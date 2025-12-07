@@ -597,7 +597,7 @@ h1, h2, h3, h4 {
   width: 100%;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.8s ease-in-out, visibility 0.8s ease-in-out;
+  transition: opacity 0.4s ease-in-out, visibility 0.4s ease-in-out;
   pointer-events: none;
 }
 
@@ -609,11 +609,11 @@ h1, h2, h3, h4 {
 }
 
 .hero-slide.fade-in {
-  animation: fadeIn 0.8s ease-in-out forwards;
+  animation: fadeIn 0.4s ease-in-out forwards;
 }
 
 .hero-slide.fade-out {
-  animation: fadeOut 0.8s ease-in-out forwards;
+  animation: fadeOut 0.4s ease-in-out forwards;
 }
 
 @keyframes fadeIn {
