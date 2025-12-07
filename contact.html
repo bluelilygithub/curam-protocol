@@ -1,761 +1,441 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Contact Us | Curam-Ai Protocol™</title>
-    <meta name="description" content="Get in touch with Curam-Ai. Book a diagnostic call, start a Feasibility Sprint, or ask our AI assistant about document automation solutions.">
-    <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
-    <link rel="stylesheet" href="assets/css/styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        /* Contact Page Specific Overrides */
-        .contact-sections {
-            background: #ffffff;
-        }
-        
-        .contact-sections .section-headline,
-        .contact-sections h2,
-        .contact-sections h3,
-        .contact-sections h4 {
-            color: var(--color-navy);
-        }
-        
-        .contact-sections p,
-        .contact-sections .section-subhead {
-            color: var(--color-gray);
-        }
-        
-        /* AI Assistant Styles */
-        .ai-assistant-container {
-            max-width: 700px;
-            margin: 0 auto;
-        }
-        
-        .ai-assistant-box {
-            background: #ffffff;
-            padding: var(--spacing-xl);
-            border-radius: var(--border-radius-lg);
-            border: 2px solid var(--color-gold);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        }
-        
-        .ai-header {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
-            margin-bottom: var(--spacing-md);
-            padding-bottom: var(--spacing-md);
-            border-bottom: 2px solid #E5E7EB;
-        }
-        
-        .ai-header h3 {
-            margin: 0;
-            color: var(--color-navy);
-            font-size: 1.25rem;
-            font-weight: 700;
-        }
-        
-        .ai-tag {
-            background: var(--color-gold);
-            color: var(--color-navy);
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .ai-intro {
-            color: var(--color-gray);
-            margin-bottom: var(--spacing-md);
-            font-size: 0.9rem;
-        }
-        
-        .chat-window {
-            max-height: 400px;
-            overflow-y: auto;
-            margin-bottom: var(--spacing-md);
-            padding: var(--spacing-md);
-            background: #F9FAFB;
-            border-radius: var(--border-radius);
-            min-height: 200px;
-        }
-        
-        .chat-msg {
-            margin-bottom: var(--spacing-md);
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .chat-msg.user {
-            align-items: flex-end;
-        }
-        
-        .chat-msg.assistant {
-            align-items: flex-start;
-        }
-        
-        .msg-bubble {
-            max-width: 80%;
-            padding: var(--spacing-sm) var(--spacing-md);
-            border-radius: var(--border-radius);
-            word-wrap: break-word;
-            font-size: 0.9375rem;
-            line-height: 1.5;
-        }
-        
-        .chat-msg.user .msg-bubble {
-            background: var(--color-navy);
-            color: #ffffff;
-        }
-        
-        .chat-msg.assistant .msg-bubble {
-            background: #ffffff;
-            color: var(--color-navy);
-            border: 1px solid #E5E7EB;
-        }
-        
-        .chat-input-row {
-            display: flex;
-            gap: var(--spacing-sm);
-        }
-        
-        .chat-field {
-            flex: 1;
-            padding: 0.75rem;
-            border: 2px solid #E5E7EB;
-            border-radius: var(--border-radius);
-            font-family: var(--font-sans);
-            font-size: 1rem;
-            transition: var(--transition);
-        }
-        
-        .chat-field:focus {
-            outline: none;
-            border-color: var(--color-gold);
-        }
-        
-        .chat-btn {
-            padding: 0.75rem 1.5rem;
-            background: var(--color-gold);
-            color: var(--color-navy);
-            border: none;
-            border-radius: var(--border-radius);
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        
-        .chat-btn:hover {
-            opacity: 0.9;
-        }
-        
-        .chat-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .loading-spin {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid var(--color-gold);
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .interest-suggestion {
-            margin-top: var(--spacing-md);
-            padding: var(--spacing-sm);
-            background: #EFF6FF;
-            border-left: 3px solid var(--color-gold);
-            border-radius: var(--border-radius);
-            font-size: 0.9rem;
-            color: var(--color-navy);
-        }
-        
-        .interest-suggestion a {
-            color: var(--color-gold);
-            text-decoration: underline;
-        }
-        
-        .email-section {
-            margin-top: var(--spacing-md);
-            padding: var(--spacing-md);
-            background: #F9FAFB;
-            border-radius: var(--border-radius);
-            border: 1px solid #E5E7EB;
-        }
-        
-        .email-form-row {
-            display: flex;
-            gap: var(--spacing-sm);
-            align-items: flex-end;
-        }
-        
-        .email-field-group {
-            flex: 1;
-        }
-        
-        .email-field-group label {
-            display: block;
-            margin-bottom: 0.25rem;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--color-navy);
-        }
-        
-        .email-field {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #E5E7EB;
-            border-radius: var(--border-radius);
-            font-family: var(--font-sans);
-            font-size: 1rem;
-        }
-        
-        .email-field:focus {
-            outline: none;
-            border-color: var(--color-gold);
-        }
-        
-        .email-btn {
-            padding: 0.75rem 1.5rem;
-            background: var(--color-navy);
-            color: #ffffff;
-            border: none;
-            border-radius: var(--border-radius);
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            white-space: nowrap;
-        }
-        
-        .email-btn:hover {
-            opacity: 0.9;
-        }
-        
-        .email-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .email-ok {
-            margin-top: var(--spacing-sm);
-            padding: var(--spacing-sm);
-            background: #D1FAE5;
-            color: #065F46;
-            border-radius: var(--border-radius);
-            font-size: 0.9rem;
-        }
-        
-        .email-err {
-            margin-top: var(--spacing-sm);
-            padding: var(--spacing-sm);
-            background: #FEE2E2;
-            color: #991B1B;
-            border-radius: var(--border-radius);
-            font-size: 0.9rem;
-        }
-        
-        /* Contact Form */
-        .contact-form-box {
-            max-width: 600px;
-            margin: 0 auto;
-            background: #ffffff;
-            padding: var(--spacing-lg);
-            border-radius: var(--border-radius);
-            border: 2px solid #E5E7EB;
-        }
-        
-        .form-field {
-            margin-bottom: var(--spacing-md);
-        }
-        
-        .form-field label {
-            display: block;
-            margin-bottom: var(--spacing-xs);
-            font-weight: 600;
-            color: var(--color-navy);
-        }
-        
-        .form-field input,
-        .form-field select,
-        .form-field textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #E5E7EB;
-            border-radius: var(--border-radius);
-            font-family: var(--font-sans);
-            font-size: 1rem;
-            transition: var(--transition);
-        }
-        
-        .form-field input:focus,
-        .form-field select:focus,
-        .form-field textarea:focus {
-            outline: none;
-            border-color: var(--color-gold);
-        }
-        
-        .form-field textarea {
-            min-height: 120px;
-            resize: vertical;
-        }
-        
-        .form-submit {
-            margin-top: var(--spacing-lg);
-        }
-        
-        /* Alternative Contact */
-        .alt-contact-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: var(--spacing-md);
-            margin-top: var(--spacing-lg);
-        }
-        
-        .alt-contact-card {
-            text-align: center;
-            padding: var(--spacing-md);
-            background: #ffffff;
-            border-radius: var(--border-radius);
-            border: 1px solid #E5E7EB;
-        }
-        
-        .alt-contact-card h3 {
-            margin-bottom: var(--spacing-sm);
-            color: var(--color-navy);
-        }
-        
-        .alt-contact-card p {
-            color: var(--color-gray);
-            margin-bottom: var(--spacing-md);
-        }
-        
-        @media (max-width: 768px) {
-            .email-form-row {
-                flex-direction: column;
-            }
-            
-            .email-btn {
-                width: 100%;
-            }
-        }
-    </style>
-</head>
-<body>
+    <meta
+      name="description"
+      content="Get in touch with Curam-Ai. Book a diagnostic call, start a Feasibility Sprint, or ask our AI assistant about document automation solutions."
+    />
+    <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png" />
+    <link rel="stylesheet" href="assets/css/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
     <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M19 12l-7 7-7-7"/>
-        </svg>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14M19 12l-7 7-7-7" />
+      </svg>
     </button>
-    
+
     <!-- Navigation -->
     <nav class="navbar">
-        <div class="container">
-            <div class="nav-brand">
-                <a href="index.html" class="nav-brand-link">
-                    <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
-                    <span class="logo-text">Curam-Ai</span>
-                </a>
-            </div>
-            <button class="mobile-menu-toggle" aria-label="Toggle menu">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
-            <div class="nav-content">
-                <div class="nav-search-row">
-                    <div class="search-container">
-                        <input type="search" placeholder="Search..." class="nav-search-input">
-                    </div>
-                </div>
-                <ul class="nav-menu">
-                    <li><a href="about.html">About</a></li>
-                    <li><a href="services.html">Services</a></li>
-                    <li><a href="target-markets.html">Target Markets</a></li>
-                    <li><a href="curam-ai-protocol.html">The Protocol</a></li>
-                    <li class="nav-dropdown">
-                        <a href="#">Resources <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4"/></svg></a>
-                        <ul class="dropdown-menu">
-                            <li><a href="roi.html">ROI Calculator</a></li>
-                            <li><a href="demo.html">Assessment Demo</a></li>
-                            <li><a href="feasibility-sprint-report.html">Phase 1 Sample Report</a></li>
-                            <li><a href="case-study.html">Case Study</a></li>
-                            <li><a href="how-it-works.html">Technical Architecture</a></li>
-                        </ul>
-                    </li>
-                    <li><a href="faq.html">FAQ</a></li>
-                    <li><a href="contact.html" class="btn-nav">Contact</a></li>
-                </ul>
-            </div>
+      <div class="container">
+        <div class="nav-brand">
+          <a href="index.html" class="nav-brand-link">
+            <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image" />
+            <span class="logo-text">Curam-Ai</span>
+          </a>
         </div>
+        <button class="mobile-menu-toggle" aria-label="Toggle menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div class="nav-content">
+          <div class="nav-search-row">
+            <div class="search-container">
+              <input type="search" placeholder="Search..." class="nav-search-input" />
+            </div>
+          </div>
+          <ul class="nav-menu">
+            <li><a href="about.html">About</a></li>
+            <li><a href="services.html">Services</a></li>
+            <li><a href="target-markets.html">Target Markets</a></li>
+            <li><a href="curam-ai-protocol.html">The Protocol</a></li>
+            <li class="nav-dropdown">
+              <a href="#"
+                >Resources
+                <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M1 1l4 4 4-4" /></svg
+              ></a>
+              <ul class="dropdown-menu">
+                <li><a href="roi.html">ROI Calculator</a></li>
+                <li><a href="demo.html">Assessment Demo</a></li>
+                <li><a href="feasibility-sprint-report.html">Phase 1 Sample Report</a></li>
+                <li><a href="case-study.html">Case Study</a></li>
+                <li><a href="how-it-works.html">Technical Architecture</a></li>
+              </ul>
+            </li>
+            <li><a href="faq.html">FAQ</a></li>
+            <li><a href="contact.html" class="btn-nav">Contact</a></li>
+          </ul>
+        </div>
+      </div>
     </nav>
 
     <!-- Page Header / Hero -->
-    <section class="hero" style="min-height: 40vh; padding: var(--spacing-lg) 0;">
-        <div class="hero-background">
-            <div class="hero-gradient"></div>
-            <div class="hero-pattern"></div>
+    <section class="hero contact-hero">
+      <div class="hero-background">
+        <div class="hero-gradient"></div>
+        <div class="hero-pattern"></div>
+      </div>
+      <div class="container">
+        <div class="hero-content">
+          <p class="hero-eyebrow">Get Started</p>
+          <h1 class="hero-headline">Let's Start the Conversation</h1>
+          <p class="hero-subhead">
+            Book a diagnostic call or start with a Feasibility Sprint
+          </p>
         </div>
-        <div class="container">
-            <div class="hero-content">
-                <p class="hero-eyebrow">Get Started</p>
-                <h1 class="hero-headline" style="font-size: 2.5rem;">Let's Start the Conversation</h1>
-                <p class="hero-subhead" style="font-size: 1.125rem;">Book a diagnostic call or start with a Feasibility Sprint</p>
-            </div>
-        </div>
+      </div>
     </section>
 
     <!-- Contact Sections (Light Background) -->
     <div class="contact-sections">
-        <!-- AI Assistant Section -->
-        <section class="section" style="padding: var(--spacing-xl) 0;">
-            <div class="container">
-                <div class="ai-assistant-container">
-                    <div class="ai-assistant-box">
-                        <div class="ai-header">
-                            <h3>AI Inquiry Assistant</h3>
-                            <span class="ai-tag">AI</span>
-                        </div>
-                        <p class="ai-intro">
-                            Not sure where to start? Ask me about your document automation needs, and I'll help guide you to the right solution.
-                        </p>
-                        <div class="chat-window" id="chatContainer">
-                            <div class="chat-msg assistant">
-                                <div class="msg-bubble">
-                                    Hi! I'm here to help you find the right document automation solution. What challenges are you facing with document processing?
-                                </div>
-                            </div>
-                        </div>
-                        <div class="chat-input-row">
-                            <input type="text" class="chat-field" id="chatInput" placeholder="Ask about invoice automation, beam schedules, or our protocol..." />
-                            <button class="chat-btn" id="chatSendBtn">Send</button>
-                        </div>
-                        <div id="suggestedInterest" class="interest-suggestion" style="display: none;"></div>
-                        
-                        <!-- Email Chat Log Section -->
-                        <div class="email-section" id="emailChatSection" style="display: none;">
-                            <p style="margin-bottom: var(--spacing-sm); font-weight: 600; color: var(--color-navy);">
-                                📧 Email this conversation
-                            </p>
-                            <p style="font-size: 0.875rem; color: var(--color-gray); margin-bottom: var(--spacing-md);">
-                                Get a copy of our conversation sent to your email for your records.
-                            </p>
-                            <div class="email-form-row">
-                                <div class="email-field-group">
-                                    <label for="emailInput">Your Email Address</label>
-                                    <input type="email" class="email-field" id="emailInput" placeholder="your.email@example.com" />
-                                </div>
-                                <button class="email-btn" id="emailChatBtn">Send Email</button>
-                            </div>
-                            <div id="emailStatus"></div>
-                        </div>
-                    </div>
+      <!-- Combined AI Assistant + Contact Form Section -->
+      <section class="contact-section">
+        <div class="container">
+          <div class="contact-two-col">
+            <!-- AI Assistant -->
+            <div class="contact-ai-assistant-container">
+              <div class="contact-ai-assistant-box">
+                <div class="contact-ai-header">
+                  <h3>AI Inquiry Assistant</h3>
+                  <span class="contact-ai-tag">AI</span>
                 </div>
-            </div>
-        </section>
+                <p class="contact-ai-intro">
+                  Not sure where to start? Ask me about your document automation needs, and I'll help guide you to the
+                  right solution.
+                </p>
+                <div class="contact-chat-window" id="chatContainer">
+                  <div class="contact-chat-msg assistant">
+                    <div class="contact-msg-bubble">
+                      Hi! I'm here to help you find the right document automation solution. What challenges are you facing
+                      with document processing?
+                    </div>
+                  </div>
+                </div>
+                <div class="contact-chat-input-row">
+                  <input
+                    type="text"
+                    class="contact-chat-field"
+                    id="chatInput"
+                    placeholder="Ask about invoice automation, beam schedules, or our protocol..."
+                  />
+                  <button class="contact-chat-btn" id="chatSendBtn">Send</button>
+                </div>
+                <div id="suggestedInterest" class="contact-interest-suggestion" style="display: none;"></div>
 
-        <!-- Contact Form Section -->
-        <section class="section" style="padding: var(--spacing-xl) 0; background: #F9FAFB;">
-            <div class="container">
-                <div class="contact-form-box">
-                    <h2 style="text-align: center; margin-bottom: var(--spacing-lg); color: var(--color-navy);">Contact Us</h2>
-                    <form id="contactForm" action="#" method="POST">
-                        <div class="form-field">
-                            <label for="name">Full Name *</label>
-                            <input type="text" id="name" name="name" required>
-                        </div>
-                        
-                        <div class="form-field">
-                            <label for="email">Email Address *</label>
-                            <input type="email" id="email" name="email" required>
-                        </div>
-                        
-                        <div class="form-field">
-                            <label for="company">Company Name</label>
-                            <input type="text" id="company" name="company">
-                        </div>
-                        
-                        <div class="form-field">
-                            <label for="interest">I'm interested in:</label>
-                            <select id="interest" name="interest">
-                                <option value="">Select an option</option>
-                                <option value="phase-1">Phase 1 - Feasibility Sprint ($1,500)</option>
-                                <option value="phase-2">Phase 2 - The Roadmap ($7,500)</option>
-                                <option value="phase-3">Phase 3 - Compliance Shield ($8-12k)</option>
-                                <option value="phase-4">Phase 4 - Implementation ($20-30k)</option>
-                                <option value="roi">ROI Calculator</option>
-                                <option value="general">General Inquiry</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-field">
-                            <label for="message">Message *</label>
-                            <textarea id="message" name="message" required placeholder="Tell us about your current challenges or what you'd like to learn more about..."></textarea>
-                        </div>
-                        
-                        <div class="form-submit">
-                            <button type="submit" class="btn btn-primary" style="width: 100%;">Send Message</button>
-                        </div>
-                    </form>
+                <!-- Email Chat Log Section -->
+                <div class="contact-email-section" id="emailChatSection" style="display: none;">
+                  <p class="contact-email-section-title">📧 Email this conversation</p>
+                  <p class="contact-email-section-desc">
+                    Get a copy of our conversation sent to your email for your records.
+                  </p>
+                  <div class="contact-email-form-row">
+                    <div class="contact-email-field-group">
+                      <label for="emailInput">Your Email Address</label>
+                      <input type="email" class="contact-email-field" id="emailInput" placeholder="your.email@example.com" />
+                    </div>
+                    <button class="contact-email-btn" id="emailChatBtn">Send Email</button>
+                  </div>
+                  <div id="emailStatus"></div>
                 </div>
+              </div>
             </div>
-        </section>
 
-        <!-- Alternative Contact Methods -->
-        <section class="section" style="padding: var(--spacing-xl) 0;">
-            <div class="container">
-                <h2 class="section-headline" style="text-align: center;">Other Ways to Reach Us</h2>
-                <div class="alt-contact-grid">
-                    <div class="alt-contact-card">
-                        <h3>Book a Call</h3>
-                        <p>Schedule a 30-minute diagnostic call to discuss your needs.</p>
-                        <a href="#" class="btn btn-secondary" style="width: 100%;">Schedule Now</a>
-                    </div>
-                    <div class="alt-contact-card">
-                        <h3>Calculate ROI</h3>
-                        <p>Use our ROI calculator to understand the financial impact.</p>
-                        <a href="roi.html" class="btn btn-secondary" style="width: 100%;">Open Calculator</a>
-                    </div>
+            <!-- Contact Form -->
+            <div class="contact-form-box">
+              <h2>Contact Us</h2>
+              <form id="contactForm" action="#" method="POST">
+                <div class="contact-form-field">
+                  <label for="name">Full Name *</label>
+                  <input type="text" id="name" name="name" required />
                 </div>
+
+                <div class="contact-form-field">
+                  <label for="email">Email Address *</label>
+                  <input type="email" id="email" name="email" required />
+                </div>
+
+                <div class="contact-form-field">
+                  <label for="company">Company Name</label>
+                  <input type="text" id="company" name="company" />
+                </div>
+
+                <div class="contact-form-field">
+                  <label for="interest">I'm interested in:</label>
+                  <select id="interest" name="interest">
+                    <option value="">Select an option</option>
+                    <option value="phase-1">Phase 1 - Feasibility Sprint ($1,500)</option>
+                    <option value="phase-2">Phase 2 - The Roadmap ($7,500)</option>
+                    <option value="phase-3">Phase 3 - Compliance Shield ($8-12k)</option>
+                    <option value="phase-4">Phase 4 - Implementation ($20-30k)</option>
+                    <option value="roi">ROI Calculator</option>
+                    <option value="general">General Inquiry</option>
+                  </select>
+                </div>
+
+                <div class="contact-form-field">
+                  <label for="message">Message *</label>
+                  <textarea
+                    id="message"
+                    name="message"
+                    required
+                    placeholder="Tell us about your current challenges or what you'd like to learn more about..."
+                  ></textarea>
+                </div>
+
+                <div class="contact-form-submit">
+                  <button type="submit" class="btn btn-primary">Send Message</button>
+                </div>
+              </form>
             </div>
-        </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- Alternative Contact Methods -->
+      <section class="contact-section">
+        <div class="container">
+          <h2 class="section-headline">Other Ways to Reach Us</h2>
+          <div class="contact-alt-grid">
+            <div class="contact-alt-card">
+              <h3>Book a Call</h3>
+              <p>Schedule a 30-minute diagnostic call to discuss your needs.</p>
+              <a href="#" class="btn btn-secondary">Schedule Now</a>
+            </div>
+            <div class="contact-alt-card">
+              <h3>Calculate ROI</h3>
+              <p>Use our ROI calculator to understand the financial impact.</p>
+              <a href="roi.html" class="btn btn-secondary">Open Calculator</a>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- Footer -->
     <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-brand">
-                    <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
-                    <span class="logo-text">Curam-Ai</span>
-                    <p class="footer-tagline">The Curam-Ai Protocol™</p>
-                </div>
-                <div class="footer-links">
-                    <div class="footer-column">
-                        <h4>Services</h4>
-                        <ul>
-                            <li><a href="services.html#service-1">Document Intelligence</a></li>
-                            <li><a href="services.html#service-2">Enterprise RAG Systems</a></li>
-                            <li><a href="services.html#service-3">Workflow Automation</a></li>
-                            <li><a href="services.html#service-4">AI Strategy</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-column">
-                        <h4>The Protocol</h4>
-                        <ul>
-                            <li><a href="curam-ai-protocol.html">Phase 1: Feasibility Sprint</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 2: The Roadmap</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 3: Compliance Shield</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 4: Implementation</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-column">
-                        <h4>Resources</h4>
-                        <ul>
-                            <li><a href="roi.html">ROI Calculator</a></li>
-                            <li><a href="how-it-works.html">Technical Architecture</a></li>
-                            <li><a href="faq.html">FAQ</a></li>
-                            <li><a href="target-markets.html">Target Markets</a></li>
-                        </ul>
-                    </div>
-                    <div class="footer-column">
-                        <h4>Company</h4>
-                        <ul>
-                            <li><a href="about.html">About</a></li>
-                            <li><a href="contact.html">Contact</a></li>
-                            <li><a href="case-study.html">Case Studies</a></li>
-                        </ul>
-                    </div>
-                </div>
+      <div class="container">
+        <div class="footer-content">
+          <div class="footer-brand">
+            <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image" />
+            <span class="logo-text">Curam-Ai</span>
+            <p class="footer-tagline">The Curam-Ai Protocol™</p>
+          </div>
+          <div class="footer-links">
+            <div class="footer-column">
+              <h4>Services</h4>
+              <ul>
+                <li><a href="services.html#service-1">Document Intelligence</a></li>
+                <li><a href="services.html#service-2">Enterprise RAG Systems</a></li>
+                <li><a href="services.html#service-3">Workflow Automation</a></li>
+                <li><a href="services.html#service-4">AI Strategy</a></li>
+              </ul>
             </div>
-            <div class="footer-bottom">
-                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html">Sitemap</a></p>
+            <div class="footer-column">
+              <h4>The Protocol</h4>
+              <ul>
+                <li><a href="curam-ai-protocol.html">Phase 1: Feasibility Sprint</a></li>
+                <li><a href="curam-ai-protocol.html">Phase 2: The Roadmap</a></li>
+                <li><a href="curam-ai-protocol.html">Phase 3: Compliance Shield</a></li>
+                <li><a href="curam-ai-protocol.html">Phase 4: Implementation</a></li>
+              </ul>
             </div>
+            <div class="footer-column">
+              <h4>Resources</h4>
+              <ul>
+                <li><a href="roi.html">ROI Calculator</a></li>
+                <li><a href="how-it-works.html">Technical Architecture</a></li>
+                <li><a href="faq.html">FAQ</a></li>
+                <li><a href="target-markets.html">Target Markets</a></li>
+              </ul>
+            </div>
+            <div class="footer-column">
+              <h4>Company</h4>
+              <ul>
+                <li><a href="about.html">About</a></li>
+                <li><a href="contact.html">Contact</a></li>
+                <li><a href="case-study.html">Case Studies</a></li>
+              </ul>
+            </div>
+          </div>
         </div>
+        <div class="footer-bottom">
+          <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html">Sitemap</a></p>
+        </div>
+      </div>
     </footer>
 
     <script src="assets/js/scripts.js"></script>
     <script>
-        // AI Contact Assistant
-        const chatContainer = document.getElementById('chatContainer');
-        const chatInput = document.getElementById('chatInput');
-        const chatSendBtn = document.getElementById('chatSendBtn');
-        const suggestedInterestDiv = document.getElementById('suggestedInterest');
-        const interestSelect = document.getElementById('interest');
-        const messageTextarea = document.getElementById('message');
-        
-        let conversationHistory = [];
-        
-        function addMessageToChat(role, content) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `chat-msg ${role}`;
-            messageDiv.innerHTML = `<div class="msg-bubble">${content}</div>`;
-            chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            
-            // Add to conversation history
-            conversationHistory.push({ role, content });
-        }
-        
-        function showSuggestedInterest(suggestedInterest) {
-            if (!suggestedInterest) {
-                suggestedInterestDiv.style.display = 'none';
-                return;
-            }
-            
-            const interestLabels = {
-                'phase-1': 'Phase 1 - Feasibility Sprint ($1,500)',
-                'phase-2': 'Phase 2 - The Roadmap ($7,500)',
-                'phase-3': 'Phase 3 - Compliance Shield ($8-12k)',
-                'phase-4': 'Phase 4 - Implementation ($20-30k)',
-                'roi': 'ROI Calculator'
-            };
-            
-            suggestedInterestDiv.innerHTML = `
-                <strong>💡 Suggested:</strong> Based on our conversation, you might be interested in 
-                <strong>${interestLabels[suggestedInterest] || suggestedInterest}</strong>. 
-                <a href="#" onclick="document.getElementById('interest').value='${suggestedInterest}'; return false;">Apply to form</a>
-            `;
-            suggestedInterestDiv.style.display = 'block';
-        }
-        
-        async function sendChatMessage() {
-            const message = chatInput.value.trim();
-            if (!message) return;
-            
-            // Add user message to chat
-            addMessageToChat('user', message);
-            chatInput.value = '';
-            chatSendBtn.disabled = true;
-            chatSendBtn.innerHTML = '<span class="loading-spin"></span>';
-            
-            try {
-                const response = await fetch('/api/contact-assistant', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: message,
-                        history: conversationHistory
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.error) {
-                    addMessageToChat('assistant', "I'm sorry, I encountered an error. Please feel free to fill out the form below or contact us directly.");
-                } else {
-                    addMessageToChat('assistant', data.message);
-                    
-                    // Show suggested interest if provided
-                    if (data.suggested_interest) {
-                        showSuggestedInterest(data.suggested_interest);
-                    }
-                    
-                    // Show email section after at least 2 messages (user + assistant)
-                    if (conversationHistory.length >= 2) {
-                        document.getElementById('emailChatSection').style.display = 'block';
-                    }
-                }
-            } catch (error) {
-                console.error('Chat error:', error);
-                addMessageToChat('assistant', "I'm having trouble connecting right now. Please fill out the form below and we'll get back to you.");
-            } finally {
-                chatSendBtn.disabled = false;
-                chatSendBtn.textContent = 'Send';
-            }
-        }
-        
-        // Email chat log functionality
-        const emailChatBtn = document.getElementById('emailChatBtn');
-        const emailInput = document.getElementById('emailInput');
-        const emailStatus = document.getElementById('emailStatus');
-        const nameInput = document.getElementById('name');
-        const companyInput = document.getElementById('company');
-        
-        // Pre-fill email from form if available
-        const emailFormInput = document.getElementById('email');
-        if (emailFormInput) {
-            emailFormInput.addEventListener('blur', function() {
-                if (this.value && !emailInput.value) {
-                    emailInput.value = this.value;
-                }
-            });
-        }
-        
-        emailChatBtn.addEventListener('click', async function() {
-            const email = emailInput.value.trim();
-            if (!email) {
-                emailStatus.innerHTML = '<div class="email-err">Please enter your email address.</div>';
-                return;
-            }
-            
-            if (conversationHistory.length === 0) {
-                emailStatus.innerHTML = '<div class="email-err">No conversation to email.</div>';
-                return;
-            }
-            
-            emailChatBtn.disabled = true;
-            emailChatBtn.textContent = 'Sending...';
-            emailStatus.innerHTML = '';
-            
-            try {
-                const response = await fetch('/api/email-chat-log', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: email,
-                        history: conversationHistory,
-                        name: nameInput ? nameInput.value.trim() : '',
-                        company: companyInput ? companyInput.value.trim() : ''
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.error) {
-                    emailStatus.innerHTML = `<div class="email-err">Error: ${data.error}</div>`;
-                } else {
-                    emailStatus.innerHTML = '<div class="email-ok">✓ Chat log sent successfully! Check your email.</div>';
-                    emailInput.value = '';
-                }
-            } catch (error) {
-                console.error('Email error:', error);
-                emailStatus.innerHTML = '<div class="email-err">Failed to send email. Please try again later.</div>';
-            } finally {
-                emailChatBtn.disabled = false;
-                emailChatBtn.textContent = 'Send Email';
-            }
-        });
-        
-        chatSendBtn.addEventListener('click', sendChatMessage);
-        chatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                sendChatMessage();
-            }
-        });
-        
-        // Form submission handler
-        document.getElementById('contactForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            // In a real implementation, this would send data to a backend
-            alert('Thank you for your message! We will get back to you soon.');
-            this.reset();
-        });
+      // AI Contact Assistant
+      const chatContainer = document.getElementById('chatContainer');
+      const chatInput = document.getElementById('chatInput');
+      const chatSendBtn = document.getElementById('chatSendBtn');
+      const suggestedInterestDiv = document.getElementById('suggestedInterest');
+      const interestSelect = document.getElementById('interest');
+      const messageTextarea = document.getElementById('message');
+
+      let conversationHistory = [];
+
+      function addMessageToChat(role, content) {
+          const messageDiv = document.createElement('div');
+          messageDiv.className = `contact-chat-msg ${role}`;
+          messageDiv.innerHTML = `<div class="contact-msg-bubble">${content}</div>`;
+          chatContainer.appendChild(messageDiv);
+          chatContainer.scrollTop = chatContainer.scrollHeight;
+
+          // Add to conversation history
+          conversationHistory.push({ role, content });
+      }
+
+      function showSuggestedInterest(suggestedInterest) {
+          if (!suggestedInterest) {
+              suggestedInterestDiv.style.display = 'none';
+              return;
+          }
+
+          const interestLabels = {
+              'phase-1': 'Phase 1 - Feasibility Sprint ($1,500)',
+              'phase-2': 'Phase 2 - The Roadmap ($7,500)',
+              'phase-3': 'Phase 3 - Compliance Shield ($8-12k)',
+              'phase-4': 'Phase 4 - Implementation ($20-30k)',
+              'roi': 'ROI Calculator'
+          };
+
+          suggestedInterestDiv.innerHTML = `
+              <strong>💡 Suggested:</strong> Based on our conversation, you might be interested in
+              <strong>${interestLabels[suggestedInterest] || suggestedInterest}</strong>.
+              <a href="#" onclick="document.getElementById('interest').value='${suggestedInterest}'; return false;">Apply to form</a>
+          `;
+          suggestedInterestDiv.style.display = 'block';
+      }
+
+      async function sendChatMessage() {
+          const message = chatInput.value.trim();
+          if (!message) return;
+
+          // Add user message to chat
+          addMessageToChat('user', message);
+          chatInput.value = '';
+          chatSendBtn.disabled = true;
+          chatSendBtn.innerHTML = '<span class="contact-loading-spin"></span>';
+
+          try {
+              const response = await fetch('/api/contact-assistant', {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                      message: message,
+                      history: conversationHistory
+                  })
+              });
+
+              const data = await response.json();
+
+              if (data.error) {
+                  addMessageToChat('assistant', "I'm sorry, I encountered an error. Please feel free to fill out the form below or contact us directly.");
+              } else {
+                  addMessageToChat('assistant', data.message);
+
+                  // Show suggested interest if provided
+                  if (data.suggested_interest) {
+                      showSuggestedInterest(data.suggested_interest);
+                  }
+
+                  // Show email section after at least 2 messages (user + assistant)
+                  if (conversationHistory.length >= 2) {
+                      document.getElementById('emailChatSection').style.display = 'block';
+                  }
+              }
+          } catch (error) {
+              console.error('Chat error:', error);
+              addMessageToChat('assistant', "I'm having trouble connecting right now. Please fill out the form below and we'll get back to you.");
+          } finally {
+              chatSendBtn.disabled = false;
+              chatSendBtn.textContent = 'Send';
+          }
+      }
+
+      // Email chat log functionality
+      const emailChatBtn = document.getElementById('emailChatBtn');
+      const emailInput = document.getElementById('emailInput');
+      const emailStatus = document.getElementById('emailStatus');
+      const nameInput = document.getElementById('name');
+      const companyInput = document.getElementById('company');
+
+      // Pre-fill email from form if available
+      const emailFormInput = document.getElementById('email');
+      if (emailFormInput) {
+          emailFormInput.addEventListener('blur', function() {
+              if (this.value && !emailInput.value) {
+                  emailInput.value = this.value;
+              }
+          });
+      }
+
+      emailChatBtn.addEventListener('click', async function() {
+          const email = emailInput.value.trim();
+          if (!email) {
+              emailStatus.innerHTML = '<div class="contact-email-err">Please enter your email address.</div>';
+              return;
+          }
+
+          if (conversationHistory.length === 0) {
+              emailStatus.innerHTML = '<div class="contact-email-err">No conversation to email.</div>';
+              return;
+          }
+
+          emailChatBtn.disabled = true;
+          emailChatBtn.textContent = 'Sending...';
+          emailStatus.innerHTML = '';
+
+          try {
+              const response = await fetch('/api/email-chat-log', {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                      email: email,
+                      history: conversationHistory,
+                      name: nameInput ? nameInput.value.trim() : '',
+                      company: companyInput ? companyInput.value.trim() : ''
+                  })
+              });
+
+              const data = await response.json();
+
+              if (data.error) {
+                  emailStatus.innerHTML = `<div class="contact-email-err">Error: ${data.error}</div>`;
+              } else {
+                  emailStatus.innerHTML = '<div class="contact-email-ok">✓ Chat log sent successfully! Check your email.</div>';
+                  emailInput.value = '';
+              }
+          } catch (error) {
+              console.error('Email error:', error);
+              emailStatus.innerHTML = '<div class="email-err">Failed to send email. Please try again later.</div>';
+          } finally {
+              emailChatBtn.disabled = false;
+              emailChatBtn.textContent = 'Send Email';
+          }
+      });
+
+      chatSendBtn.addEventListener('click', sendChatMessage);
+      chatInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+              sendChatMessage();
+          }
+      });
+
+      // Form submission handler
+      document.getElementById('contactForm').addEventListener('submit', function(e) {
+          e.preventDefault();
+          // In a real implementation, this would send data to a backend
+          alert('Thank you for your message! We will get back to you soon.');
+          this.reset();
+      });
     </script>
-</body>
+  </body>
 </html>
