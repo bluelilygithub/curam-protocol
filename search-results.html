@@ -222,7 +222,7 @@
             if (!query) {
                 document.getElementById('search-results-container').innerHTML = `
                     <div class="error-state">
-                        <p>No search query provided. Please use the search bar to search our blog.</p>
+                        <p>No search query provided. Please use the search bar to search our website and blog.</p>
                     </div>
                 `;
                 return;
@@ -236,7 +236,7 @@
                 </div>
                 <div class="loading-state">
                     <div class="spinner"></div>
-                    <p>Searching blog content with AI...</p>
+                    <p>Searching website and blog content with AI...</p>
                 </div>
             `;
             
@@ -371,19 +371,35 @@
                     
                     // Sources
                     if (data.sources && data.sources.length > 0) {
-                        html += `
-                            <div class="sources-section">
-                                <h3>Sources from Blog</h3>
-                        `;
+                        // Separate blog and website sources
+                        const blogSources = data.sources.filter(s => s.type === 'blog');
+                        const websiteSources = data.sources.filter(s => s.type === 'website');
                         
-                        data.sources.forEach(source => {
-                            html += `
-                                <div class="source-item">
-                                    <a href="${source.link}" target="_blank" class="source-title">${source.title}</a>
-                                    <p class="source-excerpt">${source.excerpt || ''}</p>
-                                </div>
-                            `;
-                        });
+                        html += `<div class="sources-section">`;
+                        
+                        if (websiteSources.length > 0) {
+                            html += `<h3>Sources from Website</h3>`;
+                            websiteSources.forEach(source => {
+                                html += `
+                                    <div class="source-item">
+                                        <a href="${source.link}" target="_blank" class="source-title">${source.title}</a>
+                                        <p class="source-excerpt">${source.excerpt || ''}</p>
+                                    </div>
+                                `;
+                            });
+                        }
+                        
+                        if (blogSources.length > 0) {
+                            html += `<h3>Sources from Blog</h3>`;
+                            blogSources.forEach(source => {
+                                html += `
+                                    <div class="source-item">
+                                        <a href="${source.link}" target="_blank" class="source-title">${source.title}</a>
+                                        <p class="source-excerpt">${source.excerpt || ''}</p>
+                                    </div>
+                                `;
+                            });
+                        }
                         
                         html += `</div>`;
                     }

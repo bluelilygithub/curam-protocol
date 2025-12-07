@@ -1586,10 +1586,141 @@ def search_results_page():
     except:
         return "Search results page not found.", 404
 
+def extract_text_from_html(file_path):
+    """
+    Extract text content from an HTML file.
+    Returns dict with title, content, and filename.
+    """
+    import re
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        
+        # Extract title from <title> tag or first <h1>
+        title_match = re.search(r'<title[^>]*>(.*?)</title>', html_content, re.IGNORECASE | re.DOTALL)
+        title = title_match.group(1).strip() if title_match else ''
+        # Clean title HTML entities
+        title = re.sub('<[^<]+?>', '', title)
+        title = re.sub(r'\s+', ' ', title).strip()
+        
+        # Extract content from <main>, <article>, or <body>
+        # Try main first, then article, then body
+        content_match = None
+        for tag in ['<main', '<article', '<body']:
+            pattern = rf'{tag}[^>]*>(.*?)</(?:main|article|body)>'
+            match = re.search(pattern, html_content, re.IGNORECASE | re.DOTALL)
+            if match:
+                content_match = match
+                break
+        
+        if not content_match:
+            # Fallback: extract from body if no main/article
+            body_match = re.search(r'<body[^>]*>(.*?)</body>', html_content, re.IGNORECASE | re.DOTALL)
+            if body_match:
+                content_html = body_match.group(1)
+            else:
+                content_html = html_content
+        else:
+            content_html = content_match.group(1)
+        
+        # Remove script and style tags completely
+        content_html = re.sub(r'<script[^>]*>.*?</script>', '', content_html, flags=re.IGNORECASE | re.DOTALL)
+        content_html = re.sub(r'<style[^>]*>.*?</style>', '', content_html, flags=re.IGNORECASE | re.DOTALL)
+        
+        # Remove HTML tags
+        content_clean = re.sub('<[^<]+?>', '', content_html)
+        
+        # Remove extra whitespace and newlines
+        content_clean = re.sub(r'\s+', ' ', content_clean).strip()
+        
+        # Get filename for link
+        filename = os.path.basename(file_path)
+        
+        return {
+            'title': title or filename.replace('.html', '').replace('-', ' ').title(),
+            'content': content_clean,
+            'link': f'/{filename}',
+            'filename': filename
+        }
+    except Exception as e:
+        print(f"Error extracting text from {file_path}: {e}")
+        return None
+
+def search_static_html_pages(query):
+    """
+    Search static HTML pages in the current directory.
+    Returns list of relevant pages with extracted content.
+    """
+    import re
+    
+    # Pages to exclude from search (navigation, includes, etc.)
+    excluded_pages = {
+        'navbar.html', 'embed_snippet.html', 'index.html',  # index.html typically redirects
+        'sitemap.html'  # Sitemap is not content
+    }
+    
+    # Get all HTML files in the root directory
+    html_files = []
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    for filename in os.listdir(root_dir):
+        if filename.endswith('.html') and filename not in excluded_pages:
+            html_files.append(os.path.join(root_dir, filename))
+    
+    # Extract content from all HTML files
+    pages = []
+    for file_path in html_files:
+        page_data = extract_text_from_html(file_path)
+        if page_data and page_data['content']:
+            pages.append(page_data)
+    
+    if not pages:
+        return []
+    
+    # Rank pages by relevance
+    query_lower = query.lower()
+    stop_words = {'what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can'}
+    query_words = set(word for word in query_lower.split() if word not in stop_words and len(word) > 2)
+    
+    if not query_words:
+        query_words = set(query_lower.split())
+    
+    def calculate_page_relevance(page):
+        score = 0
+        title = page.get('title', '').lower()
+        content = page.get('content', '').lower()
+        filename = page.get('filename', '').lower()
+        
+        # Title matches are most important
+        for word in query_words:
+            if word in title:
+                score += 10
+            if word in filename:
+                score += 8
+            if word in content:
+                score += 1
+        
+        # Exact phrase match bonus
+        if query_lower in title:
+            score += 20
+        if query_lower in content:
+            score += 5
+        
+        return score
+    
+    # Sort by relevance
+    ranked_pages = sorted(pages, key=calculate_page_relevance, reverse=True)
+    
+    # Filter out pages with zero relevance and take top 5
+    relevant_pages = [p for p in ranked_pages if calculate_page_relevance(p) > 0][:5]
+    
+    return relevant_pages
+
 @app.route('/api/search-blog', methods=['POST'])
 def search_blog_rag():
     """
-    RAG Search: Fetches blog content from www.curam-ai.com.au and uses Gemini to generate answers.
+    RAG Search: Fetches blog content from www.curam-ai.com.au and static HTML pages,
+    then uses Gemini to generate answers.
     """
     try:
         data = request.get_json()
@@ -1605,6 +1736,7 @@ def search_blog_rag():
         blog_url = 'https://www.curam-ai.com.au'
         wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
         
+        posts = []
         try:
             # Try multiple search strategies to get most relevant posts
             all_posts = []
@@ -1693,14 +1825,24 @@ def search_blog_rag():
                         break
             
         except requests.RequestException as e:
+            print(f"WordPress API request error: {e}")
             posts = []
         
-        # Step 2: Prepare context from blog posts
+        # Step 1b: Search static HTML pages
+        static_pages = []
+        try:
+            static_pages = search_static_html_pages(query)
+        except Exception as e:
+            print(f"Error searching static HTML pages: {e}")
+            static_pages = []
+        
+        # Step 2: Prepare context from blog posts and static HTML pages
         import re
         
         context = ""
         sources = []
         
+        # Add blog posts to context
         if posts:
             for post in posts[:5]:  # Use top 5 most relevant posts
                 title = post.get('title', {}).get('rendered', '')
@@ -1724,13 +1866,35 @@ def search_blog_rag():
                 sources.append({
                     'title': title,
                     'link': link,
-                    'excerpt': excerpt_clean[:200] if excerpt_clean else content_clean[:200]
+                    'excerpt': excerpt_clean[:200] if excerpt_clean else content_clean[:200],
+                    'type': 'blog'
                 })
         
-        # If no posts found, provide a helpful message
+        # Add static HTML pages to context
+        if static_pages:
+            for page in static_pages[:5]:  # Use top 5 most relevant pages
+                title = page.get('title', '')
+                content = page.get('content', '')
+                link = page.get('link', '')
+                
+                # Content is already cleaned, just truncate
+                content_snippet = content[:4000] if len(content) > 4000 else content
+                
+                # Extract a snippet for excerpt (first 200 chars of meaningful content)
+                excerpt = content[:200] + '...' if len(content) > 200 else content
+                
+                context += f"\n\n---\nWebsite Page: {title}\nContent: {content_snippet}\n---\n"
+                sources.append({
+                    'title': title,
+                    'link': link,
+                    'excerpt': excerpt,
+                    'type': 'website'
+                })
+        
+        # If no content found, provide a helpful message
         if not context:
             return jsonify({
-                'answer': f"I couldn't find specific blog content about '{query}'. Please visit our blog at www.curam-ai.com.au to search for more information.",
+                'answer': f"I couldn't find specific information about '{query}' in our blog or website content. Please visit www.curam-ai.com.au or contact us for more information.",
                 'sources': [],
                 'query': query
             })
@@ -1743,19 +1907,21 @@ def search_blog_rag():
 
 The user asked: "{query}"
 
-Below is relevant content from our blog (800+ articles). Use this content to provide a comprehensive, informative answer.
+Below is relevant content from our WordPress blog (800+ articles) and our website pages. Use this content to provide a comprehensive, informative answer.
 
-Blog Content:
+Content from Blog and Website:
 {context}
 
 Instructions:
-1. Provide a direct, comprehensive answer to the user's question using the blog content above
+1. Provide a direct, comprehensive answer to the user's question using the content above
 2. If the question is "what is X", explain what X is clearly and thoroughly
-3. Include key details, definitions, and important information from the blog posts
-4. Synthesize information from multiple posts if relevant
-5. Reference specific blog post titles when citing information
+3. Include key details, definitions, and important information from both blog posts and website pages
+4. Synthesize information from multiple sources if relevant (combine blog and website content)
+5. Reference specific source titles when citing information (mention if it's from a blog post or website page)
 6. Be thorough - the user wants to understand the topic, not just get a brief mention
 7. If the content discusses comparisons or costs, also explain what the thing itself is
+8. Prioritize website pages for information about services, pricing, and processes
+9. Use blog posts for detailed explanations, case studies, and technical deep dives
 
 Answer the question comprehensively:"""
             
