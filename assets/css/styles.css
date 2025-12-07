@@ -203,7 +203,7 @@ h1, h2, h3, h4 {
 .btn-nav {
   background: var(--color-gold);
   color: var(--navy-deep);
-  padding: 0.5rem 1.5rem;
+  padding: 0.5rem 2rem;
   border-radius: var(--border-radius);
   font-weight: 600;
   font-size: 0.875rem;
@@ -581,6 +581,112 @@ h1, h2, h3, h4 {
   line-height: 1.7;
   max-width: 600px;
   margin-bottom: 2.5rem;
+}
+
+/* Hero Text Rotation Styles */
+.hero-slides-container {
+  position: relative;
+  min-height: 220px; /* Prevent layout shift during rotation */
+  margin-bottom: 1.5rem;
+}
+
+.hero-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.8s ease-in-out, visibility 0.8s ease-in-out;
+  pointer-events: none;
+}
+
+.hero-slide.active {
+  position: relative;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.hero-slide.fade-in {
+  animation: fadeIn 0.8s ease-in-out forwards;
+}
+
+.hero-slide.fade-out {
+  animation: fadeOut 0.8s ease-in-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* Slide Indicators */
+.hero-slide-indicators {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-bottom: 2.5rem;
+  padding: 0.5rem 0;
+}
+
+.hero-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.hero-indicator:hover {
+  border-color: var(--cyan-accent);
+  transform: scale(1.2);
+}
+
+.hero-indicator.active {
+  background: var(--cyan-accent);
+  border-color: var(--cyan-accent);
+  width: 32px;
+  border-radius: 5px;
+}
+
+.hero-indicator.active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 2px;
+  background: var(--cyan-accent);
+  border-radius: 1px;
+}
+
+@media (min-width: 768px) {
+  .hero-slide-indicators {
+    justify-content: flex-start;
+  }
 }
 
 .hero-description strong {
