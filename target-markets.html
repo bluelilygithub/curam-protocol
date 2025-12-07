@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Scroll Down Button - Fixed to viewport bottom -->
+    <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M19 12l-7 7-7-7"/>
@@ -22,7 +22,7 @@
     <nav class="navbar">
         <div class="container">
             <div class="nav-brand">
-                <a href="homepage.html" class="nav-brand-link">
+                <a href="index.html" class="nav-brand-link">
                     <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
                     <span class="logo-text">Curam-Ai</span>
                 </a>
@@ -41,13 +41,13 @@
                 <ul class="nav-menu">
                     <li><a href="about.html">About</a></li>
                     <li><a href="services.html">Services</a></li>
-                    <li><a href="target-markets.html">Target Markets</a></li>
+                    <li><a href="target-markets.html" class="active">Target Markets</a></li>
                     <li><a href="curam-ai-protocol.html">The Protocol</a></li>
                     <li class="nav-dropdown">
                         <a href="#">Resources</a>
                         <ul class="dropdown-menu">
-                            <li><a href="/roi.html">ROI Calculator</a></li>
-                            <li><a href="/demo.html">Assessment Demo</a></li>
+                            <li><a href="roi.html">ROI Calculator</a></li>
+                            <li><a href="demo.html">Assessment Demo</a></li>
                             <li><a href="feasibility-sprint-report.html">Phase 1 Sample Report</a></li>
                             <li><a href="risk-audit-report.html">Sample Audit PDF</a></li>
                             <li><a href="case-study.html">Case Study</a></li>
@@ -62,168 +62,295 @@
     </nav>
 
     <!-- Hero Section -->
-    <section class="hero target-markets-hero">
+    <section class="hero services-hero">
+        <div class="hero-background">
+            <div class="hero-gradient"></div>
+            <div class="hero-pattern"></div>
+            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+            </svg>
+            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+            </svg>
+        </div>
         <div class="container">
-            <h1 class="hero-headline">Target Markets</h1>
-            <p class="hero-subhead">Document-Heavy Professional Services Firms Ready for Automation</p>
+            <div class="hero-content">
+                <p class="hero-eyebrow">Who We Serve</p>
+                <h1 class="hero-headline">Target Markets</h1>
+                <p class="hero-subheadline">
+                    Document-Heavy Professional Services Firms Ready for Automation
+                </p>
+            </div>
         </div>
     </section>
 
     <!-- Primary Target Market -->
-    <section class="methodology">
+    <section class="section">
         <div class="container">
-            <div class="target-markets-section-container">
-                <h2 class="section-headline">Primary Target Market</h2>
-                <p class="section-subhead target-markets-section-subhead">
-                    Small to mid-sized professional services firms that are:
-                </p>
-                
-                <div class="characteristics-grid">
-                    <div class="characteristic-item">
-                        <strong>Document Processing</strong>
-                        Dealing with 5-10 hours per week of manual data entry tasks
+            <div class="service-header">
+                <span class="service-number-badge">01</span>
+                <div class="service-header-text">
+                    <h2 class="section-title">Primary Target Market</h2>
+                    <p class="section-subtitle">Small to mid-sized professional services firms that are:</p>
+                </div>
+            </div>
+
+            <div class="target-characteristics-grid">
+                <div class="target-characteristic-card">
+                    <div class="target-characteristic-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Document Types</strong>
-                        Processing structured documents like invoices, schedules, transmittals, reports, and registers
+                    <h3>Document Processing</h3>
+                    <p>Dealing with 5-10 hours per week of manual data entry tasks</p>
+                </div>
+                <div class="target-characteristic-card">
+                    <div class="target-characteristic-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Infrastructure</strong>
-                        Using Microsoft 365 or Google Workspace cloud infrastructure
+                    <h3>Document Types</h3>
+                    <p>Processing invoices, schedules, transmittals, reports, and registers</p>
+                </div>
+                <div class="target-characteristic-card">
+                    <div class="target-characteristic-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Approach</strong>
-                        Looking to improve efficiency without massive IT transformation projects
+                    <h3>Infrastructure</h3>
+                    <p>Using Microsoft 365 or Google Workspace cloud infrastructure</p>
+                </div>
+                <div class="target-characteristic-card">
+                    <div class="target-characteristic-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
                     </div>
+                    <h3>Approach</h3>
+                    <p>Looking to improve efficiency without massive IT transformation projects</p>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Decision Makers -->
-    <section class="products">
+    <section class="section section-alt">
         <div class="container">
-            <div class="target-markets-section-container">
-                <h2 class="section-headline">Decision-Makers</h2>
-                <p class="section-subhead target-markets-section-subhead">
-                    Two key personas drive the decision-making process:
-                </p>
-                
-                <div class="market-grid">
-                    <div class="market-card">
+            <div class="service-header">
+                <span class="service-number-badge">02</span>
+                <div class="service-header-text">
+                    <h2 class="section-title">Decision-Makers</h2>
+                    <p class="section-subtitle">Two key personas drive the decision-making process:</p>
+                </div>
+            </div>
+
+            <div class="decision-makers-grid">
+                <div class="decision-maker-card decision-maker-card-blue">
+                    <div class="decision-maker-header">
+                        <div class="decision-maker-icon">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                <line x1="12" y1="17" x2="12" y2="21"/>
+                            </svg>
+                        </div>
                         <h3>CTOs / IT Directors</h3>
-                        <p>Concerned about:</p>
-                        <ul>
-                            <li>Security and compliance</li>
-                            <li>System ownership and control</li>
-                            <li>Maintenance and support</li>
-                            <li>Technical risk and integration</li>
-                        </ul>
                     </div>
-                    <div class="market-card">
+                    <p class="decision-maker-label">Concerned about:</p>
+                    <ul>
+                        <li>Security and compliance</li>
+                        <li>System ownership and control</li>
+                        <li>Maintenance and support</li>
+                        <li>Technical risk and integration</li>
+                    </ul>
+                </div>
+
+                <div class="decision-maker-card decision-maker-card-gold">
+                    <div class="decision-maker-header">
+                        <div class="decision-maker-icon">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                        </div>
                         <h3>Partners / Managing Directors</h3>
-                        <p>Need:</p>
-                        <ul>
-                            <li>Board-ready business cases</li>
-                            <li>ROI justification and metrics</li>
-                            <li>Strategic planning and roadmaps</li>
-                            <li>Risk mitigation strategies</li>
-                        </ul>
                     </div>
+                    <p class="decision-maker-label">Need:</p>
+                    <ul>
+                        <li>Board-ready business cases</li>
+                        <li>ROI justification and metrics</li>
+                        <li>Strategic planning and roadmaps</li>
+                        <li>Risk mitigation strategies</li>
+                    </ul>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Firm Characteristics -->
-    <section class="methodology">
+    <section class="section">
         <div class="container">
-            <div class="target-markets-section-container">
-                <h2 class="section-headline">Firm Characteristics</h2>
-                <p class="section-subhead target-markets-section-subhead">
-                    Ideal customers typically have:
-                </p>
-                
-                <div class="characteristics-grid">
-                    <div class="characteristic-item">
-                        <strong>Size</strong>
-                        10-100 employees (small enough to feel the pain of manual work, large enough to afford $10k-50k projects)
+            <div class="service-header">
+                <span class="service-number-badge">03</span>
+                <div class="service-header-text">
+                    <h2 class="section-title">Firm Characteristics</h2>
+                    <p class="section-subtitle">Ideal customers typically have:</p>
+                </div>
+            </div>
+
+            <div class="service-details-grid firm-characteristics">
+                <div class="service-detail-card service-detail-card-blue">
+                    <div class="service-detail-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Infrastructure</strong>
-                        Existing cloud infrastructure (Azure, AWS, or M365)
+                    <h3>Size & Budget</h3>
+                    <ul>
+                        <li>10-100 employees</li>
+                        <li>Can afford $10k-50k projects</li>
+                    </ul>
+                </div>
+
+                <div class="service-detail-card service-detail-card-gold">
+                    <div class="service-detail-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                            <path d="M2 17l10 5 10-5"/>
+                            <path d="M2 12l10 5 10-5"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Volume</strong>
-                        Process significant volumes of standard professional documents
+                    <h3>Infrastructure</h3>
+                    <ul>
+                        <li>Existing cloud infrastructure (Azure, AWS, or M365)</li>
+                        <li>Using Xero, MYOB, or QuickBooks</li>
+                    </ul>
+                </div>
+
+                <div class="service-detail-card service-detail-card-green">
+                    <div class="service-detail-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Compliance</strong>
-                        PI insurance and ISO 27001 compliance requirements
+                    <h3>Compliance</h3>
+                    <ul>
+                        <li>PI insurance requirements</li>
+                        <li>ISO 27001 compliance needs</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="service-details-grid firm-characteristics" style="margin-top: var(--spacing-lg);">
+                <div class="service-detail-card service-detail-card-indigo">
+                    <div class="service-detail-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Systems</strong>
-                        Currently using systems like Xero, MYOB, or QuickBooks for accounting
+                    <h3>Document Volume</h3>
+                    <ul>
+                        <li>Significant volumes of standard professional documents</li>
+                        <li>Repetitive document formats</li>
+                    </ul>
+                </div>
+
+                <div class="service-detail-card service-detail-card-red">
+                    <div class="service-detail-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Mindset</strong>
-                        Skeptical of AI but open to proof-of-concept approach
-                    </div>
+                    <h3>Mindset</h3>
+                    <ul>
+                        <li>Skeptical of AI but open to proof</li>
+                        <li>Prefer proof-of-concept approach</li>
+                    </ul>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Pain Points -->
-    <section class="products">
+    <section class="section section-alt">
         <div class="container">
-            <div class="target-markets-section-container">
-                <h2 class="section-headline">Pain Points They're Experiencing</h2>
-                <p class="section-subhead target-markets-section-subhead">
-                    Common challenges that drive firms to seek automation:
-                </p>
-                
-                <div class="pain-points">
-                    <div class="pain-point">
-                        <strong>Wasted Billable Hours</strong>
-                        Junior staff spending hours on data entry instead of billable work
-                    </div>
-                    <div class="pain-point">
-                        <strong>Manual Compilation</strong>
-                        Time-consuming manual compilation of registers and reports
-                    </div>
-                    <div class="pain-point">
-                        <strong>Processing Bottlenecks</strong>
-                        Invoice and document processing creating workflow delays
-                    </div>
-                    <div class="pain-point">
-                        <strong>Data Extraction</strong>
-                        Manual extraction of data from PDFs for reporting and analysis
-                    </div>
-                    <div class="pain-point">
-                        <strong>Human Error Risk</strong>
-                        Risk of costly mistakes in data transcription
-                    </div>
-                    <div class="pain-point">
-                        <strong>Modernization Pressure</strong>
-                        Pressure to modernize but fear of failed AI implementations
-                    </div>
+            <div class="service-header">
+                <span class="service-number-badge">04</span>
+                <div class="service-header-text">
+                    <h2 class="section-title">Pain Points They're Experiencing</h2>
+                    <p class="section-subtitle">Common challenges that drive firms to seek automation:</p>
+                </div>
+            </div>
+
+            <div class="pain-points-grid">
+                <div class="pain-point-card">
+                    <div class="pain-point-number">01</div>
+                    <h3>Wasted Billable Hours</h3>
+                    <p>Junior staff spending hours on data entry instead of billable work</p>
+                </div>
+                <div class="pain-point-card">
+                    <div class="pain-point-number">02</div>
+                    <h3>Manual Compilation</h3>
+                    <p>Time-consuming manual compilation of registers and reports</p>
+                </div>
+                <div class="pain-point-card">
+                    <div class="pain-point-number">03</div>
+                    <h3>Processing Bottlenecks</h3>
+                    <p>Invoice and document processing creating workflow delays</p>
+                </div>
+                <div class="pain-point-card">
+                    <div class="pain-point-number">04</div>
+                    <h3>Data Extraction</h3>
+                    <p>Manual extraction of data from PDFs for reporting and analysis</p>
+                </div>
+                <div class="pain-point-card">
+                    <div class="pain-point-number">05</div>
+                    <h3>Human Error Risk</h3>
+                    <p>Risk of costly mistakes in data transcription</p>
+                </div>
+                <div class="pain-point-card">
+                    <div class="pain-point-number">06</div>
+                    <h3>Modernization Pressure</h3>
+                    <p>Pressure to modernize but fear of failed AI implementations</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Specific Industries -->
-    <section class="methodology">
+    <!-- Industries We Serve with Photos -->
+    <section class="section">
         <div class="container">
-            <div class="target-markets-section-container">
-                <h2 class="section-headline">Specific Industries We Serve</h2>
-                <p class="section-subhead target-markets-section-subhead">
-                    While our engineering example demonstrates the service, the Protocol works for any document-heavy professional services firm:
-                </p>
-                
-                <div class="market-grid">
-                    <div class="market-card">
+            <div class="service-header">
+                <span class="service-number-badge">05</span>
+                <div class="service-header-text">
+                    <h2 class="section-title">Specific Industries We Serve</h2>
+                    <p class="section-subtitle">The Protocol works for any document-heavy professional services firm:</p>
+                </div>
+            </div>
+
+            <!-- Industry Photo Cards -->
+            <div class="industry-photo-grid">
+                <div class="industry-photo-card">
+                    <div class="industry-photo-image">
+                        <img src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=600&h=400&fit=crop" alt="Accounting & Bookkeeping">
+                        <div class="industry-photo-overlay"></div>
+                    </div>
+                    <div class="industry-photo-content">
                         <h3>Accounting & Bookkeeping</h3>
                         <ul>
                             <li>Client invoice processing</li>
@@ -231,10 +358,16 @@
                             <li>Data entry for Xero/MYOB/QuickBooks</li>
                             <li>Time billing and expense reports</li>
                         </ul>
-                        <a href="services.html#service-1" class="market-card-link">See our document extraction solutions</a>
+                        <a href="services.html#service-1" class="industry-link">See our document extraction solutions →</a>
                     </div>
-                    
-                    <div class="market-card">
+                </div>
+
+                <div class="industry-photo-card">
+                    <div class="industry-photo-image">
+                        <img src="https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&h=400&fit=crop" alt="Legal Firms">
+                        <div class="industry-photo-overlay"></div>
+                    </div>
+                    <div class="industry-photo-content">
                         <h3>Legal Firms</h3>
                         <ul>
                             <li>Contract extraction and clause identification</li>
@@ -242,10 +375,16 @@
                             <li>Billing and timesheet processing</li>
                             <li>Compliance document tracking</li>
                         </ul>
-                        <a href="services.html#service-2" class="market-card-link">See our RAG systems for legal research</a>
+                        <a href="services.html#service-2" class="industry-link">See our RAG systems for legal research →</a>
                     </div>
-                    
-                    <div class="market-card">
+                </div>
+
+                <div class="industry-photo-card">
+                    <div class="industry-photo-image">
+                        <img src="https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600&h=400&fit=crop" alt="Architecture Firms">
+                        <div class="industry-photo-overlay"></div>
+                    </div>
+                    <div class="industry-photo-content">
                         <h3>Architecture Firms</h3>
                         <ul>
                             <li>Drawing registers and RFIs</li>
@@ -253,143 +392,221 @@
                             <li>Consultant coordination documents</li>
                             <li>Project cost tracking</li>
                         </ul>
-                        <a href="services.html#service-3" class="market-card-link">See our workflow automation solutions</a>
+                        <a href="services.html#service-3" class="industry-link">See our workflow automation solutions →</a>
                     </div>
-                    
-                    <div class="market-card">
-                        <h3>Construction & Project Management</h3>
+                </div>
+
+                <div class="industry-photo-card">
+                    <div class="industry-photo-image">
+                        <img src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&h=400&fit=crop" alt="Construction & Project Management">
+                        <div class="industry-photo-overlay"></div>
+                    </div>
+                    <div class="industry-photo-content">
+                        <h3>Construction & PM</h3>
                         <ul>
                             <li>Site reports and safety inspections</li>
                             <li>Quality assurance forms</li>
                             <li>Supplier invoices and purchase orders</li>
                             <li>Defect lists and punch lists</li>
                         </ul>
-                        <a href="services.html#service-1" class="market-card-link">See our document intelligence services</a>
-                    </div>
-                    
-                    <div class="market-card">
-                        <h3>Real Estate & Property Management</h3>
-                        <ul>
-                            <li>Lease agreements and tenant applications</li>
-                            <li>Inspection reports and maintenance requests</li>
-                            <li>Invoice processing for multiple properties</li>
-                            <li>Compliance documentation</li>
-                        </ul>
-                        <a href="services.html#service-3" class="market-card-link">See our workflow automation solutions</a>
-                    </div>
-                    
-                    <div class="market-card">
-                        <h3>Medical/Healthcare Administration</h3>
-                        <ul>
-                            <li>Patient forms and referrals</li>
-                            <li>Pathology reports and test results</li>
-                            <li>Medical billing and insurance claims</li>
-                            <li>Regulatory compliance documents</li>
-                        </ul>
-                        <a href="services.html#service-1" class="market-card-link">See our document extraction solutions</a>
-                    </div>
-                    
-                    <div class="market-card">
-                        <h3>Government & Compliance</h3>
-                        <ul>
-                            <li>Permit applications and approvals</li>
-                            <li>Inspection reports</li>
-                            <li>Grant applications and reporting</li>
-                            <li>Regulatory submissions</li>
-                        </ul>
-                        <a href="services.html#service-4" class="market-card-link">See our AI strategy & compliance services</a>
-                    </div>
-                    
-                    <div class="market-card">
-                        <h3>Engineering Firms</h3>
-                        <ul>
-                            <li>Beam schedules and structural drawings</li>
-                            <li>Concrete test reports</li>
-                            <li>Drawing registers and transmittals</li>
-                            <li>Invoice processing and project tracking</li>
-                        </ul>
-                        <a href="services.html" class="market-card-link">See all our services for engineering</a>
+                        <a href="services.html#service-1" class="industry-link">See our document intelligence services →</a>
                     </div>
                 </div>
-                
-                <!-- NEW: Services CTA Banner -->
-                <div class="services-cta-banner">
-                    <h3>Want to See Exactly What We Can Build for Your Industry?</h3>
-                    <p>Explore our complete range of AI-powered document automation and workflow services</p>
-                    <a href="services.html" class="btn">View All Services →</a>
+            </div>
+
+            <!-- More Industries Grid -->
+            <div class="industries-grid">
+                <div class="industry-card">
+                    <div class="industry-card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            <polyline points="9 22 9 12 15 12 15 22"/>
+                        </svg>
+                    </div>
+                    <h3>Real Estate & Property</h3>
+                    <ul>
+                        <li>Lease agreements and tenant applications</li>
+                        <li>Inspection reports</li>
+                        <li>Invoice processing for properties</li>
+                    </ul>
+                    <a href="services.html#service-3" class="industry-link">Workflow automation →</a>
                 </div>
+
+                <div class="industry-card">
+                    <div class="industry-card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                        </svg>
+                    </div>
+                    <h3>Medical/Healthcare</h3>
+                    <ul>
+                        <li>Patient forms and referrals</li>
+                        <li>Pathology reports and test results</li>
+                        <li>Medical billing and insurance claims</li>
+                    </ul>
+                    <a href="services.html#service-1" class="industry-link">Document extraction →</a>
+                </div>
+
+                <div class="industry-card">
+                    <div class="industry-card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                        </svg>
+                    </div>
+                    <h3>Government & Compliance</h3>
+                    <ul>
+                        <li>Permit applications and approvals</li>
+                        <li>Grant applications and reporting</li>
+                        <li>Regulatory submissions</li>
+                    </ul>
+                    <a href="services.html#service-4" class="industry-link">AI strategy & compliance →</a>
+                </div>
+
+                <div class="industry-card">
+                    <div class="industry-card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                            <polyline points="2 17 12 22 22 17"/>
+                            <polyline points="2 12 12 17 22 12"/>
+                        </svg>
+                    </div>
+                    <h3>Engineering Firms</h3>
+                    <ul>
+                        <li>Beam schedules and structural drawings</li>
+                        <li>Concrete test reports</li>
+                        <li>Drawing registers and transmittals</li>
+                    </ul>
+                    <a href="services.html" class="industry-link">See all services →</a>
+                </div>
+            </div>
+
+            <!-- Services CTA Banner -->
+            <div class="services-cta-banner">
+                <h3>Want to See Exactly What We Can Build for Your Industry?</h3>
+                <p>Explore our complete range of AI-powered document automation and workflow services</p>
+                <a href="services.html" class="btn btn-primary">View All Services →</a>
             </div>
         </div>
     </section>
 
     <!-- Why These Industries -->
-    <section class="products">
+    <section class="section section-alt">
         <div class="container">
-            <div class="target-markets-section-container">
-                <h2 class="section-headline">Why These Industries?</h2>
-                <p class="section-subhead target-markets-section-subhead">
-                    They all share common characteristics that make them ideal candidates for document automation:
-                </p>
-                
-                <div class="characteristics-grid">
-                    <div class="characteristic-item">
-                        <strong>High Document Volumes</strong>
-                        Structured data in repetitive document formats
+            <h2 class="section-title centered">Why These Industries?</h2>
+            <p class="section-subtitle centered">They all share common characteristics that make them ideal candidates for document automation:</p>
+
+            <div class="why-industries-grid">
+                <div class="why-industry-card">
+                    <div class="why-industry-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Expensive Staff Time</strong>
-                        High-cost staff time spent on low-value data entry
+                    <h3>High Document Volumes</h3>
+                    <p>Structured data in repetitive document formats</p>
+                </div>
+                <div class="why-industry-card">
+                    <div class="why-industry-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"/>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Compliance Requirements</strong>
-                        Need for audit trails, accuracy, and regulatory compliance
+                    <h3>Expensive Staff Time</h3>
+                    <p>High-cost staff time spent on low-value data entry</p>
+                </div>
+                <div class="why-industry-card">
+                    <div class="why-industry-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <path d="M9 12l2 2 4-4"/>
+                        </svg>
                     </div>
-                    <div class="characteristic-item">
-                        <strong>Existing Infrastructure</strong>
-                        Cloud/on-premise infrastructure already in place
+                    <h3>Compliance Requirements</h3>
+                    <p>Need for audit trails, accuracy, and regulatory compliance</p>
+                </div>
+                <div class="why-industry-card">
+                    <div class="why-industry-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
                     </div>
+                    <h3>Existing Infrastructure</h3>
+                    <p>Cloud/on-premise infrastructure already in place</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Sweet Spot Customer Profile -->
-    <section class="methodology">
+    <!-- Sweet Spot Profile -->
+    <section class="section">
         <div class="container">
-            <div class="target-markets-section-container">
-                <div class="sweet-spot-box">
-                    <h3>Sweet Spot Customer Profile</h3>
-                    <p>
-                        The ideal customer has:
-                    </p>
-                    <ul>
-                        <li><strong>50+ hours/month</strong> spent on manual document processing</li>
-                        <li><strong>$80k+/year</strong> salary cost for admin/junior staff doing data entry</li>
-                        <li><strong>Existing cloud tools</strong> but manually bridging gaps between systems</li>
-                        <li><strong>Privacy/security sensitive</strong> (your private cloud positioning wins here)</li>
-                        <li><strong>Risk-averse</strong> (your phased approach with exits is perfect)</li>
-                    </ul>
-                    <p>
-                        The engineering angle is just your proof of concept—the Protocol works for ANY document-heavy business.
-                    </p>
+            <div class="sweet-spot-card">
+                <div class="sweet-spot-header">
+                    <div class="sweet-spot-icon">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <circle cx="12" cy="12" r="6"/>
+                            <circle cx="12" cy="12" r="2"/>
+                        </svg>
+                    </div>
+                    <h2>Sweet Spot Customer Profile</h2>
                 </div>
+                <p class="sweet-spot-intro">The ideal customer has:</p>
+                <div class="sweet-spot-metrics">
+                    <div class="sweet-spot-metric">
+                        <span class="sweet-spot-metric-value">50+</span>
+                        <span class="sweet-spot-metric-label">hours/month on manual document processing</span>
+                    </div>
+                    <div class="sweet-spot-metric">
+                        <span class="sweet-spot-metric-value">$80k+</span>
+                        <span class="sweet-spot-metric-label">salary cost for admin/junior staff doing data entry</span>
+                    </div>
+                    <div class="sweet-spot-metric">
+                        <span class="sweet-spot-metric-value">Cloud</span>
+                        <span class="sweet-spot-metric-label">existing tools but manually bridging system gaps</span>
+                    </div>
+                </div>
+                <div class="sweet-spot-traits">
+                    <div class="sweet-spot-trait">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <span><strong>Privacy/security sensitive</strong> — your private cloud positioning wins here</span>
+                    </div>
+                    <div class="sweet-spot-trait">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <span><strong>Risk-averse</strong> — your phased approach with exits is perfect</span>
+                    </div>
+                </div>
+                <p class="sweet-spot-footer">The engineering angle is just your proof of concept—the Protocol works for ANY document-heavy business.</p>
             </div>
         </div>
     </section>
 
-    <!-- CTA Section -->
-    <section class="selector">
+    <!-- Final CTA Section -->
+    <section class="cta-section">
+        <div class="cta-background">
+            <svg class="cta-abstract" viewBox="0 0 400 200" fill="none">
+                <path d="M0 100 Q100 50 200 100 T400 100" stroke="var(--color-gold)" stroke-width="1" opacity="0.3"/>
+                <path d="M0 120 Q100 70 200 120 T400 120" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+            </svg>
+        </div>
         <div class="container">
-            <div class="target-markets-cta">
-                <h2 class="section-headline">Ready to See If You're a Fit?</h2>
-                <p class="section-subhead target-markets-section-subhead">
-                    Start with Phase 1: The Feasibility Sprint. We'll prove it works on YOUR documents in 48 hours.
-                </p>
-                <div class="target-markets-cta-buttons">
-                    <a href="contact.html" class="btn btn-primary">Book a Diagnostic</a>
-                    <a href="/demo.html" class="btn btn-secondary">Try Assessment Demo</a>
-                    <a href="/roi.html" class="btn btn-secondary">Calculate ROI</a>
-                </div>
+            <h2 class="cta-title">Ready to See If You're a Fit?</h2>
+            <p class="cta-subtitle">Start with Phase 1: The Feasibility Sprint. We'll prove it works on YOUR documents in 48 hours.</p>
+            <div class="cta-buttons">
+                <a href="contact.html" class="btn btn-primary btn-lg">Book a Diagnostic</a>
+                <a href="demo.html" class="btn btn-outline btn-lg">Try Assessment Demo</a>
+                <a href="roi.html" class="btn btn-outline btn-lg">Calculate ROI</a>
             </div>
         </div>
     </section>
@@ -425,7 +642,7 @@
                     <div class="footer-column">
                         <h4>Resources</h4>
                         <ul>
-                            <li><a href="/roi.html">ROI Calculator</a></li>
+                            <li><a href="roi.html">ROI Calculator</a></li>
                             <li><a href="how-it-works.html">Technical Architecture</a></li>
                             <li><a href="faq.html">FAQ</a></li>
                             <li><a href="target-markets.html">Target Markets</a></li>
@@ -442,7 +659,7 @@
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html" style="color: var(--color-gold); text-decoration: none;">Sitemap</a></p>
+                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html">Sitemap</a></p>
             </div>
         </div>
     </footer>
