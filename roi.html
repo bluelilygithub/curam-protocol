@@ -10,12 +10,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M19 12l-7 7-7-7"/>
         </svg>
     </button>
     
+    <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
             <div class="nav-brand">
@@ -30,6 +32,11 @@
                 <span></span>
             </button>
             <div class="nav-content">
+                <div class="nav-search-row">
+                    <div class="search-container">
+                        <input type="search" placeholder="Search..." class="nav-search-input">
+                    </div>
+                </div>
                 <ul class="nav-menu">
                     <li><a href="about.html">About</a></li>
                     <li><a href="services.html">Services</a></li>
@@ -38,8 +45,8 @@
                     <li class="nav-dropdown">
                         <a href="#">Resources</a>
                         <ul class="dropdown-menu">
-                            <li><a href="/roi.html">ROI Calculator</a></li>
-                            <li><a href="/demo.html">Assessment Demo</a></li>
+                            <li><a href="roi.html">ROI Calculator</a></li>
+                            <li><a href="demo.html">Assessment Demo</a></li>
                             <li><a href="feasibility-sprint-report.html">Phase 1 Sample Report</a></li>
                             <li><a href="risk-audit-report.html">Sample Audit PDF</a></li>
                             <li><a href="case-study.html">Case Study</a></li>
@@ -53,44 +60,140 @@
         </div>
     </nav>
 
-    <section class="hero" style="min-height: 40vh; padding: var(--spacing-lg) 0;">
+    <!-- Hero Section -->
+    <section class="service-hero">
         <div class="container">
-            <h1 class="hero-headline" style="font-size: 2.5rem;">Return on Investment</h1>
-            <p class="hero-subhead" style="font-size: 1.125rem;">Quantify the cost of manual engineering administration.</p>
+            <div class="service-hero-content">
+                <span class="hero-label">RESOURCE</span>
+                <h1 class="service-hero-title">ROI Calculator</h1>
+                <p class="service-hero-subtitle">Quantify the cost of manual document processing and see your potential savings with AI automation.</p>
+            </div>
         </div>
     </section>
 
-    <section class="methodology" style="padding: var(--spacing-xl) 0;">
+    <!-- Calculator Section -->
+    <section class="section">
         <div class="container">
-            <div style="background: var(--color-white); border-radius: var(--border-radius); padding: var(--spacing-md); border: 2px solid #E5E7EB;">
-                <div style="width: 100%; height: 900px; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden;">
+            <div class="roi-calculator-container">
+                <div class="roi-calculator-wrapper">
                     <iframe 
                         src="/roi-calculator/" 
                         width="100%" 
                         height="100%" 
                         frameborder="0"
-                        style="border: none;"
                         title="Curam-Ai ROI Calculator"
+                        loading="lazy"
                     ></iframe>
                 </div>
-                <p style="text-align: center; margin-top: var(--spacing-md); color: var(--color-gray); font-size: 0.875rem;">
-                    Estimations based on standard Australian engineering salary bands and administrative overhead.
+                <p class="roi-calculator-disclaimer">
+                    Estimations based on standard Australian professional services salary bands and administrative overhead.
                 </p>
             </div>
         </div>
     </section>
 
-    <section class="products" style="padding: var(--spacing-xl) 0; background-color: #f8fafc;">
-        <div class="container" style="text-align: center;">
-            <h2 class="section-headline">Stop Burning Cash</h2>
-            <p class="section-subhead">The calculator shows the problem. The Protocol provides the solution.</p>
-            <div style="margin-top: var(--spacing-lg);">
-                <a href="contact.html" class="btn btn-primary" style="margin-right: var(--spacing-sm);">Book a Diagnostic Call</a>
-                <a href="demo.html" class="btn btn-secondary">Try the Assessment Demo</a>
+    <!-- Key Insights Section -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">What the Numbers Mean</h2>
+            <p class="section-subhead">Understanding the true cost of manual document processing</p>
+            
+            <div class="roi-insights-grid">
+                <div class="roi-insight-card">
+                    <div class="roi-insight-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12,6 12,12 16,14"/>
+                        </svg>
+                    </div>
+                    <h3>Hidden Time Costs</h3>
+                    <p>Junior staff spending hours on data entry means less billable work and slower project delivery. Calculate the true opportunity cost.</p>
+                </div>
+                
+                <div class="roi-insight-card">
+                    <div class="roi-insight-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                    </div>
+                    <h3>Salary Arbitrage</h3>
+                    <p>High-cost professionals doing low-value admin work. The calculator shows exactly how much you're overpaying for data entry.</p>
+                </div>
+                
+                <div class="roi-insight-card">
+                    <div class="roi-insight-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22,4 12,14.01 9,11.01"/>
+                        </svg>
+                    </div>
+                    <h3>Error Reduction</h3>
+                    <p>Manual transcription errors cost more than time—they damage client trust. AI achieves 95%+ accuracy consistently.</p>
+                </div>
+                
+                <div class="roi-insight-card">
+                    <div class="roi-insight-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                    </div>
+                    <h3>Compound Savings</h3>
+                    <p>Automation savings compound monthly. What starts as hours saved becomes days recovered across your team.</p>
+                </div>
             </div>
         </div>
     </section>
 
+    <!-- Typical Results Section -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">Typical Client Results</h2>
+            <p class="section-subhead">Real outcomes from Phase 1 Feasibility Sprints</p>
+            
+            <div class="roi-results-grid">
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">40+</div>
+                    <div class="roi-result-label">Hours saved per month</div>
+                    <p class="roi-result-description">Average time recovered from document processing automation</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">95%</div>
+                    <div class="roi-result-label">Extraction accuracy</div>
+                    <p class="roi-result-description">Validated benchmark achieved in Phase 1 testing</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">6-12</div>
+                    <div class="roi-result-label">Month payback period</div>
+                    <p class="roi-result-description">Typical ROI timeline for full implementation</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">$80k+</div>
+                    <div class="roi-result-label">Annual savings potential</div>
+                    <p class="roi-result-description">For firms processing 50+ hours/month of documents</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="section section-alt">
+        <div class="container">
+            <div class="roi-cta-box">
+                <h2 class="section-headline">Stop Burning Cash on Manual Work</h2>
+                <p class="section-subhead">The calculator shows the problem. The Protocol provides the solution.</p>
+                <div class="roi-cta-buttons">
+                    <a href="contact.html" class="btn btn-primary">Book a Diagnostic Call</a>
+                    <a href="demo.html" class="btn btn-secondary">Try the Assessment Demo</a>
+                    <a href="curam-ai-protocol.html" class="btn btn-outline">Learn About the Protocol</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
     <footer class="footer">
         <div class="container">
             <div class="footer-content">
@@ -121,7 +224,7 @@
                     <div class="footer-column">
                         <h4>Resources</h4>
                         <ul>
-                            <li><a href="/roi.html">ROI Calculator</a></li>
+                            <li><a href="roi.html">ROI Calculator</a></li>
                             <li><a href="how-it-works.html">Technical Architecture</a></li>
                             <li><a href="faq.html">FAQ</a></li>
                             <li><a href="target-markets.html">Target Markets</a></li>

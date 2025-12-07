@@ -3675,6 +3675,193 @@ h1, h2, h3, h4 {
   font-size: 1rem;
 }
 
+/* ========== ROI PAGE STYLES ========== */
+
+.roi-calculator-container {
+  background: var(--color-white);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-lg);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+}
+
+.roi-calculator-wrapper {
+  width: 100%;
+  height: 900px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+}
+
+.roi-calculator-wrapper iframe {
+  border: none;
+  display: block;
+}
+
+.roi-calculator-disclaimer {
+  text-align: center;
+  margin-top: var(--spacing-md);
+  color: var(--color-gray);
+  font-size: 0.875rem;
+}
+
+/* ROI Insights Grid */
+.roi-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
+}
+
+@media (max-width: 1024px) {
+  .roi-insights-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .roi-insights-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.roi-insight-card {
+  background: var(--color-white);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-lg);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.roi-insight-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.roi-insight-icon {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.roi-insight-icon svg {
+  stroke: var(--color-white);
+}
+
+.roi-insight-card h3 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--navy-deep);
+  margin-bottom: var(--spacing-sm);
+}
+
+.roi-insight-card p {
+  font-size: 0.9375rem;
+  color: var(--color-gray);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ROI Results Grid */
+.roi-results-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
+}
+
+@media (max-width: 1024px) {
+  .roi-results-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .roi-results-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.roi-result-card {
+  background: var(--color-white);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-xl);
+  text-align: center;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.roi-result-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  border-color: var(--color-gold);
+}
+
+.roi-result-stat {
+  font-size: 3rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--color-gold), var(--cyan-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: var(--spacing-xs);
+}
+
+.roi-result-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--navy-deep);
+  margin-bottom: var(--spacing-sm);
+}
+
+.roi-result-description {
+  font-size: 0.875rem;
+  color: var(--color-gray);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ROI CTA Box */
+.roi-cta-box {
+  background: var(--navy-deep);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-3xl);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.roi-cta-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-gold), var(--cyan-accent), var(--color-gold));
+}
+
+.roi-cta-box .section-headline {
+  color: var(--color-white);
+}
+
+.roi-cta-box .section-subhead {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.roi-cta-buttons {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  margin-top: var(--spacing-xl);
+}
+
 /* ========== UTILITIES ========== */
 .sr-only {
   position: absolute;
