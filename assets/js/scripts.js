@@ -39,19 +39,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // ========== HERO MESSAGE ROTATION ==========
-  const heroSlides = document.querySelectorAll('.hero-slide');
-  let currentSlide = 0;
-  
-  if (heroSlides.length > 1) {
-    // Set first slide as active
-    heroSlides[0].classList.add('active');
-    
-    setInterval(function() {
-      heroSlides[currentSlide].classList.remove('active');
-      currentSlide = (currentSlide + 1) % heroSlides.length;
-      heroSlides[currentSlide].classList.add('active');
-    }, 6000); // Rotate every 6 seconds
-  }
+  // Hero rotation is now handled by hero-text-rotation.js
+  // This code has been moved to avoid conflicts
 
   // ========== NAVBAR SCROLL EFFECT ==========
   const navbar = document.querySelector('.navbar');

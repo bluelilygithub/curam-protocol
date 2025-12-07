@@ -12,6 +12,7 @@
     
     function initHeroRotation() {
         const slides = document.querySelectorAll('.hero-slide');
+        const statsSlides = document.querySelectorAll('.hero-stats-slide');
         const indicators = document.querySelectorAll('.hero-indicator');
         
         if (slides.length < 2) {
@@ -19,7 +20,12 @@
             return;
         }
         
-        // Initialize first slide
+        // Ensure stats slides exist and match text slides
+        if (statsSlides.length !== slides.length) {
+            console.warn('Hero stats slides count does not match text slides count');
+        }
+        
+        // Initialize first slide (both text and stats)
         updateSlide(0);
         
         // Setup indicator clicks
@@ -63,7 +69,10 @@
     
     function nextSlide() {
         const slides = document.querySelectorAll('.hero-slide');
-        currentSlide = (currentSlide + 1) % slides.length;
+        const statsSlides = document.querySelectorAll('.hero-stats-slide');
+        // Use the minimum length to ensure we don't go out of bounds
+        const maxSlides = Math.min(slides.length, statsSlides.length || slides.length);
+        currentSlide = (currentSlide + 1) % maxSlides;
         updateSlide(currentSlide);
     }
     
@@ -78,9 +87,15 @@
     }
     
     function updateSlide(index) {
+        // Query elements fresh each time to ensure we have the latest DOM state
         const slides = document.querySelectorAll('.hero-slide');
         const statsSlides = document.querySelectorAll('.hero-stats-slide');
         const indicators = document.querySelectorAll('.hero-indicator');
+        
+        // Validate index
+        if (index < 0 || index >= slides.length) {
+            return;
+        }
         
         // Update text slides with fade transition
         slides.forEach((slide, i) => {
@@ -95,18 +110,20 @@
             }
         });
         
-        // Update stats slides with fade transition
-        statsSlides.forEach((statsSlide, i) => {
-            if (i === index) {
-                // Fade in active stats
-                statsSlide.classList.remove('fade-out');
-                statsSlide.classList.add('active', 'fade-in');
-            } else {
-                // Fade out inactive stats
-                statsSlide.classList.remove('active', 'fade-in');
-                statsSlide.classList.add('fade-out');
-            }
-        });
+        // Update stats slides with fade transition (synchronously)
+        if (statsSlides.length > 0) {
+            statsSlides.forEach((statsSlide, i) => {
+                if (i === index) {
+                    // Fade in active stats
+                    statsSlide.classList.remove('fade-out');
+                    statsSlide.classList.add('active', 'fade-in');
+                } else {
+                    // Fade out inactive stats
+                    statsSlide.classList.remove('active', 'fade-in');
+                    statsSlide.classList.add('fade-out');
+                }
+            });
+        }
         
         // Update indicators
         indicators.forEach((indicator, i) => {
