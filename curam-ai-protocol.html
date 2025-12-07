@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Scroll Down Button - Fixed to viewport bottom -->
+    <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M19 12l-7 7-7-7"/>
@@ -42,7 +42,7 @@
                     <li><a href="about.html">About</a></li>
                     <li><a href="services.html">Services</a></li>
                     <li><a href="target-markets.html">Target Markets</a></li>
-                    <li><a href="curam-ai-protocol.html">The Protocol</a></li>
+                    <li><a href="curam-ai-protocol.html" class="active">The Protocol</a></li>
                     <li class="nav-dropdown">
                         <a href="#">Resources</a>
                         <ul class="dropdown-menu">
@@ -61,148 +61,370 @@
         </div>
     </nav>
 
-    <!-- Header & Hero Section -->
-    <header class="protocol-hero">
+    <!-- Hero Section -->
+    <section class="service-hero">
         <div class="container">
-            <h1 class="protocol-hero-title">
-                The Curam-Ai Protocol: Engineering Rigor Meets Agile Speed
-            </h1>
-            <p class="protocol-hero-subtitle">
-                The integration of artificial intelligence into core business processes often begins as an "Agile Black Box"—a project characterized by high uncertainty, unquantified liability, and uncontrolled financial exposure.
-            </p>
-            <!-- High-impact callout -->
-            <div class="protocol-hero-callout">
-                <p class="protocol-hero-callout-text">
-                    The Curam-Ai Protocol replaces uncertainty with discipline.
+            <div class="service-hero-content">
+                <span class="service-hero-badge">The Curam-Ai Protocol™</span>
+                <h1 class="service-hero-title">Engineering Rigor Meets Agile Speed</h1>
+                <p class="service-hero-description">
+                    The integration of artificial intelligence into core business processes often begins as an "Agile Black Box"—a project characterized by high uncertainty, unquantified liability, and uncontrolled financial exposure.
                 </p>
-            </div>
-        </div>
-    </header>
-
-    <!-- Protocol Overview and Phase Cards -->
-    <section class="protocol-overview">
-        <div class="container">
-            <h2 class="section-headline">A Structured Approach to Guaranteeing Value</h2>
-            <p class="section-subhead">
-                The Protocol transforms AI adoption from a risk into a predictable, validated investment through four distinct, fixed-fee commercial gates.
-            </p>
-
-            <!-- 4-Phase Grid/Cards -->
-            <div class="protocol-phases-grid">
-
-                <!-- Phase 1 Card -->
-                <div class="protocol-phase-card protocol-phase-card-gold">
-                    <span class="protocol-phase-label">PHASE 1</span>
-                    <h3 class="protocol-phase-title">The Feasibility Sprint</h3>
-                    <p class="protocol-phase-subtitle">(Prove It Before You Invest)</p>
-                    
-                    <div class="protocol-phase-price">
-                        <p class="protocol-phase-price-amount">$1,500 <span class="protocol-phase-price-time">| ~40 Hours</span></p>
-                    </div>
-
-                    <p class="protocol-phase-description">
-                        This phase acts as a Paid Lab Test, proving the technical capacity to extract data from your specific engineering documents. The outcome is a <strong>Validated Benchmark</strong> confirming a high accuracy standard.
-                    </p>
-                    <div class="protocol-phase-info-box protocol-phase-info-box-gray">
-                         <p class="protocol-phase-info-label">OFF-RAMP CRITERIA:</p>
-                         <p class="protocol-phase-info-text">If accuracy cannot be achieved, an immediate Off-Ramp is triggered. You retain the full assessment and findings memo, securing valuable technical data.</p>
-                    </div>
+                <div class="service-hero-callout">
+                    <p>The Curam-Ai Protocol replaces uncertainty with discipline.</p>
                 </div>
-
-                <!-- Phase 2 Card -->
-                <div class="protocol-phase-card protocol-phase-card-blue">
-                    <span class="protocol-phase-label">PHASE 2</span>
-                    <h3 class="protocol-phase-title">The Readiness Roadmap</h3>
-                    <p class="protocol-phase-subtitle">(Quantify the ROI)</p>
-                    
-                    <div class="protocol-phase-price">
-                        <p class="protocol-phase-price-amount">$7,500 <span class="protocol-phase-price-time">| ~3 Weeks</span></p>
-                    </div>
-
-                    <p class="protocol-phase-description">
-                        This phase develops a <strong>Board-Ready Business Case</strong>. It quantifies the precise Return on Investment (ROI) and builds a robust Tier 1/Tier 2 support plan and risk register, ensuring any subsequent investment is financially justified.
-                    </p>
-                    <div class="protocol-phase-info-box protocol-phase-info-box-blue">
-                         <p class="protocol-phase-info-label">DELIVERABLE:</p>
-                         <p class="protocol-phase-info-text">Board-Ready Business Case (Financial justification and Governance Readiness)</p>
-                    </div>
-                </div>
-
-                <!-- Phase 3 Card -->
-                <div class="protocol-phase-card protocol-phase-card-indigo">
-                    <span class="protocol-phase-label">PHASE 3</span>
-                    <h3 class="protocol-phase-title">The Compliance Shield</h3>
-                    <p class="protocol-phase-subtitle">(Zero Tolerance for Shadow IT)</p>
-
-                    <div class="protocol-phase-price">
-                        <p class="protocol-phase-price-amount">$8–12k <span class="protocol-phase-price-time">| ~2 Weeks</span></p>
-                    </div>
-
-                    <p class="protocol-phase-description">
-                        This pre-audit step addresses CTO concerns. It maps deployment against ISO 27001 controls and builds a <strong>Compliance Pool</strong> of documentation. The solution is rigorously compliant and operates <strong>100% inside your existing secure cloud tenant (Azure, AWS, or GCP)</strong>.
-                    </p>
-                    <div class="protocol-phase-info-box protocol-phase-info-box-indigo">
-                         <p class="protocol-phase-info-label">ASSURANCE:</p>
-                         <p class="protocol-phase-info-text">Proactive security check to flag blockers early and guarantee data sovereignty.</p>
-                    </div>
-                </div>
-
-                <!-- Phase 4 Card -->
-                <div class="protocol-phase-card protocol-phase-card-red">
-                    <span class="protocol-phase-label">PHASE 4</span>
-                    <h3 class="protocol-phase-title">Wave 1 Implementation</h3>
-                    <p class="protocol-phase-subtitle">(Predictable Deployment and Full Ownership)</p>
-                    
-                    <div class="protocol-phase-price">
-                        <p class="protocol-phase-price-amount">$20–90k <span class="protocol-phase-price-time">| ~30-Day Sprint</span></p>
-                    </div>
-
-                    <p class="protocol-phase-description">
-                        A fixed-scope sprint leading to production. This phase includes a <strong>Full IP Handover</strong>—your firm owns the source code and workflows outright. This eliminates vendor lock-in and ensures self-sufficiency for maintenance or enhancement.
-                    </p>
-                    <div class="protocol-phase-info-box protocol-phase-info-box-red">
-                         <p class="protocol-phase-info-label">GUARANTEE:</p>
-                         <p class="protocol-phase-info-text">Full IP Handover. No ongoing licensing fees for the core solution.</p>
-                    </div>
-                </div>
-
             </div>
         </div>
     </section>
 
-    <!-- Advantage of the Frame -->
-    <section class="protocol-advantages">
+    <!-- Protocol Overview -->
+    <section class="section section-alt">
         <div class="container">
-            <h2 class="section-headline">The Advantage of the Frame: Guaranteed Outcomes</h2>
-            <div class="protocol-advantages-grid">
+            <div class="section-header">
+                <h2 class="section-headline">A Structured Approach to Guaranteeing Value</h2>
+                <p class="section-subhead">
+                    The Protocol transforms AI adoption from a risk into a predictable, validated investment through four distinct, fixed-fee commercial gates.
+                </p>
+            </div>
 
-                <!-- Financial Control -->
-                <div class="protocol-advantage-card protocol-advantage-card-gold">
-                    <div class="protocol-advantage-header">
-                        <svg class="protocol-advantage-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <h3 class="protocol-advantage-title">Financial Control</h3>
+            <!-- Protocol Timeline Visual -->
+            <div class="protocol-timeline">
+                <div class="protocol-timeline-line"></div>
+                <div class="protocol-timeline-steps">
+                    <div class="protocol-timeline-step">
+                        <div class="protocol-timeline-dot protocol-timeline-dot-gold"></div>
+                        <span>Validate</span>
                     </div>
-                    <p class="protocol-advantage-text">Investment is incremental and fixed-fee, contingent on proven performance—eliminating runaway costs and ensuring every dollar spent secures validated progress.</p>
+                    <div class="protocol-timeline-step">
+                        <div class="protocol-timeline-dot protocol-timeline-dot-blue"></div>
+                        <span>Plan</span>
+                    </div>
+                    <div class="protocol-timeline-step">
+                        <div class="protocol-timeline-dot protocol-timeline-dot-indigo"></div>
+                        <span>Secure</span>
+                    </div>
+                    <div class="protocol-timeline-step">
+                        <div class="protocol-timeline-dot protocol-timeline-dot-green"></div>
+                        <span>Deploy</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Phase 1 -->
+    <section class="section" id="phase-1">
+        <div class="container">
+            <div class="protocol-phase-section">
+                <div class="protocol-phase-header">
+                    <div class="protocol-phase-number protocol-phase-number-gold">01</div>
+                    <div class="protocol-phase-header-content">
+                        <span class="protocol-phase-tag">PHASE 1</span>
+                        <h2 class="section-headline">The Feasibility Sprint</h2>
+                        <p class="protocol-phase-tagline">Prove It Before You Invest</p>
+                    </div>
                 </div>
 
-                <!-- Technical Certainty -->
-                <div class="protocol-advantage-card protocol-advantage-card-blue">
-                    <div class="protocol-advantage-header">
-                        <svg class="protocol-advantage-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 4.016c-1.636 1.34-2.617 3.253-2.617 5.344 0 4.135 3.35 7.485 7.485 7.485 4.135 0 7.485-3.35 7.485-7.485 0-2.091-.98-3.998-2.617-5.344z"></path></svg>
-                        <h3 class="protocol-advantage-title">Technical Certainty</h3>
+                <div class="protocol-phase-grid">
+                    <div class="protocol-phase-main">
+                        <div class="protocol-phase-photo">
+                            <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=400&fit=crop" alt="Data analysis and testing" />
+                        </div>
+                        <div class="protocol-phase-intro">
+                            <p>This phase acts as a <strong>Paid Lab Test</strong>, proving the technical capacity to extract data from your specific documents. We run your actual files through our AI pipeline and deliver measurable results.</p>
+                        </div>
                     </div>
-                    <p class="protocol-advantage-text">Compliance and security are fully validated before production begins, ensuring the AI deployment aligns with rigorous standards and operates entirely within your secure cloud boundary.</p>
+
+                    <div class="protocol-phase-details">
+                        <div class="protocol-detail-card protocol-detail-card-gold">
+                            <div class="protocol-detail-header">
+                                <span class="protocol-detail-price">$1,500</span>
+                                <span class="protocol-detail-duration">~48 Hours</span>
+                            </div>
+                            <h4>What You Get</h4>
+                            <ul class="protocol-detail-list">
+                                <li>Live test on 10-20 of YOUR actual documents</li>
+                                <li>Accuracy benchmark with metrics</li>
+                                <li>Technical findings memo</li>
+                                <li>Go/no-go recommendation</li>
+                            </ul>
+                        </div>
+
+                        <div class="protocol-detail-card protocol-detail-card-outline">
+                            <h4>Off-Ramp Guarantee</h4>
+                            <p>If we cannot achieve ≥90% accuracy on your document types, you receive a full refund. You keep the technical assessment and findings—valuable data regardless of outcome.</p>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Definitive Ownership -->
-                <div class="protocol-advantage-card protocol-advantage-card-green">
-                    <div class="protocol-advantage-header">
-                        <svg class="protocol-advantage-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                        <h3 class="protocol-advantage-title">Definitive Ownership</h3>
+                <div class="protocol-phase-cta">
+                    <a href="feasibility-sprint-report.html" class="btn btn-primary">View Sample Report →</a>
+                    <a href="contact.html" class="btn btn-secondary">Start Phase 1</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Phase 2 -->
+    <section class="section section-alt" id="phase-2">
+        <div class="container">
+            <div class="protocol-phase-section">
+                <div class="protocol-phase-header">
+                    <div class="protocol-phase-number protocol-phase-number-blue">02</div>
+                    <div class="protocol-phase-header-content">
+                        <span class="protocol-phase-tag">PHASE 2</span>
+                        <h2 class="section-headline">The Readiness Roadmap</h2>
+                        <p class="protocol-phase-tagline">Quantify the ROI</p>
                     </div>
-                    <p class="protocol-advantage-text">The IP Handover guarantees your firm owns the resulting asset, preventing vendor lock-in and transforming the solution into a powerful, self-sustaining extension of your business.</p>
                 </div>
 
+                <div class="protocol-phase-grid">
+                    <div class="protocol-phase-main">
+                        <div class="protocol-phase-photo">
+                            <img src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=400&fit=crop" alt="Business planning and strategy" />
+                        </div>
+                        <div class="protocol-phase-intro">
+                            <p>This phase develops a <strong>Board-Ready Business Case</strong>. We quantify the precise Return on Investment and build a robust support plan, ensuring any subsequent investment is financially justified.</p>
+                        </div>
+                    </div>
+
+                    <div class="protocol-phase-details">
+                        <div class="protocol-detail-card protocol-detail-card-blue">
+                            <div class="protocol-detail-header">
+                                <span class="protocol-detail-price">$7,500</span>
+                                <span class="protocol-detail-duration">~3 Weeks</span>
+                            </div>
+                            <h4>What You Get</h4>
+                            <ul class="protocol-detail-list">
+                                <li>Detailed ROI model with projections</li>
+                                <li>Tier 1/Tier 2 support plan</li>
+                                <li>Risk register and mitigation strategies</li>
+                                <li>Implementation timeline</li>
+                                <li>Board presentation deck</li>
+                            </ul>
+                        </div>
+
+                        <div class="protocol-detail-card protocol-detail-card-outline">
+                            <h4>Deliverable</h4>
+                            <p>Board-Ready Business Case with financial justification, governance framework, and implementation roadmap—everything needed for executive approval.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="protocol-phase-cta">
+                    <a href="/roi.html" class="btn btn-primary">Try ROI Calculator →</a>
+                    <a href="contact.html" class="btn btn-secondary">Get Your Roadmap</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Phase 3 -->
+    <section class="section" id="phase-3">
+        <div class="container">
+            <div class="protocol-phase-section">
+                <div class="protocol-phase-header">
+                    <div class="protocol-phase-number protocol-phase-number-indigo">03</div>
+                    <div class="protocol-phase-header-content">
+                        <span class="protocol-phase-tag">PHASE 3</span>
+                        <h2 class="section-headline">The Compliance Shield</h2>
+                        <p class="protocol-phase-tagline">Zero Tolerance for Shadow IT</p>
+                    </div>
+                </div>
+
+                <div class="protocol-phase-grid">
+                    <div class="protocol-phase-main">
+                        <div class="protocol-phase-photo">
+                            <img src="https://images.unsplash.com/photo-1563986768609-322da13575f3?w=600&h=400&fit=crop" alt="Security and compliance" />
+                        </div>
+                        <div class="protocol-phase-intro">
+                            <p>This pre-audit step addresses CTO concerns. We map deployment against <strong>ISO 27001 controls</strong> and build a Compliance Pool of documentation. The solution operates <strong>100% inside your existing secure cloud tenant</strong>.</p>
+                        </div>
+                    </div>
+
+                    <div class="protocol-phase-details">
+                        <div class="protocol-detail-card protocol-detail-card-indigo">
+                            <div class="protocol-detail-header">
+                                <span class="protocol-detail-price">$8–12k</span>
+                                <span class="protocol-detail-duration">~2 Weeks</span>
+                            </div>
+                            <h4>What You Get</h4>
+                            <ul class="protocol-detail-list">
+                                <li>ISO 27001 alignment audit</li>
+                                <li>Data sovereignty verification</li>
+                                <li>Security architecture review</li>
+                                <li>PI insurance compatibility check</li>
+                                <li>Compliance documentation package</li>
+                            </ul>
+                        </div>
+
+                        <div class="protocol-detail-card protocol-detail-card-outline">
+                            <h4>Assurance</h4>
+                            <p>Proactive security check to flag blockers early. Guarantees data sovereignty—your data never leaves your Azure, AWS, or GCP tenant.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="protocol-phase-cta">
+                    <a href="risk-audit-report.html" class="btn btn-primary">View Sample Audit →</a>
+                    <a href="contact.html" class="btn btn-secondary">Request Compliance Review</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Phase 4 -->
+    <section class="section section-alt" id="phase-4">
+        <div class="container">
+            <div class="protocol-phase-section">
+                <div class="protocol-phase-header">
+                    <div class="protocol-phase-number protocol-phase-number-green">04</div>
+                    <div class="protocol-phase-header-content">
+                        <span class="protocol-phase-tag">PHASE 4</span>
+                        <h2 class="section-headline">Wave 1 Implementation</h2>
+                        <p class="protocol-phase-tagline">Predictable Deployment and Full Ownership</p>
+                    </div>
+                </div>
+
+                <div class="protocol-phase-grid">
+                    <div class="protocol-phase-main">
+                        <div class="protocol-phase-photo">
+                            <img src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=600&h=400&fit=crop" alt="Team implementation" />
+                        </div>
+                        <div class="protocol-phase-intro">
+                            <p>A fixed-scope sprint leading to production. This phase includes <strong>Full IP Handover</strong>—your firm owns the source code and workflows outright. No vendor lock-in, no ongoing licensing fees.</p>
+                        </div>
+                    </div>
+
+                    <div class="protocol-phase-details">
+                        <div class="protocol-detail-card protocol-detail-card-green">
+                            <div class="protocol-detail-header">
+                                <span class="protocol-detail-price">$20–90k</span>
+                                <span class="protocol-detail-duration">~30-Day Sprint</span>
+                            </div>
+                            <h4>What You Get</h4>
+                            <ul class="protocol-detail-list">
+                                <li>Production-ready AI workflows</li>
+                                <li>Full source code handover</li>
+                                <li>Integration with your systems</li>
+                                <li>Staff training and documentation</li>
+                                <li>30-day hypercare support</li>
+                            </ul>
+                        </div>
+
+                        <div class="protocol-detail-card protocol-detail-card-outline">
+                            <h4>IP Guarantee</h4>
+                            <p>Full IP Handover. You own everything—source code, workflows, documentation. No ongoing licensing fees for the core solution. Self-sufficiency is the goal.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="protocol-phase-cta">
+                    <a href="case-study.html" class="btn btn-primary">View Case Study →</a>
+                    <a href="contact.html" class="btn btn-secondary">Start Implementation</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Advantages Section -->
+    <section class="section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-headline">The Advantage of the Frame</h2>
+                <p class="section-subhead">Guaranteed Outcomes at Every Stage</p>
+            </div>
+
+            <div class="advantages-grid">
+                <div class="advantage-card advantage-card-gold">
+                    <div class="advantage-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <h3>Financial Control</h3>
+                    <p>Investment is incremental and fixed-fee, contingent on proven performance—eliminating runaway costs and ensuring every dollar spent secures validated progress.</p>
+                </div>
+
+                <div class="advantage-card advantage-card-blue">
+                    <div class="advantage-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                    </div>
+                    <h3>Technical Certainty</h3>
+                    <p>Compliance and security are fully validated before production begins, ensuring the AI deployment aligns with rigorous standards and operates within your secure cloud boundary.</p>
+                </div>
+
+                <div class="advantage-card advantage-card-green">
+                    <div class="advantage-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                        </svg>
+                    </div>
+                    <h3>Definitive Ownership</h3>
+                    <p>The IP Handover guarantees your firm owns the resulting asset, preventing vendor lock-in and transforming the solution into a powerful, self-sustaining extension of your business.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Entry Points Section -->
+    <section class="section section-alt">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-headline">Choose Your Entry Point</h2>
+                <p class="section-subhead">Start where it makes sense for your situation</p>
+            </div>
+
+            <div class="entry-points-grid">
+                <div class="entry-point-card">
+                    <div class="entry-point-badge">Most Popular</div>
+                    <h3>For Skeptics</h3>
+                    <p class="entry-point-quote">"I don't believe AI can handle our messy documents."</p>
+                    <p class="entry-point-action">→ Start with <strong>Phase 1: Feasibility Sprint</strong></p>
+                    <p class="entry-point-details">48 hours, $1,500. We prove it works on YOUR documents.</p>
+                    <a href="feasibility-sprint-report.html" class="btn btn-secondary">See Sample Report →</a>
+                </div>
+
+                <div class="entry-point-card">
+                    <h3>For Planners</h3>
+                    <p class="entry-point-quote">"I need a budget and business case first."</p>
+                    <p class="entry-point-action">→ Start with <strong>Phase 2: Readiness Roadmap</strong></p>
+                    <p class="entry-point-details">3 weeks, $7,500. Board-ready ROI model.</p>
+                    <a href="/roi.html" class="btn btn-secondary">Try ROI Calculator →</a>
+                </div>
+
+                <div class="entry-point-card">
+                    <h3>For Compliance-Focused</h3>
+                    <p class="entry-point-quote">"I'm blocked by IT security or insurance."</p>
+                    <p class="entry-point-action">→ Start with <strong>Phase 3: Compliance Shield</strong></p>
+                    <p class="entry-point-details">2 weeks, $8-12k. ISO 27001 alignment audit.</p>
+                    <a href="risk-audit-report.html" class="btn btn-secondary">View Sample Audit →</a>
+                </div>
+
+                <div class="entry-point-card">
+                    <h3>For Ready-to-Deploy</h3>
+                    <p class="entry-point-quote">"Let's implement now."</p>
+                    <p class="entry-point-action">→ Start with <strong>Phase 4: Wave 1 Implementation</strong></p>
+                    <p class="entry-point-details">30 days, $20-90k. Production workflows + IP handover.</p>
+                    <a href="contact.html" class="btn btn-secondary">Book Implementation Call →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="section protocol-final-cta">
+        <div class="container">
+            <div class="final-cta-content">
+                <h2 class="section-headline">Ready to Replace Uncertainty with Discipline?</h2>
+                <p class="section-subhead">Book a 15-minute diagnostic call. We'll help you identify the right phase to start.</p>
+                <div class="final-cta-buttons">
+                    <a href="contact.html" class="btn btn-primary btn-lg">Book Diagnostic Call</a>
+                    <a href="/demo.html" class="btn btn-secondary btn-lg">Try AI Demo</a>
+                    <a href="/roi.html" class="btn btn-secondary btn-lg">Calculate ROI</a>
+                </div>
             </div>
         </div>
     </section>
@@ -229,10 +451,10 @@
                     <div class="footer-column">
                         <h4>The Protocol</h4>
                         <ul>
-                            <li><a href="curam-ai-protocol.html">Phase 1: Feasibility Sprint</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 2: The Roadmap</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 3: Compliance Shield</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 4: Implementation</a></li>
+                            <li><a href="#phase-1">Phase 1: Feasibility Sprint</a></li>
+                            <li><a href="#phase-2">Phase 2: The Roadmap</a></li>
+                            <li><a href="#phase-3">Phase 3: Compliance Shield</a></li>
+                            <li><a href="#phase-4">Phase 4: Implementation</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
