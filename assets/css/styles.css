@@ -1269,6 +1269,307 @@ h1, h2, h3, h4 {
 .delay-4 { animation-delay: 0.4s; }
 .delay-5 { animation-delay: 0.5s; }
 
+/* ========== PAGE HERO (Compact for inner pages) ========== */
+.page-hero {
+  padding-top: 160px;
+  padding-bottom: var(--spacing-3xl);
+  background: linear-gradient(180deg, var(--navy-deep) 0%, var(--navy-medium) 100%);
+  text-align: center;
+}
+
+.page-hero-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.hero-eyebrow {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--cyan-accent);
+  margin-bottom: var(--spacing-md);
+}
+
+.page-hero-headline {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-md);
+  line-height: 1.1;
+}
+
+.page-hero-subhead {
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ========== CONTENT SECTIONS ========== */
+.content-section {
+  padding: var(--spacing-3xl) 0;
+  background: var(--navy-deep);
+}
+
+.content-section.alt-bg {
+  background: var(--navy-medium);
+}
+
+@media (min-width: 768px) {
+  .content-section {
+    padding: 5rem 0;
+  }
+}
+
+.content-block {
+  max-width: 900px;
+}
+
+.content-block.text-center {
+  margin: 0 auto;
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.content-text {
+  font-size: 1.125rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+/* ========== PHASE CARDS (About page framework) ========== */
+.phases-list {
+  max-width: 1000px;
+  margin: var(--spacing-2xl) auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.phase-card {
+  background: var(--navy-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  transition: var(--transition);
+}
+
+.phase-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: 0 8px 32px rgba(0, 212, 255, 0.08);
+}
+
+.phase-card-header {
+  padding: var(--spacing-lg);
+  background: rgba(0, 212, 255, 0.05);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.phase-badge {
+  display: inline-block;
+  padding: 0.375rem 0.75rem;
+  background: var(--cyan-accent);
+  color: var(--navy-deep);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-radius: 4px;
+}
+
+.phase-card-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.phase-card-body {
+  padding: var(--spacing-lg);
+}
+
+.phase-objective,
+.phase-outcome {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: var(--spacing-md);
+}
+
+.phase-objective strong,
+.phase-outcome strong {
+  color: var(--text-primary);
+}
+
+.phase-process {
+  margin-bottom: var(--spacing-md);
+}
+
+.phase-process p {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+}
+
+.phase-process ul {
+  padding-left: var(--spacing-lg);
+}
+
+.phase-process li {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: var(--spacing-sm);
+  position: relative;
+  list-style: none;
+}
+
+.phase-process li::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--spacing-lg) * -1 + 0.25rem);
+  top: 0.6em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cyan-accent);
+}
+
+/* ========== ADVANTAGES GRID ========== */
+.advantages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-2xl);
+}
+
+.advantage-card {
+  background: var(--navy-medium);
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--accent-color, var(--cyan-accent));
+  border-radius: var(--border-radius);
+  padding: var(--spacing-xl);
+  transition: var(--transition);
+}
+
+.advantage-card:hover {
+  border-color: var(--accent-color, var(--cyan-accent));
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+
+.advantage-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 212, 255, 0.1);
+  border-radius: 50%;
+  color: var(--accent-color, var(--cyan-accent));
+  margin-bottom: var(--spacing-md);
+}
+
+.advantage-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.advantage-desc {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ========== FEATURES GRID (Why Choose Us) ========== */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-lg);
+  max-width: 1000px;
+  margin: var(--spacing-2xl) auto 0;
+}
+
+.feature-card {
+  background: var(--navy-deep);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-xl);
+  transition: var(--transition);
+}
+
+.feature-card:hover {
+  border-color: var(--border-accent);
+  transform: translateY(-2px);
+}
+
+.feature-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.feature-desc {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ========== CTA SECTION ========== */
+.cta-section {
+  padding: var(--spacing-3xl) 0;
+  background: linear-gradient(135deg, var(--navy-medium) 0%, var(--navy-deep) 100%);
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .cta-section {
+    padding: 5rem 0;
+  }
+}
+
+.cta-content {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.cta-headline {
+  font-size: clamp(1.5rem, 4vw, 2.25rem);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+.cta-subhead {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-xl);
+}
+
+.cta-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--spacing-md);
+}
+
 /* ========== UTILITIES ========== */
 .sr-only {
   position: absolute;
