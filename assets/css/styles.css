@@ -712,9 +712,40 @@ h1, h2, h3, h4 {
 
 /* Hero Stats Grid */
 .hero-stats {
+  position: relative;
+  min-height: 300px; /* Prevent layout shift during rotation */
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
+}
+
+.hero-stats-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s ease-in-out, visibility 0.4s ease-in-out;
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.hero-stats-slide.active {
+  position: relative;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.hero-stats-slide.fade-in {
+  animation: fadeIn 0.4s ease-in-out forwards;
+}
+
+.hero-stats-slide.fade-out {
+  animation: fadeOut 0.4s ease-in-out forwards;
 }
 
 .stat-card {

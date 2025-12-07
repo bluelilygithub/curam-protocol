@@ -79,9 +79,10 @@
     
     function updateSlide(index) {
         const slides = document.querySelectorAll('.hero-slide');
+        const statsSlides = document.querySelectorAll('.hero-stats-slide');
         const indicators = document.querySelectorAll('.hero-indicator');
         
-        // Update slides with fade transition
+        // Update text slides with fade transition
         slides.forEach((slide, i) => {
             if (i === index) {
                 // Fade in active slide
@@ -91,6 +92,19 @@
                 // Fade out inactive slides
                 slide.classList.remove('active', 'fade-in');
                 slide.classList.add('fade-out');
+            }
+        });
+        
+        // Update stats slides with fade transition
+        statsSlides.forEach((statsSlide, i) => {
+            if (i === index) {
+                // Fade in active stats
+                statsSlide.classList.remove('fade-out');
+                statsSlide.classList.add('active', 'fade-in');
+            } else {
+                // Fade out inactive stats
+                statsSlide.classList.remove('active', 'fade-in');
+                statsSlide.classList.add('fade-out');
             }
         });
         

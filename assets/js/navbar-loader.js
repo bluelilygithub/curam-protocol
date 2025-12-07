@@ -17,6 +17,7 @@
         'case-study.html': 'resources',
         'how-it-works.html': 'resources',
         'faq.html': 'faq',
+        'blog.html': 'blog',
         'contact.html': 'contact'
     };
 
