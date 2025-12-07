@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 2 Discovery & Baseline Report: Workflow Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Montserrat', sans-serif; background-color: #f8f9fa; color: #1f2937; }
+        .container { max-width: 1000px; }
+        .header-section { border-left: 5px solid #004d99; padding-left: 1rem; }
+        h1 { color: #004d99; font-size: 28px; font-weight: 700; }
+        h2 { color: #1e40af; font-size: 20px; font-weight: 600; margin-top: 1.5rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 1rem; border-radius: 0.5rem; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        th { background-color: #3b82f6; color: white; text-align: left; padding: 12px 16px; font-weight: 600; }
+        td { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; }
+        tr:nth-child(even) td { background-color: #f9fafb; }
+        .highlight { font-weight: 700; color: #10b981; }
+        .risk-high { font-weight: 700; color: #ef4444; }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+<div class="container mx-auto bg-white rounded-xl shadow-2xl p-6 lg:p-10">
+    
+    <!-- Document Header -->
+    <div class="header-section mb-8">
+        <div class="text-sm font-semibold uppercase text-gray-500">Curam-Ai Protocol™ — Phase 2 Deliverable</div>
+        <h1 class="mt-1">Discovery and Baseline Workflow Analysis</h1>
+        <p class="text-gray-600 mt-2">Documenting the "Before" State and defining quantifiable metrics for the Implementation Roadmap.</p>
+    </div>
+
+    <!-- Introduction -->
+    <section class="mb-8">
+        <h2 class="text-xl font-semibold mb-3">Workflow Documentation: Baseline Data Capture</h2>
+        <p class="text-gray-700">This section details findings from targeted interviews with the Admin Staff and Drafting Manager. The data below establishes the verifiable **Baseline Metrics** used to calculate the Return on Investment (ROI) and monitor the success of the Performance Retention clause in Phase 4.</p>
+    </section>
+
+    <!-- Tier 1 Workflow -->
+    <section class="mb-10">
+        <h2 class="text-2xl font-bold text-gray-800">1. Tier 1 Workflow: Invoice Processing (Admin Burden Reduction)</h2>
+        <table class="w-full">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Baseline (Before Automation)</th>
+                    <th>Target (Phase 4 Goal)</th>
+                    <th>Capacity Wasted</th>
+                    <th>Verifying Role</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Document Volume</strong></td>
+                    <td>350 invoices per month</td>
+                    <td>N/A</td>
+                    <td>N/A</td>
+                    <td>Finance / Admin Lead</td>
+                </tr>
+                <tr>
+                    <td><strong>Time Per Document</strong></td>
+                    <td>4.0 minutes (Manual entry into Xero)</td>
+                    <td>1.4 minutes (HITL review only)</td>
+                    <td><span class="highlight">4.0 minutes</span></td>
+                    <td>Admin Staff</td>
+                </tr>
+                <tr>
+                    <td><strong>Monthly Manual Hours</strong></td>
+                    <td>23.3 hours per month</td>
+                    <td>8.2 hours per month (HITL)</td>
+                    <td><span class="highlight">15.1 hours</span></td>
+                    <td>Process Owner</td>
+                </tr>
+                <tr>
+                    <td><strong>Wasted Cost/Month (Fully Burdened)</strong></td>
+                    <td>$\$\text{15.1 hours} \times \$\text{300}/\text{hr}$</td>
+                    <td>$\$\text{8.2 hours} \times \$\text{300}/\text{hr}$</td>
+                    <td>N/A</td>
+                    <td>CFO / Finance Team</td>
+                </tr>
+                <tr>
+                    <td><strong>Key Pain Point</strong></td>
+                    <td>High volume, repetitive, non-billable task prone to transcription errors.</td>
+                    <td>Low volume, specialized error check.</td>
+                    <td>N/A</td>
+                    <td>Admin Staff</td>
+                </tr>
+                <tr>
+                    <td>**P4 Target Metric**</td>
+                    <td>N/A</td>
+                    <td><span class="highlight">**65% Reduction in manual time**</span></td>
+                    <td>N/A</td>
+                    <td>Process Owner</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Tier 2 Workflow -->
+    <section class="mb-10">
+        <h2 class="text-2xl font-bold text-gray-800">2. Tier 2 Workflow: Beam Schedule Extraction (Critical Risk Mitigation)</h2>
+        <table class="w-full">
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>Baseline (Before Automation)</th>
+                    <th>Target (Phase 4 Goal)</th>
+                    <th>Liability Focus</th>
+                    <th>Verifying Role</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Document Volume</strong></td>
+                    <td>120 drawing revisions per month</td>
+                    <td>N/A</td>
+                    <td>N/A</td>
+                    <td>Drafting Manager</td>
+                </tr>
+                <tr>
+                    <td><strong>Error Rate (Manual)</strong></td>
+                    <td>5% (Avg. 6 errors per month, primarily in steel grade/placement notes).</td>
+                    <td>1% (Avg. 1.2 errors per month, caught by HITL).</td>
+                    <td><span class="risk-high">High</span></td>
+                    <td>Drafting Manager</td>
+                </tr>
+                <tr>
+                    <td><strong>Time Per Correction</strong></td>
+                    <td>60 minutes (Discovery, RFI, correction, resubmit)</td>
+                    <td>5 minutes (HITL immediate correction)</td>
+                    <td>N/A</td>
+                    <td>Risk Manager</td>
+                </tr>
+                <tr>
+                    <td><strong>Risk Type</strong></td>
+                    <td>Design/Structural Liability; Potential project delays.</td>
+                    <td>Mitigated via $\mathbf{95\%}$ Data Integrity SLA.</td>
+                    <td><span class="risk-high">Very High</span></td>
+                    <td>Engineering Partner</td>
+                </tr>
+                <tr>
+                    <td>**P4 Target Metric**</td>
+                    <td>N/A</td>
+                    <td><span class="highlight">**80% Reduction in manual error rate**</span> on critical fields.</td>
+                    <td>N/A</td>
+                    <td>Risk Manager</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Conclusion -->
+    <section>
+        <h2 class="text-2xl font-bold text-gray-800">Conclusion of Baseline Analysis</h2>
+        <div class="p-6 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+            <p class="text-gray-800">The analysis confirms that the total capacity wasted on **Tier 1 tasks (Invoices)** and the exposure to **Tier 2 Risk (Beam Schedules)** significantly exceeds the firm's approved financial hurdle.</p>
+            <p class="text-gray-800 mt-2 font-semibold">The implementation of Wave 1 is therefore financially justified and necessary to meet the firm's strategic liability goals, leading directly to the recommended deployment phase.</p>
+        </div>
+    </section>
+
+</div>
+
+</body>
+</html>

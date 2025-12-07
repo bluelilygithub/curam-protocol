@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sitemap | Curam-Ai Protocol™</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .sitemap-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: var(--spacing-xl) var(--spacing-md);
+        }
+        .sitemap-header {
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+        }
+        .sitemap-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: var(--spacing-sm);
+            color: var(--color-navy);
+        }
+        .sitemap-header p {
+            color: var(--color-gray);
+            font-size: 1.125rem;
+        }
+        .sitemap-section {
+            margin-bottom: var(--spacing-lg);
+        }
+        .sitemap-section h2 {
+            font-size: 1.5rem;
+            color: var(--color-navy);
+            margin-bottom: var(--spacing-md);
+            padding-bottom: var(--spacing-xs);
+            border-bottom: 2px solid var(--color-gold);
+        }
+        .sitemap-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--spacing-sm);
+            list-style: none;
+            padding: 0;
+        }
+        .sitemap-links li {
+            padding: var(--spacing-xs) 0;
+        }
+        .sitemap-links a {
+            color: var(--color-gray-dark);
+            text-decoration: none;
+            font-size: 1rem;
+            transition: var(--transition);
+            display: inline-block;
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: var(--border-radius);
+        }
+        .sitemap-links a:hover {
+            color: var(--color-gold);
+            background-color: var(--color-gray-light);
+            transform: translateX(4px);
+        }
+        .sitemap-note {
+            background-color: var(--color-gray-light);
+            border-left: 4px solid var(--color-gold);
+            padding: var(--spacing-md);
+            margin-top: var(--spacing-xl);
+            border-radius: var(--border-radius);
+        }
+        .sitemap-note p {
+            margin: 0;
+            color: var(--color-gray-dark);
+            font-size: 0.9rem;
+        }
+        .sitemap-note a {
+            color: var(--color-gold);
+            text-decoration: none;
+        }
+        .sitemap-note a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <a href="homepage.html" class="nav-brand-link">
+                    <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
+                    <span class="logo-text">Curam-Ai</span>
+                </a>
+            </div>
+            <button class="mobile-menu-toggle" aria-label="Toggle menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <div class="nav-content">
+                <div class="nav-search-row">
+                    <div class="search-container">
+                        <input type="search" placeholder="Try our AI search - Ask about RAG, automation, or AI..." class="nav-search-input">
+                    </div>
+                </div>
+                <ul class="nav-menu">
+                    <li><a href="about.html">About</a></li>
+                    <li><a href="target-markets.html">Target Markets</a></li>
+                    <li><a href="curam-ai-protocol.html">The Protocol</a></li>
+                    <li><a href="how-it-works.html">How It Works</a></li>
+                    <li><a href="blog.html">Blog</a></li>
+                    <li class="nav-dropdown">
+                        <a href="#">Resources</a>
+                        <ul class="dropdown-menu">
+                            <li><a href="/roi.html">ROI Calculator</a></li>
+                            <li><a href="/demo.html">Assessment Demo</a></li>
+                            <li><a href="feasibility-sprint-report.html">Phase 1 Sample Report</a></li>
+                            <li><a href="risk-audit-report.html">Sample Audit PDF</a></li>
+                            <li><a href="case-study.html">Case Study</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="faq.html">FAQ</a></li>
+                    <li><a href="contact.html" class="btn-nav">Contact</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="sitemap-container">
+        <div class="sitemap-header">
+            <h1>Site Map</h1>
+            <p>Navigate through all pages of the Curam-Ai Protocol™ website</p>
+        </div>
+
+        <div class="sitemap-section">
+            <h2>Main Pages</h2>
+            <ul class="sitemap-links">
+                <li><a href="homepage.html">Home</a></li>
+                <li><a href="about.html">About Us</a></li>
+                <li><a href="contact.html">Contact</a></li>
+                <li><a href="curam-ai-protocol.html">The Protocol</a></li>
+                <li><a href="how-it-works.html">How It Works</a></li>
+                <li><a href="target-markets.html">Target Markets</a></li>
+            </ul>
+        </div>
+
+        <div class="sitemap-section">
+            <h2>Resources</h2>
+            <ul class="sitemap-links">
+                <li><a href="roi.html">ROI Calculator</a></li>
+                <li><a href="demo.html">Assessment Demo</a></li>
+                <li><a href="faq.html">Frequently Asked Questions</a></li>
+                <li><a href="case-study.html">Case Study</a></li>
+                <li><a href="commercial-guarantee.html">Commercial Guarantee</a></li>
+            </ul>
+        </div>
+
+        <div class="sitemap-section">
+            <h2>Blog & Content</h2>
+            <ul class="sitemap-links">
+                <li><a href="blog.html">Blog</a></li>
+                <li><a href="search-results.html">Search Results</a></li>
+            </ul>
+        </div>
+
+        <div class="sitemap-section">
+            <h2>Reports & Assessments</h2>
+            <ul class="sitemap-links">
+                <li><a href="feasibility-sprint-report.html">Feasibility Sprint Report</a></li>
+                <li><a href="risk-audit-report.html">Risk Audit Report</a></li>
+                <li><a href="tier-one-feasibility-report.html">Tier One Feasibility Report</a></li>
+                <li><a href="tier2-report.html">Tier 2 Report</a></li>
+                <li><a href="gate2-sample-report.html">Gate 2 Sample Report</a></li>
+                <li><a href="phase-2-discovery-baseline-report.html">Phase 2 Discovery Baseline Report</a></li>
+                <li><a href="phase-2-exec-summary.html">Phase 2 Executive Summary</a></li>
+                <li><a href="phase-2-metric-agreement.html">Phase 2 Metric Agreement</a></li>
+                <li><a href="phase-2-reports.html">Phase 2 Reports</a></li>
+                <li><a href="Curam-Ai-Redacted-Tier-2-Strategic-Assessment.html">Tier 2 Strategic Assessment</a></li>
+            </ul>
+        </div>
+
+        <div class="sitemap-note">
+            <p><strong>Note:</strong> For search engines, an <a href="sitemap.xml">XML sitemap</a> is also available.</p>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
+                    <span class="logo-text">Curam-Ai</span>
+                    <p class="footer-tagline">The Curam-Ai Protocol™</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>The Protocol</h4>
+                        <ul>
+                            <li><a href="curam-ai-protocol.html">Phase 1: Feasibility Sprint</a></li>
+                            <li><a href="curam-ai-protocol.html">Phase 2: The Roadmap</a></li>
+                            <li><a href="curam-ai-protocol.html">Phase 3: Compliance Shield</a></li>
+                            <li><a href="curam-ai-protocol.html">Phase 4: Implementation</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Resources</h4>
+                        <ul>
+                            <li><a href="roi.html">ROI Calculator</a></li>
+                            <li><a href="how-it-works.html">How It Works</a></li>
+                            <li><a href="faq.html">FAQ</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Company</h4>
+                        <ul>
+                            <li><a href="contact.html">Contact</a></li>
+                            <li><a href="curam-ai-protocol.html">The Protocol</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html" style="color: var(--color-gold); text-decoration: none;">Sitemap</a></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="assets/js/main.js"></script>
+</body>
+</html>
+

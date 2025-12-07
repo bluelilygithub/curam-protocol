@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curam-Ai - Redacted Tier 2 Strategic Assessment</title>
+    <style>
+        /* GLOBAL PRINT SETTINGS */
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap');
+
+        :root {
+            --color-navy: #0F172A;
+            --color-gold: #D4AF37;
+            --color-white: #FFFFFF;
+            --color-gray-light: #F8F9FA;
+            --color-gray: #6B7280;
+            --color-gray-dark: #374151;
+            --font-sans: 'Montserrat', sans-serif;
+            --code-bg: #f4f4f4;
+            --success: #166534;
+            --warning: #854d0e;
+            --error: #991b1b;
+        }
+
+        body {
+            background-color: #555;
+            font-family: var(--font-sans);
+            color: var(--color-gray-dark);
+            margin: 0;
+            padding: 20px;
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact; 
+        }
+
+        .page {
+            background: white;
+            width: 210mm;
+            height: 297mm;
+            display: block;
+            margin: 0 auto 20px auto;
+            padding: 20mm;
+            box-sizing: border-box;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+            page-break-after: always;
+        }
+
+        .redacted {
+            background-color: #000 !important;
+            color: #000 !important;
+            padding: 0 4px;
+            border-radius: 2px;
+            font-size: 0.9em;
+            letter-spacing: -1px;
+            opacity: 1;
+            user-select: none;
+        }
+
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-45deg);
+            font-size: 100px;
+            font-weight: bold;
+            color: rgba(200, 0, 0, 0.08);
+            border: 8px solid rgba(200, 0, 0, 0.08);
+            padding: 20px 50px;
+            z-index: 0;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        h1 { font-family: var(--font-sans); color: var(--color-navy); font-size: 28pt; font-weight: 700; margin-bottom: 10px; }
+        h2 { font-family: var(--font-sans); color: var(--color-navy); font-size: 18pt; font-weight: 600; border-bottom: 2px solid var(--color-gold); padding-bottom: 10px; margin-top: 30px; margin-bottom: 20px; }
+        h3 { font-size: 12pt; font-weight: 600; color: var(--color-navy); margin-top: 20px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        p, li { font-size: 10pt; line-height: 1.5; margin-bottom: 12px; }
+
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 10pt; }
+        th { background-color: var(--color-navy); color: var(--color-white); padding: 10px; text-align: left; font-weight: 600; }
+        td { border-bottom: 1px solid #ddd; padding: 10px; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+
+        .log-table { font-family: 'Roboto Mono', monospace; font-size: 9pt; }
+        .log-table th { background-color: var(--color-navy); }
+        .status-success { color: var(--success); font-weight: bold; }
+        .status-warning { color: var(--warning); font-weight: bold; }
+        .status-error { color: var(--error); font-weight: bold; }
+        
+        .code-block {
+            background-color: var(--code-bg);
+            border-left: 4px solid var(--color-navy);
+            padding: 15px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 9pt;
+            white-space: pre-wrap;
+            margin: 20px 0;
+        }
+
+        /* TEAMS CARD MOCKUP */
+        .teams-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            font-family: 'Segoe UI', sans-serif;
+            max-width: 400px;
+            margin: 20px auto;
+        }
+        .teams-header { font-weight: bold; color: #444; margin-bottom: 10px; display: flex; align-items: center; }
+        .teams-body { font-size: 9pt; color: #333; }
+        .teams-btn { background: #6264A7; color: white; padding: 5px 15px; border-radius: 4px; display: inline-block; margin-top: 10px; font-size: 9pt; font-weight: 600; }
+
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid var(--color-navy); padding-bottom: 20px; margin-bottom: 40px; }
+        .logo { font-family: var(--font-sans); font-weight: 700; font-size: 24px; color: var(--color-navy); letter-spacing: 0.05em; }
+        .meta { text-align: right; font-size: 9pt; color: #666; }
+        .footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; border-top: 1px solid #ddd; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8pt; color: #888; }
+
+        @media print {
+            body { background: none; margin: 0; padding: 0; }
+            .page { box-shadow: none; margin: 0; page-break-after: always; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- PAGE 1: EXECUTIVE SUMMARY -->
+    <div class="page">
+        <div class="watermark">SAMPLE // REDACTED</div>
+        <div class="header">
+            <div class="logo">Curam-Ai</div>
+            <div class="meta">Prepared For: <span class="redacted">Client Ref A1</span><br>Date: <span class="redacted">Oct 2025</span></div>
+        </div>
+        <h1>Executive Summary</h1>
+        <p><strong>Subject:</strong> AI Readiness Assessment & Implementation Strategy</p>
+        <p>Curam-Ai conducted a 3-week analysis of <span class="redacted">Client Name</span> workflows. This assessment utilized the <strong>Curam-Ai Protocol™</strong> to identify high-friction administrative tasks.</p>
+        <div style="background-color: #f0f7ff; border-left: 5px solid var(--color-navy); padding: 15px; margin: 20px 0;">
+            <strong>The Bottom Line:</strong><br>
+            We identified <strong>$214,500</strong> in recoverable annual revenue. This figure is validated by raw data sampling (See Appendix A).
+        </div>
+        <h2>1.1 The "Size of the Prize" (Year 1)</h2>
+        <table>
+            <thead><tr><th>Metric</th><th>Current</th><th>Future</th><th>Delta</th></tr></thead>
+            <tbody>
+                <tr><td>Admin Burden</td><td><span class="redacted">45</span> hrs/week</td><td><span class="redacted">12</span> hrs/week</td><td><strong>-65%</strong></td></tr>
+                <tr><td>Proposal Velocity</td><td><span class="redacted">08</span> /month</td><td><span class="redacted">14</span> /month</td><td><strong>+40%</strong></td></tr>
+                <tr><td>Error Rate</td><td>4.2%</td><td>&lt;0.5%</td><td><strong>Risk Mitigated</strong></td></tr>
+                <tr><td><strong>Net Impact</strong></td><td>—</td><td>—</td><td style="color: var(--color-navy); font-weight: bold;">+$214,500</td></tr>
+            </tbody>
+        </table>
+        <div class="footer"><span>Curam-Ai - Strategic AI Implementation</span><span>Page 1 of 7</span></div>
+    </div>
+
+    <!-- PAGE 2: WORKFLOW HEATMAP -->
+    <div class="page">
+        <div class="watermark">SAMPLE // REDACTED</div>
+        <div class="header"><div class="logo">X-Engineering</div><div class="meta">Strategy Assessment</div></div>
+        <h2>2.0 Workflow Analysis</h2>
+        <h3>Priority A: Beam Schedule Digitization</h3>
+        <ul>
+            <li><strong>Problem:</strong> Manual transcription from PDF to Excel.</li>
+            <li><strong>Validation:</strong> We processed <span class="redacted">50</span> historical schedules. (See Appendix B for failure analysis).</li>
+            <li><strong>Result:</strong> Azure AI Document Intelligence extracted tabular data with 98.5% accuracy.</li>
+        </ul>
+        <h3>Priority B: Drawing Register Management</h3>
+        <ul>
+            <li><strong>Problem:</strong> Version control errors leading to site rework.</li>
+            <li><strong>Risk Cost:</strong> <span class="redacted">$35,000</span> per major rework event.</li>
+            <li><strong>Solution:</strong> Power Automate file parser.</li>
+        </ul>
+        <div class="footer"><span>X-Engineering - Strategic Assessment</span><span>Page 2 of 7</span></div>
+    </div>
+
+    <!-- PAGE 3: FINANCIAL MODEL & CLOUD COSTS -->
+    <div class="page">
+        <div class="watermark">SAMPLE // REDACTED</div>
+        <div class="header"><div class="logo">X-Engineering</div><div class="meta">Financials</div></div>
+        <h2>3.0 Investment & ROI Analysis</h2>
+        <h3>3.1 Cost of Implementation</h3>
+        <table>
+            <tr><td>Wave 1 Setup</td><td style="text-align: right;">$<span class="redacted">12,000</span></td></tr>
+            <tr><td>Configuration</td><td style="text-align: right;">$<span class="redacted">10,000</span></td></tr>
+            <tr><td>Training</td><td style="text-align: right;">$<span class="redacted">6,500</span></td></tr>
+            <tr style="background-color: var(--color-navy); color: var(--color-white);"><td>Total Year 1</td><td style="text-align: right;">$28,500</td></tr>
+        </table>
+        
+        <!-- NEW SECTION: CLOUD COST ANALYSIS -->
+        <h3>3.2 Operational Cost Analysis (Azure Consumption)</h3>
+        <p>Based on the sampling of 50 documents, the ongoing cloud consumption costs are negligible relative to labor savings.</p>
+        <table>
+            <thead><tr><th>Resource</th><th>Unit Cost</th><th>Volume</th><th>Monthly Cost</th></tr></thead>
+            <tbody>
+                <tr><td>Azure AI Doc Intelligence</td><td>$10 / 1k pages</td><td>450 pages</td><td>$4.50</td></tr>
+                <tr><td>Logic Apps / Flow</td><td>$0.000125 / action</td><td>2000 runs</td><td>$2.50</td></tr>
+                <tr><td><strong>TOTAL OPEX</strong></td><td>—</td><td>—</td><td style="color: var(--success); font-weight: bold;">&lt; $10.00 / mo</td></tr>
+            </tbody>
+        </table>
+
+        <h3>3.3 Value Realization</h3>
+        <table>
+            <tr><td>Admin Time Recaptured</td><td style="text-align: right;"><strong>$142,000</strong></td></tr>
+            <tr><td>Risk Mitigation</td><td style="text-align: right;"><strong>$<span class="redacted">35,000</span></strong></td></tr>
+            <tr style="border-top: 2px solid var(--color-navy);"><td><strong>GROSS RETURN</strong></td><td style="text-align: right;">$214,500</td></tr>
+        </table>
+        <div class="footer"><span>X-Engineering - Strategic Assessment</span><span>Page 3 of 7</span></div>
+    </div>
+
+    <!-- PAGE 4: ROADMAP & COMMERCIAL TERMS -->
+    <div class="page">
+        <div class="watermark">SAMPLE // REDACTED</div>
+        <div class="header"><div class="logo">X-Engineering</div><div class="meta">Roadmap</div></div>
+        <h2>4.0 Phased Execution Plan</h2>
+        <div style="border-left: 4px solid var(--color-navy); padding-left: 20px; margin-bottom: 20px;">
+            <h3>Wave 1: Foundation (Month 1)</h3>
+            <ul>
+                <li>Governance Configuration.</li>
+                <li>Invoice Processing Deployment.</li>
+                <li>Beam Schedule Extraction Deployment.</li>
+            </ul>
+        </div>
+        <div style="border-left: 4px solid var(--color-gold); padding-left: 20px; margin-bottom: 30px;">
+            <h3>Wave 2: Growth (Months 2-3)</h3>
+            <ul>
+                <li>Tender Assistant Deployment.</li>
+                <li>ERP Integration.</li>
+            </ul>
+        </div>
+        
+        <!-- NEW SECTION: COMMERCIAL TERMS -->
+        <div style="background: #f9f9f9; padding: 20px; border: 1px solid #ddd;">
+            <h3>Commercial Guarantee</h3>
+            <p>Curam-Ai stands by the Protocol. The Phase 4 Statement of Work (SOW) includes:</p>
+            <ul>
+                <li><strong>30-Day Warranty:</strong> Any bugs or logic errors fixed at no cost.</li>
+                <li><strong>Performance Retention:</strong> Client holds 15% of fee until success metrics are met.</li>
+                <li><strong>IP Ownership:</strong> 100% transfer of source code and flows to Client Tenant.</li>
+            </ul>
+        </div>
+        
+        <div class="footer"><span>X-Engineering - Strategic Assessment</span><span>Page 4 of 7</span></div>
+    </div>
+
+    <!-- PAGE 5: APPENDIX A (THE RAW PROOF) -->
+    <div class="page">
+        <div class="watermark">TECHNICAL APPENDIX</div>
+        <div class="header"><div class="logo">X-Engineering</div><div class="meta"><strong>APPENDIX A: DATA SAMPLING LOG</strong></div></div>
+        <h2>5.0 Technical Validation: Data Diary</h2>
+        <p>To validate the ROI assumptions, Curam-Ai ran a random sample of <span class="redacted">50</span> vendor invoices. The table below represents the raw system logs.</p>
+        <table class="log-table">
+            <thead><tr><th>Doc ID</th><th>Processing Time</th><th>Confidence</th><th>Status</th></tr></thead>
+            <tbody>
+                <tr><td>INV-2024-001</td><td>4.2s</td><td>0.99</td><td class="status-success">SUCCESS</td></tr>
+                <tr><td>INV-2024-002</td><td>3.8s</td><td>0.98</td><td class="status-success">SUCCESS</td></tr>
+                <tr><td>INV-2024-003</td><td>4.1s</td><td>0.98</td><td class="status-success">SUCCESS</td></tr>
+                <tr><td>INV-2024-004</td><td>5.6s</td><td>0.82</td><td class="status-warning">FLAGGED</td></tr>
+                <tr><td>INV-2024-005</td><td>3.9s</td><td>0.99</td><td class="status-success">SUCCESS</td></tr>
+                <tr><td>INV-2024-006</td><td>2.1s</td><td>0.45</td><td class="status-error">FAILED</td></tr>
+            </tbody>
+        </table>
+        <div class="footer"><span>Curam-Ai - Technical Appendix</span><span>Page 5 of 7</span></div>
+    </div>
+
+    <!-- PAGE 6: APPENDIX B (UX VISUALIZATION) -->
+    <div class="page">
+        <div class="watermark">TECHNICAL APPENDIX</div>
+        <div class="header"><div class="logo">X-Engineering</div><div class="meta"><strong>APPENDIX B: FAILURE ANALYSIS</strong></div></div>
+        <h2>6.0 Failure Mode & User Experience</h2>
+        <p>The system is designed to "Fail Safe." Below is the actual Teams Notification generated when File <strong>INV-2024-004</strong> (Flagged) required human intervention.</p>
+        
+        <h3>The Human-in-the-Loop Workflow</h3>
+        
+        <!-- VISUAL MOCKUP OF TEAMS CARD -->
+        <div class="teams-card">
+            <div class="teams-header">
+                <span style="color: #6264A7; font-size: 14pt; margin-right: 10px;">🤖</span>
+                FINANCE BOT • Now
+            </div>
+            <div class="teams-body">
+                <strong>⚠️ Review Required: Low Confidence Score</strong><br><br>
+                The invoice from <strong>Local Courier</strong> has a confidence score of <strong>0.82</strong>.<br>
+                Potential Issue: <em>Date format ambiguous.</em><br><br>
+                Please verify before export to Xero.
+            </div>
+            <div class="teams-btn">Review Document</div>
+        </div>
+
+        <p><strong>Action Taken:</strong> Staff member clicked "Review", corrected the date, and the system learned from the correction.</p>
+
+        <div class="footer"><span>X-Engineering - Technical Appendix</span><span>Page 6 of 7</span></div>
+    </div>
+
+    <!-- PAGE 7: APPENDIX C (LOGIC & PREREQUISITES) -->
+    <div class="page">
+        <div class="watermark">TECHNICAL APPENDIX</div>
+        <div class="header"><div class="logo">X-Engineering</div><div class="meta"><strong>APPENDIX C: LOGIC TRACE</strong></div></div>
+        <h2>7.0 Prototype Logic (Power Automate)</h2>
+        <p>The following logic block demonstrates the validation step preventing ABN fraud.</p>
+
+        <div class="code-block">
+// STEP 4: VALIDATION LOGIC
+// PREREQUISITE: SharePoint List "Approved_Vendors" must exist.
+
+$Vendor_Check = SharePoint.GetItems(
+    List="Approved_Vendors",
+    Filter="ABN eq '@{items('Extract_ABN')}'"
+);
+
+If (length($Vendor_Check) == 0) {
+    // FAIL SAFE
+    Post_Message_Teams(Channel="Finance Alerts", Message="⚠️ FRAUD ALERT");
+    Terminate(Status="Cancelled");
+}
+        </div>
+        <p><strong>System Prerequisite:</strong> This logic requires the "Approved_Vendors" list to be synchronized with your ERP master data.</p>
+        <div class="footer"><span>X-Engineering - Technical Appendix</span><span>Page 7 of 7</span></div>
+    </div>
+
+</body>
+</html>
