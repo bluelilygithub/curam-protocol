@@ -3,26 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>How The Curam-Ai Protocol™ Works: Incremental Commitment</title>
+    <title>How It Works | Technical Architecture | Curam-Ai Protocol™</title>
+    <meta name="description" content="Discover how the Curam-Ai Protocol™ works through incremental commitment, from diagnostic to deployment with clear commercial gates.">
     <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
-    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Scroll Down Button - Fixed to viewport bottom -->
+    <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M19 12l-7 7-7-7"/>
         </svg>
     </button>
     
-    <!-- Navigation (COPIED EXACTLY FROM PROTOCOL.HTML) -->
+    <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
             <div class="nav-brand">
-                <a href="homepage.html" class="nav-brand-link">
+                <a href="index.html" class="nav-brand-link">
                     <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
                     <span class="logo-text">Curam-Ai</span>
                 </a>
@@ -35,7 +36,7 @@
             <div class="nav-content">
                 <div class="nav-search-row">
                     <div class="search-container">
-                        <input type="search" placeholder="Search..." class="nav-search-input">
+                        <input type="search" placeholder="Try our AI search - Ask about RAG, automation, or AI..." class="nav-search-input">
                     </div>
                 </div>
                 <ul class="nav-menu">
@@ -44,12 +45,11 @@
                     <li><a href="target-markets.html">Target Markets</a></li>
                     <li><a href="curam-ai-protocol.html">The Protocol</a></li>
                     <li class="nav-dropdown">
-                        <a href="#">Resources</a>
+                        <a href="#">Resources <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5l3 3 3-3"/></svg></a>
                         <ul class="dropdown-menu">
-                            <li><a href="/roi.html">ROI Calculator</a></li>
-                            <li><a href="/demo.html">Assessment Demo</a></li>
+                            <li><a href="roi.html">ROI Calculator</a></li>
+                            <li><a href="demo.html">Assessment Demo</a></li>
                             <li><a href="feasibility-sprint-report.html">Phase 1 Sample Report</a></li>
-                            <li><a href="risk-audit-report.html">Sample Audit PDF</a></li>
                             <li><a href="case-study.html">Case Study</a></li>
                             <li><a href="how-it-works.html">Technical Architecture</a></li>
                         </ul>
@@ -61,146 +61,407 @@
         </div>
     </nav>
 
-    <!-- Header & Hero Section (COPIED EXACTLY FROM PROTOCOL.HTML STRUCTURE, UPDATED CONTENT) -->
-    <header class="protocol-hero">
-        <div class="container">
-            <h1 class="protocol-hero-title">
-                The Journey of Risk: From Diagnostic to Deployment
-            </h1>
-            <p class="protocol-hero-subtitle">
-                We manage project uncertainty by defining clear commercial gates that ensure predictable value, data security, and full IP ownership before the final investment.
-            </p>
-            <!-- High-impact callout -->
-            <div class="protocol-hero-callout">
-                <p class="protocol-hero-callout-text">
-                    The Curam-Ai Protocol replaces uncertainty with discipline.
-                </p>
-            </div>
+    <!-- Hero Section -->
+    <section class="hero how-it-works-hero">
+        <div class="hero-background">
+            <div class="hero-gradient"></div>
+            <div class="hero-pattern"></div>
+            <svg class="hero-abstract" viewBox="0 0 800 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="650" cy="150" r="200" stroke="rgba(212,175,55,0.15)" stroke-width="1" fill="none"/>
+                <circle cx="650" cy="150" r="280" stroke="rgba(212,175,55,0.1)" stroke-width="1" fill="none"/>
+                <circle cx="650" cy="150" r="360" stroke="rgba(212,175,55,0.05)" stroke-width="1" fill="none"/>
+                <path d="M100 400 Q 250 300, 400 350 T 700 300" stroke="rgba(212,175,55,0.2)" stroke-width="2" fill="none"/>
+                <path d="M50 450 Q 200 350, 350 400 T 650 350" stroke="rgba(212,175,55,0.15)" stroke-width="1.5" fill="none"/>
+            </svg>
         </div>
-    </header>
-
-    <!-- Protocol Overview and Phase Cards - Updated Content -->
-    <section class="protocol-overview">
         <div class="container">
-            <h2 class="section-headline">The Incremental Commitment Journey</h2>
-            <p class="section-subhead">
-                The Protocol transforms AI adoption from a risk into a predictable, validated investment through four distinct, fixed-fee commercial gates.
-            </p>
-
-            <!-- 4-Phase Grid/Cards -->
-            <div class="protocol-phases-grid">
-
-                <!-- Phase 1: Validation (Gold Card) -->
-                <div class="protocol-phase-card protocol-phase-card-gold">
-                    <span class="protocol-phase-label">PHASE 1</span>
-                    <h3 class="protocol-phase-title">The Feasibility Sprint</h3>
-                    <p class="protocol-phase-subtitle">(Prove It Before You Invest)</p>
-                    
-                    <div class="protocol-phase-price">
-                        <p class="protocol-phase-price-amount">$1,500 <span class="protocol-phase-price-time">| ~48 Hours</span></p>
-                    </div>
-
-                    <p class="protocol-phase-description">
-                        We take 5–10 of your messiest documents to prove the technical concept. This establishes the ≥90% Field-Level Accuracy benchmark required for every subsequent phase.
-                    </p>
-                    <div class="protocol-phase-info-box protocol-phase-info-box-gray">
-                         <p class="protocol-phase-info-label">RISK SHARED:</p>
-                         <p class="protocol-phase-info-text">100% Money-Back Guarantee if accuracy is not met.</p>
-                    </div>
-                </div>
-
-                <!-- Phase 2: Strategy (Blue Card) -->
-                <div class="protocol-phase-card protocol-phase-card-blue">
-                    <span class="protocol-phase-label">PHASE 2</span>
-                    <h3 class="protocol-phase-title">The Readiness Roadmap</h3>
-                    <p class="protocol-phase-subtitle">(Quantify the ROI)</p>
-                    
-                    <div class="protocol-phase-price">
-                        <p class="protocol-phase-price-amount">$7,500 <span class="protocol-phase-price-time">| ~3 Weeks</span></p>
-                    </div>
-
-                    <p class="protocol-phase-description">
-                        We audit your capacity waste and generate the verifiable Baseline Metrics and custom ROI model. This aligns the project with your internal financial hurdle.
-                    </p>
-                    <div class="protocol-phase-info-box protocol-phase-info-box-blue">
-                         <p class="protocol-phase-info-label">COMMITMENT:</p>
-                         <p class="protocol-phase-info-text">Board-Ready Business Case with custom ROI targets.</p>
-                    </div>
-                </div>
-
-                <!-- Phase 3: Governance (Indigo Card) -->
-                <div class="protocol-phase-card protocol-phase-card-indigo">
-                    <span class="protocol-phase-label">PHASE 3</span>
-                    <h3 class="protocol-phase-title">The Compliance Shield</h3>
-                    <p class="protocol-phase-subtitle">(Zero Tolerance for Shadow IT)</p>
-
-                    <div class="protocol-phase-price">
-                        <p class="protocol-phase-price-amount">$8–12k <span class="protocol-phase-price-time">| ~2 Weeks</span></p>
-                    </div>
-
-                    <p class="protocol-phase-description">
-                        This pre-audit step maps deployment against ISO 27001 and PI requirements, providing the auditable Risk Control Matrix needed for CTO approval.
-                    </p>
-                    <div class="protocol-phase-info-box protocol-phase-info-box-indigo">
-                         <p class="protocol-phase-info-label">MITIGATION:</p>
-                         <p class="protocol-phase-info-text">Guarantees zero data egress and regulatory compliance.</p>
-                    </div>
-                </div>
-
-                <!-- Phase 4: Deployment (Red Card) -->
-                <div class="protocol-phase-card protocol-phase-card-red">
-                    <span class="protocol-phase-label">PHASE 4</span>
-                    <h3 class="protocol-phase-title">Wave 1 Implementation</h3>
-                    <p class="protocol-phase-subtitle">(Predictable Deployment and Full Ownership)</p>
-                    
-                    <div class="protocol-phase-price">
-                        <p class="protocol-phase-price-amount">$20–30k <span class="protocol-phase-price-time">| ~30-Day Sprint</span></p>
-                    </div>
-
-                    <p class="protocol-phase-description">
-                        The final fixed-scope sprint puts live workflows in your secure tenant. This targets Tier 2 Priority routines first to address the highest design liability risks.
-                    </p>
-                    <div class="protocol-phase-info-box protocol-phase-info-box-red">
-                         <p class="protocol-phase-info-label">GUARANTEE:</p>
-                         <p class="protocol-phase-info-text">15% Fee Retention held until success metrics are met.</p>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    </section>
-
-    <!-- Technical Differentiators Section - Using <section> for new content -->
-    <section class="protocol-advantages" style="background-color: #f0f4ff; padding: 3rem 0;">
-        <div class="container">
-            <h2 class="section-headline" style="color: #004d99; margin-bottom: 2rem;">Technical Differentiators & Ownership</h2>
-             
-             <div class="protocol-advantages-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
-                
-                <!-- Moat & Modularity -->
-                <div class="protocol-advantage-card protocol-advantage-card-blue" style="border-top: 4px solid #3b82f6;">
-                    <h3 class="protocol-advantage-title">Proprietary Moat & Flexibility</h3>
-                    <p class="protocol-advantage-text">Our moat is the Extraction Schema and Logic Trace framework—the reusable methodology developed specifically for structural engineering data complexity, ensuring faster, more accurate deployment.</p>
-                    <p class="protocol-advantage-text">Mitigation via Modularity: We separate the stable process control layer (M365/Power Automate) from the interchangeable AI execution layer (LLM API), guaranteeing data residency without vendor lock-in to a single LLM. </p>
-                </div>
-
-                <!-- Security & Ownership -->
-                <div class="protocol-advantage-card protocol-advantage-card-green" style="border-top: 4px solid #10b981;">
-                    <h3 class="protocol-advantage-title">Zero Risk & Full Ownership</h3>
-                    <p class="protocol-advantage-text">Data Residency: The solution utilizes the client's existing secure cloud tenant (Azure, AWS, or GCP) to guarantee zero data egress and satisfy regulatory compliance.</p>
-                    <p class="protocol-advantage-text">Full IP Ownership: We transfer 100% of the source code and flows to your tenant. This eliminates licensing fees from Curam-Ai, transforming the solution into a self-sustaining asset. </p>
+            <div class="hero-content">
+                <p class="hero-eyebrow">Technical Architecture</p>
+                <h1 class="hero-headline">The Journey of Risk:<br>From Diagnostic to Deployment</h1>
+                <p class="hero-subhead">We manage project uncertainty by defining clear commercial gates that ensure predictable value, data security, and full IP ownership before the final investment.</p>
+                <div class="hero-cta-group">
+                    <a href="curam-ai-protocol.html" class="btn btn-primary">View The Protocol</a>
+                    <a href="contact.html" class="btn btn-secondary">Book a Diagnostic</a>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Footer - Replicating structure -->
+    <!-- Overview Section -->
+    <section class="section-alt how-it-works-overview">
+        <div class="container">
+            <div class="section-header">
+                <p class="section-eyebrow">The Methodology</p>
+                <h2 class="section-headline">Incremental Commitment Journey</h2>
+                <p class="section-subhead">The Protocol transforms AI adoption from a risk into a predictable, validated investment through four distinct, fixed-fee commercial gates.</p>
+            </div>
+
+            <div class="how-it-works-journey">
+                <!-- Journey Flow Diagram -->
+                <div class="journey-flow">
+                    <div class="journey-line"></div>
+                    
+                    <div class="journey-step journey-step-gold">
+                        <div class="journey-step-marker">
+                            <span class="journey-step-number">01</span>
+                        </div>
+                        <div class="journey-step-content">
+                            <h3 class="journey-step-title">Validate</h3>
+                            <p class="journey-step-subtitle">Prove feasibility</p>
+                        </div>
+                    </div>
+                    
+                    <div class="journey-step journey-step-blue">
+                        <div class="journey-step-marker">
+                            <span class="journey-step-number">02</span>
+                        </div>
+                        <div class="journey-step-content">
+                            <h3 class="journey-step-title">Plan</h3>
+                            <p class="journey-step-subtitle">Quantify ROI</p>
+                        </div>
+                    </div>
+                    
+                    <div class="journey-step journey-step-indigo">
+                        <div class="journey-step-marker">
+                            <span class="journey-step-number">03</span>
+                        </div>
+                        <div class="journey-step-content">
+                            <h3 class="journey-step-title">Secure</h3>
+                            <p class="journey-step-subtitle">Ensure compliance</p>
+                        </div>
+                    </div>
+                    
+                    <div class="journey-step journey-step-red">
+                        <div class="journey-step-marker">
+                            <span class="journey-step-number">04</span>
+                        </div>
+                        <div class="journey-step-content">
+                            <h3 class="journey-step-title">Deploy</h3>
+                            <p class="journey-step-subtitle">Go live</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Phase Details Section -->
+    <section class="how-it-works-phases">
+        <div class="container">
+            <div class="section-header">
+                <p class="section-eyebrow">The Four Phases</p>
+                <h2 class="section-headline">Fixed-Fee Commercial Gates</h2>
+            </div>
+
+            <div class="phases-detailed-grid">
+                <!-- Phase 1 -->
+                <div class="phase-detailed-card phase-detailed-gold">
+                    <div class="phase-detailed-header">
+                        <span class="phase-detailed-label">Phase 1</span>
+                        <div class="phase-detailed-pricing">
+                            <span class="phase-detailed-price">$1,500</span>
+                            <span class="phase-detailed-duration">~48 Hours</span>
+                        </div>
+                    </div>
+                    <h3 class="phase-detailed-title">The Feasibility Sprint</h3>
+                    <p class="phase-detailed-subtitle">Prove It Before You Invest</p>
+                    <p class="phase-detailed-description">We take 5–10 of your messiest documents to prove the technical concept. This establishes the ≥90% Field-Level Accuracy benchmark required for every subsequent phase.</p>
+                    <div class="phase-detailed-guarantee">
+                        <span class="phase-detailed-guarantee-label">Risk Shared:</span>
+                        <span class="phase-detailed-guarantee-text">100% Money-Back Guarantee if accuracy is not met.</span>
+                    </div>
+                </div>
+
+                <!-- Phase 2 -->
+                <div class="phase-detailed-card phase-detailed-blue">
+                    <div class="phase-detailed-header">
+                        <span class="phase-detailed-label">Phase 2</span>
+                        <div class="phase-detailed-pricing">
+                            <span class="phase-detailed-price">$7,500</span>
+                            <span class="phase-detailed-duration">~3 Weeks</span>
+                        </div>
+                    </div>
+                    <h3 class="phase-detailed-title">The Readiness Roadmap</h3>
+                    <p class="phase-detailed-subtitle">Quantify the ROI</p>
+                    <p class="phase-detailed-description">We audit your capacity waste and generate the verifiable Baseline Metrics and custom ROI model. This aligns the project with your internal financial hurdle.</p>
+                    <div class="phase-detailed-guarantee">
+                        <span class="phase-detailed-guarantee-label">Commitment:</span>
+                        <span class="phase-detailed-guarantee-text">Board-Ready Business Case with custom ROI targets.</span>
+                    </div>
+                </div>
+
+                <!-- Phase 3 -->
+                <div class="phase-detailed-card phase-detailed-indigo">
+                    <div class="phase-detailed-header">
+                        <span class="phase-detailed-label">Phase 3</span>
+                        <div class="phase-detailed-pricing">
+                            <span class="phase-detailed-price">$8–12k</span>
+                            <span class="phase-detailed-duration">~2 Weeks</span>
+                        </div>
+                    </div>
+                    <h3 class="phase-detailed-title">The Compliance Shield</h3>
+                    <p class="phase-detailed-subtitle">Zero Tolerance for Shadow IT</p>
+                    <p class="phase-detailed-description">This pre-audit step maps deployment against ISO 27001 and PI requirements, providing the auditable Risk Control Matrix needed for CTO approval.</p>
+                    <div class="phase-detailed-guarantee">
+                        <span class="phase-detailed-guarantee-label">Mitigation:</span>
+                        <span class="phase-detailed-guarantee-text">Guarantees zero data egress and regulatory compliance.</span>
+                    </div>
+                </div>
+
+                <!-- Phase 4 -->
+                <div class="phase-detailed-card phase-detailed-red">
+                    <div class="phase-detailed-header">
+                        <span class="phase-detailed-label">Phase 4</span>
+                        <div class="phase-detailed-pricing">
+                            <span class="phase-detailed-price">$20–30k</span>
+                            <span class="phase-detailed-duration">~30-Day Sprint</span>
+                        </div>
+                    </div>
+                    <h3 class="phase-detailed-title">Wave 1 Implementation</h3>
+                    <p class="phase-detailed-subtitle">Predictable Deployment and Full Ownership</p>
+                    <p class="phase-detailed-description">The final fixed-scope sprint puts live workflows in your secure tenant. This targets Tier 2 Priority routines first to address the highest design liability risks.</p>
+                    <div class="phase-detailed-guarantee">
+                        <span class="phase-detailed-guarantee-label">Guarantee:</span>
+                        <span class="phase-detailed-guarantee-text">15% Fee Retention held until success metrics are met.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technical Differentiators -->
+    <section class="section-alt how-it-works-differentiators">
+        <div class="container">
+            <div class="section-header">
+                <p class="section-eyebrow">What Sets Us Apart</p>
+                <h2 class="section-headline">Technical Differentiators & Ownership</h2>
+            </div>
+
+            <div class="differentiators-grid">
+                <div class="differentiator-card">
+                    <div class="differentiator-icon">
+                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <path d="M12 20h8M12 28h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="34" cy="24" r="6" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <path d="M34 21v6M31 24h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="differentiator-title">Proprietary Moat & Flexibility</h3>
+                    <p class="differentiator-text">Our moat is the Extraction Schema and Logic Trace framework—the reusable methodology developed specifically for structural engineering data complexity, ensuring faster, more accurate deployment.</p>
+                    <div class="differentiator-detail">
+                        <strong>Mitigation via Modularity:</strong> We separate the stable process control layer (M365/Power Automate) from the interchangeable AI execution layer (LLM API), guaranteeing data residency without vendor lock-in to a single LLM.
+                    </div>
+                </div>
+
+                <div class="differentiator-card">
+                    <div class="differentiator-icon">
+                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M24 4L6 14v20l18 10 18-10V14L24 4z" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <path d="M24 24v20M6 14l18 10 18-10" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="24" cy="18" r="4" stroke="currentColor" stroke-width="2" fill="none"/>
+                        </svg>
+                    </div>
+                    <h3 class="differentiator-title">Zero Risk & Full Ownership</h3>
+                    <p class="differentiator-text">The solution utilizes your existing secure cloud tenant (Azure, AWS, or GCP) to guarantee zero data egress and satisfy regulatory compliance.</p>
+                    <div class="differentiator-detail">
+                        <strong>Full IP Ownership:</strong> We transfer 100% of the source code and flows to your tenant. This eliminates licensing fees from Curam-Ai, transforming the solution into a self-sustaining asset.
+                    </div>
+                </div>
+
+                <div class="differentiator-card">
+                    <div class="differentiator-icon">
+                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="24" cy="24" r="18" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <path d="M24 12v12l8 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="24" cy="24" r="3" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <h3 class="differentiator-title">Predictable Timeline</h3>
+                    <p class="differentiator-text">Every phase has fixed scope and duration. No open-ended consulting engagements that drift into cost overruns.</p>
+                    <div class="differentiator-detail">
+                        <strong>Clear Exit Points:</strong> Each phase delivers standalone value. Walk away at any gate with usable deliverables and no sunken-cost trap.
+                    </div>
+                </div>
+
+                <div class="differentiator-card">
+                    <div class="differentiator-icon">
+                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8 40V20l16-12 16 12v20H8z" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <rect x="18" y="28" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <path d="M24 8v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <h3 class="differentiator-title">Your Infrastructure</h3>
+                    <p class="differentiator-text">We deploy into your existing cloud environment. No new platforms to learn, no data leaving your security perimeter.</p>
+                    <div class="differentiator-detail">
+                        <strong>Seamless Integration:</strong> Works with your existing M365, SharePoint, and accounting systems without disruption to current workflows.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Architecture Diagram Section -->
+    <section class="how-it-works-architecture">
+        <div class="container">
+            <div class="section-header">
+                <p class="section-eyebrow">Technical Stack</p>
+                <h2 class="section-headline">Solution Architecture</h2>
+                <p class="section-subhead">A modular approach that separates process control from AI execution, ensuring flexibility and data security.</p>
+            </div>
+
+            <div class="architecture-diagram">
+                <div class="architecture-layer architecture-layer-input">
+                    <div class="architecture-layer-header">
+                        <span class="architecture-layer-label">Input Layer</span>
+                    </div>
+                    <div class="architecture-layer-items">
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">📄</span>
+                            <span class="architecture-item-text">PDF Documents</span>
+                        </div>
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">📊</span>
+                            <span class="architecture-item-text">CAD Drawings</span>
+                        </div>
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">🧾</span>
+                            <span class="architecture-item-text">Invoices</span>
+                        </div>
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">📋</span>
+                            <span class="architecture-item-text">Schedules</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="architecture-arrow">
+                    <svg width="24" height="48" viewBox="0 0 24 48" fill="none">
+                        <path d="M12 0v40M4 32l8 8 8-8" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                </div>
+
+                <div class="architecture-layer architecture-layer-process">
+                    <div class="architecture-layer-header">
+                        <span class="architecture-layer-label">Process Control Layer</span>
+                        <span class="architecture-layer-tag">Your M365 Tenant</span>
+                    </div>
+                    <div class="architecture-layer-items">
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">⚡</span>
+                            <span class="architecture-item-text">Power Automate</span>
+                        </div>
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">📁</span>
+                            <span class="architecture-item-text">SharePoint</span>
+                        </div>
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">🔒</span>
+                            <span class="architecture-item-text">Azure Security</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="architecture-arrow">
+                    <svg width="24" height="48" viewBox="0 0 24 48" fill="none">
+                        <path d="M12 0v40M4 32l8 8 8-8" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                </div>
+
+                <div class="architecture-layer architecture-layer-ai">
+                    <div class="architecture-layer-header">
+                        <span class="architecture-layer-label">AI Execution Layer</span>
+                        <span class="architecture-layer-tag">Interchangeable</span>
+                    </div>
+                    <div class="architecture-layer-items">
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">🤖</span>
+                            <span class="architecture-item-text">GPT-4 / Claude</span>
+                        </div>
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">🔍</span>
+                            <span class="architecture-item-text">Document AI</span>
+                        </div>
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">📐</span>
+                            <span class="architecture-item-text">Custom Models</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="architecture-arrow">
+                    <svg width="24" height="48" viewBox="0 0 24 48" fill="none">
+                        <path d="M12 0v40M4 32l8 8 8-8" stroke="currentColor" stroke-width="2"/>
+                    </svg>
+                </div>
+
+                <div class="architecture-layer architecture-layer-output">
+                    <div class="architecture-layer-header">
+                        <span class="architecture-layer-label">Output Layer</span>
+                    </div>
+                    <div class="architecture-layer-items">
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">💰</span>
+                            <span class="architecture-item-text">Xero/MYOB</span>
+                        </div>
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">📈</span>
+                            <span class="architecture-item-text">Excel Reports</span>
+                        </div>
+                        <div class="architecture-item">
+                            <span class="architecture-item-icon">✅</span>
+                            <span class="architecture-item-text">Approvals</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="how-it-works-cta">
+        <div class="container">
+            <div class="cta-content">
+                <h2 class="cta-headline">Ready to Begin Your Journey?</h2>
+                <p class="cta-subhead">Start with a $1,500 Feasibility Sprint to prove the concept works on your actual documents.</p>
+                <div class="cta-buttons">
+                    <a href="contact.html" class="btn btn-primary">Book a Feasibility Sprint</a>
+                    <a href="demo.html" class="btn btn-secondary">Try the Demo First</a>
+                </div>
+                <div class="cta-features">
+                    <div class="cta-feature">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M16.667 5L7.5 14.167 3.333 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>48-hour turnaround</span>
+                    </div>
+                    <div class="cta-feature">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M16.667 5L7.5 14.167 3.333 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>≥90% accuracy guaranteed</span>
+                    </div>
+                    <div class="cta-feature">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M16.667 5L7.5 14.167 3.333 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>Full money-back guarantee</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
     <footer class="footer">
         <div class="container">
             <div class="footer-content">
                 <div class="footer-brand">
-                    <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
-                    <span class="logo-text">Curam-Ai</span>
+                    <a href="index.html" class="footer-brand-link">
+                        <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
+                        <span class="logo-text">Curam-Ai</span>
+                    </a>
                     <p class="footer-tagline">The Curam-Ai Protocol™</p>
                 </div>
                 <div class="footer-links">
@@ -225,7 +486,7 @@
                     <div class="footer-column">
                         <h4>Resources</h4>
                         <ul>
-                            <li><a href="/roi.html">ROI Calculator</a></li>
+                            <li><a href="roi.html">ROI Calculator</a></li>
                             <li><a href="how-it-works.html">Technical Architecture</a></li>
                             <li><a href="faq.html">FAQ</a></li>
                             <li><a href="target-markets.html">Target Markets</a></li>
@@ -242,11 +503,11 @@
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html" style="color: var(--color-gold); text-decoration: none;">Sitemap</a></p>
+                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html">Sitemap</a></p>
             </div>
         </div>
     </footer>
 
-    <script src="assets/js/main.js"></script>
+    <script src="scripts.js"></script>
 </body>
 </html>
