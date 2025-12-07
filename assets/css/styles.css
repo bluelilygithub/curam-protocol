@@ -203,7 +203,7 @@ h1, h2, h3, h4 {
 .btn-nav {
   background: var(--color-gold);
   color: var(--navy-deep);
-  padding: 0.5rem calc(2rem + 10px);
+  padding: 0.5rem 10px;
   border-radius: var(--border-radius);
   font-weight: 600;
   font-size: 0.875rem;
@@ -375,6 +375,12 @@ h1, h2, h3, h4 {
   font-weight: 500;
   color: var(--text-secondary);
   transition: color var(--transition-fast);
+}
+
+.nav-menu > li > a.btn-nav {
+  padding: 0.5rem 10px !important;
+  padding-left: 10px !important;
+  padding-right: 10px !important;
 }
 
 .nav-menu > li > a:hover {
@@ -2402,6 +2408,41 @@ h1, h2, h3, h4 {
 
 .service-header-text {
   flex: 1;
+}
+
+/* Service Proof Callout */
+.service-proof-callout {
+  background: rgba(0, 212, 255, 0.08);
+  border-left: 3px solid var(--cyan-accent);
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin: var(--spacing-lg) 0 var(--spacing-xl);
+  border-radius: var(--border-radius);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.service-proof-callout p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.service-proof-callout strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.service-proof-callout .proof-link {
+  color: var(--cyan-accent);
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 0.25rem;
+  transition: var(--transition);
+  border-bottom: 1px solid transparent;
+}
+
+.service-proof-callout .proof-link:hover {
+  color: var(--cyan-accent);
+  border-bottom-color: var(--cyan-accent);
 }
 
 .service-intro-text {
