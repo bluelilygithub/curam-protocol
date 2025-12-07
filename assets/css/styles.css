@@ -203,7 +203,7 @@ h1, h2, h3, h4 {
 .btn-nav {
   background: var(--color-gold);
   color: var(--navy-deep);
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1.5rem;
   border-radius: var(--border-radius);
   font-weight: 600;
   font-size: 0.875rem;

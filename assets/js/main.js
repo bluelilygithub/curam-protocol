@@ -168,120 +168,152 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 16);
     }
 
-    // Mobile menu toggle
-    const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
-    const navContent = document.querySelector('.nav-content');
+    // Function to initialize mobile menu (can be called multiple times for dynamic navbars)
+    function initializeMobileMenu() {
+        const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
+        const navContent = document.querySelector('.nav-content');
+        
+        if (mobileMenuToggle && navContent && !mobileMenuToggle.dataset.initialized) {
+            mobileMenuToggle.dataset.initialized = 'true';
+            
+            mobileMenuToggle.addEventListener('click', function() {
+                this.classList.toggle('active');
+                navContent.classList.toggle('active');
+                // Prevent body scroll when menu is open
+                if (navContent.classList.contains('active')) {
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    document.body.style.overflow = '';
+                }
+            });
+            
+            // Close menu when clicking on a link
+            const navLinks = navContent.querySelectorAll('a');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    mobileMenuToggle.classList.remove('active');
+                    navContent.classList.remove('active');
+                    document.body.style.overflow = '';
+                });
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', function(event) {
+                const isClickInsideNav = navContent.contains(event.target);
+                const isClickOnToggle = mobileMenuToggle.contains(event.target);
+                
+                if (!isClickInsideNav && !isClickOnToggle && navContent.classList.contains('active')) {
+                    mobileMenuToggle.classList.remove('active');
+                    navContent.classList.remove('active');
+                    document.body.style.overflow = '';
+                }
+            });
+        }
+    }
+
+    // Initialize mobile menu immediately (for static navbars)
+    initializeMobileMenu();
     
-    if (mobileMenuToggle && navContent) {
-        mobileMenuToggle.addEventListener('click', function() {
-            this.classList.toggle('active');
-            navContent.classList.toggle('active');
-            // Prevent body scroll when menu is open
-            if (navContent.classList.contains('active')) {
-                document.body.style.overflow = 'hidden';
-            } else {
-                document.body.style.overflow = '';
+    // Also listen for navbarLoaded event (for dynamically loaded navbars)
+    document.addEventListener('navbarLoaded', initializeMobileMenu);
+
+    // Function to initialize dropdowns (can be called multiple times for dynamic navbars)
+    function initializeDropdowns() {
+        const dropdowns = document.querySelectorAll('.nav-dropdown:not([data-dropdown-initialized])');
+        dropdowns.forEach(dropdown => {
+            dropdown.dataset.dropdownInitialized = 'true';
+            const dropdownToggle = dropdown.querySelector('a');
+            
+            // Desktop: hover to open
+            dropdown.addEventListener('mouseenter', function() {
+                if (window.innerWidth > 768) {
+                    this.classList.add('active');
+                }
+            });
+            
+            dropdown.addEventListener('mouseleave', function() {
+                if (window.innerWidth > 768) {
+                    this.classList.remove('active');
+                }
+            });
+            
+            // Mobile: click to toggle
+            if (dropdownToggle) {
+                dropdownToggle.addEventListener('click', function(e) {
+                    if (window.innerWidth <= 768) {
+                        e.preventDefault();
+                        dropdown.classList.toggle('active');
+                    }
+                });
             }
         });
         
-        // Close menu when clicking on a link
-        const navLinks = navContent.querySelectorAll('a');
-        navLinks.forEach(link => {
-            link.addEventListener('click', function() {
-                mobileMenuToggle.classList.remove('active');
-                navContent.classList.remove('active');
-                document.body.style.overflow = '';
+        // Close dropdowns when clicking outside (mobile) - only add once
+        if (!document.body.dataset.dropdownHandlerAdded) {
+            document.body.dataset.dropdownHandlerAdded = 'true';
+            document.addEventListener('click', function(event) {
+                if (window.innerWidth <= 768) {
+                    document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
+                        if (!dropdown.contains(event.target)) {
+                            dropdown.classList.remove('active');
+                        }
+                    });
+                }
             });
-        });
+        }
+    }
+
+    // Initialize dropdowns immediately (for static navbars)
+    initializeDropdowns();
+    
+    // Also listen for navbarLoaded event (for dynamically loaded navbars)
+    document.addEventListener('navbarLoaded', initializeDropdowns);
+
+    // Function to initialize search inputs (can be called multiple times for dynamic navbars)
+    function initializeSearchInputs() {
+        const searchInputs = document.querySelectorAll('.nav-search-input:not([data-search-initialized])');
         
-        // Close menu when clicking outside
-        document.addEventListener('click', function(event) {
-            const isClickInsideNav = navContent.contains(event.target);
-            const isClickOnToggle = mobileMenuToggle.contains(event.target);
+        searchInputs.forEach(input => {
+            input.dataset.searchInitialized = 'true';
             
-            if (!isClickInsideNav && !isClickOnToggle && navContent.classList.contains('active')) {
-                mobileMenuToggle.classList.remove('active');
-                navContent.classList.remove('active');
-                document.body.style.overflow = '';
+            // Update placeholder to indicate AI search
+            if (!input.placeholder.includes('blog') && !input.placeholder.includes('AI')) {
+                input.placeholder = 'Ask AI about our services...';
+            }
+            
+            // Handle Enter key - redirect to search results page
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const query = input.value.trim();
+                    
+                    if (query) {
+                        // Redirect to search results page with query parameter
+                        window.location.href = `search-results.html?q=${encodeURIComponent(query)}`;
+                    }
+                }
+            });
+            
+            // Also handle form submission if input is in a form
+            const form = input.closest('form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const query = input.value.trim();
+                    
+                    if (query) {
+                        window.location.href = `search-results.html?q=${encodeURIComponent(query)}`;
+                    }
+                });
             }
         });
     }
 
-    // Dropdown menu functionality
-    const dropdowns = document.querySelectorAll('.nav-dropdown');
-    dropdowns.forEach(dropdown => {
-        const dropdownToggle = dropdown.querySelector('a');
-        
-        // Desktop: hover to open
-        dropdown.addEventListener('mouseenter', function() {
-            if (window.innerWidth > 768) {
-                this.classList.add('active');
-            }
-        });
-        
-        dropdown.addEventListener('mouseleave', function() {
-            if (window.innerWidth > 768) {
-                this.classList.remove('active');
-            }
-        });
-        
-        // Mobile: click to toggle
-        if (dropdownToggle) {
-            dropdownToggle.addEventListener('click', function(e) {
-                if (window.innerWidth <= 768) {
-                    e.preventDefault();
-                    dropdown.classList.toggle('active');
-                }
-            });
-        }
-    });
+    // Initialize search inputs immediately (for static navbars)
+    initializeSearchInputs();
     
-    // Close dropdowns when clicking outside (mobile)
-    document.addEventListener('click', function(event) {
-        if (window.innerWidth <= 768) {
-            dropdowns.forEach(dropdown => {
-                if (!dropdown.contains(event.target)) {
-                    dropdown.classList.remove('active');
-                }
-            });
-        }
-    });
-
-    // RAG Search Functionality - Redirects to dedicated search results page
-    const searchInputs = document.querySelectorAll('.nav-search-input');
-    
-    searchInputs.forEach(input => {
-        // Update placeholder to indicate AI search
-        if (!input.placeholder.includes('blog') && !input.placeholder.includes('AI')) {
-            input.placeholder = 'Ask AI about our services...';
-        }
-        
-        // Handle Enter key - redirect to search results page
-        input.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const query = input.value.trim();
-                
-                if (query) {
-                    // Redirect to search results page with query parameter
-                    window.location.href = `search-results.html?q=${encodeURIComponent(query)}`;
-                }
-            }
-        });
-        
-        // Also handle form submission if input is in a form
-        const form = input.closest('form');
-        if (form) {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                const query = input.value.trim();
-                
-                if (query) {
-                    window.location.href = `search-results.html?q=${encodeURIComponent(query)}`;
-                }
-            });
-        }
-    });
+    // Also listen for navbarLoaded event (for dynamically loaded navbars)
+    document.addEventListener('navbarLoaded', initializeSearchInputs);
 });
 
 // Video background handling
