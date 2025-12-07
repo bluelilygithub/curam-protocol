@@ -646,6 +646,50 @@ h1, h2, h3, h4 {
   color: var(--text-muted);
 }
 
+/* Hero Stats Row (for demo/roi pages) */
+.hero-stats-row {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-2xl);
+  margin-top: var(--spacing-2xl);
+  flex-wrap: wrap;
+}
+
+.hero-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--spacing-lg);
+  background: rgba(26, 45, 74, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--border-radius);
+  backdrop-filter: blur(8px);
+  min-width: 150px;
+  transition: var(--transition);
+}
+
+.hero-stat-item:hover {
+  border-color: rgba(0, 212, 255, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 212, 255, 0.1);
+}
+
+.hero-stat-value {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 600;
+  color: var(--color-gold);
+  line-height: 1.2;
+  margin-bottom: var(--spacing-xs);
+}
+
+.hero-stat-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
 /* Scroll Indicator */
 .scroll-indicator {
   position: absolute;
