@@ -1741,42 +1741,84 @@ h1, h2, h3, h4 {
 }
 
 .feature-card-enhanced {
-  background: var(--navy-deep);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--border-radius-lg);
-  padding: var(--spacing-xl);
-  text-align: center;
-  transition: var(--transition);
+    background: var(--navy-deep);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-xl);
+    text-align: center;
+    transition: var(--transition);
 }
 
 .feature-card-enhanced:hover {
-  border-color: var(--border-accent);
-  transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+    border-color: var(--border-accent);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}
+
+/* Feature cards with images */
+.features-grid-with-images {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 1024px) {
+    .features-grid-with-images {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.feature-card-with-image {
+    padding: 0;
+    overflow: hidden;
+    text-align: left;
+}
+
+.feature-card-image {
+    width: 100%;
+    height: 140px;
+    overflow: hidden;
+}
+
+.feature-card-image svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.feature-card-body {
+    padding: var(--spacing-lg);
+}
+
+.feature-card-with-image .feature-card-title {
+    text-align: left;
+    font-size: 1.125rem;
+}
+
+.feature-card-with-image .feature-card-desc {
+    text-align: left;
 }
 
 .feature-icon-bg {
-  width: 64px;
-  height: 64px;
-  margin: 0 auto var(--spacing-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(245, 166, 35, 0.05) 100%);
-  border-radius: 50%;
-  color: var(--cyan-accent);
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--spacing-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(245, 166, 35, 0.05) 100%);
+    border-radius: 50%;
+    color: var(--cyan-accent);
 }
 
 .feature-icon-bg svg {
-  width: 32px;
-  height: 32px;
+    width: 32px;
+    height: 32px;
 }
 
 .feature-card-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-sm);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
 }
 
 .feature-card-desc {
