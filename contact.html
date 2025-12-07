@@ -4,284 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Contact Us | Curam-Ai Protocol™</title>
-    <link rel="stylesheet" href="assets/css/styles.css">
+    <meta name="description" content="Get in touch with Curam-Ai to discuss how our AI-powered document automation can transform your engineering firm's operations.">
+    <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
+    <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        .contact-form {
-            max-width: 600px;
-            margin: 0 auto;
-            background: var(--color-white);
-            padding: var(--spacing-lg);
-            border-radius: var(--border-radius);
-            border: 2px solid #E5E7EB;
-        }
-        .form-group {
-            margin-bottom: var(--spacing-md);
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: var(--spacing-xs);
-            font-weight: 600;
-            color: var(--color-navy);
-        }
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #E5E7EB;
-            border-radius: var(--border-radius);
-            font-family: var(--font-sans);
-            font-size: 1rem;
-            transition: var(--transition);
-        }
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: var(--color-gold);
-        }
-        .form-group textarea {
-            min-height: 120px;
-            resize: vertical;
-        }
-        .form-actions {
-            margin-top: var(--spacing-lg);
-        }
-        
-        /* AI Assistant Chat Styles */
-        .ai-assistant-section {
-            max-width: 600px;
-            margin: 0 auto var(--spacing-xl);
-            background: var(--color-white);
-            padding: var(--spacing-lg);
-            border-radius: var(--border-radius);
-            border: 2px solid var(--color-gold);
-        }
-        
-        .ai-assistant-header {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-sm);
-            margin-bottom: var(--spacing-md);
-            padding-bottom: var(--spacing-md);
-            border-bottom: 2px solid #E5E7EB;
-        }
-        
-        .ai-assistant-header h3 {
-            margin: 0;
-            color: var(--color-navy);
-            font-size: 1.25rem;
-        }
-        
-        .ai-badge {
-            background: var(--color-gold);
-            color: var(--color-navy);
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .chat-container {
-            max-height: 400px;
-            overflow-y: auto;
-            margin-bottom: var(--spacing-md);
-            padding: var(--spacing-md);
-            background: #F9FAFB;
-            border-radius: var(--border-radius);
-            min-height: 200px;
-        }
-        
-        .chat-message {
-            margin-bottom: var(--spacing-md);
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .chat-message.user {
-            align-items: flex-end;
-        }
-        
-        .chat-message.assistant {
-            align-items: flex-start;
-        }
-        
-        .message-bubble {
-            max-width: 80%;
-            padding: var(--spacing-sm) var(--spacing-md);
-            border-radius: var(--border-radius);
-            word-wrap: break-word;
-        }
-        
-        .chat-message.user .message-bubble {
-            background: var(--color-navy);
-            color: var(--color-white);
-        }
-        
-        .chat-message.assistant .message-bubble {
-            background: var(--color-white);
-            color: var(--color-navy);
-            border: 1px solid #E5E7EB;
-        }
-        
-        .chat-input-container {
-            display: flex;
-            gap: var(--spacing-sm);
-        }
-        
-        .chat-input {
-            flex: 1;
-            padding: 0.75rem;
-            border: 2px solid #E5E7EB;
-            border-radius: var(--border-radius);
-            font-family: var(--font-sans);
-            font-size: 1rem;
-        }
-        
-        .chat-input:focus {
-            outline: none;
-            border-color: var(--color-gold);
-        }
-        
-        .chat-send-btn {
-            padding: 0.75rem 1.5rem;
-            background: var(--color-gold);
-            color: var(--color-navy);
-            border: none;
-            border-radius: var(--border-radius);
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-        
-        .chat-send-btn:hover {
-            opacity: 0.9;
-        }
-        
-        .chat-send-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .chat-loading {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid var(--color-gold);
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        .suggested-interest {
-            margin-top: var(--spacing-md);
-            padding: var(--spacing-sm);
-            background: #EFF6FF;
-            border-left: 3px solid var(--color-gold);
-            border-radius: var(--border-radius);
-            font-size: 0.9rem;
-        }
-        
-        .email-chat-section {
-            margin-top: var(--spacing-md);
-            padding: var(--spacing-md);
-            background: #F9FAFB;
-            border-radius: var(--border-radius);
-            border: 1px solid #E5E7EB;
-        }
-        
-        .email-chat-form {
-            display: flex;
-            gap: var(--spacing-sm);
-            align-items: flex-end;
-        }
-        
-        .email-input-group {
-            flex: 1;
-        }
-        
-        .email-input-group label {
-            display: block;
-            margin-bottom: 0.25rem;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--color-navy);
-        }
-        
-        .email-input {
-            width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #E5E7EB;
-            border-radius: var(--border-radius);
-            font-family: var(--font-sans);
-            font-size: 1rem;
-        }
-        
-        .email-input:focus {
-            outline: none;
-            border-color: var(--color-gold);
-        }
-        
-        .email-chat-btn {
-            padding: 0.75rem 1.5rem;
-            background: var(--color-navy);
-            color: var(--color-white);
-            border: none;
-            border-radius: var(--border-radius);
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            white-space: nowrap;
-        }
-        
-        .email-chat-btn:hover {
-            opacity: 0.9;
-        }
-        
-        .email-chat-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .email-success {
-            margin-top: var(--spacing-sm);
-            padding: var(--spacing-sm);
-            background: #D1FAE5;
-            color: #065F46;
-            border-radius: var(--border-radius);
-            font-size: 0.9rem;
-        }
-        
-        .email-error {
-            margin-top: var(--spacing-sm);
-            padding: var(--spacing-sm);
-            background: #FEE2E2;
-            color: #991B1B;
-            border-radius: var(--border-radius);
-            font-size: 0.9rem;
-        }
-    </style>
 </head>
 <body>
-    <!-- Scroll Down Button - Fixed to viewport bottom -->
-    <button class="scroll-down-btn" aria-label="Scroll down">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M19 12l-7 7-7-7"/>
-        </svg>
-    </button>
-    
     <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
             <div class="nav-brand">
-                <a href="homepage.html" class="nav-brand-link">
+                <a href="index.html" class="nav-brand-link">
                     <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
                     <span class="logo-text">Curam-Ai</span>
                 </a>
@@ -292,149 +27,259 @@
                 <span></span>
             </button>
             <div class="nav-content">
-                <div class="nav-search-row">
-                    <div class="search-container">
-                        <input type="search" placeholder="Search..." class="nav-search-input">
-                    </div>
-                </div>
                 <ul class="nav-menu">
                     <li><a href="about.html">About</a></li>
                     <li><a href="services.html">Services</a></li>
                     <li><a href="target-markets.html">Target Markets</a></li>
                     <li><a href="curam-ai-protocol.html">The Protocol</a></li>
                     <li class="nav-dropdown">
-                        <a href="#">Resources</a>
+                        <a href="#" class="dropdown-toggle">Resources <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
                         <ul class="dropdown-menu">
-                            <li><a href="/roi.html">ROI Calculator</a></li>
-                            <li><a href="/demo.html">Assessment Demo</a></li>
-                            <li><a href="feasibility-sprint-report.html">Phase 1 Sample Report</a></li>
-                            <li><a href="risk-audit-report.html">Sample Audit PDF</a></li>
-                            <li><a href="case-study.html">Case Study</a></li>
-                            <li><a href="how-it-works.html">Technical Architecture</a></li>
+                            <li><a href="how-it-works.html">How It Works</a></li>
+                            <li><a href="case-study.html">Case Studies</a></li>
+                            <li><a href="roi.html">ROI Calculator</a></li>
                         </ul>
                     </li>
                     <li><a href="faq.html">FAQ</a></li>
-                    <li><a href="contact.html" class="btn-nav">Contact</a></li>
+                    <li><a href="contact.html" class="btn-nav active">Contact</a></li>
                 </ul>
             </div>
         </div>
     </nav>
 
-    <!-- Page Header -->
-    <section class="hero" style="min-height: 40vh; padding: var(--spacing-lg) 0;">
-        <div class="container">
-            <h1 class="hero-headline" style="font-size: 2.5rem;">Get Started</h1>
-            <p class="hero-subhead" style="font-size: 1.125rem;">Book a diagnostic call or start with a Feasibility Sprint</p>
+    <!-- Hero Section -->
+    <section class="hero contact-hero">
+        <div class="hero-background">
+            <div class="hero-gradient"></div>
+            <svg class="hero-pattern" viewBox="0 0 1200 600" preserveAspectRatio="xMidYMid slice">
+                <defs>
+                    <pattern id="contact-grid" x="0" y="0" width="60" height="60" patternUnits="userSpaceOnUse">
+                        <circle cx="30" cy="30" r="1" fill="rgba(212,175,55,0.15)"/>
+                    </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#contact-grid)"/>
+            </svg>
+            <svg class="hero-abstract" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid slice">
+                <defs>
+                    <linearGradient id="contact-grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color:rgba(212,175,55,0.2)"/>
+                        <stop offset="100%" style="stop-color:rgba(212,175,55,0)"/>
+                    </linearGradient>
+                </defs>
+                <circle cx="500" cy="100" r="200" fill="url(#contact-grad1)"/>
+                <circle cx="100" cy="500" r="150" fill="url(#contact-grad1)"/>
+            </svg>
         </div>
-    </section>
-
-    <!-- AI Assistant Section -->
-    <section class="methodology" style="padding: var(--spacing-xl) 0 0;">
         <div class="container">
-            <div class="ai-assistant-section">
-                <div class="ai-assistant-header">
-                    <h3>AI Inquiry Assistant</h3>
-                    <span class="ai-badge">AI</span>
-                </div>
-                <p style="color: var(--color-gray); margin-bottom: var(--spacing-md); font-size: 0.9rem;">
-                    Not sure where to start? Ask me about your document automation needs, and I'll help guide you to the right solution.
+            <div class="hero-content">
+                <span class="hero-badge">Get In Touch</span>
+                <h1 class="hero-headline">Let's Start a Conversation</h1>
+                <p class="hero-subhead">
+                    Whether you're ready to transform your document workflows or just exploring options, 
+                    we're here to help you navigate the path to AI-powered automation.
                 </p>
-                <div class="chat-container" id="chatContainer">
-                    <div class="chat-message assistant">
-                        <div class="message-bubble">
-                            Hi! I'm here to help you find the right document automation solution. What challenges are you facing with document processing?
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Content Section -->
+    <section class="contact-content">
+        <div class="container">
+            <div class="contact-grid">
+                <!-- Contact Form -->
+                <div class="contact-form-wrapper">
+                    <div class="contact-form-header">
+                        <h2>Send Us a Message</h2>
+                        <p>Fill out the form below and we'll get back to you within 24 hours.</p>
+                    </div>
+                    <form class="contact-form" id="contactForm">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="firstName">First Name <span class="required">*</span></label>
+                                <input type="text" id="firstName" name="firstName" required placeholder="John">
+                            </div>
+                            <div class="form-group">
+                                <label for="lastName">Last Name <span class="required">*</span></label>
+                                <input type="text" id="lastName" name="lastName" required placeholder="Smith">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="email">Email Address <span class="required">*</span></label>
+                            <input type="email" id="email" name="email" required placeholder="john@company.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="company">Company Name</label>
+                            <input type="text" id="company" name="company" placeholder="Your Engineering Firm">
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">Phone Number</label>
+                            <input type="tel" id="phone" name="phone" placeholder="+61 4XX XXX XXX">
+                        </div>
+                        <div class="form-group">
+                            <label for="interest">What are you interested in? <span class="required">*</span></label>
+                            <select id="interest" name="interest" required>
+                                <option value="">Select an option...</option>
+                                <option value="feasibility">Phase 1: Feasibility Sprint ($1,500)</option>
+                                <option value="roadmap">Phase 2: Readiness Roadmap ($7,500)</option>
+                                <option value="compliance">Phase 3: Compliance Shield ($8-12k)</option>
+                                <option value="implementation">Phase 4: Implementation ($20-30k)</option>
+                                <option value="demo">Request a Demo</option>
+                                <option value="general">General Inquiry</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="message">Your Message <span class="required">*</span></label>
+                            <textarea id="message" name="message" rows="5" required placeholder="Tell us about your document automation challenges..."></textarea>
+                        </div>
+                        <div class="form-group form-checkbox">
+                            <input type="checkbox" id="newsletter" name="newsletter">
+                            <label for="newsletter">Subscribe to our newsletter for AI automation insights</label>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-submit">
+                            <span>Send Message</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Contact Information -->
+                <div class="contact-info-wrapper">
+                    <!-- Quick Contact Cards -->
+                    <div class="contact-info-cards">
+                        <div class="contact-info-card">
+                            <div class="contact-info-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                                    <polyline points="22,6 12,13 2,6"/>
+                                </svg>
+                            </div>
+                            <div class="contact-info-content">
+                                <h3>Email Us</h3>
+                                <a href="mailto:hello@curam-ai.com.au">hello@curam-ai.com.au</a>
+                            </div>
+                        </div>
+
+                        <div class="contact-info-card">
+                            <div class="contact-info-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                                </svg>
+                            </div>
+                            <div class="contact-info-content">
+                                <h3>Call Us</h3>
+                                <a href="tel:+61400000000">+61 4XX XXX XXX</a>
+                            </div>
+                        </div>
+
+                        <div class="contact-info-card">
+                            <div class="contact-info-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                                    <circle cx="12" cy="10" r="3"/>
+                                </svg>
+                            </div>
+                            <div class="contact-info-content">
+                                <h3>Location</h3>
+                                <p>Sydney, Australia</p>
+                            </div>
+                        </div>
+
+                        <div class="contact-info-card">
+                            <div class="contact-info-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                            </div>
+                            <div class="contact-info-content">
+                                <h3>Business Hours</h3>
+                                <p>Mon - Fri: 9:00 AM - 6:00 PM AEST</p>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="chat-input-container">
-                    <input type="text" class="chat-input" id="chatInput" placeholder="Ask about invoice automation, beam schedules, or our protocol..." />
-                    <button class="chat-send-btn" id="chatSendBtn">Send</button>
-                </div>
-                <div id="suggestedInterest" class="suggested-interest" style="display: none;"></div>
-                
-                <!-- Email Chat Log Section -->
-                <div class="email-chat-section" id="emailChatSection" style="display: none;">
-                    <p style="margin-bottom: var(--spacing-sm); font-weight: 600; color: var(--color-navy);">
-                        📧 Email this conversation
-                    </p>
-                    <p style="font-size: 0.875rem; color: var(--color-gray); margin-bottom: var(--spacing-md);">
-                        Get a copy of our conversation sent to your email for your records.
-                    </p>
-                    <div class="email-chat-form">
-                        <div class="email-input-group">
-                            <label for="emailInput">Your Email Address</label>
-                            <input type="email" class="email-input" id="emailInput" placeholder="your.email@example.com" />
+
+                    <!-- Response Time Promise -->
+                    <div class="contact-promise-card">
+                        <div class="promise-icon">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                <path d="M9 12l2 2 4-4"/>
+                            </svg>
                         </div>
-                        <button class="email-chat-btn" id="emailChatBtn">Send Email</button>
+                        <h3>Our Response Promise</h3>
+                        <p>We respond to all inquiries within <strong>24 business hours</strong>. For urgent matters, please call us directly.</p>
                     </div>
-                    <div id="emailStatus"></div>
+
+                    <!-- Map Placeholder -->
+                    <div class="contact-map-wrapper">
+                        <div class="contact-map">
+                            <div class="map-overlay">
+                                <div class="map-pin">
+                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill="var(--color-gold)" stroke="var(--color-navy)" stroke-width="2"/>
+                                        <circle cx="12" cy="10" r="3" fill="var(--color-navy)"/>
+                                    </svg>
+                                </div>
+                                <p class="map-label">Sydney, Australia</p>
+                            </div>
+                            <svg class="map-illustration" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice">
+                                <defs>
+                                    <pattern id="map-pattern" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                                        <rect width="20" height="20" fill="#E8EEF5"/>
+                                        <rect x="0" y="0" width="10" height="10" fill="#DCE5F0"/>
+                                    </pattern>
+                                    <linearGradient id="map-water" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" style="stop-color:#B8D4E8"/>
+                                        <stop offset="100%" style="stop-color:#A1C6DD"/>
+                                    </linearGradient>
+                                </defs>
+                                <rect width="100%" height="100%" fill="url(#map-pattern)"/>
+                                <path d="M0 150 Q100 120 200 140 T400 130 L400 200 L0 200 Z" fill="url(#map-water)" opacity="0.6"/>
+                                <circle cx="200" cy="100" r="8" fill="var(--color-gold)"/>
+                                <circle cx="200" cy="100" r="20" fill="var(--color-gold)" opacity="0.2"/>
+                                <circle cx="200" cy="100" r="35" fill="var(--color-gold)" opacity="0.1"/>
+                            </svg>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- Contact Form Section -->
-    <section class="methodology" style="padding: var(--spacing-xl) 0;">
+    <!-- Quick Start CTA -->
+    <section class="contact-cta">
         <div class="container">
-            <div class="contact-form">
-                <h2 style="text-align: center; margin-bottom: var(--spacing-lg);">Contact Us</h2>
-                <form id="contactForm" action="#" method="POST">
-                    <div class="form-group">
-                        <label for="name">Full Name *</label>
-                        <input type="text" id="name" name="name" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="email">Email Address *</label>
-                        <input type="email" id="email" name="email" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="company">Company Name</label>
-                        <input type="text" id="company" name="company">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="interest">I'm interested in:</label>
-                        <select id="interest" name="interest">
-                            <option value="">Select an option</option>
-                            <option value="phase-1">Phase 1 - Feasibility Sprint ($1,500)</option>
-                            <option value="phase-2">Phase 2 - The Roadmap ($7,500)</option>
-                            <option value="phase-3">Phase 3 - Compliance Shield ($8-12k)</option>
-                            <option value="phase-4">Phase 4 - Implementation ($20-30k)</option>
-                            <option value="roi">ROI Calculator</option>
-                            <option value="general">General Inquiry</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="message">Message *</label>
-                        <textarea id="message" name="message" required placeholder="Tell us about your current challenges or what you'd like to learn more about..."></textarea>
-                    </div>
-                    
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">Send Message</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </section>
-
-    <!-- Alternative Contact Methods -->
-    <section class="selector" style="padding: var(--spacing-xl) 0;">
-        <div class="container">
-            <h2 class="section-headline">Other Ways to Reach Us</h2>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--spacing-md); margin-top: var(--spacing-lg);">
-                <div style="text-align: center; padding: var(--spacing-md);">
-                    <h3 style="margin-bottom: var(--spacing-sm);">Book a Call</h3>
-                    <p style="color: var(--color-gray); margin-bottom: var(--spacing-md);">Schedule a 30-minute diagnostic call to discuss your needs.</p>
-                    <a href="#" class="btn btn-secondary" style="width: 100%;">Schedule Now</a>
+            <div class="contact-cta-content">
+                <div class="contact-cta-text">
+                    <h2>Ready to Get Started?</h2>
+                    <p>Begin with our risk-free Phase 1 Feasibility Sprint and see measurable results in 48 hours.</p>
                 </div>
-                <div style="text-align: center; padding: var(--spacing-md);">
-                    <h3 style="margin-bottom: var(--spacing-sm);">Calculate ROI</h3>
-                    <p style="color: var(--color-gray); margin-bottom: var(--spacing-md);">Use our ROI calculator to understand the financial impact.</p>
-                    <a href="/roi-calculator/" class="btn btn-secondary" style="width: 100%;">Open Calculator</a>
+                <div class="contact-cta-features">
+                    <div class="cta-feature">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        <span>100% Money-Back Guarantee</span>
+                    </div>
+                    <div class="cta-feature">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        <span>Results in 48 Hours</span>
+                    </div>
+                    <div class="cta-feature">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        <span>Fixed Price: $1,500</span>
+                    </div>
                 </div>
+                <a href="curam-ai-protocol.html" class="btn btn-primary">Start Phase 1 Sprint</a>
             </div>
         </div>
     </section>
@@ -444,226 +289,86 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-brand">
-                    <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
-                    <span class="logo-text">Curam-Ai</span>
-                    <p class="footer-tagline">The Curam-Ai Protocol™</p>
+                    <a href="index.html" class="footer-logo">
+                        <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
+                        <span class="logo-text">Curam-Ai</span>
+                    </a>
+                    <p class="footer-tagline">AI-Powered Document Automation for Engineering Firms</p>
                 </div>
                 <div class="footer-links">
                     <div class="footer-column">
                         <h4>Services</h4>
                         <ul>
-                            <li><a href="services.html#service-1">Document Intelligence</a></li>
-                            <li><a href="services.html#service-2">Enterprise RAG Systems</a></li>
-                            <li><a href="services.html#service-3">Workflow Automation</a></li>
-                            <li><a href="services.html#service-4">AI Strategy</a></li>
+                            <li><a href="services.html">Document Intelligence</a></li>
+                            <li><a href="services.html">Enterprise RAG Systems</a></li>
+                            <li><a href="services.html">Workflow Automation</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
                         <h4>The Protocol</h4>
                         <ul>
-                            <li><a href="curam-ai-protocol.html">Phase 1: Feasibility Sprint</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 2: The Roadmap</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 3: Compliance Shield</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 4: Implementation</a></li>
+                            <li><a href="curam-ai-protocol.html">Feasibility Sprint</a></li>
+                            <li><a href="curam-ai-protocol.html">Readiness Roadmap</a></li>
+                            <li><a href="curam-ai-protocol.html">Compliance Shield</a></li>
+                            <li><a href="curam-ai-protocol.html">Implementation</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
                         <h4>Resources</h4>
                         <ul>
-                            <li><a href="/roi.html">ROI Calculator</a></li>
-                            <li><a href="how-it-works.html">Technical Architecture</a></li>
+                            <li><a href="how-it-works.html">How It Works</a></li>
+                            <li><a href="case-study.html">Case Studies</a></li>
+                            <li><a href="roi.html">ROI Calculator</a></li>
                             <li><a href="faq.html">FAQ</a></li>
-                            <li><a href="target-markets.html">Target Markets</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
                         <h4>Company</h4>
                         <ul>
-                            <li><a href="about.html">About</a></li>
+                            <li><a href="about.html">About Us</a></li>
                             <li><a href="contact.html">Contact</a></li>
-                            <li><a href="case-study.html">Case Studies</a></li>
+                            <li><a href="target-markets.html">Target Markets</a></li>
                         </ul>
                     </div>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html" style="color: var(--color-gold); text-decoration: none;">Sitemap</a></p>
+                <p>&copy; 2025 Curam-Ai. All rights reserved.</p>
+                <div class="footer-legal">
+                    <a href="#">Privacy Policy</a>
+                    <a href="#">Terms of Service</a>
+                </div>
             </div>
         </div>
     </footer>
 
-    <script src="assets/js/main.js"></script>
+    <script src="scripts.js"></script>
     <script>
-        // AI Contact Assistant
-        const chatContainer = document.getElementById('chatContainer');
-        const chatInput = document.getElementById('chatInput');
-        const chatSendBtn = document.getElementById('chatSendBtn');
-        const suggestedInterestDiv = document.getElementById('suggestedInterest');
-        const interestSelect = document.getElementById('interest');
-        const messageTextarea = document.getElementById('message');
-        
-        let conversationHistory = [];
-        
-        function addMessageToChat(role, content) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `chat-message ${role}`;
-            messageDiv.innerHTML = `<div class="message-bubble">${content}</div>`;
-            chatContainer.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-            
-            // Add to conversation history
-            conversationHistory.push({ role, content });
-        }
-        
-        function showSuggestedInterest(suggestedInterest) {
-            if (!suggestedInterest) {
-                suggestedInterestDiv.style.display = 'none';
-                return;
-            }
-            
-            const interestLabels = {
-                'phase-1': 'Phase 1 - Feasibility Sprint ($1,500)',
-                'phase-2': 'Phase 2 - The Roadmap ($7,500)',
-                'phase-3': 'Phase 3 - Compliance Shield ($8-12k)',
-                'phase-4': 'Phase 4 - Implementation ($20-30k)',
-                'roi': 'ROI Calculator'
-            };
-            
-            suggestedInterestDiv.innerHTML = `
-                <strong>💡 Suggested:</strong> Based on our conversation, you might be interested in 
-                <strong>${interestLabels[suggestedInterest] || suggestedInterest}</strong>. 
-                <a href="#" onclick="document.getElementById('interest').value='${suggestedInterest}'; return false;" style="color: var(--color-gold); text-decoration: underline;">Apply to form</a>
-            `;
-            suggestedInterestDiv.style.display = 'block';
-        }
-        
-        async function sendChatMessage() {
-            const message = chatInput.value.trim();
-            if (!message) return;
-            
-            // Add user message to chat
-            addMessageToChat('user', message);
-            chatInput.value = '';
-            chatSendBtn.disabled = true;
-            chatSendBtn.innerHTML = '<span class="chat-loading"></span>';
-            
-            try {
-                const response = await fetch('/api/contact-assistant', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        message: message,
-                        history: conversationHistory
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.error) {
-                    addMessageToChat('assistant', "I'm sorry, I encountered an error. Please feel free to fill out the form below or contact us directly.");
-                } else {
-                    addMessageToChat('assistant', data.message);
-                    
-                    // Show suggested interest if provided
-                    if (data.suggested_interest) {
-                        showSuggestedInterest(data.suggested_interest);
-                    }
-                    
-                    // Show email section after at least 2 messages (user + assistant)
-                    if (conversationHistory.length >= 2) {
-                        document.getElementById('emailChatSection').style.display = 'block';
-                    }
-                }
-            } catch (error) {
-                console.error('Chat error:', error);
-                addMessageToChat('assistant', "I'm having trouble connecting right now. Please fill out the form below and we'll get back to you.");
-            } finally {
-                chatSendBtn.disabled = false;
-                chatSendBtn.textContent = 'Send';
-            }
-        }
-        
-        // Email chat log functionality
-        const emailChatBtn = document.getElementById('emailChatBtn');
-        const emailInput = document.getElementById('emailInput');
-        const emailStatus = document.getElementById('emailStatus');
-        const nameInput = document.getElementById('name');
-        const companyInput = document.getElementById('company');
-        
-        // Pre-fill email from form if available
-        const emailFormInput = document.getElementById('email');
-        if (emailFormInput) {
-            emailFormInput.addEventListener('blur', function() {
-                if (this.value && !emailInput.value) {
-                    emailInput.value = this.value;
-                }
-            });
-        }
-        
-        emailChatBtn.addEventListener('click', async function() {
-            const email = emailInput.value.trim();
-            if (!email) {
-                emailStatus.innerHTML = '<div class="email-error">Please enter your email address.</div>';
-                return;
-            }
-            
-            if (conversationHistory.length === 0) {
-                emailStatus.innerHTML = '<div class="email-error">No conversation to email.</div>';
-                return;
-            }
-            
-            emailChatBtn.disabled = true;
-            emailChatBtn.textContent = 'Sending...';
-            emailStatus.innerHTML = '';
-            
-            try {
-                const response = await fetch('/api/email-chat-log', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: email,
-                        history: conversationHistory,
-                        name: nameInput ? nameInput.value.trim() : '',
-                        company: companyInput ? companyInput.value.trim() : ''
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (data.error) {
-                    emailStatus.innerHTML = `<div class="email-error">Error: ${data.error}</div>`;
-                } else {
-                    emailStatus.innerHTML = '<div class="email-success">✓ Chat log sent successfully! Check your email.</div>';
-                    emailInput.value = '';
-                }
-            } catch (error) {
-                console.error('Email error:', error);
-                emailStatus.innerHTML = '<div class="email-error">Failed to send email. Please try again later.</div>';
-            } finally {
-                emailChatBtn.disabled = false;
-                emailChatBtn.textContent = 'Send Email';
-            }
-        });
-        
-        chatSendBtn.addEventListener('click', sendChatMessage);
-        chatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                sendChatMessage();
-            }
-        });
-        
-        // Form submission handler
+        // Form submission handling
         document.getElementById('contactForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            // In a real implementation, this would send data to a backend
-            alert('Thank you for your message! We will get back to you soon.');
-            this.reset();
+            
+            const submitBtn = this.querySelector('.btn-submit');
+            const originalText = submitBtn.innerHTML;
+            
+            // Show loading state
+            submitBtn.innerHTML = '<span>Sending...</span>';
+            submitBtn.disabled = true;
+            
+            // Simulate form submission (replace with actual API call)
+            setTimeout(() => {
+                submitBtn.innerHTML = '<span>Message Sent!</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+                submitBtn.classList.add('success');
+                
+                // Reset form after delay
+                setTimeout(() => {
+                    this.reset();
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('success');
+                }, 3000);
+            }, 1500);
         });
     </script>
 </body>
 </html>
-
