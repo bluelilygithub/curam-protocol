@@ -276,9 +276,9 @@ document.addEventListener('DOMContentLoaded', function() {
         searchInputs.forEach(input => {
             input.dataset.searchInitialized = 'true';
             
-            // Update placeholder to indicate AI search
-            if (!input.placeholder.includes('blog') && !input.placeholder.includes('AI')) {
-                input.placeholder = 'Ask AI about our services...';
+            // Update placeholder to indicate RAG search
+            if (!input.placeholder.includes('blog') && !input.placeholder.includes('RAG') && !input.placeholder.includes('AI')) {
+                input.placeholder = 'RAG Search...';
             }
             
             // Handle Enter key - redirect to search results page
