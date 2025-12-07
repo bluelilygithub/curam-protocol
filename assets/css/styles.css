@@ -222,7 +222,7 @@ h1, h2, h3, h4 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 72px;
+  height: 120px;
 }
 
 .nav-brand {
@@ -377,6 +377,20 @@ h1, h2, h3, h4 {
 /* Dropdown */
 .nav-dropdown {
   position: relative;
+}
+
+.nav-dropdown > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.dropdown-chevron {
+  transition: transform var(--transition-fast);
+}
+
+.nav-dropdown:hover .dropdown-chevron {
+  transform: rotate(180deg);
 }
 
 .dropdown-menu {
