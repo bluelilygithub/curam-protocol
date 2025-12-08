@@ -2035,10 +2035,84 @@ Keep responses concise (2-3 sentences), friendly, and focused on understanding t
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 
+def send_sms_notification(name, email, company, interest):
+    """
+    Send SMS notification using Twilio API when contact form is submitted.
+    Sends to +61411951625 (Australian number: 0411951625)
+    """
+    try:
+        # Twilio credentials - support both API Key and standard Auth Token methods
+        twilio_account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
+        twilio_api_key = os.environ.get('TWILIO_API_KEY')  # Alternative to auth token
+        twilio_auth_token = os.environ.get('TWILIO_AUTH_TOKEN')
+        twilio_phone_from = os.environ.get('TWILIO_PHONE_FROM')
+        
+        # Hardcoded recipient phone number (Australian format: +61411951625)
+        twilio_phone_to = '+61411951625'
+        
+        # Need Account SID and either Auth Token or API Key
+        if not twilio_account_sid:
+            app.logger.info("Twilio Account SID not configured - skipping SMS notification")
+            return False
+        
+        # Need at least one authentication method
+        if not twilio_auth_token and not twilio_api_key:
+            app.logger.info("Twilio authentication not configured (need AUTH_TOKEN or API_KEY) - skipping SMS notification")
+            return False
+        
+        if not twilio_phone_from:
+            app.logger.info("Twilio phone number (FROM) not configured - skipping SMS notification")
+            return False
+        
+        # Prepare SMS message
+        company_text = f" ({company})" if company else ""
+        sms_body = f"New contact: {name}{company_text}\nEmail: {email}\nInterest: {interest}\nCheck email for details."
+        
+        # Truncate if too long (SMS limit is 1600 chars, but keep it shorter)
+        if len(sms_body) > 200:
+            sms_body = sms_body[:197] + "..."
+        
+        # Send SMS via Twilio API
+        twilio_url = f'https://api.twilio.com/2010-04-01/Accounts/{twilio_account_sid}/Messages.json'
+        
+        sms_data = {
+            'From': twilio_phone_from,
+            'To': twilio_phone_to,
+            'Body': sms_body
+        }
+        
+        # Use Auth Token if available, otherwise use API Key as fallback
+        # Note: Twilio API Key auth requires API Key SID + Secret, but many users name their Auth Token as API_KEY
+        # So we'll try API_KEY as Auth Token if AUTH_TOKEN is not set
+        auth_creds = (twilio_account_sid, twilio_auth_token if twilio_auth_token else twilio_api_key)
+        
+        response = requests.post(
+            twilio_url,
+            data=sms_data,
+            auth=auth_creds,
+            timeout=10
+        )
+        
+        if response.status_code == 201:
+            app.logger.info(f"SMS notification sent successfully to {twilio_phone_to}")
+            return True
+        else:
+            app.logger.error(f"Twilio API error: {response.status_code} - {response.text}")
+            return False
+            
+    except Exception as e:
+        app.logger.error(f"Error sending SMS notification: {e}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        # Don't fail the whole request if SMS fails
+        return False
+
+
 @app.route('/api/contact', methods=['POST'])
 def contact_form():
     """
     Handle contact form submissions and send emails using MailChannel API.
+    Also sends SMS notification if Twilio is configured.
     """
     try:
         data = request.get_json()
@@ -2248,6 +2322,13 @@ Curam-Ai Protocol™ Team
             
             if admin_response.status_code == 202:
                 app.logger.info(f"Contact form email sent successfully from {email}")
+                
+                # Send SMS notification if configured (non-blocking)
+                try:
+                    send_sms_notification(name, email, company, interest_display)
+                except Exception as sms_error:
+                    app.logger.warning(f"SMS notification failed (non-critical): {sms_error}")
+                
                 return jsonify({
                     'success': True,
                     'message': 'Thank you for your message! We will get back to you soon.'
