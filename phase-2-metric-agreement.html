@@ -9,173 +9,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        .report-container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: var(--color-white);
-            border-radius: var(--border-radius-lg);
-            padding: var(--spacing-2xl);
-            color: #1f2937;
-            box-shadow: var(--shadow-lg);
-        }
-        .report-header {
-            border-bottom: 4px solid var(--color-navy);
-            padding-bottom: var(--spacing-md);
-            margin-bottom: var(--spacing-lg);
-        }
-        .report-header .document-label {
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: var(--color-gray);
-            margin-bottom: var(--spacing-xs);
-        }
-        .report-header h1 {
-            font-size: 2rem;
-            font-weight: 700;
-            color: #1f2937;
-            margin: var(--spacing-xs) 0 var(--spacing-sm);
-        }
-        .report-header p {
-            font-size: 1.125rem;
-            color: #4b5563;
-        }
-        .metadata-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: var(--spacing-md);
-            margin-bottom: var(--spacing-xl);
-        }
-        .metadata-box {
-            padding: var(--spacing-md);
-            background: #f9fafb;
-            border-radius: var(--border-radius);
-        }
-        .metadata-box strong {
-            font-weight: 600;
-            color: #1f2937;
-        }
-        .section-title {
-            color: var(--color-navy);
-            border-left: 5px solid var(--color-navy);
-            padding-left: var(--spacing-md);
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin: var(--spacing-xl) 0 var(--spacing-md);
-        }
-        .metric-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: var(--spacing-lg) 0;
-            border-radius: var(--border-radius);
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .metric-table th {
-            background-color: var(--navy-deep);
-            color: var(--color-white);
-            font-weight: 600;
-            padding: var(--spacing-md);
-            text-align: left;
-            width: 25%;
-        }
-        .metric-table td {
-            vertical-align: top;
-            padding: var(--spacing-md);
-            border-bottom: 1px solid #e5e7eb;
-            color: #374151;
-        }
-        .metric-table tbody tr:nth-child(even) {
-            background-color: #f9fafb;
-        }
-        .metric-table tbody tr:nth-child(odd) {
-            background-color: var(--color-white);
-        }
-        .warning-box {
-            padding: var(--spacing-md);
-            background: #fefce8;
-            border-left: 4px solid #eab308;
-            border-radius: var(--border-radius);
-            margin: var(--spacing-md) 0;
-        }
-        .warning-box p {
-            margin: 0;
-            font-size: 0.875rem;
-            color: #1f2937;
-        }
-        .warning-box strong {
-            font-weight: 600;
-        }
-        .verification-list {
-            list-style: disc;
-            padding-left: var(--spacing-xl);
-            margin: var(--spacing-md) 0;
-        }
-        .verification-list li {
-            color: #374151;
-            margin-bottom: var(--spacing-sm);
-            line-height: 1.6;
-        }
-        .sign-off {
-            padding-top: var(--spacing-xl);
-            border-top: 1px solid #d1d5db;
-            margin-top: var(--spacing-xl);
-        }
-        .sign-off p {
-            margin-bottom: var(--spacing-sm);
-        }
-        .sign-off-title {
-            font-size: 1rem;
-            font-weight: 600;
-            color: #1f2937;
-            margin-bottom: var(--spacing-lg);
-        }
-        .sign-off-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: var(--spacing-xl);
-            margin-top: var(--spacing-lg);
-        }
-        .sign-off-box h3 {
-            font-weight: 700;
-            color: #1f2937;
-            margin-bottom: var(--spacing-md);
-        }
-        .sign-off-line {
-            border-bottom: 2px solid #9ca3af;
-            padding: var(--spacing-md) 0;
-            margin: var(--spacing-md) 0;
-        }
-        .sign-off-label {
-            font-size: 0.875rem;
-            color: #6b7280;
-            margin-top: var(--spacing-xs);
-        }
-        .report-section {
-            padding: 120px 0 var(--spacing-3xl);
-            background: var(--navy-deep);
-        }
-        .report-content-section {
-            padding: var(--spacing-lg) 0;
-        }
-        @media (max-width: 768px) {
-            .report-container {
-                padding: var(--spacing-lg);
-                margin: var(--spacing-lg);
-            }
-            .metadata-grid {
-                grid-template-columns: 1fr;
-            }
-            .metric-table {
-                font-size: 0.875rem;
-            }
-            .metric-table th,
-            .metric-table td {
-                padding: var(--spacing-sm);
-            }
-        }
-    </style>
 </head>
 <body>
     <!-- Navigation -->
@@ -183,37 +16,37 @@
     <script src="assets/js/navbar-loader.js"></script>
 
     <!-- Report Section -->
-    <section class="report-section">
+    <section class="phase-2-report-section">
         <div class="container">
-            <div class="report-container">
+            <div class="phase-2-report-container narrow">
                 
                 <!-- Document Header -->
-                <div class="report-header">
-                    <div class="document-label">Curam-Ai Protocol™ — Phase 2 Deliverable</div>
-                    <h1>SUCCESS METRICS AGREEMENT</h1>
+                <div class="phase-2-report-header border-thin">
+                    <div class="document-label small">Curam-Ai Protocol™ — Phase 2 Deliverable</div>
+                    <h1 class="weight-normal">SUCCESS METRICS AGREEMENT</h1>
                     <p>Defining Measurable Targets for Phase 4 Performance Retention</p>
                 </div>
 
                 <!-- Meta Data -->
-                <div class="metadata-grid">
-                    <div class="metadata-box"><strong>Client Firm:</strong> [Client Name]</div>
-                    <div class="metadata-box"><strong>Guarantor:</strong> [Your Name / Consultancy Name]</div>
-                    <div class="metadata-box"><strong>Date Agreed:</strong> [Date of P2 Sign-Off]</div>
+                <div class="phase-2-metadata-grid">
+                    <div class="phase-2-metadata-box"><strong>Client Firm:</strong> [Client Name]</div>
+                    <div class="phase-2-metadata-box"><strong>Guarantor:</strong> [Your Name / Consultancy Name]</div>
+                    <div class="phase-2-metadata-box"><strong>Date Agreed:</strong> [Date of P2 Sign-Off]</div>
                 </div>
 
                 <!-- Introduction -->
-                <div class="report-content-section">
-                    <h2 class="section-title">I. Introduction & Financial Alignment</h2>
-                    <p style="color: #374151; margin-bottom: var(--spacing-md); line-height: 1.7;">This document formalizes the specific performance targets that, upon verifiable achievement during Phase 4 (Wave 1 Deployment), will trigger the release of the <strong>15% Performance Retention</strong> clause. These metrics ensure the project meets the client's internal <strong>Financial Hurdle</strong> and realizes the full projected ROI.</p>
-                    <div class="warning-box">
+                <div class="phase-2-report-content-section compact">
+                    <h2 class="phase-2-section-title border-left">I. Introduction & Financial Alignment</h2>
+                    <p>This document formalizes the specific performance targets that, upon verifiable achievement during Phase 4 (Wave 1 Deployment), will trigger the release of the <strong>15% Performance Retention</strong> clause. These metrics ensure the project meets the client's internal <strong>Financial Hurdle</strong> and realizes the full projected ROI.</p>
+                    <div class="phase-2-warning-box">
                         <p><strong>Approved Financial Hurdle (P2 Mandate):</strong> Payback within <strong>[18]</strong> months (Target Metric for Phase 2 Modelling).</p>
                     </div>
                 </div>
 
                 <!-- Metric Table -->
-                <div class="report-content-section">
-                    <h2 class="section-title">II. Phase 4 Performance Metrics (Release of 15% Retention)</h2>
-                    <table class="metric-table">
+                <div class="phase-2-report-content-section compact">
+                    <h2 class="phase-2-section-title border-left">II. Phase 4 Performance Metrics (Release of 15% Retention)</h2>
+                    <table class="phase-2-metric-table">
                         <thead>
                             <tr>
                                 <th>Metric Name</th>
@@ -225,7 +58,7 @@
                         <tbody>
                             <tr>
                                 <td style="font-weight: 600;">ROI Payback Period</td>
-                                <td style="color: #059669;"><strong>Achieve Payback within 18 Months</strong></td>
+                                <td style="color: var(--color-success-dark);"><strong>Achieve Payback within 18 Months</strong></td>
                                 <td>CFO / Finance Team</td>
                                 <td>All Workflows (T1 & T2)</td>
                             </tr>
@@ -252,10 +85,10 @@
                 </div>
 
                 <!-- Verification Protocol -->
-                <div class="report-content-section">
-                    <h2 class="section-title">III. Verification Protocol</h2>
-                    <p style="color: #374151; margin-bottom: var(--spacing-md); line-height: 1.7;">Verification of these targets is a joint audit process performed post-Phase 4 deployment. The official Process Owner within the Client Firm is responsible for the final sign-off.</p>
-                    <ul class="verification-list">
+                <div class="phase-2-report-content-section compact">
+                    <h2 class="phase-2-section-title border-left">III. Verification Protocol</h2>
+                    <p>Verification of these targets is a joint audit process performed post-Phase 4 deployment. The official Process Owner within the Client Firm is responsible for the final sign-off.</p>
+                    <ul class="phase-2-verification-list">
                         <li><strong>Verification Agent:</strong> The Client's designated <strong>Process Owner</strong> ([Specific Name/Title]) will conduct the final audit of metrics.</li>
                         <li><strong>Methodology:</strong> Success will be verified via a comparison between the <strong>Baseline Metrics</strong> (defined in P2) and live performance data exported from the M365 environment (Power Automate/SharePoint logs).</li>
                         <li><strong>Release of Funds:</strong> The 15% Performance Retention fee will be released to the Guarantor within 5 business days of the Process Owner's written sign-off that all targets have been met.</li>
@@ -263,18 +96,18 @@
                 </div>
 
                 <!-- Sign-off -->
-                <div class="sign-off">
-                    <p class="sign-off-title">By signing below, the Client agrees to the defined metrics as the measure of success for Wave 1 deployment and the condition for releasing the Performance Retention fee.</p>
-                    <div class="sign-off-grid">
-                        <div class="sign-off-box">
+                <div class="phase-2-sign-off">
+                    <p class="phase-2-sign-off-title">By signing below, the Client agrees to the defined metrics as the measure of success for Wave 1 deployment and the condition for releasing the Performance Retention fee.</p>
+                    <div class="phase-2-sign-off-grid">
+                        <div class="phase-2-sign-off-box">
                             <h3>Guarantor (Vendor)</h3>
-                            <div class="sign-off-line"></div>
-                            <p class="sign-off-label">[Your Name / Consultancy Name], Principal Consultant</p>
+                            <div class="phase-2-sign-off-line"></div>
+                            <p class="phase-2-sign-off-label">[Your Name / Consultancy Name], Principal Consultant</p>
                         </div>
-                        <div class="sign-off-box">
+                        <div class="phase-2-sign-off-box">
                             <h3>Client Firm (Process Owner)</h3>
-                            <div class="sign-off-line"></div>
-                            <p class="sign-off-label">[Client Representative Name], [Title/Process Owner]</p>
+                            <div class="phase-2-sign-off-line"></div>
+                            <p class="phase-2-sign-off-label">[Client Representative Name], [Title/Process Owner]</p>
                         </div>
                     </div>
                 </div>

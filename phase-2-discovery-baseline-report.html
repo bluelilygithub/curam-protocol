@@ -9,124 +9,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        .report-container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: var(--color-white);
-            border-radius: var(--border-radius-lg);
-            padding: var(--spacing-2xl);
-            color: #1f2937;
-            box-shadow: var(--shadow-lg);
-        }
-        .report-header-section {
-            border-left: 5px solid var(--color-navy);
-            padding-left: var(--spacing-lg);
-            margin-bottom: var(--spacing-xl);
-        }
-        .report-header-section .document-label {
-            font-size: 0.875rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: var(--color-gray);
-            margin-bottom: var(--spacing-xs);
-        }
-        .report-header-section h1 {
-            color: var(--color-navy);
-            font-size: 2rem;
-            font-weight: 700;
-            margin: var(--spacing-xs) 0 var(--spacing-sm);
-        }
-        .report-header-section p {
-            color: #4b5563;
-            margin-top: var(--spacing-sm);
-        }
-        .report-section-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--color-navy);
-            margin-top: var(--spacing-xl);
-            margin-bottom: var(--spacing-md);
-            border-bottom: 2px solid #e5e7eb;
-            padding-bottom: var(--spacing-sm);
-        }
-        .report-subsection-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: #1f2937;
-            margin-bottom: var(--spacing-md);
-        }
-        .report-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            margin: var(--spacing-lg) 0;
-            border-radius: var(--border-radius);
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .report-table th {
-            background-color: var(--navy-deep);
-            color: var(--color-white);
-            text-align: left;
-            padding: var(--spacing-md);
-            font-weight: 600;
-        }
-        .report-table td {
-            padding: var(--spacing-md);
-            border-bottom: 1px solid #e5e7eb;
-            color: #374151;
-        }
-        .report-table tbody tr:nth-child(even) td {
-            background-color: #f9fafb;
-        }
-        .highlight {
-            font-weight: 700;
-            color: #10b981;
-        }
-        .risk-high {
-            font-weight: 700;
-            color: #ef4444;
-        }
-        .report-content-section {
-            padding: var(--spacing-lg) 0;
-        }
-        .conclusion-box {
-            padding: var(--spacing-xl);
-            background: #eff6ff;
-            border-left: 4px solid var(--color-navy);
-            border-radius: var(--border-radius);
-            margin-top: var(--spacing-xl);
-        }
-        .conclusion-box p {
-            color: #1f2937;
-            margin-bottom: var(--spacing-sm);
-            line-height: 1.6;
-        }
-        .conclusion-box p:last-child {
-            margin-bottom: 0;
-        }
-        .conclusion-box strong {
-            font-weight: 600;
-        }
-        .report-section {
-            padding: 120px 0 var(--spacing-3xl);
-            background: var(--navy-deep);
-        }
-        @media (max-width: 768px) {
-            .report-container {
-                padding: var(--spacing-lg);
-                margin: var(--spacing-lg);
-            }
-            .report-table {
-                font-size: 0.875rem;
-            }
-            .report-table th,
-            .report-table td {
-                padding: var(--spacing-sm);
-            }
-        }
-    </style>
 </head>
 <body>
     <!-- Navigation -->
@@ -134,27 +16,27 @@
     <script src="assets/js/navbar-loader.js"></script>
 
     <!-- Report Section -->
-    <section class="report-section">
+    <section class="phase-2-report-section">
         <div class="container">
-            <div class="report-container">
+            <div class="phase-2-report-container">
                 
                 <!-- Document Header -->
-                <div class="report-header-section">
+                <div class="phase-2-report-header-section">
                     <div class="document-label">Curam-Ai Protocol™ — Phase 2 Deliverable</div>
                     <h1>Discovery and Baseline Workflow Analysis</h1>
                     <p>Documenting the "Before" State and defining quantifiable metrics for the Implementation Roadmap.</p>
                 </div>
 
                 <!-- Introduction -->
-                <div class="report-content-section">
-                    <h2 class="report-section-title">Workflow Documentation: Baseline Data Capture</h2>
-                    <p style="color: #374151; line-height: 1.7;">This section details findings from targeted interviews with the Admin Staff and Drafting Manager. The data below establishes the verifiable <strong>Baseline Metrics</strong> used to calculate the Return on Investment (ROI) and monitor the success of the Performance Retention clause in Phase 4.</p>
+                <div class="phase-2-report-content-section compact">
+                    <h2 class="phase-2-report-section-title">Workflow Documentation: Baseline Data Capture</h2>
+                    <p>This section details findings from targeted interviews with the Admin Staff and Drafting Manager. The data below establishes the verifiable <strong>Baseline Metrics</strong> used to calculate the Return on Investment (ROI) and monitor the success of the Performance Retention clause in Phase 4.</p>
                 </div>
 
                 <!-- Tier 1 Workflow -->
-                <div class="report-content-section">
-                    <h2 class="report-subsection-title">1. Tier 1 Workflow: Invoice Processing (Admin Burden Reduction)</h2>
-                    <table class="report-table">
+                <div class="phase-2-report-content-section compact">
+                    <h2 class="phase-2-report-subsection-title">1. Tier 1 Workflow: Invoice Processing (Admin Burden Reduction)</h2>
+                    <table class="phase-2-report-table">
                         <thead>
                             <tr>
                                 <th>Metric</th>
@@ -176,14 +58,14 @@
                                 <td><strong>Time Per Document</strong></td>
                                 <td>4.0 minutes (Manual entry into Xero)</td>
                                 <td>1.4 minutes (HITL review only)</td>
-                                <td><span class="highlight">4.0 minutes</span></td>
+                                <td><span class="phase-2-highlight">4.0 minutes</span></td>
                                 <td>Admin Staff</td>
                             </tr>
                             <tr>
                                 <td><strong>Monthly Manual Hours</strong></td>
                                 <td>23.3 hours per month</td>
                                 <td>8.2 hours per month (HITL)</td>
-                                <td><span class="highlight">15.1 hours</span></td>
+                                <td><span class="phase-2-highlight">15.1 hours</span></td>
                                 <td>Process Owner</td>
                             </tr>
                             <tr>
@@ -203,7 +85,7 @@
                             <tr>
                                 <td><strong>P4 Target Metric</strong></td>
                                 <td>N/A</td>
-                                <td><span class="highlight"><strong>65% Reduction in manual time</strong></span></td>
+                                <td><span class="phase-2-highlight"><strong>65% Reduction in manual time</strong></span></td>
                                 <td>N/A</td>
                                 <td>Process Owner</td>
                             </tr>
@@ -212,9 +94,9 @@
                 </div>
 
                 <!-- Tier 2 Workflow -->
-                <div class="report-content-section">
-                    <h2 class="report-subsection-title">2. Tier 2 Workflow: Beam Schedule Extraction (Critical Risk Mitigation)</h2>
-                    <table class="report-table">
+                <div class="phase-2-report-content-section compact">
+                    <h2 class="phase-2-report-subsection-title">2. Tier 2 Workflow: Beam Schedule Extraction (Critical Risk Mitigation)</h2>
+                    <table class="phase-2-report-table">
                         <thead>
                             <tr>
                                 <th>Metric</th>
@@ -236,7 +118,7 @@
                                 <td><strong>Error Rate (Manual)</strong></td>
                                 <td>5% (Avg. 6 errors per month, primarily in steel grade/placement notes).</td>
                                 <td>1% (Avg. 1.2 errors per month, caught by HITL).</td>
-                                <td><span class="risk-high">High</span></td>
+                                <td><span class="phase-2-risk-high">High</span></td>
                                 <td>Drafting Manager</td>
                             </tr>
                             <tr>
@@ -250,13 +132,13 @@
                                 <td><strong>Risk Type</strong></td>
                                 <td>Design/Structural Liability; Potential project delays.</td>
                                 <td>Mitigated via <strong>95%</strong> Data Integrity SLA.</td>
-                                <td><span class="risk-high">Very High</span></td>
+                                <td><span class="phase-2-risk-high">Very High</span></td>
                                 <td>Engineering Partner</td>
                             </tr>
                             <tr>
                                 <td><strong>P4 Target Metric</strong></td>
                                 <td>N/A</td>
-                                <td><span class="highlight"><strong>80% Reduction in manual error rate</strong></span> on critical fields.</td>
+                                <td><span class="phase-2-highlight"><strong>80% Reduction in manual error rate</strong></span> on critical fields.</td>
                                 <td>N/A</td>
                                 <td>Risk Manager</td>
                             </tr>
@@ -265,9 +147,9 @@
                 </div>
 
                 <!-- Conclusion -->
-                <div class="report-content-section">
-                    <h2 class="report-subsection-title">Conclusion of Baseline Analysis</h2>
-                    <div class="conclusion-box">
+                <div class="phase-2-report-content-section compact">
+                    <h2 class="phase-2-report-subsection-title">Conclusion of Baseline Analysis</h2>
+                    <div class="phase-2-conclusion-box">
                         <p>The analysis confirms that the total capacity wasted on <strong>Tier 1 tasks (Invoices)</strong> and the exposure to <strong>Tier 2 Risk (Beam Schedules)</strong> significantly exceeds the firm's approved financial hurdle.</p>
                         <p><strong>The implementation of Wave 1 is therefore financially justified and necessary to meet the firm's strategic liability goals, leading directly to the recommended deployment phase.</strong></p>
                     </div>

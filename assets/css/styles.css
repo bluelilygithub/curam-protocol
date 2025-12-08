@@ -31,6 +31,33 @@
   --color-gray: #6b7280;
   --color-gray-dark: rgba(255, 255, 255, 0.6);
   
+  /* Report Text Colors (for white backgrounds) */
+  --color-text-dark: #1f2937;
+  --color-text-medium: #374151;
+  --color-text-light: #4b5563;
+  --color-text-muted: #6b7280;
+  
+  /* Report Background Colors */
+  --color-bg-light: #f9fafb;
+  --color-bg-blue-light: #f0f4ff;
+  --color-bg-green-light: #f0fdf4;
+  --color-bg-yellow-light: #fefce8;
+  --color-bg-green-pale: #d1fae5;
+  --color-bg-blue-pale: #eff6ff;
+  
+  /* Report Border Colors */
+  --color-border-gray: #e5e7eb;
+  --color-border-gray-light: #d1d5db;
+  --color-border-gray-medium: #9ca3af;
+  
+  /* Status Colors */
+  --color-success: #10b981;
+  --color-success-dark: #059669;
+  --color-success-darker: #065f46;
+  --color-error: #ef4444;
+  --color-error-dark: #991b1b;
+  --color-warning: #eab308;
+  
   /* Utility Colors */
   --border-subtle: rgba(255, 255, 255, 0.1);
   --border-accent: rgba(0, 212, 255, 0.3);
@@ -4969,6 +4996,519 @@ h1, h2, h3, h4 {
   .report-slideshow-header {
     flex-direction: column;
     text-align: center;
+  }
+}
+
+/* ========== PHASE 2 REPORT PAGES STYLES ========== */
+
+/* Report Section Container */
+.phase-2-report-section {
+  padding: 120px 0 var(--spacing-3xl);
+  background: var(--navy-deep);
+}
+
+.phase-2-report-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  background: var(--color-white);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-2xl);
+  color: var(--color-text-dark);
+  box-shadow: var(--shadow-lg);
+}
+
+.phase-2-report-container.narrow {
+  max-width: 900px;
+}
+
+/* Report Headers */
+.phase-2-report-header {
+  border-bottom: 5px solid var(--color-navy);
+  padding-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.phase-2-report-header.border-thin {
+  border-bottom-width: 4px;
+}
+
+.phase-2-report-header-section {
+  border-left: 5px solid var(--color-navy);
+  padding-left: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl);
+}
+
+.phase-2-report-header .document-label,
+.phase-2-report-header-section .document-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--color-gray);
+  margin-bottom: var(--spacing-xs);
+}
+
+.phase-2-report-header .document-label.small {
+  font-size: 0.75rem;
+}
+
+.phase-2-report-header h1,
+.phase-2-report-header-section h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--color-text-dark);
+  margin: 0;
+}
+
+.phase-2-report-header h1.weight-normal {
+  font-weight: 700;
+}
+
+.phase-2-report-header-section h1 {
+  color: var(--color-navy);
+  font-weight: 700;
+  margin: var(--spacing-xs) 0 var(--spacing-sm);
+}
+
+.phase-2-report-header p,
+.phase-2-report-header-section p {
+  font-size: 1.125rem;
+  color: var(--color-text-light);
+  margin-top: var(--spacing-sm);
+}
+
+/* Report Content Sections */
+.phase-2-report-content-section {
+  padding: var(--spacing-xl) 0;
+}
+
+.phase-2-report-content-section.compact {
+  padding: var(--spacing-lg) 0;
+}
+
+.phase-2-report-content-section p {
+  color: var(--color-text-light);
+  line-height: 1.7;
+  margin-bottom: var(--spacing-md);
+}
+
+/* Bottom Line Box (Executive Summary) */
+.phase-2-bottom-line-box {
+  text-align: center;
+  padding: var(--spacing-xl);
+  background: var(--color-bg-light);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-xl);
+}
+
+.phase-2-bottom-line-box h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-medium);
+  margin-bottom: var(--spacing-sm);
+}
+
+.phase-2-bottom-line-amount {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--color-success);
+  line-height: 1;
+  margin: var(--spacing-sm) 0;
+}
+
+.phase-2-bottom-line-description {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-light);
+  margin-top: var(--spacing-sm);
+}
+
+/* Section Titles */
+.phase-2-section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  border-bottom: 2px solid var(--color-border-gray);
+  padding-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
+}
+
+.phase-2-section-title.border-left {
+  border-bottom: none;
+  border-left: 5px solid var(--color-navy);
+  padding-left: var(--spacing-md);
+  padding-bottom: 0;
+  color: var(--color-navy);
+  font-weight: 600;
+  margin: var(--spacing-xl) 0 var(--spacing-md);
+}
+
+.phase-2-report-section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  margin-top: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
+  border-bottom: 2px solid var(--color-border-gray);
+  padding-bottom: var(--spacing-sm);
+}
+
+.phase-2-report-subsection-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-dark);
+  margin-bottom: var(--spacing-md);
+}
+
+/* Financial Table (Executive Summary) */
+.phase-2-financial-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--spacing-lg) 0;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.phase-2-financial-table th {
+  background-color: var(--navy-deep);
+  color: var(--color-white);
+  text-align: left;
+  padding: var(--spacing-md);
+  font-weight: 600;
+}
+
+.phase-2-financial-table th:first-child {
+  width: 50%;
+}
+
+.phase-2-financial-table th:last-child,
+.phase-2-financial-table th:nth-child(2) {
+  text-align: right;
+  width: 25%;
+}
+
+.phase-2-financial-table td {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border-gray);
+}
+
+.phase-2-financial-table tbody tr:nth-child(even) {
+  background-color: var(--color-bg-light);
+}
+
+.phase-2-financial-table tbody tr td:last-child,
+.phase-2-financial-table tbody tr td:nth-child(2) {
+  text-align: right;
+  font-weight: 600;
+}
+
+.phase-2-financial-table tfoot {
+  background-color: var(--color-border-gray);
+  font-weight: 700;
+}
+
+.phase-2-financial-table tfoot td {
+  padding: var(--spacing-md);
+}
+
+.phase-2-financial-table tfoot td:last-child {
+  color: var(--color-success);
+}
+
+/* Report Table (Discovery Baseline) */
+.phase-2-report-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: var(--spacing-lg) 0;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.phase-2-report-table th {
+  background-color: var(--navy-deep);
+  color: var(--color-white);
+  text-align: left;
+  padding: var(--spacing-md);
+  font-weight: 600;
+}
+
+.phase-2-report-table td {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border-gray);
+  color: var(--color-text-medium);
+}
+
+.phase-2-report-table tbody tr:nth-child(even) td {
+  background-color: var(--color-bg-light);
+}
+
+/* Metric Table (Metric Agreement) */
+.phase-2-metric-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--spacing-lg) 0;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.phase-2-metric-table th {
+  background-color: var(--navy-deep);
+  color: var(--color-white);
+  font-weight: 600;
+  padding: var(--spacing-md);
+  text-align: left;
+  width: 25%;
+}
+
+.phase-2-metric-table td {
+  vertical-align: top;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border-gray);
+  color: var(--color-text-medium);
+}
+
+.phase-2-metric-table tbody tr:nth-child(even) {
+  background-color: var(--color-bg-light);
+}
+
+.phase-2-metric-table tbody tr:nth-child(odd) {
+  background-color: var(--color-white);
+}
+
+/* Metric Grid & Boxes */
+.phase-2-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing-lg);
+  margin: var(--spacing-lg) 0;
+}
+
+.phase-2-metric-box {
+  background-color: var(--color-bg-blue-light);
+  border-radius: var(--border-radius);
+  border-left: 5px solid var(--color-navy);
+  padding: var(--spacing-lg);
+}
+
+.phase-2-metric-box.green {
+  background-color: var(--color-bg-green-light);
+  border-left-color: var(--color-success);
+}
+
+.phase-2-metric-box p {
+  margin: 0;
+}
+
+.phase-2-metric-label {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-text-medium);
+  margin-bottom: var(--spacing-sm);
+}
+
+.phase-2-metric-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--color-navy);
+  margin: var(--spacing-xs) 0;
+}
+
+.phase-2-metric-box.green .phase-2-metric-value {
+  color: var(--color-success-dark);
+}
+
+.phase-2-metric-description {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin-top: var(--spacing-sm);
+}
+
+/* Recommendation Box */
+.phase-2-recommendation-box {
+  background-color: var(--color-bg-green-pale);
+  border: 1px solid var(--color-success);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-xl);
+  margin-top: var(--spacing-xl);
+}
+
+.phase-2-recommendation-box p {
+  margin: 0;
+}
+
+.phase-2-recommendation-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-success-darker);
+  margin-bottom: var(--spacing-sm);
+}
+
+.phase-2-recommendation-text {
+  color: var(--color-text-medium);
+  line-height: 1.6;
+}
+
+/* Conclusion Box */
+.phase-2-conclusion-box {
+  padding: var(--spacing-xl);
+  background: var(--color-bg-blue-pale);
+  border-left: 4px solid var(--color-navy);
+  border-radius: var(--border-radius);
+  margin-top: var(--spacing-xl);
+}
+
+.phase-2-conclusion-box p {
+  color: var(--color-text-dark);
+  margin-bottom: var(--spacing-sm);
+  line-height: 1.6;
+}
+
+.phase-2-conclusion-box p:last-child {
+  margin-bottom: 0;
+}
+
+.phase-2-conclusion-box strong {
+  font-weight: 600;
+}
+
+/* Highlight & Risk Classes */
+.phase-2-highlight {
+  font-weight: 700;
+  color: var(--color-success);
+}
+
+.phase-2-risk-high {
+  font-weight: 700;
+  color: var(--color-error);
+}
+
+/* Metadata Grid */
+.phase-2-metadata-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
+}
+
+.phase-2-metadata-box {
+  padding: var(--spacing-md);
+  background: var(--color-bg-light);
+  border-radius: var(--border-radius);
+}
+
+.phase-2-metadata-box strong {
+  font-weight: 600;
+  color: var(--color-text-dark);
+}
+
+/* Warning Box */
+.phase-2-warning-box {
+  padding: var(--spacing-md);
+  background: var(--color-bg-yellow-light);
+  border-left: 4px solid var(--color-warning);
+  border-radius: var(--border-radius);
+  margin: var(--spacing-md) 0;
+}
+
+.phase-2-warning-box p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-text-dark);
+}
+
+.phase-2-warning-box strong {
+  font-weight: 600;
+}
+
+/* Verification List */
+.phase-2-verification-list {
+  list-style: disc;
+  padding-left: var(--spacing-xl);
+  margin: var(--spacing-md) 0;
+}
+
+.phase-2-verification-list li {
+  color: var(--color-text-medium);
+  margin-bottom: var(--spacing-sm);
+  line-height: 1.6;
+}
+
+/* Sign-off Section */
+.phase-2-sign-off {
+  padding-top: var(--spacing-xl);
+  border-top: 1px solid var(--color-border-gray-light);
+  margin-top: var(--spacing-xl);
+}
+
+.phase-2-sign-off p {
+  margin-bottom: var(--spacing-sm);
+}
+
+.phase-2-sign-off-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-dark);
+  margin-bottom: var(--spacing-lg);
+}
+
+.phase-2-sign-off-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--spacing-xl);
+  margin-top: var(--spacing-lg);
+}
+
+.phase-2-sign-off-box h3 {
+  font-weight: 700;
+  color: var(--color-text-dark);
+  margin-bottom: var(--spacing-md);
+}
+
+.phase-2-sign-off-line {
+  border-bottom: 2px solid var(--color-border-gray-medium);
+  padding: var(--spacing-md) 0;
+  margin: var(--spacing-md) 0;
+}
+
+.phase-2-sign-off-label {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  margin-top: var(--spacing-xs);
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .phase-2-report-container {
+    padding: var(--spacing-lg);
+    margin: var(--spacing-lg);
+  }
+  
+  .phase-2-bottom-line-amount {
+    font-size: 2rem;
+  }
+  
+  .phase-2-metric-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .phase-2-report-table,
+  .phase-2-metric-table {
+    font-size: 0.875rem;
+  }
+  
+  .phase-2-report-table th,
+  .phase-2-report-table td,
+  .phase-2-metric-table th,
+  .phase-2-metric-table td {
+    padding: var(--spacing-sm);
+  }
+  
+  .phase-2-metadata-grid {
+    grid-template-columns: 1fr;
   }
 }
 
