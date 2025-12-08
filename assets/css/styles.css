@@ -5003,7 +5003,7 @@ h1, h2, h3, h4 {
 
 /* Report Section Container */
 .phase-2-report-section {
-  padding: 120px 0 var(--spacing-3xl);
+  padding: 220px 0 var(--spacing-3xl);
   background: var(--navy-deep);
 }
 
