@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+
+# Large files that shouldn't be in Docker image
+*.pdf
+drawings/
+invoices/
+assets/videos/*.mp4
+assets/videos/*.webm
+
+# Node modules (if any)
+node_modules/
+
+# Build artifacts
+*.log
+*.tmp
+
