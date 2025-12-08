@@ -266,6 +266,64 @@
       const messageTextarea = document.getElementById('message');
 
       let conversationHistory = [];
+      let audioContext = null;
+
+      // Initialize audio context on first user interaction
+      function initAudioContext() {
+          if (!audioContext) {
+              try {
+                  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+              } catch (error) {
+                  console.log('Could not initialize audio context:', error);
+              }
+          }
+          // Resume audio context if it's suspended (required by some browsers)
+          if (audioContext && audioContext.state === 'suspended') {
+              audioContext.resume();
+          }
+      }
+
+      // Function to play notification sound when AI responds
+      function playNotificationSound() {
+          try {
+              // Ensure audio context is initialized
+              if (!audioContext) {
+                  initAudioContext();
+              }
+              
+              if (!audioContext) return;
+              
+              // Resume if suspended
+              if (audioContext.state === 'suspended') {
+                  audioContext.resume();
+              }
+              
+              // Create a pleasant notification sound (gentle chime)
+              const oscillator = audioContext.createOscillator();
+              const gainNode = audioContext.createGain();
+              
+              oscillator.connect(gainNode);
+              gainNode.connect(audioContext.destination);
+              
+              // Set frequency for a pleasant tone (gentle descending chime)
+              oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+              oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.1);
+              
+              // Set volume envelope (fade in and out)
+              gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+              gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+              gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+              
+              // Use a sine wave for a smooth, pleasant sound
+              oscillator.type = 'sine';
+              
+              oscillator.start(audioContext.currentTime);
+              oscillator.stop(audioContext.currentTime + 0.2);
+          } catch (error) {
+              // Silently fail if audio context is not available (e.g., autoplay restrictions)
+              console.log('Could not play notification sound:', error);
+          }
+      }
 
       function addMessageToChat(role, content) {
           const messageDiv = document.createElement('div');
@@ -276,6 +334,11 @@
 
           // Add to conversation history
           conversationHistory.push({ role, content });
+
+          // Play sound when assistant responds
+          if (role === 'assistant') {
+              playNotificationSound();
+          }
       }
 
       function showSuggestedInterest(suggestedInterest) {
@@ -412,12 +475,20 @@
           }
       });
 
-      chatSendBtn.addEventListener('click', sendChatMessage);
+      // Initialize audio context on first user interaction
+      chatSendBtn.addEventListener('click', function() {
+          initAudioContext();
+          sendChatMessage();
+      });
       chatInput.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
+              initAudioContext();
               sendChatMessage();
           }
       });
+      
+      // Also initialize on any click in the chat area (for better browser compatibility)
+      chatInput.addEventListener('focus', initAudioContext);
 
       // Form submission handler
       const formMessage = document.getElementById('form-message');
