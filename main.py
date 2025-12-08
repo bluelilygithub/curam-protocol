@@ -2043,34 +2043,70 @@ def send_sms_notification(name, email, company, interest):
     try:
         app.logger.info("=== SMS Notification Attempt Started ===")
         
-        # Twilio credentials - support both API Key and standard Auth Token methods
-        twilio_account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
-        twilio_api_key = os.environ.get('TWILIO_API_KEY')  # Alternative to auth token
-        twilio_auth_token = os.environ.get('TWILIO_AUTH_TOKEN')
-        twilio_phone_from = os.environ.get('TWILIO_PHONE_FROM')
+        # Twilio credentials - support both Auth Token and API Key methods
+        twilio_account_sid = os.environ.get('TWILIO_ACCOUNT_SID') or os.environ.get('TWILIO_SID')
+        
+        # Method 1: Auth Token (most common - recommended)
+        twilio_auth_token = os.environ.get('TWILIO_AUTH_TOKEN') or os.environ.get('TWILIO_TOKEN')
+        
+        # Method 2: API Key (alternative method - requires API Key SID + Secret)
+        twilio_api_key_sid = os.environ.get('TWILIO_API_KEY_SID')
+        twilio_api_secret = os.environ.get('TWILIO_API_SECRET')
+        
+        # Legacy support: If TWILIO_API_KEY is set but no AUTH_TOKEN, treat it as Auth Token
+        # (Many users put their Auth Token in TWILIO_API_KEY variable)
+        if not twilio_auth_token and os.environ.get('TWILIO_API_KEY'):
+            twilio_auth_token = os.environ.get('TWILIO_API_KEY')
+            app.logger.info("SMS: Using TWILIO_API_KEY as Auth Token (if this doesn't work, use TWILIO_AUTH_TOKEN instead)")
+        
+        twilio_phone_from = os.environ.get('TWILIO_PHONE_FROM') or os.environ.get('TWILIO_FROM') or os.environ.get('TWILIO_PHONE')
         
         # Hardcoded recipient phone number (Australian format: +61411951625)
         twilio_phone_to = '+61411951625'
         
         # Log what we found (without exposing secrets)
-        app.logger.info(f"SMS Config Check - Account SID: {'SET' if twilio_account_sid else 'MISSING'}")
-        app.logger.info(f"SMS Config Check - API Key: {'SET' if twilio_api_key else 'MISSING'}")
-        app.logger.info(f"SMS Config Check - Auth Token: {'SET' if twilio_auth_token else 'MISSING'}")
-        app.logger.info(f"SMS Config Check - Phone From: {'SET' if twilio_phone_from else 'MISSING'}")
+        app.logger.info(f"SMS Config Check - Account SID: {'SET' if twilio_account_sid else 'MISSING (need TWILIO_ACCOUNT_SID)'}")
+        app.logger.info(f"SMS Config Check - Auth Token: {'SET' if twilio_auth_token else 'MISSING (or use TWILIO_API_KEY with Auth Token value)'}")
+        app.logger.info(f"SMS Config Check - API Key SID: {'SET' if twilio_api_key_sid else 'MISSING'}")
+        app.logger.info(f"SMS Config Check - API Secret: {'SET' if twilio_api_secret else 'MISSING'}")
+        app.logger.info(f"SMS Config Check - Phone From: {'SET' if twilio_phone_from else 'MISSING (need TWILIO_PHONE_FROM)'}")
         app.logger.info(f"SMS Config Check - Phone To: {twilio_phone_to}")
         
         # Need Account SID and either Auth Token or API Key
         if not twilio_account_sid:
-            app.logger.warning("SMS: Twilio Account SID not configured - skipping SMS notification")
+            app.logger.error("SMS: ❌ Twilio Account SID not configured!")
+            app.logger.error("SMS: Please add 'TWILIO_ACCOUNT_SID' environment variable in Railway")
+            app.logger.error("SMS: You can find your Account SID in your Twilio Console: https://console.twilio.com/")
             return False
         
         # Need at least one authentication method
-        if not twilio_auth_token and not twilio_api_key:
-            app.logger.warning("SMS: Twilio authentication not configured (need AUTH_TOKEN or API_KEY) - skipping SMS notification")
+        # Method 1: Auth Token (simpler - recommended)
+        # Method 2: API Key + Secret (requires both)
+        has_auth_token_method = bool(twilio_auth_token)
+        has_api_key_method = bool(twilio_api_key_sid and twilio_api_secret)
+        
+        if not has_auth_token_method and not has_api_key_method:
+            app.logger.error("SMS: ❌ Twilio authentication not configured!")
+            app.logger.error("SMS: Choose ONE of these methods:")
+            app.logger.error("SMS:   Method 1 (Recommended): Add 'TWILIO_AUTH_TOKEN' (or use 'TWILIO_API_KEY' with your Auth Token value)")
+            app.logger.error("SMS:   Method 2: Add both 'TWILIO_API_KEY_SID' AND 'TWILIO_API_SECRET'")
+            app.logger.error("SMS: Find Auth Token in Twilio Console → Account Info → Auth Token")
             return False
         
+        # Determine which authentication method to use
+        if has_auth_token_method:
+            auth_username = twilio_account_sid
+            auth_password = twilio_auth_token
+            app.logger.info("SMS: Using Auth Token authentication method")
+        else:
+            auth_username = twilio_api_key_sid
+            auth_password = twilio_api_secret
+            app.logger.info("SMS: Using API Key authentication method")
+        
         if not twilio_phone_from:
-            app.logger.warning("SMS: Twilio phone number (FROM) not configured - skipping SMS notification")
+            app.logger.error("SMS: ❌ Twilio phone number (FROM) not configured!")
+            app.logger.error("SMS: Please add 'TWILIO_PHONE_FROM' environment variable in Railway")
+            app.logger.error("SMS: This should be your Twilio phone number in E.164 format (e.g., +1234567890)")
             return False
         
         # Prepare SMS message
@@ -2093,10 +2129,8 @@ def send_sms_notification(name, email, company, interest):
             'Body': sms_body
         }
         
-        # Use Auth Token if available, otherwise use API Key as fallback
-        # Note: Twilio API Key auth requires API Key SID + Secret, but many users name their Auth Token as API_KEY
-        # So we'll try API_KEY as Auth Token if AUTH_TOKEN is not set
-        auth_creds = (twilio_account_sid, twilio_auth_token if twilio_auth_token else twilio_api_key)
+        # Use determined authentication credentials
+        auth_creds = (auth_username, auth_password)
         
         app.logger.info(f"SMS: Sending request to Twilio API...")
         app.logger.info(f"SMS: URL: {twilio_url}")
