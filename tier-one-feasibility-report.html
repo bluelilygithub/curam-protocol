@@ -4,137 +4,42 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Curam-Ai - Tier One Feasibility Report</title>
-    <style>
-        /* GLOBAL PRINT SETTINGS */
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap');
-
-        :root {
-            --color-navy: #0F172A;
-            --color-gold: #D4AF37;
-            --color-white: #FFFFFF;
-            --color-gray-light: #F8F9FA;
-            --color-gray: #6B7280;
-            --color-gray-dark: #374151;
-            --font-sans: 'Montserrat', sans-serif;
-            --code-bg: #f4f4f4;
-        }
-
-        body {
-            background-color: #555;
-            font-family: var(--font-sans);
-            color: var(--color-gray-dark);
-            margin: 0;
-            padding: 20px;
-            -webkit-print-color-adjust: exact; 
-            print-color-adjust: exact; 
-        }
-
-        .page {
-            background: white;
-            width: 210mm;
-            height: 297mm;
-            display: block;
-            margin: 0 auto 20px auto;
-            padding: 20mm;
-            box-sizing: border-box;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
-            position: relative;
-            overflow: hidden;
-            page-break-after: always;
-        }
-
-        h1 { font-family: var(--font-sans); color: var(--color-navy); font-size: 28pt; font-weight: 700; margin-bottom: 10px; }
-        h2 { font-family: var(--font-sans); color: var(--color-navy); font-size: 18pt; font-weight: 600; border-bottom: 2px solid var(--color-gold); padding-bottom: 10px; margin-top: 30px; margin-bottom: 20px; }
-        h3 { font-size: 14pt; font-weight: 600; color: var(--color-navy); margin-top: 20px; margin-bottom: 10px; }
-        p, li { font-size: 10pt; line-height: 1.6; margin-bottom: 12px; }
-
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 10pt; }
-        th { background-color: var(--color-navy); color: var(--color-white); padding: 10px; text-align: left; font-weight: 600; }
-        td { border-bottom: 1px solid #ddd; padding: 10px; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-
-        .code-block {
-            background-color: var(--code-bg);
-            border-left: 4px solid var(--color-navy);
-            padding: 15px;
-            font-family: 'Roboto Mono', monospace;
-            font-size: 9pt;
-            white-space: pre-wrap;
-            margin: 20px 0;
-        }
-
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid var(--color-navy); padding-bottom: 20px; margin-bottom: 40px; }
-        .logo { font-family: var(--font-sans); font-weight: 700; font-size: 24px; color: var(--color-navy); letter-spacing: 0.05em; }
-        .meta { text-align: right; font-size: 9pt; color: #666; }
-        .footer { position: absolute; bottom: 20mm; left: 20mm; right: 20mm; border-top: 1px solid #ddd; padding-top: 10px; display: flex; justify-content: space-between; font-size: 8pt; color: #888; }
-
-        .cover-page {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            height: 100%;
-        }
-
-        .cover-border {
-            border: 3px solid var(--color-gold);
-            padding: 40px;
-            max-width: 500px;
-        }
-
-        .highlight-box {
-            background-color: var(--color-gray-light);
-            border-left: 4px solid var(--color-gold);
-            padding: 16px;
-            margin: 20px 0;
-            font-size: 11pt;
-        }
-
-        .gate-card {
-            border: 1px solid var(--color-gold);
-            padding: 20px;
-            margin: 15px 0;
-            border-radius: 4px;
-        }
-
-        @media print {
-            body { background: none; margin: 0; padding: 0; }
-            .page { box-shadow: none; margin: 0; page-break-after: always; }
-        }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body>
+<body class="tier-one-body tier-one-root">
 
-    <div class="page">
-        <div class="cover-page">
-            <div class="cover-border">
-                <h1 style="font-size: 36pt; margin-bottom: 20px;">Curam-Ai Protocol™</h1>
-                <h2 style="font-size: 24pt; font-weight: 400; margin: 20px 0;">Phase 1 – Feasibility Sprint</h2>
-                <p style="font-size: 16pt; margin: 30px 0;">Tier One Feasibility Report</p>
-                <p style="font-size: 10pt; margin-top: 40px; color: #666;">Generated: November 2025 | Pilot Client #3</p>
+    <div class="tier-one-page">
+        <div class="tier-one-cover-page">
+            <div class="tier-one-cover-border">
+                <h1 class="tier-one-cover-title">Curam-Ai Protocol™</h1>
+                <h2 class="tier-one-cover-subtitle">Phase 1 – Feasibility Sprint</h2>
+                <p class="tier-one-cover-text">Tier One Feasibility Report</p>
+                <p class="tier-one-cover-meta">Generated: November 2025 | Pilot Client #3</p>
             </div>
         </div>
-        <div class="footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 1 of 9</span></div>
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 1 of 10</span></div>
     </div>
 
-    <div class="page">
-        <div class="header">
-            <div class="logo">Curam-Ai</div>
-            <div class="meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
+    <div class="tier-one-page">
+        <div class="tier-one-header">
+            <div class="tier-one-logo">Curam-Ai</div>
+            <div class="tier-one-meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
         </div>
         <h2>Executive Summary</h2>
-        <p style="font-size: 12pt; line-height: 1.8;">The 50-person structural engineering firm <strong>"Pilot Client #3"</strong> can unlock <strong>$888k in direct savings</strong> and <strong>$1.44M in new billable capacity</strong> by automating three administrative workflows.</p>
-        <div class="highlight-box">
+        <p class="tier-one-executive-summary">The 50-person structural engineering firm <strong>"Pilot Client #3"</strong> can unlock <strong>$888k in direct savings</strong> and <strong>$1.44M in new billable capacity</strong> by automating three administrative workflows.</p>
+        <div class="tier-one-highlight-box">
             <strong>Next Step:</strong> Validate these figures in <strong>Phase 2 – Readiness Roadmap</strong> to confirm strategic alignment and ROI.
         </div>
-        <div class="footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 2 of 9</span></div>
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 2 of 10</span></div>
     </div>
 
-    <div class="page">
-        <div class="header">
-            <div class="logo">Curam-Ai</div>
-            <div class="meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
+    <div class="tier-one-page">
+        <div class="tier-one-header">
+            <div class="tier-one-logo">Curam-Ai</div>
+            <div class="tier-one-meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
         </div>
         <h2>Assumed Variables</h2>
         <table>
@@ -152,14 +57,14 @@
                 <tr><td>Compliance Status</td><td><strong>Unverified</strong> (Requires Phase 3 Audit)</td></tr>
             </tbody>
         </table>
-        <p style="font-size: 9pt; color: var(--color-gray); margin-top: 16px;">*Baseline assumptions derived from initial discovery call. Used to calculate Tier-1 Efficiency Models.</p>
-        <div class="footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 3 of 9</span></div>
+        <p class="tier-one-footnote">*Baseline assumptions derived from initial discovery call. Used to calculate Tier-1 Efficiency Models.</p>
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 3 of 10</span></div>
     </div>
 
-    <div class="page">
-        <div class="header">
-            <div class="logo">Curam-Ai</div>
-            <div class="meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
+    <div class="tier-one-page">
+        <div class="tier-one-header">
+            <div class="tier-one-logo">Curam-Ai</div>
+            <div class="tier-one-meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
         </div>
         <h2>Four-Tier Value Model</h2>
         <table>
@@ -177,130 +82,124 @@
                 <tr><td><strong>4</strong> Capacity Reallocation</td><td>Senior hrs → billable</td><td>$1.44M</td></tr>
             </tbody>
         </table>
-        <p style="font-size: 9pt; color: var(--color-gray); margin-top: 16px;">*Figures based on 50 staff. Tier 1: Time valued at Avg. Rate ($185/hr). Tier 4: Capacity valued at Senior Rate (~$300/hr).</p>
-        <div class="footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 4 of 9</span></div>
+        <p class="tier-one-footnote">*Figures based on 50 staff. Tier 1: Time valued at Avg. Rate ($185/hr). Tier 4: Capacity valued at Senior Rate (~$300/hr).</p>
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 4 of 10</span></div>
     </div>
 
-    <div class="page">
-        <div class="header">
-            <div class="logo">Curam-Ai</div>
-            <div class="meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
+    <div class="tier-one-page">
+        <div class="tier-one-header">
+            <div class="tier-one-logo">Curam-Ai</div>
+            <div class="tier-one-meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
         </div>
         <h2>Roadmap & Phasing</h2>
-        <div class="gate-card">
+        <div class="tier-one-gate-card">
             <h3>Phase 2 – Readiness Roadmap</h3>
-            <p style="margin: 0;">3 weeks | $7,500 | Board-Approved Business Case & Implementation Plan</p>
+            <p>3 weeks | $7,500 | Board-Approved Business Case & Implementation Plan</p>
         </div>
-        <div class="gate-card">
+        <div class="tier-one-gate-card">
             <h3>Phase 3 – Compliance Shield</h3>
-            <p style="margin: 0;">2 weeks | $8–12k | ISO-27001 & PI-insurance alignment</p>
+            <p>2 weeks | $8–12k | ISO-27001 & PI-insurance alignment</p>
         </div>
-        <p style="font-size: 9pt; color: var(--color-gray); margin-top: 24px;"><strong>✔ 100% IP Transfer.</strong> Source-code and flows owned by client upon final payment. No ongoing licensing.</p>
-        <div class="footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 5 of 9</span></div>
+        <p class="tier-one-footnote-large"><strong>✔ 100% IP Transfer.</strong> Source-code and flows owned by client upon final payment. No ongoing licensing.</p>
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 5 of 10</span></div>
     </div>
 
-    <div class="page">
-        <div class="header">
-            <div class="logo">Curam-Ai</div>
-            <div class="meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
+    <div class="tier-one-page">
+        <div class="tier-one-header">
+            <div class="tier-one-logo">Curam-Ai</div>
+            <div class="tier-one-meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
         </div>
         <h2>Financial Model (Conservative)</h2>
-        <div style="background: var(--color-gray-light); border: 1px solid #E5E7EB; padding: 24px; margin-top: 24px; border-radius: 4px;">
+        <div class="tier-one-financial-box">
             <table>
-                <tr><td>Hours Saved/Week (2 hrs/staff)</td><td style="text-align: right;">100</td></tr>
-                <tr><td>Average billable rate</td><td style="text-align: right;">$185/hr</td></tr>
-                <tr style="font-weight: bold; border-top: 2px solid var(--color-navy);"><td>Gross Efficiency Value (48 wks)</td><td style="text-align: right;">$888,000</td></tr>
-                <tr style="font-weight: bold; border-top: 2px solid var(--color-navy);"><td>Potential Year-1 Efficiency</td><td style="text-align: right;">$888,000</td></tr>
+                <tr><td>Hours Saved/Week (2 hrs/staff)</td><td class="tier-one-table-right">100</td></tr>
+                <tr><td>Average billable rate</td><td class="tier-one-table-right">$185/hr</td></tr>
+                <tr class="tier-one-table-row-total"><td>Gross Efficiency Value (48 wks)</td><td class="tier-one-table-right">$888,000</td></tr>
+                <tr class="tier-one-table-row-total"><td>Potential Year-1 Efficiency</td><td class="tier-one-table-right">$888,000</td></tr>
             </table>
         </div>
-        <p style="font-size: 9pt; color: var(--color-gray); margin-top: 16px;">Model built on actual sample data; adoption rate capped at 60%. Implementation costs to be determined in Phase 2.</p>
-        <div class="footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 6 of 9</span></div>
+        <p class="tier-one-footnote">Model built on actual sample data; adoption rate capped at 60%. Implementation costs to be determined in Phase 2.</p>
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 6 of 10</span></div>
     </div>
 
-    <div class="page">
-        <div class="header">
-            <div class="logo">Curam-Ai</div>
-            <div class="meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
+    <div class="tier-one-page">
+        <div class="tier-one-header">
+            <div class="tier-one-logo">Curam-Ai</div>
+            <div class="tier-one-meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
         </div>
         <h2>Risk Register (Excerpts)</h2>
-        <ul style="font-size: 11pt; line-height: 1.8; padding-left: 20px;">
-            <li style="margin-bottom: 16px;"><strong>Data residency</strong> – Mitigation: All processing inside client cloud tenant (no egress).</li>
-            <li style="margin-bottom: 16px;"><strong>Model drift</strong> – Mitigation: Quarterly re-validation trigger written into SOW.</li>
-            <li style="margin-bottom: 16px;"><strong>Staff adoption &lt; 50%</strong> – Mitigation: SOP videos + 30-day Teams support channel.</li>
-            <li style="margin-bottom: 16px;"><strong>PI Insurance Compliance</strong> – Mitigation: Pre-filled ISO-27001 control matrix.</li>
+        <ul class="tier-one-risk-list">
+            <li><strong>Data residency</strong> – Mitigation: All processing inside client cloud tenant (no egress).</li>
+            <li><strong>Model drift</strong> – Mitigation: Quarterly re-validation trigger written into SOW.</li>
+            <li><strong>Staff adoption &lt; 50%</strong> – Mitigation: SOP videos + 30-day Teams support channel.</li>
+            <li><strong>PI Insurance Compliance</strong> – Mitigation: Pre-filled ISO-27001 control matrix.</li>
         </ul>
-        <div class="highlight-box" style="background: #fffbeb; border-color: #fcd34d; color: #92400e;">
+        <div class="tier-one-highlight-box tier-one-highlight-warning">
             <strong>Recommendation:</strong> Address potential risks in Phase 2 to ensure governance compliance.
         </div>
-        <div class="footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 7 of 8</span></div>
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 7 of 10</span></div>
     </div>
 
-    <div class="page">
-        <div class="header">
-            <div class="logo">Curam-Ai</div>
-            <div class="meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
+    <div class="tier-one-page">
+        <div class="tier-one-header">
+            <div class="tier-one-logo">Curam-Ai</div>
+            <div class="tier-one-meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
         </div>
         <h2>Technical Deep Dive: CAD Schedule</h2>
-        <p style="font-size: 11pt; line-height: 1.8; margin-bottom: 20px;">Analysis of <strong>Drawing S-105 (Roof Beam Schedule)</strong> reveals high structured data extraction but identified specific engineering "traps".</p>
+        <p class="tier-one-deep-dive-intro">Analysis of <strong>Drawing S-105 (Roof Beam Schedule)</strong> reveals high structured data extraction but identified specific engineering "traps".</p>
         
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0;">
-            <div style="padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; border-left: 5px solid #10b981;">
-                <div style="font-size: 1.8rem; margin-bottom: 10px;">✅</div>
-                <h3 style="color: var(--color-navy); font-size: 1.1rem; margin: 5px 0 10px 0; font-weight: 700;">Structured Extraction</h3>
-                <p style="font-size: 10pt; line-height: 1.5; color: #4b5563; margin: 0;"><strong>100% Accuracy</strong> on standard members (B-101, R-02). System correctly grouped "Hot Dip Galv" items for separate procurement workflows.</p>
+        <div class="tier-one-grid-2col">
+            <div class="tier-one-card-success">
+                <div class="tier-one-card-icon">✅</div>
+                <h3 class="tier-one-card-title">Structured Extraction</h3>
+                <p class="tier-one-card-text"><strong>100% Accuracy</strong> on standard members (B-101, R-02). System correctly grouped "Hot Dip Galv" items for separate procurement workflows.</p>
             </div>
-            <div style="padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; border-left: 5px solid #f59e0b;">
-                <div style="font-size: 1.8rem; margin-bottom: 10px;">⚠️</div>
-                <h3 style="color: var(--color-navy); font-size: 1.1rem; margin: 5px 0 10px 0; font-weight: 700;">"Human-in-Loop" Trigger</h3>
-                <p style="font-size: 10pt; line-height: 1.5; color: #4b5563; margin: 0;"><strong>Variable Lengths:</strong> Item <code style="background: #f3f4f6; padding: 2px 5px; border-radius: 4px; font-family: 'Roboto Mono', monospace; color: #d946ef;">STR-1</code> contains "VARIES 1200-2400". AI flagged this as "Non-Procureable" requiring CAD model reference.</p>
+            <div class="tier-one-card-warning">
+                <div class="tier-one-card-icon">⚠️</div>
+                <h3 class="tier-one-card-title">"Human-in-Loop" Trigger</h3>
+                <p class="tier-one-card-text"><strong>Variable Lengths:</strong> Item <code class="tier-one-code-inline">STR-1</code> contains "VARIES 1200-2400". AI flagged this as "Non-Procureable" requiring CAD model reference.</p>
             </div>
         </div>
         
-        <div class="highlight-box">
+        <div class="tier-one-highlight-box">
             <strong>Feasibility Verdict:</strong> Document S-105 is <strong>Passed</strong>. The "VARIES" edge case is handled by our <em>Exception Routing</em> workflow, preventing ordering errors.
         </div>
-        <div class="footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 8 of 8</span></div>
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 8 of 10</span></div>
     </div>
 
-Here is the updated HTML code for the Sprint Validation Log page within your printable report.
-
-I have adapted the "Scorecard" and "Audit Table" concepts to fit your existing PDF/Print CSS (.page, var(--color-navy)). This replaces the "Appendix" page with a proper technical annex.
-
-HTML
-
-    <div class="page">
-        <div class="header">
-            <div class="logo">Curam-Ai</div>
-            <div class="meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
+    <div class="tier-one-page">
+        <div class="tier-one-header">
+            <div class="tier-one-logo">Curam-Ai</div>
+            <div class="tier-one-meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
         </div>
         
         <h2>Sprint Validation Log (Technical Annex)</h2>
         
-        <div style="display: flex; gap: 20px; margin-top: 30px; margin-bottom: 30px;">
-            <div style="flex: 1; background: var(--color-gray-light); padding: 15px; border-radius: 4px; border-top: 4px solid var(--color-navy);">
-                <div style="font-size: 8pt; text-transform: uppercase; color: #666; font-weight: 600; letter-spacing: 0.5px;">Docs Processed</div>
-                <div style="font-size: 24pt; font-weight: 700; color: var(--color-navy); margin-top: 5px;">4</div>
+        <div class="tier-one-stats-row">
+            <div class="tier-one-stat-card">
+                <div class="tier-one-stat-label">Docs Processed</div>
+                <div class="tier-one-stat-value">4</div>
             </div>
-            <div style="flex: 1; background: var(--color-gray-light); padding: 15px; border-radius: 4px; border-top: 4px solid #10b981;">
-                <div style="font-size: 8pt; text-transform: uppercase; color: #666; font-weight: 600; letter-spacing: 0.5px;">STP Rate</div>
-                <div style="font-size: 24pt; font-weight: 700; color: var(--color-navy); margin-top: 5px;">75%</div>
+            <div class="tier-one-stat-card-success">
+                <div class="tier-one-stat-label">STP Rate</div>
+                <div class="tier-one-stat-value">75%</div>
             </div>
-            <div style="flex: 1; background: #FFFBEB; padding: 15px; border-radius: 4px; border-top: 4px solid #F59E0B;">
-                <div style="font-size: 8pt; text-transform: uppercase; color: #92400E; font-weight: 600; letter-spacing: 0.5px;">Exceptions</div>
-                <div style="font-size: 24pt; font-weight: 700; color: #B45309; margin-top: 5px;">1</div>
+            <div class="tier-one-stat-card-warning">
+                <div class="tier-one-stat-label-warning">Exceptions</div>
+                <div class="tier-one-stat-value-warning">1</div>
             </div>
         </div>
 
         <h3>Detailed Field Audit (Sample: S-105)</h3>
-        <p style="font-size: 9pt; color: #666; margin-bottom: 15px;">Target Document: <em>CAD Schedule S-105</em>. Extracted using standard structural model.</p>
+        <p class="tier-one-audit-intro">Target Document: <em>CAD Schedule S-105</em>. Extracted using standard structural model.</p>
         
         <table>
             <thead>
                 <tr>
-                    <th style="width: 20%;">Field</th>
-                    <th style="width: 40%;">Extracted Value</th>
-                    <th style="width: 20%;">Confidence</th>
-                    <th style="width: 20%;">Status</th>
+                    <th class="tier-one-table-th-20">Field</th>
+                    <th class="tier-one-table-th-40">Extracted Value</th>
+                    <th class="tier-one-table-th-20">Confidence</th>
+                    <th class="tier-one-table-th-20">Status</th>
                 </tr>
             </thead>
             <tbody>
@@ -308,59 +207,96 @@ HTML
                     <td><strong>Mark</strong></td>
                     <td><code>B-101</code></td>
                     <td>99.8%</td>
-                    <td><span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 700;">PASS</span></td>
+                    <td><span class="tier-one-status-pass">PASS</span></td>
                 </tr>
                 <tr>
                     <td><strong>Profile</strong></td>
                     <td><code>460UB82.1</code></td>
                     <td>99.2%</td>
-                    <td><span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 700;">PASS</span></td>
+                    <td><span class="tier-one-status-pass">PASS</span></td>
                 </tr>
-                <tr style="background-color: #FEF2F2;">
+                <tr class="tier-one-table-row-flag">
                     <td><strong>Length</strong></td>
                     <td><code>VARIES 1200-2400</code></td>
-                    <td style="color: #DC2626; font-weight: 700;">42.0%</td>
-                    <td><span style="background: #FEE2E2; color: #991B1B; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 700;">FLAG</span></td>
+                    <td class="tier-one-confidence-low">42.0%</td>
+                    <td><span class="tier-one-status-flag">FLAG</span></td>
                 </tr>
                 <tr>
                     <td><strong>Remarks</strong></td>
                     <td><code>...See Detail D5/S-500</code></td>
                     <td>88.0%</td>
-                    <td><span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 8pt; font-weight: 700;">PASS</span></td>
+                    <td><span class="tier-one-status-pass">PASS</span></td>
                 </tr>
             </tbody>
         </table>
 
-        <div style="background-color: #F0FDF4; border: 1px solid #BBF7D0; padding: 20px; margin-top: 20px; border-radius: 4px;">
-            <strong style="color: #166534; font-size: 11pt;">👷 Engineer's Note:</strong>
-            <p style="color: #15803d; font-size: 10pt; margin: 8px 0 0 0;">
+        <div class="tier-one-engineer-note">
+            <strong>👷 Engineer's Note:</strong>
+            <p>
                 The system correctly identified that item <strong>STR-1</strong> had a variable length range and stopped the automation. This "Safety Flag" prevents invalid orders from reaching the fabricator.
             </p>
         </div>
 
-        <h3 style="margin-top: 30px;">Full Artifact List</h3>
-        <ul style="list-style: none; padding: 0; margin: 0; font-size: 9pt;">
-             <li style="padding: 8px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
+        <h3 class="tier-one-h3-margin-top">Full Artifact List</h3>
+        <ul class="tier-one-artifact-list">
+             <li>
                 <span>• BNE Structural Invoice</span>
-                <strong style="color: #065f46;">PASS</strong>
+                <strong class="tier-one-artifact-status-pass">PASS</strong>
             </li>
-            <li style="padding: 8px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
+            <li>
                 <span>• CAD Schedule S-105</span>
-                <strong style="color: #B45309;">PARTIAL (Safety Flag)</strong>
+                <strong class="tier-one-artifact-status-warning">PARTIAL (Safety Flag)</strong>
             </li>
-            <li style="padding: 8px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
+            <li>
                 <span>• Tingalpa Invoice</span>
-                <strong style="color: #065f46;">PASS</strong>
+                <strong class="tier-one-artifact-status-pass">PASS</strong>
             </li>
-            <li style="padding: 8px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
+            <li>
                 <span>• General Notes S-001</span>
-                <strong style="color: #B45309;">FLAG (Handwriting)</strong>
+                <strong class="tier-one-artifact-status-warning">FLAG (Handwriting)</strong>
             </li>
         </ul>
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 9 of 10</span></div>
+    </div>
 
-        <div class="footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 9 of 9</span></div>
+    <div class="tier-one-page">
+        <div class="tier-one-header">
+            <div class="tier-one-logo">Curam-Ai</div>
+            <div class="tier-one-meta">Prepared For: Pilot Client #3<br>Date: November 2025</div>
+        </div>
+
+        <div class="tier-one-recommendation-center">
+            <h2 class="tier-one-recommendation-title">Recommendation to Proceed</h2>
+            <p class="tier-one-recommendation-text">
+                Based on the <strong>$888k efficiency potential</strong> identified in the Executive Summary and the <strong>Technical Validation</strong> of your specific documents, we recommend proceeding to Phase 2 immediately.
+            </p>
+        </div>
+
+        <div class="tier-one-phase-box">
+            <h3>
+                Phase 2: Readiness Roadmap
+                <span class="tier-one-phase-badge">Investment: $7,500</span>
+            </h3>
+            <ul>
+                <li><strong>Deliverable 1:</strong> Full Implementation Project Plan & Timeline</li>
+                <li><strong>Deliverable 2:</strong> IT Security & ISO-27001 Compliance Matrix</li>
+                <li><strong>Deliverable 3:</strong> ROI Validation Workshop with Senior Partners</li>
+            </ul>
+        </div>
+
+        <div class="tier-one-signature-row">
+            <div class="tier-one-signature-box">
+                <div class="tier-one-signature-line"></div>
+                <p class="tier-one-signature-label">Approved By (Pilot Client #3)</p>
+            </div>
+            <div class="tier-one-signature-box">
+                <div class="tier-one-signature-line"></div>
+                <p class="tier-one-signature-label">Date</p>
+            </div>
+        </div>
+
+        <div class="tier-one-footer"><span>Curam-Ai - Tier One Feasibility Report</span><span>Page 10 of 10</span></div>
     </div>
 
 </body>
 </html>
-
