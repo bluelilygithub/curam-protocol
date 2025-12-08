@@ -2041,6 +2041,8 @@ def send_sms_notification(name, email, company, interest):
     Sends to +61411951625 (Australian number: 0411951625)
     """
     try:
+        app.logger.info("=== SMS Notification Attempt Started ===")
+        
         # Twilio credentials - support both API Key and standard Auth Token methods
         twilio_account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
         twilio_api_key = os.environ.get('TWILIO_API_KEY')  # Alternative to auth token
@@ -2050,18 +2052,25 @@ def send_sms_notification(name, email, company, interest):
         # Hardcoded recipient phone number (Australian format: +61411951625)
         twilio_phone_to = '+61411951625'
         
+        # Log what we found (without exposing secrets)
+        app.logger.info(f"SMS Config Check - Account SID: {'SET' if twilio_account_sid else 'MISSING'}")
+        app.logger.info(f"SMS Config Check - API Key: {'SET' if twilio_api_key else 'MISSING'}")
+        app.logger.info(f"SMS Config Check - Auth Token: {'SET' if twilio_auth_token else 'MISSING'}")
+        app.logger.info(f"SMS Config Check - Phone From: {'SET' if twilio_phone_from else 'MISSING'}")
+        app.logger.info(f"SMS Config Check - Phone To: {twilio_phone_to}")
+        
         # Need Account SID and either Auth Token or API Key
         if not twilio_account_sid:
-            app.logger.info("Twilio Account SID not configured - skipping SMS notification")
+            app.logger.warning("SMS: Twilio Account SID not configured - skipping SMS notification")
             return False
         
         # Need at least one authentication method
         if not twilio_auth_token and not twilio_api_key:
-            app.logger.info("Twilio authentication not configured (need AUTH_TOKEN or API_KEY) - skipping SMS notification")
+            app.logger.warning("SMS: Twilio authentication not configured (need AUTH_TOKEN or API_KEY) - skipping SMS notification")
             return False
         
         if not twilio_phone_from:
-            app.logger.info("Twilio phone number (FROM) not configured - skipping SMS notification")
+            app.logger.warning("SMS: Twilio phone number (FROM) not configured - skipping SMS notification")
             return False
         
         # Prepare SMS message
@@ -2071,6 +2080,9 @@ def send_sms_notification(name, email, company, interest):
         # Truncate if too long (SMS limit is 1600 chars, but keep it shorter)
         if len(sms_body) > 200:
             sms_body = sms_body[:197] + "..."
+        
+        app.logger.info(f"SMS: Preparing to send SMS to {twilio_phone_to}")
+        app.logger.info(f"SMS: Message preview: {sms_body[:50]}...")
         
         # Send SMS via Twilio API
         twilio_url = f'https://api.twilio.com/2010-04-01/Accounts/{twilio_account_sid}/Messages.json'
@@ -2086,6 +2098,10 @@ def send_sms_notification(name, email, company, interest):
         # So we'll try API_KEY as Auth Token if AUTH_TOKEN is not set
         auth_creds = (twilio_account_sid, twilio_auth_token if twilio_auth_token else twilio_api_key)
         
+        app.logger.info(f"SMS: Sending request to Twilio API...")
+        app.logger.info(f"SMS: URL: {twilio_url}")
+        app.logger.info(f"SMS: From: {twilio_phone_from}, To: {twilio_phone_to}")
+        
         response = requests.post(
             twilio_url,
             data=sms_data,
@@ -2093,17 +2109,20 @@ def send_sms_notification(name, email, company, interest):
             timeout=10
         )
         
+        app.logger.info(f"SMS: Twilio API response status: {response.status_code}")
+        app.logger.info(f"SMS: Twilio API response text: {response.text[:200]}")
+        
         if response.status_code == 201:
-            app.logger.info(f"SMS notification sent successfully to {twilio_phone_to}")
+            app.logger.info(f"SMS: ✅ Notification sent successfully to {twilio_phone_to}")
             return True
         else:
-            app.logger.error(f"Twilio API error: {response.status_code} - {response.text}")
+            app.logger.error(f"SMS: ❌ Twilio API error: {response.status_code} - {response.text}")
             return False
             
     except Exception as e:
-        app.logger.error(f"Error sending SMS notification: {e}")
+        app.logger.error(f"SMS: ❌ Exception sending SMS notification: {str(e)}")
         import traceback
-        app.logger.error(traceback.format_exc())
+        app.logger.error(f"SMS: Full traceback:\n{traceback.format_exc()}")
         # Don't fail the whole request if SMS fails
         return False
 
@@ -2324,10 +2343,17 @@ Curam-Ai Protocol™ Team
                 app.logger.info(f"Contact form email sent successfully from {email}")
                 
                 # Send SMS notification if configured (non-blocking)
+                app.logger.info("=== Starting SMS notification process ===")
                 try:
-                    send_sms_notification(name, email, company, interest_display)
+                    sms_result = send_sms_notification(name, email, company, interest_display)
+                    if sms_result:
+                        app.logger.info("✅ SMS notification completed successfully")
+                    else:
+                        app.logger.warning("⚠️ SMS notification returned False (check logs above for details)")
                 except Exception as sms_error:
-                    app.logger.warning(f"SMS notification failed (non-critical): {sms_error}")
+                    app.logger.error(f"❌ SMS notification exception (non-critical): {sms_error}")
+                    import traceback
+                    app.logger.error(f"SMS exception traceback:\n{traceback.format_exc()}")
                 
                 return jsonify({
                     'success': True,
