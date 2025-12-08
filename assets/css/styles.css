@@ -37,13 +37,13 @@
   --color-text-light: #4b5563;
   --color-text-muted: #6b7280;
   
-  /* Report Background Colors */
-  --color-bg-light: #f9fafb;
-  --color-bg-blue-light: #f0f4ff;
-  --color-bg-green-light: #f0fdf4;
-  --color-bg-yellow-light: #fefce8;
-  --color-bg-green-pale: #d1fae5;
-  --color-bg-blue-pale: #eff6ff;
+  /* Report Background Colors - Using white to match site design */
+  --color-bg-light: var(--color-white);
+  --color-bg-blue-light: var(--color-white);
+  --color-bg-green-light: var(--color-white);
+  --color-bg-yellow-light: var(--color-white);
+  --color-bg-green-pale: var(--color-white);
+  --color-bg-blue-pale: var(--color-white);
   
   /* Report Border Colors */
   --color-border-gray: #e5e7eb;
@@ -5095,7 +5095,8 @@ h1, h2, h3, h4 {
 .phase-2-bottom-line-box {
   text-align: center;
   padding: var(--spacing-xl);
-  background: var(--color-bg-light);
+  background: var(--color-white);
+  border: 2px solid var(--color-border-gray);
   border-radius: var(--border-radius);
   margin-bottom: var(--spacing-xl);
 }
@@ -5288,14 +5289,16 @@ h1, h2, h3, h4 {
 }
 
 .phase-2-metric-box {
-  background-color: var(--color-bg-blue-light);
+  background-color: var(--color-white);
   border-radius: var(--border-radius);
+  border: 2px solid var(--color-border-gray);
   border-left: 5px solid var(--color-navy);
   padding: var(--spacing-lg);
 }
 
 .phase-2-metric-box.green {
-  background-color: var(--color-bg-green-light);
+  background-color: var(--color-white);
+  border: 2px solid var(--color-border-gray);
   border-left-color: var(--color-success);
 }
 
@@ -5329,8 +5332,9 @@ h1, h2, h3, h4 {
 
 /* Recommendation Box */
 .phase-2-recommendation-box {
-  background-color: var(--color-bg-green-pale);
-  border: 1px solid var(--color-success);
+  background-color: var(--color-white);
+  border: 2px solid var(--color-border-gray);
+  border-left: 5px solid var(--color-success);
   border-radius: var(--border-radius);
   padding: var(--spacing-xl);
   margin-top: var(--spacing-xl);
@@ -5355,8 +5359,9 @@ h1, h2, h3, h4 {
 /* Conclusion Box */
 .phase-2-conclusion-box {
   padding: var(--spacing-xl);
-  background: var(--color-bg-blue-pale);
-  border-left: 4px solid var(--color-navy);
+  background: var(--color-white);
+  border: 2px solid var(--color-border-gray);
+  border-left: 5px solid var(--color-navy);
   border-radius: var(--border-radius);
   margin-top: var(--spacing-xl);
 }
@@ -5396,7 +5401,8 @@ h1, h2, h3, h4 {
 
 .phase-2-metadata-box {
   padding: var(--spacing-md);
-  background: var(--color-bg-light);
+  background: var(--color-white);
+  border: 2px solid var(--color-border-gray);
   border-radius: var(--border-radius);
 }
 
@@ -5408,8 +5414,9 @@ h1, h2, h3, h4 {
 /* Warning Box */
 .phase-2-warning-box {
   padding: var(--spacing-md);
-  background: var(--color-bg-yellow-light);
-  border-left: 4px solid var(--color-warning);
+  background: var(--color-white);
+  border: 2px solid var(--color-border-gray);
+  border-left: 5px solid var(--color-warning);
   border-radius: var(--border-radius);
   margin: var(--spacing-md) 0;
 }
