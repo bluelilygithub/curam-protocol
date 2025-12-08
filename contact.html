@@ -16,36 +16,6 @@
       href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <style>
-      .form-message {
-        margin-top: var(--spacing-md);
-        padding: var(--spacing-sm) var(--spacing-md);
-        border-radius: var(--border-radius);
-        font-size: 0.9375rem;
-        line-height: 1.6;
-        animation: fadeIn 0.3s ease-in;
-      }
-      .form-message-success {
-        background: #d1fae5;
-        color: #065f46;
-        border: 1px solid #10b981;
-      }
-      .form-message-error {
-        background: #fee2e2;
-        color: #991b1b;
-        border: 1px solid #ef4444;
-      }
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(-10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-    </style>
   </head>
   <body>
     <!-- Scroll Down Button -->
@@ -110,10 +80,10 @@
                   />
                   <button class="contact-chat-btn" id="chatSendBtn">Send</button>
                 </div>
-                <div id="suggestedInterest" class="contact-interest-suggestion" style="display: none;"></div>
+                <div id="suggestedInterest" class="contact-interest-suggestion contact-hidden"></div>
 
                 <!-- Email Chat Log Section -->
-                <div class="contact-email-section" id="emailChatSection" style="display: none;">
+                <div class="contact-email-section contact-hidden" id="emailChatSection">
                   <p class="contact-email-section-title">📧 Email this conversation</p>
                   <p class="contact-email-section-desc">
                     Get a copy of our conversation sent to your email for your records.
@@ -174,7 +144,7 @@
 
                 <div class="contact-form-submit">
                   <button type="submit" class="btn btn-primary">Send Message</button>
-                  <div id="form-message" class="form-message" style="display: none;"></div>
+                  <div id="form-message" class="form-message contact-hidden"></div>
                 </div>
               </form>
             </div>
@@ -343,7 +313,7 @@
 
       function showSuggestedInterest(suggestedInterest) {
           if (!suggestedInterest) {
-              suggestedInterestDiv.style.display = 'none';
+              suggestedInterestDiv.classList.add('contact-hidden');
               return;
           }
 
@@ -360,7 +330,7 @@
               <strong>${interestLabels[suggestedInterest] || suggestedInterest}</strong>.
               <a href="#" onclick="document.getElementById('interest').value='${suggestedInterest}'; return false;">Apply to form</a>
           `;
-          suggestedInterestDiv.style.display = 'block';
+          suggestedInterestDiv.classList.remove('contact-hidden');
       }
 
       async function sendChatMessage() {
@@ -399,7 +369,7 @@
 
                   // Show email section after at least 2 messages (user + assistant)
                   if (conversationHistory.length >= 2) {
-                      document.getElementById('emailChatSection').style.display = 'block';
+                      document.getElementById('emailChatSection').classList.remove('contact-hidden');
                   }
               }
           } catch (error) {
@@ -496,7 +466,7 @@
       function showFormMessage(message, isError = false) {
           formMessage.textContent = message;
           formMessage.className = 'form-message ' + (isError ? 'form-message-error' : 'form-message-success');
-          formMessage.style.display = 'block';
+          formMessage.classList.remove('contact-hidden');
           
           // Scroll to message
           formMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -504,13 +474,13 @@
           // Hide message after 5 seconds for success, keep error visible
           if (!isError) {
               setTimeout(() => {
-                  formMessage.style.display = 'none';
+                  formMessage.classList.add('contact-hidden');
               }, 5000);
           }
       }
       
       function hideFormMessage() {
-          formMessage.style.display = 'none';
+          formMessage.classList.add('contact-hidden');
       }
       
       document.getElementById('contactForm').addEventListener('submit', async function(e) {
