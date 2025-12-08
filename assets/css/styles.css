@@ -947,7 +947,7 @@ h1, h2, h3, h4 {
 /* Protocol Hero Section */
 .protocol-hero {
   position: relative;
-  padding: 120px 0 var(--spacing-2xl);
+  padding: 160px 0 var(--spacing-2xl);
   background: var(--navy-deep);
   text-align: center;
 }
@@ -2795,9 +2795,20 @@ h1, h2, h3, h4 {
 }
 
 /* Section Utilities */
+.section {
+  padding: var(--spacing-3xl) 0;
+}
+
 .section-alt {
   background: var(--navy-medium);
+  padding: var(--spacing-3xl) 0;
   padding-bottom: var(--spacing-4xl);
+}
+
+/* First section after hero needs top padding */
+.protocol-hero + .section,
+.protocol-hero + .section-alt {
+  padding-top: var(--spacing-4xl);
 }
 
 .centered {
