@@ -8,10 +8,21 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
     <link rel="stylesheet" href="assets/css/styles.css">
 </head>
 <body class="report-body">
+    <!-- Scroll Down Button -->
+    <button class="scroll-down-btn" aria-label="Scroll down">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M19 12l-7 7-7-7" />
+        </svg>
+    </button>
+
+    <!-- Navigation -->
+    <div id="navbar-placeholder"></div>
+    <script src="assets/js/navbar-loader.js"></script>
 
     <section class="report-hero">
         <div class="report-container">
@@ -151,7 +162,7 @@
                                 <table class="report-table report-table-no-margin">
                                     <tr><td>Hours Saved/Week (2 hrs/staff)</td><td class="report-table-text-right">100</td></tr>
                                     <tr><td>Average billable rate</td><td class="report-table-text-right">$185/hr</td></tr>
-                                    <tr><td>Gross Efficiency Value (48 wks)</td><td class="report-table-text-right">$888,000</td></tr>
+                                    <tr class="report-table-row-total"><td>Gross Efficiency Value (48 wks)</td><td class="report-table-text-right">$888,000</td></tr>
                                     <tr class="report-table-row-total"><td>Potential Year-1 Efficiency</td><td class="report-table-text-right">$888,000</td></tr>
                                 </table>
                             </div>
@@ -165,7 +176,7 @@
                         </div>
                         <div class="report-slide-content">
                             <p class="report-margin-bottom">
-                                [cite_start]Analysis of <strong>Drawing S-105 (Roof Beam Schedule)</strong> reveals high structured data extraction but identified specific engineering "traps"[cite: 3, 5, 10].
+                                Analysis of <strong>Drawing S-105 (Roof Beam Schedule)</strong> reveals high structured data extraction but identified specific engineering "traps".
                             </p>
                             
                             <div class="report-validation-grid">
@@ -178,7 +189,7 @@
                                 <div class="report-validation-card warning">
                                     <div class="report-card-icon">⚠️</div>
                                     <h3>"Human-in-Loop" Trigger</h3>
-                                    <p><strong>Variable Lengths:</strong> Item <code>STR-1</code> contains "VARIES 1200-2400". [cite_start]AI flagged this as "Non-Procureable" requiring CAD model reference[cite: 10].</p>
+                                    <p><strong>Variable Lengths:</strong> Item <code>STR-1</code> contains "VARIES 1200-2400". AI flagged this as "Non-Procureable" requiring CAD model reference.</p>
                                 </div>
                             </div>
 
@@ -233,7 +244,7 @@
                             </div>
                             
                             <div class="report-json-box">
-                                [cite_start]<p class="report-json-label">Raw Output (S-105 Extraction)[cite: 5, 10]:</p>
+                                <p class="report-json-label">Raw Output (S-105 Extraction):</p>
                                 <code>{ "mark": "B-101", "size": "460UB82.1", "qty": 12, "length": 8500, "finish": "P1 (2 coats)", "ref": "D1/S-500" }</code>
                             </div>
                             
@@ -251,12 +262,60 @@
         </div>
     </section>
 
-    <footer class="report-footer">
-        <div class="report-container">
-            <p>&copy; 2025 Curam-Ai  All rights reserved. | The Curam-Ai Protocol™</p>
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image" />
+                    <span class="logo-text">Curam-Ai</span>
+                    <p class="footer-tagline">The Curam-Ai Protocol™</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Services</h4>
+                        <ul>
+                            <li><a href="services.html#service-1">Document Intelligence</a></li>
+                            <li><a href="services.html#service-2">Enterprise RAG Systems</a></li>
+                            <li><a href="services.html#service-3">Workflow Automation</a></li>
+                            <li><a href="services.html#service-4">AI Strategy</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>The Protocol</h4>
+                        <ul>
+                            <li><a href="curam-ai-protocol.html">Phase 1: Feasibility Sprint</a></li>
+                            <li><a href="curam-ai-protocol.html">Phase 2: The Roadmap</a></li>
+                            <li><a href="curam-ai-protocol.html">Phase 3: Compliance Shield</a></li>
+                            <li><a href="curam-ai-protocol.html">Phase 4: Implementation</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Resources</h4>
+                        <ul>
+                            <li><a href="roi.html">ROI Calculator</a></li>
+                            <li><a href="how-it-works.html">Technical Architecture</a></li>
+                            <li><a href="faq.html">FAQ</a></li>
+                            <li><a href="target-markets.html">Target Markets</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Company</h4>
+                        <ul>
+                            <li><a href="about.html">About</a></li>
+                            <li><a href="contact.html">Contact</a></li>
+                            <li><a href="case-study.html">Case Studies</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html">Sitemap</a></p>
+            </div>
         </div>
     </footer>
 
+    <script src="assets/js/scripts.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script>
         const swiper = new Swiper('.report-slider', {

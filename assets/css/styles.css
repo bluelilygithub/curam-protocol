@@ -4813,15 +4813,7 @@ h1, h2, h3, h4 {
   color: var(--color-gold-dark);
 }
 
-/* Swiper Navigation */
-.report-slider .swiper-button-next,
-.report-slider .swiper-button-prev {
-  color: var(--color-gold);
-}
-
-.report-slider .swiper-pagination-bullet {
-  background: var(--color-gray);
-}
+/* Swiper Navigation - Removed duplicate, see report styles section */
 
 .report-slider .swiper-pagination-bullet-active {
   background: var(--color-gold);
@@ -9174,7 +9166,41 @@ h1, h2, h3, h4 {
 /* Navigation Buttons */
 .report-slider .swiper-button-next,
 .report-slider .swiper-button-prev {
-    color: var(--color-gold);
+    color: var(--color-gold) !important;
+    width: 44px;
+    height: 44px;
+    background: rgba(212, 175, 55, 0.15);
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    margin-top: -22px;
+    border: 2px solid var(--color-gold);
+}
+
+.report-slider .swiper-button-next:hover,
+.report-slider .swiper-button-prev:hover {
+    background: rgba(212, 175, 55, 0.3);
+    transform: scale(1.1);
+    border-color: var(--color-gold);
+}
+
+.report-slider .swiper-button-next::after,
+.report-slider .swiper-button-prev::after {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: var(--color-gold) !important;
+}
+
+.report-slider .swiper-button-next {
+    right: 10px;
+}
+
+.report-slider .swiper-button-prev {
+    left: 10px;
+}
+
+.report-slider .swiper-button-disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
 }
 
 .report-slider .swiper-pagination-bullet-active {
@@ -9182,13 +9208,24 @@ h1, h2, h3, h4 {
 }
 
 /* Footer */
-.report-footer {
-    background: #111;
-    color: #666;
-    padding: 40px 0;
-    text-align: center;
-    border-top: 1px solid #333;
-    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
+/* Footer on report pages should use standard footer styling */
+.report-body .footer {
+    background: var(--navy-deep);
+    color: var(--text-primary);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.report-body .footer h4,
+.report-body .footer a {
+    color: var(--text-primary);
+}
+
+.report-body .footer a:hover {
+    color: var(--color-gold);
+}
+
+.report-body .footer .footer-tagline {
+    color: var(--text-secondary);
 }
 
 .report-footer-link {
