@@ -8694,6 +8694,13 @@ h1, h2, h3, h4 {
     padding: 0;
 }
 
+/* Ensure all report elements use Montserrat */
+.report-body *,
+.report-body *::before,
+.report-body *::after {
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
 /* Basic Layout / Hero Styles */
 .report-container {
     max-width: 1200px;
@@ -8715,6 +8722,7 @@ h1, h2, h3, h4 {
     font-weight: 700;
     margin-bottom: 20px;
     color: white;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-hero-subheadline {
@@ -8723,6 +8731,7 @@ h1, h2, h3, h4 {
     max-width: 700px;
     margin: 0 auto 40px;
     line-height: 1.6;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-hero-stats-row {
@@ -8742,6 +8751,7 @@ h1, h2, h3, h4 {
     font-size: 2rem;
     font-weight: 700;
     color: var(--color-gold);
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-hero-stat-label {
@@ -8750,6 +8760,7 @@ h1, h2, h3, h4 {
     letter-spacing: 1px;
     opacity: 0.8;
     margin-top: 5px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-hero-eyebrow {
@@ -8757,6 +8768,7 @@ h1, h2, h3, h4 {
     letter-spacing: 2px;
     font-size: 0.9rem;
     color: var(--color-cyan);
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* Slideshow Section */
@@ -8770,6 +8782,12 @@ h1, h2, h3, h4 {
     text-align: center;
     color: white;
     margin-bottom: 30px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.report-slideshow-header h2,
+.report-slideshow-header p {
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* Swiper / Slider Styles */
@@ -8793,6 +8811,7 @@ h1, h2, h3, h4 {
     background: white;
     padding: 40px 50px;
     color: var(--color-navy);
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-slide-dark {
@@ -8803,6 +8822,7 @@ h1, h2, h3, h4 {
     align-items: center;
     justify-content: center;
     text-align: center;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-slide-header h2 {
@@ -8811,6 +8831,8 @@ h1, h2, h3, h4 {
     padding-bottom: 15px;
     border-bottom: 2px solid var(--color-gold);
     color: var(--color-navy);
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-weight: 600;
 }
 
 /* Report Slide Cover Styles */
@@ -8818,11 +8840,14 @@ h1, h2, h3, h4 {
     font-size: 2rem;
     font-weight: 700;
     margin-bottom: 20px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-slide-cover-title {
     font-size: 2.5rem;
     margin-bottom: 10px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-weight: 700;
 }
 
 .report-slide-cover-subtitle {
@@ -8830,15 +8855,18 @@ h1, h2, h3, h4 {
     font-weight: 400;
     color: var(--color-gold);
     margin-bottom: 30px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-slide-cover-text {
     opacity: 0.8;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-slide-cover-meta {
     opacity: 0.6;
     font-size: 0.9rem;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* Tables */
@@ -8854,11 +8882,13 @@ h1, h2, h3, h4 {
     background: var(--color-navy);
     color: white;
     font-weight: 600;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-table td {
     padding: 12px;
     border-bottom: 1px solid #eee;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-table tr:last-child td {
@@ -8894,11 +8924,14 @@ h1, h2, h3, h4 {
 .report-phase-card h3 {
     margin: 0 0 10px 0;
     font-size: 1.1rem;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-weight: 600;
 }
 
 .report-risk-list li {
     margin-bottom: 15px;
     line-height: 1.5;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-slide-callout {
@@ -8909,6 +8942,7 @@ h1, h2, h3, h4 {
     border-radius: 6px;
     margin-top: 20px;
     font-size: 0.95rem;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-slide-callout-warning {
@@ -8952,6 +8986,7 @@ h1, h2, h3, h4 {
     font-size: 1.1rem;
     margin: 5px 0 10px 0;
     font-weight: 700;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-validation-card p {
@@ -8959,13 +8994,14 @@ h1, h2, h3, h4 {
     line-height: 1.5;
     color: #4b5563;
     margin: 0;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-validation-card code {
     background: #f3f4f6;
     padding: 2px 5px;
     border-radius: 4px;
-    font-family: monospace;
+    font-family: 'Montserrat', monospace, sans-serif;
     color: #d946ef;
 }
 
@@ -9023,6 +9059,7 @@ h1, h2, h3, h4 {
     align-items: center;
     padding: 12px 0;
     border-bottom: 1px solid #eee;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-doc-list li a {
@@ -9031,6 +9068,7 @@ h1, h2, h3, h4 {
     font-weight: 500;
     display: flex;
     align-items: center;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-doc-icon {
@@ -9045,6 +9083,7 @@ h1, h2, h3, h4 {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-status-pass {
@@ -9062,17 +9101,22 @@ h1, h2, h3, h4 {
     border: 1px solid #e2e8f0;
     padding: 15px;
     border-radius: 6px;
-    font-family: monospace;
+    font-family: 'Montserrat', monospace, sans-serif;
     font-size: 0.85rem;
     color: #334155;
     overflow-x: auto;
     margin-top: 15px;
 }
 
+.report-json-box code {
+    font-family: 'Montserrat', monospace, sans-serif;
+}
+
 .report-json-label {
     font-size: 0.8rem;
     margin-bottom: 5px;
     color: #666;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 /* Text Utilities */
@@ -9080,28 +9124,33 @@ h1, h2, h3, h4 {
     font-size: 0.9rem;
     color: #666;
     margin-top: 20px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-text-small-gray {
     font-size: 0.8rem;
     color: #888;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-text-small-gray-margin {
     font-size: 0.8rem;
     color: #888;
     margin-top: 10px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-text-large {
     font-size: 1.1rem;
     line-height: 1.6;
     margin-bottom: 30px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-text-medium {
     font-size: 0.9rem;
     margin-top: 25px;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-text-center {
@@ -9139,6 +9188,7 @@ h1, h2, h3, h4 {
     padding: 40px 0;
     text-align: center;
     border-top: 1px solid #333;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .report-footer-link {
