@@ -2035,6 +2035,236 @@ Keep responses concise (2-3 sentences), friendly, and focused on understanding t
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 
+@app.route('/api/contact', methods=['POST'])
+def contact_form():
+    """
+    Handle contact form submissions and send emails using MailChannel API.
+    """
+    try:
+        data = request.get_json()
+        name = data.get('name', '').strip()
+        email = data.get('email', '').strip()
+        company = data.get('company', '').strip()
+        interest = data.get('interest', '').strip()
+        message = data.get('message', '').strip()
+        
+        # Validation
+        if not name or not email or not message:
+            return jsonify({'error': 'Name, email, and message are required'}), 400
+        
+        # Get MailChannel API key
+        mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
+        if not mailchannels_api_key:
+            app.logger.error("MAILCHANNELS_API_KEY not configured - email sending disabled")
+            return jsonify({
+                'error': 'Email service is currently unavailable. Please try again later.',
+                'details': 'MAILCHANNELS_API_KEY environment variable is missing'
+            }), 503
+        
+        # Get recipient email (admin/contact email)
+        to_email = os.environ.get('CONTACT_EMAIL', 'contact@curam-ai.com.au')
+        from_email = os.environ.get('FROM_EMAIL', 'noreply@curam-ai.com.au')
+        
+        # Interest labels
+        interest_labels = {
+            'phase-1': 'Phase 1 - Feasibility Sprint ($1,500)',
+            'phase-2': 'Phase 2 - The Roadmap ($7,500)',
+            'phase-3': 'Phase 3 - Compliance Shield ($8-12k)',
+            'phase-4': 'Phase 4 - Implementation ($20-30k)',
+            'roi': 'ROI Calculator',
+            'general': 'General Inquiry'
+        }
+        interest_display = interest_labels.get(interest, interest or 'Not specified')
+        
+        # Build email content for admin
+        email_subject = f"New Contact Form Submission from {name}"
+        
+        email_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
+                h1 {{ color: #0a1628; border-bottom: 2px solid #D4AF37; padding-bottom: 10px; }}
+                .field {{ margin: 15px 0; }}
+                .label {{ font-weight: bold; color: #0a1628; }}
+                .value {{ margin-top: 5px; padding: 10px; background: #F8F9FA; border-radius: 4px; }}
+                .message-box {{ background: #F8F9FA; padding: 15px; border-left: 3px solid #D4AF37; border-radius: 4px; }}
+            </style>
+        </head>
+        <body>
+            <h1>New Contact Form Submission</h1>
+            
+            <div class="field">
+                <div class="label">Name:</div>
+                <div class="value">{name}</div>
+            </div>
+            
+            <div class="field">
+                <div class="label">Email:</div>
+                <div class="value"><a href="mailto:{email}">{email}</a></div>
+            </div>
+            
+            {f'<div class="field"><div class="label">Company:</div><div class="value">{company}</div></div>' if company else ''}
+            
+            <div class="field">
+                <div class="label">Interest:</div>
+                <div class="value">{interest_display}</div>
+            </div>
+            
+            <div class="field">
+                <div class="label">Message:</div>
+                <div class="message-box">{message.replace(chr(10), '<br>')}</div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        email_text = f"""New Contact Form Submission
+
+Name: {name}
+Email: {email}
+{('Company: ' + company + '\n') if company else ''}Interest: {interest_display}
+
+Message:
+{message}
+"""
+        
+        # Build confirmation email for user
+        confirmation_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
+                h1 {{ color: #0a1628; border-bottom: 2px solid #D4AF37; padding-bottom: 10px; }}
+                .message {{ margin: 20px 0; padding: 15px; background: #F8F9FA; border-radius: 4px; }}
+            </style>
+        </head>
+        <body>
+            <h1>Thank You for Contacting Curam-Ai</h1>
+            <p>Hi {name},</p>
+            <p>We've received your message and will get back to you within 24 hours.</p>
+            <div class="message">
+                <strong>Your Message:</strong><br>
+                {message.replace(chr(10), '<br>')}
+            </div>
+            <p>Best regards,<br>Curam-Ai Protocol™ Team</p>
+        </body>
+        </html>
+        """
+        
+        confirmation_text = f"""Thank You for Contacting Curam-Ai
+
+Hi {name},
+
+We've received your message and will get back to you within 24 hours.
+
+Your Message:
+{message}
+
+Best regards,
+Curam-Ai Protocol™ Team
+"""
+        
+        mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
+        
+        # MailChannel API headers - API key is optional if domain lockdown is configured
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        if mailchannels_api_key:
+            headers['X-Api-Key'] = mailchannels_api_key
+        
+        # Send email to admin
+        admin_email_data = {
+            "personalizations": [
+                {
+                    "to": [{"email": to_email}]
+                }
+            ],
+            "from": {
+                "email": from_email,
+                "name": "Curam-Ai Protocol™ Contact Form"
+            },
+            "reply_to": {
+                "email": email,
+                "name": name
+            },
+            "subject": email_subject,
+            "content": [
+                {
+                    "type": "text/plain",
+                    "value": email_text
+                },
+                {
+                    "type": "text/html",
+                    "value": email_html
+                }
+            ]
+        }
+        
+        # Send confirmation email to user
+        user_email_data = {
+            "personalizations": [
+                {
+                    "to": [{"email": email, "name": name}]
+                }
+            ],
+            "from": {
+                "email": from_email,
+                "name": "Curam-Ai Protocol™"
+            },
+            "subject": "Thank You for Contacting Curam-Ai",
+            "content": [
+                {
+                    "type": "text/plain",
+                    "value": confirmation_text
+                },
+                {
+                    "type": "text/html",
+                    "value": confirmation_html
+                }
+            ]
+        }
+        
+        try:
+            # Send admin notification
+            admin_response = requests.post(mailchannels_url, json=admin_email_data, headers=headers, timeout=10)
+            if admin_response.status_code != 202:
+                app.logger.error(f"Mailchannels API error (admin email): {admin_response.status_code} - {admin_response.text}")
+            
+            # Send user confirmation
+            user_response = requests.post(mailchannels_url, json=user_email_data, headers=headers, timeout=10)
+            if user_response.status_code != 202:
+                app.logger.error(f"Mailchannels API error (user confirmation): {user_response.status_code} - {user_response.text}")
+            
+            if admin_response.status_code == 202:
+                app.logger.info(f"Contact form email sent successfully from {email}")
+                return jsonify({
+                    'success': True,
+                    'message': 'Thank you for your message! We will get back to you soon.'
+                })
+            else:
+                app.logger.error(f"Failed to send contact form email: {admin_response.text}")
+                return jsonify({
+                    'error': 'Failed to send email. Please try again later.',
+                    'details': admin_response.text if admin_response.text else 'Unknown error'
+                }), 500
+                
+        except requests.RequestException as e:
+            app.logger.error(f"Error sending contact form email via Mailchannels: {e}")
+            return jsonify({
+                'error': 'Failed to send email. Please try again later.'
+            }), 500
+        
+    except Exception as e:
+        app.logger.error(f"Contact form submission failed: {e}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
+
+
 @app.route('/api/email-chat-log', methods=['POST'])
 def email_chat_log():
     """
@@ -2167,11 +2397,12 @@ def email_chat_log():
             ]
         }
         
-        # Set headers
+        # Set headers - MailChannel API key is optional if domain lockdown is configured
         headers = {
-            'Content-Type': 'application/json',
-            'X-Api-Key': mailchannels_api_key
+            'Content-Type': 'application/json'
         }
+        if mailchannels_api_key:
+            headers['X-Api-Key'] = mailchannels_api_key
         
         try:
             # Send email via Mailchannels API

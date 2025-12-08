@@ -389,11 +389,62 @@
       });
 
       // Form submission handler
-      document.getElementById('contactForm').addEventListener('submit', function(e) {
+      document.getElementById('contactForm').addEventListener('submit', async function(e) {
           e.preventDefault();
-          // In a real implementation, this would send data to a backend
-          alert('Thank you for your message! We will get back to you soon.');
-          this.reset();
+          
+          const form = this;
+          const submitBtn = form.querySelector('button[type="submit"]');
+          const originalBtnText = submitBtn.textContent;
+          
+          // Get form data
+          const formData = {
+              name: document.getElementById('name').value.trim(),
+              email: document.getElementById('email').value.trim(),
+              company: document.getElementById('company').value.trim(),
+              interest: document.getElementById('interest').value,
+              message: document.getElementById('message').value.trim()
+          };
+          
+          // Validation
+          if (!formData.name || !formData.email || !formData.message) {
+              alert('Please fill in all required fields (Name, Email, and Message).');
+              return;
+          }
+          
+          // Disable submit button
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Sending...';
+          
+          try {
+              const response = await fetch('/api/contact', {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify(formData)
+              });
+              
+              const data = await response.json();
+              
+              if (response.ok && data.success) {
+                  // Show success message
+                  alert(data.message || 'Thank you for your message! We will get back to you soon.');
+                  form.reset();
+              } else {
+                  // Show error message
+                  alert(data.error || 'Failed to send message. Please try again later.');
+                  if (data.details) {
+                      console.error('Error details:', data.details);
+                  }
+              }
+          } catch (error) {
+              console.error('Form submission error:', error);
+              alert('An error occurred while sending your message. Please try again later.');
+          } finally {
+              // Re-enable submit button
+              submitBtn.disabled = false;
+              submitBtn.textContent = originalBtnText;
+          }
       });
     </script>
   </body>
