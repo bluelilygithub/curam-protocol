@@ -2079,6 +2079,10 @@ def contact_form():
         # Build email content for admin
         email_subject = f"New Contact Form Submission from {name}"
         
+        # Prepare message with HTML line breaks (escape newlines for HTML)
+        message_html = message.replace(chr(10), '<br>') if message else ''
+        company_html = f'<div class="field"><div class="label">Company:</div><div class="value">{company}</div></div>' if company else ''
+        
         email_html = f"""
         <!DOCTYPE html>
         <html>
@@ -2105,7 +2109,7 @@ def contact_form():
                 <div class="value"><a href="mailto:{email}">{email}</a></div>
             </div>
             
-            {f'<div class="field"><div class="label">Company:</div><div class="value">{company}</div></div>' if company else ''}
+            {company_html}
             
             <div class="field">
                 <div class="label">Interest:</div>
@@ -2114,17 +2118,20 @@ def contact_form():
             
             <div class="field">
                 <div class="label">Message:</div>
-                <div class="message-box">{message.replace(chr(10), '<br>')}</div>
+                <div class="message-box">{message_html}</div>
             </div>
         </body>
         </html>
         """
         
+        # Prepare email text content
+        newline = '\n'
+        company_line = f'Company: {company}{newline}' if company else ''
         email_text = f"""New Contact Form Submission
 
 Name: {name}
 Email: {email}
-{('Company: ' + company + '\n') if company else ''}Interest: {interest_display}
+{company_line}Interest: {interest_display}
 
 Message:
 {message}
@@ -2147,7 +2154,7 @@ Message:
             <p>We've received your message and will get back to you within 24 hours.</p>
             <div class="message">
                 <strong>Your Message:</strong><br>
-                {message.replace(chr(10), '<br>')}
+                {message_html}
             </div>
             <p>Best regards,<br>Curam-Ai Protocol™ Team</p>
         </body>
