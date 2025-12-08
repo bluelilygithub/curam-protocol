@@ -2035,6 +2035,92 @@ Keep responses concise (2-3 sentences), friendly, and focused on understanding t
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 
+@app.route('/api/test-twilio-auth', methods=['GET'])
+def test_twilio_auth():
+    """
+    Test endpoint to verify Twilio authentication without sending SMS.
+    """
+    try:
+        app.logger.info("=== Testing Twilio Authentication ===")
+        
+        # Get Twilio credentials
+        twilio_account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
+        twilio_api_key_sid = os.environ.get('TWILIO_API_KEY_SID')
+        twilio_api_secret = os.environ.get('TWILIO_API_SECRET')
+        twilio_auth_token = os.environ.get('TWILIO_AUTH_TOKEN')
+        
+        # Check what we have
+        has_auth_token = bool(twilio_auth_token)
+        has_api_key = bool(twilio_api_key_sid and twilio_api_secret)
+        
+        result = {
+            'account_sid_set': bool(twilio_account_sid),
+            'account_sid_preview': twilio_account_sid[:10] + '...' if twilio_account_sid else None,
+            'auth_method': 'Auth Token' if has_auth_token else ('API Key' if has_api_key else 'None'),
+            'api_key_sid_preview': twilio_api_key_sid[:10] + '...' if twilio_api_key_sid else None,
+            'api_secret_set': bool(twilio_api_secret),
+            'auth_token_set': bool(twilio_auth_token)
+        }
+        
+        if not twilio_account_sid:
+            return jsonify({'error': 'TWILIO_ACCOUNT_SID not set', **result}), 400
+        
+        if not has_auth_token and not has_api_key:
+            return jsonify({'error': 'No authentication method configured', **result}), 400
+        
+        # Test authentication by making a simple API call
+        if has_api_key:
+            auth_username = twilio_api_key_sid
+            auth_password = twilio_api_secret
+            app.logger.info(f"Testing API Key auth: {twilio_api_key_sid[:10]}...")
+        else:
+            auth_username = twilio_account_sid
+            auth_password = twilio_auth_token
+            app.logger.info(f"Testing Auth Token auth")
+        
+        # Try to fetch account info (simple test call)
+        test_url = f'https://api.twilio.com/2010-04-01/Accounts/{twilio_account_sid}.json'
+        
+        response = requests.get(
+            test_url,
+            auth=(auth_username, auth_password),
+            timeout=10
+        )
+        
+        result['test_status_code'] = response.status_code
+        result['test_success'] = response.status_code == 200
+        
+        if response.status_code == 200:
+            account_info = response.json()
+            result['account_friendly_name'] = account_info.get('friendly_name')
+            result['account_status'] = account_info.get('status')
+            app.logger.info("✅ Twilio authentication successful!")
+            return jsonify({'success': True, 'message': 'Twilio authentication successful!', **result})
+        else:
+            error_text = response.text[:200]
+            result['error_response'] = error_text
+            app.logger.error(f"❌ Twilio authentication failed: {response.status_code} - {error_text}")
+            
+            # Try to parse error
+            try:
+                error_data = response.json()
+                result['error_code'] = error_data.get('code')
+                result['error_message'] = error_data.get('message')
+            except:
+                pass
+            
+            return jsonify({'success': False, 'error': 'Twilio authentication failed', **result}), response.status_code
+            
+    except Exception as e:
+        app.logger.error(f"Error testing Twilio auth: {e}")
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
+
+
 def send_sms_notification(name, email, company, interest):
     """
     Send SMS notification using Twilio API when contact form is submitted.
@@ -2098,10 +2184,27 @@ def send_sms_notification(name, email, company, interest):
             auth_username = twilio_account_sid
             auth_password = twilio_auth_token
             app.logger.info("SMS: Using Auth Token authentication method")
+            app.logger.info(f"SMS: Auth Username (Account SID): {twilio_account_sid[:10]}..." if twilio_account_sid else "MISSING")
         else:
             auth_username = twilio_api_key_sid
             auth_password = twilio_api_secret
             app.logger.info("SMS: Using API Key authentication method")
+            app.logger.info(f"SMS: Auth Username (API Key SID): {twilio_api_key_sid[:10]}..." if twilio_api_key_sid else "MISSING")
+            app.logger.info(f"SMS: API Secret: {'SET' if twilio_api_secret else 'MISSING'}")
+            
+            # Validate API Key format
+            if twilio_api_key_sid and not twilio_api_key_sid.startswith('SK'):
+                app.logger.warning("SMS: ⚠️ API Key SID should start with 'SK' - please verify TWILIO_API_KEY_SID value")
+            if twilio_account_sid and not twilio_account_sid.startswith('AC'):
+                app.logger.warning("SMS: ⚠️ Account SID should start with 'AC' - please verify TWILIO_ACCOUNT_SID value")
+            app.logger.info(f"SMS: Auth Username (API Key SID): {twilio_api_key_sid[:10]}..." if twilio_api_key_sid else "MISSING")
+            app.logger.info(f"SMS: API Secret: {'SET' if twilio_api_secret else 'MISSING'}")
+            
+            # Verify API Key belongs to the Account
+            if twilio_api_key_sid and not twilio_api_key_sid.startswith('SK'):
+                app.logger.warning("SMS: ⚠️ API Key SID should start with 'SK' - please verify TWILIO_API_KEY_SID value")
+            if twilio_account_sid and not twilio_account_sid.startswith('AC'):
+                app.logger.warning("SMS: ⚠️ Account SID should start with 'AC' - please verify TWILIO_ACCOUNT_SID value")
         
         if not twilio_phone_from:
             app.logger.error("SMS: ❌ Twilio phone number (FROM) not configured!")
@@ -2134,7 +2237,12 @@ def send_sms_notification(name, email, company, interest):
         
         app.logger.info(f"SMS: Sending request to Twilio API...")
         app.logger.info(f"SMS: URL: {twilio_url}")
+        app.logger.info(f"SMS: Account SID in URL: {twilio_account_sid[:10]}...")
         app.logger.info(f"SMS: From: {twilio_phone_from}, To: {twilio_phone_to}")
+        
+        # For API Key auth, verify the Account SID matches
+        if has_api_key_method and not has_auth_token_method:
+            app.logger.info(f"SMS: Using API Key auth - Account SID {twilio_account_sid[:10]}... must match the account that owns API Key {twilio_api_key_sid[:10]}...")
         
         response = requests.post(
             twilio_url,
@@ -2144,7 +2252,24 @@ def send_sms_notification(name, email, company, interest):
         )
         
         app.logger.info(f"SMS: Twilio API response status: {response.status_code}")
-        app.logger.info(f"SMS: Twilio API response text: {response.text[:200]}")
+        app.logger.info(f"SMS: Twilio API response text: {response.text[:500]}")
+        
+        # Parse error details if available
+        if response.status_code == 401:
+            try:
+                error_data = response.json()
+                error_code = error_data.get('code')
+                error_message = error_data.get('message')
+                app.logger.error(f"SMS: Authentication failed - Code: {error_code}, Message: {error_message}")
+                if error_code == 20003:
+                    app.logger.error("SMS: Error 20003 = Authentication failed")
+                    app.logger.error("SMS: Possible causes:")
+                    app.logger.error("SMS:   1. API Key SID/Secret are incorrect")
+                    app.logger.error("SMS:   2. API Key belongs to a different Account SID")
+                    app.logger.error("SMS:   3. API Key has been revoked or deactivated")
+                    app.logger.error("SMS:   4. API Key doesn't have SMS permissions")
+            except:
+                pass
         
         if response.status_code == 201:
             app.logger.info(f"SMS: ✅ Notification sent successfully to {twilio_phone_to}")
