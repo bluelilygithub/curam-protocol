@@ -917,6 +917,27 @@ h1, h2, h3, h4 {
 }
 
 /* ========== METHODOLOGY / PROTOCOL SECTION ========== */
+/* Protocol Hero Section */
+.protocol-hero {
+  position: relative;
+  padding: 120px 0 var(--spacing-2xl);
+  background: var(--navy-deep);
+  text-align: center;
+}
+
+.protocol-hero-title {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
+  margin-bottom: var(--spacing-md);
+  line-height: 1.2;
+}
+
+.protocol-hero-subtitle {
+  font-size: 1.25rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
 .methodology {
   padding: var(--spacing-3xl) 0;
   background: var(--navy-medium);

@@ -3,100 +3,331 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Executive Summary: Board-Ready Business Case</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Executive Summary: Board-Ready Business Case | Curam-Ai Protocol™</title>
+    <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Montserrat', sans-serif; background-color: #f7f9fb; color: #1f2937; }
-        .container { max-width: 900px; }
-        .header { border-bottom: 5px solid #004d99; }
-        .metric-box { background-color: #f0f4ff; border-radius: 0.5rem; border-left: 5px solid #3b82f6; }
-        .financial-table th { background-color: #004d99; color: white; }
-        .net-return-box { background-color: #d1fae5; border: 1px solid #10b981; }
+        .report-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--color-white);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-2xl);
+            color: #1f2937;
+            box-shadow: var(--shadow-lg);
+        }
+        .report-header {
+            border-bottom: 5px solid var(--color-navy);
+            padding-bottom: var(--spacing-md);
+            margin-bottom: var(--spacing-xl);
+        }
+        .report-header .document-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--color-gray);
+            margin-bottom: var(--spacing-xs);
+        }
+        .report-header h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #1f2937;
+            margin: 0;
+        }
+        .bottom-line-box {
+            text-align: center;
+            padding: var(--spacing-xl);
+            background: #f9fafb;
+            border-radius: var(--border-radius);
+            margin-bottom: var(--spacing-xl);
+        }
+        .bottom-line-box h3 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: var(--spacing-sm);
+        }
+        .bottom-line-amount {
+            font-size: 3rem;
+            font-weight: 800;
+            color: #10b981;
+            line-height: 1;
+            margin: var(--spacing-sm) 0;
+        }
+        .bottom-line-description {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #4b5563;
+            margin-top: var(--spacing-sm);
+        }
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: var(--spacing-sm);
+            margin-bottom: var(--spacing-lg);
+            margin-top: var(--spacing-xl);
+        }
+        .financial-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: var(--spacing-lg) 0;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .financial-table th {
+            background-color: var(--color-navy);
+            color: var(--color-white);
+            text-align: left;
+            padding: var(--spacing-md);
+            font-weight: 600;
+        }
+        .financial-table th:first-child {
+            width: 50%;
+        }
+        .financial-table th:last-child,
+        .financial-table th:nth-child(2) {
+            text-align: right;
+            width: 25%;
+        }
+        .financial-table td {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .financial-table tbody tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        .financial-table tbody tr td:last-child,
+        .financial-table tbody tr td:nth-child(2) {
+            text-align: right;
+            font-weight: 600;
+        }
+        .financial-table tfoot {
+            background-color: #e5e7eb;
+            font-weight: 700;
+        }
+        .financial-table tfoot td {
+            padding: var(--spacing-md);
+        }
+        .financial-table tfoot td:last-child {
+            color: #10b981;
+        }
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-lg);
+            margin: var(--spacing-lg) 0;
+        }
+        .metric-box {
+            background-color: #f0f4ff;
+            border-radius: var(--border-radius);
+            border-left: 5px solid #3b82f6;
+            padding: var(--spacing-lg);
+        }
+        .metric-box.green {
+            background-color: #f0fdf4;
+            border-left-color: #10b981;
+        }
+        .metric-box p {
+            margin: 0;
+        }
+        .metric-label {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: var(--spacing-sm);
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #1e40af;
+            margin: var(--spacing-xs) 0;
+        }
+        .metric-box.green .metric-value {
+            color: #059669;
+        }
+        .metric-description {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-top: var(--spacing-sm);
+        }
+        .recommendation-box {
+            background-color: #d1fae5;
+            border: 1px solid #10b981;
+            border-radius: var(--border-radius);
+            padding: var(--spacing-xl);
+            margin-top: var(--spacing-xl);
+        }
+        .recommendation-box p {
+            margin: 0;
+        }
+        .recommendation-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #065f46;
+            margin-bottom: var(--spacing-sm);
+        }
+        .recommendation-text {
+            color: #374151;
+            line-height: 1.6;
+        }
+        .report-section {
+            padding: var(--spacing-3xl) 0;
+            background: var(--navy-medium);
+        }
+        .report-content-section {
+            padding: var(--spacing-xl) 0;
+        }
+        @media (max-width: 768px) {
+            .report-container {
+                padding: var(--spacing-lg);
+                margin: var(--spacing-lg);
+            }
+            .bottom-line-amount {
+                font-size: 2rem;
+            }
+            .metric-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
-<body class="p-4 sm:p-8">
+<body>
+    <!-- Navigation -->
+    <div id="navbar-placeholder"></div>
+    <script src="assets/js/navbar-loader.js"></script>
 
-<div class="container mx-auto bg-white shadow-2xl rounded-xl p-6 lg:p-10">
-    
-    <!-- Document Header -->
-    <div class="header pb-4 mb-8">
-        <div class="text-sm font-semibold uppercase text-gray-500">Curam-Ai Protocol™ — Phase 2 Business Case</div>
-        <h1 class="text-3xl font-extrabold mt-1 text-gray-900">EXECUTIVE SUMMARY: INVESTMENT RECOMMENDATION</h1>
-    </div>
+    <!-- Report Section -->
+    <section class="report-section">
+        <div class="container">
+            <div class="report-container">
+                
+                <!-- Document Header -->
+                <div class="report-header">
+                    <div class="document-label">Curam-Ai Protocol™ — Phase 2 Business Case</div>
+                    <h1>EXECUTIVE SUMMARY: INVESTMENT RECOMMENDATION</h1>
+                </div>
 
-    <!-- The Bottom Line -->
-    <section class="mb-8">
-        <div class="text-center p-6 bg-gray-50 rounded-lg shadow-inner">
-            <h3 class="text-xl font-bold text-gray-700 mb-2">The Bottom Line</h3>
-            <p class="text-5xl font-extrabold text-[#10b981]">
-                $214,500
-            </p>
-            <p class="text-lg font-semibold text-gray-600 mt-1">Recoverable Annual Revenue (Year 1) Validated by Baseline Data</p>
-        </div>
-    </section>
+                <!-- The Bottom Line -->
+                <div class="report-content-section">
+                    <div class="bottom-line-box">
+                        <h3>The Bottom Line</h3>
+                        <div class="bottom-line-amount">$214,500</div>
+                        <p class="bottom-line-description">Recoverable Annual Revenue (Year 1) Validated by Baseline Data</p>
+                    </div>
+                </div>
 
-    <!-- Visual Justification: Financial Drivers -->
-    <section class="mb-8">
-        <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b pb-2">I. The Four-Tier Value Model: Justifying the Investment</h2>
-        <p class="text-gray-600 mb-6">The total Gross Return is driven by two primary, quantified drivers. The Capacity Reallocation is the primary volume driver, while Risk Mitigation addresses core design liability.</p>
-        
-        <table class="financial-table w-full border-collapse">
-            <thead>
-                <tr>
-                    <th class="p-3 text-left w-1/2 rounded-tl-lg">Financial Driver (Value Component)</th>
-                    <th class="p-3 text-right w-1/4">Quantified Value (Annual)</th>
-                    <th class="p-3 text-right w-1/4 rounded-tr-lg">Metric Evidence</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr class="bg-gray-50">
-                    <td class="p-3 font-semibold text-blue-700">Capacity Reallocation (Tier 1 Savings)</td>
-                    <td class="p-3 text-right font-medium text-blue-700">$142,000</td>
-                    <td class="p-3 text-right">Admin Burden $\mathbf{-65\%}$</td>
-                </tr>
-                <tr class="bg-white">
-                    <td class="p-3 font-semibold text-red-700">Risk Mitigation (Tier 2 Liability Avoidance)</td>
-                    <td class="p-3 text-right font-medium text-red-700">$72,500</td>
-                    <td class="p-3 text-right">Critical Error Rate $<\mathbf{0.5\%}$</td>
-                </tr>
-            </tbody>
-            <tfoot>
-                <tr class="bg-gray-200 font-bold">
-                    <td class="p-3 text-left">TOTAL GROSS RETURN (Year 1)</td>
-                    <td class="p-3 text-right text-[#10b981]">$214,500</td>
-                    <td class="p-3 text-right"></td>
-                </tr>
-            </tfoot>
-        </table>
-    </section>
+                <!-- Visual Justification: Financial Drivers -->
+                <div class="report-content-section">
+                    <h2 class="section-title">I. The Four-Tier Value Model: Justifying the Investment</h2>
+                    <p style="color: #4b5563; margin-bottom: var(--spacing-lg); line-height: 1.7;">The total Gross Return is driven by two primary, quantified drivers. The Capacity Reallocation is the primary volume driver, while Risk Mitigation addresses core design liability.</p>
+                    
+                    <table class="financial-table">
+                        <thead>
+                            <tr>
+                                <th>Financial Driver (Value Component)</th>
+                                <th>Quantified Value (Annual)</th>
+                                <th>Metric Evidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="font-weight: 600; color: #1e40af;">Capacity Reallocation (Tier 1 Savings)</td>
+                                <td style="color: #1e40af;">$142,000</td>
+                                <td>Admin Burden <strong>-65%</strong></td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: 600; color: #991b1b;">Risk Mitigation (Tier 2 Liability Avoidance)</td>
+                                <td style="color: #991b1b;">$72,500</td>
+                                <td>Critical Error Rate &lt;<strong>0.5%</strong></td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td>TOTAL GROSS RETURN (Year 1)</td>
+                                <td style="color: #10b981;">$214,500</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
 
-    <!-- Investment and ROI Summary -->
-    <section class="mb-8">
-        <h2 class="text-2xl font-bold mb-4 text-gray-800 border-b pb-2">II. Investment and Recommendation</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div class="p-5 metric-box">
-                <p class="text-lg font-semibold text-gray-700">Total Investment (Phase 4 / Wave 1 Setup)</p>
-                <p class="text-3xl font-extrabold text-blue-900 mt-1">$28,500</p>
-                <p class="text-sm text-gray-500 mt-2">Fixed-fee for configuration and deployment.</p>
+                <!-- Investment and ROI Summary -->
+                <div class="report-content-section">
+                    <h2 class="section-title">II. Investment and Recommendation</h2>
+                    <div class="metric-grid">
+                        <div class="metric-box">
+                            <p class="metric-label">Total Investment (Phase 4 / Wave 1 Setup)</p>
+                            <p class="metric-value">$28,500</p>
+                            <p class="metric-description">Fixed-fee for configuration and deployment.</p>
+                        </div>
+                        <div class="metric-box green">
+                            <p class="metric-label">Return on Investment (ROI)</p>
+                            <p class="metric-value">13.5 Months</p>
+                            <p class="metric-description">The project meets the internal financial hurdle of 18 months, ensuring investment security.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Final Recommendation -->
+                <div class="report-content-section">
+                    <div class="recommendation-box">
+                        <p class="recommendation-title">Final Recommendation: Proceed to Phase 4 Deployment.</p>
+                        <p class="recommendation-text">Based on the technical validation and documented 65% reduction in administrative burden, we recommend immediate approval of the Phase 4 Statement of Work to realize the calculated <strong>$214,500</strong> in verifiable annual returns.</p>
+                    </div>
+                </div>
+
             </div>
-            <div class="p-5 metric-box bg-green-50 border-green-500">
-                <p class="text-lg font-semibold text-gray-700">Return on Investment (ROI)</p>
-                <p class="text-3xl font-extrabold text-green-700 mt-1">13.5 Months</p>
-                <p class="text-sm text-gray-500 mt-2">The project meets the internal financial hurdle of 18 months, ensuring investment security.</p>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <img src="assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
+                    <span class="logo-text">Curam-Ai</span>
+                    <p class="footer-tagline">The Curam-Ai Protocol™</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>The Protocol</h4>
+                        <ul>
+                            <li><a href="curam-ai-protocol.html">Phase 1: Feasibility Sprint</a></li>
+                            <li><a href="curam-ai-protocol.html">Phase 2: The Roadmap</a></li>
+                            <li><a href="curam-ai-protocol.html">Phase 3: Compliance Shield</a></li>
+                            <li><a href="curam-ai-protocol.html">Phase 4: Implementation</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Resources</h4>
+                        <ul>
+                            <li><a href="roi.html">ROI Calculator</a></li>
+                            <li><a href="how-it-works.html">How It Works</a></li>
+                            <li><a href="faq.html">FAQ</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Company</h4>
+                        <ul>
+                            <li><a href="contact.html">Contact</a></li>
+                            <li><a href="phase-2-reports.html">Sample Reports</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="sitemap.html" style="color: var(--color-gold); text-decoration: none;">Sitemap</a></p>
             </div>
         </div>
-    </section>
-    
-    <!-- Final Recommendation -->
-    <section>
-        <div class="p-6 net-return-box rounded-lg">
-            <p class="text-xl font-bold text-green-800">Final Recommendation: Proceed to Phase 4 Deployment.</p>
-            <p class="text-gray-700 mt-2">Based on the technical validation and documented 65% reduction in administrative burden, we recommend immediate approval of the Phase 4 Statement of Work to realize the calculated $\mathbf{\$214,500}$ in verifiable annual returns.</p>
-        </div>
-    </section>
+    </footer>
 
-</div>
-
+    <script src="assets/js/main.js"></script>
 </body>
 </html>
