@@ -2769,25 +2769,7 @@ h1, h2, h3, h4 {
   margin-bottom: var(--spacing-md);
 }
 
-.entry-point-quote {
-  font-size: 0.9375rem;
-  color: var(--text-secondary);
-  font-style: italic;
-  margin-bottom: var(--spacing-md);
-}
-
-.entry-point-action {
-  font-size: 0.9375rem;
-  color: var(--cyan-accent);
-  font-weight: 600;
-  margin-bottom: var(--spacing-sm);
-}
-
-.entry-point-detail {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  margin-bottom: var(--spacing-lg);
-}
+/* Entry point styles defined later in protocol section (line ~3910) */
 
 .btn-sm {
   padding: var(--spacing-sm) var(--spacing-md);
@@ -2797,6 +2779,7 @@ h1, h2, h3, h4 {
 /* Section Utilities */
 .section {
   padding: var(--spacing-3xl) 0;
+  background: var(--navy-deep);
 }
 
 .section-alt {
@@ -3465,8 +3448,8 @@ h1, h2, h3, h4 {
 /* Protocol Timeline */
 .protocol-timeline {
   position: relative;
-  padding: var(--spacing-3xl) 0;
-  margin-top: var(--spacing-2xl);
+  padding: var(--spacing-2xl) 0;
+  margin-top: var(--spacing-xl);
 }
 
 .protocol-timeline-line {
@@ -3549,7 +3532,7 @@ h1, h2, h3, h4 {
 
 /* Protocol Phase Section */
 .protocol-phase-section {
-  padding: var(--spacing-xl) 0;
+  padding: 0;
 }
 
 .protocol-phase-header {
@@ -3695,6 +3678,10 @@ h1, h2, h3, h4 {
   border: 1px dashed var(--border-accent);
 }
 
+.protocol-detail-card-outline h4 {
+  color: var(--text-primary);
+}
+
 .protocol-detail-header {
   display: flex;
   align-items: baseline;
@@ -3756,6 +3743,7 @@ h1, h2, h3, h4 {
   display: flex;
   gap: var(--spacing-md);
   flex-wrap: wrap;
+  margin-top: var(--spacing-2xl);
 }
 
 /* Advantages Grid */
