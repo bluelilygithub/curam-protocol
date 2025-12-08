@@ -8703,6 +8703,7 @@ h1, h2, h3, h4 {
 .report-hero {
     background: var(--color-navy);
     color: white;
+    margin-top:120px;
     padding: 60px 0;
     text-align: center;
     position: relative;
