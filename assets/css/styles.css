@@ -9174,6 +9174,11 @@ h1, h2, h3, h4 {
     transition: all 0.3s ease;
     margin-top: -22px;
     border: 2px solid var(--color-gold);
+    font-size: 24px !important;
+    font-weight: 700 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .report-slider .swiper-button-next:hover,
@@ -9183,11 +9188,20 @@ h1, h2, h3, h4 {
     border-color: var(--color-gold);
 }
 
-.report-slider .swiper-button-next::after,
-.report-slider .swiper-button-prev::after {
-    font-size: 18px !important;
+.report-slider .swiper-button-next::after {
+    content: '>' !important;
+    font-size: 24px !important;
     font-weight: 700 !important;
     color: var(--color-gold) !important;
+    font-family: 'Montserrat', sans-serif !important;
+}
+
+.report-slider .swiper-button-prev::after {
+    content: '<' !important;
+    font-size: 24px !important;
+    font-weight: 700 !important;
+    color: var(--color-gold) !important;
+    font-family: 'Montserrat', sans-serif !important;
 }
 
 .report-slider .swiper-button-next {
