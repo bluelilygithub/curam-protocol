@@ -4958,7 +4958,7 @@ h1, h2, h3, h4 {
 .case-study-section-header h2 {
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--color-navy);
+  color: var(--color-gold);
   margin: 0;
 }
 
@@ -5071,7 +5071,7 @@ h1, h2, h3, h4 {
 .case-study-timeline-content h3 {
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--color-navy);
+  color: var(--color-gold);
   margin-bottom: var(--spacing-sm);
 }
 
@@ -5085,7 +5085,7 @@ h1, h2, h3, h4 {
 .case-study-timeline-content p {
   font-size: 0.9375rem;
   line-height: 1.7;
-  color: var(--color-gray);
+  color: var(--color-white);
   margin-bottom: var(--spacing-sm);
 }
 
@@ -5179,7 +5179,7 @@ h1, h2, h3, h4 {
 .case-study-financial-box h3 {
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--color-navy);
+  color: var(--color-gold);
   margin-bottom: var(--spacing-lg);
 }
 
@@ -5196,7 +5196,7 @@ h1, h2, h3, h4 {
 .case-study-financial-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--color-navy);
+  color: var(--color-white);
   margin-bottom: var(--spacing-xs);
 }
 
