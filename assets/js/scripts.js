@@ -86,36 +86,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // ========== FAQ ACCORDION ==========
-  const faqItems = document.querySelectorAll('.faq-accordion-item');
-  
-  if (faqItems.length > 0) {
-    faqItems.forEach(item => {
-      const header = item.querySelector('.faq-accordion-header');
-      
-      if (header) {
-        header.addEventListener('click', function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          const isActive = item.classList.contains('active');
-          
-          // Close all other items
-          faqItems.forEach(otherItem => {
-            if (otherItem !== item) {
-              otherItem.classList.remove('active');
-            }
-          });
-          
-          // Toggle current item
-          if (isActive) {
-            item.classList.remove('active');
-          } else {
-            item.classList.add('active');
-          }
-        });
-      }
-    });
-  }
+  // Note: FAQ accordion is handled by main.js to avoid conflicts
+  // This ensures consistent behavior across all pages
 
   // ========== SMOOTH SCROLL FOR ANCHOR LINKS ==========
   document.querySelectorAll('a[href^="#"]').forEach(anchor => {

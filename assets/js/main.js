@@ -341,22 +341,40 @@ if (heroVideo) {
 }
 
 // FAQ Accordion functionality
-const accordionHeaders = document.querySelectorAll('.faq-accordion-header');
-accordionHeaders.forEach(header => {
-    header.addEventListener('click', function() {
-        const item = this.parentElement;
-        const isActive = item.classList.contains('active');
-        
-        // Close all accordion items
-        document.querySelectorAll('.faq-accordion-item').forEach(accItem => {
-            accItem.classList.remove('active');
+// Wrapped in DOMContentLoaded to ensure it runs after DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    const accordionHeaders = document.querySelectorAll('.faq-accordion-header');
+    
+    if (accordionHeaders.length > 0) {
+        accordionHeaders.forEach(header => {
+            // Mark as initialized to prevent duplicate handlers
+            if (!header.dataset.accordionInitialized) {
+                header.dataset.accordionInitialized = 'true';
+                
+                header.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    const item = this.closest('.faq-accordion-item') || this.parentElement;
+                    const isActive = item.classList.contains('active');
+                    
+                    // Close all accordion items
+                    document.querySelectorAll('.faq-accordion-item').forEach(accItem => {
+                        if (accItem !== item) {
+                            accItem.classList.remove('active');
+                        }
+                    });
+                    
+                    // Toggle current item
+                    if (isActive) {
+                        item.classList.remove('active');
+                    } else {
+                        item.classList.add('active');
+                    }
+                });
+            }
         });
-        
-        // Open clicked item if it wasn't active
-        if (!isActive) {
-            item.classList.add('active');
-        }
-    });
+    }
 });
 
 // Add CSS animation for pulse
