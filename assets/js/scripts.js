@@ -88,21 +88,34 @@ document.addEventListener('DOMContentLoaded', function() {
   // ========== FAQ ACCORDION ==========
   const faqItems = document.querySelectorAll('.faq-accordion-item');
   
-  faqItems.forEach(item => {
-    const header = item.querySelector('.faq-accordion-header');
-    
-    header.addEventListener('click', function() {
-      // Close all other items
-      faqItems.forEach(otherItem => {
-        if (otherItem !== item) {
-          otherItem.classList.remove('active');
-        }
-      });
+  if (faqItems.length > 0) {
+    faqItems.forEach(item => {
+      const header = item.querySelector('.faq-accordion-header');
       
-      // Toggle current item
-      item.classList.toggle('active');
+      if (header) {
+        header.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const isActive = item.classList.contains('active');
+          
+          // Close all other items
+          faqItems.forEach(otherItem => {
+            if (otherItem !== item) {
+              otherItem.classList.remove('active');
+            }
+          });
+          
+          // Toggle current item
+          if (isActive) {
+            item.classList.remove('active');
+          } else {
+            item.classList.add('active');
+          }
+        });
+      }
     });
-  });
+  }
 
   // ========== SMOOTH SCROLL FOR ANCHOR LINKS ==========
   document.querySelectorAll('a[href^="#"]').forEach(anchor => {
