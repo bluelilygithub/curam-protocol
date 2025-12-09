@@ -589,6 +589,11 @@
       }
       
       async function updateRelevanceWarning() {
+          if (!messageTextarea || !relevanceWarning) {
+              console.error('Message textarea or relevance warning element not found');
+              return;
+          }
+          
           const message = messageTextarea.value.trim();
           
           if (message.length < 10) {
@@ -596,12 +601,18 @@
               return;
           }
           
-          const result = await checkMessageRelevance(message);
-          
-          if (result && !result.isRelevant && result.confidence < 0.7) {
-              // Show warning if not relevant and confidence is low
-              relevanceWarning.classList.remove('contact-hidden');
-          } else {
+          try {
+              const result = await checkMessageRelevance(message);
+              
+              if (result && !result.isRelevant && result.confidence < 0.7) {
+                  // Show warning if not relevant and confidence is low
+                  relevanceWarning.classList.remove('contact-hidden');
+              } else {
+                  relevanceWarning.classList.add('contact-hidden');
+              }
+          } catch (error) {
+              console.error('Error updating relevance warning:', error);
+              // On error, hide warning to not block user
               relevanceWarning.classList.add('contact-hidden');
           }
       }
