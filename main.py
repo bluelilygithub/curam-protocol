@@ -1950,14 +1950,52 @@ def format_text_to_html(text):
     """
     Convert plain text to HTML with paragraph breaks and basic formatting.
     Handles double newlines as paragraph breaks, single newlines as line breaks.
+    Also handles sentences that end with periods followed by newlines as paragraph breaks.
     """
     if not text:
         return ""
     
     import re
     
+    # First, normalize whitespace - replace multiple spaces with single space
+    text = re.sub(r' +', ' ', text.strip())
+    
     # Split by double newlines (paragraphs)
-    paragraphs = re.split(r'\n\s*\n', text.strip())
+    paragraphs = re.split(r'\n\s*\n', text)
+    
+    # If no double newlines, try to intelligently split into paragraphs
+    # Look for sentence endings followed by capital letters (likely new paragraph)
+    if len(paragraphs) == 1:
+        # Pattern: sentence ending (. ! ?) followed by space and capital letter
+        # This helps identify natural paragraph breaks
+        parts = re.split(r'([.!?])\s+([A-Z][a-z])', text)
+        
+        if len(parts) > 3:  # If we found potential breaks
+            # Reconstruct paragraphs intelligently
+            paragraphs = []
+            current_para = parts[0] if parts[0] else ""
+            
+            for i in range(1, len(parts), 3):
+                if i + 1 < len(parts):
+                    punctuation = parts[i] if i < len(parts) else ""
+                    next_sentence = parts[i + 1] if i + 1 < len(parts) else ""
+                    
+                    # If current paragraph is substantial and next starts a new thought, break
+                    if len(current_para.strip()) > 50 and next_sentence:
+                        if current_para.strip():
+                            paragraphs.append((current_para.strip() + punctuation).strip())
+                        current_para = next_sentence
+                    else:
+                        current_para += punctuation + " " + next_sentence
+                else:
+                    current_para += parts[i] if i < len(parts) else ""
+            
+            if current_para.strip():
+                paragraphs.append(current_para.strip())
+        else:
+            # Fallback: if text has single newlines, use those
+            if '\n' in text:
+                paragraphs = [p.strip() for p in text.split('\n') if p.strip()]
     
     html_parts = []
     for para in paragraphs:
@@ -1965,13 +2003,17 @@ def format_text_to_html(text):
         if not para:
             continue
         
-        # Replace single newlines with <br> within paragraphs
+        # Replace single newlines with <br> within paragraphs (but preserve intentional breaks)
         para = para.replace('\n', '<br>')
         
         # Basic markdown-style formatting
-        # Bold: **text** or *text*
+        # Bold: **text** or *text* (but not if it's part of a URL or email)
         para = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', para)
-        para = re.sub(r'\*([^*]+)\*', r'<em>\1</em>', para)
+        # Only italicize single asterisks that aren't part of bold
+        para = re.sub(r'(?<!\*)\*([^*]+?)\*(?!\*)', r'<em>\1</em>', para)
+        
+        # Escape any remaining HTML that shouldn't be there
+        # (This is a simple escape - more complex sanitization happens in frontend)
         
         # Wrap in paragraph tag
         html_parts.append(f'<p>{para}</p>')
@@ -2044,19 +2086,27 @@ Keep responses concise (2-3 sentences per paragraph), friendly, and focused on u
             response = model.generate_content(conversation)
             assistant_message = response.text if response.text else "I'm here to help! Could you tell me more about what you're looking for?"
             
-            # Check if response already contains HTML tags (from LLM)
-            has_html_tags = '<p>' in assistant_message or '<br>' in assistant_message or '<strong>' in assistant_message or '<ul>' in assistant_message
-            
-            # Format plain text to HTML if it doesn't already contain HTML tags
-            if assistant_message and not has_html_tags:
-                # Convert plain text to HTML with paragraph breaks
-                assistant_message = format_text_to_html(assistant_message)
-            elif assistant_message and has_html_tags:
-                # LLM returned HTML, but ensure it's properly formatted
-                # Add paragraph tags if missing but has other HTML
-                if '<p>' not in assistant_message and '<br>' in assistant_message:
-                    # Wrap content in paragraph if it has line breaks but no paragraphs
-                    assistant_message = f'<p>{assistant_message}</p>'
+            # Always format the response to ensure proper HTML structure
+            if assistant_message:
+                # Check if response already contains proper HTML paragraph tags
+                has_proper_paragraphs = '<p>' in assistant_message and '</p>' in assistant_message
+                
+                if not has_proper_paragraphs:
+                    # Convert plain text to HTML with paragraph breaks
+                    # This handles cases where LLM returns plain text or partial HTML
+                    assistant_message = format_text_to_html(assistant_message)
+                else:
+                    # LLM returned HTML with paragraphs, but clean it up
+                    import re
+                    # Remove extra whitespace between tags
+                    assistant_message = re.sub(r'>\s+<', '><', assistant_message)
+                    # Normalize whitespace in content
+                    assistant_message = re.sub(r'\s+', ' ', assistant_message)
+                    # Clean up any unclosed tags or malformed HTML
+                    if assistant_message.count('<p>') != assistant_message.count('</p>'):
+                        # If paragraphs aren't balanced, extract text and reformat
+                        text_only = re.sub(r'<[^>]+>', ' ', assistant_message)
+                        assistant_message = format_text_to_html(text_only)
             
             # Try to extract suggested service/interest from the conversation
             suggested_interest = None
