@@ -1570,6 +1570,14 @@ def target_markets():
     except:
         return "Target Markets page not found.", 404
 
+@app.route('/accounting')
+@app.route('/accounting.html')
+def accounting_page():
+    try:
+        return send_file('accounting.html')
+    except:
+        return "Accounting page not found.", 404
+
 @app.route('/case-study')
 @app.route('/case-study.html')
 def case_study_page():
