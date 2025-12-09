@@ -140,6 +140,9 @@
                     required
                     placeholder="Tell us about your current challenges or what you'd like to learn more about..."
                   ></textarea>
+                  <div id="message-relevance-warning" class="message-relevance-warning contact-hidden">
+                    <strong>⚠️ Note:</strong> Your message doesn't appear to be related to our services (document automation, AI implementation, structural engineering workflows, or the Curam-Ai Protocol). We may not be able to assist with your inquiry. Please consider if your question relates to our services before submitting.
+                  </div>
                 </div>
 
                 <div class="contact-form-submit">
@@ -295,20 +298,95 @@
           }
       }
 
+      function sanitizeHtml(html) {
+          // Parse the HTML safely using DOMParser
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+          
+          // Remove dangerous elements
+          const dangerous = doc.querySelectorAll('script, style, iframe, object, embed, form, input, button, link, meta');
+          dangerous.forEach(el => el.remove());
+          
+          // Remove dangerous attributes from all elements
+          const allElements = doc.querySelectorAll('*');
+          allElements.forEach(el => {
+              // Remove all attributes except safe ones
+              Array.from(el.attributes).forEach(attr => {
+                  const attrName = attr.name.toLowerCase();
+                  if (attrName === 'href' && el.tagName === 'A') {
+                      // Only allow http/https links
+                      if (!attr.value.match(/^https?:\/\//i)) {
+                          el.removeAttribute(attrName);
+                      }
+                  } else if (!['class', 'id'].includes(attrName)) {
+                      el.removeAttribute(attrName);
+                  }
+              });
+          });
+          
+          // Get sanitized HTML
+          return doc.body.innerHTML;
+      }
+      
       function addMessageToChat(role, content) {
           const messageDiv = document.createElement('div');
           messageDiv.className = `contact-chat-msg ${role}`;
-          messageDiv.innerHTML = `<div class="contact-msg-bubble">${content}</div>`;
+          
+          // If content doesn't contain HTML tags, format it
+          let formattedContent = content;
+          if (!content.includes('<') || !content.includes('>')) {
+              // Convert plain text to HTML
+              formattedContent = formatTextToHtml(content);
+          } else {
+              // Sanitize existing HTML
+              formattedContent = sanitizeHtml(content);
+          }
+          
+          messageDiv.innerHTML = `<div class="contact-msg-bubble">${formattedContent}</div>`;
           chatContainer.appendChild(messageDiv);
           chatContainer.scrollTop = chatContainer.scrollHeight;
 
-          // Add to conversation history
+          // Add to conversation history (store original content)
           conversationHistory.push({ role, content });
 
           // Play sound when assistant responds
           if (role === 'assistant') {
               playNotificationSound();
           }
+      }
+      
+      function formatTextToHtml(text) {
+          if (!text) return '';
+          
+          // Split by double newlines (paragraphs)
+          const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim());
+          
+          if (paragraphs.length === 0) {
+              return `<p>${escapeHtml(text)}</p>`;
+          }
+          
+          let html = '';
+          for (const para of paragraphs) {
+              const trimmed = para.trim();
+              if (!trimmed) continue;
+              
+              // Replace single newlines with <br>
+              let formatted = trimmed.replace(/\n/g, '<br>');
+              
+              // Basic markdown-style formatting
+              formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+              formatted = formatted.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+              
+              html += `<p>${formatted}</p>`;
+          }
+          
+          return html || `<p>${escapeHtml(text)}</p>`;
+      }
+      
+      function escapeHtml(text) {
+          const div = document.createElement('div');
+          div.textContent = text;
+          return div.innerHTML;
       }
 
       function showSuggestedInterest(suggestedInterest) {
@@ -460,6 +538,83 @@
       // Also initialize on any click in the chat area (for better browser compatibility)
       chatInput.addEventListener('focus', initAudioContext);
 
+      // Message relevance validation using NLP (same as AI assistant)
+      const messageTextarea = document.getElementById('message');
+      const relevanceWarning = document.getElementById('message-relevance-warning');
+      
+      let relevanceCheckInProgress = false;
+      let lastCheckedMessage = '';
+      
+      async function checkMessageRelevance(message) {
+          if (!message || message.trim().length < 10) {
+              return { isRelevant: true, confidence: 1.0, reason: 'Message too short to analyze' };
+          }
+          
+          // Don't re-check the same message
+          if (message === lastCheckedMessage && lastCheckedMessage !== '') {
+              return null; // Use cached result
+          }
+          
+          if (relevanceCheckInProgress) {
+              return null; // Skip if check already in progress
+          }
+          
+          relevanceCheckInProgress = true;
+          lastCheckedMessage = message;
+          
+          try {
+              const response = await fetch('/api/check-message-relevance', {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ message: message })
+              });
+              
+              const data = await response.json();
+              
+              return {
+                  isRelevant: data.is_relevant !== false, // Default to true if not specified
+                  confidence: data.confidence || 0.5,
+                  reason: data.reason || 'Analyzed by AI'
+              };
+          } catch (error) {
+              console.error('Relevance check error:', error);
+              // On error, default to allowing submission
+              return { isRelevant: true, confidence: 0.5, reason: 'Check unavailable' };
+          } finally {
+              relevanceCheckInProgress = false;
+          }
+      }
+      
+      async function updateRelevanceWarning() {
+          const message = messageTextarea.value.trim();
+          
+          if (message.length < 10) {
+              relevanceWarning.classList.add('contact-hidden');
+              return;
+          }
+          
+          const result = await checkMessageRelevance(message);
+          
+          if (result && !result.isRelevant && result.confidence < 0.7) {
+              // Show warning if not relevant and confidence is low
+              relevanceWarning.classList.remove('contact-hidden');
+          } else {
+              relevanceWarning.classList.add('contact-hidden');
+          }
+      }
+      
+      // Check relevance as user types (with debounce)
+      let relevanceCheckTimeout;
+      messageTextarea.addEventListener('input', function() {
+          clearTimeout(relevanceCheckTimeout);
+          relevanceCheckTimeout = setTimeout(updateRelevanceWarning, 1000); // 1 second debounce for API calls
+      });
+      
+      // Also check on blur
+      messageTextarea.addEventListener('blur', updateRelevanceWarning);
+      
       // Form submission handler
       const formMessage = document.getElementById('form-message');
       
@@ -508,9 +663,42 @@
               return;
           }
           
-          // Disable submit button
+          // Disable submit button early
           submitBtn.disabled = true;
-          submitBtn.textContent = 'Sending...';
+          submitBtn.textContent = 'Checking...';
+          
+          // Check message relevance before submission using NLP
+          if (formData.message.length > 10) {
+              try {
+                  const relevanceResult = await checkMessageRelevance(formData.message);
+                  
+                  if (relevanceResult && !relevanceResult.isRelevant && relevanceResult.confidence < 0.7) {
+                      // Re-enable button for user decision
+                      submitBtn.disabled = false;
+                      submitBtn.textContent = originalBtnText;
+                      
+                      // Show warning but allow submission
+                      const confirmSubmit = confirm(
+                          'Your message doesn\'t appear to be related to our services (document automation, AI implementation, or structural engineering workflows). We may not be able to assist with your inquiry. Do you still want to submit?'
+                      );
+                      if (!confirmSubmit) {
+                          return; // User cancelled submission
+                      }
+                      
+                      // Disable again for submission
+                      submitBtn.disabled = true;
+                      submitBtn.textContent = 'Sending...';
+                  }
+              } catch (error) {
+                  console.error('Relevance check failed on submit:', error);
+                  // Continue with submission if check fails
+              }
+          }
+          
+          // Update button text if not already updated
+          if (submitBtn.textContent !== 'Sending...') {
+              submitBtn.textContent = 'Sending...';
+          }
           
           try {
               const response = await fetch('/api/contact', {

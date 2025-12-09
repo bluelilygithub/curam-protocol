@@ -8559,6 +8559,23 @@ h1, h2, h3, h4 {
 }
 
 /* Form Message Styles */
+.message-relevance-warning {
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-md);
+    background-color: #fff3cd;
+    border: 1px solid #ffc107;
+    border-left: 4px solid #ffc107;
+    border-radius: var(--border-radius);
+    color: #856404;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.message-relevance-warning strong {
+    color: #856404;
+    font-weight: 600;
+}
+
 .form-message {
     margin-top: var(--spacing-md);
     padding: var(--spacing-sm) var(--spacing-md);

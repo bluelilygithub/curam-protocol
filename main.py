@@ -1946,6 +1946,39 @@ Answer the question comprehensively:"""
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 
+def format_text_to_html(text):
+    """
+    Convert plain text to HTML with paragraph breaks and basic formatting.
+    Handles double newlines as paragraph breaks, single newlines as line breaks.
+    """
+    if not text:
+        return ""
+    
+    import re
+    
+    # Split by double newlines (paragraphs)
+    paragraphs = re.split(r'\n\s*\n', text.strip())
+    
+    html_parts = []
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        
+        # Replace single newlines with <br> within paragraphs
+        para = para.replace('\n', '<br>')
+        
+        # Basic markdown-style formatting
+        # Bold: **text** or *text*
+        para = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', para)
+        para = re.sub(r'\*([^*]+)\*', r'<em>\1</em>', para)
+        
+        # Wrap in paragraph tag
+        html_parts.append(f'<p>{para}</p>')
+    
+    return ''.join(html_parts) if html_parts else f'<p>{text}</p>'
+
+
 @app.route('/api/contact-assistant', methods=['POST'])
 def contact_assistant():
     """
@@ -1983,7 +2016,14 @@ Services:
 - Engineering: Beam schedule digitization from drawings
 - Drafting: Transmittal register automation
 
-Keep responses concise (2-3 sentences), friendly, and focused on understanding their needs. Ask one clarifying question at a time when needed."""
+IMPORTANT: Format your responses using HTML tags for better readability:
+- Use <p> tags for paragraphs
+- Use <strong> or <b> for emphasis
+- Use <ul> and <li> for lists
+- Use <br> for line breaks when needed
+- Keep HTML simple and safe (no scripts or complex tags)
+
+Keep responses concise (2-3 sentences per paragraph), friendly, and focused on understanding their needs. Ask one clarifying question at a time when needed."""
         
         # Build conversation for Gemini
         conversation = [{"role": "user", "parts": [system_prompt]}]
@@ -2003,6 +2043,20 @@ Keep responses concise (2-3 sentences), friendly, and focused on understanding t
             # Generate response
             response = model.generate_content(conversation)
             assistant_message = response.text if response.text else "I'm here to help! Could you tell me more about what you're looking for?"
+            
+            # Check if response already contains HTML tags (from LLM)
+            has_html_tags = '<p>' in assistant_message or '<br>' in assistant_message or '<strong>' in assistant_message or '<ul>' in assistant_message
+            
+            # Format plain text to HTML if it doesn't already contain HTML tags
+            if assistant_message and not has_html_tags:
+                # Convert plain text to HTML with paragraph breaks
+                assistant_message = format_text_to_html(assistant_message)
+            elif assistant_message and has_html_tags:
+                # LLM returned HTML, but ensure it's properly formatted
+                # Add paragraph tags if missing but has other HTML
+                if '<p>' not in assistant_message and '<br>' in assistant_message:
+                    # Wrap content in paragraph if it has line breaks but no paragraphs
+                    assistant_message = f'<p>{assistant_message}</p>'
             
             # Try to extract suggested service/interest from the conversation
             suggested_interest = None
@@ -2033,6 +2087,110 @@ Keep responses concise (2-3 sentences), friendly, and focused on understanding t
     except Exception as e:
         app.logger.error(f"Contact assistant failed: {e}")
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
+
+
+@app.route('/api/check-message-relevance', methods=['POST'])
+def check_message_relevance():
+    """
+    NLP-based check to determine if a contact form message is related to Curam-Ai services.
+    Uses the same Gemini model as the contact assistant.
+    """
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        
+        if not message:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        if not api_key:
+            # Fallback to keyword matching if API key not available
+            return jsonify({
+                'is_relevant': True,  # Default to relevant if we can't check
+                'confidence': 0.5,
+                'reason': 'AI service unavailable, defaulting to allow submission'
+            })
+        
+        # System prompt for relevance checking
+        relevance_prompt = """You are analyzing a contact form message to determine if it's related to Curam-Ai Protocol™ services.
+
+Curam-Ai Protocol™ provides:
+- Document automation and extraction (invoices, CAD schedules, drawings)
+- AI implementation for engineering firms
+- Workflow automation for structural engineering
+- The Protocol: 4-phase framework (Feasibility Sprint, Roadmap, Compliance Shield, Implementation)
+- ROI calculations and efficiency improvements
+- ISO-27001 compliance and security
+- Data entry automation, PDF processing, OCR
+
+Analyze the message and respond with ONLY a JSON object in this exact format:
+{
+    "is_relevant": true or false,
+    "confidence": 0.0 to 1.0,
+    "reason": "brief explanation"
+}
+
+Consider relevant if the message mentions:
+- Document processing, automation, extraction
+- AI, machine learning, or technology implementation
+- Engineering, structural engineering, or professional services
+- Workflow efficiency, time savings, productivity
+- Invoices, schedules, drawings, PDFs
+- The Protocol, phases, feasibility, compliance
+- General inquiries about services, pricing, or next steps
+
+Consider NOT relevant if the message is clearly about:
+- Completely unrelated services (e.g., selling products, unrelated consulting)
+- Spam or promotional content
+- Personal matters unrelated to business services
+- Topics completely outside document automation/AI
+
+Message to analyze:
+"""
+        
+        try:
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            
+            # Generate relevance analysis
+            full_prompt = relevance_prompt + message
+            response = model.generate_content(full_prompt)
+            response_text = response.text if response.text else ""
+            
+            # Try to parse JSON from response
+            import re
+            json_match = re.search(r'\{[^}]+\}', response_text, re.DOTALL)
+            if json_match:
+                result = json.loads(json_match.group())
+                return jsonify({
+                    'is_relevant': result.get('is_relevant', True),
+                    'confidence': result.get('confidence', 0.5),
+                    'reason': result.get('reason', 'Analyzed by AI')
+                })
+            else:
+                # Fallback: check if response indicates relevance
+                response_lower = response_text.lower()
+                is_relevant = not any(word in response_lower for word in ['not relevant', 'unrelated', 'not related', 'cannot help'])
+                return jsonify({
+                    'is_relevant': is_relevant,
+                    'confidence': 0.6,
+                    'reason': 'AI analysis completed'
+                })
+            
+        except Exception as e:
+            app.logger.error(f"Gemini relevance check failed: {e}")
+            # Fallback to allowing submission
+            return jsonify({
+                'is_relevant': True,
+                'confidence': 0.5,
+                'reason': 'AI check unavailable, defaulting to allow'
+            })
+            
+    except Exception as e:
+        app.logger.error(f"Message relevance check failed: {e}")
+        return jsonify({
+            'is_relevant': True,
+            'confidence': 0.5,
+            'reason': 'Error in analysis, defaulting to allow'
+        }), 500
 
 
 @app.route('/api/contact', methods=['POST'])
