@@ -2863,8 +2863,7 @@ h1, h2, h3, h4 {
 }
 
 .firm-characteristics:nth-child(2) {
-  grid-template-columns: repeat(2, 1fr);
-  max-width: 800px;
+  grid-template-columns: repeat(3, 1fr);
 }
 
 @media (max-width: 1024px) {
@@ -8493,4 +8492,132 @@ h1, h2, h3, h4 {
     font-size: 0.9375rem;
     line-height: 1.6;
     color: var(--text-secondary);
+}
+
+/* ========== ACCOUNTING PAGE SPECIFIC STYLES ========== */
+
+/* Methodology Card Border Variants */
+.methodology-card-border-red {
+    border-left: 4px solid #dc3545;
+}
+
+.methodology-card-border-yellow {
+    border-left: 4px solid #ffc107;
+}
+
+.methodology-card-border-green {
+    border-left: 4px solid #28a745;
+}
+
+/* Deliverable Grid Spacing */
+.deliverable-grid-spaced {
+    margin-bottom: 3rem;
+}
+
+/* Time Savings Text */
+.time-savings {
+    margin-top: 15px;
+    color: #22c55e;
+    font-weight: 600;
+}
+
+/* Highlight Box Special Variant */
+.highlight-box-special {
+    margin-top: 40px;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    border-left: 4px solid var(--cyan-accent);
+}
+
+.highlight-box-centered {
+    text-align: center;
+    padding: 20px;
+}
+
+.highlight-box-label {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 15px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Three-Way Match Example */
+.match-example-container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    margin: 20px 0;
+}
+
+.match-example-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.match-example-card {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    border: 2px solid #dee2e6;
+}
+
+.match-example-card-error {
+    border-color: #dc3545;
+}
+
+.match-example-label {
+    margin: 0;
+    color: #666;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.match-example-content {
+    margin: 5px 0 0 0;
+    color: #0B1221;
+    font-weight: 700;
+}
+
+.match-example-error-text {
+    color: #dc3545;
+}
+
+.match-example-exception {
+    background: #FEE2E2;
+    padding: 15px;
+    border-radius: 4px;
+    border-left: 4px solid #dc3545;
+}
+
+.match-example-exception-title {
+    margin: 0;
+    color: #991B1B;
+    font-weight: 600;
+}
+
+.match-example-exception-text {
+    margin: 5px 0 0 0;
+    color: #4B5563;
+    font-size: 0.9em;
+}
+
+.match-example-description {
+    font-size: 1em;
+    color: #2c3e50;
+    margin-top: 15px;
+    line-height: 1.6;
+}
+
+.match-example-note {
+    color: #666;
+    font-size: 0.95em;
+}
+
+/* FAQ List Item Styling */
+.faq-answer ul {
+    margin: 10px 0;
+    padding-left: 20px;
 }

@@ -9,6 +9,7 @@
         'about.html': 'about',
         'services.html': 'services',
         'target-markets.html': 'target-markets',
+        'accounting.html': 'target-markets',
         'curam-ai-protocol.html': 'protocol',
         'roi.html': 'resources',
         'demo.html': 'resources',
@@ -39,25 +40,18 @@
         });
 
         // Add active class to current page's nav item
-        if (activeNav === 'resources') {
-            // For resources pages, we might want to highlight the dropdown
-            const resourcesDropdown = document.querySelector('.nav-dropdown');
-            if (resourcesDropdown) {
-                const dropdownToggle = resourcesDropdown.querySelector('a');
-                if (dropdownToggle) {
-                    dropdownToggle.classList.add('active');
-                }
-            }
-        } else {
-            // Find and activate the specific nav link
-            const navLinks = document.querySelectorAll('.nav-menu a');
-            navLinks.forEach(link => {
-                const href = link.getAttribute('href');
-                if (href && href.includes(activeNav + '.html')) {
+        const navLinks = document.querySelectorAll('.nav-menu a');
+        navLinks.forEach(link => {
+            const href = link.getAttribute('href');
+            if (href) {
+                // Check if this link matches the current page
+                if (href.includes(activeNav + '.html') || 
+                    (activeNav === 'target-markets' && (href === 'target-markets.html' || href === 'accounting.html')) ||
+                    (activeNav === 'resources' && (href.includes('roi.html') || href.includes('demo.html') || href.includes('feasibility-sprint-report.html') || href.includes('risk-audit-report.html') || href.includes('case-study.html') || href.includes('how-it-works.html') || href.includes('blog.html')))) {
                     link.classList.add('active');
                 }
-            });
-        }
+            }
+        });
     }
 
     function loadNavbar() {
