@@ -2722,6 +2722,15 @@ def phase_2_roadmap():
     except:
         return "Phase 2 Roadmap page not found.", 404
 
+@app.route('/phase-3-compliance')
+@app.route('/phase-3-compliance.html')
+def phase_3_compliance():
+    """Serve the Phase 3 Compliance Shield page"""
+    try:
+        return send_file('phase-3-compliance.html')
+    except:
+        return "Phase 3 Compliance Shield page not found.", 404
+
 @app.route('/feasibility-sprint-report')
 @app.route('/feasibility-sprint-report.html')
 @app.route('/gate2-sample-report')
