@@ -2663,6 +2663,10 @@ h1, h2, h3, h4 {
 }
 
 /* Section Utilities */
+.section{
+    margin:32px 0;
+}
+
 .section-alt {
   background: var(--navy-medium);
   padding-bottom: var(--spacing-4xl);
