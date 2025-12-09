@@ -307,6 +307,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             }
         });
+        
+        return searchInputs.length;
     }
 
     // Initialize search inputs immediately (for static navbars)
@@ -314,7 +316,71 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Also listen for navbarLoaded event (for dynamically loaded navbars)
     document.addEventListener('navbarLoaded', initializeSearchInputs);
+    
+    // Fallback: Check for search input periodically if not found initially
+    // This handles edge cases where navbar loads asynchronously
+    let retryCount = 0;
+    const maxRetries = 10;
+    const retryInterval = setInterval(function() {
+        const uninitialized = document.querySelectorAll('.nav-search-input:not([data-search-initialized])');
+        if (uninitialized.length > 0) {
+            initializeSearchInputs();
+            retryCount = 0; // Reset counter if we found inputs
+        } else {
+            retryCount++;
+            if (retryCount >= maxRetries) {
+                clearInterval(retryInterval);
+            }
+        }
+    }, 200);
 });
+
+// Set up navbarLoaded listener outside DOMContentLoaded to ensure it's always ready
+// This handles cases where the navbar loads before DOMContentLoaded fires
+(function() {
+    function initSearch() {
+        const searchInputs = document.querySelectorAll('.nav-search-input:not([data-search-initialized])');
+        
+        searchInputs.forEach(input => {
+            input.dataset.searchInitialized = 'true';
+            
+            if (!input.placeholder.includes('blog') && !input.placeholder.includes('RAG') && !input.placeholder.includes('AI')) {
+                input.placeholder = 'RAG Search...';
+            }
+            
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const query = input.value.trim();
+                    if (query) {
+                        window.location.href = `search-results.html?q=${encodeURIComponent(query)}`;
+                    }
+                }
+            });
+            
+            const form = input.closest('form');
+            if (form) {
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const query = input.value.trim();
+                    if (query) {
+                        window.location.href = `search-results.html?q=${encodeURIComponent(query)}`;
+                    }
+                });
+            }
+        });
+    }
+    
+    // Listen for navbarLoaded event
+    document.addEventListener('navbarLoaded', initSearch);
+    
+    // Also try to initialize immediately if navbar is already loaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSearch);
+    } else {
+        initSearch();
+    }
+})();
 
 // Video background handling
 const heroVideo = document.querySelector('.hero-video-background video');
