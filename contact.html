@@ -418,6 +418,7 @@
           // Add user message to chat
           addMessageToChat('user', message);
           chatInput.value = '';
+          const originalBtnContent = chatSendBtn.innerHTML;
           chatSendBtn.disabled = true;
           chatSendBtn.innerHTML = '<span class="contact-loading-spin"></span>';
 
@@ -455,7 +456,7 @@
               addMessageToChat('assistant', "I'm having trouble connecting right now. Please fill out the form below and we'll get back to you.");
           } finally {
               chatSendBtn.disabled = false;
-              chatSendBtn.textContent = 'Send';
+              chatSendBtn.innerHTML = originalBtnContent || 'Send';
           }
       }
 
@@ -539,7 +540,7 @@
       chatInput.addEventListener('focus', initAudioContext);
 
       // Message relevance validation using NLP (same as AI assistant)
-      const messageTextarea = document.getElementById('message');
+      // Note: messageTextarea is already declared above
       const relevanceWarning = document.getElementById('message-relevance-warning');
       
       let relevanceCheckInProgress = false;

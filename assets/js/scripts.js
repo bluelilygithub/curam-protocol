@@ -45,15 +45,17 @@ document.addEventListener('DOMContentLoaded', function() {
   // ========== NAVBAR SCROLL EFFECT ==========
   const navbar = document.querySelector('.navbar');
   
-  window.addEventListener('scroll', function() {
-    if (window.scrollY > 50) {
-      navbar.style.background = 'rgba(10, 22, 40, 0.98)';
-      navbar.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
-    } else {
-      navbar.style.background = 'rgba(10, 22, 40, 0.95)';
-      navbar.style.boxShadow = 'none';
-    }
-  });
+  if (navbar) {
+    window.addEventListener('scroll', function() {
+      if (window.scrollY > 50) {
+        navbar.style.background = 'rgba(10, 22, 40, 0.98)';
+        navbar.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
+      } else {
+        navbar.style.background = 'rgba(10, 22, 40, 0.95)';
+        navbar.style.boxShadow = 'none';
+      }
+    });
+  }
 
   // ========== SCROLL DOWN BUTTON ==========
   const scrollDownBtn = document.querySelector('.scroll-down-btn');
