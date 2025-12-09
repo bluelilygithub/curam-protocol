@@ -2664,12 +2664,12 @@ h1, h2, h3, h4 {
 
 /* Section Utilities */
 .section{
-    margin:32px 0;
+    padding:var(--spacing-4xl) 0;
 }
 
 .section-alt {
   background: var(--navy-medium);
-  padding-bottom: var(--spacing-4xl);
+  padding: var(--spacing-4xl) 0;
 }
 
 .centered {
