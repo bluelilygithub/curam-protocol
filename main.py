@@ -2713,6 +2713,15 @@ def phase_1_feasibility():
     except:
         return "Phase 1 Feasibility page not found.", 404
 
+@app.route('/phase-2-roadmap')
+@app.route('/phase-2-roadmap.html')
+def phase_2_roadmap():
+    """Serve the Phase 2 Roadmap page"""
+    try:
+        return send_file('phase-2-roadmap.html')
+    except:
+        return "Phase 2 Roadmap page not found.", 404
+
 @app.route('/feasibility-sprint-report')
 @app.route('/feasibility-sprint-report.html')
 @app.route('/gate2-sample-report')
