@@ -2704,6 +2704,15 @@ def tier_one_feasibility_report():
     except:
         return "Tier One Feasibility Report not found.", 404
 
+@app.route('/phase-1-feasibility')
+@app.route('/phase-1-feasibility.html')
+def phase_1_feasibility():
+    """Serve the Phase 1 Feasibility page"""
+    try:
+        return send_file('phase-1-feasibility.html')
+    except:
+        return "Phase 1 Feasibility page not found.", 404
+
 @app.route('/feasibility-sprint-report')
 @app.route('/feasibility-sprint-report.html')
 @app.route('/gate2-sample-report')
