@@ -8153,6 +8153,11 @@ h1, h2, h3, h4 {
     font-weight: 600;
 }
 
+.highlight-text-centered {
+    text-align: center;
+    width: 100%;
+}
+
 /* Methodology Grid */
 .methodology-grid {
     display: grid;
@@ -8620,4 +8625,107 @@ h1, h2, h3, h4 {
 .faq-answer ul {
     margin: 10px 0;
     padding-left: 20px;
+}
+
+/* Protocol Phase Exit Notes */
+.protocol-exit-note {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+/* ROI Calculator CTA Section */
+.roi-cta-container {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    max-width: 600px;
+    margin: 0 auto 30px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.roi-cta-title {
+    color: #0B1221;
+    margin-bottom: 1rem;
+    font-size: 1.2em;
+}
+
+.roi-cta-list {
+    text-align: left;
+    color: #4B5563;
+    line-height: 2;
+    list-style-position: inside;
+}
+
+.roi-cta-note {
+    margin-top: 20px;
+    color: #666;
+    font-size: 0.95em;
+}
+
+/* Metrics Grid */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-lg);
+    margin: 2rem 0;
+}
+
+.metric-card {
+    background: var(--navy-deep);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-xl);
+    text-align: center;
+    transition: var(--transition);
+}
+
+.metric-card:hover {
+    border-color: var(--cyan-accent);
+    transform: translateY(-4px);
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--color-gold);
+    line-height: 1;
+    margin-bottom: var(--spacing-sm);
+}
+
+.metric-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* CTA Section Styles */
+.cta-content-text {
+    margin: 1.5rem 0;
+    font-size: 1.1em;
+    color: rgba(255,255,255,0.9);
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.cta-buttons-group {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+}
+
+.cta-footer-note {
+    margin-top: 1.5rem;
+    color: rgba(255,255,255,0.8);
+    font-size: 0.95em;
+}
+
+/* Section Subhead with Max Width */
+.section-subhead-constrained {
+    max-width: 700px;
+    margin: 0 auto 30px;
 }
