@@ -2064,6 +2064,8 @@ IMPORTANT: Format your responses using HTML tags for better readability:
 - Use <ul> and <li> for lists
 - Use <br> for line breaks when needed
 - Keep HTML simple and safe (no scripts or complex tags)
+- DO NOT wrap your response in markdown code blocks (no ```html or ```)
+- Return the HTML directly, not wrapped in code fences
 
 Keep responses concise (2-3 sentences per paragraph), friendly, and focused on understanding their needs. Ask one clarifying question at a time when needed."""
         
@@ -2085,6 +2087,17 @@ Keep responses concise (2-3 sentences per paragraph), friendly, and focused on u
             # Generate response
             response = model.generate_content(conversation)
             assistant_message = response.text if response.text else "I'm here to help! Could you tell me more about what you're looking for?"
+            
+            # Remove markdown code blocks if present (```html ... ``` or ``` ... ```)
+            import re
+            if assistant_message:
+                # Remove markdown code blocks
+                assistant_message = re.sub(r'```html\s*\n?(.*?)\n?```', r'\1', assistant_message, flags=re.DOTALL)
+                assistant_message = re.sub(r'```\s*\n?(.*?)\n?```', r'\1', assistant_message, flags=re.DOTALL)
+                # Remove any remaining backticks
+                assistant_message = assistant_message.strip().strip('`')
+                # Clean up any extra whitespace
+                assistant_message = re.sub(r'\n\s*\n\s*\n+', '\n\n', assistant_message)
             
             # Always format the response to ensure proper HTML structure
             if assistant_message:
