@@ -246,6 +246,18 @@ INDUSTRIES = {
         "q2_label": "Hours per week spent verifying data accuracy across tables?",
         "q2_type": "slider",
         "q2_range": (0, 20)
+    },
+    "Accounting & Advisory": {
+        "context": "Trust account audits, Inter-entity reconciliations, Complex GL coding",
+        "q1_label": "How do you currently handle trust account reconciliations and inter-entity matching?",
+        "q1_options": {
+            "Automated reconciliation software (Low pain)": 0,
+            "Manual transaction-by-transaction matching in Excel (Medium pain)": 5,
+            "Manual typing from bank statements (High pain)": 10
+        },
+        "q2_label": "Hours per week, per accountant, spent on reconciliations & complex invoice coding?",
+        "q2_type": "slider",
+        "q2_range": (0, 20)
     }
 }
 

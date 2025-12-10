@@ -49,6 +49,14 @@ AI_OPPORTUNITIES = {
         {"task": "Air Quality Data Processing", "potential": "MEDIUM", "hours_per_week": 4, "description": "Sensor data to reports"},
         {"task": "Quarterly Monitoring Reports", "potential": "MEDIUM", "hours_per_week": 3, "description": "Recurring report automation"},
         {"task": "Data Verification", "potential": "LOW", "hours_per_week": 2, "description": "Cross-table accuracy checks"}
+    ],
+    "Accounting & Advisory": [
+        {"task": "Trust Account Reconciliations", "potential": "HIGH", "hours_per_week": 8, "description": "Automated transaction matching and exception flagging"},
+        {"task": "Inter-Entity Reconciliations", "potential": "HIGH", "hours_per_week": 7, "description": "Cross-entity loan accounts and management fee matching"},
+        {"task": "Complex Invoice GL Coding", "potential": "HIGH", "hours_per_week": 6, "description": "Multi-line invoice splitting across cost centers"},
+        {"task": "Three-Way Match (PO/Docket/Invoice)", "potential": "MEDIUM", "hours_per_week": 5, "description": "Automated variance detection and approval routing"},
+        {"task": "Fraud Detection (Bank Details)", "potential": "MEDIUM", "hours_per_week": 3, "description": "BSB/account verification against master records"},
+        {"task": "Bank Reconciliation", "potential": "LOW", "hours_per_week": 2, "description": "Automated bank statement matching"}
     ]
 }
 
@@ -101,6 +109,18 @@ INDUSTRIES = {
             "Rolling forward last year's Word Doc & finding/replacing numbers (High pain)": 10
         },
         "q2_label": "Hours per week spent verifying data accuracy across tables?",
+        "q2_type": "slider",
+        "q2_range": (0, 20)
+    },
+    "Accounting & Advisory": {
+        "context": "Trust account audits, Inter-entity reconciliations, Complex GL coding",
+        "q1_label": "How do you currently handle trust account reconciliations and inter-entity matching?",
+        "q1_options": {
+            "Automated reconciliation software (Low pain)": 0,
+            "Manual transaction-by-transaction matching in Excel (Medium pain)": 5,
+            "Manual typing from bank statements (High pain)": 10
+        },
+        "q2_label": "Hours per week, per accountant, spent on reconciliations & complex invoice coding?",
         "q2_type": "slider",
         "q2_range": (0, 20)
     }
