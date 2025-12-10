@@ -911,7 +911,7 @@ HTML_TEMPLATE = """
             <span class="step">3</span>
             <span class="step">4</span>
         </div>
-        <h1>Input Your Baseline Data</h1>
+        <h1>Input Your Baseline Data{% if industry %}: {{ industry }}{% endif %}</h1>
         <hr>
         <form method="POST" action="{{ url_for('roi_calculator.roi_calculator') }}">
             <input type="hidden" name="step" value="2">
