@@ -934,6 +934,9 @@ HTML_TEMPLATE = """
                     <strong>Billable Rate:</strong> {{ format_currency(avg_rate) }}/hour
                 </div>
                 <div class="summary-item">
+                    <strong>Hours per Week (Waste):</strong> {{ calculations.weekly_waste }} hours
+                </div>
+                <div class="summary-item">
                     <strong>Tech Stack:</strong> {{ platform }}
                 </div>
             </div>
@@ -1316,20 +1319,20 @@ def roi_calculator():
         
         # Handle form submission
         if request.method == 'POST' and action == 'calculate':
-            # Get values from form
-            staff_count = int(request.form.get('staff_count', session.get('staff_count', 50)))
-            avg_rate = float(request.form.get('avg_rate', session.get('avg_rate', 185)))
-            platform = request.form.get('platform', session.get('platform', 'M365/SharePoint'))
-            pain_point = request.form.get('pain_point')
-            if pain_point:
-                pain_point = int(pain_point)
-            else:
-                pain_point = session.get('pain_point', 5)
-            weekly_waste = request.form.get('weekly_waste')
-            if weekly_waste:
-                weekly_waste = float(weekly_waste)
-            else:
-                weekly_waste = session.get('weekly_waste', 5.0)
+            # Get values from form - prioritize form values over session/defaults
+            staff_count_str = request.form.get('staff_count', '').strip()
+            staff_count = int(staff_count_str) if staff_count_str else int(session.get('staff_count', 50))
+            
+            avg_rate_str = request.form.get('avg_rate', '').strip()
+            avg_rate = float(avg_rate_str) if avg_rate_str else float(session.get('avg_rate', 185))
+            
+            platform = request.form.get('platform', '').strip() or session.get('platform', 'M365/SharePoint')
+            
+            pain_point_str = request.form.get('pain_point', '').strip()
+            pain_point = int(pain_point_str) if pain_point_str else int(session.get('pain_point', 5))
+            
+            weekly_waste_str = request.form.get('weekly_waste', '').strip()
+            weekly_waste = float(weekly_waste_str) if weekly_waste_str else float(session.get('weekly_waste', 5.0))
             
             # Save to session
             session['staff_count'] = staff_count
@@ -1339,8 +1342,15 @@ def roi_calculator():
             session['weekly_waste'] = weekly_waste
             session['industry'] = industry
             
-            # Redirect to step 3
-            return redirect(url_for('roi_calculator.roi_calculator', step=3))
+            # Redirect to step 3 with values in URL as backup (in case session doesn't persist)
+            return redirect(url_for('roi_calculator.roi_calculator', 
+                                  step=3,
+                                  staff_count=staff_count,
+                                  avg_rate=avg_rate,
+                                  weekly_waste=weekly_waste,
+                                  pain_point=pain_point,
+                                  platform=platform,
+                                  industry=industry))
         
         # Get values from session or defaults
         staff_count = int(request.form.get('staff_count', session.get('staff_count', 50)))
@@ -1369,19 +1379,28 @@ def roi_calculator():
     
     # Step 3: Results
     if step == 3:
-        # Get values from session - ensure we're using the saved values
-        staff_count = int(session.get('staff_count', 50))
-        avg_rate = float(session.get('avg_rate', 185))
-        weekly_waste = float(session.get('weekly_waste', 5.0))
-        pain_point = int(session.get('pain_point', 5))
+        # Get values from form first (if submitted), then session, then defaults
+        # This ensures we use the actual submitted values
+        staff_count = int(request.form.get('staff_count') or request.args.get('staff_count') or session.get('staff_count') or 50)
+        avg_rate = float(request.form.get('avg_rate') or request.args.get('avg_rate') or session.get('avg_rate') or 185)
+        weekly_waste = float(request.form.get('weekly_waste') or request.args.get('weekly_waste') or session.get('weekly_waste') or 5.0)
+        pain_point = int(request.form.get('pain_point') or request.args.get('pain_point') or session.get('pain_point') or 5)
+        platform = request.form.get('platform') or request.args.get('platform') or session.get('platform') or 'M365/SharePoint'
         
-        # Debug: ensure we have valid values
-        if not staff_count or staff_count < 10:
-            staff_count = 50
-        if not avg_rate or avg_rate < 50:
-            avg_rate = 185
-        if not weekly_waste or weekly_waste < 0:
-            weekly_waste = 5.0
+        # Validate values are within acceptable ranges (but don't reset to defaults if they're valid)
+        if staff_count < 10:
+            staff_count = max(10, staff_count)  # Ensure minimum, but don't override user input
+        if avg_rate < 50:
+            avg_rate = max(50, avg_rate)  # Ensure minimum, but don't override user input
+        if weekly_waste < 0:
+            weekly_waste = max(0, weekly_waste)  # Ensure non-negative
+        
+        # Save to session to ensure persistence
+        session['staff_count'] = staff_count
+        session['avg_rate'] = avg_rate
+        session['weekly_waste'] = weekly_waste
+        session['pain_point'] = pain_point
+        session['platform'] = platform
         
         calculations = calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point)
         session['calculations'] = calculations
