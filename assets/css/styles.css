@@ -1392,6 +1392,13 @@ h1, h2, h3, h4 {
   color: var(--text-primary);
 }
 
+.footer-disclaimer {
+  margin-top: 1rem;
+  font-size: 0.85em;
+  color: rgba(255,255,255,0.6);
+  line-height: 1.5;
+}
+
 /* ========== ANIMATIONS ========== */
 @keyframes fadeUp {
   from {
