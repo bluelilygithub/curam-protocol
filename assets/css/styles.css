@@ -8521,15 +8521,15 @@ h1, h2, h3, h4 {
 
 /* Methodology Card Border Variants */
 .methodology-card-border-red {
-    border-left: 4px solid #dc3545;
+    border-left: 4px solid #ef4444;
 }
 
 .methodology-card-border-yellow {
-    border-left: 4px solid #ffc107;
+    border-left: 4px solid #fbbf24;
 }
 
 .methodology-card-border-green {
-    border-left: 4px solid #28a745;
+    border-left: 4px solid #10b981;
 }
 
 .methodology-card-border-blue {
