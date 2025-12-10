@@ -63,16 +63,46 @@ AI_OPPORTUNITIES = {
 # Industry configurations
 INDUSTRIES = {
     "Architecture & Building Services": {
-        "context": "Specification writing, Drawing registers, Energy modelling",
-        "q1_label": "How do you currently compile Drawing Registers and Window/Door Schedules?",
+        "context": "Architecture and engineering firms (15-100 staff)",
+        "pain_point_question": "What's your biggest documentation bottleneck?",
+        "pain_point_options": [
+            {
+                "value": 0,
+                "label": "Drawing Registers (Automated BIM export)",
+                "description": "Low pain - mostly automated"
+            },
+            {
+                "value": 5,
+                "label": "Drawing Registers (Export to Excel, manual formatting)",
+                "description": "Medium pain - significant manual cleanup"
+            },
+            {
+                "value": 7,
+                "label": "Specification Writing (Copy-paste from Masterspec/Natspec)",
+                "description": "Medium-high pain - repetitive but requires judgment"
+            },
+            {
+                "value": 10,
+                "label": "Document Transmittals (Manual creation and tracking)",
+                "description": "High pain - fully manual, time-consuming"
+            }
+        ],
+        "weekly_hours_question": "Total firm-wide hours per week on manual documentation (all staff combined)",
+        "weekly_hours_range": [10, 200, 80],
+        "weekly_hours_help_text": "Example: 25 staff × 4 hours each = 100 hours/week",
+        "demo_documents": "drawing registers, BIM schedules, or document transmittals",
+        "automation_potential": 0.40,
+        # Legacy support
+        "q1_label": "What's your biggest documentation bottleneck?",
         "q1_options": {
-            "Automated BIM export (Low pain)": 0,
-            "Export to Excel, then manual formatting (Medium pain)": 5,
-            "Manual typing in CAD title blocks (High pain)": 10
+            "Drawing Registers (Automated BIM export)": 0,
+            "Drawing Registers (Export to Excel, manual formatting)": 5,
+            "Specification Writing (Copy-paste from Masterspec/Natspec)": 7,
+            "Document Transmittals (Manual creation and tracking)": 10
         },
-        "q2_label": "Hours per week, per engineer, spent on spec writing & manual data entry?",
+        "q2_label": "Total firm-wide hours per week on manual documentation (all staff combined)",
         "q2_type": "slider",
-        "q2_range": (0, 20)
+        "q2_range": (10, 200)
     },
     "Civil & Surveying": {
         "context": "Bore-hole logs, Lab reports, Drone photogrammetry",
@@ -113,16 +143,46 @@ INDUSTRIES = {
         "q2_range": (0, 20)
     },
     "Accounting & Advisory": {
-        "context": "Trust account audits, Inter-entity reconciliations, Complex GL coding",
-        "q1_label": "How do you currently handle trust account reconciliations and inter-entity matching?",
+        "context": "Australian accounting firms (15-100 staff)",
+        "pain_point_question": "What's your biggest manual processing pain point?",
+        "pain_point_options": [
+            {
+                "value": 3,
+                "label": "Invoice Data Entry (Typing vendor invoices into Xero/MYOB)",
+                "description": "Low-medium pain - repetitive but straightforward"
+            },
+            {
+                "value": 6,
+                "label": "Complex GL Coding (Multi-line invoices requiring judgment)",
+                "description": "Medium pain - requires accounting knowledge"
+            },
+            {
+                "value": 8,
+                "label": "Trust Account Reconciliations (Matching deposits to matter files)",
+                "description": "Medium-high pain - high-stakes, time-consuming"
+            },
+            {
+                "value": 10,
+                "label": "Inter-Entity Transaction Matching (Consolidation reconciliations)",
+                "description": "High pain - complex, error-prone, senior staff time"
+            }
+        ],
+        "weekly_hours_question": "Total firm-wide hours per week on manual processing (all staff combined)",
+        "weekly_hours_range": [10, 200, 60],
+        "weekly_hours_help_text": "Example: 15 staff × 4 hours each = 60 hours/week. Include: data entry, reconciliations, GL coding, trust account matching.",
+        "demo_documents": "invoices, bank statements, trust account transactions, or inter-entity reconciliations",
+        "automation_potential": 0.40,
+        # Legacy support
+        "q1_label": "What's your biggest manual processing pain point?",
         "q1_options": {
-            "Automated reconciliation software (Low pain)": 0,
-            "Manual transaction-by-transaction matching in Excel (Medium pain)": 5,
-            "Manual typing from bank statements (High pain)": 10
+            "Invoice Data Entry (Typing vendor invoices into Xero/MYOB)": 3,
+            "Complex GL Coding (Multi-line invoices requiring judgment)": 6,
+            "Trust Account Reconciliations (Matching deposits to matter files)": 8,
+            "Inter-Entity Transaction Matching (Consolidation reconciliations)": 10
         },
-        "q2_label": "Hours per week, per accountant, spent on reconciliations & complex invoice coding?",
+        "q2_label": "Total firm-wide hours per week on manual processing (all staff combined)",
         "q2_type": "slider",
-        "q2_range": (0, 20)
+        "q2_range": (10, 200)
     }
 }
 
@@ -1030,7 +1090,70 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <hr>
-        <h2>Your Annual Efficiency Loss: {{ format_currency(calculations.annual_burn) }}</h2>
+        <!-- BIG SCARY NUMBER -->
+        <div class="annual-burn-section" style="background: linear-gradient(135deg, #0B1221, #1a2332); border-radius: 16px; padding: 3rem 2rem; text-align: center; margin: 2rem 0; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);">
+            <div style="color: #D4AF37; font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1rem;">Annual Waste on Manual Processing</div>
+            <div style="font-size: 4rem; font-weight: 800; background: linear-gradient(135deg, #D4AF37, #FFD700); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem; line-height: 1;">{{ format_currency(calculations.annual_burn) }}</div>
+            <div style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem; font-style: italic;">Based on your inputs</div>
+        </div>
+        
+        <!-- WHAT THIS MEANS -->
+        <div class="interpretation-box" style="background: white; border: 2px solid #E5E7EB; border-radius: 12px; padding: 2rem; margin: 2rem 0;">
+            <h3 style="color: #0B1221; font-size: 1.5rem; margin-bottom: 1rem;">What This Means:</h3>
+            <ul style="list-style: none; padding: 0; margin: 0;">
+                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-bottom: 1px solid #E5E7EB;">
+                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
+                    Your staff spend <strong style="color: #0B1221;">{{ calculations.weekly_waste }} hours/week</strong> on manual document processing
+                </li>
+                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-bottom: 1px solid #E5E7EB;">
+                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
+                    That's <strong style="color: #0B1221;">{{ "{:,.0f}".format(calculations.weekly_waste * 48) }} hours/year</strong> of wasted capacity
+                </li>
+                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-bottom: 1px solid #E5E7EB;">
+                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
+                    At an average rate of <strong style="color: #0B1221;">{{ format_currency(avg_rate) }}/hour</strong>, you're burning <strong style="color: #0B1221;">{{ format_currency(calculations.annual_burn) }}/year</strong>
+                </li>
+                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
+                    If you could automate 40% of this work, you'd save <strong style="color: #0B1221;">{{ format_currency(calculations.tier_1_savings) }}/year</strong>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- REALITY CHECK BOX -->
+        <div class="reality-check-box" style="background: linear-gradient(135deg, rgba(255, 165, 0, 0.1), rgba(255, 165, 0, 0.05)); border: 2px solid rgba(255, 165, 0, 0.4); border-radius: 12px; padding: 2rem; margin: 2rem 0;">
+            <h3 style="color: #FF8C00; font-size: 1.5rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">⚠️ Important: This is an ESTIMATE</h3>
+            <p style="color: #4B5563; font-size: 1rem; line-height: 1.7; margin-bottom: 1rem;">
+                This calculator uses <strong style="color: #0B1221;">industry averages</strong> and 
+                <strong style="color: #0B1221;">generic assumptions</strong>. We don't actually know:
+            </p>
+            <ul style="list-style: none; padding: 0; margin: 1rem 0;">
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    How YOUR firm actually works (your unique workflows and processes)
+                </li>
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    Which of YOUR tasks can realistically be automated (vs require human judgment)
+                </li>
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    Whether YOUR documents are suitable for AI extraction (format, quality, complexity)
+                </li>
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    If YOUR staff will adopt new workflows (change management is the #1 risk)
+                </li>
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    What YOUR specific baseline efficiency is (you might already be more efficient than average)
+                </li>
+            </ul>
+            <div style="background: white; padding: 1rem; border-radius: 8px; border-left: 4px solid #FF8C00; margin-top: 1rem; font-weight: 600; color: #0B1221;">
+                That's why Phase 1 exists: to replace these guesses with proof using YOUR actual documents.
+            </div>
+        </div>
+        
         <hr>
         <div class="metrics-grid">
             <div class="metric-card">
@@ -1087,6 +1210,82 @@ HTML_TEMPLATE = """
         </div>
         <hr>
         {% endif %}
+        
+        <!-- PHASE 1 EXPLAINER (UNIVERSAL) -->
+        {% set demo_docs = industry_config.get('demo_documents', 'your documents') if industry_config else 'your documents' %}
+        <div class="phase1-explainer" style="background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.05)); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 12px; padding: 2.5rem; margin: 3rem 0;">
+            <h2 style="color: #0B1221; font-size: 2rem; margin-bottom: 1.5rem; text-align: center;">Replace This Estimate With Proof: $1,500 Feasibility Sprint</h2>
+            
+            <div class="phase1-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
+                <div class="phase1-column" style="background: white; border-radius: 8px; padding: 1.5rem; border: 1px solid #E5E7EB;">
+                    <h4 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">📋 What We'll Test (48 hours):</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            30 of YOUR documents ({{ demo_docs }})
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            AI extraction accuracy on YOUR specific document formats
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Time savings based on YOUR baseline process (not industry averages)
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Integration feasibility with YOUR systems
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="phase1-column" style="background: white; border-radius: 8px; padding: 1.5rem; border: 1px solid #E5E7EB;">
+                    <h4 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">✅ What You Get:</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Accuracy report showing extraction results on your docs
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            ROI calculation using YOUR data (not generic estimates)
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Feasibility assessment: "Will this work for us?"
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Decision point: Proceed to Phase 2 or walk away with full refund
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Guarantee Box -->
+            <div class="guarantee-box" style="background: white; border: 2px solid #4CAF50; border-radius: 12px; padding: 2rem; margin: 2rem 0;">
+                <h4 style="color: #4CAF50; font-size: 1.3rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">🛡️ Zero-Risk Guarantee:</h4>
+                <p style="color: #4B5563; font-size: 1rem; line-height: 1.7; margin-bottom: 1rem;">
+                    If we don't achieve <strong style="color: #0B1221;">90%+ accuracy</strong> on your documents, 
+                    you get a <strong style="color: #0B1221;">full refund</strong>. No questions asked. No fine print.
+                </p>
+                <div style="font-size: 0.9rem; color: #6B7280; background: #F8F9FA; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+                    <strong>Only condition:</strong> You provide the 30 documents and respond 
+                    to clarification questions promptly. We can't test if you don't participate.
+                </div>
+            </div>
+            
+            <!-- PRIMARY CTA -->
+            <div class="primary-cta-section" style="text-align: center; margin: 3rem 0; padding: 2rem; background: white; border-radius: 12px; border: 2px solid #D4AF37;">
+                <a href="/contact" class="btn-primary-huge" style="display: inline-block; background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; font-size: 1.3rem; font-weight: 700; padding: 1.25rem 3rem; border-radius: 8px; text-decoration: none; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);">
+                    Book $1,500 Feasibility Test →
+                </a>
+                <p style="margin-top: 1rem; color: #4B5563; font-size: 0.95rem; font-style: italic;">
+                    3 hours of your time. 48-hour turnaround. Full refund if accuracy <90%.
+                </p>
+            </div>
+        </div>
+        
         <h3>Current State vs Future State</h3>
         <div class="chart-container">
             <div id="chart"></div>
@@ -1594,19 +1793,51 @@ def roi_calculator():
         # Generate automation roadmap
         roadmap = generate_automation_roadmap(industry, staff_count, avg_rate, weekly_waste)
         
+        # Get industry config for template
+        industry_config = INDUSTRIES.get(industry, {})
+        
+        # Calculate additional metrics for universal template
+        total_weekly_hours = weekly_waste
+        total_annual_hours = total_weekly_hours * 48
+        tier1_savings = calculations['tier_1_savings']
+        
+        # Get pain point description
+        pain_point_description = "Not specified"
+        if 'pain_point_options' in industry_config:
+            for option in industry_config['pain_point_options']:
+                if option.get('value') == pain_point:
+                    pain_point_description = option.get('label', 'Not specified')
+                    break
+        elif 'q1_options' in industry_config:
+            # Fallback to legacy format
+            for label, value in industry_config['q1_options'].items():
+                if value == pain_point:
+                    pain_point_description = label
+                    break
+        
+        # Industry slug for URL
+        industry_slug = industry.lower().replace(' & ', '-').replace(' ', '-')
+        
         return render_template_string(HTML_TEMPLATE,
             step=3,
             industry=industry,
+            industry_config=industry_config,
+            industry_slug=industry_slug,
             staff_count=staff_count,
             avg_rate=avg_rate,
             platform=platform,
             calculations=calculations,
+            total_weekly_hours=total_weekly_hours,
+            total_annual_hours=total_annual_hours,
+            tier1_savings=tier1_savings,
+            pain_point_description=pain_point_description,
             chart_json=json.dumps(chart_data, cls=plotly.utils.PlotlyJSONEncoder),
             analysis_text=analysis_text,
             ai_opportunities=ai_opportunities,
             roadmap=roadmap,
             booking_url=BOOKING_URL,
-            format_currency=format_currency)
+            format_currency=format_currency,
+            INDUSTRIES=INDUSTRIES)
     
     # Step 4: PDF Download
     if step == 4:
