@@ -8217,6 +8217,17 @@ h1, h2, h3, h4 {
     border-radius: 50%;
 }
 
+.methodology-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
 .methodology-card-warning .methodology-number {
     color: #fbbf24;
     background: rgba(251, 191, 36, 0.1);
@@ -8512,6 +8523,18 @@ h1, h2, h3, h4 {
 
 .methodology-card-border-green {
     border-left: 4px solid #28a745;
+}
+
+.methodology-card-border-blue {
+    border-left: 4px solid #2563eb;
+}
+
+.methodology-card-border-purple {
+    border-left: 4px solid #9333ea;
+}
+
+.methodology-card-border-orange {
+    border-left: 4px solid #f97316;
 }
 
 /* Deliverable Grid Spacing */
