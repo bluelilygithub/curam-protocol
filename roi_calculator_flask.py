@@ -779,6 +779,70 @@ HTML_TEMPLATE = """
             border-top: 1px solid #E5E7EB;
             margin: 2rem 0;
         }
+        .section-headline {
+            color: #0B1221;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 2rem;
+            margin-top: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        .section-subhead {
+            color: #4B5563;
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .roi-results-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        @media (max-width: 1024px) {
+            .roi-results-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 640px) {
+            .roi-results-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .roi-result-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            border: 1px solid #E5E7EB;
+            transition: all 0.3s ease;
+        }
+        .roi-result-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+            border-color: #D4AF37;
+        }
+        .roi-result-stat {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #D4AF37, #0B1221);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+        .roi-result-label {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #0B1221;
+            margin-bottom: 0.5rem;
+        }
+        .roi-result-description {
+            font-size: 0.875rem;
+            color: #4B5563;
+            line-height: 1.5;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -963,6 +1027,38 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <hr>
+        {% if industry == "Accounting & Advisory" %}
+        <!-- Typical Client Results for Accounting -->
+        <h2 class="section-headline">Typical Client Results</h2>
+        <p class="section-subhead">Real outcomes from Phase 1 Feasibility Sprints</p>
+        
+        <div class="roi-results-grid">
+            <div class="roi-result-card">
+                <div class="roi-result-stat">40+</div>
+                <div class="roi-result-label">Hours saved per month</div>
+                <p class="roi-result-description">Average time recovered from document processing automation</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">95%</div>
+                <div class="roi-result-label">Extraction accuracy</div>
+                <p class="roi-result-description">Validated benchmark achieved in Phase 1 testing</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">6-12</div>
+                <div class="roi-result-label">Month payback period</div>
+                <p class="roi-result-description">Typical ROI timeline for full implementation</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">$80k+</div>
+                <div class="roi-result-label">Year 1 Revenue (Phase 1)</div>
+                <p class="roi-result-description">Scales to $500k+ for 15-20 staff firms</p>
+            </div>
+        </div>
+        <hr>
+        {% endif %}
         <h3>Current State vs Future State</h3>
         <div class="chart-container">
             <div id="chart"></div>
