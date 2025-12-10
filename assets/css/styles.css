@@ -9064,31 +9064,37 @@ h1, h2, h3, h4 {
     padding: 10px;
     border-radius: 4px;
     font-size: 0.9em;
+    color: var(--text-secondary);
 }
 
 .example-box-red {
-    background: #FEE2E2;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
 .example-box-yellow {
-    background: #FEF3C7;
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
 .example-box-green {
-    background: #D1FAE5;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .example-box-cream {
-    background: #FFFBF0;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.3);
 }
 
 /* Industry Detail Section */
 .industry-detail-section {
-    background: white;
+    background: var(--navy-deep);
+    border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 2.5rem;
     margin: 2.5rem 0;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
 .industry-detail-section-blue {
@@ -9102,10 +9108,11 @@ h1, h2, h3, h4 {
 .industry-detail-title {
     font-size: 1.8rem;
     margin-bottom: 1.5rem;
+    color: var(--text-primary);
 }
 
 .industry-detail-subtitle {
-    color: #6B7280;
+    color: var(--text-secondary);
     margin-bottom: 1.5rem;
 }
 
@@ -9122,10 +9129,11 @@ h1, h2, h3, h4 {
 .industry-detail-item-title {
     font-weight: 600;
     margin-bottom: 0.5rem;
+    color: var(--text-primary);
 }
 
 .industry-detail-item-text {
-    color: #6B7280;
+    color: var(--text-secondary);
     margin-bottom: 0.5rem;
 }
 
@@ -9135,11 +9143,13 @@ h1, h2, h3, h4 {
 }
 
 .industry-detail-note {
-    background: #FFFBF0;
+    background: rgba(212, 175, 55, 0.1);
+    border: 1px solid rgba(212, 175, 55, 0.3);
     padding: 1rem;
     border-radius: 4px;
     margin-top: 1.5rem;
     font-size: 0.9em;
+    color: var(--text-secondary);
 }
 
 /* Industry Grid */
@@ -9166,9 +9176,17 @@ h1, h2, h3, h4 {
 
 /* Industry Card */
 .industry-card {
-    background: white;
+    background: var(--navy-deep);
+    border: 1px solid var(--border-subtle);
     padding: 2rem;
     border-radius: 8px;
+    transition: var(--transition);
+}
+
+.industry-card:hover {
+    border-color: var(--cyan-accent);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
 }
 
 .industry-card-blue {
@@ -9186,11 +9204,12 @@ h1, h2, h3, h4 {
 .industry-card-title {
     font-size: 1.3rem;
     margin-bottom: 1rem;
+    color: var(--text-primary);
 }
 
 .industry-card-subtitle {
     font-size: 0.9rem;
-    color: #6B7280;
+    color: var(--text-secondary);
     margin-bottom: 1rem;
 }
 
@@ -9202,10 +9221,11 @@ h1, h2, h3, h4 {
 
 .industry-card-list li {
     padding: 0.5rem 0;
+    color: var(--text-secondary);
 }
 
 .industry-card-list li:not(:last-child) {
-    border-bottom: 1px solid #F3F4F6;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .industry-card-note {
@@ -9213,14 +9233,17 @@ h1, h2, h3, h4 {
     padding: 0.75rem;
     border-radius: 4px;
     font-size: 0.85em;
+    color: var(--text-secondary);
 }
 
 .industry-card-note-green {
-    background: #D1FAE5;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .industry-card-note-yellow {
-    background: #FEF3C7;
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
 @media (max-width: 968px) {
