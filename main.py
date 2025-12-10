@@ -1570,13 +1570,29 @@ def target_markets():
     except:
         return "Target Markets page not found.", 404
 
-@app.route('/accounting')
-@app.route('/accounting.html')
-def accounting_page():
+@app.route('/professional-services')
+@app.route('/professional-services.html')
+def professional_services_page():
     try:
-        return send_file('accounting.html')
+        return send_file('professional-services.html')
     except:
-        return "Accounting page not found.", 404
+        return "Professional Services page not found.", 404
+
+@app.route('/logistics-compliance')
+@app.route('/logistics-compliance.html')
+def logistics_compliance_page():
+    try:
+        return send_file('logistics-compliance.html')
+    except:
+        return "Logistics Compliance page not found.", 404
+
+@app.route('/built-environment')
+@app.route('/built-environment.html')
+def built_environment_page():
+    try:
+        return send_file('built-environment.html')
+    except:
+        return "Built Environment page not found.", 404
 
 @app.route('/case-study')
 @app.route('/case-study.html')

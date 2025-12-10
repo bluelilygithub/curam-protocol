@@ -9,7 +9,9 @@
         'about.html': 'about',
         'services.html': 'services',
         'target-markets.html': 'target-markets',
-        'accounting.html': 'target-markets',
+        'professional-services.html': 'target-markets',
+        'logistics-compliance.html': 'target-markets',
+        'built-environment.html': 'target-markets',
         'curam-ai-protocol.html': 'protocol',
         'roi.html': 'resources',
         'demo.html': 'resources',
@@ -46,7 +48,7 @@
             if (href) {
                 // Check if this link matches the current page
                 if (href.includes(activeNav + '.html') || 
-                    (activeNav === 'target-markets' && (href === 'target-markets.html' || href === 'accounting.html')) ||
+                    (activeNav === 'target-markets' && (href === 'target-markets.html' || href === 'professional-services.html' || href === 'logistics-compliance.html' || href === 'built-environment.html')) ||
                     (activeNav === 'resources' && (href.includes('roi.html') || href.includes('demo.html') || href.includes('feasibility-sprint-report.html') || href.includes('risk-audit-report.html') || href.includes('case-study.html') || href.includes('how-it-works.html') || href.includes('blog.html')))) {
                     link.classList.add('active');
                 }
