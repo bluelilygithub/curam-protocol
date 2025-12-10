@@ -9007,6 +9007,50 @@ h1, h2, h3, h4 {
     margin-top: 2rem;
 }
 
+/* Industry Navigation Bar */
+.industry-nav-bar {
+    background: #F8F9FA;
+    border-bottom: 1px solid #E9ECEF;
+    padding: 20px 0;
+    margin: 0;
+}
+
+.industry-nav-label {
+    text-align: center;
+    color: #6B7280;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 15px;
+}
+
+.industry-nav-buttons {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.btn-outline {
+    background: transparent;
+    border: 2px solid #E5E7EB;
+    color: #0B1221;
+    font-weight: 600;
+    padding: 0.5rem 1.5rem;
+    border-radius: 50px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.btn-outline:hover {
+    border-color: #D4AF37;
+    color: #0B1221;
+    background: rgba(212, 175, 55, 0.1);
+    transform: translateY(-2px);
+}
+
 @media (max-width: 968px) {
     .industry-content-grid {
         grid-template-columns: 1fr;
