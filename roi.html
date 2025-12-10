@@ -32,8 +32,17 @@
         </div>
     </section>
 
+    <!-- Industry Section Selector -->
+    <section class="section" id="industry-section-selector" style="display: none;">
+        <div class="container">
+            <h2 class="section-headline">Select Your Industry</h2>
+            <p class="section-subhead">Choose your industry to see industry-specific ROI calculations</p>
+            <div id="industry-options-container" class="methodology-grid"></div>
+        </div>
+    </section>
+
     <!-- Calculator Section -->
-    <section class="section">
+    <section class="section" id="calculator-section">
         <div class="container">
             <div class="roi-calculator-container">
                 <div class="roi-calculator-wrapper">
@@ -210,34 +219,106 @@
 
     <script src="assets/js/main.js"></script>
     <script>
-        // Handle industry parameter from URL and pass to iframe
+        // Industry sections and their industries
+        const industrySections = {
+            'professional-services': {
+                title: 'Group 1: Billable Hour Industries',
+                subtitle: 'Accounting, Legal, Wealth & Insurance',
+                industries: [
+                    { id: 'accounting', name: 'Accounting & Advisory', icon: '💼', description: 'Trust account reconciliations, inter-entity matching, GL coding' },
+                    { id: 'legal', name: 'Legal Services', icon: '⚖️', description: 'Trust account audits, matter cost tracking, billing reconciliation' },
+                    { id: 'wealth', name: 'Wealth Management', icon: '📊', description: 'Client statement processing, performance reporting, SOA generation' },
+                    { id: 'insurance', name: 'Insurance Underwriting', icon: '🛡️', description: 'Risk assessment, policy applications, claims documentation' }
+                ]
+            },
+            'built-environment': {
+                title: 'Group 2: Built World Industries',
+                subtitle: 'Engineering, Construction, Architecture, Mining & Property',
+                industries: [
+                    { id: 'engineering', name: 'Architecture & Building Services', icon: '🏗️', description: 'Specification writing, drawing registers, energy modelling' },
+                    { id: 'civil', name: 'Civil & Surveying', icon: '📐', description: 'Bore-hole logs, lab reports, drone photogrammetry' },
+                    { id: 'mining', name: 'Mining & Resources', icon: '⛏️', description: 'Safety incident reports, environmental compliance docs' },
+                    { id: 'property', name: 'Property & Development', icon: '🏘️', description: 'Lease documentation, tenant applications, maintenance requests' }
+                ]
+            },
+            'compliance': {
+                title: 'Group 3: Compliance-Heavy Industries',
+                subtitle: 'Logistics, Healthcare Admin & Government Services',
+                industries: [
+                    { id: 'logistics', name: 'Logistics & Freight', icon: '🚛', description: 'Customs documentation, freight manifests, POD processing' },
+                    { id: 'healthcare', name: 'Healthcare Admin', icon: '🏥', description: 'Patient referral processing, Medicare billing, compliance docs' },
+                    { id: 'government', name: 'Government Services', icon: '🏛️', description: 'Tender responses, contract compliance, grant applications' }
+                ]
+            }
+        };
+
+        // Map URL parameter values to full industry names for calculator
+        // Only includes industries that exist in the ROI calculator
+        const industryMap = {
+            'accounting': 'Accounting & Advisory',
+            'engineering': 'Architecture & Building Services',
+            'architecture': 'Architecture & Building Services',
+            'civil': 'Civil & Surveying',
+            'surveying': 'Civil & Surveying',
+            'manufacturing': 'Manufacturing (Design-to-Order)',
+            'environmental': 'Environmental Consulting'
+        };
+
         (function() {
-            // Map URL parameter values to full industry names
-            const industryMap = {
-                'accounting': 'Accounting & Advisory',
-                'engineering': 'Architecture & Building Services',
-                'architecture': 'Architecture & Building Services',
-                'civil': 'Civil & Surveying',
-                'surveying': 'Civil & Surveying',
-                'manufacturing': 'Manufacturing (Design-to-Order)',
-                'environmental': 'Environmental Consulting'
-            };
-            
-            // Get industry parameter from URL
             const urlParams = new URLSearchParams(window.location.search);
+            const sectionParam = urlParams.get('section');
             const industryParam = urlParams.get('industry');
             
+            // Handle section parameter - show industry selector
+            if (sectionParam && industrySections[sectionParam]) {
+                const section = industrySections[sectionParam];
+                const selectorSection = document.getElementById('industry-section-selector');
+                const calculatorSection = document.getElementById('calculator-section');
+                
+                if (selectorSection && calculatorSection) {
+                    // Update section title
+                    const titleEl = selectorSection.querySelector('.section-headline');
+                    const subtitleEl = selectorSection.querySelector('.section-subhead');
+                    if (titleEl) titleEl.textContent = section.title;
+                    if (subtitleEl) subtitleEl.textContent = section.subtitle;
+                    
+                    // Build industry options
+                    const container = document.getElementById('industry-options-container');
+                    if (container) {
+                        container.innerHTML = section.industries.map(industry => `
+                            <div class="methodology-card methodology-card-clickable" onclick="window.location.href='roi.html?industry=${industry.id}'">
+                                <div class="methodology-content">
+                                    <h3>${industry.icon} ${industry.name}</h3>
+                                    <p class="methodology-desc">${industry.description}</p>
+                                    <p class="methodology-link" style="margin-top: 15px;">
+                                        <a href="roi.html?industry=${industry.id}">Calculate ROI →</a>
+                                    </p>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                    
+                    // Show selector, hide calculator initially
+                    selectorSection.style.display = 'block';
+                    calculatorSection.style.display = 'none';
+                }
+            }
+            
+            // Handle industry parameter - pass to iframe
             if (industryParam) {
-                // Map the parameter to full industry name
                 const industryName = industryMap[industryParam.toLowerCase()];
                 
                 if (industryName) {
-                    // Update iframe src to include industry parameter
                     const iframe = document.getElementById('roi-calculator-iframe');
                     if (iframe) {
-                        // Encode the industry name for URL
                         const encodedIndustry = encodeURIComponent(industryName);
                         iframe.src = `/roi-calculator/?industry=${encodedIndustry}`;
+                        
+                        // Show calculator, hide selector
+                        const selectorSection = document.getElementById('industry-section-selector');
+                        const calculatorSection = document.getElementById('calculator-section');
+                        if (selectorSection) selectorSection.style.display = 'none';
+                        if (calculatorSection) calculatorSection.style.display = 'block';
                     }
                 }
             }
