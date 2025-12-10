@@ -843,6 +843,30 @@ HTML_TEMPLATE = """
             line-height: 1.5;
             margin: 0;
         }
+        .highlight-box {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            background: rgba(0, 212, 255, 0.08);
+            border: 1px solid #00D4FF;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            text-align: left;
+        }
+        .highlight-box.footnote {
+            margin-top: 1.5rem;
+            background: #FFFBF0;
+            border-color: #D4AF37;
+        }
+        .highlight-box p {
+            margin: 0;
+            color: #4B5563;
+            line-height: 1.6;
+        }
+        .highlight-box strong {
+            color: #0B1221;
+        }
     </style>
 </head>
 <body>
@@ -1028,9 +1052,9 @@ HTML_TEMPLATE = """
         </div>
         <hr>
         {% if industry == "Accounting & Advisory" %}
-        <!-- Typical Client Results for Accounting -->
-        <h2 class="section-headline">Typical Client Results</h2>
-        <p class="section-subhead">Real outcomes from Phase 1 Feasibility Sprints</p>
+        <!-- Phase 1 Proof → Year 1 Revenue for Accounting -->
+        <h2 class="section-headline">Phase 1 Proof → Year 1 Revenue</h2>
+        <p class="section-subhead">Real results from $1,500 Feasibility Sprints (scales firm-wide)</p>
         
         <div class="roi-results-grid">
             <div class="roi-result-card">
@@ -1052,10 +1076,14 @@ HTML_TEMPLATE = """
             </div>
             
             <div class="roi-result-card">
-                <div class="roi-result-stat">$80k+</div>
-                <div class="roi-result-label">Year 1 Revenue (Phase 1)</div>
-                <p class="roi-result-description">Scales to $500k+ for 15-20 staff firms</p>
+                <div class="roi-result-stat">$500k+</div>
+                <div class="roi-result-label">Year 1 Revenue (15-staff firms)</div>
+                <p class="roi-result-description">Proven from $80k Phase 1 trust recon wins</p>
             </div>
+        </div>
+        
+        <div class="highlight-box footnote">
+            <p><strong>Phase 1 ($1,500):</strong> $80k trust recon proof → <strong>Phases 2-4:</strong> $420k+ from GL coding, inter-entity matching</p>
         </div>
         <hr>
         {% endif %}
