@@ -8836,3 +8836,189 @@ h1, h2, h3, h4 {
 .methodology-desc-spaced {
     margin-bottom: 15px;
 }
+
+/* ========== PROFESSIONAL SERVICES PAGE STYLES ========== */
+
+/* Industry Section Styles */
+.industry-section {
+    background: white;
+    border-radius: 12px;
+    padding: 2.5rem;
+    margin: 2.5rem 0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: 1px solid #E5E7EB;
+}
+
+.industry-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 2px solid #F3F4F6;
+}
+
+.industry-icon {
+    font-size: 3.5rem;
+    line-height: 1;
+}
+
+.industry-title-group {
+    flex: 1;
+}
+
+.industry-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #0B1221;
+    margin-bottom: 0.5rem;
+}
+
+.industry-subtitle {
+    font-size: 1rem;
+    color: #6B7280;
+    margin: 0;
+}
+
+.industry-content-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 2.5rem;
+}
+
+.industry-pain-points h4,
+.industry-roi h4 {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #0B1221;
+    margin-bottom: 1rem;
+}
+
+.industry-pain-points ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.industry-pain-points li {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #F3F4F6;
+    color: #4B5563;
+    line-height: 1.6;
+}
+
+.industry-pain-points li:last-child {
+    border-bottom: none;
+}
+
+.industry-roi {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+}
+
+.roi-stat {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 0;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.roi-stat:last-of-type {
+    border-bottom: none;
+}
+
+.roi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #667eea;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+}
+
+.roi-label {
+    font-size: 0.9rem;
+    color: #4B5563;
+    line-height: 1.4;
+}
+
+/* Utility classes for inline style replacements */
+.methodology-link {
+    margin-top: 15px;
+}
+
+.methodology-link a {
+    color: var(--cyan-accent);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.methodology-note {
+    margin-top: 15px;
+    color: #666;
+    font-size: 0.9em;
+}
+
+.content-block-centered {
+    text-align: center;
+}
+
+.section-subhead-constrained {
+    max-width: 700px;
+    margin: 0 auto 30px;
+}
+
+.btn-large-enhanced {
+    font-size: 1.1em;
+    padding: 1rem 3rem;
+}
+
+.cta-note {
+    margin-top: 20px;
+    color: #666;
+    font-size: 0.95em;
+}
+
+.cta-text {
+    margin: 1.5rem 0;
+    font-size: 1.1em;
+    color: rgba(255,255,255,0.9);
+    max-width: 700px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.cta-buttons-wrapper {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+}
+
+.cta-footer-note {
+    margin-top: 1.5rem;
+    color: rgba(255,255,255,0.8);
+    font-size: 0.95em;
+}
+
+.deliverable-grid-spaced {
+    margin-top: 2rem;
+}
+
+@media (max-width: 968px) {
+    .industry-content-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
+    .industry-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .industry-icon {
+        font-size: 2.5rem;
+    }
+}
