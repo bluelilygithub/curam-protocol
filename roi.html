@@ -38,6 +38,7 @@
             <div class="roi-calculator-container">
                 <div class="roi-calculator-wrapper">
                     <iframe 
+                        id="roi-calculator-iframe"
                         src="/roi-calculator/" 
                         width="100%" 
                         height="100%" 
@@ -208,5 +209,39 @@
     </footer>
 
     <script src="assets/js/main.js"></script>
+    <script>
+        // Handle industry parameter from URL and pass to iframe
+        (function() {
+            // Map URL parameter values to full industry names
+            const industryMap = {
+                'accounting': 'Accounting & Advisory',
+                'engineering': 'Architecture & Building Services',
+                'architecture': 'Architecture & Building Services',
+                'civil': 'Civil & Surveying',
+                'surveying': 'Civil & Surveying',
+                'manufacturing': 'Manufacturing (Design-to-Order)',
+                'environmental': 'Environmental Consulting'
+            };
+            
+            // Get industry parameter from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const industryParam = urlParams.get('industry');
+            
+            if (industryParam) {
+                // Map the parameter to full industry name
+                const industryName = industryMap[industryParam.toLowerCase()];
+                
+                if (industryName) {
+                    // Update iframe src to include industry parameter
+                    const iframe = document.getElementById('roi-calculator-iframe');
+                    if (iframe) {
+                        // Encode the industry name for URL
+                        const encodedIndustry = encodeURIComponent(industryName);
+                        iframe.src = `/roi-calculator/?industry=${encodedIndustry}`;
+                    }
+                }
+            }
+        })();
+    </script>
 </body>
 </html>

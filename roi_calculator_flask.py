@@ -1418,6 +1418,13 @@ def roi_calculator():
     industry = request.args.get('industry') or request.form.get('industry') or session.get('industry')
     selected_industry = industry
     
+    # If industry is provided via URL parameter and we're on step 1, auto-advance to step 2
+    if industry and step == 1 and request.method == 'GET':
+        # Validate industry exists in INDUSTRIES
+        if industry in INDUSTRIES:
+            session['industry'] = industry
+            step = 2
+    
     if request.method == 'POST':
         action = request.form.get('action', '')
         if action == 'continue' or request.form.get('industry'):
