@@ -1610,6 +1610,14 @@ def legal_services_page():
     except:
         return "Legal Services page not found.", 404
 
+@app.route('/wealth-management')
+@app.route('/wealth-management.html')
+def wealth_management_page():
+    try:
+        return send_file('wealth-management.html')
+    except:
+        return "Wealth Management page not found.", 404
+
 @app.route('/case-study')
 @app.route('/case-study.html')
 def case_study_page():
