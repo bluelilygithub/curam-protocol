@@ -7881,10 +7881,10 @@ h1, h2, h3, h4 {
 .message-relevance-warning {
     margin-top: var(--spacing-md);
     padding: var(--spacing-md);
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: var(--navy-deep);
+    border: var(--border-subtle);
     border-radius: var(--border-radius);
-    color: #fca5a5;
+    color: #ffffff;
     font-size: 0.9375rem;
     line-height: 1.6;
 }
@@ -7908,9 +7908,10 @@ h1, h2, h3, h4 {
 }
 
 .form-message-error {
-    background: #FEE2E2;
-    color: #991B1B;
-    border: 1px solid #ef4444;
+    background: var(--navy-deep);
+    border: var(--border-subtle);
+    border-radius: var(--border-radius);
+    color:#ffffff;
 }
 
 /* Contact Form */

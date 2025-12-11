@@ -2405,15 +2405,15 @@ def contact_form():
             }), 503
         
         # Get recipient email (admin/contact email)
-        to_email = os.environ.get('CONTACT_EMAIL', 'contact@curam-ai.com.au')
+        to_email = 'michaelbarrett@bluelily.com.au'
         from_email = os.environ.get('FROM_EMAIL', 'noreply@curam-ai.com.au')
         
         # Interest labels
         interest_labels = {
-            'phase-1': 'Phase 1 - Feasibility Sprint ($1,500)',
-            'phase-2': 'Phase 2 - The Roadmap ($7,500)',
-            'phase-3': 'Phase 3 - Compliance Shield ($8-12k)',
-            'phase-4': 'Phase 4 - Implementation ($20-30k)',
+            'phase-1': 'Phase 1 - Feasibility Sprint',
+            'phase-2': 'Phase 2 - The Roadmap',
+            'phase-3': 'Phase 3 - Compliance Shield',
+            'phase-4': 'Phase 4 - Implementation',
             'roi': 'ROI Calculator',
             'general': 'General Inquiry'
         }
