@@ -1052,12 +1052,23 @@ h1, h2, h3, h4 {
   padding: var(--spacing-xl);
   text-align: center;
   transition: var(--transition);
+  display: flex;
+  flex-direction: column;
 }
 
 .protocol-phase:hover {
   border-color: rgba(212, 175, 55, 0.4);
   transform: translateX(4px);
   box-shadow: 0 8px 30px rgba(212, 175, 55, 0.15);
+}
+
+/* Phase actions container - pushes buttons to bottom */
+.phase-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: auto; /* This pushes it to the bottom */
+  padding-top: var(--spacing-md);
 }
 
 .phase-icon {
