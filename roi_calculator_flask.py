@@ -2103,18 +2103,23 @@ HTML_TEMPLATE = """
 """
 
 @roi_app.route('/', methods=['GET', 'POST'])
+@roi_app.route('', methods=['GET', 'POST'])  # Also handle without trailing slash
 def roi_calculator():
-    step = int(request.args.get('step', request.form.get('step', 1)))
-    industry = request.args.get('industry') or request.form.get('industry') or session.get('industry')
-    
-    # Normalize industry name (strip whitespace, handle URL encoding)
-    if industry:
-        industry = industry.strip()
-    
-    selected_industry = industry
-    
-    # If industry is provided via URL parameter and we're on step 1, auto-advance to step 2
-    if industry and step == 1 and request.method == 'GET':
+    try:
+        step = int(request.args.get('step', request.form.get('step', 1)))
+        industry = request.args.get('industry') or request.form.get('industry') or session.get('industry')
+        
+        # Normalize industry name (strip whitespace, handle URL encoding)
+        if industry:
+            industry = industry.strip()
+            # Flask automatically decodes URL encoding, but ensure we have the exact key
+            # Handle common URL encoding issues
+            industry = industry.replace('+', ' ')
+        
+        selected_industry = industry
+        
+        # If industry is provided via URL parameter and we're on step 1, auto-advance to step 2
+        if industry and step == 1 and request.method == 'GET':
         # Validate industry exists in INDUSTRIES (case-sensitive match required)
         if industry in INDUSTRIES:
             session['industry'] = industry
@@ -2122,8 +2127,8 @@ def roi_calculator():
         else:
             # Log for debugging - industry not found
             print(f"Warning: Industry '{industry}' not found in INDUSTRIES. Available industries: {list(INDUSTRIES.keys())}")
-    
-    if request.method == 'POST':
+        
+        if request.method == 'POST':
         action = request.form.get('action', '')
         if action == 'continue' or request.form.get('industry'):
             industry = request.form.get('industry')
@@ -2131,16 +2136,16 @@ def roi_calculator():
             step = 2
         elif action == 'calculate':
             step = 3
-    
-    # Step 1: Industry Selection
-    if step == 1:
+        
+        # Step 1: Industry Selection
+        if step == 1:
         return render_template_string(HTML_TEMPLATE, 
             step=1, 
             industries=INDUSTRIES,
             selected_industry=selected_industry)
-    
-    # Step 2: Data Entry
-    if step == 2:
+        
+        # Step 2: Data Entry
+        if step == 2:
         if not industry:
             return render_template_string(HTML_TEMPLATE, step=1, industries=INDUSTRIES)
         
@@ -2210,9 +2215,9 @@ def roi_calculator():
             platform=platform,
             pain_point=pain_point,
             weekly_waste=weekly_waste)
-    
-    # Step 3: Results
-    if step == 3:
+        
+        # Step 3: Results
+        if step == 3:
         # Get values from form first (if submitted), then session, then defaults
         # This ensures we use the actual submitted values
         staff_count = int(request.form.get('staff_count') or request.args.get('staff_count') or session.get('staff_count') or 50)
@@ -2350,15 +2355,35 @@ def roi_calculator():
             booking_url=BOOKING_URL,
             format_currency=format_currency,
             INDUSTRIES=INDUSTRIES)
+        
+        # Step 4: PDF Download
+        if step == 4:
+            # Get industry from session for email button
+            industry = session.get('industry', '')
+            return render_template_string(HTML_TEMPLATE,
+                step=4,
+                industry=industry,
+                booking_url=BOOKING_URL)
     
-    # Step 4: PDF Download
-    if step == 4:
-        # Get industry from session for email button
-        industry = session.get('industry', '')
-        return render_template_string(HTML_TEMPLATE,
-            step=4,
-            industry=industry,
-            booking_url=BOOKING_URL)
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        error_msg = str(e)
+        traceback.print_exc()
+        print(f"Error in roi_calculator route: {error_msg}")
+        
+        # Return a user-friendly error page
+        return f"""
+        <html>
+        <head><title>ROI Calculator Error</title></head>
+        <body style="font-family: Arial, sans-serif; padding: 40px; text-align: center;">
+            <h1>Error Loading ROI Calculator</h1>
+            <p>We encountered an error while loading the calculator. Please try again.</p>
+            <p style="color: #666; font-size: 0.9em;">Error: {error_msg}</p>
+            <p><a href="/roi.html">Return to ROI Calculator</a></p>
+        </body>
+        </html>
+        """, 500
 
 @roi_app.route('/email-report', methods=['POST'])
 def email_report():
@@ -2548,6 +2573,16 @@ def download_pdf():
         as_attachment=True,
         download_name=f'Curam_AI_ROI_Report_{datetime.now().strftime("%Y%m%d")}.pdf'
     )
+
+# Test route to verify blueprint is working
+@roi_app.route('/test')
+def test_route():
+    """Test endpoint to verify ROI calculator blueprint is registered"""
+    return {
+        "status": "ok",
+        "message": "ROI Calculator blueprint is working",
+        "available_industries": list(INDUSTRIES.keys())
+    }
 
 # Note: This blueprint should be registered in main.py
 # Example: app.register_blueprint(roi_app, url_prefix='/roi-calculator')
