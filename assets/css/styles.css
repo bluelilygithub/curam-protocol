@@ -205,7 +205,7 @@ h1, h2, h3, h4 {
 .btn-nav {
   background: var(--color-gold);
   color: var(--navy-deep);
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1rem !important;
   border-radius: var(--border-radius);
   font-weight: 600;
   font-size: 0.875rem;
@@ -9051,7 +9051,7 @@ h1, h2, h3, h4 {
 .btn-outline {
     background: transparent;
     border: 2px solid #E5E7EB;
-    color: #0B1221;
+    color: #ffffff;
     font-weight: 600;
     padding: 0.5rem 1.5rem;
     border-radius: 50px;

@@ -123,10 +123,10 @@
                   <label for="interest">I'm interested in:</label>
                   <select id="interest" name="interest">
                     <option value="">Select an option</option>
-                    <option value="phase-1">Phase 1 - Feasibility Sprint ($1,500)</option>
-                    <option value="phase-2">Phase 2 - The Roadmap ($7,500)</option>
-                    <option value="phase-3">Phase 3 - Compliance Shield ($8-12k)</option>
-                    <option value="phase-4">Phase 4 - Implementation ($20-30k)</option>
+                    <option value="phase-1">Phase 1 - Feasibility Sprint</option>
+                    <option value="phase-2">Phase 2 - The Roadmap</option>
+                    <option value="phase-3">Phase 3 - Compliance Shield</option>
+                    <option value="phase-4">Phase 4 - Implementation</option>
                     <option value="roi">ROI Calculator</option>
                     <option value="general">General Inquiry</option>
                   </select>
@@ -230,6 +230,21 @@
 
     <script src="assets/js/scripts.js"></script>
     <script>
+      // Pre-select interest option from URL parameter
+      (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const option = urlParams.get('option');
+        const interestSelect = document.getElementById('interest');
+        
+        if (option && interestSelect) {
+          // Set the value if it exists in the dropdown
+          const optionExists = Array.from(interestSelect.options).some(opt => opt.value === option);
+          if (optionExists) {
+            interestSelect.value = option;
+          }
+        }
+      })();
+
       // AI Contact Assistant
       const chatContainer = document.getElementById('chatContainer');
       const chatInput = document.getElementById('chatInput');
