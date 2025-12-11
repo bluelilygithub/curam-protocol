@@ -120,9 +120,6 @@ AI_OPPORTUNITIES = {
         {"task": "Claims Documentation Intelligence", "potential": "HIGH", "hours_per_week": 6, "description": "Automated extraction and analysis from claims documentation"},
         {"task": "Compliance Documentation", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated extraction from compliance certificates and audits"},
         {"task": "Policy Renewal Processing", "potential": "MEDIUM", "hours_per_week": 3, "description": "Automated extraction from renewal forms and client correspondence"}
-        {"task": "NDIS Audit Trail Generation", "potential": "HIGH", "hours_per_week": 7, "description": "Automated compilation of NDIS service delivery documentation"},
-        {"task": "Contract Retention Processing", "potential": "MEDIUM", "hours_per_week": 5, "description": "Automated extraction from contract documents"},
-        {"task": "Regulatory Report Assembly", "potential": "MEDIUM", "hours_per_week": 4, "description": "Template-based government report automation"}
     ]
 }
 
@@ -2120,241 +2117,241 @@ def roi_calculator():
         
         # If industry is provided via URL parameter and we're on step 1, auto-advance to step 2
         if industry and step == 1 and request.method == 'GET':
-        # Validate industry exists in INDUSTRIES (case-sensitive match required)
-        if industry in INDUSTRIES:
-            session['industry'] = industry
-            step = 2
-        else:
-            # Log for debugging - industry not found
-            print(f"Warning: Industry '{industry}' not found in INDUSTRIES. Available industries: {list(INDUSTRIES.keys())}")
+            # Validate industry exists in INDUSTRIES (case-sensitive match required)
+            if industry in INDUSTRIES:
+                session['industry'] = industry
+                step = 2
+            else:
+                # Log for debugging - industry not found
+                print(f"Warning: Industry '{industry}' not found in INDUSTRIES. Available industries: {list(INDUSTRIES.keys())}")
         
         if request.method == 'POST':
-        action = request.form.get('action', '')
-        if action == 'continue' or request.form.get('industry'):
-            industry = request.form.get('industry')
-            session['industry'] = industry
-            step = 2
-        elif action == 'calculate':
-            step = 3
+            action = request.form.get('action', '')
+            if action == 'continue' or request.form.get('industry'):
+                industry = request.form.get('industry')
+                session['industry'] = industry
+                step = 2
+            elif action == 'calculate':
+                step = 3
         
         # Step 1: Industry Selection
         if step == 1:
-        return render_template_string(HTML_TEMPLATE, 
-            step=1, 
-            industries=INDUSTRIES,
-            selected_industry=selected_industry)
+            return render_template_string(HTML_TEMPLATE, 
+                step=1, 
+                industries=INDUSTRIES,
+                selected_industry=selected_industry)
         
         # Step 2: Data Entry
         if step == 2:
-        if not industry:
-            return render_template_string(HTML_TEMPLATE, step=1, industries=INDUSTRIES)
-        
-        # Validate industry exists before accessing
-        if industry not in INDUSTRIES:
-            # If industry not found, redirect to step 1 with error message
-            return render_template_string(HTML_TEMPLATE, step=1, industries=INDUSTRIES, error=f"Industry '{industry}' not found. Please select from the list below.")
-        
-        industry_config = INDUSTRIES[industry]
-        
-        # Handle form submission
-        if request.method == 'POST' and action == 'calculate':
-            # Get values from form - prioritize form values over session/defaults
-            staff_count_str = request.form.get('staff_count', '').strip()
-            staff_count = int(staff_count_str) if staff_count_str else int(session.get('staff_count', 50))
+            if not industry:
+                return render_template_string(HTML_TEMPLATE, step=1, industries=INDUSTRIES)
             
-            avg_rate_str = request.form.get('avg_rate', '').strip()
-            avg_rate = float(avg_rate_str) if avg_rate_str else float(session.get('avg_rate', 185))
+            # Validate industry exists before accessing
+            if industry not in INDUSTRIES:
+                # If industry not found, redirect to step 1 with error message
+                return render_template_string(HTML_TEMPLATE, step=1, industries=INDUSTRIES, error=f"Industry '{industry}' not found. Please select from the list below.")
             
-            platform = request.form.get('platform', '').strip() or session.get('platform', 'M365/SharePoint')
+            industry_config = INDUSTRIES[industry]
             
-            pain_point_str = request.form.get('pain_point', '').strip()
-            pain_point = int(pain_point_str) if pain_point_str else int(session.get('pain_point', 5))
+            # Handle form submission
+            if request.method == 'POST' and action == 'calculate':
+                # Get values from form - prioritize form values over session/defaults
+                staff_count_str = request.form.get('staff_count', '').strip()
+                staff_count = int(staff_count_str) if staff_count_str else int(session.get('staff_count', 50))
+                
+                avg_rate_str = request.form.get('avg_rate', '').strip()
+                avg_rate = float(avg_rate_str) if avg_rate_str else float(session.get('avg_rate', 185))
+                
+                platform = request.form.get('platform', '').strip() or session.get('platform', 'M365/SharePoint')
+                
+                pain_point_str = request.form.get('pain_point', '').strip()
+                pain_point = int(pain_point_str) if pain_point_str else int(session.get('pain_point', 5))
+                
+                weekly_waste_str = request.form.get('weekly_waste', '').strip()
+                weekly_waste = float(weekly_waste_str) if weekly_waste_str else float(session.get('weekly_waste', 5.0))
+                
+                # Save to session
+                session['staff_count'] = staff_count
+                session['avg_rate'] = avg_rate
+                session['platform'] = platform
+                session['pain_point'] = pain_point
+                session['weekly_waste'] = weekly_waste
+                session['industry'] = industry
+                
+                # Redirect to step 3 with values in URL as backup (in case session doesn't persist)
+                return redirect(url_for('roi_calculator.roi_calculator', 
+                                      step=3,
+                                      staff_count=staff_count,
+                                      avg_rate=avg_rate,
+                                      weekly_waste=weekly_waste,
+                                      pain_point=pain_point,
+                                      platform=platform,
+                                      industry=industry))
             
-            weekly_waste_str = request.form.get('weekly_waste', '').strip()
-            weekly_waste = float(weekly_waste_str) if weekly_waste_str else float(session.get('weekly_waste', 5.0))
+            # Get values from session or defaults
+            staff_count = int(request.form.get('staff_count', session.get('staff_count', 50)))
+            avg_rate = float(request.form.get('avg_rate', session.get('avg_rate', 185)))
+            platform = request.form.get('platform', session.get('platform', 'M365/SharePoint'))
+            pain_point = request.form.get('pain_point')
+            if pain_point:
+                pain_point = int(pain_point)
+            else:
+                pain_point = session.get('pain_point')
+            weekly_waste = request.form.get('weekly_waste')
+            if weekly_waste:
+                weekly_waste = float(weekly_waste)
+            else:
+                weekly_waste = session.get('weekly_waste', 5.0)
             
-            # Save to session
-            session['staff_count'] = staff_count
-            session['avg_rate'] = avg_rate
-            session['platform'] = platform
-            session['pain_point'] = pain_point
-            session['weekly_waste'] = weekly_waste
-            session['industry'] = industry
-            
-            # Redirect to step 3 with values in URL as backup (in case session doesn't persist)
-            return redirect(url_for('roi_calculator.roi_calculator', 
-                                  step=3,
-                                  staff_count=staff_count,
-                                  avg_rate=avg_rate,
-                                  weekly_waste=weekly_waste,
-                                  pain_point=pain_point,
-                                  platform=platform,
-                                  industry=industry))
-        
-        # Get values from session or defaults
-        staff_count = int(request.form.get('staff_count', session.get('staff_count', 50)))
-        avg_rate = float(request.form.get('avg_rate', session.get('avg_rate', 185)))
-        platform = request.form.get('platform', session.get('platform', 'M365/SharePoint'))
-        pain_point = request.form.get('pain_point')
-        if pain_point:
-            pain_point = int(pain_point)
-        else:
-            pain_point = session.get('pain_point')
-        weekly_waste = request.form.get('weekly_waste')
-        if weekly_waste:
-            weekly_waste = float(weekly_waste)
-        else:
-            weekly_waste = session.get('weekly_waste', 5.0)
-        
-        return render_template_string(HTML_TEMPLATE,
-            step=2,
-            industry=industry,
-            industry_config=industry_config,
-            staff_count=staff_count,
-            avg_rate=avg_rate,
-            platform=platform,
-            pain_point=pain_point,
-            weekly_waste=weekly_waste)
+            return render_template_string(HTML_TEMPLATE,
+                step=2,
+                industry=industry,
+                industry_config=industry_config,
+                staff_count=staff_count,
+                avg_rate=avg_rate,
+                platform=platform,
+                pain_point=pain_point,
+                weekly_waste=weekly_waste)
         
         # Step 3: Results
         if step == 3:
-        # Get values from form first (if submitted), then session, then defaults
-        # This ensures we use the actual submitted values
-        staff_count = int(request.form.get('staff_count') or request.args.get('staff_count') or session.get('staff_count') or 50)
-        avg_rate = float(request.form.get('avg_rate') or request.args.get('avg_rate') or session.get('avg_rate') or 185)
-        weekly_waste = float(request.form.get('weekly_waste') or request.args.get('weekly_waste') or session.get('weekly_waste') or 5.0)
-        pain_point = int(request.form.get('pain_point') or request.args.get('pain_point') or session.get('pain_point') or 5)
-        platform = request.form.get('platform') or request.args.get('platform') or session.get('platform') or 'M365/SharePoint'
-        
-        # Validate values are within acceptable ranges (but don't reset to defaults if they're valid)
-        if staff_count < 10:
-            staff_count = max(10, staff_count)  # Ensure minimum, but don't override user input
-        if avg_rate < 50:
-            avg_rate = max(50, avg_rate)  # Ensure minimum, but don't override user input
-        if weekly_waste < 0:
-            weekly_waste = max(0, weekly_waste)  # Ensure non-negative
-        
-        # Save to session to ensure persistence
-        session['staff_count'] = staff_count
-        session['avg_rate'] = avg_rate
-        session['weekly_waste'] = weekly_waste
-        session['pain_point'] = pain_point
-        session['platform'] = platform
-        
-        # Get industry config for automation potential
-        industry_config = INDUSTRIES.get(industry, {})
-        
-        calculations = calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_config)
-        automation_potential = calculations.get('automation_potential', 0.40)
-        session['calculations'] = calculations
-        
-        # Format automation potential as percentage for display
-        tier1_percentage = int(automation_potential * 100)
-        
-        # Create chart data with proper formatting
-        chart_data = {
-            "data": [{
-                "x": ["Current<br>State", f"Tier 1<br>({tier1_percentage}% Reduction)", "Tier 2<br>(70% Reduction)"],
-                "y": [
-                    calculations['annual_burn'],
-                    calculations['tier_1_cost'],
-                    calculations['tier_2_cost']
-                ],
-                "type": "bar",
-                "marker": {"color": ["#0B1221", "#D4AF37", "#B8941F"]},
-                "text": [format_currency(calculations['annual_burn']), 
-                        format_currency(calculations['tier_1_cost']),
-                        format_currency(calculations['tier_2_cost'])],
-                "textposition": "outside",
-                "hovertemplate": "%{y:$,.0f}<extra></extra>",
-                "textfont": {"size": 12}
-            }],
-            "layout": {
-                "title": "",
-                "xaxis": {
+            # Get values from form first (if submitted), then session, then defaults
+            # This ensures we use the actual submitted values
+            staff_count = int(request.form.get('staff_count') or request.args.get('staff_count') or session.get('staff_count') or 50)
+            avg_rate = float(request.form.get('avg_rate') or request.args.get('avg_rate') or session.get('avg_rate') or 185)
+            weekly_waste = float(request.form.get('weekly_waste') or request.args.get('weekly_waste') or session.get('weekly_waste') or 5.0)
+            pain_point = int(request.form.get('pain_point') or request.args.get('pain_point') or session.get('pain_point') or 5)
+            platform = request.form.get('platform') or request.args.get('platform') or session.get('platform') or 'M365/SharePoint'
+            
+            # Validate values are within acceptable ranges (but don't reset to defaults if they're valid)
+            if staff_count < 10:
+                staff_count = max(10, staff_count)  # Ensure minimum, but don't override user input
+            if avg_rate < 50:
+                avg_rate = max(50, avg_rate)  # Ensure minimum, but don't override user input
+            if weekly_waste < 0:
+                weekly_waste = max(0, weekly_waste)  # Ensure non-negative
+            
+            # Save to session to ensure persistence
+            session['staff_count'] = staff_count
+            session['avg_rate'] = avg_rate
+            session['weekly_waste'] = weekly_waste
+            session['pain_point'] = pain_point
+            session['platform'] = platform
+            
+            # Get industry config for automation potential
+            industry_config = INDUSTRIES.get(industry, {})
+            
+            calculations = calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_config)
+            automation_potential = calculations.get('automation_potential', 0.40)
+            session['calculations'] = calculations
+            
+            # Format automation potential as percentage for display
+            tier1_percentage = int(automation_potential * 100)
+            
+            # Create chart data with proper formatting
+            chart_data = {
+                "data": [{
+                    "x": ["Current<br>State", f"Tier 1<br>({tier1_percentage}% Reduction)", "Tier 2<br>(70% Reduction)"],
+                    "y": [
+                        calculations['annual_burn'],
+                        calculations['tier_1_cost'],
+                        calculations['tier_2_cost']
+                    ],
+                    "type": "bar",
+                    "marker": {"color": ["#0B1221", "#D4AF37", "#B8941F"]},
+                    "text": [format_currency(calculations['annual_burn']), 
+                            format_currency(calculations['tier_1_cost']),
+                            format_currency(calculations['tier_2_cost'])],
+                    "textposition": "outside",
+                    "hovertemplate": "%{y:$,.0f}<extra></extra>",
+                    "textfont": {"size": 12}
+                }],
+                "layout": {
                     "title": "",
-                    "tickangle": 0,
-                    "tickfont": {"size": 11}
-                },
-                "yaxis": {
-                    "title": "Annual Cost (AUD)",
-                    "tickformat": "$,.0f"
-                },
-                "showlegend": False,
-                "height": 450,
-                "margin": {"t": 60, "b": 100, "l": 80, "r": 40},
-                "plot_bgcolor": "white",
-                "paper_bgcolor": "white"
+                    "xaxis": {
+                        "title": "",
+                        "tickangle": 0,
+                        "tickfont": {"size": 11}
+                    },
+                    "yaxis": {
+                        "title": "Annual Cost (AUD)",
+                        "tickformat": "$,.0f"
+                    },
+                    "showlegend": False,
+                    "height": 450,
+                    "margin": {"t": 60, "b": 100, "l": 80, "r": 40},
+                    "plot_bgcolor": "white",
+                    "paper_bgcolor": "white"
+                }
             }
-        }
-        
-        # Analysis text
-        analysis_text = []
-        if calculations['pain_point'] >= 8:
-            analysis_text.append("⚠️ <strong>High Risk Profile:</strong> You have a high risk profile for transcription errors that could impact project quality and compliance.")
-        if calculations['weekly_waste'] > 5:
-            waste_percentage = (calculations['weekly_waste'] / 40) * 100
-            analysis_text.append(f"📊 <strong>Time Allocation:</strong> Your senior staff are spending {waste_percentage:.1f}%+ of their time on non-billable administrative work.")
-        if calculations['annual_burn'] > 100000:
-            analysis_text.append(f"💰 <strong>Significant Opportunity:</strong> With an annual revenue leakage of {format_currency(calculations['annual_burn'])}, automation could deliver substantial ROI within the first year.")
-        if not analysis_text:
-            analysis_text.append("✅ Your organization shows moderate efficiency opportunities. Automation can still deliver meaningful improvements.")
-        
-        # Get platform and other values for display
-        platform = session.get('platform', 'M365/SharePoint')
-        
-        # Get AI opportunities for this industry
-        ai_opportunities = AI_OPPORTUNITIES.get(industry, [])
-        
-        # Generate automation roadmap
-        roadmap = generate_automation_roadmap(industry, staff_count, avg_rate, weekly_waste)
-        
-        # Industry config already retrieved above for automation_potential
-        
-        # Calculate additional metrics for universal template
-        total_weekly_hours = weekly_waste
-        total_annual_hours = total_weekly_hours * 48
-        tier1_savings = calculations['tier_1_savings']
-        
-        # Get pain point description
-        pain_point_description = "Not specified"
-        if 'pain_point_options' in industry_config:
-            for option in industry_config['pain_point_options']:
-                if option.get('value') == pain_point:
-                    pain_point_description = option.get('label', 'Not specified')
-                    break
-        elif 'q1_options' in industry_config:
-            # Fallback to legacy format
-            for label, value in industry_config['q1_options'].items():
-                if value == pain_point:
-                    pain_point_description = label
-                    break
-        
-        # Industry slug for URL
-        industry_slug = industry.lower().replace(' & ', '-').replace(' ', '-')
-        
-        return render_template_string(HTML_TEMPLATE,
-            step=3,
-            industry=industry,
-            industry_config=industry_config,
-            industry_slug=industry_slug,
-            staff_count=staff_count,
-            avg_rate=avg_rate,
-            platform=platform,
-            calculations=calculations,
-            total_weekly_hours=total_weekly_hours,
-            total_annual_hours=total_annual_hours,
-            tier1_savings=tier1_savings,
-            pain_point_description=pain_point_description,
-            tier1_percentage=tier1_percentage,
-            automation_potential=automation_potential,
-            chart_json=json.dumps(chart_data, cls=plotly.utils.PlotlyJSONEncoder),
-            analysis_text=analysis_text,
-            ai_opportunities=ai_opportunities,
-            roadmap=roadmap,
-            booking_url=BOOKING_URL,
-            format_currency=format_currency,
-            INDUSTRIES=INDUSTRIES)
+            
+            # Analysis text
+            analysis_text = []
+            if calculations['pain_point'] >= 8:
+                analysis_text.append("⚠️ <strong>High Risk Profile:</strong> You have a high risk profile for transcription errors that could impact project quality and compliance.")
+            if calculations['weekly_waste'] > 5:
+                waste_percentage = (calculations['weekly_waste'] / 40) * 100
+                analysis_text.append(f"📊 <strong>Time Allocation:</strong> Your senior staff are spending {waste_percentage:.1f}%+ of their time on non-billable administrative work.")
+            if calculations['annual_burn'] > 100000:
+                analysis_text.append(f"💰 <strong>Significant Opportunity:</strong> With an annual revenue leakage of {format_currency(calculations['annual_burn'])}, automation could deliver substantial ROI within the first year.")
+            if not analysis_text:
+                analysis_text.append("✅ Your organization shows moderate efficiency opportunities. Automation can still deliver meaningful improvements.")
+            
+            # Get platform and other values for display
+            platform = session.get('platform', 'M365/SharePoint')
+            
+            # Get AI opportunities for this industry
+            ai_opportunities = AI_OPPORTUNITIES.get(industry, [])
+            
+            # Generate automation roadmap
+            roadmap = generate_automation_roadmap(industry, staff_count, avg_rate, weekly_waste)
+            
+            # Industry config already retrieved above for automation_potential
+            
+            # Calculate additional metrics for universal template
+            total_weekly_hours = weekly_waste
+            total_annual_hours = total_weekly_hours * 48
+            tier1_savings = calculations['tier_1_savings']
+            
+            # Get pain point description
+            pain_point_description = "Not specified"
+            if 'pain_point_options' in industry_config:
+                for option in industry_config['pain_point_options']:
+                    if option.get('value') == pain_point:
+                        pain_point_description = option.get('label', 'Not specified')
+                        break
+            elif 'q1_options' in industry_config:
+                # Fallback to legacy format
+                for label, value in industry_config['q1_options'].items():
+                    if value == pain_point:
+                        pain_point_description = label
+                        break
+            
+            # Industry slug for URL
+            industry_slug = industry.lower().replace(' & ', '-').replace(' ', '-')
+            
+            return render_template_string(HTML_TEMPLATE,
+                step=3,
+                industry=industry,
+                industry_config=industry_config,
+                industry_slug=industry_slug,
+                staff_count=staff_count,
+                avg_rate=avg_rate,
+                platform=platform,
+                calculations=calculations,
+                total_weekly_hours=total_weekly_hours,
+                total_annual_hours=total_annual_hours,
+                tier1_savings=tier1_savings,
+                pain_point_description=pain_point_description,
+                tier1_percentage=tier1_percentage,
+                automation_potential=automation_potential,
+                chart_json=json.dumps(chart_data, cls=plotly.utils.PlotlyJSONEncoder),
+                analysis_text=analysis_text,
+                ai_opportunities=ai_opportunities,
+                roadmap=roadmap,
+                booking_url=BOOKING_URL,
+                format_currency=format_currency,
+                INDUSTRIES=INDUSTRIES)
         
         # Step 4: PDF Download
         if step == 4:
