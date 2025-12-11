@@ -1618,6 +1618,14 @@ def wealth_management_page():
     except:
         return "Wealth Management page not found.", 404
 
+@app.route('/insurance-underwriting')
+@app.route('/insurance-underwriting.html')
+def insurance_underwriting_page():
+    try:
+        return send_file('insurance-underwriting.html')
+    except:
+        return "Insurance Underwriting page not found.", 404
+
 @app.route('/case-study')
 @app.route('/case-study.html')
 def case_study_page():
