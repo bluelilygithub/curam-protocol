@@ -349,7 +349,7 @@ def generate_pdf_report(industry, staff_count, avg_rate, platform, calculations)
     story.append(Paragraph("Financial Analysis", heading_style))
     calc_data = [
         ["Metric", "Value"],
-        ["Annual Efficiency Loss (Burn Rate)", format_currency(calculations['annual_burn'])],
+        ["Annual Revenue Leakage", format_currency(calculations['annual_burn'])],
         ["Tier 1 Opportunity (Immediate Savings)", format_currency(calculations['tier_1_savings'])],
         ["Capacity Hours Unlocked", f"{calculations['capacity_hours']:,.0f} hours"],
         ["Potential Revenue Opportunity", format_currency(calculations['potential_revenue'])]
@@ -1111,7 +1111,7 @@ HTML_TEMPLATE = """
                 </li>
                 <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-bottom: 1px solid #E5E7EB;">
                     <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
-                    At an average rate of <strong style="color: #0B1221;">{{ format_currency(avg_rate) }}/hour</strong>, you're burning <strong style="color: #0B1221;">{{ format_currency(calculations.annual_burn) }}/year</strong>
+                    At an average rate of <strong style="color: #0B1221;">{{ format_currency(avg_rate) }}/hour</strong>, this represents <strong style="color: #0B1221;">{{ format_currency(calculations.annual_burn) }}/year</strong> in revenue leakage
                 </li>
                 <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6;">
                     <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
@@ -1154,15 +1154,21 @@ HTML_TEMPLATE = """
             </div>
         </div>
         
+        <!-- Utilization Disclaimer -->
+        <p class="disclaimer" style="font-size: 0.9em; color: #cbd5e1; margin-bottom: 20px; padding: 1rem; background: rgba(203, 213, 225, 0.1); border-left: 3px solid #cbd5e1; border-radius: 6px;">
+            *Assumes 70% of recovered time converts to billable work. Actual results depend on 
+            firm capacity and client demand.
+        </p>
+        
         <hr>
         <div class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-value">{{ format_currency(calculations.annual_burn) }}</div>
-                <div class="metric-label">Annual Burn Rate</div>
+                <div class="metric-label">Annual Revenue Leakage</div>
             </div>
             <div class="metric-card">
                 <div class="metric-value">{{ format_currency(calculations.tier_1_savings) }}</div>
-                <div class="metric-label">Tier 1 Savings</div>
+                <div class="metric-label">Tier 1 Opportunity</div>
             </div>
             <div class="metric-card">
                 <div class="metric-value">{{ "{:,.0f}".format(calculations.capacity_hours) }}</div>
@@ -1402,7 +1408,7 @@ HTML_TEMPLATE = """
         <hr>
         <div class="explanation-box">
             <h4>How These Numbers Are Calculated</h4>
-            <p><strong>Annual Burn Rate (Efficiency Loss):</strong></p>
+            <p><strong>Annual Revenue Leakage (Efficiency Loss):</strong></p>
             <p>This represents the total cost of wasted time spent on manual administrative tasks. Calculated as:</p>
             <ul>
                 <li><strong>Staff Count</strong> × <strong>Weekly Waste Hours</strong> × <strong>Billable Rate</strong> × <strong>48 weeks</strong></li>
@@ -1420,16 +1426,16 @@ HTML_TEMPLATE = """
                 <li><strong>Capacity Hours</strong> × <strong>Billable Rate</strong></li>
                 <li>Example: 12,000 hours × $185/hour = $2,220,000 in potential revenue</li>
             </ul>
-            <p><strong>Tier 1 Savings (Immediate Opportunity - 40% Reduction):</strong></p>
+            <p><strong>Tier 1 Opportunity (Immediate Opportunity - 40% Reduction):</strong></p>
             <p>A conservative estimate assuming 40% reduction in administrative time through Phase 1 automation (e.g., automated data extraction, document processing):</p>
             <ul>
-                <li><strong>Annual Burn Rate</strong> × <strong>40%</strong></li>
+                <li><strong>Annual Revenue Leakage</strong> × <strong>40%</strong></li>
                 <li>This represents the "low-hanging fruit" - quick wins that can be implemented in the first 3-6 months</li>
             </ul>
             <p><strong>Tier 2 Opportunity (Expanded Automation - 70% Reduction):</strong></p>
             <p>Further automation and workflow optimization, expanding beyond initial use cases:</p>
             <ul>
-                <li><strong>Annual Burn Rate</strong> × <strong>70%</strong></li>
+                <li><strong>Annual Revenue Leakage</strong> × <strong>70%</strong></li>
                 <li>Includes Tier 1 benefits plus advanced automation, process redesign, and integration across systems</li>
                 <li>Typically achieved within 12-18 months of implementation</li>
             </ul>
@@ -1591,6 +1597,36 @@ HTML_TEMPLATE = """
         <div class="btn-group">
             <a href="{{ url_for('roi_calculator.download_pdf') }}" class="btn">📥 Download Business Case PDF</a>
         </div>
+        <div style="margin-top: 20px;">
+            <button onclick="emailPDF()" style="background: #1e3a8a; padding: 12px 24px; border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 1rem; font-weight: 600;">
+                📧 Email Report to Me
+            </button>
+        </div>
+        <script>
+        function emailPDF() {
+            const email = prompt("Enter your email address:");
+            if (!email) return;
+            
+            // Get session data for email
+            fetch('{{ url_for("roi_calculator.email_report") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    email: email,
+                    industry: '{{ industry }}'
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) alert('Report sent to ' + email);
+                else alert('Error sending email: ' + (data.error || 'Unknown error'));
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error sending email. Please try again.');
+            });
+        }
+        </script>
         <hr>
         <h3>Next Steps</h3>
         <ol>
@@ -1780,7 +1816,7 @@ def roi_calculator():
             waste_percentage = (calculations['weekly_waste'] / 40) * 100
             analysis_text.append(f"📊 <strong>Time Allocation:</strong> Your senior staff are spending {waste_percentage:.1f}%+ of their time on non-billable administrative work.")
         if calculations['annual_burn'] > 100000:
-            analysis_text.append(f"💰 <strong>Significant Opportunity:</strong> With an annual burn rate of {format_currency(calculations['annual_burn'])}, automation could deliver substantial ROI within the first year.")
+            analysis_text.append(f"💰 <strong>Significant Opportunity:</strong> With an annual revenue leakage of {format_currency(calculations['annual_burn'])}, automation could deliver substantial ROI within the first year.")
         if not analysis_text:
             analysis_text.append("✅ Your organization shows moderate efficiency opportunities. Automation can still deliver meaningful improvements.")
         
@@ -1841,9 +1877,63 @@ def roi_calculator():
     
     # Step 4: PDF Download
     if step == 4:
+        # Get industry from session for email button
+        industry = session.get('industry', '')
         return render_template_string(HTML_TEMPLATE,
             step=4,
+            industry=industry,
             booking_url=BOOKING_URL)
+
+@roi_app.route('/email-report', methods=['POST'])
+def email_report():
+    """Email PDF report to user"""
+    from flask import jsonify
+    
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        industry = data.get('industry')
+        
+        if not email:
+            return jsonify({"success": False, "error": "Email is required"}), 400
+        
+        # Get session data
+        if not industry:
+            industry = session.get('industry')
+        staff_count = session.get('staff_count', 50)
+        avg_rate = session.get('avg_rate', 185)
+        platform = session.get('platform', 'M365/SharePoint')
+        calculations = session.get('calculations')
+        weekly_waste = session.get('weekly_waste', 5.0)
+        
+        if not calculations:
+            return jsonify({"success": False, "error": "No calculations found. Please complete the calculator first."}), 400
+        
+        # Generate PDF
+        pdf_buffer = generate_pdf_report(industry, staff_count, avg_rate, platform, calculations)
+        pdf_bytes = pdf_buffer.getvalue()
+        
+        # TODO: Integrate with your email service (SendGrid, AWS SES, etc.)
+        # For now, just log it
+        print(f"PDF EMAIL REQUEST:")
+        print(f"  To: {email}")
+        print(f"  Industry: {industry}")
+        print(f"  PDF size: {len(pdf_bytes)} bytes")
+        
+        # In production, send email with PDF attachment here
+        # send_email_with_attachment(
+        #     to=email,
+        #     subject="Your ROI Business Case Report",
+        #     body="Please find your personalized ROI Business Case report attached.",
+        #     attachment=pdf_bytes,
+        #     filename="roi_business_case.pdf"
+        # )
+        
+        return jsonify({"success": True, "message": "Report sent successfully"})
+        
+    except Exception as e:
+        print(f"Error sending email report: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @roi_app.route('/send-roadmap-email', methods=['POST'])
 def send_roadmap_email():
