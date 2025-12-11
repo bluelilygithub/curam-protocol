@@ -187,17 +187,19 @@ h1, h2, h3, h4 {
 
 .btn-protocol {
   background: transparent;
-  color: var(--cyan-accent);
-  border: 1px solid var(--cyan-accent);
+  color: var(--color-gold);
+  border: 1px solid rgba(212, 175, 55, 0.3);
   font-size: 0.8125rem;
   padding: 0.625rem 1.25rem;
   width: 100%;
   margin-top: var(--spacing-md);
+  transition: var(--transition);
 }
 
 .btn-protocol:hover {
-  background: rgba(0, 212, 255, 0.1);
-  box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+  background: rgba(212, 175, 55, 0.1);
+  border-color: rgba(212, 175, 55, 0.6);
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
 }
 
 .btn-nav {
@@ -880,8 +882,8 @@ h1, h2, h3, h4 {
 }
 
 .protocol-assurance-callout {
-  background: rgba(0, 212, 255, 0.08);
-  border: 1px solid var(--border-accent);
+  background: rgba(212, 175, 55, 0.08);
+  border: 1px solid rgba(212, 175, 55, 0.3);
   border-radius: var(--border-radius);
   padding: var(--spacing-lg);
   margin-bottom: var(--spacing-2xl);
@@ -891,7 +893,7 @@ h1, h2, h3, h4 {
 }
 
 .protocol-assurance-callout strong {
-  color: var(--cyan-accent);
+  color: var(--color-gold);
 }
 
 /* Protocol Diagram Grid */
@@ -923,9 +925,9 @@ h1, h2, h3, h4 {
 }
 
 .protocol-phase:hover {
-  border-color: var(--border-accent);
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
+  border-color: rgba(212, 175, 55, 0.4);
+  transform: translateX(4px);
+  box-shadow: 0 8px 30px rgba(212, 175, 55, 0.15);
 }
 
 .phase-icon {
@@ -936,8 +938,8 @@ h1, h2, h3, h4 {
   height: 72px;
   margin-bottom: var(--spacing-md);
   border-radius: 50%;
-  background: rgba(0, 212, 255, 0.1);
-  color: var(--cyan-accent);
+  background: rgba(212, 175, 55, 0.1);
+  color: var(--color-gold);
 }
 
 .phase-number {
@@ -945,7 +947,7 @@ h1, h2, h3, h4 {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--cyan-accent);
+  color: var(--color-gold);
   margin-bottom: var(--spacing-xs);
 }
 
@@ -1008,7 +1010,7 @@ h1, h2, h3, h4 {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--cyan-accent);
+  background: var(--color-gold);
 }
 
 .phase-exit {
@@ -1027,12 +1029,13 @@ h1, h2, h3, h4 {
   display: block;
   margin-top: var(--spacing-sm);
   font-size: 0.8125rem;
-  color: var(--cyan-accent);
+  color: var(--color-gold);
   transition: var(--transition-fast);
 }
 
 .phase-resource-link:hover {
-  color: var(--text-primary);
+  color: #FFD700;
+  text-decoration: underline;
 }
 
 /* Protocol Memory Hook */
@@ -1044,13 +1047,13 @@ h1, h2, h3, h4 {
 }
 
 .protocol-memory-hook-link {
-  color: var(--cyan-accent);
+  color: var(--color-gold);
   font-weight: 600;
   transition: var(--transition-fast);
 }
 
 .protocol-memory-hook-link:hover {
-  color: var(--text-primary);
+  color: #FFD700;
   text-decoration: underline;
 }
 
@@ -8189,9 +8192,9 @@ h1, h2, h3, h4 {
 }
 
 .methodology-card:hover {
-    border-color: var(--cyan-accent);
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-lg);
+    border-color: rgba(212, 175, 55, 0.4);
+    transform: translateX(4px);
+    box-shadow: 0 8px 30px rgba(212, 175, 55, 0.15);
 }
 
 .methodology-card-warning {
@@ -8219,8 +8222,8 @@ h1, h2, h3, h4 {
     justify-content: center;
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--cyan-accent);
-    background: rgba(0, 212, 255, 0.1);
+    color: var(--color-gold);
+    background: rgba(212, 175, 55, 0.1);
     border-radius: 50%;
 }
 
@@ -8255,7 +8258,7 @@ h1, h2, h3, h4 {
 .methodology-count {
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cyan-accent);
+    color: var(--color-gold);
     margin-bottom: var(--spacing-sm);
 }
 
@@ -8956,9 +8959,15 @@ h1, h2, h3, h4 {
 }
 
 .methodology-link a {
-    color: var(--cyan-accent);
+    color: var(--color-gold);
     font-weight: 600;
     text-decoration: none;
+    transition: var(--transition);
+}
+
+.methodology-link a:hover {
+    color: #FFD700;
+    text-decoration: underline;
 }
 
 .methodology-note {
