@@ -57,6 +57,13 @@ AI_OPPORTUNITIES = {
         {"task": "Three-Way Match (PO/Docket/Invoice)", "potential": "MEDIUM", "hours_per_week": 5, "description": "Automated variance detection and approval routing"},
         {"task": "Fraud Detection (Bank Details)", "potential": "MEDIUM", "hours_per_week": 3, "description": "BSB/account verification against master records"},
         {"task": "Bank Reconciliation", "potential": "LOW", "hours_per_week": 2, "description": "Automated bank statement matching"}
+    ],
+    "Legal Services": [
+        {"task": "Contract Review & Term Extraction", "potential": "HIGH", "hours_per_week": 8, "description": "Automated extraction of key terms, dates, parties, and obligations from contracts"},
+        {"task": "Matter Intake Automation", "potential": "HIGH", "hours_per_week": 7, "description": "Extract client data from intake forms and ID documents, auto-create matter files"},
+        {"task": "Legal Research Indexing", "potential": "MEDIUM", "hours_per_week": 5, "description": "AI-powered search across past matters and research memos"},
+        {"task": "Time Entry Automation", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated time sheet entry from calendar and email data"},
+        {"task": "Document Discovery", "potential": "LOW", "hours_per_week": 3, "description": "Indexing and searching large document sets for discovery"}
     ]
 }
 
@@ -183,6 +190,48 @@ INDUSTRIES = {
         "q2_label": "Total firm-wide hours per week on manual processing (all staff combined)",
         "q2_type": "slider",
         "q2_range": (10, 200)
+    },
+    "Legal Services": {
+        "context": "Legal practices and law firms (10-100 staff)",
+        "pain_point_question": "What's your biggest administrative bottleneck?",
+        "pain_point_options": [
+            {
+                "value": 3,
+                "label": "Time Entry & Billing (Manual time sheet entry)",
+                "description": "Low-medium pain - tedious but straightforward"
+            },
+            {
+                "value": 6,
+                "label": "Matter File Management (Creating and organizing client files)",
+                "description": "Medium pain - time-consuming setup"
+            },
+            {
+                "value": 8,
+                "label": "Contract Review (Reading and extracting key terms)",
+                "description": "Medium-high pain - requires legal judgment"
+            },
+            {
+                "value": 10,
+                "label": "Document Discovery (Searching and indexing large document sets)",
+                "description": "High pain - extremely time-consuming, paralegal work"
+            }
+        ],
+        "weekly_hours_question": "Total firm-wide hours per week on administrative tasks (all staff combined)",
+        "weekly_hours_range": [10, 150, 50],
+        "weekly_hours_help_text": "Example: 20 staff × 2.5 hours each = 50 hours/week. Include: time entry, file management, document review.",
+        "demo_documents": "contracts, matter files, time sheets, or discovery documents",
+        "automation_potential": 0.35,
+        # Legacy support
+        "q1_label": "What's your biggest administrative bottleneck?",
+        "q1_options": {
+            "Time Entry & Billing (Manual time sheet entry)": 3,
+            "Matter File Management (Creating and organizing client files)": 6,
+            "Contract Review (Reading and extracting key terms)": 8,
+            "Document Discovery (Searching and indexing large document sets)": 10
+        },
+        "q2_label": "Total firm-wide hours per week on administrative tasks (all staff combined)",
+        "q2_type": "slider",
+        "q2_range": (10, 150)
     }
 }
 

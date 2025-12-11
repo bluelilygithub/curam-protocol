@@ -56,6 +56,38 @@
         <priority>0.7</priority>
     </url>
     
+    <!-- Industry Pages -->
+    <url>
+        <loc>https://www.curam-ai.com.au/accounting.html</loc>
+        <lastmod>2025-01-27</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://www.curam-ai.com.au/legal-services.html</loc>
+        <lastmod>2025-01-27</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://www.curam-ai.com.au/professional-services.html</loc>
+        <lastmod>2025-01-27</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
+        <loc>https://www.curam-ai.com.au/logistics-compliance.html</loc>
+        <lastmod>2025-01-27</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    <url>
+        <loc>https://www.curam-ai.com.au/built-environment.html</loc>
+        <lastmod>2025-01-27</lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    
     <!-- Resources -->
     <url>
         <loc>https://www.curam-ai.com.au/roi.html</loc>

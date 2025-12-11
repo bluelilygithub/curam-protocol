@@ -1602,6 +1602,14 @@ def built_environment_page():
     except:
         return "Built Environment page not found.", 404
 
+@app.route('/legal-services')
+@app.route('/legal-services.html')
+def legal_services_page():
+    try:
+        return send_file('legal-services.html')
+    except:
+        return "Legal Services page not found.", 404
+
 @app.route('/case-study')
 @app.route('/case-study.html')
 def case_study_page():
