@@ -8,7 +8,7 @@
     let currentSlide = 0;
     let slideInterval;
     let isPaused = false;
-    const rotationSpeed = 6000; // 6 seconds per slide (reduced by 40% from 10 seconds)
+    const rotationSpeed = 4000; // 6 seconds per slide (reduced by 40% from 10 seconds)
     
     function initHeroRotation() {
         const slides = document.querySelectorAll('.hero-slide');

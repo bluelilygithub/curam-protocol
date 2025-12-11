@@ -2481,6 +2481,9 @@ Message:
 """
         
         # Build confirmation email for user
+        interest_line_html = f'<p><strong>Interest:</strong> {interest_display}</p>' if interest else ''
+        interest_line_text = f'Interest: {interest_display}\n\n' if interest else ''
+        
         confirmation_html = f"""
         <!DOCTYPE html>
         <html>
@@ -2488,13 +2491,16 @@ Message:
             <style>
                 body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
                 h1 {{ color: #0a1628; border-bottom: 2px solid #D4AF37; padding-bottom: 10px; }}
+                .info-box {{ margin: 20px 0; padding: 15px; background: #F8F9FA; border-radius: 4px; }}
                 .message {{ margin: 20px 0; padding: 15px; background: #F8F9FA; border-radius: 4px; }}
+                .interest {{ color: #D4AF37; font-weight: bold; }}
             </style>
         </head>
         <body>
             <h1>Thank You for Contacting Curam-Ai</h1>
             <p>Hi {name},</p>
-            <p>We've received your message and will get back to you within 24 hours.</p>
+            <p>We've received your inquiry and will get back to you within 24 hours.</p>
+            {interest_line_html}
             <div class="message">
                 <strong>Your Message:</strong><br>
                 {message_html}
@@ -2508,9 +2514,9 @@ Message:
 
 Hi {name},
 
-We've received your message and will get back to you within 24 hours.
+We've received your inquiry and will get back to you within 24 hours.
 
-Your Message:
+{interest_line_text}Your Message:
 {message}
 
 Best regards,
