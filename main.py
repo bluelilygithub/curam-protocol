@@ -2859,6 +2859,15 @@ def phase_3_compliance():
     except:
         return "Phase 3 Compliance Shield page not found.", 404
 
+@app.route('/phase-4-implementation')
+@app.route('/phase-4-implementation.html')
+def phase_4_implementation():
+    """Serve the Phase 4 Implementation page"""
+    try:
+        return send_file('phase-4-implementation.html')
+    except:
+        return "Phase 4 Implementation page not found.", 404
+
 @app.route('/feasibility-sprint-report')
 @app.route('/feasibility-sprint-report.html')
 @app.route('/gate2-sample-report')
