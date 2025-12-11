@@ -1626,6 +1626,36 @@ def insurance_underwriting_page():
     except:
         return "Insurance Underwriting page not found.", 404
 
+@app.route('/logistics-freight')
+@app.route('/logistics-freight.html')
+@app.route('/logistics')
+@app.route('/logistics.html')
+def logistics_freight_page():
+    try:
+        return send_file('logistics-freight.html')
+    except:
+        return "Logistics & Freight page not found.", 404
+
+@app.route('/healthcare-admin')
+@app.route('/healthcare-admin.html')
+@app.route('/healthcare')
+@app.route('/healthcare.html')
+def healthcare_admin_page():
+    try:
+        return send_file('healthcare-admin.html')
+    except:
+        return "Healthcare Admin page not found.", 404
+
+@app.route('/government-contractors')
+@app.route('/government-contractors.html')
+@app.route('/government')
+@app.route('/government.html')
+def government_contractors_page():
+    try:
+        return send_file('government-contractors.html')
+    except:
+        return "Government Contractors page not found.", 404
+
 @app.route('/case-study')
 @app.route('/case-study.html')
 def case_study_page():
