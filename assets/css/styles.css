@@ -9484,3 +9484,327 @@ h1, h2, h3, h4 {
     font-size: 1.25rem;
   }
 }
+
+/* ==============================================
+   HOW IT WORKS PAGE - DARK NAVY OVERRIDES
+   Force dark theme, remove white/colorful backgrounds
+   ============================================== */
+
+/* Force dark background for entire page */
+.how-it-works-page {
+  background: #0F172A !important;
+  color: #f8f9fa !important;
+}
+
+.how-it-works-page body {
+  background: #0F172A !important;
+}
+
+/* Override hero section */
+.how-it-works-page .hero,
+.how-it-works-page .how-it-works-hero {
+  background: linear-gradient(180deg, #0F172A 0%, #1a2332 100%) !important;
+}
+
+.how-it-works-page .hero-background {
+  background: transparent !important;
+}
+
+.how-it-works-page .hero-gradient {
+  background: linear-gradient(180deg, #0F172A 0%, #1a2332 100%) !important;
+}
+
+.how-it-works-page .hero-eyebrow {
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .hero-headline {
+  color: #ffffff !important;
+}
+
+.how-it-works-page .hero-subhead {
+  color: #cbd5e1 !important;
+}
+
+/* Override section backgrounds */
+.how-it-works-page .section-alt,
+.how-it-works-page .how-it-works-overview,
+.how-it-works-page .how-it-works-phases,
+.how-it-works-page .how-it-works-differentiators,
+.how-it-works-page .how-it-works-architecture {
+  background: #0F172A !important;
+}
+
+.how-it-works-page .how-it-works-phases,
+.how-it-works-page .how-it-works-architecture {
+  background: linear-gradient(180deg, #0F172A 0%, #1a2332 100%) !important;
+}
+
+/* Override journey step white backgrounds */
+.how-it-works-page .journey-step-marker {
+  background: rgba(212, 175, 55, 0.1) !important;
+  border: 2px solid rgba(212, 175, 55, 0.4) !important;
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .journey-step-number {
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .journey-step-content {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+}
+
+.how-it-works-page .journey-step-title {
+  color: #ffffff !important;
+}
+
+.how-it-works-page .journey-step-subtitle {
+  color: #cbd5e1 !important;
+}
+
+/* Remove colorful journey step colors - use gold only */
+.how-it-works-page .journey-step-gold,
+.how-it-works-page .journey-step-blue,
+.how-it-works-page .journey-step-indigo,
+.how-it-works-page .journey-step-red {
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .journey-step-blue .journey-step-marker,
+.how-it-works-page .journey-step-indigo .journey-step-marker,
+.how-it-works-page .journey-step-red .journey-step-marker {
+  border-color: rgba(212, 175, 55, 0.4) !important;
+}
+
+/* Override colorful journey line - use gold only */
+.how-it-works-page .journey-line {
+  background: linear-gradient(90deg, #D4AF37, rgba(212, 175, 55, 0.6)) !important;
+}
+
+@media (max-width: 768px) {
+  .how-it-works-page .journey-line {
+    background: linear-gradient(180deg, #D4AF37, rgba(212, 175, 55, 0.6)) !important;
+  }
+}
+
+/* Override phase cards - remove white backgrounds */
+.how-it-works-page .phase-detailed-card {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 2px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+}
+
+.how-it-works-page .phase-detailed-card:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(212, 175, 55, 0.4) !important;
+  box-shadow: 0 8px 30px rgba(212, 175, 55, 0.15) !important;
+}
+
+/* Remove colorful phase borders - use gold only */
+.how-it-works-page .phase-detailed-card::before {
+  background: #D4AF37 !important;
+  height: 3px !important;
+}
+
+.how-it-works-page .phase-detailed-gold::before,
+.how-it-works-page .phase-detailed-blue::before,
+.how-it-works-page .phase-detailed-indigo::before,
+.how-it-works-page .phase-detailed-red::before {
+  background: #D4AF37 !important;
+}
+
+.how-it-works-page .phase-detailed-label {
+  background: rgba(212, 175, 55, 0.15) !important;
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .phase-detailed-blue .phase-detailed-label,
+.how-it-works-page .phase-detailed-indigo .phase-detailed-label,
+.how-it-works-page .phase-detailed-red .phase-detailed-label {
+  background: rgba(212, 175, 55, 0.15) !important;
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .phase-detailed-price {
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .phase-detailed-duration {
+  color: #94a3b8 !important;
+}
+
+.how-it-works-page .phase-detailed-title {
+  color: #ffffff !important;
+}
+
+.how-it-works-page .phase-detailed-subtitle {
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .phase-detailed-description {
+  color: #cbd5e1 !important;
+}
+
+.how-it-works-page .phase-detailed-guarantee {
+  background: rgba(212, 175, 55, 0.1) !important;
+  border-left: 3px solid #D4AF37 !important;
+}
+
+.how-it-works-page .phase-detailed-guarantee-label {
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .phase-detailed-guarantee-text {
+  color: #cbd5e1 !important;
+}
+
+/* Override differentiator cards - remove white backgrounds */
+.how-it-works-page .differentiator-card {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 2px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+}
+
+.how-it-works-page .differentiator-card:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(212, 175, 55, 0.4) !important;
+  box-shadow: 0 8px 30px rgba(212, 175, 55, 0.15) !important;
+}
+
+.how-it-works-page .differentiator-title {
+  color: #ffffff !important;
+}
+
+.how-it-works-page .differentiator-text {
+  color: #cbd5e1 !important;
+}
+
+.how-it-works-page .differentiator-detail {
+  background: rgba(212, 175, 55, 0.05) !important;
+  border: 1px solid rgba(212, 175, 55, 0.2) !important;
+  color: #cbd5e1 !important;
+}
+
+.how-it-works-page .differentiator-detail strong {
+  color: #D4AF37 !important;
+}
+
+/* Override architecture layers - remove colorful gradients */
+.how-it-works-page .architecture-layer {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.how-it-works-page .architecture-layer-input,
+.how-it-works-page .architecture-layer-process,
+.how-it-works-page .architecture-layer-ai,
+.how-it-works-page .architecture-layer-output {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.how-it-works-page .architecture-layer:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(212, 175, 55, 0.3) !important;
+}
+
+.how-it-works-page .architecture-layer-label {
+  color: #D4AF37 !important;
+}
+
+.how-it-works-page .architecture-layer-header h4 {
+  color: #ffffff !important;
+}
+
+.how-it-works-page .architecture-layer-tag {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #94a3b8 !important;
+}
+
+/* Override architecture items - use gold instead of colorful */
+.how-it-works-page .architecture-item {
+  background: rgba(212, 175, 55, 0.1) !important;
+  border: 1px solid rgba(212, 175, 55, 0.3) !important;
+}
+
+.how-it-works-page .architecture-item:hover {
+  background: rgba(212, 175, 55, 0.15) !important;
+  border-color: rgba(212, 175, 55, 0.5) !important;
+}
+
+.how-it-works-page .architecture-item-text {
+  color: #ffffff !important;
+}
+
+.how-it-works-page .architecture-arrow {
+  color: #D4AF37 !important;
+}
+
+/* Override CTA section */
+.how-it-works-page .how-it-works-cta {
+  background: linear-gradient(135deg, #0F172A 0%, #1a2332 100%) !important;
+}
+
+.how-it-works-page .cta-headline {
+  color: #ffffff !important;
+}
+
+.how-it-works-page .cta-subhead {
+  color: #cbd5e1 !important;
+}
+
+.how-it-works-page .cta-feature {
+  color: #cbd5e1 !important;
+}
+
+.how-it-works-page .cta-feature svg {
+  color: #4CAF50 !important;
+}
+
+/* Override all text colors */
+.how-it-works-page h1,
+.how-it-works-page h2,
+.how-it-works-page h3,
+.how-it-works-page h4,
+.how-it-works-page h5,
+.how-it-works-page h6 {
+  color: #ffffff !important;
+}
+
+.how-it-works-page p,
+.how-it-works-page li,
+.how-it-works-page span:not(.journey-step-number):not(.phase-detailed-price) {
+  color: #cbd5e1 !important;
+}
+
+/* Responsive overrides */
+@media (max-width: 1024px) {
+  .how-it-works-page .journey-steps,
+  .how-it-works-page .how-it-works-journey {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .how-it-works-page .phases-grid,
+  .how-it-works-page .phases-detailed-grid,
+  .how-it-works-page .differentiators-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .how-it-works-page .hero-headline {
+    font-size: 2rem !important;
+  }
+  
+  .how-it-works-page .section-headline {
+    font-size: 2rem !important;
+  }
+  
+  .how-it-works-page .journey-steps,
+  .how-it-works-page .how-it-works-journey {
+    grid-template-columns: 1fr;
+  }
+}
