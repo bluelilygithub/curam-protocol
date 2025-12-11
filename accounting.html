@@ -370,74 +370,75 @@
             <p class="section-subhead">
                 Common questions from managing partners considering AI automation.
             </p>
-            <div class="faq-list" style="display: flex; flex-direction: column; gap: 20px; margin-top: 40px;">
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+            
+            <div class="faq-accordion">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>What about client confidentiality and data security?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        All data remains within your Microsoft 365 tenant in Australia. We use Azure AI services with encryption at rest and in transit. No client data is sent to third-party AI providers like OpenAI. We document the entire data flow for TPB compliance and ATO audit requirements. Your trust account data never leaves your private cloud tenant.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>All data remains within your Microsoft 365 tenant in Australia. We use Azure AI services with encryption at rest and in transit. No client data is sent to third-party AI providers like OpenAI. We document the entire data flow for TPB compliance and ATO audit requirements. Your trust account data never leaves your private cloud tenant.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>Does this integrate with Xero/MYOB/QuickBooks?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        Yes. We build integrations with all major Australian accounting software via API. Extracted data flows directly into your ERP system, bypassing manual CSV uploads. Staff don't need to switch platforms or learn new software—the automation works within your existing workflow.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>Yes. We build integrations with all major Australian accounting software via API. Extracted data flows directly into your ERP system, bypassing manual CSV uploads. Staff don't need to switch platforms or learn new software—the automation works within your existing workflow.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>What if the AI miscodes a transaction?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        The system is designed to "fail safe." Any coding decision with confidence below 95% is flagged for human review via Teams notification. A senior accountant verifies the output before it's committed to your GL. You're eliminating typing, not eliminating oversight. Every AI decision is logged in an audit trail for compliance.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>The system is designed to "fail safe." Any coding decision with confidence below 95% is flagged for human review via Teams notification. A senior accountant verifies the output before it's committed to your GL. You're eliminating typing, not eliminating oversight. Every AI decision is logged in an audit trail for compliance.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>How long before we see ROI?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        Most accounting firms see payback in 6-12 weeks. Phase 1 (Feasibility) proves the ROI exists with your actual documents. Phase 2 (Roadmap) quantifies it with your firm's numbers. Implementation happens in Phase 4, and you start recovering capacity immediately. The automation pays for itself from recovered capacity—you don't need to bill any additional hours.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>Most accounting firms see payback in 6-12 weeks. Phase 1 (Feasibility) proves the ROI exists with your actual documents. Phase 2 (Roadmap) quantifies it with your firm's numbers. Implementation happens in Phase 4, and you start recovering capacity immediately. The automation pays for itself from recovered capacity—you don't need to bill any additional hours.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>What happens if we decide not to proceed after Phase 1 or 2?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        Each phase is a decision gate. If Phase 1 doesn't prove the ROI exists, you stop there with a clear answer and a full refund if we don't hit 90% accuracy. If Phase 2 roadmap shows implementation isn't viable for your firm structure, you have the analysis and you stop. No long-term contracts. No sunk cost pressure to continue.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>Each phase is a decision gate. If Phase 1 doesn't prove the ROI exists, you stop there with a clear answer and a full refund if we don't hit 90% accuracy. If Phase 2 roadmap shows implementation isn't viable for your firm structure, you have the analysis and you stop. No long-term contracts. No sunk cost pressure to continue.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>How does this affect our professional indemnity insurance?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        Phase 3 (Compliance Shield) includes a pre-audit pack for your PI insurer. We document the governance framework, audit trails, and human oversight processes. The automation doesn't replace professional judgment—it eliminates manual data entry. Your professional responsibility remains unchanged, but with better documentation and fewer transcription errors.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>Phase 3 (Compliance Shield) includes a pre-audit pack for your PI insurer. We document the governance framework, audit trails, and human oversight processes. The automation doesn't replace professional judgment—it eliminates manual data entry. Your professional responsibility remains unchanged, but with better documentation and fewer transcription errors.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>Will our staff resist this change?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        We design workflows with your team, not for them. Phase 2 includes staff interviews to map existing processes. The automation eliminates repetitive typing, not professional judgment. Most staff welcome the change because it frees them for higher-value work. Hands-on training sessions are included, and we provide ongoing support during adoption.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>We design workflows with your team, not for them. Phase 2 includes staff interviews to map existing processes. The automation eliminates repetitive typing, not professional judgment. Most staff welcome the change because it frees them for higher-value work. Hands-on training sessions are included, and we provide ongoing support during adoption.</p>
                     </div>
                 </div>
             </div>

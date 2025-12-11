@@ -314,61 +314,62 @@
         </div>
     </section>
 
-    <!-- FAQ Section - Using same structure as accounting but keeping legal-specific content -->
+    <!-- FAQ Section -->
     <section class="section section-alt">
         <div class="container">
             <h2 class="section-headline">Legal Firm FAQs</h2>
             <p class="section-subhead">
                 Common questions from partners considering AI automation.
             </p>
-            <div class="faq-list" style="display: flex; flex-direction: column; gap: 20px; margin-top: 40px;">
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+            
+            <div class="faq-accordion">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>What about legal professional privilege and confidentiality?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        All data remains within your Microsoft 365 tenant in Australia. We use Azure AI services with encryption at rest and in transit. No client data is sent to third-party AI providers like OpenAI. We document the entire data flow for your ethics committee and comply with Law Society guidelines on technology adoption.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>All data remains within your Microsoft 365 tenant in Australia. We use Azure AI services with encryption at rest and in transit. No client data is sent to third-party AI providers like OpenAI. We document the entire data flow for your ethics committee and comply with Law Society guidelines on technology adoption.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>Does this integrate with ActionStep/LEAP/Smokeball?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        Yes. We build integrations with all major Australian practice management systems. Extracted data flows directly into your existing system via API, so staff don't need to switch platforms or learn new software.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>Yes. We build integrations with all major Australian practice management systems. Extracted data flows directly into your existing system via API, so staff don't need to switch platforms or learn new software.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>What if the AI makes a mistake extracting contract terms?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        The system is designed to "fail safe." Any extraction with confidence below 95% is flagged for human review via Teams notification. A paralegal verifies the output before it's committed to your practice management system. You're eliminating typing, not eliminating oversight.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>The system is designed to "fail safe." Any extraction with confidence below 95% is flagged for human review via Teams notification. A paralegal verifies the output before it's committed to your practice management system. You're eliminating typing, not eliminating oversight.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>How long before we see ROI?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        Most legal firms see payback in 6-8 weeks. Phase 1 (Feasibility) proves the ROI exists. Phase 2 (Roadmap) quantifies it with your actual numbers. Implementation happens in Phase 4, and you start recovering billable hours immediately. The automation pays for itself from recovered capacity—you don't need to bill any additional hours.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>Most legal firms see payback in 6-8 weeks. Phase 1 (Feasibility) proves the ROI exists. Phase 2 (Roadmap) quantifies it with your actual numbers. Implementation happens in Phase 4, and you start recovering billable hours immediately. The automation pays for itself from recovered capacity—you don't need to bill any additional hours.</p>
                     </div>
                 </div>
 
-                <div class="faq-item" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 30px;">
-                    <div class="faq-question" style="color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
                         <span>What happens if we decide not to proceed after Phase 1 or 2?</span>
-                        <span class="faq-toggle" style="color: var(--color-gold); font-size: 1.5rem;">+</span>
-                    </div>
-                    <div class="faq-answer" style="color: #cbd5e1; line-height: 1.7; display: none;">
-                        Each phase is a decision gate. If Phase 1 doesn't prove the ROI exists, you stop there with a clear answer. If Phase 2 roadmap shows implementation isn't viable for your firm structure, you have the analysis and you stop. No long-term contracts. No sunk cost pressure to continue.
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>Each phase is a decision gate. If Phase 1 doesn't prove the ROI exists, you stop there with a clear answer. If Phase 2 roadmap shows implementation isn't viable for your firm structure, you have the analysis and you stop. No long-term contracts. No sunk cost pressure to continue.</p>
                     </div>
                 </div>
             </div>
