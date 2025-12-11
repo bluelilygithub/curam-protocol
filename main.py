@@ -1656,6 +1656,42 @@ def government_contractors_page():
     except:
         return "Government Contractors page not found.", 404
 
+@app.route('/construction')
+@app.route('/construction.html')
+def construction_page():
+    try:
+        return send_file('construction.html')
+    except:
+        return "Construction page not found.", 404
+
+@app.route('/architecture')
+@app.route('/architecture.html')
+def architecture_page():
+    try:
+        return send_file('architecture.html')
+    except:
+        return "Architecture page not found.", 404
+
+@app.route('/mining-services')
+@app.route('/mining-services.html')
+@app.route('/mining')
+@app.route('/mining.html')
+def mining_services_page():
+    try:
+        return send_file('mining-services.html')
+    except:
+        return "Mining Services page not found.", 404
+
+@app.route('/property-management')
+@app.route('/property-management.html')
+@app.route('/property')
+@app.route('/property.html')
+def property_management_page():
+    try:
+        return send_file('property-management.html')
+    except:
+        return "Property Management page not found.", 404
+
 @app.route('/case-study')
 @app.route('/case-study.html')
 def case_study_page():
