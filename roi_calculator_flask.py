@@ -2106,14 +2106,22 @@ HTML_TEMPLATE = """
 def roi_calculator():
     step = int(request.args.get('step', request.form.get('step', 1)))
     industry = request.args.get('industry') or request.form.get('industry') or session.get('industry')
+    
+    # Normalize industry name (strip whitespace, handle URL encoding)
+    if industry:
+        industry = industry.strip()
+    
     selected_industry = industry
     
     # If industry is provided via URL parameter and we're on step 1, auto-advance to step 2
     if industry and step == 1 and request.method == 'GET':
-        # Validate industry exists in INDUSTRIES
+        # Validate industry exists in INDUSTRIES (case-sensitive match required)
         if industry in INDUSTRIES:
             session['industry'] = industry
             step = 2
+        else:
+            # Log for debugging - industry not found
+            print(f"Warning: Industry '{industry}' not found in INDUSTRIES. Available industries: {list(INDUSTRIES.keys())}")
     
     if request.method == 'POST':
         action = request.form.get('action', '')
@@ -2135,6 +2143,11 @@ def roi_calculator():
     if step == 2:
         if not industry:
             return render_template_string(HTML_TEMPLATE, step=1, industries=INDUSTRIES)
+        
+        # Validate industry exists before accessing
+        if industry not in INDUSTRIES:
+            # If industry not found, redirect to step 1 with error message
+            return render_template_string(HTML_TEMPLATE, step=1, industries=INDUSTRIES, error=f"Industry '{industry}' not found. Please select from the list below.")
         
         industry_config = INDUSTRIES[industry]
         
