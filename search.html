@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Search Demo | Curam-Ai Protocol™</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Navigation -->
+    <div id="navbar-placeholder"></div>
+
+    <!-- Hero Section -->
+    <section class="hero hero-search">
+        <div class="container">
+            <div class="hero-content-center">
+                <span class="hero-eyebrow">Enterprise RAG Demo</span>
+                <h1 class="hero-headline">Intelligent Document Search<br>with Source Citations</h1>
+                <p class="hero-subheadline">
+                    Experience how our RAG (Retrieval-Augmented Generation) system searches across thousands of documents and provides accurate answers with verifiable sources—no hallucinations.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Search Interface Section -->
+    <section class="section">
+        <div class="container">
+            <div class="search-demo-container">
+                <div class="search-demo-header">
+                    <h2 class="section-headline">Try It Yourself</h2>
+                    <p class="section-subhead">
+                        This demo searches across our public protocol documentation. Your deployment would search YOUR documents with the same technology.
+                    </p>
+                </div>
+
+                <div class="search-input-wrapper">
+                    <div class="search-input-container">
+                        <svg class="search-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                        <input 
+                            type="text" 
+                            id="rag-search-input" 
+                            class="search-input" 
+                            placeholder="Ask a question... (e.g., 'What is the Phase 1 guarantee?')"
+                        />
+                        <button id="search-btn" class="btn btn-primary">Search</button>
+                    </div>
+                </div>
+
+                <!-- Example Questions -->
+                <div class="example-questions">
+                    <span class="example-label">Try these examples:</span>
+                    <button class="example-question-btn" data-question="What is the Phase 1 guarantee?">What is the Phase 1 guarantee?</button>
+                    <button class="example-question-btn" data-question="How does the Protocol prevent AI hallucinations?">How does the Protocol prevent AI hallucinations?</button>
+                    <button class="example-question-btn" data-question="What industries do you serve?">What industries do you serve?</button>
+                    <button class="example-question-btn" data-question="What is included in Phase 2?">What is included in Phase 2?</button>
+                </div>
+
+                <!-- Loading State -->
+                <div id="search-loading" class="search-loading" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <p>Searching across documents...</p>
+                </div>
+
+                <!-- Search Results -->
+                <div id="search-results" class="search-results">
+                    <!-- Results will be inserted here dynamically -->
+                </div>
+
+                <!-- Empty State -->
+                <div id="empty-state" class="empty-state">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <h3>Start Your Search</h3>
+                    <p>Ask a question about the Curam-Ai Protocol, phases, industries, or technologies.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How RAG Works Section -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">How RAG Search Works</h2>
+            <p class="section-subhead">
+                Retrieval-Augmented Generation combines semantic search with AI to deliver accurate, source-backed answers.
+            </p>
+
+            <div class="methodology-grid">
+                <div class="methodology-card">
+                    <div class="methodology-number">1</div>
+                    <h3>Semantic Search</h3>
+                    <p>Your question is converted to a vector embedding and matched against your document library using semantic similarity—not just keyword matching.</p>
+                </div>
+
+                <div class="methodology-card">
+                    <div class="methodology-number">2</div>
+                    <h3>Context Retrieval</h3>
+                    <p>The most relevant document chunks are retrieved and ranked by relevance score. These become the context for the AI model.</p>
+                </div>
+
+                <div class="methodology-card">
+                    <div class="methodology-number">3</div>
+                    <h3>Grounded Generation</h3>
+                    <p>The AI generates an answer using ONLY the retrieved context—it cannot hallucinate or invent information from the internet.</p>
+                </div>
+
+                <div class="methodology-card">
+                    <div class="methodology-number">4</div>
+                    <h3>Source Citations</h3>
+                    <p>Every answer includes links to the source documents and page numbers, so your team can verify the information.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Use Cases Section -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">Enterprise Use Cases</h2>
+            <p class="section-subhead">
+                How firms use RAG search across their document repositories
+            </p>
+
+            <div class="features-grid-enhanced">
+                <div class="feature-card-enhanced">
+                    <div class="feature-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                    </div>
+                    <h3>Contract Intelligence</h3>
+                    <p>Search across thousands of contracts to find specific clauses, obligations, or renewal dates instantly.</p>
+                </div>
+
+                <div class="feature-card-enhanced">
+                    <div class="feature-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                    </div>
+                    <h3>Policy Q&A</h3>
+                    <p>Employees can ask questions about company policies, HR guidelines, or compliance requirements and get instant, accurate answers.</p>
+                </div>
+
+                <div class="feature-card-enhanced">
+                    <div class="feature-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                        </svg>
+                    </div>
+                    <h3>Tender Research</h3>
+                    <p>Quickly find similar past projects, pricing strategies, or technical specifications from your historical tender library.</p>
+                </div>
+
+                <div class="feature-card-enhanced">
+                    <div class="feature-card-icon">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                    </div>
+                    <h3>Compliance Audit</h3>
+                    <p>Surface all documents related to specific compliance requirements or audit questions with full traceability.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="section cta-section cta-section-enhanced">
+        <div class="container">
+            <div class="cta-content-center">
+                <h2 class="cta-headline">Ready to Deploy RAG for Your Documents?</h2>
+                <p class="cta-subheadline">
+                    We'll build a custom RAG system for your document library in Phase 2 of the Protocol.
+                </p>
+                <div class="cta-buttons-group">
+                    <a href="contact.html" class="btn btn-primary btn-large">Book a Discovery Call</a>
+                    <a href="phase-2-roadmap.html" class="btn btn-secondary btn-large">View Phase 2 Details</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <div id="footer-placeholder"></div>
+
+    <!-- Scripts -->
+    <script src="assets/js/main.js"></script>
+    <script src="assets/js/rag-search-demo.js"></script>
+</body>
+</html>
+

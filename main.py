@@ -1546,6 +1546,15 @@ def about_page():
     except:
         return "About page not found.", 404
 
+@app.route('/search')
+@app.route('/search.html')
+def search_page():
+    """Serve the RAG Search Demo page"""
+    try:
+        return send_file('search.html')
+    except:
+        return "Search page not found.", 404
+
 @app.route('/services')
 @app.route('/services.html')
 def services_page():
