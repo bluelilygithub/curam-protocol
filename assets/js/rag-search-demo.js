@@ -120,24 +120,36 @@ function isRelevantQuery(query) {
     const irrelevantKeywords = [
         'recipe', 'cooking', 'weather', 'sports', 'celebrity', 'movie', 'game',
         'restaurant', 'hotel', 'travel', 'vacation', 'music', 'fashion', 'car',
-        'bitcoin', 'crypto', 'stock', 'forex', 'dating', 'pets', 'gardening'
+        'bitcoin', 'crypto', 'stock', 'forex', 'dating', 'pets', 'gardening',
+        'mars', 'venus', 'planet', 'space', 'relationship', 'love', 'marriage',
+        'book', 'novel', 'fiction', 'poem', 'song', 'album', 'tv show', 'netflix'
     ];
     
     const relevantKeywords = [
         'ai', 'automation', 'document', 'protocol', 'phase', 'roi', 'engineering',
         'accounting', 'legal', 'compliance', 'workflow', 'extraction', 'rag',
         'implementation', 'feasibility', 'audit', 'guarantee', 'pricing', 'cost',
-        'invoice', 'contract', 'tender', 'data', 'extract', 'search', 'intelligence'
+        'invoice', 'contract', 'tender', 'data', 'extract', 'search', 'intelligence',
+        'curam', 'gemini', 'python', 'api', 'pdf', 'ocr', 'azure', 'cloud'
     ];
     
     const queryLower = query.toLowerCase();
     
+    // Remove common stop words for better analysis
+    const stopWords = ['what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'how', 'why', 'when', 'where', 'who'];
+    const queryWords = queryLower.split(/\s+/).filter(word => !stopWords.includes(word) && word.length > 2);
+    
     // Check for obviously irrelevant queries
     const hasIrrelevant = irrelevantKeywords.some(keyword => queryLower.includes(keyword));
-    const hasRelevant = relevantKeywords.some(keyword => queryLower.includes(keyword));
+    const hasRelevant = relevantKeywords.some(keyword => queryWords.includes(keyword) || queryLower.includes(keyword));
     
-    // If it has irrelevant keywords and no relevant ones, mark as irrelevant
-    if (hasIrrelevant && !hasRelevant) {
+    // If it has irrelevant keywords, mark as irrelevant
+    if (hasIrrelevant) {
+        return false;
+    }
+    
+    // If it has no relevant keywords and is more than 3 words, likely irrelevant
+    if (!hasRelevant && queryWords.length > 2) {
         return false;
     }
     
@@ -237,7 +249,16 @@ async function searchWordPressBlog(query) {
 
 // Find relevant answers using keyword matching (simulating semantic search)
 function findRelevantAnswers(query) {
-    const queryWords = query.toLowerCase().split(' ').filter(word => word.length > 2);
+    const queryLower = query.toLowerCase();
+    
+    // Remove stop words for better matching
+    const stopWords = ['what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'how', 'why', 'when', 'where', 'who'];
+    const queryWords = queryLower.split(/\s+/).filter(word => !stopWords.includes(word) && word.length > 2);
+    
+    // If no meaningful words after filtering, return empty
+    if (queryWords.length === 0) {
+        return [];
+    }
     
     const scoredResults = knowledgeBase.map(item => {
         let score = 0;
@@ -245,20 +266,39 @@ function findRelevantAnswers(query) {
         // Check if query words match the question keywords
         item.question.forEach(keyword => {
             queryWords.forEach(word => {
-                if (keyword.includes(word) || word.includes(keyword)) {
+                // Exact match
+                if (keyword === word) {
+                    score += 20;
+                }
+                // Partial match
+                else if (keyword.includes(word) && word.length > 3) {
                     score += 10;
                 }
+                else if (word.includes(keyword) && keyword.length > 3) {
+                    score += 5;
+                }
             });
+        });
+        
+        // Bonus for exact phrase match in keywords
+        item.question.forEach(keyword => {
+            if (queryLower.includes(keyword) && keyword.length > 4) {
+                score += 15;
+            }
         });
         
         return { ...item, score };
     });
 
-    // Sort by score and return top 3
-    return scoredResults
-        .filter(item => item.score > 0)
+    // Sort by score and return top 3, but only if score is meaningful
+    const MINIMUM_SCORE = 15; // Require at least one good match
+    
+    const results = scoredResults
+        .filter(item => item.score >= MINIMUM_SCORE)
         .sort((a, b) => b.score - a.score)
         .slice(0, 3);
+    
+    return results;
 }
 
 // Display irrelevant query message
