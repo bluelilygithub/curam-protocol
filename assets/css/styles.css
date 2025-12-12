@@ -1734,6 +1734,8 @@ h1, h2, h3, h4 {
   margin-top: var(--spacing-xl);
   padding-top: var(--spacing-xl);
   border-top: 1px solid var(--border-subtle);
+  flex-direction: row; 
+  justify-content: center; 
 }
 
 .mission-stat {
@@ -10283,7 +10285,7 @@ h1, h2, h3, h4 {
 
 /* Hero Section */
 .phase-3-hero {
-  padding: 120px var(--spacing-lg) var(--spacing-3xl);
+  padding: 200px var(--spacing-lg) var(--spacing-3xl);
   text-align: center;
 }
 
@@ -10395,7 +10397,7 @@ h1, h2, h3, h4 {
 /* Deliverables Grid */
 .deliverables-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
   gap: var(--spacing-2xl);
   margin-top: var(--spacing-2xl);
 }
@@ -10459,8 +10461,8 @@ h1, h2, h3, h4 {
 
 /* Warning Section */
 .warning-section {
-  background: rgba(255, 140, 0, 0.08);
-  border: 2px solid rgba(255, 140, 0, 0.4);
+  background: var(--color-navy-dark);
+  border: var(--border-subtle);
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-2xl);
   margin: var(--spacing-3xl) 0;
@@ -10663,7 +10665,7 @@ h1, h2, h3, h4 {
 
 /* Final CTA Section */
 .final-cta-section {
-  background: rgba(212, 175, 55, 0.1);
+  background: var(--color-navy-dark);
   border: 2px solid rgba(212, 175, 55, 0.3);
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-3xl) var(--spacing-2xl);

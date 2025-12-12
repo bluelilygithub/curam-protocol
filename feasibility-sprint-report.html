@@ -11,6 +11,61 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css">
+    <style>
+        /* Sector Selector Styles */
+        .sector-selector {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin: 2rem auto;
+            max-width: 600px;
+            flex-wrap: wrap;
+        }
+        
+        .sector-btn {
+            flex: 1;
+            min-width: 150px;
+            padding: 1rem 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .sector-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(212, 175, 55, 0.4);
+            transform: translateY(-2px);
+        }
+        
+        .sector-btn.active {
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(212, 175, 55, 0.1));
+            border-color: var(--color-gold);
+            color: var(--color-gold);
+        }
+        
+        .report-slider {
+            display: none;
+        }
+        
+        .report-slider.active {
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .sector-selector {
+                flex-direction: column;
+            }
+            
+            .sector-btn {
+                min-width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Scroll Down Button -->
@@ -48,11 +103,11 @@
         <div class="container">
             <div class="mission-stats" style="max-width: 900px; margin: 0 auto;">
                 <div class="mission-stat">
-                    <span class="mission-stat-value">$888k</span>
+                    <span class="mission-stat-value" id="stat-efficiency">$888k</span>
                     <span class="mission-stat-label">Year-1 Efficiency</span>
                 </div>
                 <div class="mission-stat">
-                    <span class="mission-stat-value">$1.44M</span>
+                    <span class="mission-stat-value" id="stat-capacity">$1.44M</span>
                     <span class="mission-stat-label">Capacity Upside</span>
                 </div>
                 <div class="mission-stat">
@@ -67,9 +122,23 @@
     <section class="content-section alt-bg">
         <div class="container">
             <h2 class="section-headline">Interactive Report Preview</h2>
-            <p class="section-subhead">Swipe to view the full feasibility analysis</p>
+            <p class="section-subhead">Select your industry to view a sector-specific report</p>
 
-            <div class="report-slider swiper" style="margin-top: 3rem;">
+            <!-- Sector Selector -->
+            <div class="sector-selector">
+                <button class="sector-btn active" data-sector="engineering">
+                    🏗️ Engineering
+                </button>
+                <button class="sector-btn" data-sector="accounting">
+                    📊 Accounting
+                </button>
+                <button class="sector-btn" data-sector="logistics">
+                    🚢 Logistics
+                </button>
+            </div>
+
+            <!-- ENGINEERING SLIDER -->
+            <div class="report-slider active swiper" id="slider-engineering" style="margin-top: 3rem;">
                 <div class="swiper-wrapper">
                     
                     <!-- Slide 1: Cover -->
@@ -78,8 +147,8 @@
                             <div class="report-slide-cover-brand">Curam-Ai</div>
                             <h1 class="report-slide-cover-title">Curam-Ai Protocol™</h1>
                             <h2 class="report-slide-cover-subtitle">Phase 1 – Feasibility Sprint</h2>
-                            <p class="report-slide-cover-text">Phase 1: Proof of Value Report</p>
-                            <p class="report-slide-cover-meta">Generated: November 2025 | Pilot Client #3</p>
+                            <p class="report-slide-cover-text">Engineering Sector Report</p>
+                            <p class="report-slide-cover-meta">Generated: November 2025 | Sample Client</p>
                         </div>
                     </div>
 
@@ -115,7 +184,7 @@
                         </div>
                         <div class="report-slide-content">
                             <p class="report-text-large">
-                                The 50-person structural engineering firm <strong>"Pilot Client #3"</strong> can unlock 
+                                The 50-person structural engineering firm can unlock 
                                 <strong>$888k in direct savings</strong> and <strong>$1.44M in new billable capacity</strong> 
                                 by automating three administrative workflows.
                             </p>
@@ -163,7 +232,7 @@
                                 </div>
                                 <div class="report-phase-card">
                                     <h3>Phase 3 – Compliance Shield</h3>
-                                    <p>2 weeks | $8–12k | ISO-27001 & PI-insurance alignment</p>
+                                    <p>2 weeks | $8–12k | Ensure compliance & auditor approval before implementation</p>
                                 </div>
                             </div>
                             <div class="report-text-medium">
@@ -172,7 +241,7 @@
                         </div>
                     </div>
 
-                    <!-- Slide 6: Financial Model -->
+                    <!-- Slide 6: Financial Model with Sensitivity -->
                     <div class="swiper-slide report-slide report-slide-light">
                         <div class="report-slide-header">
                             <h2>Financial Model (Conservative)</h2>
@@ -187,10 +256,28 @@
                                 </table>
                             </div>
                             <p class="report-text-small-gray-margin">Model built on actual sample data; adoption rate capped at 60%. Implementation costs to be determined in Phase 2.</p>
+                            
+                            <!-- Sensitivity Analysis -->
+                            <div style="margin-top: 1.5rem; padding: 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                                <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: #166534;">📊 Sensitivity Analysis</h4>
+                                <table class="report-table" style="font-size: 0.9rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Adoption Rate</th>
+                                            <th>Year-1 Efficiency</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td>70%</td><td><strong>$1.04M</strong></td></tr>
+                                        <tr style="background: #dcfce7;"><td>75% (Target)</td><td><strong>$1.11M</strong></td></tr>
+                                        <tr><td>80%</td><td><strong>$1.18M</strong></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Slide 7: Technical Deep Dive -->
+                    <!-- Slide 7: Technical Deep Dive - Engineering -->
                     <div class="swiper-slide report-slide report-slide-light">
                         <div class="report-slide-header">
                             <h2>Technical Deep Dive: CAD Schedule</h2>
@@ -220,10 +307,10 @@
                         </div>
                     </div>
 
-                    <!-- Slide 8: Risk Register -->
+                    <!-- Slide 8: Key Risks -->
                     <div class="swiper-slide report-slide report-slide-light">
                         <div class="report-slide-header">
-                            <h2>Risk Register (Excerpts)</h2>
+                            <h2>Key Risks & Mitigations</h2>
                         </div>
                         <div class="report-slide-content">
                             <ul class="report-risk-list">
@@ -231,6 +318,8 @@
                                 <li><strong>Model drift</strong> – Mitigation: Quarterly re-validation trigger written into SOW.</li>
                                 <li><strong>Staff adoption &lt; 50%</strong> – Mitigation: SOP videos + 30-day Teams support channel.</li>
                                 <li><strong>PI Insurance Compliance</strong> – Mitigation: Pre-filled ISO-27001 control matrix.</li>
+                                <li><strong>Integration complexity</strong> – Mitigation: Phase 2 API audit before build.</li>
+                                <li><strong>Change management resistance</strong> – Mitigation: Champion identification + executive sponsorship.</li>
                             </ul>
                             <div class="report-slide-callout report-slide-callout-warning">
                                 <strong>Recommendation:</strong> Address potential risks in Phase 2 to ensure governance compliance.
@@ -238,7 +327,7 @@
                         </div>
                     </div>
 
-                    <!-- Slide 9: Sprint Validation Log -->
+                    <!-- Slide 9: Sprint Validation Log with CTA -->
                     <div class="swiper-slide report-slide report-slide-light">
                         <div class="report-slide-header">
                             <h2>Sprint Validation Log (Technical Annex)</h2>
@@ -305,8 +394,14 @@
                                 </p>
                             </div>
 
-                            <div style="margin-top: 20px; text-align: center;">
-                                <a href="tier-one-feasibility-report.html" class="btn btn-primary" target="_blank">Download Full Audit Logs</a>
+                            <!-- CTA Section -->
+                            <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(212, 175, 55, 0.1); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 8px; text-align: center;">
+                                <h3 style="margin: 0 0 1rem 0; color: var(--color-navy); font-size: 1.25rem;">Ready to Validate?</h3>
+                                <p style="margin: 0 0 1.5rem 0; font-size: 0.95rem; color: #4B5563;">Move to Phase 2 to turn this analysis into an implementation plan.</p>
+                                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                                    <a href="contact.html?option=phase-2" class="btn btn-primary">Book Phase 2</a>
+                                    <a href="contact.html" class="btn btn-secondary">Schedule Call</a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -316,6 +411,557 @@
                 <div class="swiper-button-prev"></div>
                 <div class="swiper-pagination"></div>
             </div>
+
+            <!-- ACCOUNTING SLIDER -->
+            <div class="report-slider swiper" id="slider-accounting" style="margin-top: 3rem;">
+                <div class="swiper-wrapper">
+                    
+                    <!-- Accounting Slide 1: Cover -->
+                    <div class="swiper-slide report-slide report-slide-dark">
+                        <div class="report-slide-cover">
+                            <div class="report-slide-cover-brand">Curam-Ai</div>
+                            <h1 class="report-slide-cover-title">Curam-Ai Protocol™</h1>
+                            <h2 class="report-slide-cover-subtitle">Phase 1 – Feasibility Sprint</h2>
+                            <p class="report-slide-cover-text">Accounting Sector Report</p>
+                            <p class="report-slide-cover-meta">Generated: November 2025 | Sample Client</p>
+                        </div>
+                    </div>
+
+                    <!-- Accounting Slide 2: Assumed Variables -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Assumed Variables</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Variable</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>Number of Staff</td><td>35</td></tr>
+                                    <tr><td>Current Process</td><td>Manual / Practice Management System</td></tr>
+                                    <tr><td>Average Billable Rate</td><td>$220/hr</td></tr>
+                                    <tr><td>Annual Revenue</td><td>$11,704,000</td></tr>
+                                    <tr><td>Compliance Status</td><td><strong>Unverified</strong> (Requires Phase 3 Audit)</td></tr>
+                                </tbody>
+                            </table>
+                            <p class="report-text-small">*Baseline assumptions derived from initial discovery call. Used to calculate Tier-1 Efficiency Models.</p>
+                        </div>
+                    </div>
+
+                    <!-- Accounting Slide 3: Executive Summary -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Executive Summary</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <p class="report-text-large">
+                                The 35-person accounting practice can unlock 
+                                <strong>$739k in direct savings</strong> and <strong>$1.27M in new billable capacity</strong> 
+                                by automating invoice processing, trust account reconciliation, and client correspondence workflows.
+                            </p>
+                            <div class="report-slide-callout">
+                                <strong>Next Step:</strong> Validate these figures in <strong>Phase 2 – Readiness Roadmap</strong> to confirm strategic alignment and ROI.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accounting Slide 4: Four-Tier Value Model -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Four-Tier Value Model</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tier</th>
+                                        <th>Metric</th>
+                                        <th>Year-1 Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><strong>1</strong> Time Saved</td><td>Admin hrs × billable rate</td><td>$739k</td></tr>
+                                    <tr><td><strong>2</strong> Risk Mitigation</td><td>Trust Account Errors & Compliance</td><td>$180k</td></tr>
+                                    <tr><td><strong>3</strong> Client Retention</td><td>Faster Response Time (+12%)</td><td>$420k</td></tr>
+                                    <tr><td><strong>4</strong> Capacity Reallocation</td><td>Senior hrs → advisory</td><td>$1.27M</td></tr>
+                                </tbody>
+                            </table>
+                            <p class="report-text-small-gray">*Figures based on 35 staff. Tier 1: Time valued at Avg. Rate ($220/hr). Tier 4: Capacity valued at Partner Rate (~$350/hr).</p>
+                        </div>
+                    </div>
+
+                    <!-- Accounting Slide 5: Roadmap & Phasing -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Roadmap & Phasing</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <div class="report-phase-cards">
+                                <div class="report-phase-card">
+                                    <h3>Phase 2 – Readiness Roadmap</h3>
+                                    <p>3 weeks | $7,500 | Board-Approved Business Case & Implementation Plan</p>
+                                </div>
+                                <div class="report-phase-card">
+                                    <h3>Phase 3 – Compliance Shield</h3>
+                                    <p>2 weeks | $8–12k | Ensure compliance & auditor approval before implementation</p>
+                                </div>
+                            </div>
+                            <div class="report-text-medium">
+                                <strong>✔ 100% IP Transfer.</strong> Source-code and flows owned by client upon final payment. No ongoing licensing.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accounting Slide 6: Financial Model with Sensitivity -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Financial Model (Conservative)</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <div class="report-bg-light">
+                                <table class="report-table report-table-no-margin">
+                                    <tr><td>Hours Saved/Week (2 hrs/staff)</td><td class="report-table-text-right">70</td></tr>
+                                    <tr><td>Average billable rate</td><td class="report-table-text-right">$220/hr</td></tr>
+                                    <tr class="report-table-row-total"><td>Gross Efficiency Value (48 wks)</td><td class="report-table-text-right">$739,200</td></tr>
+                                    <tr class="report-table-row-total"><td>Potential Year-1 Efficiency</td><td class="report-table-text-right">$739,200</td></tr>
+                                </table>
+                            </div>
+                            <p class="report-text-small-gray-margin">Model built on actual sample data; adoption rate capped at 60%. Implementation costs to be determined in Phase 2.</p>
+                            
+                            <!-- Sensitivity Analysis -->
+                            <div style="margin-top: 1.5rem; padding: 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                                <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: #166534;">📊 Sensitivity Analysis</h4>
+                                <table class="report-table" style="font-size: 0.9rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Adoption Rate</th>
+                                            <th>Year-1 Efficiency</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td>70%</td><td><strong>$865k</strong></td></tr>
+                                        <tr style="background: #dcfce7;"><td>75% (Target)</td><td><strong>$924k</strong></td></tr>
+                                        <tr><td>80%</td><td><strong>$983k</strong></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accounting Slide 7: Technical Deep Dive -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Technical Deep Dive: Invoice with GL Coding</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <p class="report-margin-bottom">
+                                Analysis of <strong>Supplier Invoice #INV-2024-1847</strong> reveals high extraction accuracy with intelligent GL code suggestion for ambiguous line items.
+                            </p>
+                            
+                            <div class="report-validation-grid">
+                                <div class="report-validation-card success">
+                                    <div class="report-card-icon">✅</div>
+                                    <h3>Standard Fields</h3>
+                                    <p><strong>100% Accuracy</strong> on vendor name, ABN, invoice date, total, and GST. System correctly parsed multi-line item descriptions.</p>
+                                </div>
+
+                                <div class="report-validation-card warning">
+                                    <div class="report-card-icon">⚠️</div>
+                                    <h3>"Human-in-Loop" Trigger</h3>
+                                    <p><strong>Ambiguous GL Code:</strong> Line item "Office supplies & software licenses" spans two GL codes. AI suggested split: 60% (6200 - Office), 40% (6410 - Software).</p>
+                                </div>
+                            </div>
+
+                            <div class="report-slide-callout">
+                                <strong>Feasibility Verdict:</strong> Invoice INV-2024-1847 is <strong>Passed</strong>. The ambiguous GL code is flagged for accountant review, preventing mis-classification.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accounting Slide 8: Key Risks -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Key Risks & Mitigations</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <ul class="report-risk-list">
+                                <li><strong>Trust account compliance</strong> – Mitigation: Audit trail for every automated trust transaction.</li>
+                                <li><strong>Professional indemnity insurance</strong> – Mitigation: Phase 3 compliance documentation for insurer review.</li>
+                                <li><strong>Staff adoption &lt; 50%</strong> – Mitigation: Practice manager training + 30-day support channel.</li>
+                                <li><strong>Integration with Xero/MYOB</strong> – Mitigation: API validation in Phase 2 before build.</li>
+                                <li><strong>Client data sovereignty</strong> – Mitigation: All processing inside Azure tenant (no third-party egress).</li>
+                                <li><strong>Change management resistance</strong> – Mitigation: Partner sponsorship + incremental rollout.</li>
+                            </ul>
+                            <div class="report-slide-callout report-slide-callout-warning">
+                                <strong>Recommendation:</strong> Address potential risks in Phase 2 to ensure governance compliance.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Accounting Slide 9: Sprint Validation Log with CTA -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Sprint Validation Log (Technical Annex)</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            
+                            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                                <div style="flex: 1; background: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #64748b;">Documents Processed</div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">6</div>
+                                </div>
+                                <div style="flex: 1; background: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #64748b;">STP Rate (No Human)</div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">83%</div>
+                                </div>
+                                <div style="flex: 1; background: #fffbeb; padding: 15px; border-radius: 6px; border-left: 4px solid #f59e0b;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #92400e;">Exceptions Flagged</div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #b45309;">1</div>
+                                </div>
+                            </div>
+
+                            <h3 style="font-size: 1rem; margin-bottom: 10px; color: var(--color-navy);">Detailed Field Audit (Sample: INV-2024-1847)</h3>
+                            <table class="report-table" style="font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th>Field</th>
+                                        <th>Extracted Value</th>
+                                        <th>Confidence</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Vendor</strong></td>
+                                        <td><code>Office Supply Co Pty Ltd</code></td>
+                                        <td>99.9%</td>
+                                        <td><span class="status-badge status-pass">PASS</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total</strong></td>
+                                        <td><code>$2,847.50</code></td>
+                                        <td>99.7%</td>
+                                        <td><span class="status-badge status-pass">PASS</span></td>
+                                    </tr>
+                                    <tr style="background-color: #fff1f2;">
+                                        <td><strong>GL Code</strong></td>
+                                        <td><code>Split: 6200 / 6410</code></td>
+                                        <td style="color: #e11d48; font-weight: bold;">58.0%</td>
+                                        <td><span class="status-badge" style="background:#fee2e2; color:#991b1b;">FLAG</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>GST</strong></td>
+                                        <td><code>$258.86</code></td>
+                                        <td>99.5%</td>
+                                        <td><span class="status-badge status-pass">PASS</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div style="margin-top: 15px; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 6px;">
+                                <strong style="color: #166534; font-size: 0.9rem;">👨‍💼 Accountant's Note:</strong>
+                                <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #14532d;">
+                                    The system correctly identified that the line item description spans two GL codes and suggested a split. This prevents mis-classification and ensures accurate financial reporting.
+                                </p>
+                            </div>
+
+                            <!-- CTA Section -->
+                            <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(212, 175, 55, 0.1); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 8px; text-align: center;">
+                                <h3 style="margin: 0 0 1rem 0; color: var(--color-navy); font-size: 1.25rem;">Ready to Validate?</h3>
+                                <p style="margin: 0 0 1.5rem 0; font-size: 0.95rem; color: #4B5563;">Move to Phase 2 to turn this analysis into an implementation plan.</p>
+                                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                                    <a href="contact.html?option=phase-2" class="btn btn-primary">Book Phase 2</a>
+                                    <a href="contact.html" class="btn btn-secondary">Schedule Call</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-pagination"></div>
+            </div>
+
+            <!-- LOGISTICS SLIDER -->
+            <div class="report-slider swiper" id="slider-logistics" style="margin-top: 3rem;">
+                <div class="swiper-wrapper">
+                    
+                    <!-- Logistics Slide 1: Cover -->
+                    <div class="swiper-slide report-slide report-slide-dark">
+                        <div class="report-slide-cover">
+                            <div class="report-slide-cover-brand">Curam-Ai</div>
+                            <h1 class="report-slide-cover-title">Curam-Ai Protocol™</h1>
+                            <h2 class="report-slide-cover-subtitle">Phase 1 – Feasibility Sprint</h2>
+                            <p class="report-slide-cover-text">Logistics Sector Report</p>
+                            <p class="report-slide-cover-meta">Generated: November 2025 | Sample Client</p>
+                        </div>
+                    </div>
+
+                    <!-- Logistics Slide 2: Assumed Variables -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Assumed Variables</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Variable</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td>Number of Staff</td><td>60</td></tr>
+                                    <tr><td>Current Process</td><td>Manual / Email-based / Spreadsheets</td></tr>
+                                    <tr><td>Average Hourly Cost</td><td>$75/hr</td></tr>
+                                    <tr><td>Annual Revenue</td><td>$28,500,000</td></tr>
+                                    <tr><td>Compliance Status</td><td><strong>Unverified</strong> (Requires Phase 3 Audit)</td></tr>
+                                </tbody>
+                            </table>
+                            <p class="report-text-small">*Baseline assumptions derived from initial discovery call. Used to calculate Tier-1 Efficiency Models.</p>
+                        </div>
+                    </div>
+
+                    <!-- Logistics Slide 3: Executive Summary -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Executive Summary</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <p class="report-text-large">
+                                The 60-person logistics firm can unlock 
+                                <strong>$432k in direct savings</strong> and <strong>$890k in operational upside</strong> 
+                                by automating manifest processing, POD matching, and customs clearance workflows.
+                            </p>
+                            <div class="report-slide-callout">
+                                <strong>Next Step:</strong> Validate these figures in <strong>Phase 2 – Readiness Roadmap</strong> to confirm strategic alignment and ROI.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logistics Slide 4: Four-Tier Value Model -->
+                    <div class="swiper-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Four-Tier Value Model</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <table class="report-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tier</th>
+                                        <th>Metric</th>
+                                        <th>Year-1 Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><strong>1</strong> Time Saved</td><td>Admin hrs × cost rate</td><td>$432k</td></tr>
+                                    <tr><td><strong>2</strong> Risk Mitigation</td><td>Customs Errors & Penalties Avoided</td><td>$240k</td></tr>
+                                    <tr><td><strong>3</strong> Throughput Increase</td><td>Shipment Volume (+18%)</td><td>$890k</td></tr>
+                                    <tr><td><strong>4</strong> Customer Retention</td><td>Faster delivery times</td><td>$520k</td></tr>
+                                </tbody>
+                            </table>
+                            <p class="report-text-small-gray">*Figures based on 60 staff. Tier 1: Time valued at Avg. Cost ($75/hr). Tier 3: Throughput valued at contribution margin.</p>
+                        </div>
+                    </div>
+
+                    <!-- Logistics Slide 5: Roadmap & Phasing -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Roadmap & Phasing</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <div class="report-phase-cards">
+                                <div class="report-phase-card">
+                                    <h3>Phase 2 – Readiness Roadmap</h3>
+                                    <p>3 weeks | $7,500 | Board-Approved Business Case & Implementation Plan</p>
+                                </div>
+                                <div class="report-phase-card">
+                                    <h3>Phase 3 – Compliance Shield</h3>
+                                    <p>2 weeks | $8–12k | Ensure compliance & auditor approval before implementation</p>
+                                </div>
+                            </div>
+                            <div class="report-text-medium">
+                                <strong>✔ 100% IP Transfer.</strong> Source-code and flows owned by client upon final payment. No ongoing licensing.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logistics Slide 6: Financial Model with Sensitivity -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Financial Model (Conservative)</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <div class="report-bg-light">
+                                <table class="report-table report-table-no-margin">
+                                    <tr><td>Hours Saved/Week (2 hrs/staff)</td><td class="report-table-text-right">120</td></tr>
+                                    <tr><td>Average cost rate</td><td class="report-table-text-right">$75/hr</td></tr>
+                                    <tr class="report-table-row-total"><td>Gross Efficiency Value (48 wks)</td><td class="report-table-text-right">$432,000</td></tr>
+                                    <tr class="report-table-row-total"><td>Potential Year-1 Efficiency</td><td class="report-table-text-right">$432,000</td></tr>
+                                </table>
+                            </div>
+                            <p class="report-text-small-gray-margin">Model built on actual sample data; adoption rate capped at 60%. Implementation costs to be determined in Phase 2.</p>
+                            
+                            <!-- Sensitivity Analysis -->
+                            <div style="margin-top: 1.5rem; padding: 1rem; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                                <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; color: #166534;">📊 Sensitivity Analysis</h4>
+                                <table class="report-table" style="font-size: 0.9rem;">
+                                    <thead>
+                                        <tr>
+                                            <th>Adoption Rate</th>
+                                            <th>Year-1 Efficiency</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td>70%</td><td><strong>$504k</strong></td></tr>
+                                        <tr style="background: #dcfce7;"><td>75% (Target)</td><td><strong>$540k</strong></td></tr>
+                                        <tr><td>80%</td><td><strong>$576k</strong></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logistics Slide 7: Technical Deep Dive -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Technical Deep Dive: Manifest with Handwritten Data</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <p class="report-margin-bottom">
+                                Analysis of <strong>Shipping Manifest #MAN-SYD-2024-0384</strong> reveals strong extraction accuracy even with handwritten amendments and corrections.
+                            </p>
+                            
+                            <div class="report-validation-grid">
+                                <div class="report-validation-card success">
+                                    <div class="report-card-icon">✅</div>
+                                    <h3>Printed Fields</h3>
+                                    <p><strong>98% Accuracy</strong> on container numbers, seal IDs, weights, and commodity codes. System correctly parsed multi-container shipments.</p>
+                                </div>
+
+                                <div class="report-validation-card warning">
+                                    <div class="report-card-icon">⚠️</div>
+                                    <h3>"Human-in-Loop" Trigger</h3>
+                                    <p><strong>Handwritten Amendment:</strong> Container weight shows a pen-correction from "22,400" to "24,200". AI flagged this for verification due to 8% variance from manifest weight.</p>
+                                </div>
+                            </div>
+
+                            <div class="report-slide-callout">
+                                <strong>Feasibility Verdict:</strong> Manifest MAN-SYD-2024-0384 is <strong>Passed</strong>. The handwritten correction is flagged for customs officer review, preventing weight discrepancy issues.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logistics Slide 8: Key Risks -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Key Risks & Mitigations</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            <ul class="report-risk-list">
+                                <li><strong>Customs compliance</strong> – Mitigation: 100% audit trail for every automated customs entry.</li>
+                                <li><strong>Handwritten data variability</strong> – Mitigation: Low-confidence fields flagged for human review.</li>
+                                <li><strong>Staff adoption &lt; 50%</strong> – Mitigation: Operations manager training + 30-day support channel.</li>
+                                <li><strong>Integration with TMS/WMS</strong> – Mitigation: API validation in Phase 2 before build.</li>
+                                <li><strong>Data sovereignty</strong> – Mitigation: All processing inside Azure tenant (no third-party egress).</li>
+                                <li><strong>Peak season capacity</strong> – Mitigation: Scalable architecture design validated in Phase 2.</li>
+                            </ul>
+                            <div class="report-slide-callout report-slide-callout-warning">
+                                <strong>Recommendation:</strong> Address potential risks in Phase 2 to ensure governance compliance.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logistics Slide 9: Sprint Validation Log with CTA -->
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header">
+                            <h2>Sprint Validation Log (Technical Annex)</h2>
+                        </div>
+                        <div class="report-slide-content">
+                            
+                            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                                <div style="flex: 1; background: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #64748b;">Documents Processed</div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">5</div>
+                                </div>
+                                <div style="flex: 1; background: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #64748b;">STP Rate (No Human)</div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #0f172a;">80%</div>
+                                </div>
+                                <div style="flex: 1; background: #fffbeb; padding: 15px; border-radius: 6px; border-left: 4px solid #f59e0b;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #92400e;">Exceptions Flagged</div>
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #b45309;">1</div>
+                                </div>
+                            </div>
+
+                            <h3 style="font-size: 1rem; margin-bottom: 10px; color: var(--color-navy);">Detailed Field Audit (Sample: MAN-SYD-2024-0384)</h3>
+                            <table class="report-table" style="font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th>Field</th>
+                                        <th>Extracted Value</th>
+                                        <th>Confidence</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Container</strong></td>
+                                        <td><code>MSCU-9427518</code></td>
+                                        <td>99.8%</td>
+                                        <td><span class="status-badge status-pass">PASS</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Seal ID</strong></td>
+                                        <td><code>AUS-847-2024</code></td>
+                                        <td>99.3%</td>
+                                        <td><span class="status-badge status-pass">PASS</span></td>
+                                    </tr>
+                                    <tr style="background-color: #fff1f2;">
+                                        <td><strong>Weight (kg)</strong></td>
+                                        <td><code>24,200 (corrected)</code></td>
+                                        <td style="color: #e11d48; font-weight: bold;">67.0%</td>
+                                        <td><span class="status-badge" style="background:#fee2e2; color:#991b1b;">FLAG</span></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Commodity</strong></td>
+                                        <td><code>8471.30.00</code></td>
+                                        <td>96.5%</td>
+                                        <td><span class="status-badge status-pass">PASS</span></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <div style="margin-top: 15px; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 15px; border-radius: 6px;">
+                                <strong style="color: #166534; font-size: 0.9rem;">🚢 Operations Note:</strong>
+                                <p style="margin: 5px 0 0 0; font-size: 0.85rem; color: #14532d;">
+                                    The system correctly identified that the weight field had a handwritten correction and flagged it for verification. This prevents customs discrepancies and potential delays at port.
+                                </p>
+                            </div>
+
+                            <!-- CTA Section -->
+                            <div style="margin-top: 2rem; padding: 1.5rem; background: rgba(212, 175, 55, 0.1); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 8px; text-align: center;">
+                                <h3 style="margin: 0 0 1rem 0; color: var(--color-navy); font-size: 1.25rem;">Ready to Validate?</h3>
+                                <p style="margin: 0 0 1.5rem 0; font-size: 0.95rem; color: #4B5563;">Move to Phase 2 to turn this analysis into an implementation plan.</p>
+                                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                                    <a href="contact.html?option=phase-2" class="btn btn-primary">Book Phase 2</a>
+                                    <a href="contact.html" class="btn btn-secondary">Schedule Call</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-pagination"></div>
+            </div>
+
         </div>
     </section>
 
@@ -343,10 +989,10 @@
                     <div class="footer-column">
                         <h4>The Protocol</h4>
                         <ul>
-                            <li><a href="curam-ai-protocol.html">Phase 1: Feasibility Sprint</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 2: The Roadmap</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 3: Compliance Shield</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 4: Implementation</a></li>
+                            <li><a href="phase-1-feasibility.html">Phase 1: Feasibility Sprint</a></li>
+                            <li><a href="phase-2-roadmap.html">Phase 2: The Roadmap</a></li>
+                            <li><a href="phase-3-compliance.html">Phase 3: Compliance Shield</a></li>
+                            <li><a href="phase-4-implementation.html">Phase 4: Implementation</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
@@ -377,18 +1023,109 @@
     <script src="assets/js/main.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script>
-        const swiper = new Swiper('.report-slider', {
+        // Sector data for stats
+        const sectorData = {
+            engineering: {
+                efficiency: '$888k',
+                capacity: '$1.44M'
+            },
+            accounting: {
+                efficiency: '$739k',
+                capacity: '$1.27M'
+            },
+            logistics: {
+                efficiency: '$432k',
+                capacity: '$890k'
+            }
+        };
+
+        // Initialize all swipers
+        const engineeringSwiper = new Swiper('#slider-engineering', {
             loop: false,
             speed: 500,
             autoHeight: true,
             navigation: {
-                nextEl: '.swiper-button-next',
-                prevEl: '.swiper-button-prev',
+                nextEl: '#slider-engineering .swiper-button-next',
+                prevEl: '#slider-engineering .swiper-button-prev',
             },
             pagination: {
-                el: '.swiper-pagination',
+                el: '#slider-engineering .swiper-pagination',
                 clickable: true,
             },
+        });
+
+        const accountingSwiper = new Swiper('#slider-accounting', {
+            loop: false,
+            speed: 500,
+            autoHeight: true,
+            navigation: {
+                nextEl: '#slider-accounting .swiper-button-next',
+                prevEl: '#slider-accounting .swiper-button-prev',
+            },
+            pagination: {
+                el: '#slider-accounting .swiper-pagination',
+                clickable: true,
+            },
+        });
+
+        const logisticsSwiper = new Swiper('#slider-logistics', {
+            loop: false,
+            speed: 500,
+            autoHeight: true,
+            navigation: {
+                nextEl: '#slider-logistics .swiper-button-next',
+                prevEl: '#slider-logistics .swiper-button-prev',
+            },
+            pagination: {
+                el: '#slider-logistics .swiper-pagination',
+                clickable: true,
+            },
+        });
+
+        // Sector switching logic
+        const sectorBtns = document.querySelectorAll('.sector-btn');
+        const sliders = document.querySelectorAll('.report-slider');
+        const statEfficiency = document.getElementById('stat-efficiency');
+        const statCapacity = document.getElementById('stat-capacity');
+
+        function switchSector(sector) {
+            // Update buttons
+            sectorBtns.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.sector === sector);
+            });
+
+            // Update sliders
+            sliders.forEach(slider => {
+                slider.classList.toggle('active', slider.id === `slider-${sector}`);
+            });
+
+            // Update stats
+            if (sectorData[sector]) {
+                statEfficiency.textContent = sectorData[sector].efficiency;
+                statCapacity.textContent = sectorData[sector].capacity;
+            }
+
+            // Update URL without page reload
+            const url = new URL(window.location);
+            url.searchParams.set('industrysector', sector);
+            window.history.pushState({}, '', url);
+        }
+
+        // Add click handlers
+        sectorBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                switchSector(btn.dataset.sector);
+            });
+        });
+
+        // Check URL parameter on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const sectorParam = urlParams.get('industrysector');
+            
+            if (sectorParam && ['engineering', 'accounting', 'logistics'].includes(sectorParam)) {
+                switchSector(sectorParam);
+            }
         });
     </script>
 </body>
