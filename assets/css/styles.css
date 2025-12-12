@@ -11211,6 +11211,26 @@ h1, h2, h3, h4 {
   font-weight: 500;
 }
 
+/* Search Page Specific - Force Single Column for All Grids */
+.search-page .methodology-grid {
+  grid-template-columns: 1fr !important;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.search-page .features-grid-enhanced {
+  grid-template-columns: 1fr !important;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.search-page .methodology-card,
+.search-page .feature-card-enhanced {
+  max-width: 100%;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .hero-search {
