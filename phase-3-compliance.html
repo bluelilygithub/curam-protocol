@@ -11,230 +11,644 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body>
-    <!-- Scroll Down Button -->
-    <button class="scroll-down-btn" aria-label="Scroll down">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M19 12l-7 7-7-7"/>
-        </svg>
-    </button>
-    
+<body class="phase-3-page">
     <!-- Navigation -->
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
-    <section class="hero">
-        <div class="hero-background">
-            <div class="hero-gradient"></div>
-            <div class="hero-pattern"></div>
+<main>
+
+<!-- ============================================
+     HERO SECTION
+     ============================================ -->
+<section class="phase-3-hero">
+    <div class="container-wide">
+        <div class="breadcrumb">Phase 3 of The Protocol</div>
+        
+        <h1>Don't Wait for the Audit. Be Ready for It.</h1>
+        
+        <p class="subheading">Pre-built documentation that accelerates your compliance review. We prepare the evidence file; your auditor validates it.</p>
+        
+        <div class="cta-buttons">
+            <a href="contact.html" class="btn btn-primary btn-primary-lg">Start Compliance Shield – From $8k</a>
+            <a href="risk-audit-report.html" class="btn btn-secondary btn-secondary-lg">View Sample Documentation</a>
         </div>
-        <div class="container">
-            <div class="hero-content">
-                <p class="hero-eyebrow">Phase 3 of The Protocol</p>
-                <h1 class="hero-headline">Don't Wait for the Audit.<br><span class="text-accent">Be Ready for It.</span></h1>
-                <p class="hero-subheadline">
-                    A pre-audit governance pack that maps your AI deployment against ISO 27001 and Insurance standards. We give your auditor the evidence they need to say "Yes."
+        
+        <div class="key-metrics">
+            <div class="metric">
+                <span class="number">$8-12k</span>
+                <span class="label">Fixed Investment</span>
+            </div>
+            <div class="metric">
+                <span class="number">2</span>
+                <span class="label">Weeks Duration</span>
+            </div>
+            <div class="metric">
+                <span class="number">ISO 27001</span>
+                <span class="label">Aligned Documentation</span>
+            </div>
+            <div class="metric">
+                <span class="number">40-50%</span>
+                <span class="label">Auditor Hours Saved</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     WHAT IS IT SECTION
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <h2>The "Audit Delay" Trap</h2>
+        
+        <p>
+            External audits typically take 8-12 weeks because auditors start from scratch. They request architecture documentation, data flow diagrams, security evidence, control mappings—all from you. Your team scrambles to find it, organize it, and present it in a format they can understand.
+        </p>
+        
+        <p>
+            Meanwhile, your AI implementation is blocked, waiting for audit sign-off.
+        </p>
+        
+        <div class="highlight-box">
+            <p>
+                <strong>Phase 3 solves this by building the evidence file in advance.</strong> Your auditor reviews pre-built documentation instead of requesting it from you piece by piece. They validate it, ask clarifying questions, and sign off faster.
+            </p>
+        </div>
+        
+        <p>
+            <strong>We don't replace your auditor. We accelerate them.</strong>
+        </p>
+    </div>
+</section>
+
+<!-- ============================================
+     WHAT YOU GET SECTION
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <h2>What Your Auditor Gets: Pre-Built Evidence Package</h2>
+        
+        <p>Phase 3 produces a comprehensive documentation package designed to be handed directly to your external auditor or compliance team.</p>
+        
+        <div class="deliverables-grid">
+            
+            <div class="deliverable">
+                <h3>✓ Architecture & Data Flow Documentation</h3>
+                <p>
+                    Visual diagrams showing exactly where your data sits, how it moves, and where it's processed. Includes:
                 </p>
-                <div class="hero-cta-group">
-                    <a href="contact.html" class="btn btn-primary">Start Compliance Shield – From $8k</a>
-                    <a href="risk-audit-report.html" class="btn btn-secondary">View Sample Pack</a>
+                <ul>
+                    <li>Cloud tenant boundary diagram (Azure/AWS/GCP)</li>
+                    <li>Data flow: Documents → AI Pipeline → Your ERP</li>
+                    <li>Network architecture and access control points</li>
+                    <li>Encryption in transit and at rest</li>
+                </ul>
+                <div class="note">
+                    <strong>Your auditor uses this as the starting point.</strong> Instead of asking "where does the data go?", they review your answer already documented. Saves ~2-3 weeks of back-and-forth.
                 </div>
             </div>
-            <div class="hero-stats-grid">
-                <div class="hero-stat-card">
-                    <span class="hero-stat-number">$8-12k</span>
-                    <span class="hero-stat-label">Fixed Investment</span>
-                </div>
-                <div class="hero-stat-card">
-                    <span class="hero-stat-number">2</span>
-                    <span class="hero-stat-suffix">wks</span>
-                    <span class="hero-stat-label">Duration</span>
-                </div>
-                <div class="hero-stat-card">
-                    <span class="hero-stat-number">ISO</span>
-                    <span class="hero-stat-label">27001 Aligned</span>
-                </div>
-                <div class="hero-stat-card">
-                    <span class="hero-stat-number">PI</span>
-                    <span class="hero-stat-label">Insurer Ready</span>
+            
+            <div class="deliverable">
+                <h3>✓ ISO 27001 Control Mapping</h3>
+                <p>
+                    Documentation linking your AI deployment to specific ISO 27001 control clauses. For each relevant control, we document:
+                </p>
+                <ul>
+                    <li>What the control requires</li>
+                    <li>How your AI deployment meets it</li>
+                    <li>Evidence (logs, screenshots, policies)</li>
+                    <li>Residual risks and mitigations</li>
+                </ul>
+                <div class="note">
+                    <strong>Your auditor validates this mapping.</strong> They may ask clarifying questions or request additional evidence, but they're reviewing your answer instead of starting from "what controls apply?"
                 </div>
             </div>
-        </div>
-    </section>
-
-
-    <section class="section">
-        <div class="container">
-            <div class="content-block">
-                <h2 class="section-headline">The "Shadow IT" Trap</h2>
-                <p class="section-subhead">
-                    To a CTO or an Insurer, undocumented AI looks like risk. If you can't prove how the data moves, they will block the deployment.
+            
+            <div class="deliverable">
+                <h3>✓ Risk & Mitigation Assessment</h3>
+                <p>
+                    We identify potential risks specific to AI-powered automation and document how each is mitigated:
                 </p>
-                <div class="highlight-box">
-                    <div class="highlight-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-accent)" stroke-width="2">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        </svg>
-                    </div>
-                    <p class="highlight-text">
-                        <strong>We don't replace your auditor. We accelerate them.</strong><br>
-                        By pre-filling the compliance questionnaires and mapping the controls in advance, we turn a potential 3-month audit delay into a streamlined approval process.
+                <ul>
+                    <li><strong>Hallucination Risk:</strong> Mitigated by "Human-in-the-Loop" review</li>
+                    <li><strong>Data Quality Risk:</strong> Mitigated by Phase 1 validation and monitoring</li>
+                    <li><strong>Model Drift Risk:</strong> Mitigated by retraining and monitoring</li>
+                    <li><strong>Access Control Risk:</strong> Mitigated by role-based ERP permissions</li>
+                    <li><strong>Data Residency Risk:</strong> Mitigated by tenant-only processing</li>
+                </ul>
+                <div class="note">
+                    <strong>Your auditor assesses whether these mitigations are sufficient.</strong> This documentation gives them the starting point for that conversation.
+                </div>
+            </div>
+            
+            <div class="deliverable">
+                <h3>✓ Security & Compliance Checklist</h3>
+                <p>
+                    Pre-filled questionnaires addressing common auditor/insurer concerns:
+                </p>
+                <ul>
+                    <li>Data sovereignty: Does the AI access data outside your tenant? (No)</li>
+                    <li>Vendor access: Can we access your data? (No)</li>
+                    <li>Audit trails: Are AI decisions logged? (Yes)</li>
+                    <li>Change management: How are model updates controlled? (Documented)</li>
+                    <li>Disaster recovery: What if the AI fails? (Manual fallback)</li>
+                </ul>
+                <div class="note">
+                    <strong>Your auditor reviews these answers.</strong> You're answering with documentation instead of improvising.
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     WARNING SECTION: WHAT THIS IS NOT
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <div class="warning-section">
+            <h2>⚠️ What Phase 3 Is NOT</h2>
+            
+            <p style="font-size: 1.05rem; font-weight: 600; margin-bottom: var(--spacing-lg);">
+                This is critical to understand. Phase 3 is audit support, not a substitute for auditor judgment.
+            </p>
+            
+            <div class="warning-grid">
+                
+                <div class="warning-item">
+                    <h3>✗ Not an Audit</h3>
+                    <p>
+                        Phase 3 is <strong>documentation preparation</strong>, not an audit. We don't review your security controls, test your systems, or validate compliance—we document your architecture so your auditor can review it.
+                    </p>
+                    <p style="margin-top: var(--spacing-md);">
+                        <strong>Your external auditor still conducts a full audit.</strong> They review our documentation, ask follow-up questions, and make the final compliance determination.
+                    </p>
+                </div>
+                
+                <div class="warning-item">
+                    <h3>✗ Not a Certification</h3>
+                    <p>
+                        Phase 3 does not certify that you meet ISO 27001, SOC 2, or any other standard. We align documentation to those standards; your auditor validates the alignment.
+                    </p>
+                    <p style="margin-top: var(--spacing-md);">
+                        <strong>Only your external auditor can certify compliance.</strong> We support their review; we don't replace it.
+                    </p>
+                </div>
+                
+                <div class="warning-item">
+                    <h3>✗ Not Insurance Pre-Approval</h3>
+                    <p>
+                        Phase 3 does not include insurance approval, pre-approval, or coverage guarantees. We prepare documentation that helps your insurer understand your AI deployment; they make the coverage decision.
+                    </p>
+                    <p style="margin-top: var(--spacing-md);">
+                        <strong>Insurance underwriting happens after Phase 3.</strong> You'll submit Phase 3 documentation to your PI insurer. They review it (2-8 weeks) and make a coverage determination.
+                    </p>
+                </div>
+                
+                <div class="warning-item">
+                    <h3>✗ Not Risk Mitigation</h3>
+                    <p>
+                        Phase 3 documents risks and proposed mitigations; it doesn't eliminate them. Your auditor/insurer may decide that some risks require additional controls beyond what Phase 3 proposes.
+                    </p>
+                    <p style="margin-top: var(--spacing-md);">
+                        <strong>We identify the risks; you and your auditor decide if the mitigations are sufficient.</strong> If they aren't, you may need additional security work before proceeding.
+                    </p>
+                </div>
+                
+            </div>
+            
+            <p style="margin-top: var(--spacing-xl); font-size: 0.95rem; color: var(--text-secondary); line-height: 1.8;">
+                <strong>Bottom line:</strong> Phase 3 is a time-saving tool for your auditors and insurers, not a substitute for their judgment. It's the difference between "we'll need to understand how your AI works" (slow, 12 weeks) and "we've reviewed your architecture documentation and have three follow-up questions" (fast, 3 weeks).
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     WHO THIS IS FOR SECTION
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <h2>Who Needs Phase 3?</h2>
+        
+        <p>
+            Phase 3 is valuable for any firm, but <strong>essential if any of these apply to you:</strong>
+        </p>
+        
+        <div class="industry-cards-section">
+            
+            <div class="industry-card">
+                <h3>You Have an External Audit Coming</h3>
+                <p>
+                    If you're subject to ISO 27001, SOC 2, or similar audits, Phase 3 documentation will dramatically reduce audit timeline and cost. Your auditor starts with pre-built evidence instead of sending you a 20-item questionnaire.
+                </p>
+            </div>
+            
+            <div class="industry-card">
+                <h3>You're Regulated or Certified</h3>
+                <p>
+                    Financial services (AFSL), healthcare (HIPAA), legal (privilege), government (security clearances)—if you're regulated, your auditor/regulator will ask about the AI. Phase 3 gives them the answers upfront.
+                </p>
+            </div>
+            
+            <div class="industry-card">
+                <h3>Your Insurer Wants Understanding</h3>
+                <p>
+                    PI insurers are increasingly asking about AI deployments. Phase 3 documentation helps them understand your risk management approach so they can make a coverage decision faster.
+                </p>
+            </div>
+            
+            <div class="industry-card">
+                <h3>You Have a CTO or IT Governance Team</h3>
+                <p>
+                    If your IT team wants documentation of the AI system before it goes live, Phase 3 provides architecture diagrams, control mappings, and risk assessments in the language they understand.
+                </p>
+            </div>
+            
+            <div class="industry-card">
+                <h3>Your Industry Moves Slow on AI Adoption</h3>
+                <p>
+                    Accounting, legal, and financial services are conservative. Having pre-built compliance documentation removes a common blocker: "We need to understand the risk before we approve this."
+                </p>
+            </div>
+            
+            <div class="industry-card">
+                <h3>You're Moving Fast to Production</h3>
+                <p>
+                    If you passed Phase 1 & 2 and want to go live quickly, Phase 3 removes the compliance delay. Auditors review documentation in parallel instead of blocking Phase 4.
+                </p>
+            </div>
+            
+        </div>
+        
+        <div style="background: rgba(76, 175, 80, 0.1); border-left: 4px solid #4CAF50; padding: var(--spacing-xl); border-radius: var(--border-radius); margin-top: var(--spacing-xl);">
+            <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                <strong>If none of these apply to you:</strong> You may not need Phase 3. Many small firms without external audits or insurance requirements skip Phase 3 and go straight from Phase 2 to Phase 4. Discuss with your team based on your risk appetite and stakeholder concerns.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     TIMELINE SECTION
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <h2>Phase 3 in 2 Weeks</h2>
+        
+        <p>
+            Phase 3 is quick because we're documenting existing architecture, not designing anything new. We leverage the technical foundation built in Phase 2.
+        </p>
+        
+        <div class="timeline-section">
+            
+            <div class="timeline-step">
+                <div class="step-day">Day 1-2</div>
+                <div class="step-content">
+                    <h4>Kickoff: Architecture Review & Scope</h4>
+                    <p>
+                        90-minute call with your IT lead. We review the Phase 2 technical blueprint and confirm the deployment architecture (Azure/AWS/GCP, integration points, data flows). We scope what documentation is most important for your auditors/insurers.
                     </p>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <section class="section section-alt">
-        <div class="container">
-            <h2 class="section-headline">We Build the "Evidence Locker"<br><span class="text-accent">Before the Questions are Asked.</span></h2>
-            <p class="section-subhead">
-                Phase 3 proactively addresses the concerns of IT Governance, External Auditors, and Insurers. We deliver three layers of defensibility:
-            </p>
-
-            <div class="methodology-grid">
-                <div class="methodology-card">
-                    <div class="methodology-number">1</div>
-                    <div class="methodology-content">
-                        <h3>Data Sovereignty Mapping</h3>
-                        <p class="methodology-desc">We prove that your data never leaves your tenant. We document the Azure/M365 boundaries to satisfy the strictest "Data Residency" requirements.</p>
-                    </div>
-                </div>
-                <div class="methodology-card">
-                    <div class="methodology-number">2</div>
-                    <div class="methodology-content">
-                        <h3>The Risk Control Matrix</h3>
-                        <p class="methodology-desc">We don't just list risks; we document the controls. We show exactly how the "Human-in-the-Loop" workflow mitigates hallucination risk to an insurable level.</p>
-                    </div>
-                </div>
-                <div class="methodology-card">
-                    <div class="methodology-number">3</div>
-                    <div class="methodology-content">
-                        <h3>Shadow IT Remediation</h3>
-                        <p class="methodology-desc">We identify insecure third-party tools (like online PDF converters) that this project will retire, actually <em>improving</em> your overall security posture.</p>
-                    </div>
+            
+            <div class="timeline-step">
+                <div class="step-day">Day 3-9</div>
+                <div class="step-content">
+                    <h4>Documentation Build: We Create Everything</h4>
+                    <p>
+                        You don't lift a finger here. We build the evidence package: architecture diagrams, ISO 27001 mapping, risk assessment, security checklist. We work from Phase 2 blueprints and industry-standard control frameworks.
+                    </p>
+                    <p>
+                        <strong>Minimal input from you:</strong> 1-2 email responses if we have questions about your specific tools or processes. Otherwise, we deliver complete documentation.
+                    </p>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <section class="section">
-        <div class="container">
-            <h2 class="section-headline">The Pre-Audit Pack.<br><span class="text-accent">Your "Permission to Deploy."</span></h2>
-            <p class="section-subhead">
-                You receive a comprehensive governance package designed to be handed directly to your Risk Manager or External Auditor.
-            </p>
-
-            <div class="deliverable-grid">
-                <div class="deliverable-card deliverable-card-ceo">
-                    <div class="deliverable-header">
-                        <div class="deliverable-icon">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                <polyline points="14 2 14 8 20 8"/>
-                                <line x1="16" y1="13" x2="8" y2="13"/>
-                                <line x1="16" y1="17" x2="8" y2="17"/>
-                                <polyline points="10 9 9 9 8 9"/>
-                            </svg>
-                        </div>
-                        <h3>For the External Auditor</h3>
-                        <p class="deliverable-subtitle">Evidence & Questionnaires</p>
-                    </div>
-                    <ul class="deliverable-list">
-                        <li><strong>Pre-Filled ISO 27001 Mapping:</strong> Evidence linking our specific AI controls to clauses A.12, A.14, and A.18.</li>
-                        <li><strong>PI Insurance Responses:</strong> Drafted answers for your Professional Indemnity renewal regarding "Design Data" automation.</li>
+            
+            <div class="timeline-step">
+                <div class="step-day">Day 10-14</div>
+                <div class="step-content">
+                    <h4>Review & Refinement: Your Team Validates</h4>
+                    <p>
+                        We share the complete package with your IT/Risk lead. They review for accuracy. Questions like:
+                    </p>
+                    <ul style="margin: var(--spacing-md) 0; padding-left: 2rem;">
+                        <li>"Is this data flow diagram correct?"</li>
+                        <li>"Are we missing any controls you want documented?"</li>
+                        <li>"Does this match our security policies?"</li>
                     </ul>
-                </div>
-
-                <div class="deliverable-card deliverable-card-engineer">
-                    <div class="deliverable-header">
-                        <div class="deliverable-icon">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                                <line x1="3" y1="9" x2="21" y2="9"/>
-                                <line x1="9" y1="21" x2="9" y2="9"/>
-                            </svg>
-                        </div>
-                        <h3>For the CISO / IT</h3>
-                        <p class="deliverable-subtitle">Architecture & Control</p>
-                    </div>
-                    <ul class="deliverable-list">
-                        <li><strong>Tenant Heat-Map:</strong> Visual confirmation of where every byte of data is stored and processed.</li>
-                        <li><strong>Governance Framework:</strong> Defines exactly who owns the model, who approves changes, and how errors are logged.</li>
-                    </ul>
+                    <p>
+                        We refine based on feedback and deliver the final package.
+                    </p>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <section class="section section-alt">
-        <div class="container">
-            <h2 class="section-headline">Variable Scope. Fixed Outcome.</h2>
-            <div class="guarantee-grid">
-                <div class="guarantee-item">
-                    <div class="guarantee-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
-                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                        </svg>
-                    </div>
-                    <h3>Investment</h3>
-                    <p class="guarantee-value">$8,000 - $12,000</p>
-                    <p class="guarantee-note">Depending on environment complexity (Single vs. Multi-Cloud)</p>
-                </div>
-                <div class="guarantee-item">
-                    <div class="guarantee-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-accent)" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
-                        </svg>
-                    </div>
-                    <h3>Timeline</h3>
-                    <p class="guarantee-value">2 Weeks</p>
-                </div>
-                <div class="guarantee-item">
-                    <div class="guarantee-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
-                            <path d="M9 11l3 3L22 4"/>
-                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-                        </svg>
-                    </div>
-                    <h3>Outcome</h3>
-                    <p class="guarantee-value">Ready to Audit</p>
-                    <p class="guarantee-note">Drastically reduces the billable hours your external auditor charges you.</p>
+            
+            <div class="timeline-step">
+                <div class="step-day">Day 14</div>
+                <div class="step-content">
+                    <h4>Handover: Ready to Share with Your Auditor/Insurer</h4>
+                    <p>
+                        Final package delivered. You now have production-ready documentation to send to your external auditor, compliance team, or insurer.
+                    </p>
                 </div>
             </div>
+            
         </div>
-    </section>
+    </div>
+</section>
 
-    <section class="section">
-        <div class="container">
-            <div class="content-block-centered">
-                <h2 class="section-headline">Resource Requirements</h2>
-                <p class="section-subhead">
-                    We do the documentation heavy lifting. You provide the validation.
+<!-- ============================================
+     TEAM REQUIREMENTS
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <h2>What We Need From Your Team</h2>
+        
+        <p>
+            Phase 3 is designed for minimal disruption. Your team provides validation, not production work.
+        </p>
+        
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: var(--border-radius-lg); padding: var(--spacing-2xl); margin-top: var(--spacing-xl);">
+            
+            <h4 style="margin-bottom: var(--spacing-md);">IT Admin / CISO / Security Lead</h4>
+            <ul style="margin-bottom: var(--spacing-xl); padding-left: 2rem;">
+                <li><strong>Kickoff call (90 min):</strong> Confirm architecture, identify what matters most for your auditors</li>
+                <li><strong>Review & feedback (2-3 hours):</strong> Review draft documentation for accuracy, suggest revisions</li>
+            </ul>
+            
+            <hr style="margin: var(--spacing-lg) 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+            
+            <h4 style="margin: var(--spacing-lg) 0 var(--spacing-md);">Risk/Compliance Owner (Optional)</h4>
+            <ul style="margin-bottom: var(--spacing-xl); padding-left: 2rem;">
+                <li><strong>Review & sign-off (1-2 hours):</strong> Validate that documentation aligns with your risk appetite and policies</li>
+            </ul>
+            
+            <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                <strong>Total time commitment: ~4-5 hours over 2 weeks</strong> (mostly review, not creation)
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     INVESTMENT SECTION
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <h2>Investment & Value</h2>
+        
+        <div class="two-col-grid">
+            
+            <div class="grid-item">
+                <h3>Phase 3 Cost</h3>
+                <div class="big-number">$8–12k</div>
+                <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                    Fixed investment. Depends on environment complexity (single cloud vs. multi-cloud, integration points).
                 </p>
-                <div class="requirements-grid">
-                    <div class="requirement-item">
-                        <strong class="requirement-title">1. IT Admin / CISO</strong>
-                        <p class="requirement-desc">~2 Hours. Review of the Tenant Heat-Map and Data Sovereignty logic.</p>
-                    </div>
-                    <div class="requirement-item">
-                        <strong class="requirement-title">2. Risk Owner</strong>
-                        <p class="requirement-desc">~2 Hours. Validation of the Risk Control Matrix and final sign-off.</p>
-                    </div>
+                <ul style="margin-top: var(--spacing-md);">
+                    <li>Architecture & data flow diagrams</li>
+                    <li>ISO 27001 control mapping</li>
+                    <li>Risk & mitigation assessment</li>
+                    <li>Security questionnaire pre-fill</li>
+                    <li>Your team review & refinement</li>
+                </ul>
+            </div>
+            
+            <div class="grid-item">
+                <h3>Auditor Time Saved</h3>
+                <div class="big-number">40–50%</div>
+                <p style="color: var(--text-secondary); font-size: 0.95rem;">
+                    Typical external audits cost $8–15k and take 8–12 weeks. Phase 3 reduces auditor hours and timeline.
+                </p>
+                <div style="background: rgba(76, 175, 80, 0.15); padding: var(--spacing-md); border-radius: var(--border-radius); margin-top: var(--spacing-md); font-size: 0.9rem; color: var(--text-secondary);">
+                    <strong>Example:</strong> If your auditor bills at $200/hour and spends 30 hours building your evidence file, that's $6k. Phase 3 eliminates most of that.
                 </div>
             </div>
+            
         </div>
-    </section>
+    </div>
+</section>
 
-    <section class="section cta-section">
-        <div class="container">
-            <div class="cta-content">
-                <h2 class="section-headline">Clear the Path to Deployment.</h2>
-                <a href="contact.html" class="btn btn-primary btn-large">Start Compliance Shield</a>
+<!-- ============================================
+     AUDITOR & INSURER NEXT STEPS
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <h2>What Happens After Phase 3?</h2>
+        
+        <p>
+            Phase 3 delivers documentation, not approvals. Your auditors and insurers now review it.
+        </p>
+        
+        <div class="two-col-grid">
+            
+            <div class="grid-item">
+                <h3>External Audit Timeline</h3>
+                <div class="big-number" style="color: var(--color-gold);">2–4 Weeks</div>
+                <p style="margin-bottom: var(--spacing-md);">(Instead of 8–12)</p>
+                <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md);">
+                    Your auditor reviews Phase 3 documentation and has clarifying conversations instead of starting from scratch.
+                </p>
+                <ul>
+                    <li><strong>Week 1:</strong> Auditor reviews architecture and control mapping</li>
+                    <li><strong>Week 1-2:</strong> Clarification questions (usually 3-5 items)</li>
+                    <li><strong>Week 2-4:</strong> Validation and final sign-off</li>
+                </ul>
+                <p style="margin-top: var(--spacing-md); font-size: 0.9rem; color: var(--text-secondary);">
+                    <em>Timeline depends on your auditor's workload and complexity of your environment. This is typical, not guaranteed.</em>
+                </p>
             </div>
+            
+            <div class="grid-item" style="border-color: rgba(255, 140, 0, 0.4);">
+                <h3 style="color: #FF8C00;">Insurance Review Timeline</h3>
+                <div class="big-number" style="color: #FF8C00;">2–8 Weeks</div>
+                <p style="margin-bottom: var(--spacing-md);">(Depends on Insurer)</p>
+                <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md);">
+                    Your PI insurer reviews Phase 3 documentation to understand your AI risk management and make a coverage decision.
+                </p>
+                <ul>
+                    <li><strong>Week 1:</strong> You submit Phase 3 documentation to your insurer</li>
+                    <li><strong>Week 1-4:</strong> Insurer reviews (timeline varies widely)</li>
+                    <li><strong>Week 2-8:</strong> Coverage decision and policy endorsement</li>
+                </ul>
+                <p style="margin-top: var(--spacing-md); font-size: 0.9rem; color: var(--text-secondary);">
+                    <em>Insurance underwriting is slower because many insurers are still developing AI coverage policies. Budget 4-8 weeks.</em>
+                </p>
+            </div>
+            
         </div>
-    </section>
+        
+        <div style="background: rgba(255, 140, 0, 0.08); border: 2px solid rgba(255, 140, 0, 0.4); border-radius: var(--border-radius-lg); padding: var(--spacing-xl); margin-top: var(--spacing-2xl);">
+            <h3 style="color: #FF8C00; margin-bottom: var(--spacing-md);">⚠️ Insurance: What to Expect</h3>
+            <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md);">
+                Insurance underwriting for AI deployments is still evolving. Many insurers are cautious. Here's what to prepare for:
+            </p>
+            <ul style="padding-left: 2rem;">
+                <li><strong>Questions, not approval:</strong> Expect your insurer to ask follow-up questions about your risk management approach</li>
+                <li><strong>Possible coverage limitations:</strong> Some insurers may approve coverage but with exclusions or higher premiums for AI-related errors</li>
+                <li><strong>Third-party assessments:</strong> Some insurers request independent penetration testing or security audits before approving coverage</li>
+                <li><strong>Waiting for policy evolution:</strong> If your insurer hasn't developed an AI policy yet, they may delay underwriting while they develop one</li>
+            </ul>
+            <p style="margin-top: var(--spacing-md); color: var(--text-secondary); font-size: 0.9rem;">
+                <strong>Phase 3 doesn't guarantee insurance approval.</strong> It gives your insurer the information they need to make a decision, but that decision depends on their risk appetite and current policies. Discuss with your broker early.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- ============================================
+     FAQ SECTION
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <h2>Common Questions About Phase 3</h2>
+        
+        <details>
+            <summary>Do I have to do Phase 3? Can I skip it and go straight to Phase 4?</summary>
+            <div>
+                <p>
+                    <strong>Yes, you can skip Phase 3.</strong> Many small firms without external audits or strict compliance requirements go straight from Phase 2 to Phase 4.
+                </p>
+                <p style="margin-top: var(--spacing-md);">
+                    <strong>But consider Phase 3 if:</strong>
+                </p>
+                <ul>
+                    <li>You're subject to external audits (ISO, SOC 2, etc.)</li>
+                    <li>You work in regulated industries (financial services, legal, healthcare)</li>
+                    <li>Your CTO/IT governance team requires documentation before go-live</li>
+                    <li>Your insurer is asking questions about AI deployments</li>
+                </ul>
+                <p style="margin-top: var(--spacing-md);">
+                    Discuss with your audit/compliance/IT team. If they're not concerned, Phase 3 may not be necessary.
+                </p>
+            </div>
+        </details>
+        
+        <details>
+            <summary>If the audit finds issues, does that mean Phase 3 failed?</summary>
+            <div>
+                <p>
+                    <strong>No.</strong> Phase 3 documents your architecture; audits identify whether that architecture meets your compliance requirements.
+                </p>
+                <p style="margin-top: var(--spacing-md);">
+                    <strong>Common scenarios:</strong>
+                </p>
+                <ul>
+                    <li><strong>"You need additional monitoring."</strong> Phase 3 proposes monitoring; auditor says you need more. You add it in Phase 4.</li>
+                    <li><strong>"This control is insufficient."</strong> Phase 3 documents a mitigation; auditor requires a stronger one. You strengthen it before go-live.</li>
+                    <li><strong>"You need penetration testing."</strong> Phase 3 isn't penetration testing. Auditor may require it before final approval.</li>
+                </ul>
+                <p style="margin-top: var(--spacing-md);">
+                    <strong>Phase 3 succeeds if it accelerates the conversation.</strong> If your auditor asks 10 clarifying questions instead of 50, Phase 3 worked. The fact that they identify additional requirements is normal.
+                </p>
+            </div>
+        </details>
+        
+        <details>
+            <summary>What if my auditor doesn't accept Phase 3 documentation and asks for something different?</summary>
+            <div>
+                <p>
+                    That's fine. Every auditor has slightly different requirements. Phase 3 builds a strong foundation; auditors often request format changes or additional detail, not a complete rework.
+                </p>
+                <p style="margin-top: var(--spacing-md);">
+                    <strong>If your auditor asks for something Phase 3 didn't cover:</strong> Tell us. We can often scope a Phase 3 extension (additional cost, usually $2-4k) to address their specific requirements.
+                </p>
+                <p style="margin-top: var(--spacing-md);">
+                    <strong>Common extensions:</strong>
+                </p>
+                <ul>
+                    <li>Penetration testing scope & findings</li>
+                    <li>Business continuity & disaster recovery documentation</li>
+                    <li>Detailed access control logs and testing evidence</li>
+                    <li>Vendor risk assessments for third-party tools</li>
+                </ul>
+            </div>
+        </details>
+        
+        <details>
+            <summary>Does Phase 3 guarantee my insurer will approve coverage?</summary>
+            <div>
+                <p>
+                    <strong>No.</strong> Phase 3 gives your insurer the information they need to make a decision, but that decision is theirs.
+                </p>
+                <p style="margin-top: var(--spacing-md);">
+                    <strong>Possible outcomes:</strong>
+                </p>
+                <ul>
+                    <li><strong>Approved as-is:</strong> Insurer reviews documentation and approves coverage without changes</li>
+                    <li><strong>Approved with conditions:</strong> Insurer approves but requires monitoring, regular retraining, or higher premiums</li>
+                    <li><strong>Approved with exclusions:</strong> Insurer approves general coverage but excludes AI-related errors</li>
+                    <li><strong>Requires assessment:</strong> Insurer requests penetration testing or independent security audit before deciding</li>
+                    <li><strong>Pending policy development:</strong> Insurer hasn't developed an AI coverage policy yet; you wait for their policy to evolve</li>
+                </ul>
+                <p style="margin-top: var(--spacing-md);">
+                    <strong>Recommendation:</strong> Contact your broker early in Phase 2. Give them a heads-up that you're implementing AI-powered automation. Some insurers will tell you upfront what they require (then Phase 3 addresses it).
+                </p>
+            </div>
+        </details>
+        
+        <details>
+            <summary>Can Phase 3 documentation be used for multiple audits (internal, external, regulatory)?</summary>
+            <div>
+                <p>
+                    <strong>Mostly yes, but with variations.</strong> Phase 3 documentation is designed to address common control frameworks (ISO 27001, SOC 2, general security). It can be adapted for industry-specific regulators.
+                </p>
+                <p style="margin-top: var(--spacing-md);">
+                    <strong>Examples:</strong>
+                </p>
+                <ul>
+                    <li><strong>Internal audit:</strong> Use Phase 3 documentation as-is</li>
+                    <li><strong>External SOC 2 audit:</strong> May require additional detail on user access controls and change management</li>
+                    <li><strong>AFSL compliance (financial services):</strong> Phase 3 + additional documentation on conflicts of interest, data integrity</li>
+                    <li><strong>HIPAA compliance (healthcare):</strong> Phase 3 + additional documentation on data encryption, breach notification</li>
+                </ul>
+                <p style="margin-top: var(--spacing-md);">
+                    Discuss with your compliance team if Phase 3 covers everything needed for your specific requirements. We can often adapt it with minimal additional work.
+                </p>
+            </div>
+        </details>
+        
+        <details>
+            <summary>What happens if I complete Phase 3 but decide not to proceed with Phase 4?</summary>
+            <div>
+                <p>
+                    <strong>You keep all the documentation.</strong> Phase 3 deliverables are yours—the evidence file, architecture diagrams, control mappings, risk assessment. All yours.
+                </p>
+                <p style="margin-top: var(--spacing-md);">
+                    You can:
+                </p>
+                <ul>
+                    <li>Use it for your next audit (saves auditor time and cost)</li>
+                    <li>Share it with other vendors who propose AI solutions</li>
+                    <li>Store it for future reference when you're ready to revisit AI automation</li>
+                </ul>
+                <p style="margin-top: var(--spacing-md);">
+                    Phase 3 has standalone value. Even if you don't implement with us, the documentation accelerates your audit and gives your team a clear picture of the AI deployment architecture.
+                </p>
+            </div>
+        </details>
+    </div>
+</section>
+
+<!-- ============================================
+     FINAL CTA
+     ============================================ -->
+<section class="section-block">
+    <div class="container-wide">
+        <div class="final-cta-section">
+            <h2>Reduce Audit Delays. Give Your Auditor a Head Start.</h2>
+            <p>Phase 3 isn't a certification. It's audit acceleration. Two weeks, $8-12k, 40-50% faster audits.</p>
+            <a href="contact.html" class="btn btn-primary btn-primary-lg" style="margin-bottom: var(--spacing-lg);">Start Compliance Shield</a>
+            <p style="font-size: 0.95rem; color: var(--text-secondary);">
+                Or <a href="contact.html?option=phase-3-consultation" class="cta-link">book a 15-minute consultation</a> to discuss whether Phase 3 is right for your situation.
+            </p>
+        </div>
+    </div>
+</section>
+
+</main>
 
     <footer class="footer">
         <div class="container">
@@ -251,7 +665,7 @@
                             <li><a href="phase-1-feasibility.html">Phase 1: Feasibility Sprint</a></li>
                             <li><a href="phase-2-roadmap.html">Phase 2: The Roadmap</a></li>
                             <li><a href="phase-3-compliance.html">Phase 3: Compliance Shield</a></li>
-                            <li><a href="curam-ai-protocol.html">Phase 4: Implementation</a></li>
+                            <li><a href="phase-4-implementation.html">Phase 4: Implementation</a></li>
                         </ul>
                     </div>
                     <div class="footer-column">
