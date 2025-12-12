@@ -128,18 +128,6 @@ document.addEventListener('DOMContentLoaded', function() {
     observer.observe(el);
   });
 
-  // ========== SELECTOR ROW CLICK ==========
-  const selectorRows = document.querySelectorAll('.selector-row');
-  
-  selectorRows.forEach(row => {
-    row.addEventListener('click', function() {
-      const phase = this.dataset.phase;
-      const protocolSection = document.getElementById('protocol');
-      if (protocolSection) {
-        protocolSection.scrollIntoView({ behavior: 'smooth' });
-      }
-    });
-  });
 
   // ========== INDUSTRY FINDER (No toggle - always visible) ==========
   // Industry finder is now always visible, styled like selector-grid
