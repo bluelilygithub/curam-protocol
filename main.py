@@ -1887,19 +1887,31 @@ def search_blog_rag():
                 print(f"WordPress search API error: {e}")
                 pass
             
-            # Strategy 2: Always also fetch recent posts as backup (WordPress search can be unreliable)
+            # Strategy 2: Fetch recent posts as backup (WordPress search can be unreliable)
+            # Fetch multiple pages to get more content
             try:
-                response = requests.get(wp_api_url, params={
-                    'per_page': 100,
-                    '_fields': 'id,title,content,excerpt,link'
-                }, timeout=15)
-                if response.status_code == 200:
-                    recent_posts = response.json()
-                    # Merge with search results, avoiding duplicates
-                    existing_ids = {p.get('id') for p in all_posts}
-                    for post in recent_posts:
-                        if post.get('id') not in existing_ids:
-                            all_posts.append(post)
+                pages_to_fetch = 3  # Fetch 3 pages = 300 posts
+                for page in range(1, pages_to_fetch + 1):
+                    response = requests.get(wp_api_url, params={
+                        'per_page': 100,  # Maximum allowed by WordPress
+                        '_fields': 'id,title,content,excerpt,link',
+                        'orderby': 'date',
+                        'order': 'desc',
+                        'page': page
+                    }, timeout=15)
+                    if response.status_code == 200:
+                        page_posts = response.json()
+                        if not page_posts:  # No more posts
+                            break
+                        # Merge with existing, avoiding duplicates
+                        existing_ids = {p.get('id') for p in all_posts}
+                        for post in page_posts:
+                            if post.get('id') not in existing_ids:
+                                all_posts.append(post)
+                    else:
+                        print(f"WordPress API returned status {response.status_code} for page {page}")
+                        break
+                print(f"Fetched {len(all_posts)} total posts for query: {query}")
             except Exception as e:
                 print(f"WordPress recent posts API error: {e}")
                 pass
@@ -1941,10 +1953,24 @@ def search_blog_rag():
             
             # Sort by relevance and take top 5
             # Don't filter by score - even low scores might have relevant content
-            posts = sorted(all_posts, key=calculate_relevance, reverse=True)[:5]
+            posts_with_scores = [(p, calculate_relevance(p)) for p in all_posts]
+            posts_with_scores.sort(key=lambda x: x[1], reverse=True)
+            
+            # Log top results for debugging
+            print(f"Query: {query}")
+            print(f"Query words after filtering: {query_words}")
+            if posts_with_scores[:3]:
+                print("Top 3 results:")
+                for p, score in posts_with_scores[:3]:
+                    title = p.get('title', {}).get('rendered', 'No title')
+                    print(f"  - Score {score}: {title}")
+            
+            # Take top 5 posts (even with score 0, as they're still most relevant)
+            posts = [p for p, score in posts_with_scores[:5]]
             
             # If top post has score 0, try a more lenient search
-            if posts and calculate_relevance(posts[0]) == 0 and len(all_posts) > 5:
+            if posts and posts_with_scores[0][1] == 0 and len(all_posts) > 5:
+                print("Top post has 0 score, trying lenient search...")
                 # Try searching for any word in the query (more lenient)
                 for word in query_words:
                     matching_posts = [p for p in all_posts 
@@ -1953,6 +1979,7 @@ def search_blog_rag():
                                     or word in p.get('content', {}).get('rendered', '').lower()]
                     if matching_posts:
                         posts = matching_posts[:5]
+                        print(f"Found {len(matching_posts)} posts matching word: {word}")
                         break
             
         except requests.RequestException as e:
@@ -2024,8 +2051,11 @@ def search_blog_rag():
         
         # If no content found, provide a helpful message
         if not context:
+            print(f"No context found for query: {query}")
+            print(f"Posts fetched: {len(posts)}")
+            print(f"Static pages: {len(static_pages)}")
             return jsonify({
-                'answer': f"I couldn't find specific information about '{query}' in our blog or website content. Please visit www.curam-ai.com.au or contact us for more information.",
+                'answer': f"I couldn't find specific information about '{query}' in our blog or website content. This topic might not be directly related to AI document automation, the Curam-Ai Protocol, or our services. Please visit <a href='https://www.curam-ai.com.au/?s={query}' target='_blank'>www.curam-ai.com.au</a> to search our full blog, or <a href='contact.html'>contact us</a> if you have questions about our services.",
                 'sources': [],
                 'query': query
             })
