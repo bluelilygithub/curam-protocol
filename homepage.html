@@ -288,70 +288,13 @@
         </div>
     </section>
 
-    <!-- AI DEMO SECTION -->
-    <section class="products">
-        <div class="container">
-            <h2 class="section-headline">See Our AI Technology in Action</h2>
-            <p class="section-subhead">
-                Try our AI-powered search above. Ask questions about RAG, document automation, or AI implementation. 
-                Our system searches 800+ articles and generates accurate, cited answers—demonstrating the same AI 
-                technology we use to extract data from your engineering documents.
-            </p>
-            
-            <div class="product-features-grid">
-                <div class="product-feature-card">
-                    <h3>🔍 Intelligent Search</h3>
-                    <p>
-                        Searches 800+ articles using RAG (Retrieval-Augmented Generation) to find relevant content instantly.
-                    </p>
-                </div>
-                
-                <div class="product-feature-card">
-                    <h3>🤖 AI-Generated Answers</h3>
-                    <p>
-                        Uses Google Gemini AI to synthesize answers from retrieved content—no hallucinations, just accurate information.
-                    </p>
-                </div>
-                
-                <div class="product-feature-card">
-                    <h3>📚 Source Citations</h3>
-                    <p>
-                        Every answer includes citations to source articles, building trust and verifiability—just like our document extraction.
-                    </p>
-                </div>
-            </div>
-            
-            <div style="text-align: center; margin-top: var(--spacing-lg);">
-                <p style="color: var(--color-gray-dark); margin-bottom: var(--spacing-md);">
-                    <strong>This is the same AI technology we use for your documents.</strong> 
-                    Try it now—ask "what is RAG?" or "how does document automation work?"
-                </p>
-                
-                <div style="max-width: 600px; margin: var(--spacing-md) auto; display: flex; gap: var(--spacing-sm);">
-                    <input type="search" 
-                           id="ai-demo-search" 
-                           placeholder='Try: "what is RAG?" or "how does document automation work?"' 
-                           style="flex: 1; padding: 0.875rem 1.25rem; border: 2px solid #E5E7EB; border-radius: var(--border-radius); font-family: var(--font-sans); font-size: 1rem; transition: var(--transition);"
-                           onkeydown="if(event.key === 'Enter') { const query = this.value.trim(); if(query) window.location.href = 'search-results.html?q=' + encodeURIComponent(query); }">
-                    <button onclick="const input = document.getElementById('ai-demo-search'); const query = input.value.trim(); if(query) window.location.href = 'search-results.html?q=' + encodeURIComponent(query);" 
-                            class="btn btn-primary" 
-                            style="white-space: nowrap; background-color: var(--color-gold); color: var(--color-navy); border: none;">
-                        RAG Search
-                    </button>
-                </div>
-                
-                <div style="margin-top: var(--spacing-md);">
-                    <a href="contact.html" class="btn btn-secondary">See How It Works for Your Documents</a>
-                </div>
-            </div>
-        </div>
-    </section>
+ 
 
     <!-- SELECTOR SECTION -->
     <section class="selector">
         <div class="container">
-            <h2 class="section-headline">Where should you start?</h2>
-            <p class="section-subhead">Choose the entry point that matches your current objection.</p>
+            <h2 class="section-headline">What is your largest bottleneck?</h2>
+            <p class="section-subhead">You don't need to solve everything at once. </p>
             
             <div class="selector-grid">
                 <div class="selector-row" data-phase="phase-1">
@@ -362,7 +305,7 @@
                     <div class="selector-arrow">→</div>
                     <div class="selector-solution">
                         <div class="solution-label">Solution</div>
-                        <p class="solution-text"><strong>Start at Phase 1 (Feasibility)</strong></p>
+                        <p class="solution-text"><strong><a href="/phase-1-feasibility.html">Start at Phase 1 (Feasibility)</a></strong></p>
                     </div>
                 </div>
                 
@@ -374,7 +317,7 @@
                     <div class="selector-arrow">→</div>
                     <div class="selector-solution">
                         <div class="solution-label">Solution</div>
-                        <p class="solution-text"><strong>Start at Phase 2 (Roadmap)</strong></p>
+                        <p class="solution-text"><strong><a href="/phase-2-roadmap.html">Start at Phase 2 (Roadmap)</a></strong></p>
                     </div>
                 </div>
                 
@@ -386,7 +329,7 @@
                     <div class="selector-arrow">→</div>
                     <div class="selector-solution">
                         <div class="solution-label">Solution</div>
-                        <p class="solution-text"><strong>Start at Phase 3 (Compliance)</strong></p>
+                        <p class="solution-text"><strong><a href="/phase-3-compliance.html">Start at Phase 3 (Compliance)</a></strong></p>
                     </div>
                 </div>
             </div>
@@ -520,127 +463,6 @@
         </div>
     </section>
 
-    <!-- INDUSTRY PATH FINDER INFOGRAPHIC -->
-    <section class="industry-finder">
-      <div class="container">
-        <div class="finder-header">
-          <h2 class="section-headline">Find Your Path in 10 Seconds</h2>
-          <p class="section-subhead">
-            Your industry shapes your automation needs. Select your sector to see workflows we've already solved.
-          </p>
-        </div>
-
-        <div class="finder-grid">
-          <!-- Professional Services -->
-          <div class="finder-card" data-category="professional">
-            <div class="finder-card-header">
-              <div class="finder-icon">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M20 7h-9" />
-                  <path d="M14 17H5" />
-                  <circle cx="17" cy="17" r="3" />
-                  <circle cx="7" cy="7" r="3" />
-                </svg>
-              </div>
-              <h3 class="finder-title">Professional Services</h3>
-            </div>
-            <p class="finder-desc">
-              Firms trapped in compliance work instead of advisory. We automate the judgment-based complexity that
-              standard tools can't handle.
-            </p>
-            <div class="finder-industries">
-              <a href="accounting.html" class="finder-industry-link">
-                <span class="industry-name">Accounting</span>
-                <span class="industry-detail">Trust accounts, GL coding</span>
-              </a>
-              <a href="legal-services.html" class="finder-industry-link">
-                <span class="industry-name">Legal</span>
-                <span class="industry-detail">Contract review, matter intake</span>
-              </a>
-              <a href="wealth-management.html" class="finder-industry-link">
-                <span class="industry-name">Wealth Management</span>
-                <span class="industry-detail">Statements, SOA generation</span>
-              </a>
-              <a href="insurance-underwriting.html" class="finder-industry-link">
-                <span class="industry-name">Insurance</span>
-                <span class="industry-detail">Underwriting, claims processing</span>
-              </a>
-            </div>
-            <a href="professional-services.html" class="finder-cta">Explore Professional Services →</a>
-          </div>
-
-          <!-- Built Environment -->
-          <div class="finder-card" data-category="built">
-            <div class="finder-card-header">
-              <div class="finder-icon">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M2 20h20" />
-                  <path d="M5 20V10l7-5 7 5v10" />
-                  <path d="M9 20v-6h6v6" />
-                </svg>
-              </div>
-              <h3 class="finder-title">Built Environment</h3>
-            </div>
-            <p class="finder-desc">
-              Projects drowning in documentation. We automate drawing registers, transmittals, and RFI tracking.
-            </p>
-            <div class="finder-industries">
-              <a href="architecture.html" class="finder-industry-link">
-                <span class="industry-name">Architecture</span>
-                <span class="industry-detail">BIM schedules, spec writing</span>
-              </a>
-              <a href="construction.html" class="finder-industry-link">
-                <span class="industry-name">Construction</span>
-                <span class="industry-detail">RFI tracking, variation orders</span>
-              </a>
-              <a href="mining-services.html" class="finder-industry-link">
-                <span class="industry-name">Mining</span>
-                <span class="industry-detail">Safety docs, compliance reporting</span>
-              </a>
-              <a href="property-management.html" class="finder-industry-link">
-                <span class="industry-name">Property Management</span>
-                <span class="industry-detail">Lease processing</span>
-              </a>
-            </div>
-            <a href="built-environment.html" class="finder-cta">Explore Built Environment →</a>
-          </div>
-
-          <!-- Operations & Logistics -->
-          <div class="finder-card" data-category="operations">
-            <div class="finder-card-header">
-              <div class="finder-icon">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path
-                    d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
-                  />
-                  <polyline points="3.29 7 12 12 20.71 7" />
-                  <line x1="12" y1="22" x2="12" y2="12" />
-                </svg>
-              </div>
-              <h3 class="finder-title">Operations & Logistics</h3>
-            </div>
-            <p class="finder-desc">
-              High-volume manual processing eating margins. We automate manifests, PODs, and customs docs.
-            </p>
-            <div class="finder-industries">
-              <a href="logistics-freight.html" class="finder-industry-link">
-                <span class="industry-name">Logistics & Freight</span>
-                <span class="industry-detail">Manifest entry, POD processing</span>
-              </a>
-              <a href="healthcare-admin.html" class="finder-industry-link">
-                <span class="industry-name">Healthcare Admin</span>
-                <span class="industry-detail">Clinical notes, billing</span>
-              </a>
-              <a href="government-contractors.html" class="finder-industry-link">
-                <span class="industry-name">Government Contractors</span>
-                <span class="industry-detail">Compliance reporting</span>
-              </a>
-            </div>
-            <a href="logistics-compliance.html" class="finder-cta">Explore Operations & Logistics →</a>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <!-- Footer (unchanged) -->
     <footer class="footer">

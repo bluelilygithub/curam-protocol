@@ -1784,10 +1784,16 @@ def search_static_html_pages(query):
     """
     import re
     
-    # Pages to exclude from search (navigation, includes, etc.)
+    # Pages to exclude from search (navigation, includes, generic pages, etc.)
     excluded_pages = {
         'navbar.html', 'embed_snippet.html', 'index.html',  # index.html typically redirects
-        'sitemap.html'  # Sitemap is not content
+        'sitemap.html',  # Sitemap is not content
+        'search-results.html',  # Search results page itself
+        'search.html',  # Search demo page
+        'about.html',  # Generic about page (rarely relevant to specific queries)
+        'contact.html',  # Contact form
+        'homepage.html',  # Homepage (too generic)
+        'services.html'  # Services overview (too generic)
     }
     
     # Get all HTML files in the root directory
@@ -1842,8 +1848,17 @@ def search_static_html_pages(query):
     # Sort by relevance
     ranked_pages = sorted(pages, key=calculate_page_relevance, reverse=True)
     
-    # Filter out pages with zero relevance and take top 5
-    relevant_pages = [p for p in ranked_pages if calculate_page_relevance(p) > 0][:5]
+    # Filter out pages with low relevance (require minimum score of 10)
+    # This ensures we only return pages that have meaningful matches
+    MINIMUM_SCORE = 10  # Require at least one title/filename match, or phrase match in content
+    relevant_pages = [p for p in ranked_pages if calculate_page_relevance(p) >= MINIMUM_SCORE][:5]
+    
+    # Log results for debugging
+    if relevant_pages:
+        print(f"Static HTML search for '{query}' found {len(relevant_pages)} pages:")
+        for p in relevant_pages[:3]:
+            score = calculate_page_relevance(p)
+            print(f"  - {p.get('filename', 'unknown')} (score: {score})")
     
     return relevant_pages
 
