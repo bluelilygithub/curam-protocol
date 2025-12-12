@@ -377,6 +377,22 @@ function displayResults(results, query) {
 
         // Date badge for blog posts
         const dateBadge = result.date ? `<span class="result-date">${result.date}</span>` : '';
+        
+        // Calculate relevance percentage (normalize score to 0-100%)
+        // Score ranges from ~15 (minimum) to ~100+ (very high)
+        const maxExpectedScore = 100;
+        const relevancePercent = Math.min(100, Math.round((result.score / maxExpectedScore) * 100));
+        
+        // Determine relevance label
+        let relevanceLabel = 'Low Relevance';
+        let relevanceColor = '#f59e0b'; // amber
+        if (relevancePercent >= 70) {
+            relevanceLabel = 'High Relevance';
+            relevanceColor = '#22c55e'; // green
+        } else if (relevancePercent >= 40) {
+            relevanceLabel = 'Medium Relevance';
+            relevanceColor = '#3b82f6'; // blue
+        }
 
         resultCard.innerHTML = `
             <div class="result-header">
@@ -384,7 +400,7 @@ function displayResults(results, query) {
                     <span class="${badgeClass}">${resultType}</span>
                     ${dateBadge}
                 </div>
-                <span class="confidence-score">Confidence: ${Math.floor(85 + Math.random() * 15)}%</span>
+                <span class="confidence-score" style="color: ${relevanceColor};" title="Based on keyword matching score: ${result.score}">${relevanceLabel}</span>
             </div>
             <div class="result-content">
                 <p>${result.answer}</p>
