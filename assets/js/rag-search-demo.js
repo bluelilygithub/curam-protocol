@@ -115,11 +115,46 @@ exampleBtns.forEach(btn => {
     });
 });
 
+// Check if query is relevant to the domain
+function isRelevantQuery(query) {
+    const irrelevantKeywords = [
+        'recipe', 'cooking', 'weather', 'sports', 'celebrity', 'movie', 'game',
+        'restaurant', 'hotel', 'travel', 'vacation', 'music', 'fashion', 'car',
+        'bitcoin', 'crypto', 'stock', 'forex', 'dating', 'pets', 'gardening'
+    ];
+    
+    const relevantKeywords = [
+        'ai', 'automation', 'document', 'protocol', 'phase', 'roi', 'engineering',
+        'accounting', 'legal', 'compliance', 'workflow', 'extraction', 'rag',
+        'implementation', 'feasibility', 'audit', 'guarantee', 'pricing', 'cost',
+        'invoice', 'contract', 'tender', 'data', 'extract', 'search', 'intelligence'
+    ];
+    
+    const queryLower = query.toLowerCase();
+    
+    // Check for obviously irrelevant queries
+    const hasIrrelevant = irrelevantKeywords.some(keyword => queryLower.includes(keyword));
+    const hasRelevant = relevantKeywords.some(keyword => queryLower.includes(keyword));
+    
+    // If it has irrelevant keywords and no relevant ones, mark as irrelevant
+    if (hasIrrelevant && !hasRelevant) {
+        return false;
+    }
+    
+    return true;
+}
+
 // Search Function
-function performSearch() {
-    const query = searchInput.value.trim().toLowerCase();
+async function performSearch() {
+    const query = searchInput.value.trim();
     
     if (!query) {
+        return;
+    }
+
+    // Check if query is relevant
+    if (!isRelevantQuery(query)) {
+        displayIrrelevantMessage(query);
         return;
     }
 
@@ -128,12 +163,76 @@ function performSearch() {
     searchResults.style.display = 'none';
     searchLoading.style.display = 'flex';
 
-    // Simulate API delay
-    setTimeout(() => {
-        const results = findRelevantAnswers(query);
-        displayResults(results, query);
+    try {
+        // Search both knowledge base and WordPress blog
+        const [kbResults, wpResults] = await Promise.all([
+            searchKnowledgeBase(query),
+            searchWordPressBlog(query)
+        ]);
+
+        // Combine and display results
+        const combinedResults = [...kbResults, ...wpResults];
+        displayResults(combinedResults, query);
+    } catch (error) {
+        console.error('Search error:', error);
+        displayResults([], query);
+    } finally {
         searchLoading.style.display = 'none';
-    }, 1500);
+    }
+}
+
+// Search Knowledge Base (existing logic)
+function searchKnowledgeBase(query) {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            const results = findRelevantAnswers(query);
+            resolve(results);
+        }, 500);
+    });
+}
+
+// Search WordPress Blog
+async function searchWordPressBlog(query) {
+    try {
+        // WordPress REST API search endpoint
+        const wpApiUrl = `https://curam-ai.com.au/wp-json/wp/v2/posts?search=${encodeURIComponent(query)}&per_page=5&_embed`;
+        
+        const response = await fetch(wpApiUrl);
+        
+        if (!response.ok) {
+            console.warn('WordPress API not available');
+            return [];
+        }
+        
+        const posts = await response.json();
+        
+        // Transform WordPress posts into our result format
+        return posts.map(post => {
+            // Extract excerpt (strip HTML tags)
+            const excerpt = post.excerpt.rendered.replace(/<[^>]*>/g, '').trim();
+            const content = post.content.rendered.replace(/<[^>]*>/g, '').substring(0, 300) + '...';
+            
+            return {
+                answer: excerpt || content,
+                sources: [
+                    {
+                        title: post.title.rendered,
+                        url: post.link
+                    }
+                ],
+                score: 5, // WordPress results get a baseline score
+                type: 'blog',
+                date: new Date(post.date).toLocaleDateString('en-AU', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                })
+            };
+        });
+    } catch (error) {
+        console.error('WordPress search error:', error);
+        return [];
+    }
 }
 
 // Find relevant answers using keyword matching (simulating semantic search)
@@ -162,6 +261,37 @@ function findRelevantAnswers(query) {
         .slice(0, 3);
 }
 
+// Display irrelevant query message
+function displayIrrelevantMessage(query) {
+    searchResults.innerHTML = '';
+    searchResults.style.display = 'block';
+    
+    searchResults.innerHTML = `
+        <div class="irrelevant-query-message">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <h3>Query Outside Search Domain</h3>
+            <p>Your search "<strong>${query}</strong>" doesn't appear to be related to AI automation, document intelligence, or the Curam-Ai Protocol.</p>
+            <p style="margin-top: var(--spacing-md); color: var(--text-secondary);">
+                This search tool is designed to answer questions about:
+            </p>
+            <ul style="text-align: left; max-width: 500px; margin: var(--spacing-md) auto; color: var(--text-secondary);">
+                <li>The Curam-Ai Protocol and its phases</li>
+                <li>Document intelligence and extraction</li>
+                <li>AI-powered workflow automation</li>
+                <li>Industries we serve (Engineering, Accounting, Legal, etc.)</li>
+                <li>Pricing, guarantees, and ROI</li>
+            </ul>
+            <button onclick="document.getElementById('rag-search-input').value=''; document.getElementById('rag-search-input').focus();" class="btn btn-primary" style="margin-top: var(--spacing-lg);">
+                Try a Different Search
+            </button>
+        </div>
+    `;
+}
+
 // Display search results
 function displayResults(results, query) {
     searchResults.innerHTML = '';
@@ -181,12 +311,20 @@ function displayResults(results, query) {
         return;
     }
 
+    // Sort results by score
+    results.sort((a, b) => b.score - a.score);
+
     // Display results
     results.forEach((result, index) => {
         const resultCard = document.createElement('div');
         resultCard.className = 'search-result-card';
         resultCard.style.animationDelay = `${index * 0.1}s`;
         
+        // Determine result type badge
+        const resultType = result.type === 'blog' ? 'Blog Post' : 'Protocol Documentation';
+        const badgeClass = result.type === 'blog' ? 'result-badge-blog' : 'result-badge';
+        
+        // Build sources HTML
         const sourcesHTML = result.sources.map(source => 
             `<a href="${source.url}" class="source-link" target="_blank">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -197,10 +335,16 @@ function displayResults(results, query) {
             </a>`
         ).join('');
 
+        // Date badge for blog posts
+        const dateBadge = result.date ? `<span class="result-date">${result.date}</span>` : '';
+
         resultCard.innerHTML = `
             <div class="result-header">
-                <span class="result-badge">Result ${index + 1}</span>
-                <span class="confidence-score">Confidence: ${Math.floor(90 + Math.random() * 10)}%</span>
+                <div style="display: flex; align-items: center; gap: var(--spacing-sm);">
+                    <span class="${badgeClass}">${resultType}</span>
+                    ${dateBadge}
+                </div>
+                <span class="confidence-score">Confidence: ${Math.floor(85 + Math.random() * 15)}%</span>
             </div>
             <div class="result-content">
                 <p>${result.answer}</p>
