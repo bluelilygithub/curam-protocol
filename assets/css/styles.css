@@ -11051,12 +11051,62 @@ h1, h2, h3, h4 {
 .result-content p {
   color: var(--text-primary);
   font-size: 1.05rem;
-  margin: 0;
+  margin-bottom: var(--spacing-md);
+}
+
+.result-content p:last-child {
+  margin-bottom: 0;
 }
 
 .result-content strong {
   color: var(--color-gold);
   font-weight: 600;
+}
+
+.result-content h3 {
+  color: var(--color-gold);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
+}
+
+.result-content h3:first-child {
+  margin-top: 0;
+}
+
+.result-content h4 {
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-sm);
+}
+
+.result-content ul,
+.result-content ol {
+  margin: var(--spacing-md) 0;
+  padding-left: var(--spacing-xl);
+  color: var(--text-primary);
+}
+
+.result-content li {
+  margin-bottom: var(--spacing-sm);
+  line-height: 1.7;
+}
+
+.result-content code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: var(--color-gold);
+}
+
+.result-content em {
+  font-style: italic;
+  color: var(--text-secondary);
 }
 
 .result-sources {
