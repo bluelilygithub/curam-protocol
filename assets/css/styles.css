@@ -4642,6 +4642,8 @@ h1, h2, h3, h4 {
   color: var(--color-navy);
 }
 
+
+
 /* Slide Content */
 .report-slide-content {
   font-size: 1rem;
@@ -4903,6 +4905,11 @@ h1, h2, h3, h4 {
   color: var(--color-gray);
   line-height: 1.6;
   margin: 0;
+}
+
+.report-validation-card h3{
+  font-size: 16px;
+  margin-top:16px;
 }
 
 /* Report CTA Section */
