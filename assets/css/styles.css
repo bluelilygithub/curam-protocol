@@ -11199,6 +11199,20 @@ h1, h2, h3, h4 {
   letter-spacing: 0.5px;
 }
 
+/* AI-Generated Badge */
+.result-badge-ai {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: var(--border-radius);
+  color: #10b981;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* Date Badge */
 .result-date {
   display: inline-block;

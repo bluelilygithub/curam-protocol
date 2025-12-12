@@ -193,14 +193,44 @@ async function performSearch() {
     }
 }
 
-// Search Knowledge Base (existing logic)
-function searchKnowledgeBase(query) {
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const results = findRelevantAnswers(query);
-            resolve(results);
-        }, 500);
-    });
+// Search using REAL RAG API (calls the same endpoint as search-results.html)
+async function searchKnowledgeBase(query) {
+    try {
+        const response = await fetch('/api/search-blog', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query: query }),
+            signal: AbortSignal.timeout(25000) // 25 second timeout
+        });
+
+        if (!response.ok) {
+            console.warn('RAG API returned error:', response.status);
+            return [];
+        }
+
+        const data = await response.json();
+        
+        if (data.error) {
+            console.warn('RAG API error:', data.error);
+            return [];
+        }
+
+        // Transform API response to our result format
+        const result = {
+            answer: data.answer || 'No answer available.',
+            sources: data.sources || [],
+            score: 80, // API results get high relevance score
+            type: 'ai-generated'
+        };
+
+        return [result];
+    } catch (error) {
+        console.error('Error calling RAG API:', error);
+        // Fallback to simulated search if API fails
+        return findRelevantAnswers(query);
+    }
 }
 
 // Search WordPress Blog
@@ -361,37 +391,56 @@ function displayResults(results, query) {
         resultCard.style.animationDelay = `${index * 0.1}s`;
         
         // Determine result type badge
-        const resultType = result.type === 'blog' ? 'Blog Post' : 'Protocol Documentation';
-        const badgeClass = result.type === 'blog' ? 'result-badge-blog' : 'result-badge';
+        let resultType, badgeClass;
+        if (result.type === 'ai-generated') {
+            resultType = 'AI-Powered Answer';
+            badgeClass = 'result-badge-ai';
+        } else if (result.type === 'blog') {
+            resultType = 'Blog Post';
+            badgeClass = 'result-badge-blog';
+        } else {
+            resultType = 'Protocol Documentation';
+            badgeClass = 'result-badge';
+        }
         
         // Build sources HTML
-        const sourcesHTML = result.sources.map(source => 
-            `<a href="${source.url}" class="source-link" target="_blank">
+        const sourcesHTML = result.sources.map(source => {
+            const sourceType = source.type === 'blog' ? '📝 Blog' : '📄 Website';
+            return `<a href="${source.link || source.url}" class="source-link" target="_blank">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                     <polyline points="14 2 14 8 20 8"/>
                 </svg>
-                ${source.title}
-            </a>`
-        ).join('');
+                ${sourceType}: ${source.title}
+            </a>`;
+        }).join('');
 
         // Date badge for blog posts
         const dateBadge = result.date ? `<span class="result-date">${result.date}</span>` : '';
         
-        // Calculate relevance percentage (normalize score to 0-100%)
-        // Score ranges from ~15 (minimum) to ~100+ (very high)
-        const maxExpectedScore = 100;
-        const relevancePercent = Math.min(100, Math.round((result.score / maxExpectedScore) * 100));
+        // For AI-generated results, show as high relevance
+        let relevanceLabel = 'AI-Generated';
+        let relevanceColor = '#10b981'; // emerald green
+        let relevanceTitle = 'Powered by Google Gemini AI with semantic search';
         
-        // Determine relevance label
-        let relevanceLabel = 'Low Relevance';
-        let relevanceColor = '#f59e0b'; // amber
-        if (relevancePercent >= 70) {
-            relevanceLabel = 'High Relevance';
-            relevanceColor = '#22c55e'; // green
-        } else if (relevancePercent >= 40) {
-            relevanceLabel = 'Medium Relevance';
-            relevanceColor = '#3b82f6'; // blue
+        // For other results, calculate relevance
+        if (result.type !== 'ai-generated') {
+            const maxExpectedScore = 100;
+            const relevancePercent = Math.min(100, Math.round((result.score / maxExpectedScore) * 100));
+            
+            if (relevancePercent >= 70) {
+                relevanceLabel = 'High Relevance';
+                relevanceColor = '#22c55e';
+                relevanceTitle = `Based on keyword matching score: ${result.score}`;
+            } else if (relevancePercent >= 40) {
+                relevanceLabel = 'Medium Relevance';
+                relevanceColor = '#3b82f6';
+                relevanceTitle = `Based on keyword matching score: ${result.score}`;
+            } else {
+                relevanceLabel = 'Low Relevance';
+                relevanceColor = '#f59e0b';
+                relevanceTitle = `Based on keyword matching score: ${result.score}`;
+            }
         }
 
         resultCard.innerHTML = `
@@ -400,11 +449,12 @@ function displayResults(results, query) {
                     <span class="${badgeClass}">${resultType}</span>
                     ${dateBadge}
                 </div>
-                <span class="confidence-score" style="color: ${relevanceColor};" title="Based on keyword matching score: ${result.score}">${relevanceLabel}</span>
+                <span class="confidence-score" style="color: ${relevanceColor};" title="${relevanceTitle}">${relevanceLabel}</span>
             </div>
             <div class="result-content">
                 <p>${result.answer}</p>
             </div>
+            ${sourcesHTML ? `
             <div class="result-sources">
                 <div class="sources-label">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -417,6 +467,7 @@ function displayResults(results, query) {
                     ${sourcesHTML}
                 </div>
             </div>
+            ` : ''}
         `;
 
         searchResults.appendChild(resultCard);
