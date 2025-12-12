@@ -47,50 +47,28 @@
                     </div>
                 </div>
 
-                <div class="search-input-wrapper">
-                    <div class="search-input-container">
-                        <svg class="search-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"/>
-                            <path d="M21 21l-4.35-4.35"/>
-                        </svg>
-                        <input 
-                            type="text" 
-                            id="rag-search-input" 
-                            class="search-input" 
-                            placeholder="Ask a question... (e.g., 'What is the Phase 1 guarantee?')"
-                        />
-                        <button id="search-btn" class="btn btn-primary">Search</button>
+                <div style="max-width: 700px; margin: 0 auto;">
+                    <div style="display: flex; gap: var(--spacing-md); margin-bottom: var(--spacing-xl);">
+                        <input type="search" 
+                               id="ai-demo-search" 
+                               placeholder='Try: "what is RAG?" or "how does document automation work?"' 
+                               style="flex: 1; padding: 1rem 1.5rem; border: 2px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.05); color: var(--text-primary); border-radius: var(--border-radius-lg); font-family: var(--font-sans); font-size: 1.1rem; transition: var(--transition);"
+                               onkeydown="if(event.key === 'Enter') { const query = this.value.trim(); if(query) window.location.href = 'search-results.html?q=' + encodeURIComponent(query); }">
+                        <button onclick="const input = document.getElementById('ai-demo-search'); const query = input.value.trim(); if(query) window.location.href = 'search-results.html?q=' + encodeURIComponent(query);" 
+                                class="btn btn-primary" 
+                                style="white-space: nowrap; padding: 1rem 2rem; font-size: 1rem;">
+                            Search
+                        </button>
                     </div>
-                </div>
 
-                <!-- Example Questions -->
-                <div class="example-questions">
-                    <span class="example-label">Try these examples:</span>
-                    <button class="example-question-btn" data-question="What is the Phase 1 guarantee?">What is the Phase 1 guarantee?</button>
-                    <button class="example-question-btn" data-question="How does the Protocol prevent AI hallucinations?">How does the Protocol prevent AI hallucinations?</button>
-                    <button class="example-question-btn" data-question="What industries do you serve?">What industries do you serve?</button>
-                    <button class="example-question-btn" data-question="What is included in Phase 2?">What is included in Phase 2?</button>
-                </div>
-
-                <!-- Loading State -->
-                <div id="search-loading" class="search-loading" style="display: none;">
-                    <div class="loading-spinner"></div>
-                    <p>Searching across documents...</p>
-                </div>
-
-                <!-- Search Results -->
-                <div id="search-results" class="search-results">
-                    <!-- Results will be inserted here dynamically -->
-                </div>
-
-                <!-- Empty State -->
-                <div id="empty-state" class="empty-state">
-                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="1.5">
-                        <circle cx="11" cy="11" r="8"/>
-                        <path d="M21 21l-4.35-4.35"/>
-                    </svg>
-                    <h3>Start Your Search</h3>
-                    <p>Ask a question about the Curam-Ai Protocol, phases, industries, or technologies.</p>
+                    <!-- Example Questions -->
+                    <div class="example-questions">
+                        <span class="example-label">Try these examples:</span>
+                        <button class="example-question-btn" onclick="document.getElementById('ai-demo-search').value='What is the Phase 1 guarantee?'; document.getElementById('ai-demo-search').focus();">What is the Phase 1 guarantee?</button>
+                        <button class="example-question-btn" onclick="document.getElementById('ai-demo-search').value='How does the Protocol prevent AI hallucinations?'; document.getElementById('ai-demo-search').focus();">How does the Protocol prevent AI hallucinations?</button>
+                        <button class="example-question-btn" onclick="document.getElementById('ai-demo-search').value='What industries do you serve?'; document.getElementById('ai-demo-search').focus();">What industries do you serve?</button>
+                        <button class="example-question-btn" onclick="document.getElementById('ai-demo-search').value='tell me about deepseek'; document.getElementById('ai-demo-search').focus();">Tell me about DeepSeek</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -257,7 +235,6 @@
 
     <!-- Scripts -->
     <script src="assets/js/main.js"></script>
-    <script src="assets/js/rag-search-demo.js"></script>
 </body>
 </html>
 

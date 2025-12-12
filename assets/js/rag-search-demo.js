@@ -122,21 +122,28 @@ function isRelevantQuery(query) {
         'restaurant', 'hotel', 'travel', 'vacation', 'music', 'fashion', 'car',
         'bitcoin', 'crypto', 'stock', 'forex', 'dating', 'pets', 'gardening',
         'mars', 'venus', 'planet', 'space', 'relationship', 'love', 'marriage',
-        'book', 'novel', 'fiction', 'poem', 'song', 'album', 'tv show', 'netflix'
+        'novel', 'fiction', 'poem', 'song', 'album', 'tv show', 'netflix'
     ];
     
     const relevantKeywords = [
+        // Core service keywords
         'ai', 'automation', 'document', 'protocol', 'phase', 'roi', 'engineering',
         'accounting', 'legal', 'compliance', 'workflow', 'extraction', 'rag',
         'implementation', 'feasibility', 'audit', 'guarantee', 'pricing', 'cost',
         'invoice', 'contract', 'tender', 'data', 'extract', 'search', 'intelligence',
-        'curam', 'gemini', 'python', 'api', 'pdf', 'ocr', 'azure', 'cloud'
+        'curam',
+        // Technology keywords
+        'gemini', 'openai', 'chatgpt', 'gpt', 'claude', 'anthropic', 'deepseek',
+        'llm', 'model', 'training', 'machine learning', 'ml', 'nlp',
+        'python', 'api', 'pdf', 'ocr', 'azure', 'cloud', 'aws',
+        // Related concepts
+        'prompt', 'embedding', 'vector', 'semantic', 'neural', 'algorithm'
     ];
     
     const queryLower = query.toLowerCase();
     
-    // Remove common stop words for better analysis
-    const stopWords = ['what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'how', 'why', 'when', 'where', 'who'];
+    // Enhanced stop words list
+    const stopWords = ['what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'how', 'why', 'when', 'where', 'who', 'tell', 'me', 'about', 'explain', 'describe'];
     const queryWords = queryLower.split(/\s+/).filter(word => !stopWords.includes(word) && word.length > 2);
     
     // Check for obviously irrelevant queries
@@ -148,8 +155,9 @@ function isRelevantQuery(query) {
         return false;
     }
     
-    // If it has no relevant keywords and is more than 3 words, likely irrelevant
-    if (!hasRelevant && queryWords.length > 2) {
+    // More lenient: If it has no relevant keywords and is more than 5 words, likely irrelevant
+    // This allows shorter queries through to the API (which might find relevant content)
+    if (!hasRelevant && queryWords.length > 5) {
         return false;
     }
     
