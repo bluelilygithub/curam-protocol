@@ -304,18 +304,31 @@
                 <div class="loading-state">
                     <div class="spinner"></div>
                     <p>Searching website and blog content with AI...</p>
+                    <p style="font-size: 0.875rem; color: #6b7280; margin-top: var(--spacing-md);">This may take 15-30 seconds as we search our blog and generate an AI answer...</p>
                 </div>
             `;
             
-            // Fetch results
+            console.log('Searching for:', query);
+            
+            // Fetch results with timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+            
             fetch('/api/search-blog', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ query: query })
+                body: JSON.stringify({ query: query }),
+                signal: controller.signal
             })
-            .then(response => response.json())
+            .then(response => {
+                clearTimeout(timeoutId);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 let html = '';
                 
@@ -504,12 +517,27 @@
                 `;
             })
             .catch(error => {
+                console.error('Search error:', error);
+                let errorMessage = 'Sorry, I encountered an error while searching.';
+                
+                if (error.name === 'AbortError') {
+                    errorMessage = 'The search took too long and was cancelled. This might mean the API is experiencing issues.';
+                } else if (error.message) {
+                    errorMessage = `Error: ${error.message}`;
+                }
+                
                 document.getElementById('search-results-container').innerHTML = `
                     <div class="search-query-display">
                         <h2>Search Results: "${query}"</h2>
                     </div>
                     <div class="error-state">
-                        <p>Sorry, I encountered an error. Please visit <a href="https://www.curam-ai.com.au/?s=${encodeURIComponent(query)}" target="_blank">www.curam-ai.com.au</a> to search our blog.</p>
+                        <p><strong>${errorMessage}</strong></p>
+                        <p>Please try:</p>
+                        <ul style="text-align: left; margin: var(--spacing-md) auto; max-width: 400px;">
+                            <li>Visiting <a href="https://www.curam-ai.com.au/?s=${encodeURIComponent(query)}" target="_blank">www.curam-ai.com.au</a> to search our blog directly</li>
+                            <li>Using our <a href="search.html">interactive RAG search demo</a></li>
+                            <li>Contacting us at <a href="contact.html">contact page</a></li>
+                        </ul>
                     </div>
                 `;
             });
