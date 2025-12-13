@@ -1879,7 +1879,7 @@ def search_blog_rag():
             return jsonify({'error': 'Gemini API key not configured'}), 500
         
         # Step 1: Fetch blog content from WordPress REST API
-        blog_url = 'https://www.curam-ai.com.au'
+        blog_url = 'https://curam-ai.com.au'
         wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
         
         posts = []
@@ -2070,7 +2070,7 @@ def search_blog_rag():
             print(f"Posts fetched: {len(posts)}")
             print(f"Static pages: {len(static_pages)}")
             return jsonify({
-                'answer': f"I couldn't find specific information about '{query}' in our blog or website content. This topic might not be directly related to AI document automation, the Curam-Ai Protocol, or our services. Please visit <a href='https://www.curam-ai.com.au/?s={query}' target='_blank'>www.curam-ai.com.au</a> to search our full blog, or <a href='contact.html'>contact us</a> if you have questions about our services.",
+                'answer': f"I couldn't find specific information about '{query}' in our blog or website content. This topic might not be directly related to AI document automation, the Curam-Ai Protocol, or our services. Please visit <a href='https://curam-ai.com.au/?s={query}' target='_blank'>curam-ai.com.au</a> to search our full blog, or <a href='contact.html'>contact us</a> if you have questions about our services.",
                 'sources': [],
                 'query': query
             })
@@ -2102,7 +2102,7 @@ Instructions:
 Answer the question comprehensively:"""
             
             response = model.generate_content(prompt)
-            answer = response.text if response.text else "I couldn't generate an answer. Please visit www.curam-ai.com.au for more information."
+            answer = response.text if response.text else "I couldn't generate an answer. Please visit curam-ai.com.au for more information."
             
             return jsonify({
                 'answer': answer,
@@ -2112,7 +2112,7 @@ Answer the question comprehensively:"""
             
         except Exception as e:
             return jsonify({
-                'answer': f"I encountered an error processing your question. Please visit www.curam-ai.com.au to search for information about '{query}'.",
+                'answer': f"I encountered an error processing your question. Please visit curam-ai.com.au to search for information about '{query}'.",
                 'sources': sources,
                 'query': query,
                 'error': str(e)
