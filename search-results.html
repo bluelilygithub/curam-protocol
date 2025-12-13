@@ -475,14 +475,21 @@
                     
                     // Sources
                     if (data.sources && data.sources.length > 0) {
-                        // Separate blog and website sources
-                        const blogSources = data.sources.filter(s => s.type === 'blog');
-                        const websiteSources = data.sources.filter(s => s.type === 'website');
+                        // Sort all sources by authority (highest first)
+                        const sortedSources = [...data.sources].sort((a, b) => {
+                            const scoreA = a.authority || 0;
+                            const scoreB = b.authority || 0;
+                            return scoreB - scoreA; // Descending order
+                        });
+                        
+                        // Separate blog and website sources (already sorted)
+                        const blogSources = sortedSources.filter(s => s.type === 'blog');
+                        const websiteSources = sortedSources.filter(s => s.type === 'website');
                         
                         html += `<div class="sources-section">`;
                         
                         if (websiteSources.length > 0) {
-                            html += `<h3>Sources from Website</h3>`;
+                            html += `<h3>Sources from Website (sorted by authority)</h3>`;
                             websiteSources.forEach(source => {
                                 const authorityScore = source.authority || 50;
                                 const authorityLabel = getAuthorityLabel(authorityScore, source.type);
@@ -503,7 +510,7 @@
                         }
                         
                         if (blogSources.length > 0) {
-                            html += `<h3>Sources from Blog</h3>`;
+                            html += `<h3>Sources from Blog (sorted by authority)</h3>`;
                             blogSources.forEach(source => {
                                 const authorityScore = source.authority || 30;
                                 const authorityLabel = getAuthorityLabel(authorityScore, source.type);
