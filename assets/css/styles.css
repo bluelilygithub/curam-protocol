@@ -11279,6 +11279,94 @@ h1, h2, h3, h4 {
   font-weight: 500;
 }
 
+/* ==============================================
+   SECTORS GRID (Target Markets Page)
+   ============================================== */
+
+.sectors-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-2xl);
+  margin-top: var(--spacing-3xl);
+}
+
+.sector-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--spacing-3xl) var(--spacing-2xl);
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--border-radius-lg);
+  text-decoration: none;
+  transition: all var(--transition);
+  cursor: pointer;
+}
+
+.sector-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(212, 175, 55, 0.4);
+  transform: translateY(-8px);
+  box-shadow: 0 12px 40px rgba(212, 175, 55, 0.15);
+}
+
+.sector-icon {
+  margin-bottom: var(--spacing-xl);
+  opacity: 0.9;
+}
+
+.sector-card h3 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+.sector-description {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: var(--spacing-lg);
+}
+
+.sector-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xl);
+}
+
+.stat-item {
+  font-weight: 600;
+}
+
+.stat-divider {
+  color: var(--color-gold);
+}
+
+.sector-link-arrow {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-gold);
+  transition: all var(--transition);
+}
+
+.sector-card:hover .sector-link-arrow {
+  transform: translateX(4px);
+}
+
+@media (max-width: 1024px) {
+  .sectors-grid {
+    grid-template-columns: 1fr;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
 /* Search Page Specific - Force Single Column for All Grids */
 .search-page .methodology-grid {
   grid-template-columns: 1fr !important;
