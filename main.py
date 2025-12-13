@@ -1956,8 +1956,38 @@ def search_blog_rag():
             return jsonify({'error': 'Gemini API key not configured'}), 500
         
         # Step 1: Fetch blog content from WordPress REST API
-        blog_url = 'https://curam-ai.com.au'
-        wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
+        # Try primary URL first, fallback to www subdomain if needed
+        blog_urls = [
+            'https://curam-ai.com.au',      # Primary (no www)
+            'https://www.curam-ai.com.au'   # Fallback (with www)
+        ]
+        
+        blog_url = None
+        wp_api_url = None
+        
+        # Test which blog URL is accessible
+        for test_url in blog_urls:
+            try:
+                test_response = requests.get(f'{test_url}/wp-json/wp/v2/posts', 
+                                            params={'per_page': 1}, 
+                                            timeout=5)
+                if test_response.status_code == 200:
+                    blog_url = test_url
+                    wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
+                    print(f"✓ Blog URL accessible: {blog_url}")
+                    break
+            except requests.RequestException as e:
+                print(f"✗ Blog URL failed: {test_url} - {str(e)[:100]}")
+                continue
+        
+        # If neither URL works, return error
+        if not blog_url:
+            return jsonify({
+                'error': 'Unable to reach blog API',
+                'answer': 'The blog is currently unavailable. Please try again later or contact us directly.',
+                'sources': [],
+                'query': query
+            }), 503
         
         posts = []
         try:
