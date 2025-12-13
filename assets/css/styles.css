@@ -46,6 +46,9 @@
   --spacing-3xl: 4rem;
   --spacing-4xl: 6rem;
   
+  /* Section Spacing (Enhanced for premium feel) */
+  --section-padding: 60px;
+  
   /* Typography - Montserrat */
   --font-sans: 'Montserrat', -apple-system, BlinkMacSystemFont, sans-serif;
   
@@ -123,10 +126,10 @@ h1, h2, h3, h4 {
 }
 
 .section-headline {
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-size: clamp(2rem, 4vw, 2.75rem); /* Increased by ~12% */
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-lg);
+  margin-bottom: var(--spacing-xl); /* More whitespace */
   text-align: center;
 }
 
@@ -1049,7 +1052,7 @@ h1, h2, h3, h4 {
   background: var(--navy-deep);
   border: 1px solid var(--border-subtle);
   border-radius: var(--border-radius-lg);
-  padding: var(--spacing-xl);
+  padding: var(--spacing-2xl) var(--spacing-xl); /* Increased vertical padding */
   text-align: center;
   transition: var(--transition);
   display: flex;
@@ -1264,7 +1267,7 @@ h1, h2, h3, h4 {
 .selector-grid {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-2xl); /* Increased gap between selector rows */
   max-width: 900px;
   margin: 0 auto;
 }
@@ -1356,7 +1359,7 @@ h1, h2, h3, h4 {
 .faq-accordion-item {
   border: 1px solid var(--border-subtle);
   border-radius: var(--border-radius);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-lg); /* Increased from md for more breathing room */
   overflow: hidden;
   transition: var(--transition);
   background-color: var(--color-navy-dark);
@@ -11274,16 +11277,20 @@ h1, h2, h3, h4 {
    TRUST & SOCIAL PROOF SECTION (Homepage)
    ============================================== */
 
+.trust-section {
+  padding: var(--section-padding) 0;
+}
+
 .trust-metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-2xl);
-  margin: var(--spacing-3xl) 0;
+  gap: 40px; /* Generous horizontal spacing */
+  margin: 0 0 var(--spacing-4xl) 0; /* More space below metrics */
 }
 
 .trust-metric {
   text-align: center;
-  padding: var(--spacing-2xl);
+  padding: var(--spacing-3xl) var(--spacing-xl); /* Increased padding for premium feel */
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--border-radius-lg);
@@ -11293,7 +11300,7 @@ h1, h2, h3, h4 {
 .trust-metric:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(212, 175, 55, 0.3);
-  transform: translateY(-4px);
+  transform: translateY(-4px); /* Subtle hover */
 }
 
 .trust-metric-icon {
@@ -11302,27 +11309,30 @@ h1, h2, h3, h4 {
 }
 
 .trust-metric-number {
-  font-size: 2.5rem;
+  font-size: 3.5rem; /* 56px - Large, bold numbers */
   font-weight: 700;
   color: var(--color-gold);
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-md); /* More space */
+  display: block;
 }
 
 .trust-metric-label {
-  font-size: 1.125rem;
+  font-size: 1.25rem; /* Slightly larger */
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+  display: block;
 }
 
 .trust-metric-detail {
   font-size: 0.9375rem;
   color: var(--text-secondary);
+  display: block;
 }
 
 .featured-case-study {
-  margin: var(--spacing-3xl) 0;
-  padding: var(--spacing-3xl);
+  margin: 0;
+  padding: var(--spacing-4xl) var(--spacing-3xl); /* More generous padding */
   background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(212, 175, 55, 0.05) 100%);
   border: 2px solid rgba(212, 175, 55, 0.2);
   border-radius: var(--border-radius-lg);
@@ -11342,10 +11352,10 @@ h1, h2, h3, h4 {
 }
 
 .case-study-title {
-  font-size: 1.75rem;
+  font-size: 2rem; /* Increased from 1.75rem */
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-lg); /* More space */
 }
 
 .case-study-description {
@@ -11359,7 +11369,8 @@ h1, h2, h3, h4 {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--spacing-xl);
-  padding-top: var(--spacing-xl);
+  padding-top: var(--spacing-2xl); /* More space above stats */
+  margin-top: var(--spacing-xl);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -11378,6 +11389,43 @@ h1, h2, h3, h4 {
 .case-study-stat .stat-label {
   font-size: 0.875rem;
   color: var(--text-muted);
+}
+
+.case-study-footer {
+  margin-top: var(--spacing-3xl);
+  padding-top: var(--spacing-2xl);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.case-study-footer-label {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
+}
+
+.case-study-footer-links {
+  display: flex;
+  gap: var(--spacing-xl);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.case-study-footer-link {
+  color: var(--color-gold);
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all var(--transition);
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.case-study-footer-link:hover {
+  background: rgba(212, 175, 55, 0.1);
+  border-color: rgba(212, 175, 55, 0.4);
+  transform: translateX(4px);
 }
 
 .client-logos-section {
@@ -11425,13 +11473,23 @@ h1, h2, h3, h4 {
 @media (max-width: 1024px) {
   .trust-metrics-grid {
     grid-template-columns: 1fr;
+    gap: var(--spacing-xl);
     max-width: 500px;
     margin-left: auto;
     margin-right: auto;
   }
   
+  .trust-metric {
+    padding: var(--spacing-2xl) var(--spacing-lg);
+  }
+  
+  .trust-metric-number {
+    font-size: 3rem; /* Slightly smaller on tablet */
+  }
+  
   .case-study-results {
     grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-lg);
   }
   
   .client-logos-grid {
@@ -11440,8 +11498,22 @@ h1, h2, h3, h4 {
 }
 
 @media (max-width: 640px) {
+  .trust-metric-number {
+    font-size: 2.5rem; /* Smaller on mobile */
+  }
+  
+  .trust-metric {
+    padding: var(--spacing-xl) var(--spacing-md);
+  }
+  
   .case-study-results {
     grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .case-study-footer-links {
+    flex-direction: column;
+    gap: var(--spacing-md);
   }
   
   .client-logos-grid {
@@ -11456,7 +11528,7 @@ h1, h2, h3, h4 {
 .sectors-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: var(--spacing-2xl);
+  gap: var(--spacing-3xl); /* Increased horizontal gap for more breathing room */
   margin-top: var(--spacing-3xl);
 }
 
@@ -11465,20 +11537,21 @@ h1, h2, h3, h4 {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: var(--spacing-3xl) var(--spacing-2xl);
+  padding: var(--spacing-4xl) var(--spacing-3xl); /* Increased by 25% */
   background: rgba(255, 255, 255, 0.03);
   border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--border-radius-lg);
   text-decoration: none;
   transition: all var(--transition);
   cursor: pointer;
+  min-height: 280px; /* Ensures consistent card height */
 }
 
 .sector-card:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(212, 175, 55, 0.4);
-  transform: translateY(-8px);
-  box-shadow: 0 12px 40px rgba(212, 175, 55, 0.15);
+  transform: translateY(-4px); /* More subtle - was -8px */
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.12); /* More subtle */
 }
 
 .sector-icon {
@@ -11487,10 +11560,10 @@ h1, h2, h3, h4 {
 }
 
 .sector-card h3 {
-  font-size: 1.75rem;
+  font-size: 2rem; /* Increased from 1.75rem (~14% increase) */
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-lg); /* More space */
 }
 
 .sector-description {
