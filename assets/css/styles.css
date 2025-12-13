@@ -1566,17 +1566,17 @@ h1, h2, h3, h4 {
     padding-left: 4px;
 }
 
-/* Footer CTA Column (Special styling for buttons) */
+/* Footer CTA Column - MINIMAL, NO SPECIAL STYLING */
 .footer-column.footer-cta {
-    background: rgba(212, 175, 55, 0.08);
+    background: transparent;
     padding: var(--spacing-lg);
-    border-radius: 8px;
-    border-left: 3px solid var(--color-gold);
+    border-radius: 0;
+    border-left: none;
 }
 
 .footer-column.footer-cta h4 {
     color: var(--color-gold);
-    border-bottom-color: var(--color-gold);
+    border-bottom: 1px solid rgba(212, 175, 55, 0.3);
 }
 
 .footer-column.footer-cta p {
