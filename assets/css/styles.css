@@ -3255,16 +3255,7 @@ h1, h2, h3, h4 {
   position: relative;
 }
 
-.industry-card li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0.65em;
-  width: 4px;
-  height: 4px;
-  background: var(--cyan-accent);
-  border-radius: 50%;
-}
+
 
 /* Services CTA Banner */
 .services-cta-banner {
