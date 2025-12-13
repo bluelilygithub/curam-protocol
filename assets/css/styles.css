@@ -1447,106 +1447,325 @@ h1, h2, h3, h4 {
 }
 
 /* ========== FOOTER (Original Structure) ========== */
+/* ============================================
+   FOOTER STYLING - UI Conformance Updates
+   ============================================ */
+
+/* Footer Container */
 .footer {
-  padding: var(--spacing-3xl) 0 var(--spacing-xl);
-  background: var(--navy-deep);
-  border-top: 1px solid var(--border-subtle);
+    background: var(--color-navy);
+    color: var(--text-primary);
+    padding: var(--spacing-3xl) 0 var(--spacing-xl);
+    margin-top: var(--spacing-xl);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Footer Content Grid */
 .footer-content {
-  display: grid;
-  gap: var(--spacing-2xl);
-  margin-bottom: var(--spacing-2xl);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-2xl);
+    margin-bottom: var(--spacing-2xl);
 }
 
 @media (min-width: 768px) {
-  .footer-content {
-    grid-template-columns: 1fr 3fr;
-  }
+    .footer-content {
+        grid-template-columns: 1fr 3fr;
+    }
 }
 
+/* Footer Brand Section */
 .footer-brand {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
+    text-align: center;
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@media (min-width: 768px) {
+    .footer-brand {
+        align-items: flex-start;
+        text-align: left;
+        border-bottom: none;
+    }
 }
 
 .footer-brand .logo-image {
-  width: 48px;
-  height: 48px;
+    height: 40px;
+    width: auto;
 }
 
 .footer-brand .logo-text {
-  font-size: 1.25rem;
-  font-weight: 700;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-gold);
 }
 
 .footer-tagline {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin: 0;
 }
 
+/* Footer Links Grid */
 .footer-links {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--spacing-xl);
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--spacing-xl);
 }
 
 @media (min-width: 768px) {
-  .footer-links {
-    grid-template-columns: repeat(4, 1fr);
-  }
+    .footer-links {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+.footer-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
 }
 
 .footer-column h4 {
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-md);
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid rgba(212, 175, 55, 0.3);
 }
 
 .footer-column ul {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.footer-column li {
+    margin: 0;
 }
 
 .footer-column a {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-  transition: color var(--transition-fast);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    transition: all 0.2s ease;
 }
 
 .footer-column a:hover {
-  color: var(--cyan-accent);
+    color: var(--color-gold);
+    padding-left: 4px;
 }
 
+/* Footer CTA Column (Special styling for buttons) */
+.footer-column.footer-cta {
+    background: rgba(212, 175, 55, 0.08);
+    padding: var(--spacing-lg);
+    border-radius: 8px;
+    border-left: 3px solid var(--color-gold);
+}
+
+.footer-column.footer-cta h4 {
+    color: var(--color-gold);
+    border-bottom-color: var(--color-gold);
+}
+
+.footer-column.footer-cta p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* ============================================
+   BUTTON STYLING - Footer Conformance
+   ============================================ */
+
+/* Button Base Styles */
+.footer .btn {
+    display: block;
+    text-align: center;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 12px 24px;
+    border-radius: 8px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+/* Primary Button (Gold background) */
+.footer .btn-primary {
+    background: var(--color-gold);
+    color: var(--color-navy);
+    border: 2px solid var(--color-gold);
+}
+
+.footer .btn-primary:hover {
+    opacity: 0.9;
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+    transform: translateY(-2px);
+}
+
+.footer .btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Outline Button (White border, no fill) */
+.footer .btn-outline {
+    background: transparent;
+    color: white;
+    border: 2px solid white;
+}
+
+.footer .btn-outline:hover {
+    background: rgba(212, 175, 55, 0.15);
+    border-color: var(--color-gold);
+    color: var(--color-gold);
+    transform: translateY(-2px);
+}
+
+.footer .btn-outline:active {
+    transform: translateY(0);
+}
+
+/* Ensure buttons in footer CTA have proper spacing */
+.footer-column.footer-cta .btn {
+    margin: 0;
+}
+
+.footer-column.footer-cta > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* ============================================
+   FOOTER BOTTOM
+   ============================================ */
+
 .footer-bottom {
-  padding-top: var(--spacing-xl);
-  border-top: 1px solid var(--border-subtle);
-  text-align: center;
+    text-align: center;
+    padding-top: var(--spacing-xl);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
 }
 
 .footer-bottom p {
-  font-size: 0.875rem;
-  color: var(--text-muted);
+    margin: 0;
 }
 
 .footer-bottom a {
-  color: var(--cyan-accent);
-  transition: var(--transition-fast);
+    color: var(--color-gold);
+    transition: color 0.2s ease;
 }
 
 .footer-bottom a:hover {
-  color: var(--text-primary);
+    color: var(--text-primary);
 }
 
 .footer-disclaimer {
-  margin-top: 1rem;
-  font-size: 0.85em;
-  color: rgba(255,255,255,0.6);
-  line-height: 1.5;
+    margin-top: 1rem;
+    font-size: 0.85em;
+    color: rgba(255,255,255,0.6);
+    line-height: 1.5;
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+    .footer-content {
+        gap: var(--spacing-lg);
+    }
+
+    .footer-links {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-lg);
+    }
+
+    .footer-column.footer-cta {
+        grid-column: 1 / -1;
+    }
+
+    .footer-column h4 {
+        font-size: 0.9rem;
+    }
+
+    .footer-column a {
+        font-size: 0.9rem;
+    }
+
+    .footer .btn {
+        padding: 10px 20px;
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .footer-links {
+        grid-template-columns: 1fr;
+    }
+
+    .footer-brand {
+        padding-bottom: var(--spacing-md);
+    }
+
+    .footer-column.footer-cta {
+        padding: var(--spacing-md);
+    }
+
+    .footer .btn {
+        padding: 10px 16px;
+        font-size: 0.85rem;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY & STATE MANAGEMENT
+   ============================================ */
+
+/* Focus states for keyboard navigation */
+.footer .btn:focus {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 2px;
+}
+
+.footer-column a:focus {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 2px;
+}
+
+/* Active/visited states */
+.footer-column a:visited {
+    color: var(--text-secondary);
+}
+
+.footer-column a:visited:hover {
+    color: var(--color-gold);
+}
+
+/* Disabled state (if needed) */
+.footer .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.footer .btn:disabled:hover {
+    transform: none;
+    opacity: 0.5;
 }
 
 /* ========== ANIMATIONS ========== */
