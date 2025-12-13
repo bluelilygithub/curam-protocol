@@ -1781,6 +1781,7 @@ def calculate_authority_score(source_type, title, content, date_str, query, quer
     """
     Calculate an authority score for a source (0-100).
     Higher score = more authoritative/relevant.
+    Prioritizes content depth and quality over title optimization.
     """
     from datetime import datetime
     import re
@@ -1793,26 +1794,47 @@ def calculate_authority_score(source_type, title, content, date_str, query, quer
     else:  # blog
         score += 30  # Blog posts are less authoritative but still valuable
     
-    # Relevance scoring (how well it matches the query)
+    # Prepare text for analysis
     title_lower = title.lower()
     content_lower = content.lower()
     query_lower = query.lower()
     
-    # Title matches (high weight)
+    # 1. CONTENT DEPTH SCORING (NEW - prioritizes substance)
+    # Count how many times query keywords appear in content
+    content_keyword_count = 0
+    for word in query_words:
+        content_keyword_count += content_lower.count(word)
+    
+    # Award points for content depth (capped at +15)
+    content_depth_score = min(content_keyword_count * 2, 15)
+    score += content_depth_score
+    
+    # 2. TITLE RELEVANCE (REDUCED weight to avoid clickbait favoritism)
+    title_keyword_count = 0
     for word in query_words:
         if word in title_lower:
-            score += 5
+            score += 3  # Reduced from 5
+            title_keyword_count += 1
+    
     if query_lower in title_lower:
-        score += 10
+        score += 6  # Reduced from 10 (exact phrase match)
     
-    # Content quality indicators
+    # 3. CONTENT-TO-TITLE RATIO (NEW - rewards substance over headline optimization)
+    if content_keyword_count > title_keyword_count and content_keyword_count >= 3:
+        score += 5  # Bonus for articles that discuss topic in depth, not just headline
+    
+    # 4. ENHANCED CONTENT QUALITY (Better gradations for comprehensive articles)
     content_length = len(content)
+    if content_length > 1000:
+        score += 3   # Basic article
     if content_length > 2000:
-        score += 5  # Substantial content
+        score += 5   # Substantial content
     if content_length > 5000:
-        score += 5  # Very detailed content
+        score += 8   # Very detailed content
+    if content_length > 10000:
+        score += 12  # Comprehensive, in-depth article
     
-    # Recency bonus (for blog posts only)
+    # 5. RECENCY BONUS (for blog posts only)
     if date_str and source_type == 'blog':
         try:
             post_date = datetime.strptime(date_str.split('T')[0], '%Y-%m-%d')
