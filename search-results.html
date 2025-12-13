@@ -127,6 +127,52 @@
             margin: 0;
         }
         
+        .source-authority {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: var(--spacing-sm);
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .authority-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.025em;
+        }
+        
+        .authority-high {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .authority-medium {
+            background: linear-gradient(135deg, var(--color-gold) 0%, #d4a520 100%);
+            color: var(--color-navy);
+        }
+        
+        .authority-low {
+            background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+            color: white;
+        }
+        
+        .authority-protocol {
+            background: linear-gradient(135deg, var(--color-navy) 0%, #1e3a5f 100%);
+            color: white;
+        }
+        
+        .source-date {
+            color: #9ca3af;
+            font-size: 0.8125rem;
+            margin-left: 0.5rem;
+        }
+        
         .blog-link-section {
             margin-top: var(--spacing-xl);
             padding-top: var(--spacing-lg);
@@ -294,6 +340,32 @@
                     // Format the answer (convert markdown-like formatting to HTML)
                     let formattedAnswer = data.answer || 'No answer available.';
                     
+                    // Helper function to get authority label
+                    function getAuthorityLabel(score, type) {
+                        if (type === 'website') {
+                            if (score >= 70) return '⭐ Protocol';
+                            if (score >= 55) return 'High';
+                            return 'Medium';
+                        } else { // blog
+                            if (score >= 60) return 'High';
+                            if (score >= 40) return 'Medium';
+                            return 'Low';
+                        }
+                    }
+                    
+                    // Helper function to get authority CSS class
+                    function getAuthorityClass(score, type) {
+                        if (type === 'website') {
+                            if (score >= 70) return 'authority-protocol';
+                            if (score >= 55) return 'authority-high';
+                            return 'authority-medium';
+                        } else { // blog
+                            if (score >= 60) return 'authority-high';
+                            if (score >= 40) return 'authority-medium';
+                            return 'authority-low';
+                        }
+                    }
+                    
                     // Escape HTML first to prevent XSS
                     function escapeHtml(text) {
                         const div = document.createElement('div');
@@ -412,10 +484,19 @@
                         if (websiteSources.length > 0) {
                             html += `<h3>Sources from Website</h3>`;
                             websiteSources.forEach(source => {
+                                const authorityScore = source.authority || 50;
+                                const authorityLabel = getAuthorityLabel(authorityScore, source.type);
+                                const authorityClass = getAuthorityClass(authorityScore, source.type);
+                                
                                 html += `
                                     <div class="source-item">
                                         <a href="${source.link}" target="_blank" class="source-title">${source.title}</a>
                                         <p class="source-excerpt">${source.excerpt || ''}</p>
+                                        <div class="source-authority">
+                                            <span class="authority-badge ${authorityClass}">
+                                                ${authorityLabel} Authority (${authorityScore}/100)
+                                            </span>
+                                        </div>
                                     </div>
                                 `;
                             });
@@ -424,10 +505,32 @@
                         if (blogSources.length > 0) {
                             html += `<h3>Sources from Blog</h3>`;
                             blogSources.forEach(source => {
+                                const authorityScore = source.authority || 30;
+                                const authorityLabel = getAuthorityLabel(authorityScore, source.type);
+                                const authorityClass = getAuthorityClass(authorityScore, source.type);
+                                
+                                // Format date if available
+                                let dateDisplay = '';
+                                if (source.date) {
+                                    try {
+                                        const date = new Date(source.date);
+                                        const options = { year: 'numeric', month: 'short', day: 'numeric' };
+                                        dateDisplay = `<span class="source-date">${date.toLocaleDateString('en-US', options)}</span>`;
+                                    } catch (e) {
+                                        // Skip date if parsing fails
+                                    }
+                                }
+                                
                                 html += `
                                     <div class="source-item">
                                         <a href="${source.link}" target="_blank" class="source-title">${source.title}</a>
                                         <p class="source-excerpt">${source.excerpt || ''}</p>
+                                        <div class="source-authority">
+                                            <span class="authority-badge ${authorityClass}">
+                                                ${authorityLabel} Authority (${authorityScore}/100)
+                                            </span>
+                                            ${dateDisplay}
+                                        </div>
                                     </div>
                                 `;
                             });
@@ -439,7 +542,7 @@
                     // Link to blog
                     html += `
                         <div class="blog-link-section">
-                            <a href="https://www.curam-ai.com.au/?s=${encodeURIComponent(data.query)}" target="_blank" 
+                            <a href="https://curam-ai.com.au/?s=${encodeURIComponent(data.query)}" target="_blank" 
                                class="btn btn-secondary" style="margin-right: var(--spacing-sm);">View all results on blog →</a>
                             <a href="contact.html" class="btn btn-primary">See How This Works for Your Documents</a>
                         </div>

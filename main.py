@@ -1777,6 +1777,61 @@ def extract_text_from_html(file_path):
         print(f"Error extracting text from {file_path}: {e}")
         return None
 
+def calculate_authority_score(source_type, title, content, date_str, query, query_words):
+    """
+    Calculate an authority score for a source (0-100).
+    Higher score = more authoritative/relevant.
+    """
+    from datetime import datetime
+    import re
+    
+    score = 0
+    
+    # Base score by source type
+    if source_type == 'website':
+        score += 50  # Protocol pages are more authoritative
+    else:  # blog
+        score += 30  # Blog posts are less authoritative but still valuable
+    
+    # Relevance scoring (how well it matches the query)
+    title_lower = title.lower()
+    content_lower = content.lower()
+    query_lower = query.lower()
+    
+    # Title matches (high weight)
+    for word in query_words:
+        if word in title_lower:
+            score += 5
+    if query_lower in title_lower:
+        score += 10
+    
+    # Content quality indicators
+    content_length = len(content)
+    if content_length > 2000:
+        score += 5  # Substantial content
+    if content_length > 5000:
+        score += 5  # Very detailed content
+    
+    # Recency bonus (for blog posts only)
+    if date_str and source_type == 'blog':
+        try:
+            post_date = datetime.strptime(date_str.split('T')[0], '%Y-%m-%d')
+            days_old = (datetime.now() - post_date).days
+            if days_old < 30:
+                score += 10  # Very recent
+            elif days_old < 90:
+                score += 7   # Recent
+            elif days_old < 180:
+                score += 5   # Fairly recent
+            elif days_old < 365:
+                score += 3   # Within last year
+        except:
+            pass
+    
+    # Cap at 100
+    return min(score, 100)
+
+
 def search_static_html_pages(query):
     """
     Search static HTML pages in the current directory.
@@ -2022,6 +2077,7 @@ def search_blog_rag():
                 content = post.get('content', {}).get('rendered', '')
                 link = post.get('link', '')
                 excerpt = post.get('excerpt', {}).get('rendered', '')
+                date_str = post.get('date', '')
                 
                 # Clean HTML tags more thoroughly
                 content_clean = re.sub('<[^<]+?>', '', content)
@@ -2030,6 +2086,16 @@ def search_blog_rag():
                 # Remove extra whitespace and newlines
                 content_clean = re.sub(r'\s+', ' ', content_clean).strip()
                 excerpt_clean = re.sub(r'\s+', ' ', excerpt_clean).strip()
+                
+                # Calculate authority score
+                authority_score = calculate_authority_score(
+                    source_type='blog',
+                    title=title,
+                    content=content_clean,
+                    date_str=date_str,
+                    query=query,
+                    query_words=query_words
+                )
                 
                 # Get more content (up to 4000 chars per post since articles are ~1000 words)
                 # 1000 words ≈ 6000 chars, so 4000 gives good coverage
@@ -2040,7 +2106,9 @@ def search_blog_rag():
                     'title': title,
                     'link': link,
                     'excerpt': excerpt_clean[:200] if excerpt_clean else content_clean[:200],
-                    'type': 'blog'
+                    'type': 'blog',
+                    'authority': authority_score,
+                    'date': date_str
                 })
         
         # Add static HTML pages to context
@@ -2049,6 +2117,16 @@ def search_blog_rag():
                 title = page.get('title', '')
                 content = page.get('content', '')
                 link = page.get('link', '')
+                
+                # Calculate authority score
+                authority_score = calculate_authority_score(
+                    source_type='website',
+                    title=title,
+                    content=content,
+                    date_str=None,
+                    query=query,
+                    query_words=query_words
+                )
                 
                 # Content is already cleaned, just truncate
                 content_snippet = content[:4000] if len(content) > 4000 else content
@@ -2061,7 +2139,8 @@ def search_blog_rag():
                     'title': title,
                     'link': link,
                     'excerpt': excerpt,
-                    'type': 'website'
+                    'type': 'website',
+                    'authority': authority_score
                 })
         
         # If no content found, provide a helpful message
