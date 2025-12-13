@@ -11271,6 +11271,185 @@ h1, h2, h3, h4 {
 }
 
 /* ==============================================
+   TRUST & SOCIAL PROOF SECTION (Homepage)
+   ============================================== */
+
+.trust-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-2xl);
+  margin: var(--spacing-3xl) 0;
+}
+
+.trust-metric {
+  text-align: center;
+  padding: var(--spacing-2xl);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--border-radius-lg);
+  transition: all var(--transition);
+}
+
+.trust-metric:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(212, 175, 55, 0.3);
+  transform: translateY(-4px);
+}
+
+.trust-metric-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--spacing-md);
+}
+
+.trust-metric-number {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--color-gold);
+  margin-bottom: var(--spacing-sm);
+}
+
+.trust-metric-label {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.trust-metric-detail {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+}
+
+.featured-case-study {
+  margin: var(--spacing-3xl) 0;
+  padding: var(--spacing-3xl);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(212, 175, 55, 0.05) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.2);
+  border-radius: var(--border-radius-lg);
+  position: relative;
+}
+
+.case-study-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: var(--color-gold);
+  color: var(--color-navy);
+  font-size: 0.875rem;
+  font-weight: 700;
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-lg);
+  letter-spacing: 0.05em;
+}
+
+.case-study-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-md);
+}
+
+.case-study-description {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  margin-bottom: var(--spacing-2xl);
+}
+
+.case-study-results {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-xl);
+  padding-top: var(--spacing-xl);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.case-study-stat {
+  text-align: center;
+}
+
+.case-study-stat .stat-value {
+  display: block;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-gold);
+  margin-bottom: var(--spacing-xs);
+}
+
+.case-study-stat .stat-label {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.client-logos-section {
+  margin-top: var(--spacing-3xl);
+  text-align: center;
+}
+
+.logos-label {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-lg);
+}
+
+.client-logos-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-lg);
+}
+
+.client-logo-placeholder {
+  padding: var(--spacing-lg);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--border-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  transition: all var(--transition);
+}
+
+.client-logo-placeholder:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(212, 175, 55, 0.3);
+}
+
+.client-logo-placeholder span {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1024px) {
+  .trust-metrics-grid {
+    grid-template-columns: 1fr;
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .case-study-results {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .client-logos-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .case-study-results {
+    grid-template-columns: 1fr;
+  }
+  
+  .client-logos-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==============================================
    SECTORS GRID (Target Markets Page)
    ============================================== */
 
