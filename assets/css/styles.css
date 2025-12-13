@@ -160,7 +160,7 @@ h1, h2, h3, h4 {
   border: 1px solid transparent;
   border-radius: var(--border-radius);
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.2s ease; /* Subtle, not slow */
   text-decoration: none;
 }
 
@@ -171,9 +171,10 @@ h1, h2, h3, h4 {
 }
 
 .btn-primary:hover {
-  background: var(--color-gold);
-  box-shadow: 0 0 20px rgba(245, 166, 35, 0.4);
-  transform: translateY(-2px);
+  /* SUBTLE change: only opacity and slight shadow */
+  opacity: 0.9;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+  transform: none; /* Removed transform for more subtle effect */
 }
 
 .btn-secondary {
@@ -183,9 +184,10 @@ h1, h2, h3, h4 {
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--cyan-accent);
-  color: var(--cyan-accent);
+  /* SUBTLE change: slight background tint and gold accent */
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--color-gold);
+  color: var(--color-gold);
 }
 
 .btn-protocol {
@@ -8621,7 +8623,8 @@ h1, h2, h3, h4 {
 }
 
 .cta-subtitle {
-    margin-bottom: 24px;
+    margin: 24px;
+    font-size: smaller;
 }
 
 .cta-content {
@@ -9211,10 +9214,11 @@ h1, h2, h3, h4 {
 }
 
 .btn-outline:hover {
-    border-color: #D4AF37;
-    color: #0B1221;
-    background: rgba(212, 175, 55, 0.1);
-    transform: translateY(-2px);
+    /* SUBTLE change: slight gold tint, no drastic color inversion */
+    background: rgba(212, 175, 55, 0.15);
+    border-color: var(--color-gold);
+    color: var(--color-gold);
+    transform: none; /* Removed transform for more subtle effect */
 }
 
 /* Example Boxes with Colored Backgrounds */
