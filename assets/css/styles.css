@@ -1587,10 +1587,10 @@ h1, h2, h3, h4 {
 }
 
 /* ============================================
-   BUTTON STYLING - Footer Conformance
+   BUTTON STYLING - Footer Conformance (FIXED)
    ============================================ */
 
-/* Button Base Styles */
+/* Button Base Styles - No transform to prevent jump */
 .footer .btn {
     display: block;
     text-align: center;
@@ -1599,12 +1599,12 @@ h1, h2, h3, h4 {
     padding: 12px 24px;
     border-radius: 8px;
     text-decoration: none;
-    transition: all 0.2s ease;
     cursor: pointer;
     border: 2px solid transparent;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-/* Primary Button (Gold background) */
+/* Primary Button (Gold) */
 .footer .btn-primary {
     background: var(--color-gold);
     color: var(--color-navy);
@@ -1612,16 +1612,13 @@ h1, h2, h3, h4 {
 }
 
 .footer .btn-primary:hover {
-    opacity: 0.9;
-    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
-    transform: translateY(-2px);
+    background: var(--color-gold);
+    border-color: var(--color-gold);
+    color: var(--color-navy);
+    /* No transform, no opacity - keeps text visible and prevents jump */
 }
 
-.footer .btn-primary:active {
-    transform: translateY(0);
-}
-
-/* Outline Button (White border, no fill) */
+/* Outline Button (White/Gold) */
 .footer .btn-outline {
     background: transparent;
     color: white;
@@ -1629,14 +1626,9 @@ h1, h2, h3, h4 {
 }
 
 .footer .btn-outline:hover {
-    background: rgba(212, 175, 55, 0.15);
+    background: var(--color-gold);
     border-color: var(--color-gold);
-    color: var(--color-gold);
-    transform: translateY(-2px);
-}
-
-.footer .btn-outline:active {
-    transform: translateY(0);
+    color: var(--color-navy);
 }
 
 /* Ensure buttons in footer CTA have proper spacing */
