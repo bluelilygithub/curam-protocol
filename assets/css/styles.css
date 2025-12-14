@@ -4134,6 +4134,22 @@ h1, h2, h3, h4 {
   padding: var(--spacing-xs) var(--spacing-md);
   border-radius: 20px;
   white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+  z-index: 1;
+}
+
+/* Most Popular Card - Enhanced Visual Prominence */
+.entry-point-card-popular {
+  border: 2px solid var(--color-gold);
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.08), rgba(212, 175, 55, 0.03));
+  box-shadow: 0 8px 32px rgba(212, 175, 55, 0.15);
+  transform: scale(1.02);
+}
+
+.entry-point-card-popular:hover {
+  border-color: var(--color-gold);
+  box-shadow: 0 12px 40px rgba(212, 175, 55, 0.25);
+  transform: translateY(-4px) scale(1.02);
 }
 
 .entry-point-card h3 {
