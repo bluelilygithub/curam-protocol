@@ -5539,7 +5539,7 @@ h1, h2, h3, h4 {
 }
 
 .case-study-result-value {
-  font-size: 0.25rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-gold);
   margin-bottom: var(--spacing-sm);
