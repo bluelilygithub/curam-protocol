@@ -58,32 +58,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // ========== SCROLL DOWN BUTTON ==========
-  const scrollDownBtn = document.querySelector('.scroll-down-btn');
-  
-  if (scrollDownBtn) {
-    scrollDownBtn.addEventListener('click', function() {
-      const protocol = document.getElementById('protocol');
-      if (protocol) {
-        protocol.scrollIntoView({ behavior: 'smooth' });
-      } else {
-        window.scrollTo({
-          top: window.innerHeight,
-          behavior: 'smooth'
-        });
-      }
-    });
-    
-    // Hide button after scrolling past hero
-    window.addEventListener('scroll', function() {
-      if (window.scrollY > window.innerHeight * 0.5) {
-        scrollDownBtn.style.opacity = '0';
-        scrollDownBtn.style.pointerEvents = 'none';
-      } else {
-        scrollDownBtn.style.opacity = '1';
-        scrollDownBtn.style.pointerEvents = 'auto';
-      }
-    });
-  }
+  // Note: Scroll down button is now handled by main.js to avoid conflicts
+  // main.js handles both click behavior and show/hide logic consistently
 
   // ========== FAQ ACCORDION ==========
   // Note: FAQ accordion is handled by main.js to avoid conflicts

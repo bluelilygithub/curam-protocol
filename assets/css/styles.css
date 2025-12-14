@@ -477,6 +477,11 @@ h1, h2, h3, h4 {
   animation: bounce 2s infinite;
 }
 
+.scroll-down-btn.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .scroll-down-btn:hover {
   background: rgba(0, 212, 255, 0.2);
   border-color: var(--cyan-accent);
