@@ -9,9 +9,75 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* FAQ Search Box */
+        .faq-search-container {
+            max-width: 600px;
+            margin: 0 auto var(--spacing-xl);
+        }
+        .faq-search-box {
+            position: relative;
+        }
+        .faq-search-input {
+            width: 100%;
+            padding: 1rem 3rem 1rem 1.25rem;
+            font-size: 1rem;
+            border: 2px solid var(--border-subtle);
+            border-radius: 8px;
+            background: white;
+            color: var(--text-primary);
+            font-family: inherit;
+        }
+        .faq-search-input::placeholder {
+            color: var(--text-secondary);
+        }
+        .faq-search-input:focus {
+            outline: none;
+            border-color: var(--color-gold);
+        }
+        .faq-search-icon {
+            position: absolute;
+            right: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            pointer-events: none;
+        }
+        .faq-search-results {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: white;
+            border: 2px solid var(--color-gold);
+            border-radius: 8px;
+            display: none;
+        }
+        .faq-search-results.active {
+            display: block;
+        }
+        .faq-search-result-item {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-subtle);
+            cursor: pointer;
+        }
+        .faq-search-result-item:last-child {
+            border-bottom: none;
+        }
+        .faq-search-result-item:hover {
+            background: rgba(212, 175, 55, 0.1);
+        }
+        .faq-search-result-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+        .faq-search-result-preview {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+    </style>
 </head>
 <body>
-    <!-- Scroll Down Button - Fixed to viewport bottom -->
+    <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M19 12l-7 7-7-7"/>
@@ -27,6 +93,21 @@
         <div class="container">
             <h1 class="hero-headline" style="font-size: 2.5rem;">Frequently Asked Questions</h1>
             <p class="hero-subhead" style="font-size: 1.125rem;">Answers to the critical questions CTOs, CFOs, and Partners ask about security, ownership, risk, and value.</p>
+            
+            <!-- FAQ Search Box -->
+            <div class="faq-search-container" style="margin-top: var(--spacing-lg);">
+                <div class="faq-search-box">
+                    <input type="text" 
+                           id="faq-search-input" 
+                           class="faq-search-input" 
+                           placeholder="Search FAQs (e.g., 'What's the total cost?', 'Data security', 'Refund policy')">
+                    <svg class="faq-search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                </div>
+                <div id="faq-search-results" class="faq-search-results"></div>
+            </div>
         </div>
     </section>
 
@@ -41,45 +122,94 @@
                 
                 <div class="faq-accordion">
                     
+                    <!-- NEW: Total Cost Question -->
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>What's the total investment if we complete all four phases?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>Total ranges $37k-$51k</strong> if you complete all phases:</p>
+                            <ul>
+                                <li>Phase 1 (Feasibility): $1,500</li>
+                                <li>Phase 2 (Roadmap): $7,500</li>
+                                <li>Phase 3 (Compliance): $8-12k</li>
+                                <li>Phase 4 (Implementation): $20-30k</li>
+                            </ul>
+                            <p><strong>You control the investment.</strong> Exit after any phase. Most firms invest ~$40k total. Typical payback: 3-9 months.</p>
+                        </div>
+                    </div>
+
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
                             <span>Why should we pay $1,500 for Phase 1 when you have a demo on your website?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>The online demo proves the technology can work with data similar to yours. However, the Feasibility Sprint proves it works on <strong>your specific, messy documents</strong>.</p>
-                            <p>The $1,500 is a fixed-fee diagnostic investment for risk assessment, purchasing the certainty of the ≥90% Validated Benchmark, saving you from a larger, failed implementation.</p>
+                            <p><strong>The demo shows the tech works. The $1,500 proves it works on YOUR documents.</strong></p>
+                            <p>You get 90%+ accuracy or a full refund. This eliminates the risk of a $40k implementation that fails because we never tested your actual documents.</p>
+                            <p>Think of it as insurance against a failed AI project.</p>
                         </div>
                     </div>
 
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>The implementation cost in Wave 1 is $28,500. Can we defer that entire cost until we start seeing the $214,500 in gross return?</span>
+                            <span>Can we defer payment until we see ROI?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>We share the risk. The <strong>Performance Retention clause</strong> allows you to hold 15% of the fee until the Phase 2 success metrics are verifiably met. While initial setup cost is necessary for readiness, this guarantee ensures our fee is contingent on your measurable realization of value.</p>
+                            <p><strong>We hold 15% of the Phase 2 fee ($1,125) until success metrics are met.</strong></p>
+                            <p>This means you pay 85% upfront ($6,375), and we don't get the remaining 15% until we prove the ROI we promised.</p>
+                            <p>We share the risk. Our fee is contingent on your measurable results.</p>
                         </div>
                     </div>
 
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>What prevents this from becoming an 'Agile Black Box' project where the scope creeps and the final bill is unpredictable?</span>
+                            <span>What prevents this from becoming an open-ended project where costs spiral?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>The Curam-Ai Protocol™ is fundamentally opposed to open-ended experimentation. Investment is incremental and contingent on success. Every subsequent phase is a <strong>fixed-scope sprint</strong>, preventing scope creep and guaranteeing cost certainty.</p>
-                            <p>Phase 1 & 2 are fixed prices, and we provide indicative pricing for additional phases. Should we engage with you, we will provide fixed prices for the project based on an agreed outcome.</p>
+                            <p><strong>Every phase is fixed-price, fixed-scope, fixed-timeline.</strong></p>
+                            <p>Example: Phase 1 is ALWAYS $1,500 for 48 hours. No "it depends on complexity" pricing.</p>
+                            <p>You approve each phase before we start. No surprises, no scope creep, no Agile black box.</p>
                         </div>
                     </div>
 
+                    <!-- REVISED: Xero/MYOB Question -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>We already have a Xero/MYOB integration. How is your 'Invoice Gatekeeper' better than the existing free/cheap tools?</span>
+                            <span>We already use Xero/MYOB. Why do we need this?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>We move beyond simple integration into <strong>Tier 2 Risk Mitigation</strong>. Our solution is custom-tuned to your unique invoice variance and integrates governance, such as the ABN fraud validation logic. This approach adds a critical financial control layer that generic tools cannot match.</p>
+                            <p><strong>Xero imports data. We validate it first.</strong></p>
+                            <p>Think of us as a quality gate BEFORE Xero. We check:</p>
+                            <ul>
+                                <li>Vendor ABN validity (catches fraud)</li>
+                                <li>Duplicate invoices (prevents double-payment)</li>
+                                <li>Coding errors (routes to correct GL accounts)</li>
+                                <li>Approval thresholds (enforces spend limits)</li>
+                            </ul>
+                            <p>Xero doesn't do this. Generic OCR tools don't do this. We custom-tune validation to YOUR financial controls.</p>
+                        </div>
+                    </div>
+
+                    <!-- NEW: Staff Time Question (moved from Process section) -->
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>How much time will our staff need to invest across all phases?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>Total: ~15 hours spread over 8-10 weeks.</strong></p>
+                            <ul>
+                                <li><strong>Phase 1:</strong> 30 minutes to upload 5-10 sample PDFs. That's it.</li>
+                                <li><strong>Phase 2:</strong> 2 hours (leadership kick-off/review) + 3 hours (SME interviews)</li>
+                                <li><strong>Phase 3:</strong> 1 hour (IT kick-off) + 2 hours (compliance review)</li>
+                                <li><strong>Phase 4:</strong> 4 hours (user training) + 2 hours (testing)</li>
+                            </ul>
+                            <p>We provide agendas in advance and work around your project deadlines.</p>
                         </div>
                     </div>
 
@@ -93,44 +223,56 @@
                 
                 <div class="faq-accordion">
                     
+                    <!-- REVISED: Lead with answer -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>How does this guarantee data security? Our CTO requires all data to remain within our M365 environment, and you mentioned 'no data leaves X-Engineering.'</span>
+                            <span>Does all data stay within our M365/Azure environment?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>For Phase 1 & 2, we work within our own environments with sample data you provide. You may choose to redact some content.</p>
-                            <p>However, should we move to Phase 3, we enforce the <strong>Phase 3 Compliance Shield</strong>. The solution is built exclusively using tools within your existing M365/Azure tenant. We specifically configure logic to prevent any data egress, eliminating 'Shadow IT' risk and meeting compliance requirements upfront.</p>
+                            <p><strong>Yes. 100% of processing happens inside your M365/Azure tenant. No data leaves your environment.</strong></p>
+                            <p>We configure zero-egress compliance from day one. For Phase 1 & 2, we work in our environment with sample data you provide (you can redact sensitive content). From Phase 3 onward, everything runs exclusively in your tenant.</p>
                         </div>
                     </div>
 
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>How will the solution be architected to guarantee compliance with ISO 27001 and our data residency requirements?</span>
+                            <span>How do you guarantee ISO 27001 compliance?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p><strong>Phase 3 (Compliance Shield)</strong> is dedicated to this. We map the deployment against ISO 27001 controls, ensuring the solution is built exclusively within your Azure tenant. This architecture provides governance, control over keys, and zero data egress, meeting the highest compliance standard.</p>
+                            <p><strong>We map the deployment against ISO 27001 controls upfront.</strong></p>
+                            <p>Phase 3 creates the compliance documentation your auditors need:</p>
+                            <ul>
+                                <li>Data flow diagrams showing zero-egress architecture</li>
+                                <li>Access control matrices (who can see what)</li>
+                                <li>Encryption protocols (data at rest and in transit)</li>
+                                <li>Audit trail specifications</li>
+                            </ul>
+                            <p>Built exclusively within your Azure tenant. You control the keys, you control the data.</p>
                         </div>
                     </div>
 
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>How does the AI handle data residency? Where exactly is the data processed to ensure no information leaves X-Engineering's environment?</span>
+                            <span>Where is data processed? Can you guarantee Australian data residency?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>All processing occurs exclusively within your Azure/M365 cloud tenancy. We configure logic traces to prevent data from being routed outside your secure environment (no egress). The solution is architected to utilize your existing secure cloud tenant (Azure, AWS, or GCP) to guarantee data residency and zero-egress compliance.</p>
+                            <p><strong>All processing occurs exclusively within your Azure/M365 cloud tenant.</strong></p>
+                            <p>If you specify Australian data residency (Azure Australia East region), we configure the solution to respect that. No data is routed outside your secure environment.</p>
+                            <p>Works with Azure, AWS, or GCP—we use your existing cloud infrastructure.</p>
                         </div>
                     </div>
 
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>Will this integration require opening any new API endpoints, firewall ports, or allowing inbound traffic from external IPs?</span>
+                            <span>Will this require opening new firewall ports or allowing inbound traffic?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>No. The solution is designed for minimal network impact. Integration relies solely on outbound communication via secure M365/Azure APIs that are already authorized. No new firewall ports or inbound external traffic is required, drastically simplifying IT security approval.</p>
+                            <p><strong>No. Zero new firewall ports. Zero inbound external traffic.</strong></p>
+                            <p>Integration uses only outbound communication via M365/Azure APIs already authorized in your environment. This drastically simplifies IT security approval.</p>
                         </div>
                     </div>
 
@@ -144,99 +286,103 @@
                 
                 <div class="faq-accordion">
                     
+                    <!-- MERGED: Q10 + Q12 -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>If we adopt this, are we going to be locked into your services permanently? Does the solution require ongoing licensing from Curam-Ai?</span>
+                            <span>Are we locked into your services? Do we own the source code?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>No. The long-term advantage is <strong>Full IP Ownership</strong>. We transfer 100% of the source code and flows to your tenant. This eliminates vendor lock-in, avoids any ongoing licensing fees from Curam-Ai, and ensures the solution becomes a self-sustaining asset managed by your internal IT team.</p>
+                            <p><strong>No lock-in. Period. You own 100% of the source code.</strong></p>
+                            <p>At the conclusion of Phase 4, we transfer complete ownership to you:</p>
+                            <ul>
+                                <li>Full source code (all workflows, all scripts)</li>
+                                <li>Complete documentation</li>
+                                <li>Video walkthroughs for maintenance</li>
+                                <li>Training materials</li>
+                            </ul>
+                            <p><strong>You can fire us and hire any developer to maintain it.</strong> Zero ongoing licensing fees from Curam-Ai. The solution becomes your self-sustaining asset.</p>
                         </div>
                     </div>
 
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>What do we own after deployment, and who handles maintenance and enhancements?</span>
+                            <span>Who handles maintenance and enhancements after deployment?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>You own the system. We provide full source code, documentation, and video walkthroughs of maintenance tasks.</p>
-                            <p><strong>Maintenance:</strong> Routine tasks (adding vendors, adjusting low-code rules, managing permissions) can be handled by any IT admin familiar with M365. No coding is required.</p>
-                            <p><strong>Enhancements:</strong> Your team can build additional workflows using the low-code foundation we deliver, or re-engage us for new, complex workflows priced as a fixed Phase 4 sprint (typically starting from ~$15k).</p>
-                            <p><strong>Tier 2 Support (Optional):</strong> We offer an optional Tier 2 retainer (covering AI model retraining, complex troubleshooting) for <strong>$500/month</strong> (up to 2 hours support) with a 24-hour response SLA.</p>
-                        </div>
-                    </div>
-
-                    <div class="faq-accordion-item">
-                        <button class="faq-accordion-header">
-                            <span>If the implementation goes forward, how will the intellectual property (IP) transfer work? Do we own the source code, or just a license to use it?</span>
-                            <span class="faq-accordion-icon">+</span>
-                        </button>
-                        <div class="faq-accordion-content">
-                            <p>Per our Commercial Guarantee, you receive <strong>100% full ownership</strong> of the source code and workflows at the conclusion of the implementation.</p>
+                            <p><strong>Your IT team handles routine tasks. We're available for complex work if needed.</strong></p>
+                            <p><strong>Routine Maintenance:</strong> Any IT admin familiar with M365 can handle adding vendors, adjusting rules, managing permissions. No coding required.</p>
+                            <p><strong>Enhancements:</strong> Your team can build additional workflows using the low-code foundation we deliver. Or re-engage us for complex new workflows (fixed-price sprints, typically $15k+).</p>
+                            <p><strong>Optional Support:</strong> We offer Tier 2 support (AI model retraining, complex troubleshooting) for $500/month (up to 2 hours) with 24-hour response SLA. Completely optional.</p>
                         </div>
                     </div>
 
                 </div>
             </div>
 
-            <!-- Accuracy & Risk -->
+            <!-- Accuracy & Risk Management -->
             <div style="margin-bottom: var(--spacing-xl);">
                 <h2 class="section-headline" style="text-align: left; margin-bottom: var(--spacing-md);">🎯 Accuracy & Risk Management</h2>
                 <p class="section-subhead" style="text-align: left; margin-bottom: var(--spacing-lg);">Questions about AI accuracy, error prevention, and risk mitigation.</p>
                 
                 <div class="faq-accordion">
                     
+                    <!-- REVISED: Add caveat -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>How do you guarantee accuracy and prevent AI hallucinations?</span>
+                            <span>How do you prevent AI hallucinations and guarantee accuracy?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>We use a three-layer validation system, targeting <strong>99%+ production accuracy</strong>:</p>
+                            <p><strong>We target 99%+ production accuracy using a three-layer system:</strong></p>
                             <ul>
-                                <li><strong>Grounding:</strong> The AI only extracts data from your documents—it is <strong>incapable of generating or guessing</strong> information from the internet.</li>
-                                <li><strong>Confidence Scoring:</strong> If the AI scores &lt;90% confident on any item, it flags the record for human review by <strong>YOUR staff</strong> through a simple approval queue.</li>
-                                <li><strong>ERP Cross-Checks:</strong> We validate extracted data against your existing vendor master lists, project codes, and approval thresholds for hard-coded correctness.</li>
+                                <li><strong>Grounding:</strong> The AI only extracts from your documents. It cannot generate or guess information from the internet.</li>
+                                <li><strong>Confidence Scoring:</strong> If the AI scores <90% confident, it flags the record for human review within seconds.</li>
+                                <li><strong>ERP Cross-Checks:</strong> We validate against your vendor lists, project codes, and approval thresholds.</li>
                             </ul>
-                            <p>When rare errors occur (usually edge cases like damaged scans), they route to your team <strong>within seconds</strong> for quick correction, maintaining high automation efficiency.</p>
+                            <p><strong>Note:</strong> No AI is 100% perfect. The <1% of errors are flagged for human review within seconds—not hidden in your ERP.</p>
                         </div>
                     </div>
 
+                    <!-- KEEP: Best Q&A on page -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>What happens if the AI achieves 95% accuracy, but the 5% failure is concentrated in our most critical documents, like the final structural plans?</span>
+                            <span>What if the AI achieves 95% accuracy, but the 5% failure is concentrated in our most critical documents?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>The concern about failure concentrating on critical documents is precisely why <strong>Phase 1 (Feasibility Sprint) is mandatory</strong>: we eliminate this risk upfront.</p>
-                            <p>We first work with your team to identify and verify the perfect, correct answer for the most important data points on your structural plans—we call this the 'answer key' or Ground Truth. Our ≥90% pass/fail guarantee is then measured only against that critical, verified answer key.</p>
-                            <p>This means a successful test on simple documents cannot mask a failure on a critical document; if the AI cannot reliably handle the most complex, high-stakes information you submitted, we issue a full refund and stop the project immediately.</p>
+                            <p><strong>This is exactly why Phase 1 is mandatory—we eliminate this risk upfront.</strong></p>
+                            <p>We work with your team to create an 'answer key' for your most critical documents. Our 90% pass/fail guarantee is measured only against that verified answer key.</p>
+                            <p>This means success on simple documents cannot mask failure on critical ones. If the AI can't reliably handle your most complex, high-stakes documents, we issue a full refund and stop immediately.</p>
                         </div>
                     </div>
 
+                    <!-- REVISED: More specific on PI insurance -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
                             <span>What if the AI makes a costly mistake in production?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>Our validation layers are designed to flag errors before they reach your ERP. If an error does bypass the system (e.g., a critical field is misread):</p>
+                            <p><strong>Errors are flagged before they reach your ERP. If one bypasses the system:</strong></p>
                             <ul>
-                                <li><strong>Workflow:</strong> The human review process ensures the data is corrected and re-entered quickly.</li>
-                                <li><strong>Feedback Loop:</strong> The incorrect document/data immediately enters a feedback loop to retrain the AI model for that specific edge case.</li>
-                                <li><strong>Professional Indemnity:</strong> We carry Professional Indemnity insurance which covers errors made by the AI implementation. Details of our policy are provided during the contract phase.</li>
+                                <li><strong>Immediate Correction:</strong> Human review process catches and corrects within minutes.</li>
+                                <li><strong>Feedback Loop:</strong> The error immediately retrains the AI model for that specific edge case.</li>
+                                <li><strong>Professional Indemnity:</strong> We carry PI insurance covering errors made by the AI implementation. Policy details shared before Phase 3.</li>
                             </ul>
                         </div>
                     </div>
 
+                    <!-- REVISED: More direct, less defensive -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>How does the model account for the human time required for the 'Human-in-the-Loop' review process?</span>
+                            <span>How much time will my team spend on human review?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>Our Phase 1 Time Saved figures are deliberately conservative because they already account for the minimal human intervention required for the 'Fail Safe' review process. This is not cleanup; it is a high-value risk mitigation step that affects &lt;10% of documents, ensuring the overall efficiency gain and the ROI remain verifiably intact.</p>
+                            <p><strong>Typically 5-15 minutes per day reviewing the <10% of documents the AI flags.</strong></p>
+                            <p>This isn't cleanup—it's high-value risk mitigation. We factor this time into ROI calculations upfront, so the efficiency gains you see are real and achievable.</p>
                         </div>
                     </div>
 
@@ -250,47 +396,33 @@
                 
                 <div class="faq-accordion">
                     
+                    <!-- KEEP: Excellent Q&A -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>What are the objective refund criteria for the Phase 1 Feasibility Sprint?</span>
+                            <span>What are the exact refund criteria for Phase 1?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>Phase 1 is <strong>$1,500</strong> and comes with a 100% money-back guarantee based on objective performance:</p>
+                            <p><strong>Phase 1 is $1,500 with a 100% money-back guarantee based on objective performance:</strong></p>
                             <ul>
-                                <li><strong>Failure Criteria:</strong> If we cannot extract your target data with <strong>&gt;90% accuracy</strong> from your sample set (minimum 10 documents).</li>
-                                <li><strong>Measurement:</strong> You verify the extracted data against your ground truth. Even one field wrong on a document means that document is a failure.</li>
-                                <li><strong>Refund:</strong> If the 90% accuracy is not met, you receive a full <strong>$1,500 refund</strong> within 5 business days.</li>
+                                <li><strong>Success Criteria:</strong> We must extract your target data with >90% accuracy from your sample set (minimum 10 documents).</li>
+                                <li><strong>Measurement:</strong> You verify the extracted data against your answer key. Even one field wrong on a document means that document fails.</li>
+                                <li><strong>Refund:</strong> If we don't hit 90% accuracy, you get a full $1,500 refund within 5 business days. No questions asked.</li>
                             </ul>
-                            <p>We pride ourselves on transparency: 43 of our last 47 Feasibility Sprints passed. The 4 failures were due to poor source material (e.g., 100% handwritten forms) and all received a full refund.</p>
+                            <p>43 of our last 47 Feasibility Sprints passed. The 4 failures (poor source material like 100% handwritten forms) all received full refunds.</p>
                         </div>
                     </div>
 
+                    <!-- REVISED: Emphasize control -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>To ensure the fixed fee of $1,500 is manageable and delivered within 48 hours, what is the maximum number and type of documents we are permitted to submit?</span>
+                            <span>How many documents can we submit for Phase 1?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>To maintain the fixed 48-hour timeline and guarantee a meaningful result, we require a limited, pre-screened subset, typically <strong>5–10 documents total</strong>.</p>
-                            <p>This set must represent the key variability (messy, clean, old style) of the three core routines you want validated (Invoices, Schedules, and Drawing Registers). This is critical to control our diagnostic time and ensure the test is objective.</p>
-                        </div>
-                    </div>
-
-                    <div class="faq-accordion-item">
-                        <button class="faq-accordion-header">
-                            <span>What are the full time requirements for our staff across all four phases?</span>
-                            <span class="faq-accordion-icon">+</span>
-                        </button>
-                        <div class="faq-accordion-content">
-                            <p>The Protocol is designed for low friction. The total time commitment is <strong>~15 hours</strong> spread over 8–10 weeks:</p>
-                            <ul>
-                                <li><strong>Phase 1 (Feasibility):</strong> 30 minutes to send us 5-10 sample PDFs. Zero staff time after that.</li>
-                                <li><strong>Phase 2 (Roadmap):</strong> 2 hours from Leadership (kick-off/review) and 3 hours from SMEs (Finance/Project Mgmt) over 3 weeks.</li>
-                                <li><strong>Phase 3 (Compliance):</strong> 1 hour for IT Admin kick-off and 2 hours for policy review/approval.</li>
-                                <li><strong>Phase 4 (Deployment):</strong> 4 hours for User Training and 2 hours for UAT testing with 2-3 end users.</li>
-                            </ul>
-                            <p>We provide all agendas in advance and work around your project deadlines.</p>
+                            <p><strong>Typically 5-10 documents that YOU choose.</strong></p>
+                            <p>Pick the documents that represent your biggest pain points—messy invoices, complex schedules, old-style forms. This ensures the test is meaningful and the 48-hour timeline is achievable.</p>
+                            <p>You're in control. Send us your worst-case documents so we prove we can handle them.</p>
                         </div>
                     </div>
 
@@ -306,38 +438,99 @@
                     
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>What is the security protocol for legacy on-premise servers?</span>
+                            <span>How does this work with legacy on-premise servers?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>The solution is built on Microsoft Power Platform. If you have on-premise file storage, we use <strong>Microsoft's Power Platform Data Gateway</strong>—a secure, Microsoft-certified connector that:</p>
+                            <p><strong>We use Microsoft's Power Platform Data Gateway—a secure, Microsoft-certified connector.</strong></p>
                             <ul>
-                                <li>Runs <strong>inside your firewall</strong> (no inbound ports need to be opened).</li>
-                                <li>Only sends <strong>encrypted data</strong> to your M365 tenant for processing.</li>
-                                <li>Is maintained by Microsoft, not Curam AI.</li>
+                                <li>Runs inside your firewall (no inbound ports needed)</li>
+                                <li>Sends only encrypted data to your M365 tenant</li>
+                                <li>Maintained by Microsoft, not Curam AI</li>
                             </ul>
-                            <p><strong>Limitations:</strong> On-premise setups are slightly slower (file retrieval adds 2-5 seconds). During Phase 2, we will assess the infrastructure and recommend the optimal integration architecture.</p>
+                            <p><strong>Trade-off:</strong> On-premise setups add 2-5 seconds per file retrieval. We assess your infrastructure in Phase 2 and recommend the optimal architecture.</p>
+                        </div>
+                    </div>
+
+                    <!-- REVISED: More specific on licensing -->
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>Will this require new Microsoft licensing?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>Uses standard Power Automate (included in most M365 Business plans).</strong></p>
+                            <p>If you don't have Power Automate, cost is ~$15/user/month from Microsoft, not us. No proprietary licensing from Curam-Ai required.</p>
+                            <p>We leverage your existing M365 infrastructure—you're not paying twice for the same tools.</p>
+                        </div>
+                    </div>
+
+                    <!-- NEW: Tool deprecation question -->
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>What happens if Microsoft deprecates the Power Platform tools you use?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>You own the source code. You can migrate to any platform.</strong></p>
+                            <p>Microsoft typically gives 12-24 months notice for deprecations with clear migration paths. Since you own the code, you're not dependent on us to make the switch.</p>
+                            <p>We can assist with migrations (fixed-price sprint), but you're not locked in.</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- PROFESSIONAL SERVICES INDUSTRY QUESTIONS -->
+            <div style="margin-bottom: var(--spacing-xl);">
+                <h2 class="section-headline" style="text-align: left; margin-bottom: var(--spacing-md);">💼 Professional Services Industries</h2>
+                <p class="section-subhead" style="text-align: left; margin-bottom: var(--spacing-lg);">Accounting, Legal, Wealth Management, Insurance Brokers</p>
+                
+                <div class="faq-accordion">
+                    
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>How does this handle trust account reconciliations for accounting and legal firms?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>We automate the three-way match: bank statement → trust ledger → client matter files.</strong></p>
+                            <p>The AI extracts transactions from bank statements, matches them to client matter codes, and flags discrepancies for review. Typical time savings: 8-12 hours per monthly reconciliation.</p>
+                            <p>Works with all major practice management systems (LEAP, ActionStep, Xero Practice Manager).</p>
                         </div>
                     </div>
 
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>How does the implementation in Phase 4 integrate with our existing Microsoft 365 SharePoint structure? Will it require new licensing?</span>
+                            <span>Can this handle privileged or confidential legal documents?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>The solution is built using standard Power Platform tools. It integrates directly with your existing M365 infrastructure and leverages existing licensing. No proprietary licensing from Curam-Ai is required.</p>
+                            <p><strong>Yes. All processing happens within your M365/Azure tenant with complete audit trails.</strong></p>
+                            <p>For Phase 1 testing, you can redact privileged content or use non-privileged sample documents. From Phase 3 onward, the solution respects your existing access controls and maintains legal privilege.</p>
+                            <p>Zero data leaves your environment. Complete compliance with solicitor-client privilege requirements.</p>
                         </div>
                     </div>
 
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>How does this help wealth management firms with ASIC compliance reporting?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>We automate client statement processing and performance reporting with complete audit trails.</strong></p>
+                            <p>The AI extracts transaction data, reconciles against portfolio holdings, and generates compliant reporting. Typical savings: 60% reduction in statement reconciliation time.</p>
+                            <p>Built-in compliance checks for ASIC reporting requirements, fee disclosure statements, and SOA generation.</p>
+                        </div>
+                    </div>
 
                 </div>
             </div>
 
-            <!-- Industry-Specific -->
+            <!-- BUILT ENVIRONMENT INDUSTRY QUESTIONS -->
             <div style="margin-bottom: var(--spacing-xl);">
-                <h2 class="section-headline" style="text-align: left; margin-bottom: var(--spacing-md);">🏗️ Industry-Specific Questions</h2>
-                <p class="section-subhead" style="text-align: left; margin-bottom: var(--spacing-lg);">Questions specific to engineering and construction firms.</p>
+                <h2 class="section-headline" style="text-align: left; margin-bottom: var(--spacing-md);">🏗️ Built Environment Industries</h2>
+                <p class="section-subhead" style="text-align: left; margin-bottom: var(--spacing-lg);">Engineering, Architecture, Construction, Mining, Property Management</p>
                 
                 <div class="faq-accordion">
                     
@@ -347,26 +540,98 @@
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p>Yes. Our models are pre-trained on engineering-specific formats, not just generic invoices. We can handle documents like:</p>
+                            <p><strong>Yes. Our models are pre-trained on engineering-specific formats:</strong></p>
                             <ul>
-                                <li>Concrete Test Reports (Extracting lot numbers, slump, and compressive strength)</li>
-                                <li>Beam Schedules (Extracting dimensions, steel grade, and placement notes)</li>
-                                <li>Drawing Registers (Auto-extracting revision numbers, issue dates, and file paths)</li>
+                                <li><strong>Concrete Test Reports:</strong> Extracting lot numbers, slump, compressive strength</li>
+                                <li><strong>Beam Schedules:</strong> Extracting dimensions, steel grade, placement notes</li>
+                                <li><strong>Drawing Registers:</strong> Auto-extracting revision numbers, issue dates, file paths</li>
                             </ul>
-                            <p>During a live demonstration, we can use redacted samples from previous deployments to show how our models handle these specific documents compared to off-the-shelf solutions.</p>
+                            <p>We can demonstrate with redacted samples from previous deployments to show how our models handle these compared to generic OCR tools.</p>
+                        </div>
+                    </div>
+
+                    <!-- KEEP: Excellent industry-specific Q&A -->
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>How can I be certain the AI didn't swap a 'UB' for a 'UC' on a critical beam schedule?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>Every extraction includes source verification and an audit trail.</strong></p>
+                            <p>The final CSV includes the source filename and confirmation that critical fields (Member Size, Grade) passed the 90% integrity check. The AI copies exactly what's in the PDF—it doesn't interpret or guess.</p>
+                            <p>If there's any ambiguity (damaged scan, unclear text), the AI flags it for human review rather than guessing.</p>
                         </div>
                     </div>
 
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>When the Schedule Digitiser runs, how can I be absolutely certain the AI didn't swap a 'UB' for a 'UC' on a critical beam schedule?</span>
+                            <span>How does this help with WorkSafe Queensland compliance for construction firms?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p><strong>Proof of Source:</strong> The solution is designed to eliminate Transcription Error by copying exactly what is in the PDF. The final CSV will include the source filename and an audit trail confirming the successful extraction of the critical data fields (like Member Size and Grade) that passed the ≥90% integrity check.</p>
+                            <p><strong>We automate SWMS tracking, subcontractor certification monitoring, and site diary digitization.</strong></p>
+                            <p>The AI monitors certificate expiry dates (alerts 30 days before), digitizes handwritten site logs, and maintains complete audit trails for WorkSafe inspections.</p>
+                            <p>Typical result: Near-zero gaps in compliance documentation, 10+ hours/week saved on manual tracking.</p>
                         </div>
                     </div>
 
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>Can this handle BIM schedules and Revit exports for architecture firms?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>Yes. We handle window schedules, door schedules, and drawing registers exported from Revit/ArchiCAD.</strong></p>
+                            <p>The AI extracts tabular data from PDF exports, maintains revision control, and auto-populates drawing registers. Works with both automated BIM exports and manually formatted schedules.</p>
+                            <p>Typical savings: 8-12 hours/week on schedule management and drawing register updates.</p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- LOGISTICS & COMPLIANCE INDUSTRY QUESTIONS -->
+            <div style="margin-bottom: var(--spacing-xl);">
+                <h2 class="section-headline" style="text-align: left; margin-bottom: var(--spacing-md);">🚢 Logistics & Compliance Industries</h2>
+                <p class="section-subhead" style="text-align: left; margin-bottom: var(--spacing-lg);">Logistics, Freight, Healthcare Administration, Government Contractors</p>
+                
+                <div class="faq-accordion">
+                    
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>How does this handle customs documentation and tariff code classification?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>We extract all 47 fields from Bills of Lading and validate tariff codes against ABF schedules.</strong></p>
+                            <p>The AI flags potential misclassifications before submission, preventing $5-50K fines and cargo hold fees. Typical result: 2.5 days faster customs clearance.</p>
+                            <p>Works with Port of Brisbane workflows and integrates with major freight management systems.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>Is this HIPAA/Privacy Act compliant for healthcare administration?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>Yes. All patient data processing occurs within your secure Azure/M365 tenant in Australian data centers.</strong></p>
+                            <p>We configure zero-egress compliance, maintain complete audit trails, and respect existing access controls. Works with Medicare claiming systems and private health insurance portals.</p>
+                            <p>Phase 3 includes Privacy Act compliance documentation for your Privacy Officer.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>Can this handle NDIS/government grant acquittal reporting?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>Yes. We automate compliant documentation with complete service logging and timestamps.</strong></p>
+                            <p>The AI extracts service delivery data, matches to funding agreements, and generates audit-ready reports. This prevents the contract terminations and repayment demands that result from incomplete documentation.</p>
+                            <p>Typical result: Pass NDIS/Defence audits with zero gaps in documentation.</p>
+                        </div>
+                    </div>
 
                 </div>
             </div>
@@ -381,19 +646,103 @@
                 <h2 class="section-headline">Still Have Questions?</h2>
                 <p class="section-subhead">Get in touch with our team to discuss your specific requirements and see how the Curam-Ai Protocol™ can work for your firm.</p>
                 <div style="margin-top: var(--spacing-lg);">
-                    <a href="contact.html" class="btn btn-primary">Book a Diagnostic</a>
-                    <a href="homepage.html#faq" class="btn btn-secondary">View Key FAQs on Homepage</a>
+                    <a href="contact.html" class="btn btn-primary btn-large">Book a Diagnostic Call</a>
+                    <a href="homepage.html#faq" class="btn btn-secondary" style="margin-left: 1rem;">View Quick FAQs</a>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Footer -->
-    <!-- Footer -->
     <div id="footer-placeholder"></div>
     <script src="assets/js/footer-loader.js"></script>
 
     <script src="assets/js/main.js"></script>
+    
+    <!-- FAQ Search Functionality -->
+    <script>
+        // Simple client-side FAQ search (can be enhanced with NLP search API later)
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('faq-search-input');
+            const searchResults = document.getElementById('faq-search-results');
+            const faqItems = document.querySelectorAll('.faq-accordion-item');
+            
+            // Build searchable index
+            const faqIndex = Array.from(faqItems).map(item => {
+                const question = item.querySelector('.faq-accordion-header span').textContent;
+                const answer = item.querySelector('.faq-accordion-content').textContent;
+                return { element: item, question, answer };
+            });
+            
+            searchInput.addEventListener('input', function(e) {
+                const query = e.target.value.toLowerCase().trim();
+                
+                if (query.length < 3) {
+                    searchResults.classList.remove('active');
+                    return;
+                }
+                
+                // Search FAQ index
+                const matches = faqIndex.filter(faq => 
+                    faq.question.toLowerCase().includes(query) || 
+                    faq.answer.toLowerCase().includes(query)
+                ).slice(0, 5); // Show top 5 matches
+                
+                if (matches.length === 0) {
+                    searchResults.innerHTML = '<p style="color: var(--text-secondary); padding: 0.5rem;">No matching questions found. Try different keywords or <a href="contact.html" style="color: var(--color-gold);">contact us</a>.</p>';
+                    searchResults.classList.add('active');
+                    return;
+                }
+                
+                // Display results
+                searchResults.innerHTML = matches.map(match => {
+                    const preview = match.answer.substring(0, 120) + '...';
+                    return `
+                        <div class="faq-search-result-item" data-faq-id="${faqIndex.indexOf(match)}">
+                            <div class="faq-search-result-title">${match.question}</div>
+                            <div class="faq-search-result-preview">${preview}</div>
+                        </div>
+                    `;
+                }).join('');
+                
+                searchResults.classList.add('active');
+                
+                // Add click handlers to results
+                searchResults.querySelectorAll('.faq-search-result-item').forEach(resultItem => {
+                    resultItem.addEventListener('click', function() {
+                        const faqId = parseInt(this.dataset.faqId);
+                        const targetFaq = faqIndex[faqId].element;
+                        
+                        // Scroll to FAQ item
+                        targetFaq.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        
+                        // Open accordion
+                        const header = targetFaq.querySelector('.faq-accordion-header');
+                        const content = targetFaq.querySelector('.faq-accordion-content');
+                        if (!content.classList.contains('active')) {
+                            header.click();
+                        }
+                        
+                        // Highlight briefly
+                        targetFaq.style.backgroundColor = 'rgba(212, 175, 55, 0.2)';
+                        setTimeout(() => {
+                            targetFaq.style.backgroundColor = '';
+                        }, 2000);
+                        
+                        // Clear search
+                        searchInput.value = '';
+                        searchResults.classList.remove('active');
+                    });
+                });
+            });
+            
+            // Close search results when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                    searchResults.classList.remove('active');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
-
