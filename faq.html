@@ -9,72 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        /* FAQ Search Box */
-        .faq-search-container {
-            max-width: 600px;
-            margin: 0 auto var(--spacing-xl);
-        }
-        .faq-search-box {
-            position: relative;
-        }
-        .faq-search-input {
-            width: 100%;
-            padding: 1rem 3rem 1rem 1.25rem;
-            font-size: 1rem;
-            border: 2px solid var(--border-subtle);
-            border-radius: 8px;
-            background: white;
-            color: var(--text-primary);
-            font-family: inherit;
-        }
-        .faq-search-input::placeholder {
-            color: var(--text-secondary);
-        }
-        .faq-search-input:focus {
-            outline: none;
-            border-color: var(--color-gold);
-        }
-        .faq-search-icon {
-            position: absolute;
-            right: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-secondary);
-            pointer-events: none;
-        }
-        .faq-search-results {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: white;
-            border: 2px solid var(--color-gold);
-            border-radius: 8px;
-            display: none;
-        }
-        .faq-search-results.active {
-            display: block;
-        }
-        .faq-search-result-item {
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--border-subtle);
-            cursor: pointer;
-        }
-        .faq-search-result-item:last-child {
-            border-bottom: none;
-        }
-        .faq-search-result-item:hover {
-            background: rgba(212, 175, 55, 0.1);
-        }
-        .faq-search-result-title {
-            font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 0.25rem;
-        }
-        .faq-search-result-preview {
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-        }
-    </style>
+
 </head>
 <body>
     <!-- Scroll Down Button -->
@@ -105,19 +40,7 @@
                     Everything CTOs, CFOs, and Partners need to know before committing to AI automation.
                 </p>
                 
-                <!-- FAQ Search Box -->
-                <div class="faq-search-container" style="margin-top: var(--spacing-xl);">
-                <div class="faq-search-box">
-                    <input type="text" 
-                           id="faq-search-input" 
-                           class="faq-search-input" 
-                           placeholder="Search FAQs (e.g., 'What's the total cost?', 'Data security', 'Refund policy')">
-                    <svg class="faq-search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"/>
-                        <path d="m21 21-4.35-4.35"/>
-                    </svg>
-                </div>
-                <div id="faq-search-results" class="faq-search-results"></div>
+                
             </div>
         </div>
     </section>
