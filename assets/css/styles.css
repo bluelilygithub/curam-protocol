@@ -11563,9 +11563,9 @@ h1, h2, h3, h4 {
 
 .featured-case-study {
   margin: 0;
-  padding: var(--spacing-4xl) var(--spacing-3xl); /* More generous padding */
-  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(212, 175, 55, 0.05) 100%);
-  border: 2px solid rgba(212, 175, 55, 0.2);
+  padding: var(--spacing-4xl) var(--spacing-3xl);
+  background: rgba(26, 45, 74, 0.3); /* Dark navy background to match homepage */
+  border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border like other sections */
   border-radius: var(--border-radius-lg);
   position: relative;
 }
@@ -11573,25 +11573,27 @@ h1, h2, h3, h4 {
 .case-study-badge {
   display: inline-block;
   padding: 0.5rem 1rem;
-  background: var(--color-gold);
-  color: var(--color-navy);
+  background: transparent;
+  color: var(--color-gold);
+  border: 1px solid var(--color-gold);
   font-size: 0.875rem;
   font-weight: 700;
   border-radius: var(--border-radius);
   margin-bottom: var(--spacing-lg);
   letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .case-study-title {
-  font-size: 2rem; /* Increased from 1.75rem */
+  font-size: 2rem;
   font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-lg); /* More space */
+  color: var(--text-primary); /* White text */
+  margin-bottom: var(--spacing-lg);
 }
 
 .case-study-description {
   font-size: 1.125rem;
-  color: var(--text-secondary);
+  color: var(--text-secondary); /* Light gray text */
   line-height: 1.7;
   margin-bottom: var(--spacing-2xl);
 }
@@ -11625,7 +11627,7 @@ h1, h2, h3, h4 {
 .case-study-footer {
   margin-top: var(--spacing-3xl);
   padding-top: var(--spacing-2xl);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.08); /* More subtle divider */
   text-align: center;
 }
 
@@ -11650,12 +11652,12 @@ h1, h2, h3, h4 {
   transition: all var(--transition);
   padding: 0.5rem 1rem;
   border-radius: var(--border-radius);
-  border: 1px solid rgba(212, 175, 55, 0.2);
+  border: 1px solid rgba(212, 175, 55, 0.3); /* Slightly more visible */
 }
 
 .case-study-footer-link:hover {
   background: rgba(212, 175, 55, 0.1);
-  border-color: rgba(212, 175, 55, 0.4);
+  border-color: var(--color-gold);
   transform: translateX(4px);
 }
 
