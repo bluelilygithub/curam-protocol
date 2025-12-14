@@ -11603,7 +11603,6 @@ h1, h2, h3, h4 {
   grid-template-columns: repeat(4, 1fr);
   gap: var(--spacing-xl);
   margin-top: var(--spacing-xl);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .case-study-stat {
@@ -11632,9 +11631,7 @@ h1, h2, h3, h4 {
 }
 
 .case-study-footer {
-  margin-top: var(--spacing-3xl);
   padding-top: var(--spacing-2xl);
-  border-top: 1px solid rgba(255, 255, 255, 0.08); /* More subtle divider */
   text-align: center;
 }
 
@@ -11778,7 +11775,7 @@ h1, h2, h3, h4 {
   align-items: center;
   text-align: center;
   padding: var(--spacing-4xl) var(--spacing-3xl); /* Increased by 25% */
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-navy-dark);
   border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--border-radius-lg);
   text-decoration: none;
