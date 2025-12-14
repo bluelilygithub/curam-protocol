@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
+ 
 </head>
 <body>
     <!-- Scroll Down Button -->
@@ -24,24 +24,12 @@
     <script src="assets/js/navbar-loader.js"></script>
 
     <!-- Hero Section -->
-    <section class="hero">
-        <div class="hero-background">
-            <div class="hero-gradient"></div>
-            <div class="hero-pattern"></div>
-        </div>
+    <section class="hero" style="min-height: 40vh; padding: var(--spacing-lg) 0;">
         <div class="container">
-            <div class="hero-content">
-                <p class="hero-eyebrow">Frequently Asked Questions</p>
-                <h1 class="hero-headline">
-                    Answers to Your Critical Questions<br>
-                    <span class="text-accent">About Security, Ownership, Risk & Value</span>
-                </h1>
-                <p class="hero-subheadline">
-                    Everything CTOs, CFOs, and Partners need to know before committing to AI automation.
-                </p>
-                
-                
-            </div>
+            <h1 class="hero-headline" style="font-size: 2.5rem;">Frequently Asked Questions</h1>
+            <p class="hero-subhead" style="font-size: 1.125rem;">Answers to the critical questions CTOs, CFOs, and Partners ask about security, ownership, risk, and value.</p>
+            
+           
         </div>
     </section>
 
@@ -92,8 +80,8 @@
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p><strong>We hold 15% of the Phase 2 fee ($1,125) until success metrics are met.</strong></p>
-                            <p>This means you pay 85% upfront ($6,375), and we don't get the remaining 15% until we prove the ROI we promised.</p>
+                            <p><strong>We hold 15% of the Phase 4 fee until success metrics are met.</strong></p>
+                            <p>This means you pay 85% upfront, and we don't get the remaining 15% until we prove the ROI we promised in Phase 2.</p>
                             <p>We share the risk. Our fee is contingent on your measurable results.</p>
                         </div>
                     </div>
@@ -129,21 +117,21 @@
                         </div>
                     </div>
 
-                    <!-- NEW: Staff Time Question (moved from Process section) -->
+                    <!-- CORRECTED: Staff Time Question (moved from Process section + ACCURATE numbers from homepage) -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
                             <span>How much time will our staff need to invest across all phases?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p><strong>Total: ~15 hours spread over 8-10 weeks.</strong></p>
+                            <p><strong>Total: ~65 hours spread over 8-10 weeks.</strong></p>
                             <ul>
-                                <li><strong>Phase 1:</strong> 30 minutes to upload 5-10 sample PDFs. That's it.</li>
-                                <li><strong>Phase 2:</strong> 2 hours (leadership kick-off/review) + 3 hours (SME interviews)</li>
-                                <li><strong>Phase 3:</strong> 1 hour (IT kick-off) + 2 hours (compliance review)</li>
-                                <li><strong>Phase 4:</strong> 4 hours (user training) + 2 hours (testing)</li>
+                                <li><strong>Phase 1 (Feasibility):</strong> 2 hours to discuss 5-10 sample PDFs. Zero staff time after that.</li>
+                                <li><strong>Phase 2 (Roadmap):</strong> 5 hours from Leadership (kick-off/review) + 4 hours from SMEs (Finance/Project Mgmt) over 3 weeks.</li>
+                                <li><strong>Phase 3 (Compliance):</strong> 6 hours for IT Admin kick-off + 8 hours for policy review/approval.</li>
+                                <li><strong>Phase 4 (Deployment):</strong> 40 hours for User Training and UAT testing with 2-3 end users.</li>
                             </ul>
-                            <p>We provide agendas in advance and work around your project deadlines.</p>
+                            <p>We provide all agendas in advance and work around your project deadlines.</p>
                         </div>
                     </div>
 
@@ -210,6 +198,23 @@
                         </div>
                     </div>
 
+                    <!-- NEW: Added from homepage FAQ -->
+                    <div class="faq-accordion-item">
+                        <button class="faq-accordion-header">
+                            <span>What is the security protocol for legacy on-premise servers?</span>
+                            <span class="faq-accordion-icon">+</span>
+                        </button>
+                        <div class="faq-accordion-content">
+                            <p><strong>We use Microsoft's Power Platform Data Gateway—a secure, Microsoft-certified connector.</strong></p>
+                            <ul>
+                                <li>Runs inside your firewall (no inbound ports needed)</li>
+                                <li>Sends only encrypted data to your M365 tenant</li>
+                                <li>Maintained by Microsoft, not Curam AI</li>
+                            </ul>
+                            <p><strong>Trade-off:</strong> On-premise setups add 2-5 seconds per file retrieval. We assess your infrastructure in Phase 2 and recommend the optimal architecture.</p>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
@@ -239,16 +244,21 @@
                         </div>
                     </div>
 
+                    <!-- EXACT TEXT FROM HOMEPAGE -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>Who handles maintenance and enhancements after deployment?</span>
+                            <span>What do we own after deployment, and who handles maintenance and enhancements?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p><strong>Your IT team handles routine tasks. We're available for complex work if needed.</strong></p>
-                            <p><strong>Routine Maintenance:</strong> Any IT admin familiar with M365 can handle adding vendors, adjusting rules, managing permissions. No coding required.</p>
-                            <p><strong>Enhancements:</strong> Your team can build additional workflows using the low-code foundation we deliver. Or re-engage us for complex new workflows (fixed-price sprints, typically $15k+).</p>
-                            <p><strong>Optional Support:</strong> We offer Tier 2 support (AI model retraining, complex troubleshooting) for $500/month (up to 2 hours) with 24-hour response SLA. Completely optional.</p>
+                            <p>You own the system. We provide full source code, documentation, and video walkthroughs of maintenance tasks.</p>
+                            <p><strong>Maintenance:</strong> Routine tasks (adding vendors, adjusting low-code rules, managing permissions) can be handled by any IT admin familiar with M365. No coding is required.</p>
+                            <p><strong>Enhancements:</strong></p>
+                            <ul>
+                                <li><strong>DIY:</strong> Your team can build additional workflows using the low-code foundation we deliver.</li>
+                                <li><strong>Re-engage us:</strong> New, complex workflows are priced as a fixed Phase 4 sprint (typically starting from ~$15k).</li>
+                            </ul>
+                            <p><strong>Tier 2 Support (Optional):</strong> We offer an optional Tier 2 retainer (covering AI model retraining, complex troubleshooting) for $500/month (up to 2 hours support) with a 24-hour response SLA.</p>
                         </div>
                     </div>
 
@@ -262,20 +272,20 @@
                 
                 <div class="faq-accordion">
                     
-                    <!-- REVISED: Add caveat -->
+                    <!-- EXACT TEXT FROM HOMEPAGE -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
-                            <span>How do you prevent AI hallucinations and guarantee accuracy?</span>
+                            <span>How do you guarantee accuracy and prevent AI hallucinations?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p><strong>We target 99%+ production accuracy using a three-layer system:</strong></p>
+                            <p>We use a three-layer validation system, targeting <strong>99%+ production accuracy</strong>:</p>
                             <ul>
-                                <li><strong>Grounding:</strong> The AI only extracts from your documents. It cannot generate or guess information from the internet.</li>
-                                <li><strong>Confidence Scoring:</strong> If the AI scores <90% confident, it flags the record for human review within seconds.</li>
-                                <li><strong>ERP Cross-Checks:</strong> We validate against your vendor lists, project codes, and approval thresholds.</li>
+                                <li><strong>Grounding:</strong> The AI only extracts data from your documents—it is <strong>incapable of generating or guessing</strong> information from the internet.</li>
+                                <li><strong>Confidence Scoring:</strong> If the AI scores <90% confident on any item, it flags the record for human review by <strong>YOUR staff</strong> through a simple approval queue.</li>
+                                <li><strong>ERP Cross-Checks:</strong> We validate extracted data against your existing vendor master lists, project codes, and approval thresholds for hard-coded correctness.</li>
                             </ul>
-                            <p><strong>Note:</strong> No AI is 100% perfect. The <1% of errors are flagged for human review within seconds—not hidden in your ERP.</p>
+                            <p>When rare errors occur (usually edge cases like damaged scans), they route to your team <strong>within seconds</strong> for quick correction, maintaining high automation efficiency.</p>
                         </div>
                     </div>
 
@@ -292,18 +302,18 @@
                         </div>
                     </div>
 
-                    <!-- REVISED: More specific on PI insurance -->
+                    <!-- EXACT TEXT FROM HOMEPAGE -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
                             <span>What if the AI makes a costly mistake in production?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p><strong>Errors are flagged before they reach your ERP. If one bypasses the system:</strong></p>
+                            <p>Our validation layers are designed to flag errors before they reach your ERP. If an error does bypass the system (e.g., a critical field is misread):</p>
                             <ul>
-                                <li><strong>Immediate Correction:</strong> Human review process catches and corrects within minutes.</li>
-                                <li><strong>Feedback Loop:</strong> The error immediately retrains the AI model for that specific edge case.</li>
-                                <li><strong>Professional Indemnity:</strong> We carry PI insurance covering errors made by the AI implementation. Policy details shared before Phase 3.</li>
+                                <li><strong>Workflow:</strong> The human review process ensures the data is corrected and re-entered quickly.</li>
+                                <li><strong>Feedback Loop:</strong> The incorrect document/data immediately enters a feedback loop to retrain the AI model for that specific edge case.</li>
+                                <li><strong>Professional Indemnity:</strong> We carry Professional Indemnity insurance which covers errors made by the AI implementation. Details of our policy are provided during the contract phase.</li>
                             </ul>
                         </div>
                     </div>
@@ -330,20 +340,20 @@
                 
                 <div class="faq-accordion">
                     
-                    <!-- KEEP: Excellent Q&A -->
+                    <!-- EXACT TEXT FROM HOMEPAGE -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
                             <span>What are the exact refund criteria for Phase 1?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p><strong>Phase 1 is $1,500 with a 100% money-back guarantee based on objective performance:</strong></p>
+                            <p>Phase 1 is <strong>$1,500</strong> and comes with a 100% money-back guarantee based on objective performance:</p>
                             <ul>
-                                <li><strong>Success Criteria:</strong> We must extract your target data with >90% accuracy from your sample set (minimum 10 documents).</li>
-                                <li><strong>Measurement:</strong> You verify the extracted data against your answer key. Even one field wrong on a document means that document fails.</li>
-                                <li><strong>Refund:</strong> If we don't hit 90% accuracy, you get a full $1,500 refund within 5 business days. No questions asked.</li>
+                                <li><strong>Failure Criteria:</strong> If we cannot extract your target data with <strong>>90% accuracy</strong> from your sample set (minimum 10 documents).</li>
+                                <li><strong>Measurement:</strong> You verify the extracted data against your ground truth. Even one field wrong on a document means that document is a failure.</li>
+                                <li><strong>Refund:</strong> If the 90% accuracy is not met, you receive a full <strong>$1,500 refund</strong> within 5 business days.</li>
                             </ul>
-                            <p>43 of our last 47 Feasibility Sprints passed. The 4 failures (poor source material like 100% handwritten forms) all received full refunds.</p>
+                            <p>We pride ourselves on transparency: 43 of our last 47 Feasibility Sprints passed. The 4 failures were due to poor source material (e.g., 100% handwritten forms) and all received a full refund.</p>
                         </div>
                     </div>
 
@@ -370,21 +380,7 @@
                 
                 <div class="faq-accordion">
                     
-                    <div class="faq-accordion-item">
-                        <button class="faq-accordion-header">
-                            <span>How does this work with legacy on-premise servers?</span>
-                            <span class="faq-accordion-icon">+</span>
-                        </button>
-                        <div class="faq-accordion-content">
-                            <p><strong>We use Microsoft's Power Platform Data Gateway—a secure, Microsoft-certified connector.</strong></p>
-                            <ul>
-                                <li>Runs inside your firewall (no inbound ports needed)</li>
-                                <li>Sends only encrypted data to your M365 tenant</li>
-                                <li>Maintained by Microsoft, not Curam AI</li>
-                            </ul>
-                            <p><strong>Trade-off:</strong> On-premise setups add 2-5 seconds per file retrieval. We assess your infrastructure in Phase 2 and recommend the optimal architecture.</p>
-                        </div>
-                    </div>
+                    <!-- Moved to Security section above -->
 
                     <!-- REVISED: More specific on licensing -->
                     <div class="faq-accordion-item">
@@ -468,19 +464,20 @@
                 
                 <div class="faq-accordion">
                     
+                    <!-- EXACT TEXT FROM HOMEPAGE -->
                     <div class="faq-accordion-item">
                         <button class="faq-accordion-header">
                             <span>Do you have examples specific to civil/structural engineering documents?</span>
                             <span class="faq-accordion-icon">+</span>
                         </button>
                         <div class="faq-accordion-content">
-                            <p><strong>Yes. Our models are pre-trained on engineering-specific formats:</strong></p>
+                            <p>Yes. Our models are pre-trained on engineering-specific formats, not just generic invoices. We can handle documents like:</p>
                             <ul>
-                                <li><strong>Concrete Test Reports:</strong> Extracting lot numbers, slump, compressive strength</li>
-                                <li><strong>Beam Schedules:</strong> Extracting dimensions, steel grade, placement notes</li>
-                                <li><strong>Drawing Registers:</strong> Auto-extracting revision numbers, issue dates, file paths</li>
+                                <li>Concrete Test Reports (Extracting lot numbers, slump, and compressive strength)</li>
+                                <li>Beam Schedules (Extracting dimensions, steel grade, and placement notes)</li>
+                                <li>Drawing Registers (Auto-extracting revision numbers, issue dates, and file paths)</li>
                             </ul>
-                            <p>We can demonstrate with redacted samples from previous deployments to show how our models handle these compared to generic OCR tools.</p>
+                            <p>During a live demonstration, we can use redacted samples from previous deployments to show how our models handle these specific documents compared to off-the-shelf solutions.</p>
                         </div>
                     </div>
 
@@ -593,90 +590,6 @@
 
     <script src="assets/js/main.js"></script>
     
-    <!-- FAQ Search Functionality -->
-    <script>
-        // Simple client-side FAQ search (can be enhanced with NLP search API later)
-        document.addEventListener('DOMContentLoaded', function() {
-            const searchInput = document.getElementById('faq-search-input');
-            const searchResults = document.getElementById('faq-search-results');
-            const faqItems = document.querySelectorAll('.faq-accordion-item');
-            
-            // Build searchable index
-            const faqIndex = Array.from(faqItems).map(item => {
-                const question = item.querySelector('.faq-accordion-header span').textContent;
-                const answer = item.querySelector('.faq-accordion-content').textContent;
-                return { element: item, question, answer };
-            });
-            
-            searchInput.addEventListener('input', function(e) {
-                const query = e.target.value.toLowerCase().trim();
-                
-                if (query.length < 3) {
-                    searchResults.classList.remove('active');
-                    return;
-                }
-                
-                // Search FAQ index
-                const matches = faqIndex.filter(faq => 
-                    faq.question.toLowerCase().includes(query) || 
-                    faq.answer.toLowerCase().includes(query)
-                ).slice(0, 5); // Show top 5 matches
-                
-                if (matches.length === 0) {
-                    searchResults.innerHTML = '<p style="color: var(--text-secondary); padding: 0.5rem;">No matching questions found. Try different keywords or <a href="contact.html" style="color: var(--color-gold);">contact us</a>.</p>';
-                    searchResults.classList.add('active');
-                    return;
-                }
-                
-                // Display results
-                searchResults.innerHTML = matches.map(match => {
-                    const preview = match.answer.substring(0, 120) + '...';
-                    return `
-                        <div class="faq-search-result-item" data-faq-id="${faqIndex.indexOf(match)}">
-                            <div class="faq-search-result-title">${match.question}</div>
-                            <div class="faq-search-result-preview">${preview}</div>
-                        </div>
-                    `;
-                }).join('');
-                
-                searchResults.classList.add('active');
-                
-                // Add click handlers to results
-                searchResults.querySelectorAll('.faq-search-result-item').forEach(resultItem => {
-                    resultItem.addEventListener('click', function() {
-                        const faqId = parseInt(this.dataset.faqId);
-                        const targetFaq = faqIndex[faqId].element;
-                        
-                        // Scroll to FAQ item
-                        targetFaq.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        
-                        // Open accordion
-                        const header = targetFaq.querySelector('.faq-accordion-header');
-                        const content = targetFaq.querySelector('.faq-accordion-content');
-                        if (!content.classList.contains('active')) {
-                            header.click();
-                        }
-                        
-                        // Highlight briefly
-                        targetFaq.style.backgroundColor = 'rgba(212, 175, 55, 0.2)';
-                        setTimeout(() => {
-                            targetFaq.style.backgroundColor = '';
-                        }, 2000);
-                        
-                        // Clear search
-                        searchInput.value = '';
-                        searchResults.classList.remove('active');
-                    });
-                });
-            });
-            
-            // Close search results when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-                    searchResults.classList.remove('active');
-                }
-            });
-        });
-    </script>
+
 </body>
 </html>
