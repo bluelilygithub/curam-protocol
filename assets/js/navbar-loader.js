@@ -14,7 +14,7 @@
         'built-environment.html': 'target-markets',
         'curam-ai-protocol.html': 'protocol',
         'roi.html': 'resources',
-        'demo.html': 'resources',
+        'feasibility-preview.html': 'resources',
         'feasibility-sprint-report.html': 'resources',
         'risk-audit-report.html': 'resources',
         'case-study.html': 'resources',
@@ -49,7 +49,7 @@
                 // Check if this link matches the current page
                 if (href.includes(activeNav + '.html') || 
                     (activeNav === 'target-markets' && (href === 'target-markets.html' || href === 'professional-services.html' || href === 'logistics-compliance.html' || href === 'built-environment.html')) ||
-                    (activeNav === 'resources' && (href.includes('roi.html') || href.includes('demo.html') || href.includes('feasibility-sprint-report.html') || href.includes('risk-audit-report.html') || href.includes('case-study.html') || href.includes('how-it-works.html') || href.includes('blog.html')))) {
+                    (activeNav === 'resources' && (href.includes('roi.html') || href.includes('feasibility-preview.html') || href.includes('feasibility-sprint-report.html') || href.includes('risk-audit-report.html') || href.includes('case-study.html') || href.includes('how-it-works.html') || href.includes('blog.html')))) {
                     link.classList.add('active');
                 }
             }

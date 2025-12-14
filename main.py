@@ -3119,15 +3119,30 @@ def root():
         # Fallback message if homepage doesn't exist
         return f"Homepage not found. Error: {str(e)}", 404
 
-# Demo HTML page with iframe (serves demo.html)
+# Feasibility Preview HTML page with iframe (serves feasibility-preview.html)
+@app.route('/feasibility-preview.html')
+def feasibility_preview_html():
+    """Serve feasibility-preview.html page with iframe to automater"""
+    return send_file('feasibility-preview.html')
+
+@app.route('/feasibility-preview', methods=['GET', 'POST'])
+def feasibility_preview_redirect():
+    """Redirect /feasibility-preview to /feasibility-preview.html"""
+    return redirect('/feasibility-preview.html', code=301)
+
+# Legacy demo routes (301 redirects to new name)
 @app.route('/demo.html')
-def demo_html():
-    """Serve demo.html page with iframe to automater"""
-    return send_file('demo.html')
+def demo_html_legacy():
+    """Legacy route - redirect to feasibility-preview.html"""
+    return redirect('/feasibility-preview.html', code=301)
+
+@app.route('/demo', methods=['GET', 'POST'])
+def demo_legacy():
+    """Legacy route - redirect to feasibility-preview.html"""
+    return redirect('/feasibility-preview.html', code=301)
 
 # Automater route (document extraction tool) - moved from root
 @app.route('/automater', methods=['GET', 'POST'])
-@app.route('/demo', methods=['GET', 'POST'])
 @app.route('/extract', methods=['GET', 'POST'])
 def automater():
     # Call the original index function logic
