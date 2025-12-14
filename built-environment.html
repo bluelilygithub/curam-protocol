@@ -3,24 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Built Environment AI Automation | Curam-Ai Protocol™</title>
-    <meta name="description" content="Win more tenders, accelerate project delivery, ensure WHS compliance. Automate tender analysis, site documentation, and safety-critical records for Queensland's $100B infrastructure boom.">
+    <title>Built Environment | AI Automation for Engineering & Construction</title>
+    <meta name="description" content="AI automation for civil engineering, architecture, construction, mining, and property management across Queensland. Automate tender specs, site diaries, and compliance tracking.">
     <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Built Environment Page - 4 Column Grid */
+        .built-environment-page .methodology-grid {
+            grid-template-columns: repeat(4, 1fr) !important;
+        }
+        @media (max-width: 1200px) {
+            .built-environment-page .methodology-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        @media (max-width: 640px) {
+            .built-environment-page .methodology-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
 </head>
-<body>
+<body class="built-environment-page">
+    <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M19 12l-7 7-7-7"/>
         </svg>
     </button>
 
+    <!-- Navigation -->
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
+    <!-- HERO SECTION -->
     <section class="hero">
         <div class="hero-background">
             <div class="hero-gradient"></div>
@@ -29,206 +48,262 @@
         <div class="container">
             <div class="hero-content">
                 <p class="hero-eyebrow">For Engineering, Construction, Architecture & Mining Services</p>
-                <h1 class="hero-headline">Win Tenders 48 Hours Faster<br><span class="text-accent">While Building Queensland's $100B Pipeline</span></h1>
+                <h1 class="hero-headline">
+                    Project-Heavy Industries—<br>
+                    <span class="text-accent">Documentation-Ready Solutions.</span>
+                </h1>
                 <p class="hero-subheadline">
-                    Queensland's infrastructure boom—Bowen Basin expansion, Brisbane Cross River Rail, $100B project pipeline—means firms that respond faster win more work. We automate tender specs, site diaries, and subcontractor compliance. Your engineers build projects, not spreadsheets.
+                    We automate the document-intensive workflows that slow down project delivery—tender specs, site diaries, compliance tracking, drawing registers. Your engineers focus on building projects, not managing spreadsheets.
                 </p>
                 <div class="hero-cta-group">
-                    <a href="contact.html" class="btn btn-primary">Book $1,500 Feasibility Sprint</a>
-                    <a href="roi.html?industry=built-environment" class="btn btn-secondary">Calculate Tender Velocity</a>
-                </div>
-            </div>
-            <div class="hero-stats-grid">
-                <div class="hero-stat-card">
-                    <span class="hero-stat-number">48hrs</span>
-                    <span class="hero-stat-label">Faster Tender Response</span>
-                </div>
-                <div class="hero-stat-card">
-                    <span class="hero-stat-number">Up to 80%</span>
-                    <span class="hero-stat-label">Time Saved (Spec Analysis)</span>
-                </div>
-                <div class="hero-stat-card">
-                    <span class="hero-stat-number">Up to 15%</span>
-                    <span class="hero-stat-label">More Tenders Won</span>
-                </div>
-                <div class="hero-stat-card">
-                    <span class="hero-stat-number">1,600+</span>
-                    <span class="hero-stat-label">QLD Firms (Est.)</span>
+                    <a href="contact.html" class="btn btn-primary btn-large">Book a Diagnostic Call</a>
+                    <a href="roi.html?section=built-environment" class="btn btn-secondary">Calculate Your ROI</a>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="section">
+
+
+    <!-- BUILT FOR QUEENSLAND'S PROJECT-HEAVY FIRMS -->
+    <section class="section section-alt">
         <div class="container">
-            <h2 class="section-headline">Queensland's Infrastructure Boom Is a Documentation Nightmare</h2>
+            <h2 class="section-headline">Built for Queensland's Project-Heavy Firms</h2>
             <p class="section-subhead">
-                $100B in projects. Bowen Basin expansion. Brisbane Olympics 2032 prep. More work than you can bid on—but only if you respond fast enough.
+                You're too big for consumer tools, too small for enterprise solutions. You're managing complex projects with document-heavy workflows, capacity-constrained teams, and tight deadlines. That's our sweet spot.
+            </p>
+
+            <div class="deliverable-grid">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <h3>Ideal Firm Profile</h3>
+                        <p class="deliverable-subtitle">Who We Work With</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li><strong>15-200 technical staff</strong> (engineers, architects, project managers)</li>
+                        <li><strong>$5-100M annual revenue</strong> typical range</li>
+                        <li><strong>Project-heavy workflows:</strong> Multiple concurrent projects with documentation requirements</li>
+                        <li><strong>Capacity-constrained:</strong> Engineers spending hours on admin instead of design</li>
+                        <li><strong>Queensland-based:</strong> Brisbane, regional infrastructure projects, Bowen Basin</li>
+                    </ul>
+                </div>
+
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                <polyline points="22 4 12 14.01 9 11.01"/>
+                            </svg>
+                        </div>
+                        <h3>What We Automate</h3>
+                        <p class="deliverable-subtitle">Common Pain Points</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li><strong>Tender specifications:</strong> Extract requirements from 500+ page tender documents</li>
+                        <li><strong>Drawing registers:</strong> Automate window schedules, door schedules, revision tracking</li>
+                        <li><strong>Site diaries:</strong> Digitize handwritten logs, extract WHS incidents</li>
+                        <li><strong>Compliance tracking:</strong> Subcontractor certificates, safety documentation, permits</li>
+                        <li><strong>RFI management:</strong> Automated tracking, categorization, response coordination</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- BUILT ENVIRONMENT INDUSTRIES -->
+    <section id="group-2" class="section">
+        <div class="container">
+            <h2 class="section-headline">
+                Built Environment Industries<br>
+                <span class="text-accent">Engineering, Construction, Architecture & Mining</span>
+            </h2>
+            <p class="section-subhead">
+                <strong>Total Addressable Market: 1,600+ Queensland firms</strong><br>
+                High fit—project-heavy, document-intensive, capacity-constrained. Automation frees engineers for technical work.
             </p>
 
             <div class="methodology-grid">
-                <div class="methodology-card methodology-card-border-green">
+                <!-- Civil Engineering & Construction -->
+                <div class="methodology-card methodology-card-clickable" onclick="window.location.href='contact.html'">
                     <div class="methodology-content">
-                        <h3>🚀 The Opportunity</h3>
-                        <p class="methodology-desc"><strong>More projects than qualified firms.</strong> Cross River Rail, Bruce Highway upgrades, Olympic venues, Bowen Basin expansions—demand is unprecedented.</p>
+                        <h3>🏗️ Civil Engineering & Construction</h3>
+                        <p class="methodology-count">~850 QLD firms (15-200 staff)</p>
+                        <p class="methodology-desc"><strong>Key Pain Points:</strong> Tender spec extraction, site diary digitization, subcontractor compliance tracking, SWMS management</p>
+                        <p class="methodology-desc"><strong>Typical Savings:</strong> 48 hours faster tender response, 15-20 hours/week on documentation</p>
+                        <p class="methodology-link">
+                            <a href="contact.html">Contact Us for Civil/Construction Solutions →</a>
+                        </p>
                     </div>
                 </div>
 
-                <div class="methodology-card methodology-card-border-yellow">
+                <!-- Architecture -->
+                <div class="methodology-card methodology-card-clickable" onclick="window.location.href='architecture.html'">
                     <div class="methodology-content">
-                        <h3>⚠️ The Constraint</h3>
-                        <p class="methodology-desc"><strong>Document velocity is the bottleneck.</strong> Your engineers spend 3 weeks analyzing 800-page specs. By then, faster competitors have won.</p>
+                        <h3>📐 Architecture</h3>
+                        <p class="methodology-count">~220 QLD firms</p>
+                        <p class="methodology-desc"><strong>Key Pain Points:</strong> Drawing register management, RFI tracking automation, council submission checklists, BIM schedule extraction</p>
+                        <p class="methodology-desc"><strong>Typical Savings:</strong> 8-12 hours/week on drawing schedules and registers</p>
+                        <p class="methodology-link">
+                            <a href="architecture.html">Contact Us for Architecture Solutions →</a>
+                        </p>
                     </div>
                 </div>
 
-                <div class="methodology-card methodology-card-border-red">
+                <!-- Mining Services -->
+                <div class="methodology-card methodology-card-clickable" onclick="window.location.href='mining-services.html'">
                     <div class="methodology-content">
-                        <h3>🚨 The Risk</h3>
-                        <p class="methodology-desc"><strong>WHS compliance isn't optional.</strong> One missing SWMS = site shutdown. One expired cert = you're liable. Manual tracking doesn't scale.</p>
+                        <h3>⛏️ Mining Services</h3>
+                        <p class="methodology-count">~150 Bowen Basin firms</p>
+                        <p class="methodology-desc"><strong>Key Pain Points:</strong> Safety incident reporting, shift handover logs, equipment maintenance tracking, compliance documentation</p>
+                        <p class="methodology-desc"><strong>Typical Savings:</strong> 10+ hours/week on safety and maintenance documentation</p>
+                        <p class="methodology-link">
+                            <a href="mining-services.html">Contact Us for Mining Services Solutions →</a>
+                        </p>
                     </div>
                 </div>
-            </div>
 
-            <div class="highlight-box">
-                <p class="highlight-text">
-                    <strong>The Equation:</strong> Faster tender response × better WHS compliance = more projects won at higher margins. Firms that automate win up to 15% more tenders because they respond 48 hours faster.
-                </p>
+                <!-- Property Management -->
+                <div class="methodology-card methodology-card-clickable" onclick="window.location.href='property-management.html'">
+                    <div class="methodology-content">
+                        <h3>🏘️ Property Management</h3>
+                        <p class="methodology-count">~400 QLD agencies</p>
+                        <p class="methodology-desc"><strong>Key Pain Points:</strong> Lease document extraction, maintenance order matching, compliance certificate tracking, tenant documentation</p>
+                        <p class="methodology-desc"><strong>Typical Savings:</strong> 12+ hours/week on lease admin and compliance tracking</p>
+                        <p class="methodology-link">
+                            <a href="property-management.html">Contact Us for Property Management Solutions →</a>
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     </section>
 
+    <!-- WHAT THESE INDUSTRIES SHARE -->
     <section class="section section-alt">
         <div class="container">
-            <h2 class="section-headline">Four Sectors. One Infrastructure Boom.</h2>
-            
-            <div class="industry-detail-section industry-detail-section-blue" style="cursor: pointer;" onclick="window.location.href='construction.html'">
-                <h3 class="industry-detail-title">🏗️ Civil Engineering & Construction</h3>
-                <p class="industry-detail-subtitle">850+ QLD firms (est.) • Tender velocity = competitive advantage</p>
-                
-                <div class="industry-detail-item">
-                    <p class="industry-detail-item-title">Tender Specification Extraction</p>
-                    <p class="industry-detail-item-text"><strong>Current:</strong> 15-20 hours reading 500-page tender docs (typical large tenders)</p>
-                    <p class="industry-detail-item-automated">Automated: 2-3 hours. 48-hour faster response = up to 15% more tenders won</p>
+            <h2 class="section-headline">What These Industries Share</h2>
+            <p class="section-subhead">
+                Different sectors, same challenges. Here's why The Protocol works across all of them:
+            </p>
+
+            <div class="deliverable-grid">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                        </div>
+                        <h3>Technical Document Complexity</h3>
+                        <p class="deliverable-subtitle">Beyond Standard OCR</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>Multi-page technical specifications (500+ pages)</li>
+                        <li>Mixed formats (CAD drawings, tables, handwritten site notes)</li>
+                        <li>Engineering judgment required (not simple data entry)</li>
+                        <li>Standard tools like DocuSign/Adobe can't handle these</li>
+                    </ul>
                 </div>
 
-                <div class="industry-detail-item">
-                    <p class="industry-detail-item-title">Site Diary Digitization</p>
-                    <p class="industry-detail-item-text"><strong>Current:</strong> Handwritten logs typed weekly into Excel</p>
-                    <p class="industry-detail-item-automated">Automated: Photograph logs, AI extracts. Rapid WHS audit readiness</p>
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                        </div>
+                        <h3>Time-Sensitive Deadlines</h3>
+                        <p class="deliverable-subtitle">Speed = Competitive Advantage</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>Tender response deadlines (faster = more tenders won)</li>
+                        <li>Project milestones and deliverables</li>
+                        <li>Regulatory submission windows</li>
+                        <li>Engineers trapped in admin instead of design work</li>
+                    </ul>
                 </div>
-
-                <div class="industry-detail-item">
-                    <p class="industry-detail-item-title">Subcontractor Compliance Tracking</p>
-                    <p class="industry-detail-item-text"><strong>Current:</strong> Excel tracking, manual cert checks, gaps in coverage</p>
-                    <p class="industry-detail-item-automated">Automated: AI monitors cert expiry, alerts 30 days before. Near-zero gaps</p>
-                </div>
-                <p style="margin-top: 20px; text-align: center;">
-                    <a href="construction.html" style="color: var(--color-gold); font-weight: 600; text-decoration: none;">Learn More →</a>
-                </p>
             </div>
 
-            <div class="industry-grid industry-grid-3">
-                <div class="industry-card industry-card-blue" style="cursor: pointer;" onclick="window.location.href='architecture.html'">
-                    <h4 class="industry-card-title">📐 Architecture</h4>
-                    <p class="industry-card-subtitle">220+ QLD firms (est.)</p>
-                    <ul class="industry-card-list">
-                        <li>Drawing register management</li>
-                        <li>RFI tracking automation</li>
-                        <li>Council submission checklists</li>
+            <div class="deliverable-grid deliverable-grid-spaced">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                        </div>
+                        <h3>Safety & Compliance Critical</h3>
+                        <p class="deliverable-subtitle">WHS and Regulatory Requirements</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>WorkSafe Queensland compliance requirements</li>
+                        <li>ISO 45001 safety management systems</li>
+                        <li>Subcontractor certification and licensing tracking</li>
+                        <li>Complete audit trails required for all projects</li>
                     </ul>
-                    <p style="margin-top: 15px; text-align: center;">
-                        <a href="architecture.html" style="color: var(--color-gold); font-weight: 600; text-decoration: none;">Learn More →</a>
-                    </p>
                 </div>
 
-                <div class="industry-card industry-card-purple" style="cursor: pointer;" onclick="window.location.href='mining-services.html'">
-                    <h4 class="industry-card-title">⛏️ Mining Services</h4>
-                    <p class="industry-card-subtitle">150+ Bowen Basin firms (est.)</p>
-                    <ul class="industry-card-list">
-                        <li>Safety incident reporting</li>
-                        <li>Shift handover logs</li>
-                        <li>Equipment maintenance tracking</li>
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="1" x2="12" y2="23"/>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                        </div>
+                        <h3>ROI Requirements</h3>
+                        <p class="deliverable-subtitle">Need Proof First</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>Can't afford failed AI experiments</li>
+                        <li>Need validated ROI before board approval</li>
+                        <li>Fixed budgets, not open-ended consulting</li>
+                        <li>3-9 month payback requirement</li>
                     </ul>
-                    <p style="margin-top: 15px; text-align: center;">
-                        <a href="mining-services.html" style="color: var(--color-gold); font-weight: 600; text-decoration: none;">Learn More →</a>
-                    </p>
-                </div>
-
-                <div class="industry-card industry-card-green" style="cursor: pointer;" onclick="window.location.href='property-management.html'">
-                    <h4 class="industry-card-title">🏘️ Property Mgmt</h4>
-                    <p class="industry-card-subtitle">400+ QLD agencies (est.)</p>
-                    <ul class="industry-card-list">
-                        <li>Lease document extraction</li>
-                        <li>Maintenance order matching</li>
-                        <li>Compliance certificate tracking</li>
-                    </ul>
-                    <p style="margin-top: 15px; text-align: center;">
-                        <a href="property-management.html" style="color: var(--color-gold); font-weight: 600; text-decoration: none;">Learn More →</a>
-                    </p>
                 </div>
             </div>
         </div>
     </section>
 
-    <section class="section">
-        <div class="container">
-            <h2 class="section-headline">The Protocol: Prove It On Your Tenders</h2>
-            
-            <div class="methodology-grid">
-                <div class="methodology-card">
-                    <div class="methodology-number">1</div>
-                    <div class="methodology-content">
-                        <h3>Feasibility Sprint</h3>
-                        <p class="methodology-count">48 Hours • $1,500</p>
-                        <p class="methodology-desc">Send us tender specs, site diaries, SWMS. We prove 90%+ accuracy or full refund.</p>
-                    </div>
-                </div>
-
-                <div class="methodology-card">
-                    <div class="methodology-number">2</div>
-                    <div class="methodology-content">
-                        <h3>Readiness Roadmap</h3>
-                        <p class="methodology-count">3 Weeks • $7,500</p>
-                        <p class="methodology-desc">Quantify tender velocity advantage with your actual project data.</p>
-                    </div>
-                </div>
-
-                <div class="methodology-card">
-                    <div class="methodology-number">3</div>
-                    <div class="methodology-content">
-                        <h3>Compliance Shield</h3>
-                        <p class="methodology-count">2 Weeks • $8-12k</p>
-                        <p class="methodology-desc">Prove WorkSafe Queensland compliance, ISO 45001 alignment.</p>
-                    </div>
-                </div>
-
-                <div class="methodology-card">
-                    <div class="methodology-number">4</div>
-                    <div class="methodology-content">
-                        <h3>Implementation</h3>
-                        <p class="methodology-count">30 Days • $20-30k</p>
-                        <p class="methodology-desc">Production deployment. You own the IP. Zero vendor lock-in.</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="warning-callout">
-                <p><strong>ROI:</strong> If faster response wins ONE $5M project, ROI is 100x. Payback: 3-6 months.</p>
-            </div>
-        </div>
-    </section>
-
+    <!-- FINAL CTA SECTION -->
     <section class="section cta-section">
         <div class="container">
             <div class="cta-content">
-                <h2 class="section-headline">Stop Losing Tenders Because You're Too Slow</h2>
-                <p class="cta-text">
-                    Start with a $1,500 Feasibility Sprint. We'll prove 90%+ accuracy in 48 hours or refund you fully.
+                <h2 class="section-headline">Ready to Test YOUR Documents?</h2>
+                <p class="cta-text" style="max-width: 700px; margin: 0 auto var(--spacing-2xl);">
+                    Every industry starts the same way: We test 15 of your most complex documents in 48 hours. 
+                    90%+ accuracy or full refund. No risk, no open-ended consulting fees.
                 </p>
-                <div class="cta-buttons-wrapper">
-                    <a href="feasibility-sprint-report.html?industrysector=engineering" class="btn btn-secondary btn-large">See Phase 1 Sample</a>
-                    <a href="contact.html" class="btn btn-primary btn-large">Book Feasibility Sprint</a>
+                
+                <!-- Primary CTA -->
+                <a href="contact.html?option=1" class="btn btn-primary btn-large">
+                    Book $1,500 Feasibility Sprint →
+                </a>
+                
+                <!-- Secondary CTAs -->
+                <div style="margin-top: var(--spacing-lg); display: flex; gap: var(--spacing-md); justify-content: center; flex-wrap: wrap;">
+                    <a href="roi.html?section=built-environment" class="btn btn-secondary">
+                        Calculate Your ROI
+                    </a>
+                    <a href="curam-ai-protocol.html" class="btn btn-secondary">
+                        View The Full Protocol
+                    </a>
                 </div>
+                
+                <p class="cta-footer-note" style="margin-top: var(--spacing-xl); font-size: 0.875rem; color: var(--text-secondary);">
+                    Serving 1,600+ built environment firms across Queensland • 15-200 staff sweet spot
+                </p>
             </div>
         </div>
     </section>
