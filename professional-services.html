@@ -10,8 +10,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Professional Services Page - 4 Column Grid */
+        .professional-services-page .methodology-grid {
+            grid-template-columns: repeat(4, 1fr) !important;
+        }
+        @media (max-width: 1200px) {
+            .professional-services-page .methodology-grid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        @media (max-width: 640px) {
+            .professional-services-page .methodology-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
 </head>
-<body>
+<body class="professional-services-page">
     <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -42,30 +58,6 @@
                 <div class="hero-cta-group">
                     <a href="contact.html" class="btn btn-primary btn-large">Book a Diagnostic Call</a>
                     <a href="roi.html?section=professional-services" class="btn btn-secondary">Calculate Your ROI</a>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- STATS BANNER -->
-    <section class="section section-stats">
-        <div class="container">
-            <div class="trust-metrics">
-                <div class="metric-card">
-                    <div class="metric-number">15-100</div>
-                    <div class="metric-label">Staff Sweet Spot</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-number">40%</div>
-                    <div class="metric-label">Capacity Freed</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-number">6-12mo</div>
-                    <div class="metric-label">Typical Payback</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-number">1,650+</div>
-                    <div class="metric-label">QLD Firms (TAM)</div>
                 </div>
             </div>
         </div>
