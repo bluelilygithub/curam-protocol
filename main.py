@@ -1124,7 +1124,7 @@ HTML_TEMPLATE = """
         {% endif %}
             <div class="button-group">
                 <a href="/export_csv" class="btn btn-export">📥 Export to CSV</a>
-                <a href="/contact.html?option=phase-1" class="btn btn-secondary">Book Your Phase 1 Sprint</a>
+                <a href="/contact.html?option=phase-1" class="btn btn-secondary" target="_parent">Book Your Phase 1 Sprint</a>
             </div>
         </div>
         {% endif %}
