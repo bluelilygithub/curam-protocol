@@ -11604,11 +11604,19 @@ h1, h2, h3, h4 {
   gap: var(--spacing-xl);
   padding-top: var(--spacing-2xl); /* More space above stats */
   margin-top: var(--spacing-xl);
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--color-gold);;
 }
 
 .case-study-stat {
   text-align: center;
+  text-decoration: none;
+  transition: all var(--transition);
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--color-gold);;
+  border-image: initial;  
 }
 
 .case-study-stat .stat-value {
