@@ -1446,31 +1446,33 @@ h1, h2, h3, h4 {
   font-weight: 600;
 }
 
-/* ========== FOOTER (Original Structure) ========== */
-/* ============================================
-   FOOTER STYLING - UI Conformance Updates
+* ============================================
+   FOOTER STYLING - COMPLETE REWRITE
    ============================================ */
 
-/* Footer Container */
 .footer {
     background: var(--color-navy);
     color: var(--text-primary);
-    padding: var(--spacing-3xl) 0 var(--spacing-xl);
+    padding: var(--spacing-3xl) var(--spacing-xl);
     margin-top: var(--spacing-xl);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Footer Content Grid */
+/* Footer Content Container */
 .footer-content {
     display: grid;
     grid-template-columns: 1fr;
-    gap: var(--spacing-2xl);
+    gap: var(--spacing-3xl);
     margin-bottom: var(--spacing-2xl);
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
     .footer-content {
         grid-template-columns: 1fr 3fr;
+        gap: var(--spacing-4xl);
     }
 }
 
@@ -1479,17 +1481,18 @@ h1, h2, h3, h4 {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-md);
     text-align: center;
-    padding-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-2xl);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
     .footer-brand {
         align-items: flex-start;
         text-align: left;
         border-bottom: none;
+        padding-bottom: 0;
     }
 }
 
@@ -1502,27 +1505,42 @@ h1, h2, h3, h4 {
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--color-gold);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 .footer-tagline {
     color: var(--text-secondary);
     font-size: 0.9rem;
     margin: 0;
+    font-weight: 500;
 }
 
-/* Footer Links Grid */
+/* ============================================
+   FOOTER LINKS GRID - 4 EQUAL COLUMNS
+   ============================================ */
+
 .footer-links {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--spacing-xl);
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-2xl);
+    width: 100%;
 }
 
 @media (min-width: 768px) {
+    .footer-links {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (min-width: 1024px) {
     .footer-links {
         grid-template-columns: repeat(4, 1fr);
     }
 }
 
+/* Footer Column Base */
 .footer-column {
     display: flex;
     flex-direction: column;
@@ -1530,14 +1548,14 @@ h1, h2, h3, h4 {
 }
 
 .footer-column h4 {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 700;
     color: var(--text-primary);
     margin: 0;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.8px;
     padding-bottom: var(--spacing-sm);
-    border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+    border-bottom: 2px solid rgba(212, 175, 55, 0.4);
 }
 
 .footer-column ul {
@@ -1556,9 +1574,11 @@ h1, h2, h3, h4 {
 .footer-column a {
     color: var(--text-secondary);
     text-decoration: none;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
+    font-weight: 400;
     line-height: 1.5;
     transition: all 0.2s ease;
+    display: inline-block;
 }
 
 .footer-column a:hover {
@@ -1566,80 +1586,94 @@ h1, h2, h3, h4 {
     padding-left: 4px;
 }
 
-/* Footer CTA Column - MINIMAL, NO SPECIAL STYLING */
+/* ============================================
+   FOOTER CTA COLUMN - CONSISTENT STYLING
+   ============================================ */
+
 .footer-column.footer-cta {
-    background: transparent;
-    padding: var(--spacing-lg);
-    border-radius: 0;
-    border-left: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
 }
 
 .footer-column.footer-cta h4 {
     color: var(--color-gold);
-    border-bottom: 1px solid rgba(212, 175, 55, 0.3);
+    border-bottom-color: rgba(212, 175, 55, 0.4);
 }
 
 .footer-column.footer-cta p {
     color: var(--text-secondary);
-    font-size: 0.95rem;
+    font-size: 0.9rem;
+    font-weight: 400;
     margin: 0;
     line-height: 1.5;
 }
 
-/* ============================================
-   BUTTON STYLING - Footer Conformance (FIXED)
-   ============================================ */
-
-/* Button Base Styles - No transform to prevent jump */
-.footer .btn {
-    display: block;
-    text-align: center;
-    font-size: 0.95rem;
-    font-weight: 600;
-    padding: 12px 24px;
-    border-radius: 8px;
-    text-decoration: none;
-    cursor: pointer;
-    border: 2px solid transparent;
-    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-/* Primary Button (Gold) */
-.footer .btn-primary {
-    background: var(--color-gold);
-    color: var(--color-navy);
-    border: 2px solid var(--color-gold);
-}
-
-.footer .btn-primary:hover {
-    background: var(--color-gold);
-    border-color: var(--color-gold);
-    color: var(--color-navy);
-    /* No transform, no opacity - keeps text visible and prevents jump */
-}
-
-/* Outline Button (White/Gold) */
-.footer .btn-outline {
-    background: transparent;
-    color: white;
-    border: 2px solid white;
-}
-
-.footer .btn-outline:hover {
-    background: var(--color-gold);
-    border-color: var(--color-gold);
-    color: var(--color-navy);
-}
-
-/* Ensure buttons in footer CTA have proper spacing */
-.footer-column.footer-cta .btn {
-    margin: 0;
-}
-
+/* Button Container in Footer CTA */
 .footer-column.footer-cta > div {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    margin-top: var(--spacing-sm);
+}
+
+/* ============================================
+   FOOTER BUTTONS - MATCH SITE STANDARDS
+   ============================================ */
+
+/* Base Footer Button */
+.footer .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border: 2px solid transparent;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+/* Primary Button (Gold) - Match Main Site Style */
+.footer .btn-primary {
+    background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+    color: var(--navy-deep);
+    border-color: var(--color-gold);
+    font-weight: 600;
+}
+
+.footer .btn-primary:hover {
+    opacity: 0.9;
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+    transform: none;
+}
+
+.footer .btn-primary:active {
+    opacity: 0.85;
+}
+
+/* Outline Button (White/Gold) - Match Main Site Style */
+.footer .btn-outline {
+    background: transparent;
+    color: var(--text-primary);
+    border: 2px solid var(--border-subtle);
+    font-weight: 600;
+}
+
+.footer .btn-outline:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--color-gold);
+    color: var(--color-gold);
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.15);
+}
+
+.footer .btn-outline:active {
+    background: rgba(255, 255, 255, 0.12);
 }
 
 /* ============================================
@@ -1661,69 +1695,61 @@ h1, h2, h3, h4 {
 .footer-bottom a {
     color: var(--color-gold);
     transition: color 0.2s ease;
+    text-decoration: none;
 }
 
 .footer-bottom a:hover {
     color: var(--text-primary);
 }
 
-.footer-disclaimer {
-    margin-top: 1rem;
-    font-size: 0.85em;
-    color: rgba(255,255,255,0.6);
-    line-height: 1.5;
-}
-
 /* ============================================
    RESPONSIVE ADJUSTMENTS
    ============================================ */
 
-@media (max-width: 768px) {
-    .footer-content {
-        gap: var(--spacing-lg);
+@media (max-width: 767px) {
+    .footer {
+        padding: var(--spacing-2xl) var(--spacing-lg);
     }
-
+    
     .footer-links {
-        grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-lg);
+        gap: var(--spacing-xl);
     }
-
-    .footer-column.footer-cta {
-        grid-column: 1 / -1;
+    
+    .footer .btn {
+        font-size: 0.85rem;
+        padding: 0.7rem 1.2rem;
     }
-
+    
     .footer-column h4 {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
-
+    
     .footer-column a {
-        font-size: 0.9rem;
-    }
-
-    .footer .btn {
-        padding: 10px 20px;
-        font-size: 0.9rem;
-    }
-}
-
-@media (max-width: 480px) {
-    .footer-links {
-        grid-template-columns: 1fr;
-    }
-
-    .footer-brand {
-        padding-bottom: var(--spacing-md);
-    }
-
-    .footer-column.footer-cta {
-        padding: var(--spacing-md);
-    }
-
-    .footer .btn {
-        padding: 10px 16px;
         font-size: 0.85rem;
     }
 }
+
+@media (max-width: 600px) {
+    .footer-content {
+        gap: var(--spacing-2xl);
+    }
+    
+    .footer-links {
+        grid-template-columns: 1fr;
+    }
+    
+    .footer .btn {
+        width: 100%;
+    }
+}
+
+
+
+
+
+
+
+
 
 /* ============================================
    ACCESSIBILITY & STATE MANAGEMENT
