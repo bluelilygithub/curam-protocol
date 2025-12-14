@@ -5539,7 +5539,7 @@ h1, h2, h3, h4 {
 }
 
 .case-study-result-value {
-  font-size: 1.75rem;
+  font-size: 0.25rem;
   font-weight: 700;
   color: var(--color-gold);
   margin-bottom: var(--spacing-sm);
@@ -5615,6 +5615,7 @@ h1, h2, h3, h4 {
   justify-content: center;
   margin-bottom: var(--spacing-md);
   color: #22c55e;
+  display:none;
 }
 
 .case-study-success-card h3 {
