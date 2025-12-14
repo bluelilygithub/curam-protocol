@@ -1463,10 +1463,8 @@ h1, h2, h3, h4 {
     display: grid;
     grid-template-columns: 1fr;
     gap: var(--spacing-3xl);
-    margin-bottom: var(--spacing-2xl);
+    margin: var(--spacing-2xl) auto;
     max-width: 1400px;
-    margin-left: auto;
-    margin-right: auto;
 }
 
 @media (min-width: 1024px) {
@@ -1651,6 +1649,7 @@ h1, h2, h3, h4 {
     opacity: 0.9;
     box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
     transform: none;
+    color: var(--navy-deep);
 }
 
 .footer .btn-primary:active {
@@ -1748,9 +1747,6 @@ h1, h2, h3, h4 {
 
 
 
-
-
-
 /* ============================================
    ACCESSIBILITY & STATE MANAGEMENT
    ============================================ */
@@ -1764,15 +1760,6 @@ h1, h2, h3, h4 {
 .footer-column a:focus {
     outline: 2px solid var(--color-gold);
     outline-offset: 2px;
-}
-
-/* Active/visited states */
-.footer-column a:visited {
-    color: var(--text-secondary);
-}
-
-.footer-column a:visited:hover {
-    color: var(--color-gold);
 }
 
 /* Disabled state (if needed) */
