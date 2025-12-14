@@ -5441,6 +5441,7 @@ h1, h2, h3, h4 {
   font-weight: 700;
   font-size: 1rem;
   margin-bottom: var(--spacing-xs);
+  display:none;
 }
 
 .case-study-timeline-label {
@@ -5633,7 +5634,7 @@ h1, h2, h3, h4 {
 /* Case Study CTA */
 .case-study-cta-section {
   padding: var(--spacing-2xl) 0;
-  background: var(--color-white);
+  background: var(--navy-medium);;
 }
 
 .case-study-cta-box {
