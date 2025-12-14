@@ -500,7 +500,11 @@ h1, h2, h3, h4 {
   }
 }
 
-/* ========== HERO SECTION ========== */
+/* ========================================
+   UPDATED HERO SECTION - STATIC (NO ROTATION)
+   ======================================== */
+
+/* Base Hero Section */
 .hero {
   position: relative;
   min-height: 100vh;
@@ -549,13 +553,7 @@ h1, h2, h3, h4 {
   opacity: 0.6;
 }
 
-/* Ensure hero content is above the overlay */
-.hero .container,
-.hero .hero-content {
-  position: relative;
-  z-index: 10;
-}
-
+/* Video Background */
 .hero-video-background {
   position: absolute;
   inset: 0;
@@ -574,6 +572,13 @@ h1, h2, h3, h4 {
   background: 
     radial-gradient(ellipse at 30% 20%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
     linear-gradient(135deg, rgba(10, 22, 40, 0.95) 0%, rgba(26, 45, 74, 0.85) 100%);
+}
+
+/* Hero Content Container */
+.hero .container,
+.hero .hero-content {
+  position: relative;
+  z-index: 10;
 }
 
 .hero-content {
@@ -662,73 +667,15 @@ h1, h2, h3, h4 {
   transform: translateX(4px);
 }
 
-/* Hero Stats Grid */
+/* Hero Stats Grid - STATIC (NO ROTATION) */
 .hero-stats {
   position: relative;
-  min-height: 300px; /* Ensure space for stats slides */
 }
 
-@media (min-width: 768px) {
-  .hero-stats {
-    min-height: 350px;
-  }
-}
-
-/* Hero Stats Slides - for rotation */
-.hero-stats-slide {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
+.hero-stats-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.6s ease-in-out, visibility 0.6s ease-in-out;
-  z-index: 1;
-}
-
-.hero-stats-slide.active,
-.hero-stats-slide.fade-in {
-  position: relative;
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  z-index: 2;
-  animation: fadeInStats 0.8s ease-in-out;
-}
-
-.hero-stats-slide.fade-out {
-  position: absolute;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  z-index: 1;
-  animation: fadeOutStats 0.8s ease-in-out;
-}
-
-@keyframes fadeInStats {
-  from {
-    opacity: 0;
-    transform: translateX(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes fadeOutStats {
-  from {
-    opacity: 1;
-    transform: translateX(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-20px);
-  }
 }
 
 .stat-card {
@@ -744,6 +691,7 @@ h1, h2, h3, h4 {
 .stat-card:hover {
   border-color: rgba(0, 212, 255, 0.4);
   box-shadow: 0 8px 32px rgba(0, 212, 255, 0.1);
+  transform: translateY(-4px);
 }
 
 .stat-number {
@@ -771,6 +719,56 @@ h1, h2, h3, h4 {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .hero {
+    padding-top: 80px;
+  }
+  
+  .hero-content {
+    padding: 2rem var(--spacing-md) var(--spacing-2xl);
+  }
+  
+  .hero-headline {
+    font-size: clamp(2rem, 8vw, 2.5rem);
+  }
+  
+  .hero-description {
+    font-size: 1rem;
+  }
+  
+  .hero-stats-grid {
+    gap: 1rem;
+  }
+  
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  .hero-cta {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+  .hero-cta .btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+}
+
+/* Remove old rotation styles - these are now obsolete */
+.hero-slides-container,
+.hero-slide,
+.hero-slide-indicators,
+.hero-indicator,
+.hero-stats-slide,
+.fade-in,
+.fade-out {
+  /* These classes are no longer needed with static hero */
+  display: none !important;
 }
 
 /* Hero Stats Row (for demo/roi pages) */
