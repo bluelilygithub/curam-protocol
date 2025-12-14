@@ -89,13 +89,24 @@
     <script src="assets/js/navbar-loader.js"></script>
 
     <!-- Hero Section -->
-    <section class="hero" style="min-height: 40vh; padding: var(--spacing-lg) 0;">
+    <section class="hero">
+        <div class="hero-background">
+            <div class="hero-gradient"></div>
+            <div class="hero-pattern"></div>
+        </div>
         <div class="container">
-            <h1 class="hero-headline" style="font-size: 2.5rem;">Frequently Asked Questions</h1>
-            <p class="hero-subhead" style="font-size: 1.125rem;">Answers to the critical questions CTOs, CFOs, and Partners ask about security, ownership, risk, and value.</p>
-            
-            <!-- FAQ Search Box -->
-            <div class="faq-search-container" style="margin-top: var(--spacing-lg);">
+            <div class="hero-content">
+                <p class="hero-eyebrow">Frequently Asked Questions</p>
+                <h1 class="hero-headline">
+                    Answers to Your Critical Questions<br>
+                    <span class="text-accent">About Security, Ownership, Risk & Value</span>
+                </h1>
+                <p class="hero-subheadline">
+                    Everything CTOs, CFOs, and Partners need to know before committing to AI automation.
+                </p>
+                
+                <!-- FAQ Search Box -->
+                <div class="faq-search-container" style="margin-top: var(--spacing-xl);">
                 <div class="faq-search-box">
                     <input type="text" 
                            id="faq-search-input" 

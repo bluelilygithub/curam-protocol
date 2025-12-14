@@ -1681,6 +1681,14 @@ def architecture_page():
     except:
         return "Architecture page not found.", 404
 
+@app.route('/engineering')
+@app.route('/engineering.html')
+def engineering_page():
+    try:
+        return send_file('engineering.html')
+    except:
+        return "Engineering page not found.", 404
+
 @app.route('/mining-services')
 @app.route('/mining-services.html')
 @app.route('/mining')
