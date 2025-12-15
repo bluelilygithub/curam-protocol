@@ -3,12 +3,180 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Curam-Ai Protocol™ | Systematised AI Implementation</title>
+    <title>The Curam-AI Protocol™ | Systematised AI Implementation</title>
     <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Responsive Infographic Styles */
+        .infographic-container {
+            margin: var(--spacing-3xl) 0;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        /* Desktop: Show roadmap infographic image */
+        .desktop-infographic {
+            display: block !important;
+            background: transparent;
+            padding: 0;
+            border-radius: 12px;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .desktop-infographic img {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 12px;
+        }
+
+        /* Mobile: Vertical phase cards (hidden on desktop) */
+        .mobile-protocol {
+            display: none !important;
+            width: 100%;
+        }
+
+        /* Mobile Protocol Styles */
+        .mobile-phase-grid {
+            display: grid;
+            gap: 24px;
+        }
+
+        .mobile-phase-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent;
+        }
+
+        .mobile-phase-card.phase-gold {
+            border-color: #C9A961;
+        }
+
+        .mobile-phase-card.phase-teal {
+            border-color: #4DB8C4;
+        }
+
+        .mobile-phase-header {
+            padding: 20px;
+            text-align: center;
+        }
+
+        .mobile-phase-header.header-gold {
+            background: linear-gradient(135deg, #C9A961, #B8935A);
+        }
+
+        .mobile-phase-header.header-teal {
+            background: linear-gradient(135deg, #4DB8C4, #3DA5B0);
+        }
+
+        .mobile-phase-number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 8px;
+        }
+
+        .mobile-phase-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 4px;
+        }
+
+        .mobile-phase-body {
+            padding: 24px 20px;
+        }
+
+        .mobile-phase-meta {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .mobile-meta-item {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .mobile-meta-label {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .mobile-meta-value {
+            font-size: 1.1rem;
+            color: #1a1a1a;
+            font-weight: 700;
+        }
+
+        .mobile-phase-deliverable {
+            margin-bottom: 20px;
+        }
+
+        .mobile-phase-deliverable strong {
+            color: #1a1a1a;
+            font-size: 0.9rem;
+        }
+
+        .mobile-phase-deliverable p {
+            color: #555;
+            font-size: 0.875rem;
+            margin-top: 4px;
+        }
+
+        .mobile-exit-point {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+        }
+
+        .mobile-exit-point strong {
+            display: block;
+            color: #856404;
+            margin-bottom: 4px;
+            font-size: 0.9rem;
+        }
+
+        .mobile-exit-point p {
+            color: #856404;
+            font-size: 0.85rem;
+            margin: 0;
+        }
+
+        .mobile-final-outcome {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+
+        .mobile-final-outcome strong,
+        .mobile-final-outcome p {
+            color: #155724;
+        }
+
+        /* Responsive breakpoint */
+        @media screen and (max-width: 768px) {
+            .desktop-infographic {
+                display: none !important;
+            }
+
+            .mobile-protocol {
+                display: block !important;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Scroll Down Button -->
@@ -25,7 +193,7 @@
     <!-- Hero Section -->
     <section class="protocol-hero">
         <div class="container">
-            <p class="protocol-hero-subtitle">The Curam-Ai Protocol replaces uncertainty with discipline.</p>
+            <p class="protocol-hero-subtitle">The Curam-AI Protocol replaces uncertainty with discipline.</p>
             <h1 class="protocol-hero-title">A Structured Approach to Guaranteeing Value</h1>
             <p class="protocol-hero-subtitle">
                 The Protocol transforms AI adoption from a risk into a predictable, validated investment through four distinct, fixed-fee commercial gates.
@@ -33,43 +201,164 @@
         </div>
     </section>
 
-    <!-- Protocol Overview -->
+    <!-- PROTOCOL JOURNEY INFOGRAPHIC - NEW SECTION -->
     <section class="section section-alt">
         <div class="container">
-            <div class="section-header">
-                <h2 class="section-headline">Four Phases, Four Gates</h2>
-                <p class="section-subhead">
-                    Each phase delivers concrete value and provides a clear exit point. No sunk costs, no vendor lock-in, no surprises.
-                </p>
-            </div>
+            <h2 class="section-headline centered">The Protocol Journey</h2>
+            <p class="section-subhead centered" style="margin-bottom: var(--spacing-xl);">
+                Progressive commitment, guaranteed off-ramps at every stage
+            </p>
 
-            <!-- Protocol Timeline Visual -->
-            <div class="protocol-timeline">
-                <div class="protocol-timeline-line"></div>
-                <div class="protocol-timeline-steps">
-                    <div class="protocol-timeline-step">
-                        <div class="protocol-timeline-dot protocol-timeline-dot-gold"></div>
-                        <span>Validate</span>
-                    </div>
-                    <div class="protocol-timeline-step">
-                        <div class="protocol-timeline-dot protocol-timeline-dot-blue"></div>
-                        <span>Plan</span>
-                    </div>
-                    <div class="protocol-timeline-step">
-                        <div class="protocol-timeline-dot protocol-timeline-dot-indigo"></div>
-                        <span>Secure</span>
-                    </div>
-                    <div class="protocol-timeline-step">
-                        <div class="protocol-timeline-dot protocol-timeline-dot-green"></div>
-                        <span>Deploy</span>
+            <!-- RESPONSIVE INFOGRAPHIC -->
+            <div class="infographic-container">
+                <!-- DESKTOP: Roadmap infographic image -->
+                <div class="desktop-infographic">
+                    <img src="assets/images/curam-protocol.jpeg" 
+                         alt="The Curam-AI Protocol journey showing 4 phases with exit points: Feasibility Sprint, Readiness Roadmap, Compliance Shield, and Wave 1 Implementation" 
+                         loading="lazy">
+                </div>
+
+                <!-- MOBILE: Vertical phase cards -->
+                <div class="mobile-protocol">
+                    <div class="mobile-phase-grid">
+                        
+                        <!-- Phase 1 -->
+                        <div class="mobile-phase-card phase-gold">
+                            <div class="mobile-phase-header header-gold">
+                                <div class="mobile-phase-number">1</div>
+                                <div class="mobile-phase-title">FEASIBILITY SPRINT</div>
+                            </div>
+                            <div class="mobile-phase-body">
+                                <div class="mobile-phase-meta">
+                                    <div class="mobile-meta-item">
+                                        <div class="mobile-meta-label">Timeline</div>
+                                        <div class="mobile-meta-value">48 hours</div>
+                                    </div>
+                                    <div class="mobile-meta-item">
+                                        <div class="mobile-meta-label">Investment</div>
+                                        <div class="mobile-meta-value">$1,500</div>
+                                    </div>
+                                </div>
+                                <div class="mobile-phase-deliverable">
+                                    <strong>Deliverable:</strong>
+                                    <p>Technical proof on YOUR documents</p>
+                                </div>
+                                <div class="mobile-exit-point">
+                                    <strong>EXIT POINT</strong>
+                                    <p>Not feasible? Full refund + keep findings. No sunk costs.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Phase 2 -->
+                        <div class="mobile-phase-card phase-teal">
+                            <div class="mobile-phase-header header-teal">
+                                <div class="mobile-phase-number">2</div>
+                                <div class="mobile-phase-title">READINESS ROADMAP</div>
+                            </div>
+                            <div class="mobile-phase-body">
+                                <div class="mobile-phase-meta">
+                                    <div class="mobile-meta-item">
+                                        <div class="mobile-meta-label">Timeline</div>
+                                        <div class="mobile-meta-value">3 weeks</div>
+                                    </div>
+                                    <div class="mobile-meta-item">
+                                        <div class="mobile-meta-label">Investment</div>
+                                        <div class="mobile-meta-value">$7,500</div>
+                                    </div>
+                                </div>
+                                <div class="mobile-phase-deliverable">
+                                    <strong>Deliverable:</strong>
+                                    <p>Board-ready business case with ROI</p>
+                                </div>
+                                <div class="mobile-exit-point">
+                                    <strong>EXIT POINT</strong>
+                                    <p>Not convinced? Walk away with business case. No sunk costs.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Phase 3 -->
+                        <div class="mobile-phase-card phase-gold">
+                            <div class="mobile-phase-header header-gold">
+                                <div class="mobile-phase-number">3</div>
+                                <div class="mobile-phase-title">COMPLIANCE SHIELD</div>
+                            </div>
+                            <div class="mobile-phase-body">
+                                <div class="mobile-phase-meta">
+                                    <div class="mobile-meta-item">
+                                        <div class="mobile-meta-label">Timeline</div>
+                                        <div class="mobile-meta-value">2 weeks</div>
+                                    </div>
+                                    <div class="mobile-meta-item">
+                                        <div class="mobile-meta-label">Investment</div>
+                                        <div class="mobile-meta-value">$8-12K</div>
+                                    </div>
+                                </div>
+                                <div class="mobile-phase-deliverable">
+                                    <strong>Deliverable:</strong>
+                                    <p>ISO 27001 alignment + audit prep</p>
+                                </div>
+                                <div class="mobile-exit-point">
+                                    <strong>EXIT POINT</strong>
+                                    <p>Compliance issues? Exit with documentation. No sunk costs.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Phase 4 -->
+                        <div class="mobile-phase-card phase-teal">
+                            <div class="mobile-phase-header header-teal">
+                                <div class="mobile-phase-number">4</div>
+                                <div class="mobile-phase-title">WAVE 1 IMPLEMENTATION</div>
+                            </div>
+                            <div class="mobile-phase-body">
+                                <div class="mobile-phase-meta">
+                                    <div class="mobile-meta-item">
+                                        <div class="mobile-meta-label">Timeline</div>
+                                        <div class="mobile-meta-value">30 days</div>
+                                    </div>
+                                    <div class="mobile-meta-item">
+                                        <div class="mobile-meta-label">Investment</div>
+                                        <div class="mobile-meta-value">$20-90K</div>
+                                    </div>
+                                </div>
+                                <div class="mobile-phase-deliverable">
+                                    <strong>Deliverable:</strong>
+                                    <p>Production system + full IP handover</p>
+                                </div>
+                                <div class="mobile-exit-point mobile-final-outcome">
+                                    <strong>100% IP OWNERSHIP</strong>
+                                    <p>No vendor lock-in. Full control.</p>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
+            </div>
+
+            <div style="text-align: center; margin-top: var(--spacing-2xl);">
+                <p style="font-size: 1rem; color: var(--text-secondary); margin-bottom: var(--spacing-md);">
+                    <strong>Ready to start?</strong> Most clients begin with Phase 1 to prove feasibility.
+                </p>
+                <a href="contact.html" class="btn btn-primary">Book Diagnostic Call</a>
             </div>
         </div>
     </section>
 
+    <!-- Phase Deep Dives - STREAMLINED -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline centered">Phase Details</h2>
+            <p class="section-subhead centered" style="margin-bottom: var(--spacing-3xl);">
+                Each phase delivers concrete value with a clear exit point
+            </p>
+        </div>
+    </section>
+
     <!-- Phase 1 -->
-    <section class="section" id="phase-1">
+    <section class="section section-alt" id="phase-1">
         <div class="container">
             <div class="protocol-phase-section">
                 <div class="protocol-phase-header">
@@ -122,7 +411,7 @@
     </section>
 
     <!-- Phase 2 -->
-    <section class="section section-alt" id="phase-2">
+    <section class="section" id="phase-2">
         <div class="container">
             <div class="protocol-phase-section">
                 <div class="protocol-phase-header">
@@ -176,7 +465,7 @@
     </section>
 
     <!-- Phase 3 -->
-    <section class="section" id="phase-3">
+    <section class="section section-alt" id="phase-3">
         <div class="container">
             <div class="protocol-phase-section">
                 <div class="protocol-phase-header">
@@ -233,7 +522,7 @@
     </section>
 
     <!-- Phase 4 -->
-    <section class="section section-alt" id="phase-4">
+    <section class="section" id="phase-4">
         <div class="container">
             <div class="protocol-phase-section">
                 <div class="protocol-phase-header">
@@ -286,49 +575,7 @@
         </div>
     </section>
 
-    <!-- Advantages Section -->
-    <section class="section">
-        <div class="container">
-            <div class="section-header">
-                <h2 class="section-headline">Why The Protocol Works</h2>
-                <p class="section-subhead">Guaranteed Outcomes at Every Stage</p>
-            </div>
-
-            <div class="advantages-grid">
-                <div class="advantage-card advantage-card-gold">
-                    <div class="advantage-icon">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <h3>Financial Control</h3>
-                    <p>Investment is incremental and fixed-fee, contingent on proven performance—eliminating runaway costs and ensuring every dollar spent secures validated progress.</p>
-                </div>
-
-                <div class="advantage-card advantage-card-blue">
-                    <div class="advantage-icon">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                        </svg>
-                    </div>
-                    <h3>Technical Certainty</h3>
-                    <p>Compliance and security are fully validated before production begins, ensuring the AI deployment aligns with rigorous standards and operates within your secure cloud boundary.</p>
-                </div>
-
-                <div class="advantage-card advantage-card-green">
-                    <div class="advantage-icon">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
-                        </svg>
-                    </div>
-                    <h3>Definitive Ownership</h3>
-                    <p>The IP Handover guarantees your firm owns the resulting asset, preventing vendor lock-in and transforming the solution into a powerful, self-sustaining extension of your business.</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Entry Points Section -->
+    <!-- Entry Points Section - KEPT, GOOD CONTENT -->
     <section class="section section-alt">
         <div class="container">
             <div class="section-header">
@@ -391,11 +638,9 @@
     </section>
 
     <!-- Footer -->
-    <!-- Footer -->
     <div id="footer-placeholder"></div>
     <script src="assets/js/footer-loader.js"></script>
 
     <script src="assets/js/main.js"></script>
 </body>
 </html>
-
