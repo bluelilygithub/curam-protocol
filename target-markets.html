@@ -3,12 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Target Markets | Curam-Ai Protocol™</title>
+    <title>Target Markets | Curam-AI Protocol™</title>
     <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Responsive Infographic Styles */
+        .infographic-container {
+            margin: var(--spacing-3xl) 0;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        /* Desktop: Show dark infographic image */
+        .desktop-infographic {
+            display: block !important;
+            background: transparent;
+            padding: 0;
+            border-radius: 12px;
+            overflow: hidden;
+            width: 100%;
+        }
+
+        .desktop-infographic img {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 12px;
+        }
+
+        /* Mobile: HTML comparison table (hidden on desktop) */
+        .mobile-comparison {
+            display: none !important;
+            width: 100%;
+        }
+
+        /* Mobile Comparison Table Styles */
+        .comparison-grid {
+            display: grid;
+            gap: 24px;
+        }
+
+        .comparison-item {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .comparison-header {
+            padding: 16px 20px;
+            background: #1E2A3A;
+            color: white;
+            font-weight: 700;
+            font-size: 1rem;
+            text-align: center;
+        }
+
+        .comparison-body {
+            display: grid;
+            gap: 0;
+        }
+
+        .comparison-side {
+            padding: 24px 20px;
+        }
+
+        .comparison-side.traditional {
+            background: #f8f9fa;
+            border-bottom: 3px solid #e74c3c;
+        }
+
+        .comparison-side.curam {
+            background: white;
+        }
+
+        .side-label {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .side-label.traditional {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .side-label.curam {
+            background: #C9A961;
+            color: white;
+        }
+
+        .side-content {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .side-icon {
+            width: 36px;
+            height: 36px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .traditional .side-icon {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .curam .side-icon {
+            background: #28a745;
+            color: white;
+        }
+
+        .side-text h3 {
+            font-size: 1rem;
+            margin-bottom: 6px;
+            color: #1a1a1a;
+            font-weight: 700;
+            line-height: 1.3;
+        }
+
+        .side-text p {
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: #495057;
+            margin: 0;
+        }
+
+        .comparison-cta {
+            background: #f8f9fa;
+            padding: 24px;
+            text-align: center;
+            border-radius: 0 0 12px 12px;
+            margin-top: 2px;
+        }
+
+        .comparison-cta p {
+            font-size: 0.9375rem;
+            color: #495057;
+            margin-bottom: 12px;
+        }
+
+        .comparison-cta a {
+            display: inline-block;
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .comparison-cta a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive breakpoint: Switch at 768px */
+        @media screen and (max-width: 768px) {
+            .desktop-infographic {
+                display: none !important;
+            }
+
+            .mobile-comparison {
+                display: block !important;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Scroll Down Button -->
@@ -39,80 +213,207 @@
         <div class="container">
             <div class="hero-content">
                 <p class="hero-eyebrow">Who We Serve</p>
-                <h1 class="hero-headline">We Serve Three Document-Intensive Sectors</h1>
+                <h1 class="hero-headline">We Serve Document-Intensive Professional Services</h1>
                 <p class="hero-subheadline">
-                    Professional services firms ready to automate their document-heavy workflows
+                    Small to mid-sized firms ready to automate their document-heavy workflows without massive IT transformation projects
                 </p>
             </div>
         </div>
     </section>
 
-    <!-- Primary Target Market -->
+    <!-- Sweet Spot Profile - MOVED UP -->
     <section class="section">
         <div class="container">
-            <div class="service-header">
-                <span class="service-number-badge">01</span>
-                <div class="service-header-text">
-                    <h2 class="section-title">Primary Target Market</h2>
-                    <p class="section-subtitle">Small to mid-sized professional services firms that are:</p>
-                </div>
-            </div>
-
-            <div class="target-characteristics-grid">
-                <div class="target-characteristic-card">
-                    <div class="target-characteristic-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                        </svg>
-                    </div>
-                    <h3>Document Processing</h3>
-                    <p>Dealing with 5-10 hours per week of manual data entry tasks</p>
-                </div>
-                <div class="target-characteristic-card">
-                    <div class="target-characteristic-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                        </svg>
-                    </div>
-                    <h3>Document Types</h3>
-                    <p>Processing invoices, schedules, transmittals, reports, and registers</p>
-                </div>
-                <div class="target-characteristic-card">
-                    <div class="target-characteristic-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                            <line x1="8" y1="21" x2="16" y2="21"/>
-                            <line x1="12" y1="17" x2="12" y2="21"/>
-                        </svg>
-                    </div>
-                    <h3>Infrastructure</h3>
-                    <p>Using Microsoft 365 or Google Workspace cloud infrastructure</p>
-                </div>
-                <div class="target-characteristic-card">
-                    <div class="target-characteristic-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <div class="sweet-spot-card">
+                <div class="sweet-spot-header">
+                    <div class="sweet-spot-icon">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
+                            <circle cx="12" cy="12" r="6"/>
+                            <circle cx="12" cy="12" r="2"/>
                         </svg>
                     </div>
-                    <h3>Approach</h3>
-                    <p>Looking to improve efficiency without massive IT transformation projects</p>
+                    <h2>Sweet Spot Customer Profile</h2>
+                </div>
+                <p class="sweet-spot-intro">The ideal customer has:</p>
+                <div class="sweet-spot-metrics">
+                    <div class="sweet-spot-metric">
+                        <span class="sweet-spot-metric-value">50+</span>
+                        <span class="sweet-spot-metric-label">hours/month on manual document processing</span>
+                    </div>
+                    <div class="sweet-spot-metric">
+                        <span class="sweet-spot-metric-value">$80k+</span>
+                        <span class="sweet-spot-metric-label">salary cost for admin/junior staff doing data entry</span>
+                    </div>
+                    <div class="sweet-spot-metric">
+                        <span class="sweet-spot-metric-value">Cloud</span>
+                        <span class="sweet-spot-metric-label">existing tools but manually bridging system gaps</span>
+                    </div>
+                </div>
+                <div class="sweet-spot-traits">
+                    <div class="sweet-spot-trait">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <span><strong>Privacy/security sensitive</strong> — private cloud positioning wins here</span>
+                    </div>
+                    <div class="sweet-spot-trait">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <span><strong>Risk-averse</strong> — phased approach with exits is perfect</span>
+                    </div>
+                </div>
+                <p class="sweet-spot-footer">The Protocol works for ANY document-heavy business with these characteristics.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- INFOGRAPHIC SECTION - NEW -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-title centered">Why Traditional AI Fails Document-Heavy Businesses</h2>
+            <p class="section-subtitle centered" style="margin-bottom: var(--spacing-xl);">
+                Most AI vendors can't handle your reality—here's how we're different
+            </p>
+
+            <!-- RESPONSIVE INFOGRAPHIC -->
+            <div class="infographic-container">
+                <!-- DESKTOP: Dark infographic image -->
+                <div class="desktop-infographic">
+                    <img src="assets/images/target-markets.jpeg" 
+                         alt="Curam-AI Protocol solving document-heavy challenges: messy documents, private cloud deployment, fixed budget, and ISO 27001 compliance" 
+                         loading="lazy">
+                </div>
+
+                <!-- MOBILE: HTML comparison table -->
+                <div class="mobile-comparison">
+                    <div class="comparison-grid">
+                        
+                        <!-- Challenge 1: Messy Documents -->
+                        <div class="comparison-item">
+                            <div class="comparison-header">Messy, Inconsistent Documents</div>
+                            <div class="comparison-body">
+                                <div class="comparison-side traditional">
+                                    <span class="side-label traditional">Traditional AI</span>
+                                    <div class="side-content">
+                                        <div class="side-icon">✕</div>
+                                        <div class="side-text">
+                                            <h3>Traditional AI Fail</h3>
+                                            <p>"Clean your docs first" / "Only standard formats"</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="comparison-side curam">
+                                    <span class="side-label curam">Curam-AI</span>
+                                    <div class="side-content">
+                                        <div class="side-icon">✓</div>
+                                        <div class="side-text">
+                                            <h3>Curam-AI Win</h3>
+                                            <p>Works with messy docs from day 1. Handles handwritten, scanned, and inconsistent files.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Challenge 2: Private Cloud -->
+                        <div class="comparison-item">
+                            <div class="comparison-header">Private Cloud Deployment</div>
+                            <div class="comparison-body">
+                                <div class="comparison-side traditional">
+                                    <span class="side-label traditional">Traditional AI</span>
+                                    <div class="side-content">
+                                        <div class="side-icon">✕</div>
+                                        <div class="side-text">
+                                            <h3>Traditional AI Fail</h3>
+                                            <p>"Upload to our cloud" / "Data processed on our servers"</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="comparison-side curam">
+                                    <span class="side-label curam">Curam-AI</span>
+                                    <div class="side-content">
+                                        <div class="side-icon">✓</div>
+                                        <div class="side-text">
+                                            <h3>Curam-AI Win</h3>
+                                            <p>Deploys inside YOUR Microsoft 365, AWS, or Azure. Data never leaves your tenant.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Challenge 3: Fixed Budget -->
+                        <div class="comparison-item">
+                            <div class="comparison-header">Fixed Budget, No Surprises</div>
+                            <div class="comparison-body">
+                                <div class="comparison-side traditional">
+                                    <span class="side-label traditional">Traditional AI</span>
+                                    <div class="side-content">
+                                        <div class="side-icon">✕</div>
+                                        <div class="side-text">
+                                            <h3>Traditional AI Fail</h3>
+                                            <p>Monthly subscriptions / Pay-per-usage / Hourly consulting</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="comparison-side curam">
+                                    <span class="side-label curam">Curam-AI</span>
+                                    <div class="side-content">
+                                        <div class="side-icon">✓</div>
+                                        <div class="side-text">
+                                            <h3>Curam-AI Win</h3>
+                                            <p>Fixed phases with exit points. Walk away after any phase with no sunk costs. ($1.5K → $7.5K → $8-12K → $20-90K)</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Challenge 4: Compliance -->
+                        <div class="comparison-item">
+                            <div class="comparison-header">ISO 27001 & Audit Requirements</div>
+                            <div class="comparison-body">
+                                <div class="comparison-side traditional">
+                                    <span class="side-label traditional">Traditional AI</span>
+                                    <div class="side-content">
+                                        <div class="side-icon">✕</div>
+                                        <div class="side-text">
+                                            <h3>Traditional AI Fail</h3>
+                                            <p>"We're certified" (but is YOUR deployment compliant?)</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="comparison-side curam">
+                                    <span class="side-label curam">Curam-AI</span>
+                                    <div class="side-content">
+                                        <div class="side-icon">✓</div>
+                                        <div class="side-text">
+                                            <h3>Curam-AI Win</h3>
+                                            <p>Pre-audit support to prepare YOUR auditor. Maps to ISO 27001 controls.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="comparison-cta">
+                        <p>Ready to de-risk your AI journey?</p>
+                        <a href="curam-ai-protocol.html">Explore The Protocol →</a>
+                    </div>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- Decision Makers -->
-    <section class="section section-alt">
+    <section class="section">
         <div class="container">
-            <div class="service-header">
-                <span class="service-number-badge">02</span>
-                <div class="service-header-text">
-                    <h2 class="section-title">Decision-Makers</h2>
-                    <p class="section-subtitle">Two key personas drive the decision-making process:</p>
-                </div>
-            </div>
+            <h2 class="section-title centered">Who Makes the Decision</h2>
+            <p class="section-subtitle centered" style="margin-bottom: var(--spacing-3xl);">Two key personas drive AI adoption in professional services firms:</p>
 
             <div class="decision-makers-grid">
                 <div class="decision-maker-card decision-maker-card-blue">
@@ -157,106 +458,11 @@
         </div>
     </section>
 
-    <!-- Firm Characteristics -->
-    <section class="section">
-        <div class="container">
-            <div class="service-header">
-                <span class="service-number-badge">03</span>
-                <div class="service-header-text">
-                    <h2 class="section-title">Firm Characteristics</h2>
-                    <p class="section-subtitle">Ideal customers typically have:</p>
-                </div>
-            </div>
-
-            <div class="service-details-grid firm-characteristics">
-                <div class="service-detail-card service-detail-card-blue">
-                    <div class="service-detail-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                            <circle cx="9" cy="7" r="4"/>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                        </svg>
-                    </div>
-                    <h3>Size & Scale</h3>
-                    <ul>
-                        <li>10-100 employees</li>
-                        <li>Growing firms investing in efficiency</li>
-                    </ul>
-                </div>
-
-                <div class="service-detail-card service-detail-card-gold">
-                    <div class="service-detail-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                            <path d="M2 17l10 5 10-5"/>
-                            <path d="M2 12l10 5 10-5"/>
-                        </svg>
-                    </div>
-                    <h3>Infrastructure</h3>
-                    <ul>
-                        <li>Existing cloud infrastructure (Azure, AWS, or M365)</li>
-                        <li>Using Xero, MYOB, or QuickBooks</li>
-                    </ul>
-                </div>
-
-                <div class="service-detail-card service-detail-card-green">
-                    <div class="service-detail-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                        </svg>
-                    </div>
-                    <h3>Compliance</h3>
-                    <ul>
-                        <li>PI insurance requirements</li>
-                        <li>ISO 27001 compliance needs</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="service-details-grid firm-characteristics" style="margin-top: var(--spacing-lg);">
-                <div class="service-detail-card service-detail-card-indigo">
-                    <div class="service-detail-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                        </svg>
-                    </div>
-                    <h3>Document Volume</h3>
-                    <ul>
-                        <li>Significant volumes of standard professional documents</li>
-                        <li>Repetitive document formats</li>
-                    </ul>
-                </div>
-
-                <div class="service-detail-card service-detail-card-red">
-                    <div class="service-detail-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                            <line x1="12" y1="17" x2="12.01" y2="17"/>
-                        </svg>
-                    </div>
-                    <h3>Mindset</h3>
-                    <ul>
-                        <li>Skeptical of AI but open to proof</li>
-                        <li>Prefer proof-of-concept approach</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <!-- Pain Points -->
     <section class="section section-alt">
         <div class="container">
-            <div class="service-header">
-                <span class="service-number-badge">04</span>
-                <div class="service-header-text">
-                    <h2 class="section-title">Pain Points They're Experiencing</h2>
-                    <p class="section-subtitle">Common challenges that drive firms to seek automation:</p>
-                </div>
-            </div>
+            <h2 class="section-title centered">Pain Points That Drive Action</h2>
+            <p class="section-subtitle centered" style="margin-bottom: var(--spacing-3xl);">Common challenges that push firms to seek automation:</p>
 
             <div class="pain-points-grid">
                 <div class="pain-point-card">
@@ -296,13 +502,8 @@
     <!-- Sectors We Serve -->
     <section class="section">
         <div class="container">
-            <div class="service-header">
-                <span class="service-number-badge">05</span>
-                <div class="service-header-text">
-                    <h2 class="section-title">Sectors We Serve</h2>
-                    <p class="section-subtitle">We specialize in three document-intensive sectors across Australia:</p>
-                </div>
-            </div>
+            <h2 class="section-title centered">Three Document-Intensive Sectors</h2>
+            <p class="section-subtitle centered" style="margin-bottom: var(--spacing-3xl);">We specialize in professional services across Australia:</p>
 
             <!-- Sector Cards -->
             <div class="sectors-grid">
@@ -364,111 +565,8 @@
         </div>
     </section>
 
-    <!-- Why These Industries -->
-    <section class="section section-alt">
-        <div class="container">
-            <h2 class="section-title centered">Why These Industries?</h2>
-            <p class="section-subtitle centered">They all share common characteristics that make them ideal candidates for document automation:</p>
-
-            <div class="why-industries-grid">
-                <div class="why-industry-card">
-                    <div class="why-industry-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                        </svg>
-                    </div>
-                    <h3>High Document Volumes</h3>
-                    <p>Structured data in repetitive document formats</p>
-                </div>
-                <div class="why-industry-card">
-                    <div class="why-industry-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="1" x2="12" y2="23"/>
-                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-                        </svg>
-                    </div>
-                    <h3>Expensive Staff Time</h3>
-                    <p>High-cost staff time spent on low-value data entry</p>
-                </div>
-                <div class="why-industry-card">
-                    <div class="why-industry-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                            <path d="M9 12l2 2 4-4"/>
-                        </svg>
-                    </div>
-                    <h3>Compliance Requirements</h3>
-                    <p>Need for audit trails, accuracy, and regulatory compliance</p>
-                </div>
-                <div class="why-industry-card">
-                    <div class="why-industry-icon">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                            <line x1="8" y1="21" x2="16" y2="21"/>
-                            <line x1="12" y1="17" x2="12" y2="21"/>
-                        </svg>
-                    </div>
-                    <h3>Existing Infrastructure</h3>
-                    <p>Cloud/on-premise infrastructure already in place</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Sweet Spot Profile -->
-    <section class="section">
-        <div class="container">
-            <div class="sweet-spot-card">
-                <div class="sweet-spot-header">
-                    <div class="sweet-spot-icon">
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <circle cx="12" cy="12" r="6"/>
-                            <circle cx="12" cy="12" r="2"/>
-                        </svg>
-                    </div>
-                    <h2>Sweet Spot Customer Profile</h2>
-                </div>
-                <p class="sweet-spot-intro">The ideal customer has:</p>
-                <div class="sweet-spot-metrics">
-                    <div class="sweet-spot-metric">
-                        <span class="sweet-spot-metric-value">50+</span>
-                        <span class="sweet-spot-metric-label">hours/month on manual document processing</span>
-                    </div>
-                    <div class="sweet-spot-metric">
-                        <span class="sweet-spot-metric-value">$80k+</span>
-                        <span class="sweet-spot-metric-label">salary cost for admin/junior staff doing data entry</span>
-                    </div>
-                    <div class="sweet-spot-metric">
-                        <span class="sweet-spot-metric-value">Cloud</span>
-                        <span class="sweet-spot-metric-label">existing tools but manually bridging system gaps</span>
-                    </div>
-                </div>
-                <div class="sweet-spot-traits">
-                    <div class="sweet-spot-trait">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                        <span><strong>Privacy/security sensitive</strong> — your private cloud positioning wins here</span>
-                    </div>
-                    <div class="sweet-spot-trait">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                        <span><strong>Risk-averse</strong> — your phased approach with exits is perfect</span>
-                    </div>
-                </div>
-                <p class="sweet-spot-footer">The engineering angle is just your proof of concept—the Protocol works for ANY document-heavy business.</p>
-            </div>
-        </div>
-    </section>
-
     <!-- Final CTA Section -->
     <section class="cta-section">
-
         <div class="container">
             <h2 class="cta-title">Ready to See If You're a Fit?</h2>
             <p class="cta-subtitle">Start with Phase 1: The Feasibility Sprint. We'll prove it works on YOUR documents in 48 hours.</p>
@@ -481,7 +579,6 @@
         </div>
     </section>
 
-    <!-- Footer -->
     <!-- Footer -->
     <div id="footer-placeholder"></div>
     <script src="assets/js/footer-loader.js"></script>
