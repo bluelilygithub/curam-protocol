@@ -11974,7 +11974,7 @@ h1, h2, h3, h4 {
 /* Highlight Panel (for emphasized content) */
 .highlight-panel {
   background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.05));
-  border: 2px solid rgba(212, 175, 55, 0.3);
+  border: 2px solid rgba(212, 175, 55, 0.6);
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-3xl) var(--spacing-2xl);
   text-align: center;
