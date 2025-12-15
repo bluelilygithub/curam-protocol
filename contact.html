@@ -520,19 +520,21 @@
       
       let relevanceCheckInProgress = false;
       let lastCheckedMessage = '';
+      let cachedResult = null;
       
       async function checkMessageRelevance(message) {
           if (!message || message.trim().length < 10) {
               return { isRelevant: true, confidence: 1.0, reason: 'Message too short to analyze' };
           }
           
-          // Don't re-check the same message
-          if (message === lastCheckedMessage && lastCheckedMessage !== '') {
-              return null; // Use cached result
+          // Use cached result if message hasn't changed
+          if (message === lastCheckedMessage && cachedResult !== null) {
+              return cachedResult;
           }
           
           if (relevanceCheckInProgress) {
-              return null; // Skip if check already in progress
+              // If check in progress, return cached result if available, otherwise return null
+              return cachedResult;
           }
           
           relevanceCheckInProgress = true;
@@ -547,17 +549,28 @@
                   body: JSON.stringify({ message: message })
               });
               
+              if (!response.ok) {
+                  throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              
               const data = await response.json();
               
-              return {
+              const result = {
                   isRelevant: data.is_relevant !== false, // Default to true if not specified
                   confidence: data.confidence || 0.5,
                   reason: data.reason || 'Analyzed by AI'
               };
+              
+              // Cache the result
+              cachedResult = result;
+              
+              return result;
           } catch (error) {
               console.error('Relevance check error:', error);
               // On error, default to allowing submission
-              return { isRelevant: true, confidence: 0.5, reason: 'Check unavailable' };
+              const errorResult = { isRelevant: true, confidence: 0.5, reason: 'Check unavailable' };
+              cachedResult = errorResult;
+              return errorResult;
           } finally {
               relevanceCheckInProgress = false;
           }
@@ -573,18 +586,29 @@
           
           if (message.length < 10) {
               relevanceWarning.classList.add('contact-hidden');
+              cachedResult = null; // Clear cache when message is too short
+              lastCheckedMessage = '';
               return;
+          }
+          
+          // Clear cache if message changed
+          if (message !== lastCheckedMessage) {
+              cachedResult = null;
           }
           
           try {
               const result = await checkMessageRelevance(message);
               
-              if (result && !result.isRelevant && result.confidence < 0.7) {
+              if (result) {
                   // Show warning if not relevant and confidence is low
-                  relevanceWarning.classList.remove('contact-hidden');
-              } else {
-                  relevanceWarning.classList.add('contact-hidden');
+                  if (!result.isRelevant && result.confidence < 0.7) {
+                      relevanceWarning.classList.remove('contact-hidden');
+                  } else {
+                      // Hide warning if relevant or confidence is high
+                      relevanceWarning.classList.add('contact-hidden');
+                  }
               }
+              // If no result (e.g., check in progress or error), keep current state
           } catch (error) {
               console.error('Error updating relevance warning:', error);
               // On error, hide warning to not block user
@@ -596,6 +620,10 @@
       let relevanceCheckTimeout;
       messageTextarea.addEventListener('input', function() {
           clearTimeout(relevanceCheckTimeout);
+          // Clear cache when user types new content
+          if (this.value.trim() !== lastCheckedMessage) {
+              cachedResult = null;
+          }
           relevanceCheckTimeout = setTimeout(updateRelevanceWarning, 1000); // 1 second debounce for API calls
       });
       
