@@ -10,6 +10,55 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Responsive Infographic Styles */
+        .infographic-container {
+            margin: var(--spacing-3xl) 0;
+        }
+
+        /* Desktop: Show dark infographic image */
+        .desktop-infographic {
+            display: block;
+            background: transparent;
+            padding: 0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .desktop-infographic img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 12px;
+        }
+
+        /* Mobile: Show clean table (hidden on desktop) */
+        .mobile-comparison {
+            display: none;
+        }
+
+        .mobile-comparison img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Responsive breakpoint: Switch at 768px */
+        @media (max-width: 768px) {
+            /* Hide desktop infographic */
+            .desktop-infographic {
+                display: none;
+            }
+
+            /* Show mobile comparison table */
+            .mobile-comparison {
+                display: block;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation -->
@@ -300,54 +349,35 @@
         </div>
     </section>
 
-    <!-- HOW WE'RE DIFFERENT SECTION -->
+    <!-- HOW WE'RE DIFFERENT SECTION - NOW WITH RESPONSIVE INFOGRAPHIC -->
     <section class="section section-alt">
         <div class="container">
-            <h2 class="section-headline">How We're Different from Other AI Vendors</h2>
-            <p class="section-subhead" style="max-width: 900px; margin: 0 auto var(--spacing-3xl);">
-                We don't follow the industry playbook—and that's by design
+            <h2 class="section-headline">How Curam-AI Protocol Redefines AI Development</h2>
+            <p class="section-subhead" style="max-width: 900px; margin: 0 auto var(--spacing-xl);">
+                A strategic shift from traditional risks to guaranteed outcomes and ownership
             </p>
 
-            <div class="cards-grid cards-grid-2">
-                <div class="feature-card card-primary">
-                    <div class="card-icon">🏗️</div>
-                    <h3 class="card-title">Not Consulting</h3>
-                    <p class="card-description">
-                        We don't write strategies or roadmaps without code. We build production 
-                        systems that run inside your business. You get working software, not 
-                        PowerPoint decks.
-                    </p>
+            <!-- RESPONSIVE INFOGRAPHIC -->
+            <div class="infographic-container">
+                <!-- DESKTOP: Dark infographic image -->
+                <div class="desktop-infographic">
+                    <img src="assets/images/services_infographic.jpeg" 
+                         alt="Curam-AI Protocol comparison infographic showing timeline paradigm, financial model, ownership, and delivery efficiency compared to traditional approaches" 
+                         loading="lazy">
                 </div>
-                
-                <div class="feature-card card-primary">
-                    <div class="card-icon">💎</div>
-                    <h3 class="card-title">Not SaaS</h3>
-                    <p class="card-description">
-                        No monthly subscriptions. No per-user fees. You own the source code 
-                        and can maintain it yourself or hire any developer. The system is yours 
-                        permanently.
-                    </p>
+
+                <!-- MOBILE: Clean comparison table -->
+                <div class="mobile-comparison">
+                    <img src="assets/images/services-table.jpeg" 
+                         alt="How we're different from other AI vendors - comparison table showing fixed phases, pay-per-phase pricing, IP ownership, and productized delivery" 
+                         loading="lazy">
                 </div>
-                
-                <div class="feature-card card-primary">
-                    <div class="card-icon">🔓</div>
-                    <h3 class="card-title">Not Vendor Lock-In</h3>
-                    <p class="card-description">
-                        Full IP handover. Your firm owns the AI workflows, prompts, and integrations. 
-                        No ongoing licensing for core functionality. Switch providers or go in-house 
-                        anytime.
-                    </p>
-                </div>
-                
-                <div class="feature-card card-primary">
-                    <div class="card-icon">📋</div>
-                    <h3 class="card-title">Not Open-Ended</h3>
-                    <p class="card-description">
-                        Every phase has a fixed price and defined deliverable. No scope creep, 
-                        no surprise invoices, no runaway costs. You know exactly what you're 
-                        paying for before work begins.
-                    </p>
-                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: var(--spacing-2xl);">
+                <a href="curam-ai-protocol.html" class="btn btn-primary">
+                    Explore The 4-Phase Protocol →
+                </a>
             </div>
         </div>
     </section>
@@ -357,7 +387,7 @@
         <div class="container">
             <h2 class="section-headline">How We Deliver These Services</h2>
             <p class="section-subhead" style="max-width: 900px; margin: 0 auto var(--spacing-3xl);">
-                The Curam-Ai Protocol™—a 4-phase framework that de-risks AI adoption
+                The Curam-AI Protocol™—a 4-phase framework that de-risks AI adoption
             </p>
 
             <div class="content-panel" style="margin-bottom: var(--spacing-2xl);">
