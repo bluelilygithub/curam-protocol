@@ -15,47 +15,208 @@
         /* Responsive Infographic Styles */
         .infographic-container {
             margin: var(--spacing-3xl) 0;
+            width: 100%;
+            max-width: 100%;
         }
 
         /* Desktop: Show dark infographic image */
         .desktop-infographic {
-            display: block;
+            display: block !important;
             background: transparent;
             padding: 0;
             border-radius: 12px;
             overflow: hidden;
+            width: 100%;
         }
 
         .desktop-infographic img {
             width: 100%;
+            max-width: 100%;
             height: auto;
             display: block;
             border-radius: 12px;
         }
 
-        /* Mobile: Show clean table (hidden on desktop) */
+        /* Mobile: HTML comparison table (hidden on desktop) */
         .mobile-comparison {
-            display: none;
+            display: none !important;
+            width: 100%;
         }
 
-        .mobile-comparison img {
-            width: 100%;
-            height: auto;
-            display: block;
+        /* Comparison Table Styles */
+        .comparison-table {
+            background: white;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .comparison-header-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .header-cell {
+            padding: 16px 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #6c757d;
+            text-align: center;
+        }
+
+        .header-cell.left {
+            border-right: 1px solid #dee2e6;
+        }
+
+        .comparison-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .comparison-row:last-child {
+            border-bottom: none;
+        }
+
+        .comparison-cell {
+            padding: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .comparison-cell.left {
+            background: #f8f9fa;
+            border-right: 1px solid #dee2e6;
+        }
+
+        .comparison-cell.right {
+            background: white;
+        }
+
+        .icon-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        .icon-badge.red {
+            background: #dc3545;
+            color: white;
+        }
+
+        .icon-badge.green {
+            background: #28a745;
+            color: white;
+        }
+
+        .cell-content h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1a1a1a;
+            margin-bottom: 6px;
+            line-height: 1.3;
+        }
+
+        .comparison-cell.right .cell-content h3 {
+            color: #0066cc;
+        }
+
+        .cell-content p {
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: #495057;
+            margin: 0;
+        }
+
+        .comparison-cta {
+            background: #f8f9fa;
+            padding: 24px;
+            text-align: center;
+            border-radius: 0 0 12px 12px;
+            margin-top: 2px;
+        }
+
+        .comparison-cta p {
+            font-size: 0.9375rem;
+            color: #495057;
+            margin-bottom: 12px;
+        }
+
+        .comparison-cta a {
+            display: inline-block;
+            color: #0066cc;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .comparison-cta a:hover {
+            text-decoration: underline;
         }
 
         /* Responsive breakpoint: Switch at 768px */
-        @media (max-width: 768px) {
+        @media screen and (max-width: 768px) {
             /* Hide desktop infographic */
             .desktop-infographic {
-                display: none;
+                display: none !important;
             }
 
             /* Show mobile comparison table */
             .mobile-comparison {
-                display: block;
+                display: block !important;
+            }
+
+            /* Stack table cells vertically on mobile */
+            .comparison-header-row,
+            .comparison-row {
+                grid-template-columns: 1fr;
+            }
+
+            .header-cell.left,
+            .comparison-cell.left {
+                border-right: none;
+                border-bottom: 2px solid #dee2e6;
+            }
+
+            .comparison-cell {
+                padding: 16px;
+            }
+        }
+
+        /* Even smaller screens */
+        @media screen and (max-width: 480px) {
+            .desktop-infographic {
+                display: none !important;
+            }
+            
+            .mobile-comparison {
+                display: block !important;
+            }
+
+            .icon-badge {
+                width: 28px;
+                height: 28px;
+                font-size: 14px;
+            }
+
+            .cell-content h3 {
+                font-size: 0.9375rem;
+            }
+
+            .cell-content p {
+                font-size: 0.8125rem;
             }
         }
     </style>
@@ -366,11 +527,91 @@
                          loading="lazy">
                 </div>
 
-                <!-- MOBILE: Clean comparison table -->
+                <!-- MOBILE: HTML comparison table -->
                 <div class="mobile-comparison">
-                    <img src="assets/images/services-table.jpeg" 
-                         alt="How we're different from other AI vendors - comparison table showing fixed phases, pay-per-phase pricing, IP ownership, and productized delivery" 
-                         loading="lazy">
+                    <div class="comparison-table">
+                        <div class="comparison-header-row">
+                            <div class="header-cell left">TRADITIONAL APPROACH</div>
+                            <div class="header-cell right">CURAM-AI PROTOCOL</div>
+                        </div>
+
+                        <!-- Row 1 -->
+                        <div class="comparison-row">
+                            <div class="comparison-cell left">
+                                <div class="icon-badge red">✕</div>
+                                <div class="cell-content">
+                                    <h3>Open-ended timelines</h3>
+                                    <p>Projects drag on for months with moving goalposts and unclear completion dates</p>
+                                </div>
+                            </div>
+                            <div class="comparison-cell right">
+                                <div class="icon-badge green">✓</div>
+                                <div class="cell-content">
+                                    <h3>Fixed phases with exit points</h3>
+                                    <p>Each phase has a defined timeline (2-4 weeks) with a guaranteed exit option if you're not satisfied</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Row 2 -->
+                        <div class="comparison-row">
+                            <div class="comparison-cell left">
+                                <div class="icon-badge red">✕</div>
+                                <div class="cell-content">
+                                    <h3>Monthly subscriptions & retainers</h3>
+                                    <p>Ongoing fees with unclear ROI and no path to ownership</p>
+                                </div>
+                            </div>
+                            <div class="comparison-cell right">
+                                <div class="icon-badge green">✓</div>
+                                <div class="cell-content">
+                                    <h3>Pay-per-phase pricing</h3>
+                                    <p>Fixed prices for each phase ($7.5K → $7.5K → $15K → $40K). No surprises, no recurring fees</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Row 3 -->
+                        <div class="comparison-row">
+                            <div class="comparison-cell left">
+                                <div class="icon-badge red">✕</div>
+                                <div class="cell-content">
+                                    <h3>Vendor lock-in & dependency</h3>
+                                    <p>You're tied to proprietary systems and dependent on the vendor for changes</p>
+                                </div>
+                            </div>
+                            <div class="comparison-cell right">
+                                <div class="icon-badge green">✓</div>
+                                <div class="cell-content">
+                                    <h3>100% IP ownership from day one</h3>
+                                    <p>All code, documentation, and models belong to you. Walk away anytime with everything we've built</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Row 4 -->
+                        <div class="comparison-row">
+                            <div class="comparison-cell left">
+                                <div class="icon-badge red">✕</div>
+                                <div class="cell-content">
+                                    <h3>Consulting bloat & hourly billing</h3>
+                                    <p>Endless meetings, scope creep, and unpredictable costs that balloon over time</p>
+                                </div>
+                            </div>
+                            <div class="comparison-cell right">
+                                <div class="icon-badge green">✓</div>
+                                <div class="cell-content">
+                                    <h3>Productized delivery process</h3>
+                                    <p>Streamlined workflow with clear deliverables at each phase. No scope creep, no surprise costs</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="comparison-cta">
+                        <p>Ready to see how the Protocol works in practice?</p>
+                        <a href="curam-ai-protocol.html">Explore The 4-Phase Protocol →</a>
+                    </div>
                 </div>
             </div>
 
