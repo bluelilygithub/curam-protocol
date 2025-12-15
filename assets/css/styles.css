@@ -3489,6 +3489,19 @@ h1, h2, h3, h4 {
   margin-bottom: var(--spacing-md);
 }
 
+/* SVG icon styling for industry cards */
+.industry-card-icon svg {
+  width: 48px;
+  height: 48px;
+  stroke: var(--cyan-accent);
+  transition: all 0.3s ease;
+}
+
+.industry-card:hover .industry-card-icon svg {
+  stroke: var(--color-gold);
+  transform: scale(1.05);
+}
+
 .industry-card h3 {
   font-size: 1rem;
   font-weight: 700;
@@ -8965,7 +8978,7 @@ h1, h2, h3, h4 {
 }
 
 .methodology-card-border-orange {
-    border-left: 4px solid #f97316;
+    border-left: 4px solid var(--color-gold);
 }
 
 /* Deliverable Grid Spacing */
@@ -9533,7 +9546,7 @@ h1, h2, h3, h4 {
 }
 
 .industry-detail-section-orange {
-    border-left: 6px solid #f59e0b;
+    border-left: 6px solid var(--color-gold);
 }
 
 .industry-detail-title {
@@ -9554,7 +9567,7 @@ h1, h2, h3, h4 {
 }
 
 .industry-detail-item-orange {
-    border-left-color: #f59e0b;
+    border-left-color: var(--color-gold);
 }
 
 .industry-detail-item-title {
@@ -12028,26 +12041,50 @@ h1, h2, h3, h4 {
 
 .card-primary {
   border-color: rgba(0, 212, 255, 0.2);
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.05), rgba(0, 212, 255, 0.02));
 }
 
 .card-primary:hover {
   border-color: rgba(0, 212, 255, 0.4);
-  box-shadow: 0 12px 40px rgba(0, 212, 255, 0.1);
+  box-shadow: 0 12px 40px rgba(0, 212, 255, 0.15);
 }
 
 .card-warning {
-  background: linear-gradient(135deg, rgba(255, 165, 0, 0.1), rgba(255, 165, 0, 0.05));
-  border-color: rgba(255, 165, 0, 0.2);
+  background: linear-gradient(135deg, rgba(185, 28, 28, 0.1), rgba(185, 28, 28, 0.05));
+  border-color: rgba(185, 28, 28, 0.2);
 }
 
 .card-warning:hover {
-  border-color: rgba(255, 165, 0, 0.4);
+  border-color: rgba(185, 28, 28, 0.4);
+  box-shadow: 0 12px 40px rgba(185, 28, 28, 0.1);
 }
 
 .card-icon {
-  font-size: 3rem;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   margin-bottom: var(--spacing-md);
-  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* SVG icon styling for cards */
+.card-icon svg {
+  width: 48px;
+  height: 48px;
+  stroke: var(--color-gold);
+  transition: all 0.3s ease;
+}
+
+/* Warning cards: red-tinted icons */
+.card-warning .card-icon svg {
+  stroke: rgba(185, 28, 28, 0.8);
+}
+
+/* Primary cards: cyan icons */
+.card-primary .card-icon svg {
+  stroke: rgba(0, 212, 255, 0.9);
 }
 
 .card-title {
@@ -12088,9 +12125,24 @@ h1, h2, h3, h4 {
 }
 
 .value-icon {
-  font-size: 2.5rem;
-  line-height: 1;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+}
+
+/* SVG icon styling for value cards (white background) */
+.value-icon svg {
+  width: 40px;
+  height: 40px;
+  stroke: var(--navy-deep);
+  transition: all 0.3s ease;
+}
+
+.value-card:hover .value-icon svg {
+  stroke: var(--color-gold);
 }
 
 .value-title {

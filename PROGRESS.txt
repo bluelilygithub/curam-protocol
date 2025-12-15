@@ -1,0 +1,32 @@
+Curam-AI Design System Update - Progress Tracker
+==================================================
+
+CSS Updates:
+[x] Remove all orange colors
+[x] Update .card-warning styles (muted red)
+[x] Update .card-primary styles (cyan)
+[x] Add .card-icon svg styles
+[x] Add .value-icon svg styles
+[x] Add .industry-card-icon svg styles
+
+HTML Page Updates:
+[x] About page (about.html) - Replaced 12 emoji icons with Heroicons
+[x] Homepage (homepage.html) - Replaced 2 emoji icons with Heroicons
+[x] Services page (services.html) - Replaced 8 emoji icons with Heroicons
+[ ] Protocol page (curam-ai-protocol.html)
+[ ] Target Markets page (target-markets.html)
+[ ] Professional Services page (professional-services.html)
+[ ] Logistics & Compliance page (logistics-compliance.html)
+[ ] Built Environment page (built-environment.html)
+[ ] FAQ page (faq.html)
+[ ] Contact page (contact.html)
+[ ] ROI page (roi.html)
+[ ] Other pages (as found)
+
+Notes:
+- Using Heroicons Outline style exclusively
+- All icons: stroke="currentColor", stroke-width="2"
+- Card icons: 48x48px
+- Value icons: 40x40px
+- Infographic images: Flagged for designer review (no code changes)
+
