@@ -2311,12 +2311,12 @@ h1, h2, h3, h4 {
 
 /* Feature cards with images */
 .features-grid-with-images {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
 }
 
 @media (min-width: 1024px) {
     .features-grid-with-images {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
     }
 }
 
@@ -10448,16 +10448,7 @@ h1, h2, h3, h4 {
   padding-left: 0;
 }
 
-/* Connecting line */
-.timeline-vertical::before {
-  content: '';
-  position: absolute;
-  left: 30px;
-  top: 30px;
-  bottom: 30px;
-  width: 2px;
-  background: linear-gradient(180deg, rgba(212, 175, 55, 0.6), rgba(212, 175, 55, 0.2));
-}
+/* Connecting line - removed per user request */
 
 .timeline-item {
   position: relative;
@@ -11030,9 +11021,6 @@ h1, h2, h3, h4 {
   }
 
   /* Timeline mobile adjustments */
-  .timeline-vertical::before {
-    left: 20px;
-  }
 
   .timeline-item {
     padding-left: 60px;
