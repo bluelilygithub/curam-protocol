@@ -13,15 +13,18 @@ HTML Page Updates:
 [x] About page (about.html) - Replaced 12 emoji icons with Heroicons
 [x] Homepage (homepage.html) - Replaced 2 emoji icons with Heroicons
 [x] Services page (services.html) - Replaced 8 emoji icons with Heroicons
-[ ] Protocol page (curam-ai-protocol.html)
-[ ] Target Markets page (target-markets.html)
-[ ] Professional Services page (professional-services.html)
-[ ] Logistics & Compliance page (logistics-compliance.html)
-[ ] Built Environment page (built-environment.html)
-[ ] FAQ page (faq.html)
-[ ] Contact page (contact.html)
-[ ] ROI page (roi.html)
-[ ] Other pages (as found)
+[x] Protocol page (curam-ai-protocol.html) - Replaced 1 emoji icon with Heroicons
+[x] Accounting page (accounting.html) - Replaced 13 emoji icons with Heroicons
+[x] Legal Services page (legal-services.html) - Replaced 5 emoji icons with Heroicons
+[x] Wealth Management page (wealth-management.html) - Replaced 13 emoji icons with Heroicons
+[x] Insurance Underwriting page (insurance-underwriting.html) - Replaced 13 emoji icons with Heroicons
+[x] Engineering page (engineering.html) - Replaced 7 emoji icons with Heroicons
+[x] Professional Services page (professional-services.html) - Replaced 4 emoji icons with Heroicons
+[x] Built Environment page (built-environment.html) - Replaced 4 emoji icons with Heroicons
+[x] Logistics & Compliance page (logistics-compliance.html) - Replaced 1 emoji icon with Heroicons
+[x] FAQ page (faq.html) - Replaced 8 emoji icons with Heroicons
+[x] Phase 1 Feasibility page (phase-1-feasibility.html) - Replaced 1 emoji icon with Heroicons
+[x] Phase 3 Compliance page (phase-3-compliance.html) - Replaced 2 emoji icons with Heroicons
 
 Notes:
 - Using Heroicons Outline style exclusively
