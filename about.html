@@ -12,25 +12,39 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body>
+    <!-- Scroll Down Button -->
+    <button class="scroll-down-btn" aria-label="Scroll down">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M19 12l-7 7-7-7"/>
+        </svg>
+    </button>
+    
     <!-- Navigation -->
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
     <!-- HERO SECTION -->
-    <section class="hero hero-about">
+    <section class="hero services-hero">
         <div class="hero-background">
             <div class="hero-gradient"></div>
             <div class="hero-pattern"></div>
+            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+            </svg>
+            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+            </svg>
         </div>
-        <div class="container hero-content">
-            <p class="hero-tagline">About Curam-Ai Protocol</p>
-            <h1 class="hero-headline">
-                <span class="headline-line">Built by Digital Strategy Experts</span>
-                <span class="headline-line headline-gradient">Who Understand Your Business</span>
-            </h1>
-            <p class="hero-description" style="max-width: 700px;">
-                We're the AI division of <a href="https://www.bluelily.com.au" target="_blank" rel="noopener" style="color: var(--color-gold); text-decoration: underline;">BlueLily</a>—a 20+ year digital strategy firm that's helped hundreds of Australian SMEs grow without losing control.
-            </p>
+        <div class="container">
+            <div class="hero-content">
+                <p class="hero-eyebrow">About Curam-Ai Protocol</p>
+                <h1 class="hero-headline">Built by Digital Strategy Experts Who Understand Your Business</h1>
+                <p class="hero-subheadline">
+                    We're the AI division of <a href="https://www.bluelily.com.au" target="_blank" rel="noopener" style="color: var(--color-gold); text-decoration: underline;">BlueLily</a>—a 20+ year digital strategy firm that's helped hundreds of Australian SMEs grow without losing control.
+                </p>
+            </div>
         </div>
     </section>
 

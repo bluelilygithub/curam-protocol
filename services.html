@@ -222,27 +222,41 @@
     </style>
 </head>
 <body>
+    <!-- Scroll Down Button -->
+    <button class="scroll-down-btn" aria-label="Scroll down">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M19 12l-7 7-7-7"/>
+        </svg>
+    </button>
+    
     <!-- Navigation -->
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
     <!-- HERO SECTION -->
-    <section class="hero hero-services">
+    <section class="hero services-hero">
         <div class="hero-background">
             <div class="hero-gradient"></div>
             <div class="hero-pattern"></div>
+            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+            </svg>
+            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+            </svg>
         </div>
-        <div class="container hero-content">
-            <p class="hero-tagline">Our Services</p>
-            <h1 class="hero-headline">
-                <span class="headline-line">Three Core Capabilities That</span>
-                <span class="headline-line headline-gradient">Automate Your Workflows</span>
-            </h1>
-            <p class="hero-description" style="max-width: 800px;">
-                We don't sell AI consulting. We build production-ready AI systems that automate 
-                your document-heavy workflows—guaranteed. Processing stays inside your private 
-                cloud environment. No external servers, no new logins.
-            </p>
+        <div class="container">
+            <div class="hero-content">
+                <p class="hero-eyebrow">Our Services</p>
+                <h1 class="hero-headline">Three Core Capabilities That Automate Your Workflows</h1>
+                <p class="hero-subheadline">
+                    We don't sell AI consulting. We build production-ready AI systems that automate 
+                    your document-heavy workflows—guaranteed. Processing stays inside your private 
+                    cloud environment. No external servers, no new logins.
+                </p>
+            </div>
         </div>
     </section>
 

@@ -12,6 +12,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
 <body class="phase-3-page">
+    <!-- Scroll Down Button -->
+    <button class="scroll-down-btn" aria-label="Scroll down">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M19 12l-7 7-7-7"/>
+        </svg>
+    </button>
+    
     <!-- Navigation -->
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
@@ -21,7 +28,31 @@
 <!-- ============================================
      HERO SECTION
      ============================================ -->
-<section class="phase-3-hero">
+<section class="hero services-hero">
+    <div class="hero-background">
+        <div class="hero-gradient"></div>
+        <div class="hero-pattern"></div>
+        <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+            <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+            <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+            <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+        </svg>
+        <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+            <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+        </svg>
+    </div>
+    <div class="container">
+        <div class="hero-content">
+            <p class="hero-eyebrow">Phase 3 of The Protocol</p>
+            <h1 class="hero-headline">Don't Wait for the Audit. Be Ready for It.</h1>
+            <p class="hero-subheadline">
+                Pre-built documentation that accelerates your compliance review. We prepare the evidence file; your auditor validates it.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="phase-3-hero" style="display: none;">
     <div class="container-wide">
         <div class="breadcrumb">Phase 3 of The Protocol</div>
         
