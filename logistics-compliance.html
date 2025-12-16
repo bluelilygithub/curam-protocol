@@ -25,6 +25,59 @@
                 grid-template-columns: 1fr !important;
             }
         }
+        /* 4 Column Cards Grid for "What These Industries Share" */
+        .logistics-compliance-page .cards-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        @media (max-width: 1200px) {
+            .logistics-compliance-page .cards-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 640px) {
+            .logistics-compliance-page .cards-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        /* Real-World Stakes Section Styling */
+        .stakes-box {
+            background: rgba(185, 28, 28, 0.1);
+            border: 2px solid rgba(185, 28, 28, 0.3);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-2xl);
+            margin-top: var(--spacing-xl);
+        }
+        .stakes-header h2 {
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-xl);
+            text-align: center;
+        }
+        .stakes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing-xl);
+            margin-top: var(--spacing-lg);
+        }
+        .stakes-scenario {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+        }
+        .stakes-scenario h4 {
+            color: var(--color-gold);
+            margin-bottom: var(--spacing-md);
+        }
+        .scenario-problem,
+        .scenario-cost,
+        .scenario-fix {
+            margin-bottom: var(--spacing-md);
+            line-height: 1.6;
+        }
+        .cost-highlight {
+            color: rgba(251, 191, 36, 1);
+            font-weight: 700;
+        }
     </style>
 </head>
 <body class="logistics-compliance-page">
@@ -57,28 +110,33 @@
             <div class="hero-content">
                 <p class="hero-eyebrow">For Logistics, Healthcare Admin & Government Contractors</p>
                 <h1 class="hero-headline">
-                    High-Volume Operations—<br>
-                    <span class="text-accent">Near-Zero-Error Compliance.</span>
+                    One Customs Error = $10K Fine.<br>
+                    <span class="text-accent">We Eliminate the Errors.</span>
                 </h1>
                 <p class="hero-subheadline">
-                    We automate the repetitive, high-stakes document workflows where mistakes aren't just slow—they're expensive. Customs entries, patient referrals, grant acquittals processed with 99%+ accuracy. One error = $10K fine. We eliminate the errors.
+                    We automate the repetitive, high-stakes document workflows where mistakes cost you thousands. Customs entries, patient referrals, grant acquittals processed with 99%+ accuracy—tested on YOUR documents before you commit.
                 </p>
                 <div class="hero-cta-group">
                     <a href="contact.html" class="btn btn-primary btn-large">Book a Diagnostic Call</a>
                     <a href="roi.html?section=logistics-compliance" class="btn btn-secondary">Calculate Your ROI</a>
                 </div>
+                
+                <!-- Infographic - ONLY appears here in hero -->
+                <div class="hero-infographic" style="margin-top: var(--spacing-3xl); text-align: center;">
+                    <img src="assets/images/logistics-compliance-sector.jpg" 
+                         alt="Serving 600+ Queensland operations-heavy businesses: logistics firms processing customs documentation at Port of Brisbane, healthcare practices managing patient referrals and Medicare claims, and NDIS/Defence contractors handling grant acquittals—automating 200+ weekly documents with 99%+ accuracy to eliminate $10-50K annual compliance fines"
+                         style="max-width: 100%; height: auto; border-radius: 8px;">
+                </div>
             </div>
         </div>
     </section>
-
-
 
     <!-- BUILT FOR QUEENSLAND'S OPERATIONS-HEAVY BUSINESSES -->
     <section class="section section-alt">
         <div class="container">
             <h2 class="section-headline">Built for Queensland's Operations-Heavy Businesses</h2>
             <p class="section-subhead">
-                You're too big for consumer tools, too small for enterprise solutions. You're processing high volumes of regulatory documents daily, where errors = fines, delays, or lost contracts. That's our sweet spot.
+                You're too big for consumer tools, too small for enterprise solutions. You're processing high volumes of regulatory documents where one error = lost revenue, fines, or contract termination. That's our sweet spot.
             </p>
 
             <div class="deliverable-grid">
@@ -99,8 +157,8 @@
                         <li><strong>20-200 operations staff</strong> (warehouse, admin, compliance teams)</li>
                         <li><strong>$5-50M annual revenue</strong> typical range</li>
                         <li><strong>High-volume workflows:</strong> Processing 200+ documents per week manually</li>
-                        <li><strong>Operations-constrained:</strong> Manual processes slowing customer service</li>
-                        <li><strong>Queensland-based:</strong> Port of Brisbane, regional logistics hubs</li>
+                        <li><strong>Speed bottlenecks:</strong> Manual processes costing you customers or contracts</li>
+                        <li><strong>Queensland-based:</strong> Port of Brisbane, regional logistics hubs, metro healthcare</li>
                     </ul>
                 </div>
 
@@ -120,7 +178,89 @@
                         <li><strong>Patient intake:</strong> Referrals, Medicare claims, appointment scheduling</li>
                         <li><strong>Compliance reporting:</strong> NDIS acquittals, grant reports, audit trails</li>
                         <li><strong>Freight auditing:</strong> POD matching, invoice verification, three-way reconciliation</li>
-                        <li><strong>Regulatory validation:</strong> Automated compliance checking, error flagging</li>
+                        <li><strong>Regulatory validation:</strong> Automated compliance checking, error flagging before submission</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WHAT THESE INDUSTRIES SHARE -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">Why The Protocol Works: High-Stakes Compliance = Zero Error Tolerance</h2>
+            <p class="section-subhead">
+                Different sectors, same stakes. Here's why our approach succeeds regardless of your specific vertical:
+            </p>
+
+            <div class="cards-grid">
+                <div class="feature-card card-primary">
+                    <div class="card-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                            <path d="M2 17l10 5 10-5"/>
+                            <path d="M2 12l10 5 10-5"/>
+                        </svg>
+                    </div>
+                    <h3 class="card-title">High Document Volumes</h3>
+                    <p class="card-description" style="margin-bottom: var(--spacing-md);"><strong>Scale Requires Automation</strong></p>
+                    <ul class="card-description" style="list-style: none; padding: 0; margin: 0; text-align: left;">
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">200+ documents processed per week minimum</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Repetitive formats (customs entries, patient forms, grant reports)</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Manual processing = guaranteed bottlenecks</li>
+                        <li style="padding: 0.5rem 0;">Peak periods (tax season, container surges) overwhelm staff</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card card-primary">
+                    <div class="card-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                            <path d="M12 9v4"/>
+                            <path d="M12 17h.01"/>
+                        </svg>
+                    </div>
+                    <h3 class="card-title">Zero Error Tolerance</h3>
+                    <p class="card-description" style="margin-bottom: var(--spacing-md);"><strong>Mistakes = Financial Loss</strong></p>
+                    <ul class="card-description" style="list-style: none; padding: 0; margin: 0; text-align: left;">
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Customs errors = $5-50K fines + demurrage fees</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Medicare coding errors = claim rejections, revenue leakage</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">NDIS audit failures = contract termination ($500K-1M lost)</li>
+                        <li style="padding: 0.5rem 0;">Manual processing at volume guarantees errors</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card card-primary">
+                    <div class="card-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                    </div>
+                    <h3 class="card-title">Regulatory Compliance</h3>
+                    <p class="card-description" style="margin-bottom: var(--spacing-md);"><strong>Government Oversight</strong></p>
+                    <ul class="card-description" style="list-style: none; padding: 0; margin: 0; text-align: left;">
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">ABF customs regulations (tariff codes, import/export rules)</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Medicare/NDIS compliance frameworks</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Government grant acquittal requirements</li>
+                        <li style="padding: 0.5rem 0;">Complete audit trails required for all transactions</li>
+                    </ul>
+                </div>
+
+                <div class="feature-card card-primary">
+                    <div class="card-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <h3 class="card-title">Time-Sensitive Operations</h3>
+                    <p class="card-description" style="margin-bottom: var(--spacing-md);"><strong>Speed = Competitive Advantage</strong></p>
+                    <ul class="card-description" style="list-style: none; padding: 0; margin: 0; text-align: left;">
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Port cargo holds = $500-2K/day demurrage fees</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Empty appointment slots = lost revenue (healthcare)</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Grant deadlines = contract obligations</li>
+                        <li style="padding: 0.5rem 0;">Faster processing = better customer service, more capacity</li>
                     </ul>
                 </div>
             </div>
@@ -128,7 +268,7 @@
     </section>
 
     <!-- HIGH-STAKES COMPLIANCE INDUSTRIES -->
-    <section id="group-3" class="section">
+    <section id="group-3" class="section section-alt">
         <div class="container">
             <h2 class="section-headline">
                 High-Stakes Compliance Industries<br>
@@ -136,19 +276,26 @@
             </h2>
             <p class="section-subhead">
                 <strong>Total Addressable Market: 600+ Queensland firms</strong><br>
-                High fit—regulatory-heavy, error-intolerant, manual processes = expensive mistakes. Automation prevents fines and lost contracts.
+                Regulatory-heavy, error-intolerant businesses where manual processes = expensive mistakes. Automation prevents fines and contract loss.
             </p>
 
             <div class="methodology-grid">
                 <!-- Logistics & Freight -->
-                <div class="methodology-card methodology-card-clickable" onclick="window.location.href='logistics-compliance.html'">
+                <div class="methodology-card methodology-card-clickable" onclick="window.location.href='logistics-freight.html'">
                     <div class="methodology-content">
-                        <h3>🚢 Logistics & Freight</h3>
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                <line x1="12" y1="22.08" x2="12" y2="12"/>
+                            </svg>
+                            Logistics & Freight
+                        </h3>
                         <p class="methodology-count">~300 QLD firms (Port of Brisbane hub)</p>
                         <p class="methodology-desc"><strong>Key Pain Points:</strong> Customs documentation, tariff classification, POD matching, bill of lading processing</p>
-                        <p class="methodology-desc"><strong>Typical Savings:</strong> 2.5 days faster customs clearance, $10-50K annual fines avoided</p>
+                        <p class="methodology-desc"><strong>Projected Impact:</strong> 2.5 days faster customs clearance, $10-50K annual fines avoided</p>
                         <p class="methodology-link">
-                            <a href="\logistics-compliance.html">Learn More →</a>
+                            <a href="logistics-freight.html">Learn More →</a>
                         </p>
                     </div>
                 </div>
@@ -156,10 +303,15 @@
                 <!-- Healthcare Admin -->
                 <div class="methodology-card methodology-card-clickable" onclick="window.location.href='healthcare-admin.html'">
                     <div class="methodology-content">
-                        <h3>🩺 Healthcare Admin</h3>
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/>
+                            </svg>
+                            Healthcare Admin
+                        </h3>
                         <p class="methodology-count">~200 QLD practices & admin firms</p>
                         <p class="methodology-desc"><strong>Key Pain Points:</strong> Patient intake forms, referral triaging, Medicare/private claiming, appointment coordination</p>
-                        <p class="methodology-desc"><strong>Typical Savings:</strong> 15 hrs/week practice manager time, $200K+ revenue recovery from filled slots</p>
+                        <p class="methodology-desc"><strong>Projected Impact:</strong> 15 hrs/week practice manager time, $200K+ revenue recovery from filled slots</p>
                         <p class="methodology-link">
                             <a href="healthcare-admin.html">Learn More →</a>
                         </p>
@@ -178,9 +330,9 @@
                         </h3>
                         <p class="methodology-count">~100 NDIS/Defence contractors</p>
                         <p class="methodology-desc"><strong>Key Pain Points:</strong> Grant acquittals, tender compliance validation, NDIS audit trails, service logging</p>
-                        <p class="methodology-desc"><strong>Typical Savings:</strong> Contract retention (one failed audit = $500K-1M lost), compliance cost reduction</p>
+                        <p class="methodology-desc"><strong>Projected Impact:</strong> Contract retention (one failed audit = $500K-1M lost), compliance cost reduction</p>
                         <p class="methodology-link">
-                            <a href="\government-contractors.html">Learn More →</a>
+                            <a href="government-contractors.html">Learn More →</a>
                         </p>
                     </div>
                 </div>
@@ -188,93 +340,42 @@
         </div>
     </section>
 
-    <!-- WHAT THESE INDUSTRIES SHARE -->
-    <section class="section section-alt">
+    <!-- REAL-WORLD STAKES SECTION -->
+    <section class="section">
         <div class="container">
-            <h2 class="section-headline">What These Industries Share</h2>
-            <p class="section-subhead">
-                Different sectors, same stakes. Here's why The Protocol works across all of them:
-            </p>
-
-            <div class="deliverable-grid">
-                <div class="deliverable-card deliverable-card-ceo">
-                    <div class="deliverable-header">
-                        <div class="deliverable-icon">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                                <path d="M2 17l10 5 10-5"/>
-                                <path d="M2 12l10 5 10-5"/>
-                            </svg>
-                        </div>
-                        <h3>High Document Volumes</h3>
-                        <p class="deliverable-subtitle">Scale Requires Automation</p>
-                    </div>
-                    <ul class="deliverable-list">
-                        <li>200+ documents processed per week minimum</li>
-                        <li>Repetitive formats (customs entries, patient forms, grant reports)</li>
-                        <li>Manual processing = guaranteed bottlenecks</li>
-                        <li>Peak periods (tax season, container surges) overwhelm staff</li>
-                    </ul>
+            <div class="stakes-box">
+                <div class="stakes-header">
+                    <h2>
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 10px;">
+                            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+                            <path d="M12 9v4"/>
+                            <path d="M12 17h.01"/>
+                        </svg>
+                        The Real Cost of Manual Processing at Volume
+                    </h2>
                 </div>
-
-                <div class="deliverable-card deliverable-card-engineer">
-                    <div class="deliverable-header">
-                        <div class="deliverable-icon">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                                <line x1="12" y1="9" x2="12" y2="13"/>
-                                <line x1="12" y1="17" x2="12.01" y2="17"/>
-                            </svg>
-                        </div>
-                        <h3>Zero Error Tolerance</h3>
-                        <p class="deliverable-subtitle">Mistakes = Financial Loss</p>
+                
+                <div class="stakes-grid">
+                    <div class="stakes-scenario">
+                        <h4>Logistics Firm (150 staff)</h4>
+                        <p class="scenario-problem"><strong>Problem:</strong> Processing 500 customs entries/month manually. 3% error rate = 15 errors.</p>
+                        <p class="scenario-cost"><strong>Cost:</strong> 15 errors × $8K average fine = <span class="cost-highlight">$120K annual fines</span></p>
+                        <p class="scenario-fix"><strong>After Automation:</strong> 99%+ accuracy = 5 errors max = $40K annual fines. <strong>Savings: $80K/year.</strong></p>
                     </div>
-                    <ul class="deliverable-list">
-                        <li>Customs errors = $5-50K fines + demurrage fees</li>
-                        <li>Medicare coding errors = claim rejections, revenue leakage</li>
-                        <li>NDIS audit failures = contract termination</li>
-                        <li>Manual processes guarantee errors at volume</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="deliverable-grid deliverable-grid-spaced">
-                <div class="deliverable-card deliverable-card-ceo">
-                    <div class="deliverable-header">
-                        <div class="deliverable-icon">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                            </svg>
-                        </div>
-                        <h3>Regulatory Compliance</h3>
-                        <p class="deliverable-subtitle">Government Oversight</p>
+                    
+                    <div class="stakes-scenario">
+                        <h4>Healthcare Practice (35 staff)</h4>
+                        <p class="scenario-problem"><strong>Problem:</strong> 20 no-shows/week due to slow referral processing. $200/appointment average.</p>
+                        <p class="scenario-cost"><strong>Cost:</strong> 20 × $200 × 48 weeks = <span class="cost-highlight">$192K annual revenue loss</span></p>
+                        <p class="scenario-fix"><strong>After Automation:</strong> Same-day referral triaging = 50% reduction in no-shows. <strong>Revenue recovery: $96K/year.</strong></p>
                     </div>
-                    <ul class="deliverable-list">
-                        <li>ABF customs regulations (tariff codes, import/export rules)</li>
-                        <li>Medicare/NDIS compliance frameworks</li>
-                        <li>Government grant acquittal requirements</li>
-                        <li>Complete audit trails required for all transactions</li>
-                    </ul>
-                </div>
-
-                <div class="deliverable-card deliverable-card-engineer">
-                    <div class="deliverable-header">
-                        <div class="deliverable-icon">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <polyline points="12 6 12 12 16 14"/>
-                            </svg>
-                        </div>
-                        <h3>Time-Sensitive Operations</h3>
-                        <p class="deliverable-subtitle">Speed = Competitive Advantage</p>
+                    
+                    <div class="stakes-scenario">
+                        <h4>NDIS Contractor (80 staff)</h4>
+                        <p class="scenario-problem"><strong>Problem:</strong> Failed one quarterly audit due to incomplete service logs.</p>
+                        <p class="scenario-cost"><strong>Cost:</strong> Contract terminated = <span class="cost-highlight">$800K annual revenue lost</span></p>
+                        <p class="scenario-fix"><strong>After Automation:</strong> Real-time audit trail = 100% acquittal compliance. <strong>Contract retention secured.</strong></p>
                     </div>
-                    <ul class="deliverable-list">
-                        <li>Port cargo holds = $500-2K/day demurrage fees</li>
-                        <li>Empty appointment slots = lost revenue (healthcare)</li>
-                        <li>Grant deadlines = contract obligations</li>
-                        <li>Faster processing = better customer service</li>
-                    </ul>
                 </div>
             </div>
         </div>
@@ -284,9 +385,9 @@
     <section class="section cta-section">
         <div class="container">
             <div class="cta-content">
-                <h2 class="section-headline">Ready to Test YOUR Documents?</h2>
+                <h2 class="section-headline">Ready to Test YOUR Compliance Documents?</h2>
                 <p class="cta-text" style="max-width: 700px; margin: 0 auto var(--spacing-2xl);">
-                    Every industry starts the same way: We test 15 of your most complex regulatory documents in 48 hours. 
+                    We don't ask you to trust us. We prove it first. We test 15 of your most complex regulatory documents in 48 hours. 
                     99%+ accuracy or full refund. No risk, no open-ended consulting fees.
                 </p>
                 
@@ -306,7 +407,10 @@
                 </div>
                 
                 <p class="cta-footer-note" style="margin-top: var(--spacing-xl); font-size: 0.875rem; color: var(--text-secondary);">
-                    Serving 600+ logistics, healthcare, and government contractors across Queensland • 20-200 staff sweet spot
+                    Full refund if accuracy &lt;99%. We test customs docs, patient forms, or grant reports—whatever costs you most when errors happen.
+                </p>
+                <p class="cta-footer-note" style="margin-top: var(--spacing-md); font-size: 0.875rem; color: var(--text-secondary);">
+                    <strong>600+ Queensland firms match your profile.</strong> Only 12 feasibility sprint slots available in Q1 2025. Logistics firms are booking 4-5 weeks out due to Port of Brisbane volume.
                 </p>
             </div>
         </div>
