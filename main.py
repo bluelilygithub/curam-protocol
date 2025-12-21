@@ -39,7 +39,10 @@ DEPARTMENT_SAMPLES = {
         "samples": [
             {"path": "invoices/Bne.pdf", "label": "Subcontractor Invoice (Table)"},
             {"path": "invoices/CloudRender.pdf", "label": "SaaS Invoice (Modern)"},
-            {"path": "invoices/Tingalpa.pdf", "label": "Hardware Receipt (Thermal)"}
+            {"path": "invoices/Tingalpa.pdf", "label": "Hardware Receipt (Thermal)"},
+            {"path": "invoices/John Deere Construction & Forestry Commercial Invoice.pdf", "label": "John Deere Construction & Forestry Commercial Invoice.pdf"},
+            {"path": "invoices/Lenovo Global Logistics Commercial Invoice.pdf", "label": "Lenovo Global Logistics Commercial Invoice.pdf"},
+            {"path": "invoices/Shenzhen Fast-Circuit Co Commercial Invoice.pdf", "label": "Shenzhen Fast-Circuit Co Commercial Invoice.pdf"}
         ]
     },
     "engineering": {
@@ -2042,13 +2045,7 @@ HTML_TEMPLATE = """
                 <strong>{{ group.label }}</strong> · {{ group.description }}
                 <div style="margin-top: 10px;">
                     {% for sample in group.samples %}
-                    {% if dept_key == 'finance' %}
-                    <div class="finance-sample-row">
-                        <span class="finance-sample-pill">✅ {{ sample.label }}</span>
-                        <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">🔗</a>
-                        <input type="hidden" name="finance_defaults" value="{{ sample.path }}">
-                    </div>
-                    {% elif dept_key == 'transmittal' %}
+                    {% if dept_key == 'transmittal' %}
                     <div class="transmittal-sample-row">
                         <span class="transmittal-sample-pill">✅ {{ sample.label }}</span>
                         <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">🔗</a>
@@ -2056,7 +2053,7 @@ HTML_TEMPLATE = """
                     </div>
                     {% else %}
                     <label>
-                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or (dept_key == 'engineering' and not selected_samples) %}checked{% endif %}>
+                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or ((dept_key == 'engineering' or dept_key == 'finance') and not selected_samples) %}checked{% endif %}>
                         {{ sample.label }}
                         <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">🔗</a>
                     </label>
@@ -2556,12 +2553,19 @@ HTML_TEMPLATE = """
         </div>
         {% endfor %}
         
-        {# Finance table (unchanged) #}
+        {# Finance tables - grouped by filename #}
         {% elif department == 'finance' %}
+        {# Render separate table for each document #}
+        {% for filename, file_results in grouped_finance_results.items() %}
+        <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: white; padding: 16px 20px;">
+                <div style="font-size: 18px; font-weight: 600;">{{ filename }}</div>
+                <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">{{ file_results|length }} row(s) extracted</div>
+            </div>
+            <div style="overflow-x: auto;">
         <table>
             <thead>
                 <tr>
-                    <th>Filename</th>
                 <th>Vendor</th>
                 <th>Date</th>
                 <th>Invoice #</th>
@@ -2572,15 +2576,8 @@ HTML_TEMPLATE = """
             </tr>
             </thead>
             <tbody>
-            {% for row in results %}
+            {% for row in file_results %}
             <tr {% if row.get('requires_manual_verification') %}class="requires-manual-verification"{% elif row.get('has_critical_errors') %}class="has-critical-errors"{% endif %}>
-                <td>{{ row.Filename }}
-                    {% if row.get('requires_manual_verification') %}
-                    <div class="critical-error-banner" style="margin-top: 8px;">
-                        <div class="critical-error-header">🚫 MANUAL VERIFICATION REQUIRED</div>
-                    </div>
-                    {% endif %}
-                </td>
                 <td>{{ row.Vendor }}</td>
                 <td>{{ row.Date }}</td>
                 <td>{{ row.InvoiceNum }}</td>
@@ -2592,6 +2589,9 @@ HTML_TEMPLATE = """
             {% endfor %}
             </tbody>
         </table>
+            </div>
+        </div>
+        {% endfor %}
         {% endif %}
         
         <div class="summary-card">
@@ -5069,14 +5069,10 @@ def index_automater():
         finance_uploaded_paths = []
         transmittal_defaults = []
 
-        # For engineering (now checkboxes), get list of values; for others handle custom logic
-        if department == 'engineering':
+        # For engineering and finance (now checkboxes), get list of values; for others handle custom logic
+        if department == 'engineering' or department == 'finance':
             selected_samples = request.form.getlist('samples')
-            model_actions.append(f"Engineering mode: selected_samples from form = {selected_samples}")
-        elif department == 'finance':
-            finance_defaults = request.form.getlist('finance_defaults')
-            selected_samples = finance_defaults.copy()
-            model_actions.append(f"Finance mode: auto-selecting {len(finance_defaults)} sample invoice(s)")
+            model_actions.append(f"{department.capitalize()} mode: selected_samples from form = {selected_samples}")
         elif department == 'transmittal':
             transmittal_defaults = request.form.getlist('transmittal_defaults')
             selected_samples = transmittal_defaults.copy()
@@ -5413,19 +5409,27 @@ def index_automater():
                 if key not in transmittal_data or transmittal_data[key] is None:
                     transmittal_data[key] = []
     
-    # Group engineering results by filename for separate tables
+    # Group engineering and finance results by filename for separate tables
     grouped_engineering_results = {}
+    grouped_finance_results = {}
     if department == 'engineering' and results:
         for row in results:
             filename = row.get('Filename', 'Unknown')
             if filename not in grouped_engineering_results:
                 grouped_engineering_results[filename] = []
             grouped_engineering_results[filename].append(row)
+    elif department == 'finance' and results:
+        for row in results:
+            filename = row.get('Filename', 'Unknown')
+            if filename not in grouped_finance_results:
+                grouped_finance_results[filename] = []
+            grouped_finance_results[filename].append(row)
     
     return render_template_string(
         HTML_TEMPLATE,
         results=results if results else [],
         grouped_engineering_results=grouped_engineering_results if department == 'engineering' else {},
+        grouped_finance_results=grouped_finance_results if department == 'finance' else {},
         department=department,
         selected_samples=selected_samples,
         sample_files=DEPARTMENT_SAMPLES,
