@@ -50,7 +50,7 @@ DEPARTMENT_SAMPLES = {
             {"path": "drawings/schedule_cad.pdf", "label": "Roof Beam Schedule (CAD)"},
             {"path": "drawings/schedule_revit.pdf", "label": "Column Schedule (Revit)"},
             {"path": "drawings/beam_messy_scan.pdf", "label": "beam_messy_scan.pdf"},
-            {"path": "drawings/column_complex_vector.pdf", "label": "column_complex_vector.pdf"}
+            {"path": "drawings/column_complex_vector.jpeg", "label": "column_complex_vector.jpeg"}
         ]
     },
     "transmittal": {
@@ -2401,6 +2401,35 @@ def validate_engineering_field(field_name, value, entry):
     return result
 
 def extract_text(file_obj):
+    """
+    Extract text from PDF or image files.
+    For PDFs: Uses pdfplumber
+    For images: Uses OCR (pytesseract) if available, otherwise returns error
+    """
+    # Check if file_obj is a string path or file object
+    file_path = None
+    if isinstance(file_obj, str):
+        file_path = file_obj
+        # Check file extension
+        file_ext = os.path.splitext(file_path)[1].lower()
+        if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+            # Try to use OCR for image files
+            try:
+                from PIL import Image
+                import pytesseract
+                
+                # Open and process image
+                img = Image.open(file_path)
+                text = pytesseract.image_to_string(img)
+                if not text.strip():
+                    return f"Error: No text extracted from image (OCR returned empty)"
+                return text
+            except ImportError:
+                return f"Error: Image processing requires pytesseract and PIL. Install with: pip install pytesseract pillow"
+            except Exception as e:
+                return f"Error: OCR failed for image: {e}"
+    
+    # PDF processing
     text = ""
     try:
         with pdfplumber.open(file_obj) as pdf:
