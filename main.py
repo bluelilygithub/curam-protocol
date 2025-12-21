@@ -47,10 +47,10 @@ DEPARTMENT_SAMPLES = {
         "description": "Engineering department samples",
         "folder": "drawings",
         "samples": [
-            {"path": "drawings/schedule_cad.pdf", "label": "Roof Beam Schedule (CAD)"},
-            {"path": "drawings/schedule_revit.pdf", "label": "Column Schedule (Revit)"},
-            {"path": "drawings/beam_messy_scan.pdf", "label": "beam_messy_scan.pdf"},
-            {"path": "drawings/column_complex_vector.jpeg", "label": "column_complex_vector.jpeg"}
+            {"path": "drawings/schedule_cad.pdf", "label": "beam_schedule_CLEAN_cad.pdf"},
+            {"path": "drawings/schedule_revit.pdf", "label": "column_schedule_CLEAN_revit.pdf"},
+            {"path": "drawings/beam_messy_scan.pdf", "label": "beam_schedule_MESSY_scan.pdf"},
+            {"path": "drawings/column_complex_vector.jpeg", "label": "column_schedule_MESSY_scan.jpeg"}
         ]
     },
     "transmittal": {
@@ -2056,11 +2056,7 @@ HTML_TEMPLATE = """
                     </div>
                     {% else %}
                     <label>
-                        {% if dept_key == 'engineering' %}
-                        <input type="radio" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples %}checked{% endif %}>
-                        {% else %}
-                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples %}checked{% endif %}>
-                        {% endif %}
+                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or (dept_key == 'engineering' and not selected_samples) %}checked{% endif %}>
                         {{ sample.label }}
                         <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">🔗</a>
                     </label>
@@ -2427,19 +2423,19 @@ HTML_TEMPLATE = """
         {% endif %}
         
         {% if department == 'finance' or department == 'engineering' %}
+        {% if department == 'engineering' %}
+        {# Render separate table for each document #}
+        {% for filename, file_results in grouped_engineering_results.items() %}
+        <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: white; padding: 16px 20px;">
+                <div style="font-size: 18px; font-weight: 600;">{{ filename }}</div>
+                <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">{{ file_results|length }} row(s) extracted</div>
+            </div>
+            <div style="overflow-x: auto;">
         <table>
             <thead>
                 <tr>
-                    <th>Filename</th>
-                    {% if department == 'finance' %}
-                <th>Vendor</th>
-                <th>Date</th>
-                <th>Invoice #</th>
-                    <th class="currency">Cost</th>
-                    <th class="currency">GST</th>
-                    <th class="currency">Final Amount</th>
-                <th>Summary</th>
-                    {% elif department == 'engineering' and schedule_type == 'column' %}
+                    {% if schedule_type == 'column' %}
                     <th>Mark</th>
                     <th>Section Type</th>
                     <th>Size</th>
@@ -2461,29 +2457,9 @@ HTML_TEMPLATE = """
             </tr>
             </thead>
             <tbody>
-            {% for row in results %}
+            {% for row in file_results %}
             <tr {% if row.get('requires_manual_verification') %}class="requires-manual-verification"{% elif row.get('has_critical_errors') %}class="has-critical-errors"{% endif %}>
-                <td>{{ row.Filename }}
-                    {% if row.get('requires_manual_verification') %}
-                    <div class="critical-error-banner" style="margin-top: 8px;">
-                        <div class="critical-error-header">🚫 MANUAL VERIFICATION REQUIRED</div>
-                    </div>
-                    {% endif %}
-                </td>
-                    {% if department == 'finance' %}
-                <td>{{ row.Vendor }}</td>
-                <td>{{ row.Date }}</td>
-                <td>{{ row.InvoiceNum }}</td>
-                    <td class="currency">{{ row.CostFormatted or row.Cost or 'N/A' }}</td>
-                    <td class="currency">{{ row.GSTFormatted if row.GSTFormatted and row.GSTFormatted != 'N/A' else (row.GST or 'N/A') }}</td>
-                    <td class="currency">{{ row.FinalAmountFormatted or row.TotalFormatted or row.FinalAmount or row.Total or 'N/A' }}</td>
-                <td>{{ row.Summary }}</td>
-                    {% elif department == 'transmittal' %}
-                    <td>{{ row.DwgNo }}</td>
-                    <td>{{ row.Rev }}</td>
-                    <td>{{ row.Title }}</td>
-                    <td>{{ row.Scale }}</td>
-                    {% elif department == 'engineering' and schedule_type == 'column' %}
+                    {% if schedule_type == 'column' %}
                     <td>{% if row.get('Mark_confidence') == 'low' %}<span class="low-confidence">{{ row.Mark }}</span>{% else %}{{ row.Mark }}{% endif %}</td>
                     <td>{{ row.SectionType }}</td>
                     <td>{% if row.get('Size_confidence') == 'low' %}<span class="low-confidence">{{ row.Size }}</span>{% else %}{{ row.Size }}{% endif %}</td>
@@ -2576,6 +2552,48 @@ HTML_TEMPLATE = """
             {% endfor %}
             </tbody>
         </table>
+            </div>
+        </div>
+        {% endfor %}
+        
+        {# Finance table (unchanged) #}
+        {% elif department == 'finance' %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                <th>Vendor</th>
+                <th>Date</th>
+                <th>Invoice #</th>
+                    <th class="currency">Cost</th>
+                    <th class="currency">GST</th>
+                    <th class="currency">Final Amount</th>
+                <th>Summary</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in results %}
+            <tr {% if row.get('requires_manual_verification') %}class="requires-manual-verification"{% elif row.get('has_critical_errors') %}class="has-critical-errors"{% endif %}>
+                <td>{{ row.Filename }}
+                    {% if row.get('requires_manual_verification') %}
+                    <div class="critical-error-banner" style="margin-top: 8px;">
+                        <div class="critical-error-header">🚫 MANUAL VERIFICATION REQUIRED</div>
+                    </div>
+                    {% endif %}
+                </td>
+                <td>{{ row.Vendor }}</td>
+                <td>{{ row.Date }}</td>
+                <td>{{ row.InvoiceNum }}</td>
+                    <td class="currency">{{ row.CostFormatted or row.Cost or 'N/A' }}</td>
+                    <td class="currency">{{ row.GSTFormatted if row.GSTFormatted and row.GSTFormatted != 'N/A' else (row.GST or 'N/A') }}</td>
+                    <td class="currency">{{ row.FinalAmountFormatted or row.TotalFormatted or row.FinalAmount or row.Total or 'N/A' }}</td>
+                <td>{{ row.Summary }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        
         <div class="summary-card">
             <div><strong>Run Summary</strong></div>
             {% for label, text in routine_summary %}
@@ -5051,11 +5069,10 @@ def index_automater():
         finance_uploaded_paths = []
         transmittal_defaults = []
 
-        # For engineering (radio buttons), get single value; for others handle custom logic
+        # For engineering (now checkboxes), get list of values; for others handle custom logic
         if department == 'engineering':
-            sample_value = request.form.get('samples')
-            selected_samples = [sample_value] if sample_value else []
-            model_actions.append(f"Engineering mode: sample_value from form = '{sample_value}'")
+            selected_samples = request.form.getlist('samples')
+            model_actions.append(f"Engineering mode: selected_samples from form = {selected_samples}")
         elif department == 'finance':
             finance_defaults = request.form.getlist('finance_defaults')
             selected_samples = finance_defaults.copy()
@@ -5379,6 +5396,15 @@ def index_automater():
             }
             for result in results:
                 if isinstance(result, dict):
+    
+    # Group engineering results by filename for separate tables
+    grouped_engineering_results = {}
+    if department == 'engineering' and results:
+        for row in results:
+            filename = row.get('Filename', 'Unknown')
+            if filename not in grouped_engineering_results:
+                grouped_engineering_results[filename] = []
+            grouped_engineering_results[filename].append(row)
                     # Extract drawing register - handle both dict and list
                     if 'DrawingRegister' in result:
                         dr = result['DrawingRegister']
@@ -5399,6 +5425,7 @@ def index_automater():
     return render_template_string(
         HTML_TEMPLATE,
         results=results if results else [],
+        grouped_engineering_results=grouped_engineering_results if department == 'engineering' else {},
         department=department,
         selected_samples=selected_samples,
         sample_files=DEPARTMENT_SAMPLES,
