@@ -5396,15 +5396,6 @@ def index_automater():
             }
             for result in results:
                 if isinstance(result, dict):
-    
-    # Group engineering results by filename for separate tables
-    grouped_engineering_results = {}
-    if department == 'engineering' and results:
-        for row in results:
-            filename = row.get('Filename', 'Unknown')
-            if filename not in grouped_engineering_results:
-                grouped_engineering_results[filename] = []
-            grouped_engineering_results[filename].append(row)
                     # Extract drawing register - handle both dict and list
                     if 'DrawingRegister' in result:
                         dr = result['DrawingRegister']
@@ -5421,6 +5412,15 @@ def index_automater():
             for key in ['DrawingRegister', 'Standards', 'Materials', 'Connections', 'Assumptions', 'VOSFlags', 'CrossReferences']:
                 if key not in transmittal_data or transmittal_data[key] is None:
                     transmittal_data[key] = []
+    
+    # Group engineering results by filename for separate tables
+    grouped_engineering_results = {}
+    if department == 'engineering' and results:
+        for row in results:
+            filename = row.get('Filename', 'Unknown')
+            if filename not in grouped_engineering_results:
+                grouped_engineering_results[filename] = []
+            grouped_engineering_results[filename].append(row)
     
     return render_template_string(
         HTML_TEMPLATE,
