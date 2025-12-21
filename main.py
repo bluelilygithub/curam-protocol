@@ -618,6 +618,35 @@ HTML_TEMPLATE = """
             background: #f0f9ff;
             font-size: 13px;
         }
+        .low-confidence {
+            background-color: #fef3c7;
+            border-left: 3px solid #f59e0b;
+            padding: 4px 8px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        .low-confidence::before {
+            content: "⚠️ ";
+            font-weight: 600;
+        }
+        .low-confidence-text {
+            background-color: #fee2e2;
+            border-left: 3px solid #ef4444;
+            padding: 6px 10px;
+            border-radius: 4px;
+            display: block;
+            position: relative;
+        }
+        .low-confidence-text::before {
+            content: "⚠️ LOW CONFIDENCE - REVIEW REQUIRED";
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            color: #dc2626;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
     </style>
 </head>
 <body>
@@ -1086,23 +1115,23 @@ HTML_TEMPLATE = """
                     <td>{{ row.Title }}</td>
                     <td>{{ row.Scale }}</td>
                     {% elif department == 'engineering' and schedule_type == 'column' %}
-                    <td>{{ row.Mark }}</td>
+                    <td>{% if row.get('Mark_confidence') == 'low' %}<span class="low-confidence">{{ row.Mark }}</span>{% else %}{{ row.Mark }}{% endif %}</td>
                     <td>{{ row.SectionType }}</td>
-                    <td>{{ row.Size }}</td>
+                    <td>{% if row.get('Size_confidence') == 'low' %}<span class="low-confidence">{{ row.Size }}</span>{% else %}{{ row.Size }}{% endif %}</td>
                     <td>{{ row.Length }}</td>
-                    <td>{{ row.Grade }}</td>
+                    <td>{% if row.get('Grade_confidence') == 'low' %}<span class="low-confidence">{{ row.Grade }}</span>{% else %}{{ row.Grade }}{% endif %}</td>
                     <td>{{ row.BasePlate }}</td>
                     <td>{{ row.CapPlate }}</td>
                     <td>{{ row.Finish }}</td>
-                    <td>{{ row.Comments }}</td>
+                    <td>{% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}</td>
                     {% else %}
-                    <td>{{ row.Mark }}</td>
-                    <td>{{ row.Size }}</td>
+                    <td>{% if row.get('Mark_confidence') == 'low' %}<span class="low-confidence">{{ row.Mark }}</span>{% else %}{{ row.Mark }}{% endif %}</td>
+                    <td>{% if row.get('Size_confidence') == 'low' %}<span class="low-confidence">{{ row.Size }}</span>{% else %}{{ row.Size }}{% endif %}</td>
                     <td>{{ row.Qty }}</td>
                     <td>{{ row.Length }}</td>
-                    <td>{{ row.Grade }}</td>
-                    <td>{{ row.PaintSystem }}</td>
-                    <td>{{ row.Comments }}</td>
+                    <td>{% if row.get('Grade_confidence') == 'low' %}<span class="low-confidence">{{ row.Grade }}</span>{% else %}{{ row.Grade }}{% endif %}</td>
+                    <td>{% if row.get('PaintSystem_confidence') == 'low' %}<span class="low-confidence">{{ row.PaintSystem }}</span>{% else %}{{ row.PaintSystem }}{% endif %}</td>
+                    <td>{% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}</td>
                     {% endif %}
             </tr>
             {% endfor %}
@@ -1263,6 +1292,59 @@ def format_currency(value):
     except (ValueError, TypeError):
         # If conversion fails, return as is
         return str(value) if value else ""
+
+def detect_low_confidence(text):
+    """
+    Detect low confidence text patterns that indicate OCR errors, garbled text, or incomplete extraction.
+    Returns a confidence level: 'high', 'medium', or 'low'
+    """
+    if not text or text == "N/A":
+        return 'high'  # N/A is expected, not an error
+    
+    text_str = str(text).strip()
+    if len(text_str) < 3:
+        return 'high'  # Short text is usually fine
+    
+    # Check for garbled text (excessive spaces between characters)
+    # Pattern: "H H o o t l d d" - characters separated by spaces
+    words = text_str.split()
+    if len(words) > len(text_str) * 0.4:  # More than 40% of chars are word separators
+        # Check if it looks like garbled OCR (many single-character "words")
+        single_char_words = sum(1 for w in words if len(w) == 1)
+        if single_char_words > len(words) * 0.3:  # More than 30% are single characters
+            return 'low'
+    
+    # Check for incomplete text (starts with bracket but doesn't close, or truncated)
+    if text_str.startswith('[') and not text_str.endswith(']'):
+        # Check if it looks truncated (ends abruptly)
+        if len(text_str) < 20 or text_str.endswith(' sta') or text_str.endswith(' sta '):
+            return 'low'
+    
+    # Check for excessive mixed case inappropriately (OCR error pattern)
+    # Pattern like "H H o o t l d d i 4 p O m g m"
+    if len(text_str) > 10:
+        alternating_case = sum(1 for i in range(len(text_str)-1) 
+                              if text_str[i].isupper() != text_str[i+1].isupper())
+        if alternating_case > len(text_str) * 0.6:  # More than 60% case changes
+            return 'low'
+    
+    # Check for repeated characters with spaces (OCR splitting)
+    # Pattern: "H H o o t l d d"
+    if ' ' in text_str:
+        chars_with_spaces = text_str.split()
+        if len(chars_with_spaces) > 5:
+            # Check if many are single characters
+            single_chars = sum(1 for c in chars_with_spaces if len(c) == 1)
+            if single_chars > len(chars_with_spaces) * 0.4:
+                return 'low'
+    
+    # Check for incomplete words (common OCR truncation patterns)
+    incomplete_patterns = [' sta ', ' sta', ' coffe', ' handwrit', ' delet']
+    for pattern in incomplete_patterns:
+        if pattern in text_str.lower():
+            return 'low'
+    
+    return 'high'
 
 def extract_text(file_obj):
     text = ""
@@ -3342,6 +3424,13 @@ def index_automater():
                                     entry['FinalAmountFormatted'] = format_currency(final_value) if final_value not in ("", None, "N/A") else (final_value or "N/A")
                                 else:
                                     entry['TotalFormatted'] = format_currency(entry.get('Total', ''))
+                                    # Add confidence indicators for engineering fields
+                                    if department == "engineering":
+                                        # Check confidence for key text fields
+                                        for field in ['Comments', 'PaintSystem', 'Size', 'Grade', 'Mark']:
+                                            if field in entry and entry[field]:
+                                                confidence = detect_low_confidence(entry[field])
+                                                entry[f'{field}_confidence'] = confidence
                                 results.append(entry)
                             # Store schedule type for engineering documents (use first detected type)
                             if department == "engineering" and schedule_type and not detected_schedule_type:
