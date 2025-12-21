@@ -413,7 +413,9 @@ If partially legible after context analysis:
 - Flag: ⚠️ Handwritten text partially unclear - interpretation based on context
 - Example: [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Partially unclear, "310UC137" inferred from context
 
-**Step 4: HANDWRITTEN CONTEXT VALIDATION - CRITICAL**
+**Step 4: HANDWRITTEN CONTEXT VALIDATION - CONSERVATIVE APPROACH**
+
+**CRITICAL RULE: Better to mark as uncertain than extract wrong information**
 
 **COMMON PATTERNS IN ENGINEERING CHANGES:**
 
@@ -429,30 +431,72 @@ Invalid patterns (make no technical sense):
 - "CORRODED TO [specification]" ✗ Makes no sense
 - "DAMAGED TO [specification]" ✗ Makes no sense
 - "BROKEN TO [specification]" ✗ Makes no sense
+- "CHEVROLET YO [specification]" ✗ Makes no sense
+- Any nonsensical phrase ✗
 
-**VALIDATION PROTOCOL:**
+**CONSERVATIVE VALIDATION PROTOCOL:**
 
-If handwriting appears to say nonsensical phrase:
-1. Re-examine with common patterns
-2. Check if verb makes technical sense:
-   - "Changed to", "Modified to", "Revised to" → Yes ✓
-   - "Corroded to", "Damaged to", "Broken to" → No ✗
-3. If nonsensical, check for similar valid patterns:
-   - "CORRODED TO" likely is "CHANGED TO" (C→CH, OCR confusion)
-   - "DAMAGED TO" likely is "MODIFIED TO" (similar pattern)
-4. Apply context-based correction if confident (>90%)
-5. Flag the correction: ⚠️ Corrected '[original]' to '[corrected]' (handwriting interpretation)
+When handwritten text is unclear:
 
-**EXAMPLE:**
+**STEP 1: Extract what OCR provides**
+- Get raw OCR text first
+- Don't modify yet
 
-Handwritten text appears: "CORRODED TO 310UC137 - PMG"
+**STEP 2: Check if it makes technical sense**
+- Does the phrase make sense in engineering context?
+- Do the words form a logical instruction?
+- → YES: Accept it (even if slightly unclear)
+- → NO: Go to Step 3
 
+**STEP 3: Try common patterns (only if confident >95%)**
+- Match against known patterns: "CHANGED TO [spec]", "DELETED - NOT REQ'D", etc.
+- Check if verb makes technical sense:
+  - "Changed to", "Modified to", "Revised to" → Yes ✓
+  - "Corroded to", "Damaged to", "Broken to", "Chevrolet" → No ✗
+- If pattern matches AND confident (>95%):
+  - Apply correction
+  - Flag: ⚠️ Corrected '[original]' to '[corrected]' (handwriting interpretation)
+
+**STEP 4: If still nonsensical or uncertain:**
+- **DO NOT force a correction**
+- **DO NOT "correct" to another nonsensical phrase**
+- Mark: [handwritten annotation unclear - appears to say "[OCR text]"]
+- Flag: 🚫 CRITICAL: Handwritten text unclear - manual verification required
+- Better to mark as uncertain than extract wrong information
+
+**EXAMPLES:**
+
+**Example 1: Clear enough to correct**
+OCR: "CORRODED TO 310UC137 - PMG"
 Analysis:
 - "CORRODED TO" makes no technical sense
 - Common pattern: "CHANGED TO [beam size]"
-- Likely OCR confusion: "CORRODED" → "CHANGED"
+- Confident: >95% (single character confusion)
 - Correction: "CHANGED TO 310UC137 - PMG"
-- Flag: ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation - nonsensical verb corrected)
+- Flag: ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)
+
+**Example 2: Too unclear - mark as uncertain**
+OCR: "CHEVROLET YO 376UC137 - PMG"
+Analysis:
+- "CHEVROLET YO" makes no technical sense
+- Common pattern match? Likely "CHANGED TO 3?0UC137" but multiple uncertainties
+- Confident: <70% (too many character uncertainties)
+- Action: [handwritten annotation unclear - appears to reference beam size change]
+- Flag: 🚫 CRITICAL: Handwritten annotation illegible - manual verification required
+- **DO NOT attempt correction - too uncertain**
+
+**Example 3: Partially clear**
+OCR: "CHANGED TO 3?0UC137 - PMG" (one unclear digit)
+Analysis:
+- Pattern matches "CHANGED TO [beam size]"
+- One digit uncertain (could be 310UC137 or 360UC137)
+- Action: [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Digit partially unclear, inferred from context
+- Flag: ⚠️ Handwritten text partially unclear - "310UC137" interpretation based on context
+
+**NEVER:**
+- "Correct" handwriting to another nonsensical phrase
+- Apply corrections when confidence <90%
+- Force interpretations when multiple characters are uncertain
 
 If truly illegible after analysis:
 - [handwritten annotation present but illegible - appears to reference [type of change]]
@@ -783,6 +827,12 @@ BEFORE SUBMITTING EXTRACTION, VERIFY:
 □ Critical issues marked 🚫? (Safety/compliance impacts)
 □ Corrections explained? (Showed original + fixed value)
 □ Suggested fixes provided? (When confident about correction)
+
+**✓ Consistency Checks**
+□ All "Corrected X to Y" flags have corresponding corrected text?
+□ Text matches flags? (No flag/text mismatches)
+□ Handwriting corrections only applied if confident >95%?
+□ Uncertain handwriting marked as unclear (not forced corrections)?
 
 ## IMAGE PROCESSING - CRITICAL FOR JPEG/PNG FILES
 
@@ -1168,6 +1218,36 @@ Every correction MUST have a corresponding flag. This is mandatory for:
 - Confidence assessment
 - Trust building
 
+**CORRECTION FLAG vs TEXT CONSISTENCY CHECK - CRITICAL:**
+
+Before finalizing extraction, validate consistency:
+
+**VALIDATION PROTOCOL:**
+
+1. Review all flags that say "Corrected X to Y"
+2. Verify text actually shows Y, not X
+3. If mismatch found:
+   - Fix the text to match the flag (apply the correction)
+   - OR remove the flag if correction wasn't applied
+4. Ensure every "Corrected X to Y" flag has corresponding corrected text
+
+**EXAMPLES:**
+
+✓ CORRECT (Flag/Text Match):
+Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
+Text: "Verify with supplier"
+[Flag and text match - correction applied]
+
+✗ WRONG (Flag/Text Mismatch):
+Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
+Text: "Verify with supplies"
+[Flag says corrected but text still shows original - FIX THIS]
+
+**MANDATORY RULE:**
+If flag says "Corrected X to Y" → Text MUST show Y
+If text shows Y but no flag → Add flag explaining correction
+Every correction MUST have a corresponding flag. No exceptions.
+
 **EXAMPLES:**
 
 ✓ "Hot dip galvanised per AS/NZS 4680"
@@ -1186,9 +1266,6 @@ Flag: "⚠️ Corrected 'supplies' to 'supplier' (OCR error)"
 "Hot dip galvanised per AS/NZS 4680"
 Flag: [none]
 [Correction applied but no transparency - engineer can't verify what changed]
-
-**MANDATORY RULE:**
-Every correction MUST have a corresponding flag. No exceptions.
 
 **SPECIFIC EXAMPLES:**
 
