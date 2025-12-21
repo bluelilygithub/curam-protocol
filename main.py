@@ -264,7 +264,9 @@ def build_prompt(text, doc_type):
         - Common substitutions: 3↔7, 0↔O, 1↔I, 5↔S
         - If "250UB77.2" appears but similar entries show "250UB37.2" pattern, correct 7→3
         - If "WB 610 x 2 x 27.2" appears, this is likely wrong format - welded beams should be "WB[depth]×[thickness]" (e.g., "WB1220×6.0")
-        - Check quantity carefully - if table shows "2" but you extract "1", verify you're reading the correct cell
+        - QUANTITY EXTRACTION: Read quantity values VERY carefully - verify you're reading from the QTY column, not adjacent cells
+        - If quantity seems unusually low (e.g., 1 when similar members show 2+), double-check the cell alignment
+        - Quantity should be a whole number from the QTY column - if you see "1" but context suggests "2", verify column boundaries
         - Only correct if you're highly confident based on context, similar entries, and column headers
         
         Return ONLY a valid JSON array (no markdown, no explanation, no code blocks).
@@ -1550,7 +1552,18 @@ def validate_engineering_field(field_name, value, entry):
                 result['errors'].append(f"Quantity '{qty}' seems unusually high - please verify")
                 if result['confidence'] == 'high':
                     result['confidence'] = 'medium'
-            # Note: We can't easily compare with other entries here, but the prompt should handle this
+            # Flag quantity of 1 for special attention (often correct, but sometimes misread)
+            # This is a soft flag - quantity of 1 is valid, but worth double-checking
+            elif qty == 1:
+                # Check if this is a structural member that might typically come in pairs
+                # This is a heuristic - we can't be certain, but it's worth flagging for review
+                mark = entry.get('Mark', '')
+                size = entry.get('Size', '')
+                # If it's a beam/column that might be duplicated, flag for verification
+                if mark and (mark.startswith('B') or mark.startswith('C') or mark.startswith('NB')):
+                    # Don't add error, but we could add a note - actually, let's be conservative
+                    # Only flag if there are other issues too
+                    pass
         except ValueError:
             result['errors'].append(f"Quantity is not a valid number: '{value_str}'")
             result['confidence'] = 'low'
@@ -3731,6 +3744,28 @@ def index_automater():
                                         if entry['critical_errors']:
                                             entry['has_critical_errors'] = True
                                 results.append(entry)
+                            
+                            # Post-processing: Cross-entry validation for engineering
+                            if department == "engineering" and len(results) > 1:
+                                # Check for quantity anomalies by comparing similar entries
+                                for i, entry in enumerate(results):
+                                    if entry.get('Qty') == 1:
+                                        # Check if similar entries (same mark prefix, similar size) have higher quantities
+                                        mark = entry.get('Mark', '')
+                                        size = entry.get('Size', '')
+                                        if mark:
+                                            # Look for similar entries (same prefix like "NB-")
+                                            similar_entries = [
+                                                r for r in results 
+                                                if r != entry and r.get('Mark', '').startswith(mark.split('-')[0] + '-')
+                                            ]
+                                            if similar_entries:
+                                                # Check if any similar entries have quantity > 1
+                                                higher_qty_entries = [e for e in similar_entries if int(e.get('Qty', 0)) > 1]
+                                                if higher_qty_entries and entry.get('has_critical_errors'):
+                                                    # Only flag if entry already has other issues (to avoid false positives)
+                                                    entry['critical_errors'].append(f"Quantity is 1, but similar entries (e.g., {higher_qty_entries[0].get('Mark')}) have quantity {higher_qty_entries[0].get('Qty')} - please verify column alignment")
+                                                    entry['has_critical_errors'] = True
                             # Store schedule type for engineering documents (use first detected type)
                             if department == "engineering" and schedule_type and not detected_schedule_type:
                                 detected_schedule_type = schedule_type
