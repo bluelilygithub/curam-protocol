@@ -360,6 +360,27 @@ Common patterns:
 - Maintain separation (periods, semicolons)
 - Don't merge distinct specifications
 
+**Step 4: OUTPUT COMPLETENESS CHECK - CRITICAL**
+
+Before finalizing each field:
+
+**TRUNCATION DETECTION:**
+- Check if output appears cut off (ends mid-word)
+- Check if sentence ends abruptly without punctuation
+- Check if field seems incomplete
+- Look for partial words like "(coffee sta" or "at bas"
+
+**If truncated:**
+- Complete the field if possible
+- Or mark as [truncated] or [remainder unclear]
+- NEVER leave partial words like "(coffee sta"
+- Use proper markers: "[coffee stain obscures text]" or "[remainder unclear]"
+
+**VALIDATION:**
+- If field ends mid-word → Mark as incomplete
+- If field seems short for important item → Check for continuation
+- If unclear portion → Use marker: "[coffee stain obscures text]" not "(coffee sta"
+
 EXAMPLES:
 
 Wrong: "Install anchor bolts"
@@ -368,11 +389,18 @@ Right: "Install anchor bolts. Torque to 150 ft-lbs per spec XYZ-789"
 Wrong: "Main support element"
 Right: "Main support element. Fly brace @ 1500 centres. See detail D-12"
 
+Wrong: "(coffee sta"
+Right: "[coffee stain obscures text]" or "Paint System A required [coffee stain obscures remainder]"
+
+Wrong: "Corrosion noted st moore"
+Right: "Corrosion noted at base" ⚠️ Corrected 'st moore' to 'at base' (OCR error)
+
 VALIDATION:
 If field seems short for an important/complex item:
 → Check for text after periods
 → Look for references to standards/drawings
 → Verify you captured complete information
+→ Check for mid-word truncation
 
 **Step 4: Handle Handwritten Annotations**
 
@@ -833,6 +861,8 @@ BEFORE SUBMITTING EXTRACTION, VERIFY:
 □ Text matches flags? (No flag/text mismatches)
 □ Handwriting corrections only applied if confident >95%?
 □ Uncertain handwriting marked as unclear (not forced corrections)?
+□ No mid-word truncation? (Fields complete, not cut off)
+□ All corrections actually applied to text (not just flagged)?
 
 ## IMAGE PROCESSING - CRITICAL FOR JPEG/PNG FILES
 
@@ -1174,20 +1204,35 @@ Common OCR errors:
 
 **CORRECTION APPLICATION PROTOCOL - CRITICAL:**
 
-When you identify a confident correction (>90% certainty):
+**MANDATORY SYNCHRONIZATION: Flags and Text MUST Match**
 
-**STEP 1: Apply the correction to the extracted text**
-- Replace the incorrect term with the corrected version in the actual output
+When you identify a correction:
+
+**STEP 1: Decide if you will apply it**
+- High confidence (>90%): APPLY IT to text
+- Medium confidence (70-90%): APPLY IT to text with strong flag
+- Low confidence (<70%): DON'T apply, flag as uncertain instead
+
+**STEP 2: Apply correction to text FIRST**
+- Write the CORRECTED version in the extracted text
+- NOT the original OCR error
+- Replace the incorrect term with the corrected version
 - The extracted text MUST show the corrected version
 
-**STEP 2: MANDATORY - Add flag explaining what was changed**
-- **NEVER apply a correction silently**
+**STEP 3: Document in flag (only if correction was applied)**
 - Flag: ⚠️ Corrected '[original OCR]' to '[corrected]' ([reason])
 - This provides transparency, verification path, and confidence indicator
+- **NEVER create a "Corrected X to Y" flag if text still shows X**
 
-**STEP 3: Show original in flag for transparency**
+**STEP 4: Show original in flag for transparency**
 - The flag preserves the original OCR text for reference
 - Engineer can verify if correction was appropriate
+
+**IF YOU CANNOT APPLY THE CORRECTION:**
+- Don't create a flag saying you did
+- Instead: Flag as uncertain
+- Example: "⚠️ Handwritten text unclear - appears to say 'CORRODED TO' but likely means 'CHANGED TO' - verify"
+- Text shows: [handwritten annotation unclear - appears to reference beam size change]
 
 **FORMAT:**
 
@@ -1220,16 +1265,24 @@ Every correction MUST have a corresponding flag. This is mandatory for:
 
 **CORRECTION FLAG vs TEXT CONSISTENCY CHECK - CRITICAL:**
 
-Before finalizing extraction, validate consistency:
+**MANDATORY VALIDATION BEFORE OUTPUT:**
 
-**VALIDATION PROTOCOL:**
+Before finalizing each row, check:
 
 1. Review all flags that say "Corrected X to Y"
 2. Verify text actually shows Y, not X
 3. If mismatch found:
-   - Fix the text to match the flag (apply the correction)
-   - OR remove the flag if correction wasn't applied
+   - **MANDATORY: FIX THE TEXT** to match the flag (apply the correction)
+   - The text MUST show the corrected version
+   - DO NOT leave text showing X when flag says Y
+   - DO NOT remove the flag - fix the text instead
 4. Ensure every "Corrected X to Y" flag has corresponding corrected text
+
+**SYNCHRONIZATION RULE:**
+
+If flag says "Corrected X to Y" → Text MUST show Y
+If text shows X but flag says corrected → FIX THE TEXT (mandatory)
+If you can't fix the text → Change flag to "uncertain" instead of "corrected"
 
 **EXAMPLES:**
 
