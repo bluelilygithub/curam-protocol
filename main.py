@@ -230,7 +230,7 @@ def build_prompt(text, doc_type):
         - "Finish": Finish specification (e.g., "HD Galv.", "Paint System A") from FINISH column
         - "Comments": All notes and specifications from COMMENTS column
         
-        CRITICAL RULES:
+        CRITICAL RULES FOR ENGINEERING ACCURACY:
         1. FIRST identify ALL column headers to determine schedule type - map each field to its correct column
         2. Mark values are SHORT (2-6 chars) like "B-101", "C1" - NOT detail references like "D1/S-500"
         3. Extract Mark ONLY from MARK column, never from Comments/Remarks
@@ -239,8 +239,21 @@ def build_prompt(text, doc_type):
         6. If multiple lengths exist for one mark, combine in Length field: "1200 mm, 2400 mm"
         7. Use "N/A" for missing fields or non-existent columns
         8. Verify data makes engineering sense (Length is numeric with units, Grade is grade designation, NOT a number)
-        9. COLUMN ALIGNMENT: Ensure each field comes from its designated column - if Grade contains a number like "37.2", this is likely misaligned (should be in Size column)
-        10. OCR CHARACTER CONFUSION: Watch for common OCR errors: 3↔7, 0↔O, 1↔I, 5↔S. If a number seems wrong, check context (e.g., "250UB77.2" might be "250UB37.2")
+        9. COLUMN ALIGNMENT (CRITICAL): Ensure each field comes from its designated column - if Grade contains a number like "37.2", this is likely misaligned (should be in Size column)
+        10. OCR CHARACTER CONFUSION: Watch for common OCR errors: 3↔7, 0↔O, 1↔I, 5↔S, 8↔5. If a number seems wrong, check context (e.g., "250UB77.2" might be "250UB37.2", "310UC118" might be "310UC158")
+        
+        WELDED BEAM (WB) EXTRACTION - CRITICAL ACCURACY:
+        - WB sizes MUST be in format: "WB[depth]×[thickness]" where depth is typically 600-2000mm, thickness is 4-20mm
+        - Example: "WB1220×6.0" is correct (depth=1220mm, thickness=6.0mm)
+        - WRONG formats to avoid: "WB 610 x 27", "WB 612.200", "WB 610 x 2 x 27.2"
+        - If you see wrong format, verify you're reading from the correct SIZE column, not adjacent cells
+        - Quantity MUST come from QTY column - verify cell alignment carefully
+        
+        INSTALLATION INSTRUCTIONS (Comments field):
+        - Extract ALL text from Comments/Remarks column, including construction details
+        - If text appears garbled, preserve it exactly as shown (don't guess)
+        - Critical instructions like "Hold 40mm grout under base plate" must be captured completely
+        - If OCR has garbled critical text, preserve the garbled version so user knows to check manually
         
         EXTRACTION GUIDELINES (be flexible, extract what you see):
         - Extract values as they appear in the PDF, preserving original format
@@ -708,6 +721,33 @@ HTML_TEMPLATE = """
         tr.has-critical-errors:hover {
             background-color: #fee2e2 !important;
         }
+        .requires-manual-verification {
+            background-color: #fff3cd !important;
+            border: 3px solid #ffc107 !important;
+            position: relative;
+        }
+        .requires-manual-verification::before {
+            content: "⚠️ MANUAL VERIFICATION REQUIRED - DO NOT USE EXTRACTED VALUES";
+            display: block;
+            background-color: #dc3545;
+            color: white;
+            font-weight: 700;
+            padding: 8px 12px;
+            text-align: center;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        .rejection-notice {
+            background-color: #dc3545;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 4px;
+            font-weight: 600;
+            margin: 8px 0;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -1160,7 +1200,7 @@ HTML_TEMPLATE = """
             </thead>
             <tbody>
             {% for row in results %}
-            <tr {% if row.get('has_critical_errors') %}class="has-critical-errors"{% endif %}>
+            <tr {% if row.get('requires_manual_verification') %}class="requires-manual-verification"{% elif row.get('has_critical_errors') %}class="has-critical-errors"{% endif %}>
                 <td>{{ row.Filename }}</td>
                     {% if department == 'finance' %}
                 <td>{{ row.Vendor }}</td>
@@ -1199,6 +1239,15 @@ HTML_TEMPLATE = """
                     <td>{% if row.get('Mark_confidence') == 'low' %}<span class="low-confidence">{{ row.Mark }}</span>{% else %}{{ row.Mark }}{% endif %}</td>
                     <td>
                         {% if row.get('Size_confidence') == 'low' %}<span class="low-confidence">{{ row.Size }}</span>{% else %}{{ row.Size }}{% endif %}
+                        {% if row.get('corrections_applied') %}
+                            {% for correction in row.corrections_applied %}
+                                {% if 'Size' in correction %}
+                                <div style="background-color: #d1f2eb; border-left: 3px solid #27ae60; padding: 4px 8px; margin-top: 4px; border-radius: 3px; font-size: 11px;">
+                                    ✓ {{ correction }}
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
                         {% if row.get('critical_errors') %}
                             {% for error in row.critical_errors %}
                                 {% if 'Size' in error %}
@@ -1239,6 +1288,11 @@ HTML_TEMPLATE = """
                     </td>
                     <td>{% if row.get('PaintSystem_confidence') == 'low' %}<span class="low-confidence">{{ row.PaintSystem }}</span>{% else %}{{ row.PaintSystem }}{% endif %}</td>
                     <td>
+                        {% if row.get('rejection_reason') %}
+                        <div class="rejection-notice">
+                            🚫 {{ row.rejection_reason }}
+                        </div>
+                        {% endif %}
                         {% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}
                         {% if row.get('critical_errors') %}
                         <div class="critical-error">
@@ -3748,31 +3802,68 @@ def index_automater():
                                     entry['FinalAmountFormatted'] = format_currency(final_value) if final_value not in ("", None, "N/A") else (final_value or "N/A")
                                 else:
                                     entry['TotalFormatted'] = format_currency(entry.get('Total', ''))
-                                    # Add confidence indicators and validation for engineering fields
+                                    # Add confidence indicators, validation, and CORRECTION for engineering fields
                                     # CRITICAL: Error flagging system must always be active for safety
                                     if department == "engineering":
                                         entry['critical_errors'] = []
-                                        # Check confidence and validate key fields
+                                        entry['corrections_applied'] = []
+                                        
+                                        # Get context from other entries for correction
+                                        context_entries = [e for e in results if e != entry]
+                                        
+                                        # Check confidence, validate, and CORRECT key fields
                                         for field in ['Comments', 'PaintSystem', 'Size', 'Grade', 'Mark', 'Length', 'Qty']:
                                             if field in entry and entry[field]:
+                                                original_value = entry[field]
+                                                
                                                 # First check for low confidence patterns
                                                 confidence = detect_low_confidence(entry[field])
-                                                entry[f'{field}_confidence'] = confidence
                                                 
-                                                # Then validate for critical errors
+                                                # ATTEMPT CORRECTION for Size field (most critical)
+                                                if field == 'Size':
+                                                    corrected_value, correction_confidence = correct_ocr_errors(
+                                                        entry[field], field, context_entries
+                                                    )
+                                                    if corrected_value != original_value:
+                                                        entry[field] = corrected_value
+                                                        entry['corrections_applied'].append(
+                                                            f"Size corrected: '{original_value}' → '{corrected_value}'"
+                                                        )
+                                                        # Update confidence based on correction
+                                                        if correction_confidence == 'medium':
+                                                            entry[f'{field}_confidence'] = 'medium'
+                                                        else:
+                                                            entry[f'{field}_confidence'] = confidence
+                                                else:
+                                                    entry[f'{field}_confidence'] = confidence
+                                                
+                                                # Then validate for critical errors (after correction)
                                                 validation = validate_engineering_field(field, entry[field], entry)
                                                 if validation['errors']:
                                                     entry['critical_errors'].extend(validation['errors'])
                                                     # Update confidence if validation found issues
                                                     if validation['confidence'] == 'low':
                                                         entry[f'{field}_confidence'] = 'low'
-                                                    elif validation['confidence'] == 'medium' and confidence == 'high':
+                                                    elif validation['confidence'] == 'medium' and entry.get(f'{field}_confidence') == 'high':
                                                         entry[f'{field}_confidence'] = 'medium'
                                         
                                         # Mark entry as having critical errors if any found
                                         # This flagging system is essential for safety - never remove it
                                         if entry['critical_errors']:
                                             entry['has_critical_errors'] = True
+                                        
+                                        # ENGINEERING SAFETY: Reject entries with critical extraction errors
+                                        # If Size or Quantity are wrong, this could cause structural failure
+                                        critical_fields_with_errors = []
+                                        for error in entry.get('critical_errors', []):
+                                            if 'Size' in error or 'size' in error.lower():
+                                                critical_fields_with_errors.append('Size')
+                                            if 'Quantity' in error or 'quantity' in error.lower() or 'Qty' in error:
+                                                critical_fields_with_errors.append('Quantity')
+                                        
+                                        if critical_fields_with_errors:
+                                            entry['requires_manual_verification'] = True
+                                            entry['rejection_reason'] = f"CRITICAL: {', '.join(critical_fields_with_errors)} extraction appears incorrect - MANUAL VERIFICATION REQUIRED before use"
                                 results.append(entry)
                             
                             # Post-processing: Cross-entry validation for engineering
