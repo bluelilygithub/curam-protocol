@@ -47,7 +47,9 @@ DEPARTMENT_SAMPLES = {
         "folder": "drawings",
         "samples": [
             {"path": "drawings/schedule_cad.pdf", "label": "Roof Beam Schedule (CAD)"},
-            {"path": "drawings/schedule_revit.pdf", "label": "Column Schedule (Revit)"}
+            {"path": "drawings/schedule_revit.pdf", "label": "Column Schedule (Revit)"},
+            {"path": "drawings/beam_messy_scan.pdf", "label": "beam_messy_scan.pdf"},
+            {"path": "drawings/column_complex_vector.pdf", "label": "column_complex_vector.pdf"}
         ]
     },
     "transmittal": {
