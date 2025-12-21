@@ -1030,6 +1030,107 @@ VALIDATION FOR MEASUREMENTS:
 - "grows under base" → "grout under base" ⚠️ Corrected OCR error
 - "calvanited" → "galvanised" (if context suggests galvanizing)
 
+### Domain-Specific Word Validation - CRITICAL
+
+CONSTRUCTION/ENGINEERING TERM VALIDATION:
+
+Construction/Engineering terms often get OCR errors. Validate against known vocabulary.
+
+**COATING/FINISH TERMS:**
+
+Common OCR errors:
+- "calvanited" → "galvanised" ✓
+- "galvinized" → "galvanised" ✓
+- "galvanized" → "galvanised" (US spelling, but use Australian "galvanised")
+- "stell" → "steel" ✓
+- "concreat" → "concrete" ✓
+- "paint" → common term ✓
+
+**MATERIAL/SUBSTANCE TERMS:**
+
+- "grows" near "plate/base" → likely "grout" ✓
+- "epoy" → "epoxy" ✓
+- "resin" → common term ✓
+- "mortor" → "mortar" ✓
+- "compund" → "compound" ✓
+- "cement" → common term ✓
+
+**INSTALLATION TERMS:**
+
+- "torqe" → "torque" ✓
+- "weld" → common term ✓
+- "brase" → "brace" ✓
+- "supplies" → "supplier" (in context of "verify with supplier")
+- "instal" → "install" ✓
+- "ancho" → "anchor" ✓
+
+**VALIDATION PROTOCOL:**
+
+1. Extract text as-is from OCR
+2. Check if term exists in technical dictionary/known terms
+3. If not found, look for close matches:
+   - Edit distance < 3 characters
+   - Phonetically similar
+   - Common OCR character substitutions (r→n, i→l, etc.)
+4. Check context:
+   - "[number]mm [substance] under base" → expect: grout, mortar, compound, epoxy
+   - "Hot dip [coating]" → expect: galvanised, painted, coated
+   - "verify with [entity]" → expect: supplier, engineer, site
+5. If high-confidence match found (>90% similar + contextually correct):
+   - Apply correction
+   - Flag: ⚠️ Corrected '[original]' to '[corrected]' (OCR error)
+
+**SPECIFIC EXAMPLES:**
+
+"Hot dip calvanited" →
+- "calvanited" not in dictionary
+- Check similar: "galvanised" (edit distance: 3, common term in context)
+- Correction: "Hot dip galvanised"
+- Flag: ⚠️ Corrected 'calvanited' to 'galvanised' (OCR error)
+
+"40mm grows under base plate" →
+- "grows" is valid word BUT contextually wrong
+- Pattern: "[number]mm [substance] under base"
+- Expected substances: grout, mortar, compound, epoxy
+- "grows" → "grout" (edit distance: 1, contextually correct)
+- Correction: "40mm grout under base plate"
+- Flag: ⚠️ Corrected 'grows' to 'grout' (likely OCR error)
+
+"verify with supplies" →
+- Context: "verify with [entity]"
+- Expected: supplier, engineer, site, manufacturer
+- "supplies" → "supplier" (edit distance: 1, contextually correct)
+- Correction: "verify with supplier"
+- Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
+
+"fly brase @ 1500 centres" →
+- "brase" not in dictionary
+- Check similar: "brace" (edit distance: 1, common structural term)
+- Correction: "fly brace @ 1500 centres"
+- Flag: ⚠️ Corrected 'brase' to 'brace' (OCR error)
+
+**KNOWN TECHNICAL TERMS (Reference List):**
+
+**Coatings/Finishes:**
+- galvanised, galvanized, painted, coated, epoxy, resin
+
+**Materials:**
+- steel, concrete, grout, mortar, compound, epoxy, resin, cement
+
+**Structural Terms:**
+- brace, anchor, weld, torque, install, verify, supplier, engineer
+
+**Installation Terms:**
+- install, anchor, bolt, weld, torque, verify, check, hold, support
+
+**IMPORTANT NOTES:**
+
+- Only correct if confidence is high (>90%) AND contextually makes sense
+- Preserve technical standards exactly: "AS/NZS 4680" not "AS NZS 4680"
+- Don't correct valid variations: "galvanized" (US) vs "galvanised" (AU) - prefer Australian spelling
+- Flag all corrections for transparency
+- If uncertain, flag but don't correct
+
 ### Standards and Reference Patterns
 
 **STANDARD REFERENCES:**
