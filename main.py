@@ -217,7 +217,7 @@ def build_prompt(text, doc_type):
         - "Length": Length with units (e.g., "8500 mm"). If multiple lengths, combine: "1200 mm, 2400 mm"
         - "Grade": Material grade (e.g., 300PLUS, G300)
         - "PaintSystem": Paint/finish specification (e.g., "P1 (2 coats)", "HD Galv.")
-        - "Comments": All notes and specifications
+        - "Comments": All notes and specifications - EXTRACT EXACTLY AS SHOWN, even if garbled. Do not attempt to fix, correct, or interpret OCR errors in comments.
         
         IF COLUMN SCHEDULE, return objects with these keys:
         - "Mark": Short identifier (e.g., C1, C2) from MARK column. DO NOT extract detail references.
@@ -228,7 +228,7 @@ def build_prompt(text, doc_type):
         - "BasePlate": Base plate specification (e.g., "BP-01 (25mm)") from BASE PLATE column, or "N/A"
         - "CapPlate": Cap plate specification (e.g., "CP-01 (20mm)") from CAP PLATE column, or "N/A"
         - "Finish": Finish specification (e.g., "HD Galv.", "Paint System A") from FINISH column
-        - "Comments": All notes and specifications from COMMENTS column
+        - "Comments": All notes and specifications from COMMENTS column - EXTRACT EXACTLY AS SHOWN, even if garbled. Do not attempt to fix, correct, or interpret OCR errors in comments. - EXTRACT EXACTLY AS SHOWN, even if garbled. Do not attempt to fix, correct, or interpret OCR errors in comments.
         
         CRITICAL RULES FOR ENGINEERING ACCURACY:
         1. FIRST identify ALL column headers to determine schedule type - map each field to its correct column
@@ -249,17 +249,22 @@ def build_prompt(text, doc_type):
         - If you see wrong format, verify you're reading from the correct SIZE column, not adjacent cells
         - Quantity MUST come from QTY column - verify cell alignment carefully
         
-        INSTALLATION INSTRUCTIONS (Comments field):
-        - Extract ALL text from Comments/Remarks column, including construction details
-        - If text appears garbled, preserve it exactly as shown (don't guess)
-        - Critical instructions like "Hold 40mm grout under base plate" must be captured completely
-        - If OCR has garbled critical text, preserve the garbled version so user knows to check manually
+        INSTALLATION INSTRUCTIONS (Comments field) - CRITICAL:
+        - Extract ALL text from Comments/Remarks column EXACTLY as it appears in the PDF
+        - DO NOT attempt to correct, fix, or interpret garbled text - preserve it character-by-character
+        - DO NOT try to "decode" OCR errors in comments - extract the raw text as-is
+        - If text appears garbled (e.g., "H H o o t l d d"), extract it exactly: "H H o o t l d d"
+        - If text is incomplete (e.g., "[coffee sta"), extract it exactly: "[coffee sta"
+        - Critical instructions like "Hold 40mm grout under base plate" must be captured if readable, but if garbled, preserve the garbled version
+        - The user will manually verify garbled comments - your job is to extract them accurately, not fix them
         
         EXTRACTION GUIDELINES (be flexible, extract what you see):
         - Extract values as they appear in the PDF, preserving original format
-        - If text is clearly garbled or incomplete, extract it as-is (don't guess)
+        - COMMENTS FIELD: Extract EXACTLY as shown, character-by-character. If garbled (e.g., "H H o o t l d d"), extract it exactly as "H H o o t l d d". DO NOT attempt to fix, decode, or interpret garbled comments.
+        - If text is clearly garbled or incomplete, extract it as-is (don't guess) - ESPECIALLY for Comments field
         - For ambiguous cases, prefer extracting the raw value over attempting correction
-        - If you're confident an OCR error exists (e.g., "3/2 mm" when context suggests "4200 mm"), you may correct it, but preserve original if uncertain
+        - OCR CORRECTION RULES: Only attempt correction for Size, Length, Grade, Qty fields - NEVER correct Comments field
+        - If you're confident an OCR error exists in Size/Length/Grade (e.g., "3/2 mm" when context suggests "4200 mm"), you may correct it, but preserve original if uncertain
         - Handle variations in format gracefully (e.g., "WB1220×6.0" vs "WB 1220 x 6.0" vs "WB1220 x 6.0")
         - Accept any reasonable grade designation (common ones: 300PLUS, 350L0, HA350, AS1594, G300, but others may exist)
         - Length can be in mm or m, with or without spaces
@@ -3881,6 +3886,7 @@ def index_automater():
                                         context_entries = [e for e in results if e != entry]
                                         
                                         # Check confidence, validate, and CORRECT key fields
+                                        # IMPORTANT: Only correct Size field - preserve Comments exactly as extracted
                                         for field in ['Comments', 'PaintSystem', 'Size', 'Grade', 'Mark', 'Length', 'Qty']:
                                             if field in entry and entry[field]:
                                                 original_value = entry[field]
@@ -3888,7 +3894,8 @@ def index_automater():
                                                 # First check for low confidence patterns
                                                 confidence = detect_low_confidence(entry[field])
                                                 
-                                                # ATTEMPT CORRECTION for Size field (most critical)
+                                                # ATTEMPT CORRECTION ONLY for Size field (most critical)
+                                                # DO NOT correct Comments - preserve garbled text exactly as extracted
                                                 if field == 'Size':
                                                     corrected_value, correction_confidence = correct_ocr_errors(
                                                         entry[field], field, context_entries
@@ -3904,6 +3911,7 @@ def index_automater():
                                                         else:
                                                             entry[f'{field}_confidence'] = confidence
                                                 else:
+                                                    # For all other fields (especially Comments), preserve exactly as extracted
                                                     entry[f'{field}_confidence'] = confidence
                                                 
                                                 # Then validate for critical errors (after correction)
