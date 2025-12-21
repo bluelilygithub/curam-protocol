@@ -1517,6 +1517,75 @@ def detect_low_confidence(text):
     
     return 'high'
 
+def correct_ocr_errors(value_str, field_name, context_entries=None):
+    """
+    Actually correct common OCR character substitution errors.
+    Returns corrected value and confidence level.
+    """
+    if not value_str or value_str == "N/A":
+        return value_str, 'high'
+    
+    original = value_str
+    corrected = value_str
+    confidence = 'high'
+    
+    # Common OCR substitutions: 3↔7, 0↔O, 1↔I, 5↔S, 8↔5
+    if field_name == 'Size':
+        # Universal Beams (UB) - correct 7→3 errors
+        if 'UB' in corrected.upper():
+            match = re.search(r'(\d+)UB(\d+)\.(\d+)', corrected)
+            if match:
+                prefix = match.group(1)
+                middle = match.group(2)
+                suffix = match.group(3)
+                # If middle number starts with 7 and is 2 digits, likely should be 3
+                if middle.startswith('7') and len(middle) == 2:
+                    # Check context - if similar entries have 3x pattern, correct it
+                    if context_entries:
+                        similar_patterns = [e.get('Size', '') for e in context_entries 
+                                          if 'UB' in e.get('Size', '').upper() and 
+                                          e.get('Size', '').startswith(prefix)]
+                        if similar_patterns:
+                            # If other entries show 3x pattern, correct this one
+                            if any('3' in p.split('UB')[1][:1] for p in similar_patterns):
+                                corrected = corrected.replace(f'UB{middle}', f'UB3{middle[1:]}', 1)
+                                confidence = 'medium'
+        
+        # Universal Columns (UC) - correct 8↔5, 1↔5 errors
+        if 'UC' in corrected.upper():
+            match = re.search(r'(\d+)UC(\d+)', corrected)
+            if match:
+                prefix = match.group(1)
+                suffix = match.group(2)
+                # Common UC sizes: 118, 137, 158, etc.
+                # If we see 118, might be 158 (8→5) or 137 (1→3, 8→7)
+                # If we see 108, might be 158 (0→5, 8→5)
+                if suffix in ['118', '108']:
+                    # Check context for common UC sizes
+                    if context_entries:
+                        similar_sizes = [e.get('Size', '') for e in context_entries 
+                                        if 'UC' in e.get('Size', '').upper() and 
+                                        e.get('Size', '').startswith(prefix)]
+                        # If we see patterns like 158, 137 in context, likely correction
+                        if any('158' in s or '137' in s for s in similar_sizes):
+                            if suffix == '118':
+                                # Could be 158 (8→5) or 137 (1→3, 8→7)
+                                # Prefer 158 as more common
+                                corrected = corrected.replace('UC118', 'UC158', 1)
+                                confidence = 'medium'
+                            elif suffix == '108':
+                                corrected = corrected.replace('UC108', 'UC158', 1)
+                                confidence = 'medium'
+        
+        # Welded Beams (WB) - correct format errors
+        if 'WB' in corrected.upper():
+            # Pattern: "WB 610 x 27" or "WB 612.200" → should be "WB1220×6.0"
+            # This is complex - need to understand the actual values
+            # For now, flag but don't auto-correct (too risky)
+            pass
+    
+    return corrected, confidence
+
 def detect_ocr_character_errors(value_str, field_name):
     """
     Detect common OCR character substitution errors.
