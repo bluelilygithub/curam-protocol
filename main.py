@@ -413,6 +413,47 @@ If partially legible after context analysis:
 - Flag: ⚠️ Handwritten text partially unclear - interpretation based on context
 - Example: [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Partially unclear, "310UC137" inferred from context
 
+**Step 4: HANDWRITTEN CONTEXT VALIDATION - CRITICAL**
+
+**COMMON PATTERNS IN ENGINEERING CHANGES:**
+
+Valid patterns (make technical sense):
+- "CHANGED TO [new specification]" ✓ Common
+- "MODIFIED TO [new specification]" ✓ Common
+- "REVISED TO [new specification]" ✓ Common
+- "UPDATED TO [new specification]" ✓ Common
+- "APPROVED - [initials] [date]" ✓ Common
+- "DELETED - NOT REQ'D" ✓ Common
+
+Invalid patterns (make no technical sense):
+- "CORRODED TO [specification]" ✗ Makes no sense
+- "DAMAGED TO [specification]" ✗ Makes no sense
+- "BROKEN TO [specification]" ✗ Makes no sense
+
+**VALIDATION PROTOCOL:**
+
+If handwriting appears to say nonsensical phrase:
+1. Re-examine with common patterns
+2. Check if verb makes technical sense:
+   - "Changed to", "Modified to", "Revised to" → Yes ✓
+   - "Corroded to", "Damaged to", "Broken to" → No ✗
+3. If nonsensical, check for similar valid patterns:
+   - "CORRODED TO" likely is "CHANGED TO" (C→CH, OCR confusion)
+   - "DAMAGED TO" likely is "MODIFIED TO" (similar pattern)
+4. Apply context-based correction if confident (>90%)
+5. Flag the correction: ⚠️ Corrected '[original]' to '[corrected]' (handwriting interpretation)
+
+**EXAMPLE:**
+
+Handwritten text appears: "CORRODED TO 310UC137 - PMG"
+
+Analysis:
+- "CORRODED TO" makes no technical sense
+- Common pattern: "CHANGED TO [beam size]"
+- Likely OCR confusion: "CORRODED" → "CHANGED"
+- Correction: "CHANGED TO 310UC137 - PMG"
+- Flag: ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation - nonsensical verb corrected)
+
 If truly illegible after analysis:
 - [handwritten annotation present but illegible - appears to reference [type of change]]
 - Don't mark entire row as illegible
@@ -420,6 +461,7 @@ If truly illegible after analysis:
 EXAMPLES:
 ✓ "Original size 250mm. [handwritten: 'CHANGED TO 300mm - approval JD 5/12/19']"
 ✓ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Handwriting partially unclear, size inferred from context"
+✓ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)"
 ✓ "Pending approval [handwritten signature - illegible]"
 ✓ "[handwritten in red pen: 'DELETED - NOT REQ'D']"
 
@@ -1088,11 +1130,14 @@ When you identify a confident correction (>90% certainty):
 - Replace the incorrect term with the corrected version in the actual output
 - The extracted text MUST show the corrected version
 
-**STEP 2: Add flag explaining what was changed**
+**STEP 2: MANDATORY - Add flag explaining what was changed**
+- **NEVER apply a correction silently**
 - Flag: ⚠️ Corrected '[original OCR]' to '[corrected]' ([reason])
+- This provides transparency, verification path, and confidence indicator
 
 **STEP 3: Show original in flag for transparency**
 - The flag preserves the original OCR text for reference
+- Engineer can verify if correction was appropriate
 
 **FORMAT:**
 
@@ -1100,7 +1145,12 @@ When you identify a confident correction (>90% certainty):
 Text: "Main support beam. Fly brace @ 1500 centres."
 Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
 
-✗ WRONG:
+✗ WRONG (Missing Flag):
+Text: "Main support beam. Fly brace @ 1500 centres."
+Flag: [none]
+[Correction applied but no transparency - engineer can't verify]
+
+✗ WRONG (Flag but No Correction):
 Text: "Main support beam. Fly brase @ 1500 centres."
 Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
 [Text still shows error even though flag says corrected]
@@ -1108,17 +1158,37 @@ Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
 **CONSISTENCY RULE:**
 
 If flag says "Corrected X to Y" → Text MUST show Y, not X
+If text shows corrected version → Flag MUST explain what was changed
+
+**TRANSPARENCY REQUIREMENT:**
+
+Every correction MUST have a corresponding flag. This is mandatory for:
+- Engineer verification
+- Audit trail
+- Confidence assessment
+- Trust building
 
 **EXAMPLES:**
 
 ✓ "Hot dip galvanised per AS/NZS 4680"
 Flag: "⚠️ Corrected 'calvanited' to 'galvanised' (OCR error)"
+[Correction applied + flag shown]
 
 ✓ "40mm grout under base plate"
 Flag: "⚠️ Corrected 'grows' to 'grout' (OCR error)"
+[Correction applied + flag shown]
 
 ✓ "verify with supplier"
 Flag: "⚠️ Corrected 'supplies' to 'supplier' (OCR error)"
+[Correction applied + flag shown]
+
+✗ WRONG (Missing Flag):
+"Hot dip galvanised per AS/NZS 4680"
+Flag: [none]
+[Correction applied but no transparency - engineer can't verify what changed]
+
+**MANDATORY RULE:**
+Every correction MUST have a corresponding flag. No exceptions.
 
 **SPECIFIC EXAMPLES:**
 
