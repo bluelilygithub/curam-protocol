@@ -37,9 +37,9 @@ DEPARTMENT_SAMPLES = {
         "description": "Finance department samples",
         "folder": "invoices",
         "samples": [
-            {"path": "invoices/Bne.pdf", "label": "Subcontractor Invoice (Table)"},
-            {"path": "invoices/CloudRender.pdf", "label": "SaaS Invoice (Modern)"},
-            {"path": "invoices/Tingalpa.pdf", "label": "Hardware Receipt (Thermal)"},
+            {"path": "invoices/Bne.pdf", "label": "Bne.pdf"},
+            {"path": "invoices/CloudRender.pdf", "label": "CloudRender.pdf"},
+            {"path": "invoices/Tingalpa.pdf", "label": "Tingalpa.pdf"},
             {"path": "invoices/John Deere Construction & Forestry Commercial Invoice.pdf", "label": "John Deere Construction & Forestry Commercial Invoice.pdf"},
             {"path": "invoices/Lenovo Global Logistics Commercial Invoice.pdf", "label": "Lenovo Global Logistics Commercial Invoice.pdf"},
             {"path": "invoices/Shenzhen Fast-Circuit Co Commercial Invoice.pdf", "label": "Shenzhen Fast-Circuit Co Commercial Invoice.pdf"}
@@ -5103,7 +5103,7 @@ def index_automater():
             selected_samples.extend(finance_uploaded_paths)
 
         # Filter samples to only those matching the current department (skip for auto-select departments)
-        if department in ('finance', 'transmittal'):
+        if department == 'transmittal':
             samples = [sample for sample in selected_samples if sample]
         else:
             samples = [
