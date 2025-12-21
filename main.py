@@ -1077,8 +1077,48 @@ Common OCR errors:
    - "Hot dip [coating]" → expect: galvanised, painted, coated
    - "verify with [entity]" → expect: supplier, engineer, site
 5. If high-confidence match found (>90% similar + contextually correct):
-   - Apply correction
+   - **APPLY THE CORRECTION TO THE EXTRACTED TEXT** (see Correction Application Protocol below)
    - Flag: ⚠️ Corrected '[original]' to '[corrected]' (OCR error)
+
+**CORRECTION APPLICATION PROTOCOL - CRITICAL:**
+
+When you identify a confident correction (>90% certainty):
+
+**STEP 1: Apply the correction to the extracted text**
+- Replace the incorrect term with the corrected version in the actual output
+- The extracted text MUST show the corrected version
+
+**STEP 2: Add flag explaining what was changed**
+- Flag: ⚠️ Corrected '[original OCR]' to '[corrected]' ([reason])
+
+**STEP 3: Show original in flag for transparency**
+- The flag preserves the original OCR text for reference
+
+**FORMAT:**
+
+✓ CORRECT:
+Text: "Main support beam. Fly brace @ 1500 centres."
+Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
+
+✗ WRONG:
+Text: "Main support beam. Fly brase @ 1500 centres."
+Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
+[Text still shows error even though flag says corrected]
+
+**CONSISTENCY RULE:**
+
+If flag says "Corrected X to Y" → Text MUST show Y, not X
+
+**EXAMPLES:**
+
+✓ "Hot dip galvanised per AS/NZS 4680"
+Flag: "⚠️ Corrected 'calvanited' to 'galvanised' (OCR error)"
+
+✓ "40mm grout under base plate"
+Flag: "⚠️ Corrected 'grows' to 'grout' (OCR error)"
+
+✓ "verify with supplier"
+Flag: "⚠️ Corrected 'supplies' to 'supplier' (OCR error)"
 
 **SPECIFIC EXAMPLES:**
 
@@ -1143,6 +1183,53 @@ Examples:
 - AS 3600
 - AS/NZS 1170.1
 - AS1594
+
+**STANDARD REFERENCE VALIDATION - CRITICAL:**
+
+Common engineering standards follow patterns:
+- AS/NZS [4-5 digits] (Australian/New Zealand)
+- AS [4-5 digits] (Australian Standard)
+- ASTM [letter][digits] (American)
+- ISO [digits]:[year] (International)
+- EN [digits] (European)
+
+**VALIDATION PROTOCOL:**
+
+If you see standard reference with unusual numbers:
+1. Check if it's a known standard
+2. Look for OCR character confusion (9→7, 0→O, 1→I, etc.)
+3. If similar to known standard (edit distance ≤ 1):
+   - Apply correction if confident (>90%)
+   - Flag: ⚠️ Corrected '[original]' to '[corrected]' (OCR error - standard reference)
+4. If uncertain, flag for verification
+
+**COMMON STANDARD OCR ERRORS:**
+
+| Actual | Often Misread As | Context Clue |
+|--------|------------------|--------------|
+| AS1594 | AS1574 | Steel standard (9→7 confusion) |
+| AS/NZS 4680 | AS/NZS 468O | Galvanising standard (0→O) |
+| AS 4100 | AS 4IOO | Steel design (1→I, 0→O) |
+
+**EXAMPLES:**
+
+"AS1574" →
+- Not a common standard
+- Similar: "AS1594" (known steel standard, edit distance: 1)
+- Likely: OCR 9→7 confusion
+- Correction: "AS1594"
+- Flag: ⚠️ Corrected 'AS1574' to 'AS1594' (OCR error - standard reference)
+- **IMPORTANT: Apply correction to extracted text, not just flag it**
+
+"AS/NZS 4680" →
+- Known standard (galvanising)
+- Action: Accept as-is
+
+"AS/NZS 468O" →
+- "468O" unusual (O instead of 0)
+- Correction: "AS/NZS 4680"
+- Flag: ⚠️ Corrected '468O' to '4680' (OCR error - standard reference)
+- **IMPORTANT: Apply correction to extracted text**
 
 **DETAIL REFERENCES:**
 
