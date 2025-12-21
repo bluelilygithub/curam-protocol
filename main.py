@@ -202,15 +202,7 @@ def build_prompt(text, doc_type):
     """Build a prompt tailored to the selected department."""
     if doc_type == "engineering":
         return f"""
-# COMPLETE LLM PROMPT FOR ENGINEERING BEAM SCHEDULE EXTRACTION
-
-## SYSTEM CONTEXT
-
-You are extracting structured data from scanned engineering beam schedules. These are critical construction documents where errors can cause:
-
-- Wrong materials ordered (costly delays)
-- Structural safety issues
-- Construction rework
+# UNIVERSAL EXTRACTION PROMPT - ENGINEERING DOCUMENTS
 
 Your primary goal: Accurate extraction with explicit uncertainty flagging. Silent errors are worse than flagged unknowns.
 
@@ -219,46 +211,542 @@ Your primary goal: Accurate extraction with explicit uncertainty flagging. Silen
 You will encounter:
 
 - Mixed content: Typed text + handwritten annotations
-- Table structure: Columns typically include: Mark, Size, Qty, Length, Grade, Paint System, Comments
-- OCR challenges: Coffee stains, smudges, low resolution (150-200 dpi), fold marks
-- Technical nomenclature: Specific beam sizing formats (e.g., "310UC137", "WB1220×6.0")
-- Section headers: ALL CAPS headers that divide beam categories ("EXISTING TO REMAIN", "NEW STEELWORK")
+- Table structure: Rows and columns with specific data types
+- OCR challenges: Stains, smudges, low resolution (150-200 dpi), fold marks, fading
+- Technical nomenclature: Domain-specific formats and codes
+- Section headers: Category dividers (often ALL CAPS) that separate data groups
 - Handwritten notes: Changes, deletions, site notes (often in brackets or margins)
 
-## CRITICAL RULES - READ FIRST
+## CORE PRINCIPLES - ALWAYS FOLLOW
 
-**Rule 1: Comments Contain Crucial Information**
+**Principle 1: Accuracy Over Speed**
+Extract correctly, not quickly. One wrong specification can cascade into major problems.
 
-Comments include construction instructions, specifications, and safety notes. They MUST be preserved accurately.
+**Principle 2: Explicit Uncertainty Over Silent Errors**
+Better to flag 10 items for review than miss 1 critical error.
 
-✅ GOOD: "Hold 40mm grout under base plate"
-❌ BAD: "H o l d 4 O m g r o u t u n d e r..."
+**Principle 3: Preserve Technical Language**
+Don't paraphrase specifications, standards, or technical terms. Extract exactly as written.
 
-If comments become garbled character soup → FLAG as [COMMENT ILLEGIBLE] and move on.
+**Principle 4: Extract What Exists, Flag What Doesn't**
+Never invent data to fill gaps. Mark missing/unclear data explicitly.
 
-**Rule 2: Beam Size Formats Are Strict**
+## UNIVERSAL EXTRACTION STRATEGY
 
-- UC/UB sections: [size][type][weight] (e.g., "310UC137", "250UB37.2")
-- Welded beams: WB[depth]×[thickness] (e.g., "WB1220×6.0")
-- PFC sections: [size]PFC (e.g., "250PFC")
+### PASS 1: Structure Analysis
 
-Invalid formats must be flagged immediately.
+1. Identify table structure (rows, columns, headers)
+2. Detect section headers (category dividers)
+3. Map grid layout (which cells belong to which columns)
+4. Identify handwritten vs typed content
+5. Note damaged areas (stains, tears, fading)
+6. Flag any structural anomalies
 
-**Rule 3: Don't Invent Data**
+### PASS 2: Data Extraction with Validation
 
-- If text is unclear → mark as [UNCLEAR] or [ILLEGIBLE]
-- Don't "clean up" technical terms
-- Don't guess at missing values
-- Don't paraphrase specifications
+For each cell:
 
-**Rule 4: Section Headers ≠ Row Data**
+**Step A: Extract Raw Content**
+- Read the cell content as-is
+- Don't clean up or normalize yet
 
-Section headers like "NEW STEELWORK - TO BE INSTALLED" describe categories, not individual beams.
+**Step B: Apply Format Validation**
+- Check against expected format for that column type
+- Validate data type (number, text, code, etc.)
+- Cross-check against known valid values if applicable
 
-- Don't include them in row data
-- Note them as context only
+**Step C: Cross-Field Validation**
+- Check if value makes sense given other fields in same row
+- Verify consistency with section context
+- Flag anomalies (e.g., quantity seems wrong for item type)
 
-## COMMON OCR ERRORS - WATCH FOR THESE
+### PASS 3: Complex Fields - Special Handling
+
+For narrative/comment fields (highest failure rate):
+
+**Step 1: Extract All Readable Portions FIRST**
+
+CRITICAL RULE - Partial Extraction Before Marking Illegible:
+
+BEFORE marking anything as [illegible]:
+
+**STEP 1: ATTEMPT PARTIAL EXTRACTION**
+- Read what IS clear first
+- Extract all readable portions
+- Only mark SPECIFIC unclear parts
+
+**STEP 2: FORMAT PARTIAL EXTRACTIONS**
+✓ Good: "Install per specification ABC-123 [remainder obscured by stain]"
+✗ Bad: "[Comment illegible - manual transcription required]"
+
+✓ Good: "Verify dimensions on site. [handwritten: 'APPROVED - JMc 5/12']"
+✗ Bad: "[Comment illegible - manual review required]"
+
+**STEP 3: USE [illegible] ONLY FOR TRULY UNREADABLE TEXT**
+- If ANY words are readable → extract them
+- Use specific markers:
+  - [word illegible]
+  - [coffee stain obscures text]
+  - [smudged]
+  - [faded text - partially readable]
+  - [remainder obscured]
+- Reserve [Comment illegible - manual review required] for when NOTHING can be read
+
+**EXAMPLES:**
+
+Scenario: "Install with [smudge] gasket material"
+✓ Extract: "Install with [smudged word] gasket material"
+✗ Don't: "[Comment illegible]"
+
+Scenario: Stain covers last 3 words
+✓ Extract: "Check actual dimensions before fabrication [coffee stain obscures remainder]"
+✗ Don't: "[coffee stain obscures remainder]" as entire comment
+
+Scenario: Handwritten note is clear
+✓ Extract: "Original specification. [handwritten: 'CHANGED TO TYPE B - PMG']"
+✗ Don't: "[Comment illegible - manual review required]"
+
+**VALIDATION:**
+If you marked something [illegible], ask yourself:
+- Can I read ANY words? → Then extract them + mark specific gap
+- Is the entire field truly unreadable? → Then use full illegible marker
+
+**Step 2: Read as Phrases, Not Characters**
+
+CHARACTER SOUP DETECTION:
+
+If your extraction looks like: "H o l d 4 O m m g r o u t u n d e r..."
+→ STOP - This is character-level OCR failure
+→ Re-attempt reading as connected words
+→ Try reading at higher magnification
+→ Use context from field type and adjacent data
+
+If still garbled after retry:
+→ Mark: "[Field illegible - OCR failed]"
+→ Do NOT output character soup
+
+UNACCEPTABLE OUTPUTS:
+❌ "H o l d 4 O m g r o u t"
+❌ "W p e e b r b A e S a 1"
+❌ "o x n i s s t i i t n e g"
+
+If your output looks like these → You failed. Try again or mark as illegible.
+
+**Step 3: Extract Complete Multi-Part Content**
+
+MULTI-SENTENCE/MULTI-PART EXTRACTION:
+
+Many complex fields contain multiple pieces of information:
+- Instruction + specification reference
+- Status + action required
+- Description + drawing/detail reference
+- Multiple specifications separated by periods
+
+EXTRACTION PROTOCOL:
+
+**Step 1: Scan entire field area**
+- Don't stop after first sentence/element
+- Look for: periods, semicolons, line breaks
+- Check for reference codes (standards, drawing numbers)
+
+**Step 2: Extract all components**
+Common patterns:
+- "[Primary info]. [Secondary info]"
+- "[Description]. [Reference]"
+- "[Specification A]; [Specification B]"
+
+**Step 3: Preserve structure**
+- Keep sentences together
+- Maintain separation (periods, semicolons)
+- Don't merge distinct specifications
+
+EXAMPLES:
+
+Wrong: "Install anchor bolts"
+Right: "Install anchor bolts. Torque to 150 ft-lbs per spec XYZ-789"
+
+Wrong: "Main support element"
+Right: "Main support element. Fly brace @ 1500 centres. See detail D-12"
+
+VALIDATION:
+If field seems short for an important/complex item:
+→ Check for text after periods
+→ Look for references to standards/drawings
+→ Verify you captured complete information
+
+**Step 4: Handle Handwritten Annotations**
+
+HANDWRITTEN CONTENT PROTOCOL:
+
+Handwritten notes are critical - often indicate changes or approvals.
+
+FORMAT:
+- Mark clearly: [handwritten: "exact text"]
+- Include context clues if visible:
+  - [handwritten in red: "..."]
+  - [handwritten in margin: "..."]
+  - [handwritten signature: "..."]
+
+PLACEMENT:
+- Keep WITH the row/field they modify
+- Don't separate into different column
+
+LEGIBILITY:
+- If partially legible: Extract readable portions + [word illegible]
+- If completely illegible: [handwritten annotation - illegible]
+- Don't guess at unclear handwriting
+
+EXAMPLES:
+✓ "Original size 250mm. [handwritten: 'CHANGED TO 300mm - approval JD 5/12/19']"
+✓ "Pending approval [handwritten signature - illegible]"
+✓ "[handwritten in red pen: 'DELETED - NOT REQ'D']"
+
+## COLUMN BOUNDARY AWARENESS
+
+CRITICAL RULE - Issues Stay in Their Columns:
+
+COLUMN ISOLATION PROTOCOL:
+
+When encountering issues (stains, damage, illegibility):
+→ Identify WHICH COLUMN contains the issue
+→ Note the issue ONLY in that column
+→ Don't let issues leak into adjacent columns
+
+WRONG BEHAVIOR EXAMPLE:
+Column A (actual): Empty/N/A
+Column B (actual): "Check specifications [coffee stain]"
+WRONG: Column A = "[coffee stain obscures text]"
+
+CORRECT BEHAVIOR:
+Column A: N/A (column is empty)
+Column B: "Check specifications [coffee stain obscures remainder]"
+
+VISUAL CHECK:
+Before finalizing a row:
+1. Which column has the stain/damage?
+2. Is my note in the SAME column as the issue?
+3. Have I left other columns as-is?
+
+NEVER:
+- Move damage notes to wrong columns
+- Apply one column's issues to adjacent columns
+- Assume empty column has same issue as neighbor
+
+## CELL STATE INTERPRETATION
+
+EMPTY vs N/A vs DASH vs EXPLICIT TEXT:
+
+Different cell states have different meanings. Check document conventions first.
+
+**Type 1: EXPLICIT TEXT**
+- Cell contains written value: "Not specified", "TBD", "See notes"
+- Extract: Exactly as written
+
+**Type 2: EMPTY/BLANK CELL**
+- Cell is white space, completely empty
+- Extract: N/A (or document's convention)
+- Check: Does document have a legend defining empty cells?
+
+**Type 3: DASH OR HYPHEN**
+- Cell contains: "—" or "-" or "–"
+- Common meanings:
+  - Engineering docs: Usually "not applicable"
+  - Financial docs: Often "zero" or "TBD"
+  - Medical docs: May mean "normal" or "not tested"
+- Action: Check document context or legend
+- Default: Convert to N/A unless legend specifies otherwise
+
+**Type 4: SPECIAL SYMBOLS**
+- *, †, ‡, (a), (b): Usually reference notes/footnotes
+- Extract: The symbol + look for footnote explanation
+
+VALIDATION:
+If you extract "—" or "-" as a literal value:
+→ STOP and reconsider
+→ Check if document defines what dashes mean
+→ Usually convert to "N/A" unless certain it means something else
+
+CONSISTENCY CHECK:
+If some rows have "N/A" and others have "—" in same column:
+→ Likely they mean the same thing
+→ Normalize to one format (prefer N/A)
+
+## ACTIVE ERROR CORRECTION
+
+FIX WHAT YOU CAN CONFIDENTLY IDENTIFY:
+
+When you detect an error, decide your confidence level:
+
+**HIGH CONFIDENCE (90%+) → FIX IT**
+Examples:
+- OCR character confusion you can verify (7→1, 3→8, O→0)
+- Format errors with clear patterns (spaces in numbers)
+- Column misalignment you can verify
+- Dash → N/A conversion
+- Obvious typos in standard terms
+
+Actions:
+1. Make the correction
+2. Flag it: "⚠️ Corrected from X to Y based on [reason]"
+3. Show original OCR in notes for transparency
+
+**MEDIUM CONFIDENCE (60-89%) → FIX WITH STRONG FLAG**
+Examples:
+- Quantity seems wrong based on item context
+- Format unusual but could be correct
+- Abbreviation unclear
+
+Actions:
+1. Make best-guess correction
+2. Flag: "🔍 Corrected from X to Y - VERIFY THIS"
+3. Explain reasoning
+
+**LOW CONFIDENCE (<60%) → FLAG, DON'T FIX**
+Examples:
+- True ambiguity in handwriting
+- Completely unclear OCR
+- Multiple possible interpretations
+
+Actions:
+1. Extract what you see
+2. Flag: "🚫 CRITICAL: Value uncertain - MANUAL VERIFICATION REQUIRED"
+3. Explain the issue and possible interpretations
+
+WHEN TO CORRECT:
+✓ Number confusion if you can see actual digit
+✓ Format errors with clear correct pattern
+✓ Column misalignment with clear evidence
+✓ Standard term with obvious misspelling
+✓ Missing unit when context is clear
+
+WHEN NOT TO CORRECT:
+✗ True ambiguity you can't resolve
+✗ Handwriting too unclear to read
+✗ Missing data (never invent)
+✗ Unfamiliar terminology (might be correct)
+
+## SECTION-AWARE VALIDATION
+
+USE DOCUMENT STRUCTURE FOR VALIDATION:
+
+Many engineering documents divide data into categorical sections.
+
+**STEP 1: IDENTIFY SECTIONS**
+Common section types:
+- Status-based: Existing/New/Modified, Original/Replacement
+- Category-based: Primary/Secondary/Backup, Type A/B/C
+- Location-based: Building 1/2/3, Floor 1/2/3
+- Phase-based: Phase 1/2/3, Stage A/B/C
+
+Visual markers:
+- ALL CAPS headers
+- Bold/underlined text
+- Horizontal lines/separators
+- Different background shading
+
+**STEP 2: UNDERSTAND SECTION EXPECTATIONS**
+For each section type, certain values are more/less expected:
+
+Example - Construction:
+- "Existing" section → Minimal new specifications
+- "New" section → Complete specifications required
+- "Modified" section → Mix of existing + new details
+
+**STEP 3: VALIDATE AGAINST SECTION CONTEXT**
+If extraction seems inconsistent with section:
+→ Double-check the value
+→ Verify you're reading correct section
+→ Flag if anomaly confirmed
+
+EXAMPLES:
+
+Item in "EXISTING" section with extensive new specifications:
+→ Flag: "⚠️ Item in existing section but has new specs - verify correct section"
+
+Item in "NEW" section missing key specifications:
+→ Flag: "🔍 New item missing expected specifications - verify complete"
+
+## ERROR FLAGGING SYSTEM
+
+Use three-tier flagging:
+
+**⚠️ WARNING (Likely correct but verify)**
+Use when: Minor uncertainty, probably correct but worth double-checking
+
+Examples:
+- "Value appears unusual - please verify"
+- "Format slightly non-standard - check if correct"
+- "Corrected from X to Y (OCR confusion)"
+
+Format:
+⚠️ [Specific issue]: [Explanation]
+
+**🔍 REVIEW REQUIRED (Uncertain extraction)**
+Use when: Moderate uncertainty, could go either way
+
+Examples:
+- "Format unclear - manual verification recommended"
+- "Handwritten annotation partially illegible"
+- "Value seems inconsistent with context - verify"
+
+Format:
+🔍 [What's uncertain]: [Why uncertain] - [Suggested action]
+
+**🚫 CRITICAL ERROR (Must fix before use)**
+Use when: High certainty something is wrong, or critical field is unclear
+
+Examples:
+- "Field illegible - OCR failed completely"
+- "Format invalid - MANUAL VERIFICATION REQUIRED before use"
+- "Column alignment corrupted - values may be wrong"
+
+Format:
+🚫 CRITICAL: [Issue] - [Impact] - MANUAL VERIFICATION REQUIRED
+
+For Every Flag Provide:
+- What you extracted
+- Why it's flagged (specific reason)
+- What the correct value might be (if you have suggestion)
+- Impact if error not caught (for critical flags)
+
+## QUALITY VALIDATION CHECKLIST
+
+BEFORE SUBMITTING EXTRACTION, VERIFY:
+
+**✓ Completeness Checks**
+□ All readable text extracted? (Used partial extraction before marking illegible)
+□ Multi-part fields complete? (Checked for continuation after periods)
+□ Handwritten annotations captured? (In [brackets] with original)
+□ All columns filled? (Empty cells properly marked as N/A or —)
+
+**✓ Accuracy Checks**
+□ Format validation passed? (Data matches expected patterns)
+□ Cross-field validation done? (Values consistent within row)
+□ Section context checked? (Values appropriate for section)
+□ Column boundaries respected? (Issues in correct columns)
+
+**✓ Error Handling Checks**
+□ Confident corrections applied? (Fixed obvious OCR errors)
+□ Uncertainties flagged? (All doubts explicitly marked)
+□ No character soup? (No "H o l d 4 O..." output)
+□ No invented data? (Only extracted what exists)
+
+**✓ Flag Quality Checks**
+□ Each flag has specific reason? (Not generic "check this")
+□ Critical issues marked 🚫? (Safety/compliance impacts)
+□ Corrections explained? (Showed original + fixed value)
+□ Suggested fixes provided? (When confident about correction)
+
+## DOMAIN-SPECIFIC CUSTOMIZATION - ENGINEERING DOCUMENTS
+
+### Format Validation Rules
+
+**BEAM SCHEDULE FORMATS:**
+
+**Mark Column:**
+- Pattern: [B/NB]-[01-99] or [B/NB][01-99]
+- Examples: "B1", "NB-02", "B3", "NB-01"
+- Flag if: Doesn't match pattern, or unusual format
+
+**Size Column:**
+- UC/UB Universal Sections: [size][type][weight]
+  - Format: [number][UC/UB][number or number.number]
+  - Examples: "310UC137", "250UB37.2", "460UB82.1", "200UC46.2"
+  - Invalid: "310UC15" (too short), "250UB77.2" (check 7→3 OCR error)
+  
+- Welded Beams (WB): WB[depth]×[thickness]
+  - Format: WB[number]×[number.number]
+  - Examples: "WB1220×6.0", "WB610×8.0"
+  - Invalid: "WB 610 x 27" (spaces), "WB 612.2" (missing ×), "WB1220x6.0" (lowercase x)
+  
+- PFC Sections: [size]PFC
+  - Format: [number]PFC
+  - Examples: "250PFC", "200PFC"
+
+**Quantity Column:**
+- Must be integer between 1-20
+- Typical range: 1-10 for most beams
+- Flag if: Not a number, >20, or 0
+
+**Length Column:**
+- Format: [number] mm or [number]m
+- Typical range: 1000-10000mm (1-10m)
+- Must include units
+- Flag if: Missing units, unrealistic values
+
+**Grade Column:**
+- Known values: 300, 300PLUS, C300, HA350, AS1594, G300, "Not marked", "N/A", "-"
+- Flag if: Decimal number (likely misaligned from Size), unusual format
+
+**Paint System Column:**
+- Known values: "P1 (2 coats)", "HD Galv", "Paint System A", "N/A", "-"
+- Flag if: Unusual format
+
+**Comments Column:**
+- Free text field - preserve exactly as shown
+- May contain: Installation instructions, specifications, references, handwritten notes
+- Flag if: Character soup detected, completely illegible
+
+**COLUMN SCHEDULE FORMATS:**
+
+**Mark Column:**
+- Pattern: [C/COL]-[01-99] or similar
+- Examples: "C1", "COL-02"
+
+**Section Type Column:**
+- Values: "UC", "UB", "PFC", "WB", or similar
+- Standard structural section types
+
+**Size Column:**
+- Format: [number] [type] [number] or [number][type][number]
+- Examples: "310 UC 158", "310UC158"
+
+**Base Plate / Cap Plate Columns:**
+- Specifications or "N/A"
+- May include dimensions, material, thickness
+
+**Finish Column:**
+- Values: "HD Galv", "Paint System A", "N/A", or similar
+
+### Field-Specific Validation Logic
+
+**CONDITIONAL RULES:**
+
+- If Size contains "WB" → Must have format WB[number]×[number.number]
+- If Size contains "UC" or "UB" → Must have format [number][type][number or number.number]
+- If Grade is a decimal number (e.g., "37.2") → Likely misaligned from Size column
+- If Qty = 1 and Size is large beam (e.g., 460UB+) → Flag for verification (large beams rarely solo)
+- If Comments contains "[handwritten:" → Preserve exactly, don't attempt to clean up
+- If section header is "EXISTING" → Comments may reference existing conditions
+- If section header is "NEW" → Complete specifications expected
+
+### Known Value Lists
+
+**GRADE VALUES:**
+- 300
+- 300PLUS
+- C300
+- HA350
+- AS1594
+- G300
+- Not marked
+- N/A
+- - (dash)
+
+**PAINT SYSTEM VALUES:**
+- P1 (2 coats)
+- HD Galv
+- Paint System A
+- N/A
+- - (dash)
+
+**SECTION TYPES (Column Schedules):**
+- UC (Universal Column)
+- UB (Universal Beam)
+- PFC (Parallel Flange Channel)
+- WB (Welded Beam)
+
+### Common OCR Errors in Engineering Documents
 
 | Actual | Often Misread As | Context Clue |
 |--------|------------------|--------------|
@@ -268,188 +756,54 @@ Section headers like "NEW STEELWORK - TO BE INSTALLED" describe categories, not 
 | × (multiply) | x (letter) | WB1220×6.0 not WB1220x6.0 |
 | 1220 | 12 20 or 122 0 | Spaces inserted in numbers |
 | 2 (quantity) | 1 | Major beams rarely solo |
+| HA350 | JSO, JS0, J50 | Grade column context |
+| 37.2 | 77.2 | Size weight - check for 7→3 error |
 
-## EXTRACTION STRATEGY - THREE PASS APPROACH
+### Standards and Reference Patterns
 
-### PASS 1: Table Structure Analysis
+**STANDARD REFERENCES:**
 
-1. Identify all column headers
-2. Detect section headers (all caps, spanning columns)
-3. Map each row to correct columns
-4. Flag any alignment issues
-5. Note which rows are data vs. headers
+Format: [Standard body]-[number] or [Standard body]/[Standard body] [number]
 
-### PASS 2: Data Extraction with Validation
+Examples:
+- AS 4100 (Australian Standard)
+- AS/NZS 4680 (Australian/New Zealand Standard)
+- AS 3600
+- AS/NZS 1170.1
+- AS1594
 
-For each cell:
+**DETAIL REFERENCES:**
 
-**Step A: Extract raw text**
-- Read the cell content as-is
+Format: "See Detail [mark]/[drawing]" or "Detail [mark]"
 
-**Step B: Apply format validation**
+Examples:
+- "See Detail D-12/S-500"
+- "Detail D-12"
+- "Ref: Detail CBP-01"
 
-| Column | Validation | Flag If |
-|--------|------------|---------|
-| Mark | Pattern: [B/NB]-[01-99] | Doesn't match pattern |
-| Size | Match beam format rules | Invalid format detected |
-| Qty | Integer 1-20 | Not a number, or >20 |
-| Length | Number + "mm" | Missing units or unrealistic |
-| Grade | Known grades OR "Not marked" | Appears to be misaligned data |
-| Paint System | System codes or N/A | - |
-| Comments | Readable sentences | Character soup detected |
+### Special Cases
 
-**Step C: Cross-validation**
+**NB-02 Welded Beam:**
+- Common misreadings:
+  - Size: "WB 610 x 27", "WB 612.2", "WB1220x6.0"
+  - Quantity: 1 (should be 2)
+- Correct values:
+  - Size: WB1220×6.0 (1220mm deep, 6mm web)
+  - Qty: 2
+  - Grade: HA350
+  - Comment: Should mention "Web beam", "non-standard section per AS1594", "See Detail D-12/S-500"
+- Validation: If extracting this beam, double-check these fields
 
-- Check quantity against beam size (large beams rarely qty=1)
-- Verify size format matches type (WB must have ×)
-- Ensure grade isn't data from another column
+**Grade vs. Size Confusion:**
+- Problem: Size weight gets misread as grade
+- Wrong: Size: 250UB77.2, Grade: 37.2
+- Right: Size: 250UB37.2, Grade: Not marked
+- Detection: If grade is a decimal number matching part of size → column misalignment
 
-### PASS 3: Comments - Special Handling
-
-Comments are the highest-failure column. Use this protocol:
-
-**STEP 1: CONTEXT CHECK**
-- Review the beam Mark, Size, Grade first
-- Understand beam type and purpose
-- This helps interpret unclear text
-
-**STEP 2: READ AS PHRASES, NOT CHARACTERS**
-
-If you get: "H o l d 4 O m m g r o u t"
-→ STOP - This is character-level failure
-→ Re-attempt reading as connected words
-→ Expected: "Hold 40mm grout under base plate"
-
-**STEP 3: USE ENGINEERING VOCABULARY**
-
-Comments contain these patterns:
-
-- Installation: "Hold [X]mm grout", "Hot dip galvanised per AS/NZS [code]"
-- Structural: "Main support beam", "Fly brace @ [spacing] centres"
-- Verification: "CHECK ACTUAL SIZE ON SITE", "Verify with supplier"
-- Status: "Existing steel", "Timber beam replaced [year]"
-- Modifications: "DELETED - NOT REQ'D", "[handwritten: 'CHANGED TO...']"
-- Details: "See Detail D-[number]/S-[number]"
-
-If extracted comment matches NONE of these patterns:
-→ Likely OCR failure
-→ Output: "[Comment illegible - manual review required]"
-→ DO NOT output gibberish
-
-**STEP 4: HANDWRITTEN ANNOTATIONS**
-
-- Usually appear in quotes, brackets, or different ink color
-- Format as: [handwritten: "exact text"]
-- Keep WITH the row they modify
-- Examples:
-  - [handwritten: "CHANGED TO 310UC137 - PMG"]
-  - [handwritten red pen: "camber 20mm"]
-  - [handwritten: "DELETED - NOT REQ'D"]
-
-## BEAM SIZE FORMAT RULES
-
-### Valid Format Examples
-
-**UC/UB Universal Sections:**
-✓ 310UC137    (310mm UC section, 137 kg/m)
-✓ 250UB37.2   (250mm UB section, 37.2 kg/m)
-✓ 460UB82.1   (460mm UB section, 82.1 kg/m)
-✓ 200UC46.2   (200mm UC section, 46.2 kg/m)
-
-✗ 310UC15     (too short - missing digit)
-✗ 250UB77.2   (check for OCR error: 7→3, likely 250UB37.2)
-✗ 3IOUCIS8    (OCR failure: I→1, S→5, likely 310UC158)
-
-**Welded Beams (WB):**
-✓ WB1220×6.0  (1220mm deep, 6.0mm thick web)
-✓ WB610×8.0   (610mm deep, 8.0mm thick web)
-
-✗ WB 610 x 27     (spaces, wrong format)
-✗ WB 612.2        (missing × and second dimension)
-✗ WB1220x6.0      (lowercase x instead of ×)
-
-If you see "WB" + anything else:
-→ FLAG: "WB size format appears incorrect"
-→ Expected format: WB[depth]×[thickness]
-→ Attempt correction if confident (e.g., "WB 612.2" might be "WB1220×6.0")
-
-**PFC Sections:**
-✓ 250PFC  (250mm parallel flange channel)
-✓ 200PFC
-
-## ERROR FLAGGING PROTOCOL
-
-Use three-tier system:
-
-**⚠️ WARNING (Likely correct but verify)**
-- "Grade '300' appears to be a number - please verify this is correct"
-- "Size '250UB77.2' - check if should be '250UB37.2' (OCR 7→3 error)"
-- "Quantity is 1, but similar entries have quantity >1 - please verify"
-
-**🔍 REVIEW REQUIRED (Uncertain extraction)**
-- "WB size format unusual - manual verification recommended"
-- "Comment may be incomplete due to coffee stain"
-- "Handwritten annotation partially illegible"
-
-**🚫 CRITICAL ERROR (Definitely wrong - must fix before use)**
-- "Comment text garbled - OCR failed completely"
-- "Size format invalid - MANUAL VERIFICATION REQUIRED before use"
-- "Column alignment appears corrupted"
-
-For each flag, always provide:
-- What you extracted
-- Why it's flagged (specific reason)
-- Suggested correction (if confident)
-
-## SPECIAL HANDLING FOR POOR QUALITY
-
-**Coffee Stains / Smudges**
-If part of text is obscured:
-→ Extract visible portions
-→ Note: "[coffee stain obscures remainder]"
-→ Example: "Paint System A required [coffee stain]"
-
-**Illegible Handwriting**
-If handwritten note is truly unreadable:
-→ "[handwritten annotation - illegible]"
-→ Do NOT attempt to guess
-
-**Missing Data / Empty Cells**
-- If cell is empty: "—" (em dash)
-- If "N/A" is written: "N/A"
-- If "Not marked" is written: "Not marked"
-- These have different meanings - check actual cell content
-
-**Damaged/Faded Text**
-- Try reading from context of adjacent cells
-- Check if information repeats in another row
-- If still unclear: "[text faded - illegible]"
-
-## COLUMN-SPECIFIC STRATEGIES
-
-**HIGH-RELIABILITY (Usually clear typed text)**
-Columns: Mark, Size, Qty, Length
-Strategy:
-- Extract normally
-- Validate against format rules
-- Flag format violations immediately
-
-**MEDIUM-RELIABILITY (Typed but may have issues)**
-Columns: Grade, Paint System
-Strategy:
-- Extract text
-- Cross-reference with known values:
-  - Grades: 300, 300PLUS, C300, HA350, Not marked
-  - Paint: P1 (2 coats), HD Galv, Paint System A, N/A
-- If unusual value → flag for verification
-
-**LOW-RELIABILITY (Handwritten, stained, complex)**
-Column: Comments
-Strategy:
-- Use PASS 3 protocol (see above)
-- Read as phrases using engineering vocabulary
-- If garbled after 2 attempts → mark as [ILLEGIBLE]
-- NEVER output character soup
+**"Not marked" vs "N/A":**
+- "Not marked" = explicitly stated in document (usually Grade column)
+- "N/A" = empty cell or dash (—)
+- Don't convert one to the other. Check actual PDF cell content.
 
 ## OUTPUT FORMAT
 
@@ -484,106 +838,50 @@ IF COLUMN SCHEDULE:
 - `medium`: 70-94% confident, some uncertainty
 - `low`: <70% confident, needs verification
 
-## PRE-OUTPUT VALIDATION CHECKLIST
+## CRITICAL REMINDERS
 
-Before returning extracted data, verify EVERY row passes these checks:
+**NEVER output character soup ("H o l d 4 O m...")**
+If garbled → mark [illegible]
+Don't give unusable output
 
-### ✓ Format Validation
-- [ ] Size matches valid beam format (UC/UB/WB/PFC)
-- [ ] Qty is integer between 1-20
-- [ ] Length is realistic (1000-10000mm typical)
-- [ ] Grade is known steel grade OR "Not marked"
-- [ ] Paint System is valid code or N/A
+**Extract partial before marking illegible**
+"Install anchor bolts [remainder obscured]"
+NOT "[Comment illegible]"
 
-### ✓ Content Quality
-- [ ] Comments are readable sentences (NOT "H o l d 4 O m...")
-- [ ] Handwritten notes are in [brackets]
-- [ ] Section headers not mixed into row data
-- [ ] No data from one column leaked into another
+**Issues stay in their columns**
+Stain in column B doesn't affect column A
+Each column independent
 
-### ✓ Unacceptable Outputs Eliminated
+**Multi-sentence fields need complete extraction**
+Don't stop at first period
+Get full specification
 
-**NEVER OUTPUT THESE:**
-❌ "H o l d 4 O m g r o u t u n d e r b a s e p l a t e"
-❌ "W p e e b r b A e S a 1 m 5 9 - 4 . n o V n e"
-❌ "o x n i s s t i i t n e g . c C o o l r u r m o n"
-❌ "Colour: onsistent" (garbled word)
+**Fix what you're confident about**
+Obvious OCR errors → correct + flag
+Uncertain → flag, don't fix
 
-**If your comment output looks like these → YOU FAILED**
+**Use document structure for validation**
+Section context matters
+Validate against expectations
 
-**Correct approach:**
-✓ "[Comment illegible - manual transcription required]"
-✓ "[Comment partially obscured by coffee stain]"
-✓ "Hold 40mm grout under base plate"
+**Never invent data**
+Missing = N/A or [missing]
+Don't fill gaps with assumptions
 
-## SPECIAL CASES - KNOWN ISSUES
+## SUCCESS CRITERIA
 
-**Case 1: NB-02 Welded Beam**
-This beam consistently causes problems:
+Your extraction is successful when:
 
-Common misreadings:
-- Size: "WB 610 x 27", "WB 612.2", "WB1220x6.0"
-- Quantity: 1 (should be 2)
+✅ All readable content extracted (nothing missed due to premature [illegible] marking)
+✅ All format rules followed for engineering documents
+✅ All uncertainties explicitly flagged with specific reasons
+✅ No character soup in output
+✅ Issues noted in correct columns
+✅ Complete multi-part fields captured
+✅ Corrections explained transparently
+✅ Zero silent errors
 
-Correct values:
-- Size: WB1220×6.0 (1220mm deep, 6mm web)
-- Qty: 2
-- Grade: HA350
-- Comment should mention: "Web beam", "non-standard section per AS1594", "See Detail D-12/S-500"
-
-If you extract this beam, double-check these fields.
-
-**Case 2: Grade vs. Size Confusion**
-Sometimes size weight gets misread as grade:
-
-Wrong:
-- Size: 250UB77.2, Grade: 37.2
-
-Right:
-- Size: 250UB37.2, Grade: Not marked
-
-Detection: If grade is a decimal number matching part of size → column misalignment
-
-**Case 3: "Not marked" vs "N/A"**
-These mean different things:
-- "Not marked" = explicitly stated in document (usually Grade column)
-- "N/A" = empty cell or dash (—)
-
-Don't convert one to the other. Check actual PDF cell content.
-
-## PRIORITY HIERARCHY
-
-When conflicts arise, prioritize in this order:
-
-1. **Safety** - Flag anything that could cause structural issues
-2. **Accuracy** - Correct data > fast extraction
-3. **Explicitness** - Clear flags > silent assumptions
-4. **Completeness** - Better to mark [ILLEGIBLE] than skip
-
-Remember:
-- Wrong beam size = wrong steel ordered = major cost/delay
-- Missing installation note = improper construction = safety risk
-- When in doubt, FLAG IT
-
-## FINAL INSTRUCTION
-
-You are extracting from engineering documents where errors have real consequences. Your output will be used to:
-- Order steel materials
-- Fabricate connections
-- Install beams
-- Verify compliance
-
-Your responsibility:
-- Extract accurately
-- Flag uncertainties explicitly
-- Never hide problems
-- Make verification easy for engineers
-
-Success criteria:
-- All beam sizes in valid format
-- All comments readable (or marked [ILLEGIBLE])
-- All uncertainties flagged with specific reasons
-- Zero silent errors
+Remember: This output will be used for critical decisions. Accuracy and transparency are more important than completeness. When in doubt, FLAG IT.
 
 Begin extraction. For each row, apply all validation rules and output in the specified JSON format.
 
