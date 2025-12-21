@@ -202,94 +202,120 @@ def build_prompt(text, doc_type):
     """Build a prompt tailored to the selected department."""
     if doc_type == "engineering":
         return f"""
-        You are a structural engineering assistant extracting data from a structural schedule PDF.
-        
-        STEP 1: Identify the schedule type by examining the column headers:
-        - BEAM SCHEDULE: Has columns like "Mark", "Size", "Qty", "Length", "Grade", "Paint System", "Comments"
-        - COLUMN SCHEDULE: Has columns like "Mark", "Section Type", "Size (mm)", "Length (mm)", "Grade", "Base Plate", "Cap Plate", "Finish", "Comments"
-        
-        STEP 2: Extract data based on the schedule type:
-        
-        IF BEAM SCHEDULE, return objects with these keys:
-        - "Mark": Short identifier (e.g., B-101, P1, STR-1) from MARK column. DO NOT extract detail references like "D1/S-500" from Comments.
-        - "Size": Complete section size (e.g., 460UB82.1, 200PFC, 75×75×4 SHS)
-        - "Qty": Quantity number (no units)
-        - "Length": Length with units (e.g., "8500 mm"). If multiple lengths, combine: "1200 mm, 2400 mm"
-        - "Grade": Material grade (e.g., 300PLUS, G300)
-        - "PaintSystem": Paint/finish specification (e.g., "P1 (2 coats)", "HD Galv.")
-        - "Comments": All notes and specifications - EXTRACT EXACTLY AS SHOWN, even if garbled. Do not attempt to fix, correct, or interpret OCR errors in comments.
-        
-        IF COLUMN SCHEDULE, return objects with these keys:
-        - "Mark": Short identifier (e.g., C1, C2) from MARK column. DO NOT extract detail references.
-        - "SectionType": Section type (e.g., "Universal Column") from SECTION TYPE column
-        - "Size": Complete size designation (e.g., "310 UC 158", "250 UC 89.5") from SIZE (mm) column
-        - "Length": Length with units (e.g., "4500 mm") from LENGTH (mm) column
-        - "Grade": Material grade (e.g., 350L0, 300PLUS) from GRADE column
-        - "BasePlate": Base plate specification (e.g., "BP-01 (25mm)") from BASE PLATE column, or "N/A"
-        - "CapPlate": Cap plate specification (e.g., "CP-01 (20mm)") from CAP PLATE column, or "N/A"
-        - "Finish": Finish specification (e.g., "HD Galv.", "Paint System A") from FINISH column
-        - "Comments": All notes and specifications from COMMENTS column - EXTRACT EXACTLY AS SHOWN, even if garbled. Do not attempt to fix, correct, or interpret OCR errors in comments. - EXTRACT EXACTLY AS SHOWN, even if garbled. Do not attempt to fix, correct, or interpret OCR errors in comments.
-        
-        CRITICAL RULES FOR ENGINEERING ACCURACY:
-        1. FIRST identify ALL column headers to determine schedule type - map each field to its correct column
-        2. Mark values are SHORT (2-6 chars) like "B-101", "C1" - NOT detail references like "D1/S-500"
-        3. Extract Mark ONLY from MARK column, never from Comments/Remarks
-        4. Extract complete values exactly as shown in PDF, ensuring each field comes from its correct column
-        5. Create ONE object per UNIQUE MARK - do NOT split same mark into multiple rows
-        6. If multiple lengths exist for one mark, combine in Length field: "1200 mm, 2400 mm"
-        7. Use "N/A" for missing fields or non-existent columns
-        8. Verify data makes engineering sense (Length is numeric with units, Grade is grade designation, NOT a number)
-        9. COLUMN ALIGNMENT (CRITICAL): Ensure each field comes from its designated column - if Grade contains a number like "37.2", this is likely misaligned (should be in Size column)
-        10. OCR CHARACTER CONFUSION: Watch for common OCR errors: 3↔7, 0↔O, 1↔I, 5↔S, 8↔5. If a number seems wrong, check context (e.g., "250UB77.2" might be "250UB37.2", "310UC118" might be "310UC158")
-        
-        WELDED BEAM (WB) EXTRACTION - CRITICAL ACCURACY:
-        - WB sizes MUST be in format: "WB[depth]×[thickness]" where depth is typically 600-2000mm, thickness is 4-20mm
-        - Example: "WB1220×6.0" is correct (depth=1220mm, thickness=6.0mm)
-        - WRONG formats to avoid: "WB 610 x 27", "WB 612.200", "WB 610 x 2 x 27.2"
-        - If you see wrong format, verify you're reading from the correct SIZE column, not adjacent cells
-        - Quantity MUST come from QTY column - verify cell alignment carefully
-        
-        INSTALLATION INSTRUCTIONS (Comments field) - CRITICAL:
-        - Extract ALL text from Comments/Remarks column EXACTLY as it appears in the PDF
-        - DO NOT attempt to correct, fix, or interpret garbled text - preserve it character-by-character
-        - DO NOT try to "decode" OCR errors in comments - extract the raw text as-is
-        - If text appears garbled (e.g., "H H o o t l d d"), extract it exactly: "H H o o t l d d"
-        - If text is incomplete (e.g., "[coffee sta"), extract it exactly: "[coffee sta"
-        - Critical instructions like "Hold 40mm grout under base plate" must be captured if readable, but if garbled, preserve the garbled version
-        - The user will manually verify garbled comments - your job is to extract them accurately, not fix them
-        
-        EXTRACTION GUIDELINES (be flexible, extract what you see):
-        - Extract values as they appear in the PDF, preserving original format
-        - COMMENTS FIELD: Extract EXACTLY as shown, character-by-character. If garbled (e.g., "H H o o t l d d"), extract it exactly as "H H o o t l d d". DO NOT attempt to fix, decode, or interpret garbled comments.
-        - If text is clearly garbled or incomplete, extract it as-is (don't guess) - ESPECIALLY for Comments field
-        - For ambiguous cases, prefer extracting the raw value over attempting correction
-        - OCR CORRECTION RULES: Only attempt correction for Size, Length, Grade, Qty fields - NEVER correct Comments field
-        - If you're confident an OCR error exists in Size/Length/Grade (e.g., "3/2 mm" when context suggests "4200 mm"), you may correct it, but preserve original if uncertain
-        - Handle variations in format gracefully (e.g., "WB1220×6.0" vs "WB 1220 x 6.0" vs "WB1220 x 6.0")
-        - Accept any reasonable grade designation (common ones: 300PLUS, 350L0, HA350, AS1594, G300, but others may exist)
-        - Length can be in mm or m, with or without spaces
-        - Quantity can be any positive whole number
-        - Size formats vary (e.g., "460UB82.1", "200PFC", "75×75×4 SHS", "WB1220×6.0", "WB 610 × 6.0 × 305 WT")
-        
-        COLUMN ALIGNMENT VERIFICATION (CRITICAL):
-        - Grade field should contain grade designations (300PLUS, 350L0, HA350, "Not marked", "N/A", "-", etc.) - NEVER a decimal number
-        - If Grade contains a decimal number like "37.2" or "77.2", this is MISALIGNED - it belongs in the Size column, not Grade
-        - Size field should contain complete section designations (e.g., "250UB37.2", "460UB82.1") - the decimal part is part of the size
-        - Verify each field matches its expected data type: Grade = text/designation, Size = section code, Qty = whole number
-        - If you see "37.2" in Grade column, check if Size column is missing this value - likely column misalignment
-        
-        OCR CHARACTER CORRECTION (when confident):
-        - Common substitutions: 3↔7, 0↔O, 1↔I, 5↔S
-        - If "250UB77.2" appears but similar entries show "250UB37.2" pattern, correct 7→3
-        - If "WB 610 x 2 x 27.2" appears, this is likely wrong format - welded beams should be "WB[depth]×[thickness]" (e.g., "WB1220×6.0")
-        - QUANTITY EXTRACTION: Read quantity values VERY carefully - verify you're reading from the QTY column, not adjacent cells
-        - If quantity seems unusually low (e.g., 1 when similar members show 2+), double-check the cell alignment
-        - Quantity should be a whole number from the QTY column - if you see "1" but context suggests "2", verify column boundaries
-        - Only correct if you're highly confident based on context, similar entries, and column headers
-        
-        Return ONLY a valid JSON array (no markdown, no explanation, no code blocks).
+You are extracting data from a scanned engineering beam schedule.
 
-        TEXT: {text}
+CRITICAL RULES:
+1. Comments column contains crucial construction instructions - preserve EXACT wording
+2. Beam sizes follow specific formats:
+   - UC/UB sections: [size][type][weight] (e.g., "310UC137", "250UB37.2")
+   - Welded beams: WB[depth]×[thickness] (e.g., "WB1220×6.0")
+   - PFC sections: [size]PFC (e.g., "250PFC")
+3. Handwritten notes appear in [brackets] or margin notes
+4. If text is unclear, mark as [UNCLEAR] - do NOT guess
+
+COMMON OCR ERRORS TO WATCH FOR:
+- "7" misread as "1" or "I"
+- "3" misread as "8" 
+- "O" (letter) vs "0" (zero)
+- "×" (multiplication) vs "x" (letter)
+- Spaces inserted in numbers (1220 → "12 20")
+
+EXTRACTION STRATEGY - TWO PASS APPROACH:
+
+PASS 1: Extract table structure
+- Identify column headers (Mark, Size, Qty, Length, Grade, Paint System, Comments)
+- Map each row to correct columns
+- Flag any alignment issues
+
+PASS 2: Content extraction with validation
+
+For each row, extract:
+
+IF BEAM SCHEDULE:
+{{
+  "Mark": Short identifier from MARK column (e.g., "B1", "NB-02"),
+  "Size": Complete section size (e.g., "310UC137", "250UB37.2", "WB1220×6.0"),
+  "Qty": Quantity number (integer, no units),
+  "Length": Length with units (e.g., "5400 mm"),
+  "Grade": Material grade (e.g., "300PLUS", "G300", "Not marked", "N/A"),
+  "PaintSystem": Paint/finish specification (e.g., "P1 (2 coats)", "HD Galv."),
+  "Comments": ALL text from Comments column - EXTRACT EXACTLY AS SHOWN, even if garbled
+}}
+
+IF COLUMN SCHEDULE:
+{{
+  "Mark": Short identifier from MARK column,
+  "SectionType": Section type from SECTION TYPE column,
+  "Size": Complete size designation (e.g., "310 UC 158"),
+  "Length": Length with units,
+  "Grade": Material grade,
+  "BasePlate": Base plate specification or "N/A",
+  "CapPlate": Cap plate specification or "N/A",
+  "Finish": Finish specification,
+  "Comments": ALL text from Comments column - EXTRACT EXACTLY AS SHOWN
+}}
+
+SPECIFIC FORMAT RULES:
+
+BEAM SIZE PATTERNS:
+✓ Correct: "310UC137", "250UB37.2", "WB1220×6.0", "460UB82.1"
+✗ Wrong: "310UC15" (too short), "WB 610 x 27" (spaces), "250UB77.2" (check for 7→3 error)
+
+If you see "WB" followed by anything other than [number]×[number]:
+→ FLAG in comments: "WB size format appears incorrect"
+→ Attempt correction only if confident: "WB 612.2" might be "WB1220×6.0"
+
+HANDWRITTEN ANNOTATIONS:
+- Usually in quotes or brackets: "CHANGED TO 310UC137 - PMG"
+- Include them in square brackets: [handwritten: "text"]
+- Keep them WITH the row they modify
+
+COMMENTS WITH SPECIAL TERMS:
+- Preserve exact technical terms: "camber 20mm", "fly brace @ 1500 centres"
+- Don't paraphrase: "AS/NZS 4680" not "Australian Standard 4680"
+- If text appears garbled (>30% non-dictionary words), preserve it EXACTLY as shown
+- If completely unintelligible, mark: [COMMENT UNCLEAR - manual review required]
+
+COMMENTS FIELD - ABSOLUTE RULES:
+- Extract character-by-character, exactly as shown in PDF
+- If you see "H H o o t l d d", extract it exactly as "H H o o t l d d"
+- If you see "[coffee sta", extract it exactly as "[coffee sta"
+- DO NOT attempt to "fix" or "decode" garbled text
+- DO NOT combine separate words that are spaced out
+- Preserve all brackets, quotes, and special characters exactly
+
+VALIDATION CHECKS:
+1. Size column: Check against beam format patterns
+2. Quantity: Must be integer 1-20 (flag if outside range)
+3. Length: Must be number + "mm" or "m"
+4. Grade: Known steel grades (300PLUS, 350L0, HA350, AS1594, G300) or "N/A", "Not marked", "-"
+   - If Grade is a decimal number like "37.2", this is MISALIGNED (belongs in Size column)
+
+ERROR FLAGGING:
+⚠️ WARNING (likely correct but verify):
+- "Grade '300' appears to be number - please verify"
+- "Size '250UB77.2' - check if should be '250UB37.2'"
+
+🔍 REVIEW REQUIRED (uncertain):
+- "WB size format unusual - manual verification recommended"
+- "Quantity 1 seems low for this beam type"
+
+🚫 CRITICAL ERROR (definitely wrong):
+- "Comment text garbled - OCR failed"
+- "Size format invalid - MUST verify before use"
+
+PRIORITY ORDER:
+1. Accuracy > Speed
+2. Explicit uncertainty > Silent errors  
+3. Preserving original text > "fixing" it
+4. Flagging issues > Hiding them
+
+Remember: Wrong beam size = wrong steel ordered = construction delays + safety risk.
+When in doubt, FLAG IT.
+
+Return ONLY a valid JSON array (no markdown, no explanation, no code blocks).
+
+TEXT: {text}
         """
     if doc_type == "transmittal":
         return f"""
@@ -3885,34 +3911,42 @@ def index_automater():
                                         # Get context from other entries for correction
                                         context_entries = [e for e in results if e != entry]
                                         
-                                        # Check confidence, validate, and CORRECT key fields
-                                        # IMPORTANT: Only correct Size field - preserve Comments exactly as extracted
+                                        # Check confidence and validate key fields
+                                        # CRITICAL: Comments field must be preserved EXACTLY - no corrections, no processing
                                         for field in ['Comments', 'PaintSystem', 'Size', 'Grade', 'Mark', 'Length', 'Qty']:
                                             if field in entry and entry[field]:
-                                                original_value = entry[field]
-                                                
-                                                # First check for low confidence patterns
-                                                confidence = detect_low_confidence(entry[field])
-                                                
-                                                # ATTEMPT CORRECTION ONLY for Size field (most critical)
-                                                # DO NOT correct Comments - preserve garbled text exactly as extracted
-                                                if field == 'Size':
-                                                    corrected_value, correction_confidence = correct_ocr_errors(
-                                                        entry[field], field, context_entries
-                                                    )
-                                                    if corrected_value != original_value:
-                                                        entry[field] = corrected_value
-                                                        entry['corrections_applied'].append(
-                                                            f"Size corrected: '{original_value}' → '{corrected_value}'"
-                                                        )
-                                                        # Update confidence based on correction
-                                                        if correction_confidence == 'medium':
-                                                            entry[f'{field}_confidence'] = 'medium'
-                                                        else:
-                                                            entry[f'{field}_confidence'] = confidence
-                                                else:
-                                                    # For all other fields (especially Comments), preserve exactly as extracted
+                                                # For Comments field: NO processing, NO validation, NO correction - preserve exactly
+                                                if field == 'Comments':
+                                                    # Only check if it's garbled for display purposes, but don't modify it
+                                                    confidence = detect_low_confidence(entry[field])
                                                     entry[f'{field}_confidence'] = confidence
+                                                    # DO NOT validate or correct Comments - preserve exactly as extracted
+                                                else:
+                                                    # For other fields: check confidence and validate
+                                                    confidence = detect_low_confidence(entry[field])
+                                                    entry[f'{field}_confidence'] = confidence
+                                                    
+                                                    # ATTEMPT CORRECTION ONLY for Size field (most critical)
+                                                    if field == 'Size':
+                                                        corrected_value, correction_confidence = correct_ocr_errors(
+                                                            entry[field], field, context_entries
+                                                        )
+                                                        if corrected_value != entry[field]:
+                                                            entry['corrections_applied'].append(
+                                                                f"Size corrected: '{entry[field]}' → '{corrected_value}'"
+                                                            )
+                                                            entry[field] = corrected_value
+                                                            if correction_confidence == 'medium':
+                                                                entry[f'{field}_confidence'] = 'medium'
+                                                    
+                                                    # Validate for critical errors (but not Comments)
+                                                    validation = validate_engineering_field(field, entry[field], entry)
+                                                    if validation['errors']:
+                                                        entry['critical_errors'].extend(validation['errors'])
+                                                        if validation['confidence'] == 'low':
+                                                            entry[f'{field}_confidence'] = 'low'
+                                                        elif validation['confidence'] == 'medium' and confidence == 'high':
+                                                            entry[f'{field}_confidence'] = 'medium'
                                                 
                                                 # Then validate for critical errors (after correction)
                                                 validation = validate_engineering_field(field, entry[field], entry)
