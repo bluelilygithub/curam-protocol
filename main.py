@@ -376,7 +376,7 @@ If field seems short for an important/complex item:
 
 **Step 4: Handle Handwritten Annotations**
 
-HANDWRITTEN CONTENT PROTOCOL:
+HANDWRITTEN CONTENT PROTOCOL - ENHANCED:
 
 Handwritten notes are critical - often indicate changes or approvals.
 
@@ -391,15 +391,120 @@ PLACEMENT:
 - Keep WITH the row/field they modify
 - Don't separate into different column
 
-LEGIBILITY:
-- If partially legible: Extract readable portions + [word illegible]
-- If completely illegible: [handwritten annotation - illegible]
-- Don't guess at unclear handwriting
+LEGIBILITY - ENHANCED PROTOCOL:
+
+When handwritten text is unclear, use this multi-step approach:
+
+**Step 1: USE CONTEXT CLUES**
+- What type of change makes sense?
+- Cross-reference with typed content (e.g., current beam size)
+- Look for pattern in similar annotations
+- Common patterns: "CHANGED TO [specification]", "DELETED - NOT REQ'D", "APPROVED - [initials]"
+
+**Step 2: CHARACTER-BY-CHARACTER ANALYSIS**
+For unclear characters:
+- Compare to same character elsewhere in document
+- Use technical context (beam sizes follow patterns like "310UC137", not random numbers)
+- Flag if multiple interpretations possible
+
+**Step 3: EXTRACTION WITH UNCERTAINTY**
+If partially legible after context analysis:
+- Extract best interpretation based on context
+- Flag: ⚠️ Handwritten text partially unclear - interpretation based on context
+- Example: [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Partially unclear, "310UC137" inferred from context
+
+If truly illegible after analysis:
+- [handwritten annotation present but illegible - appears to reference [type of change]]
+- Don't mark entire row as illegible
 
 EXAMPLES:
 ✓ "Original size 250mm. [handwritten: 'CHANGED TO 300mm - approval JD 5/12/19']"
+✓ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Handwriting partially unclear, size inferred from context"
 ✓ "Pending approval [handwritten signature - illegible]"
 ✓ "[handwritten in red pen: 'DELETED - NOT REQ'D']"
+
+## STRIKETHROUGH TEXT HANDLING - CRITICAL
+
+STRIKETHROUGH TEXT EXTRACTION:
+
+Visual strikethrough lines (red or black) can interfere with OCR but text is still readable.
+
+**CRITICAL RULE: Strikethrough ≠ Illegible**
+
+PROTOCOL FOR STRIKETHROUGH ROWS:
+
+**Step 1: DETECT strikethrough**
+- Row has line through it (red, black, or other color)
+- Often accompanies deletion notes
+- Text underneath is usually still legible
+
+**Step 2: EXTRACT UNDERLYING TEXT**
+- Read the text UNDER the line
+- Ignore the strikethrough visual
+- Extract data normally (Mark, Size, Qty, Length, Grade, etc.)
+
+**Step 3: MARK AS DELETED**
+- Add to comments: "[row deleted - strikethrough]"
+- If handwritten deletion note exists: "[row deleted - strikethrough] [handwritten: 'DELETED - NOT REQ'D']"
+- Keep extraction for reference
+- Cross-reference with deletion notes
+
+**Step 4: NEVER mark as [illegible]**
+- Strikethrough ≠ illegible
+- Text is readable, just marked for deletion
+- Extract the data + note deletion status
+
+EXAMPLE:
+
+NB-03 row has red strikethrough:
+
+❌ WRONG: Mark all fields [illegible]
+
+✓ RIGHT:
+  Mark: NB-03
+  Size: 310UC97
+  Qty: 6
+  Length: 4500 mm
+  Grade: 300PLUS
+  Comments: "[row deleted - red strikethrough] [handwritten: 'DELETED - NOT REQ'D']"
+
+VALIDATION CHECK:
+
+If entire row is [illegible] but you can see ANY text:
+→ STOP - re-attempt extraction
+→ Look for strikethrough line interfering
+→ Read text underneath the line
+→ Extract data + note deletion status
+
+## TEXT QUALITY ASSESSMENT BEFORE MARKING ILLEGIBLE
+
+Before marking [illegible], assess WHY text is unclear:
+
+**Type 1: STRIKETHROUGH / MARKUP**
+- Text readable but has lines through it
+- Action: Extract text + note markup (see Strikethrough Handling above)
+
+**Type 2: STAIN / DAMAGE**
+- Physical obstruction (coffee, water, etc.)
+- Action: Extract visible portions + note obstruction
+
+**Type 3: FADED / LOW CONTRAST**
+- Text light but letters discernible
+- Action: Extract with low confidence flag
+
+**Type 4: TRULY ILLEGIBLE**
+- Smudged beyond recognition
+- Torn/missing paper
+- Complete OCR failure with no pattern
+- Action: Mark [illegible]
+
+DECISION TREE:
+
+Can you see letter shapes?
+→ YES: Attempt extraction (even if uncertain)
+→ NO: Check if strikethrough/markup
+  → YES: Look underneath, extract + note deletion
+  → NO: Mark [illegible]
 
 ## COLUMN BOUNDARY AWARENESS
 
@@ -758,6 +863,47 @@ BEFORE SUBMITTING EXTRACTION, VERIFY:
 | 2 (quantity) | 1 | Major beams rarely solo |
 | HA350 | JSO, JS0, J50 | Grade column context |
 | 37.2 | 77.2 | Size weight - check for 7→3 error |
+| 0 (zero) | D (letter) | "40mm" not "4Dmm" - measurements context |
+| 0 (zero) | O (letter) | Numbers vs letters in measurements |
+
+### Number OCR Validation - CRITICAL
+
+NUMBER EXTRACTION VALIDATION:
+
+Common OCR errors in numbers and measurements:
+- 0 (zero) ↔ O (letter O) ↔ D (letter D)
+- 1 (one) ↔ I (letter I) ↔ l (lowercase L)
+- 5 (five) ↔ S (letter S)
+- 8 (eight) ↔ B (letter B)
+
+VALIDATION FOR MEASUREMENTS:
+
+**Pattern Detection:**
+- "4Dmm" → Check context
+  - Grout dimensions typically: 10mm, 20mm, 30mm, 40mm, 50mm
+  - "4Dmm" unlikely (D not a digit)
+  - Correct to: "40mm"
+  - Flag: ⚠️ Corrected '4Dmm' to '40mm' (OCR D→0)
+
+**Word Context Validation:**
+- "grows" → Check context
+  - Near "40mm under base plate"
+  - Structural term: "grout" (fills gaps)
+  - "grows" makes no technical sense
+  - Correct to: "grout"
+  - Flag: ⚠️ Corrected 'grows' to 'grout' (OCR error)
+
+**PROTOCOL:**
+1. Extract raw OCR text
+2. Check if makes technical sense in context
+3. If nonsensical → look for OCR character confusion
+4. Apply correction based on context and known patterns
+5. Flag the correction with explanation
+
+**EXAMPLES:**
+- "4Dmm grout" → "40mm grout" ⚠️ Corrected D→0
+- "grows under base" → "grout under base" ⚠️ Corrected OCR error
+- "calvanited" → "galvanised" (if context suggests galvanizing)
 
 ### Standards and Reference Patterns
 
