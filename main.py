@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from flask import Flask, request, render_template_string, session, Response, send_file, abort, url_for, send_from_directory, redirect, jsonify
 import google.generativeai as genai
 import pdfplumber
@@ -238,6 +239,17 @@ def build_prompt(text, doc_type):
         6. If multiple lengths exist for one mark, combine in Length field: "1200 mm, 2400 mm"
         7. Use "N/A" for missing fields or non-existent columns
         8. Verify data makes engineering sense (Length is numeric with units, Grade is grade designation, etc.)
+        
+        EXTRACTION GUIDELINES (be flexible, extract what you see):
+        - Extract values as they appear in the PDF, preserving original format
+        - If text is clearly garbled or incomplete, extract it as-is (don't guess)
+        - For ambiguous cases, prefer extracting the raw value over attempting correction
+        - If you're confident an OCR error exists (e.g., "3/2 mm" when context suggests "4200 mm"), you may correct it, but preserve original if uncertain
+        - Handle variations in format gracefully (e.g., "WB1220×6.0" vs "WB 1220 x 6.0" vs "WB1220 x 6.0")
+        - Accept any reasonable grade designation (common ones: 300PLUS, 350L0, HA350, AS1594, G300, but others may exist)
+        - Length can be in mm or m, with or without spaces
+        - Quantity can be any positive whole number
+        - Size formats vary (e.g., "460UB82.1", "200PFC", "75×75×4 SHS", "WB1220×6.0", "WB 610 × 6.0 × 305 WT")
         
         Return ONLY a valid JSON array (no markdown, no explanation, no code blocks).
 
@@ -646,6 +658,37 @@ HTML_TEMPLATE = """
             margin-bottom: 4px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        }
+        .critical-error {
+            background-color: #fee2e2;
+            border: 2px solid #ef4444;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin: 4px 0;
+            font-size: 12px;
+        }
+        .critical-error-header {
+            font-weight: 700;
+            color: #dc2626;
+            margin-bottom: 4px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .critical-error-item {
+            margin: 2px 0;
+            padding-left: 12px;
+            position: relative;
+        }
+        .critical-error-item::before {
+            content: "❌";
+            position: absolute;
+            left: 0;
+        }
+        tr.has-critical-errors {
+            background-color: #fef2f2 !important;
+        }
+        tr.has-critical-errors:hover {
+            background-color: #fee2e2 !important;
         }
     </style>
 </head>
@@ -1099,7 +1142,7 @@ HTML_TEMPLATE = """
             </thead>
             <tbody>
             {% for row in results %}
-            <tr>
+            <tr {% if row.get('has_critical_errors') %}class="has-critical-errors"{% endif %}>
                 <td>{{ row.Filename }}</td>
                     {% if department == 'finance' %}
                 <td>{{ row.Vendor }}</td>
@@ -1123,15 +1166,71 @@ HTML_TEMPLATE = """
                     <td>{{ row.BasePlate }}</td>
                     <td>{{ row.CapPlate }}</td>
                     <td>{{ row.Finish }}</td>
-                    <td>{% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}</td>
+                    <td>
+                        {% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}
+                        {% if row.get('critical_errors') %}
+                        <div class="critical-error">
+                            <div class="critical-error-header">Critical Errors Detected:</div>
+                            {% for error in row.critical_errors %}
+                            <div class="critical-error-item">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
                     {% else %}
                     <td>{% if row.get('Mark_confidence') == 'low' %}<span class="low-confidence">{{ row.Mark }}</span>{% else %}{{ row.Mark }}{% endif %}</td>
-                    <td>{% if row.get('Size_confidence') == 'low' %}<span class="low-confidence">{{ row.Size }}</span>{% else %}{{ row.Size }}{% endif %}</td>
-                    <td>{{ row.Qty }}</td>
+                    <td>
+                        {% if row.get('Size_confidence') == 'low' %}<span class="low-confidence">{{ row.Size }}</span>{% else %}{{ row.Size }}{% endif %}
+                        {% if row.get('critical_errors') %}
+                            {% for error in row.critical_errors %}
+                                {% if 'Size' in error %}
+                                <div class="critical-error" style="margin-top: 4px;">
+                                    <div class="critical-error-header">⚠️ Size Error:</div>
+                                    <div class="critical-error-item">{{ error }}</div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {{ row.Qty }}
+                        {% if row.get('critical_errors') %}
+                            {% for error in row.critical_errors %}
+                                {% if 'Quantity' in error %}
+                                <div class="critical-error" style="margin-top: 4px;">
+                                    <div class="critical-error-header">⚠️ Quantity Error:</div>
+                                    <div class="critical-error-item">{{ error }}</div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </td>
                     <td>{{ row.Length }}</td>
-                    <td>{% if row.get('Grade_confidence') == 'low' %}<span class="low-confidence">{{ row.Grade }}</span>{% else %}{{ row.Grade }}{% endif %}</td>
+                    <td>
+                        {% if row.get('Grade_confidence') == 'low' %}<span class="low-confidence">{{ row.Grade }}</span>{% else %}{{ row.Grade }}{% endif %}
+                        {% if row.get('critical_errors') %}
+                            {% for error in row.critical_errors %}
+                                {% if 'Grade' in error %}
+                                <div class="critical-error" style="margin-top: 4px;">
+                                    <div class="critical-error-header">⚠️ Grade Error:</div>
+                                    <div class="critical-error-item">{{ error }}</div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </td>
                     <td>{% if row.get('PaintSystem_confidence') == 'low' %}<span class="low-confidence">{{ row.PaintSystem }}</span>{% else %}{{ row.PaintSystem }}{% endif %}</td>
-                    <td>{% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}</td>
+                    <td>
+                        {% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}
+                        {% if row.get('critical_errors') %}
+                        <div class="critical-error">
+                            <div class="critical-error-header">Critical Errors Detected:</div>
+                            {% for error in row.critical_errors %}
+                            <div class="critical-error-item">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </td>
                     {% endif %}
             </tr>
             {% endfor %}
@@ -1345,6 +1444,113 @@ def detect_low_confidence(text):
             return 'low'
     
     return 'high'
+
+def validate_engineering_field(field_name, value, entry):
+    """
+    Validate engineering field values and detect critical errors.
+    Returns a dict with 'confidence' and 'errors' list.
+    """
+    result = {'confidence': 'high', 'errors': []}
+    
+    if not value or value == "N/A":
+        return result
+    
+    value_str = str(value).strip()
+    
+    # Validate Length field
+    if field_name == 'Length':
+        # Check for obvious OCR errors like "3/2 mm" instead of "4200 mm"
+        if '/' in value_str and 'mm' in value_str:
+            # Pattern like "3/2 mm" is likely an OCR error
+            result['errors'].append(f"Length appears to be OCR error: '{value_str}' (likely should be a 4-digit number)")
+            result['confidence'] = 'low'
+        
+        # Check if length is a reasonable number (typically 2-6 digits, but allow flexibility)
+        numbers = re.findall(r'\d+', value_str)
+        if numbers:
+            main_number = numbers[0]
+            # Only flag if extremely unusual (too short or suspiciously long)
+            if len(main_number) < 2 or len(main_number) > 6:
+                result['errors'].append(f"Length number '{main_number}' seems unusual - please verify")
+                if result['confidence'] == 'high':
+                    result['confidence'] = 'medium'
+        
+        # Check for missing units
+        if 'mm' not in value_str.lower() and 'm' not in value_str.lower():
+            result['errors'].append(f"Length missing units: '{value_str}'")
+            if result['confidence'] == 'high':
+                result['confidence'] = 'medium'
+    
+    # Validate Quantity field
+    elif field_name == 'Qty':
+        try:
+            qty = int(value_str)
+            # Only flag if extremely unusual (negative or suspiciously high)
+            if qty < 1:
+                result['errors'].append(f"Quantity '{qty}' is less than 1 - please verify")
+                result['confidence'] = 'low'
+            elif qty > 200:  # Increased threshold, flag only very high values
+                result['errors'].append(f"Quantity '{qty}' seems unusually high - please verify")
+                if result['confidence'] == 'high':
+                    result['confidence'] = 'medium'
+        except ValueError:
+            result['errors'].append(f"Quantity is not a valid number: '{value_str}'")
+            result['confidence'] = 'low'
+    
+    # Validate Grade field
+    elif field_name == 'Grade':
+        # Check for obvious OCR errors (very specific patterns that are clearly wrong)
+        # Only flag patterns that are almost certainly errors, not unusual but valid grades
+        suspicious_patterns = {
+            'JSO': 'likely OCR error for HA350',
+            'JS0': 'likely OCR error for HA350',
+            'J50': 'likely OCR error for HA350',
+            'J5O': 'likely OCR error for HA350'
+        }
+        if value_str.upper() in suspicious_patterns:
+            result['errors'].append(f"Grade '{value_str}' appears to be OCR error ({suspicious_patterns[value_str.upper()]}) - please verify")
+            result['confidence'] = 'low'
+        
+        # Only flag if format is completely invalid (contains invalid characters)
+        # Allow alphanumeric, spaces, hyphens, periods, slashes (for standards like AS/NZS)
+        if not re.match(r'^[A-Z0-9/\s\-\.]+$', value_str.upper()):
+            result['errors'].append(f"Grade format seems unusual: '{value_str}' - please verify")
+            if result['confidence'] == 'high':
+                result['confidence'] = 'medium'
+    
+    # Validate Size field
+    elif field_name == 'Size':
+        # Only flag obvious format issues, not variations in valid formats
+        # Welded beams can have various formats: "WB1220×6.0", "WB 1220 x 6.0", "WB1220 x 6.0", etc.
+        if 'WB' in value_str.upper():
+            # Check for very suspicious patterns (e.g., "WB86 x 122" where first number is tiny)
+            numbers = re.findall(r'\d+', value_str)
+            if len(numbers) >= 2:
+                first_num = int(numbers[0])
+                second_num = int(numbers[1])
+                # Only flag if first number is suspiciously small AND second is large (likely reversed)
+                if first_num < 50 and second_num > 1000:
+                    result['errors'].append(f"Size format may be incorrect: '{value_str}' (dimensions may be reversed - please verify)")
+                    result['confidence'] = 'low'
+        
+        # Don't flag missing separators - many valid formats don't use × (e.g., "460UB82.1")
+        # Only check if it's clearly malformed (multiple numbers with no separator and no context)
+        if re.search(r'\d+\s+\d+\s+\d+', value_str) and '×' not in value_str and 'x' not in value_str.lower() and 'UB' not in value_str.upper() and 'UC' not in value_str.upper():
+            result['errors'].append(f"Size format may need verification: '{value_str}'")
+            if result['confidence'] == 'high':
+                result['confidence'] = 'medium'
+    
+    # Validate Comments field for wrong content
+    elif field_name == 'Comments':
+        # Check for wrong references (e.g., "NZS 4680 strap" when should be "40mm grout")
+        # This is harder to detect automatically, but we can flag suspicious patterns
+        if 'NZS 4680' in value_str and 'strap' in value_str.lower():
+            # This might be wrong if context suggests grout
+            result['errors'].append(f"Comment references NZS 4680 strap - verify this is correct for this member")
+            if result['confidence'] == 'high':
+                result['confidence'] = 'medium'
+    
+    return result
 
 def extract_text(file_obj):
     text = ""
@@ -3424,13 +3630,29 @@ def index_automater():
                                     entry['FinalAmountFormatted'] = format_currency(final_value) if final_value not in ("", None, "N/A") else (final_value or "N/A")
                                 else:
                                     entry['TotalFormatted'] = format_currency(entry.get('Total', ''))
-                                    # Add confidence indicators for engineering fields
+                                    # Add confidence indicators and validation for engineering fields
                                     if department == "engineering":
-                                        # Check confidence for key text fields
-                                        for field in ['Comments', 'PaintSystem', 'Size', 'Grade', 'Mark']:
+                                        entry['critical_errors'] = []
+                                        # Check confidence and validate key fields
+                                        for field in ['Comments', 'PaintSystem', 'Size', 'Grade', 'Mark', 'Length', 'Qty']:
                                             if field in entry and entry[field]:
+                                                # First check for low confidence patterns
                                                 confidence = detect_low_confidence(entry[field])
                                                 entry[f'{field}_confidence'] = confidence
+                                                
+                                                # Then validate for critical errors
+                                                validation = validate_engineering_field(field, entry[field], entry)
+                                                if validation['errors']:
+                                                    entry['critical_errors'].extend(validation['errors'])
+                                                    # Update confidence if validation found issues
+                                                    if validation['confidence'] == 'low':
+                                                        entry[f'{field}_confidence'] = 'low'
+                                                    elif validation['confidence'] == 'medium' and confidence == 'high':
+                                                        entry[f'{field}_confidence'] = 'medium'
+                                        
+                                        # Mark entry as having critical errors if any found
+                                        if entry['critical_errors']:
+                                            entry['has_critical_errors'] = True
                                 results.append(entry)
                             # Store schedule type for engineering documents (use first detected type)
                             if department == "engineering" and schedule_type and not detected_schedule_type:
