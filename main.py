@@ -202,116 +202,390 @@ def build_prompt(text, doc_type):
     """Build a prompt tailored to the selected department."""
     if doc_type == "engineering":
         return f"""
-You are extracting data from a scanned engineering beam schedule.
+# COMPLETE LLM PROMPT FOR ENGINEERING BEAM SCHEDULE EXTRACTION
 
-CRITICAL RULES:
-1. Comments column contains crucial construction instructions - preserve EXACT wording
-2. Beam sizes follow specific formats:
-   - UC/UB sections: [size][type][weight] (e.g., "310UC137", "250UB37.2")
-   - Welded beams: WB[depth]×[thickness] (e.g., "WB1220×6.0")
-   - PFC sections: [size]PFC (e.g., "250PFC")
-3. Handwritten notes appear in [brackets] or margin notes
-4. If text is unclear, mark as [UNCLEAR] - do NOT guess
+## SYSTEM CONTEXT
 
-COMMON OCR ERRORS TO WATCH FOR:
-- "7" misread as "1" or "I"
-- "3" misread as "8" 
-- "O" (letter) vs "0" (zero)
-- "×" (multiplication) vs "x" (letter)
-- Spaces inserted in numbers (1220 → "12 20")
+You are extracting structured data from scanned engineering beam schedules. These are critical construction documents where errors can cause:
 
-EXTRACTION STRATEGY - TWO PASS APPROACH:
+- Wrong materials ordered (costly delays)
+- Structural safety issues
+- Construction rework
 
-PASS 1: Extract table structure
-- Identify column headers (Mark, Size, Qty, Length, Grade, Paint System, Comments)
-- Map each row to correct columns
-- Flag any alignment issues
+Your primary goal: Accurate extraction with explicit uncertainty flagging. Silent errors are worse than flagged unknowns.
 
-PASS 2: Content extraction with validation
+## DOCUMENT CHARACTERISTICS
 
-For each row, extract:
+You will encounter:
+
+- Mixed content: Typed text + handwritten annotations
+- Table structure: Columns typically include: Mark, Size, Qty, Length, Grade, Paint System, Comments
+- OCR challenges: Coffee stains, smudges, low resolution (150-200 dpi), fold marks
+- Technical nomenclature: Specific beam sizing formats (e.g., "310UC137", "WB1220×6.0")
+- Section headers: ALL CAPS headers that divide beam categories ("EXISTING TO REMAIN", "NEW STEELWORK")
+- Handwritten notes: Changes, deletions, site notes (often in brackets or margins)
+
+## CRITICAL RULES - READ FIRST
+
+**Rule 1: Comments Contain Crucial Information**
+
+Comments include construction instructions, specifications, and safety notes. They MUST be preserved accurately.
+
+✅ GOOD: "Hold 40mm grout under base plate"
+❌ BAD: "H o l d 4 O m g r o u t u n d e r..."
+
+If comments become garbled character soup → FLAG as [COMMENT ILLEGIBLE] and move on.
+
+**Rule 2: Beam Size Formats Are Strict**
+
+- UC/UB sections: [size][type][weight] (e.g., "310UC137", "250UB37.2")
+- Welded beams: WB[depth]×[thickness] (e.g., "WB1220×6.0")
+- PFC sections: [size]PFC (e.g., "250PFC")
+
+Invalid formats must be flagged immediately.
+
+**Rule 3: Don't Invent Data**
+
+- If text is unclear → mark as [UNCLEAR] or [ILLEGIBLE]
+- Don't "clean up" technical terms
+- Don't guess at missing values
+- Don't paraphrase specifications
+
+**Rule 4: Section Headers ≠ Row Data**
+
+Section headers like "NEW STEELWORK - TO BE INSTALLED" describe categories, not individual beams.
+
+- Don't include them in row data
+- Note them as context only
+
+## COMMON OCR ERRORS - WATCH FOR THESE
+
+| Actual | Often Misread As | Context Clue |
+|--------|------------------|--------------|
+| 3 | 8 | Beam sizes: 310UC not 810UC |
+| 7 | 1 or I | 250UB37.2 not 250UB11.2 |
+| O (letter) | 0 (zero) | "COLOUR" not "C0L0UR" |
+| × (multiply) | x (letter) | WB1220×6.0 not WB1220x6.0 |
+| 1220 | 12 20 or 122 0 | Spaces inserted in numbers |
+| 2 (quantity) | 1 | Major beams rarely solo |
+
+## EXTRACTION STRATEGY - THREE PASS APPROACH
+
+### PASS 1: Table Structure Analysis
+
+1. Identify all column headers
+2. Detect section headers (all caps, spanning columns)
+3. Map each row to correct columns
+4. Flag any alignment issues
+5. Note which rows are data vs. headers
+
+### PASS 2: Data Extraction with Validation
+
+For each cell:
+
+**Step A: Extract raw text**
+- Read the cell content as-is
+
+**Step B: Apply format validation**
+
+| Column | Validation | Flag If |
+|--------|------------|---------|
+| Mark | Pattern: [B/NB]-[01-99] | Doesn't match pattern |
+| Size | Match beam format rules | Invalid format detected |
+| Qty | Integer 1-20 | Not a number, or >20 |
+| Length | Number + "mm" | Missing units or unrealistic |
+| Grade | Known grades OR "Not marked" | Appears to be misaligned data |
+| Paint System | System codes or N/A | - |
+| Comments | Readable sentences | Character soup detected |
+
+**Step C: Cross-validation**
+
+- Check quantity against beam size (large beams rarely qty=1)
+- Verify size format matches type (WB must have ×)
+- Ensure grade isn't data from another column
+
+### PASS 3: Comments - Special Handling
+
+Comments are the highest-failure column. Use this protocol:
+
+**STEP 1: CONTEXT CHECK**
+- Review the beam Mark, Size, Grade first
+- Understand beam type and purpose
+- This helps interpret unclear text
+
+**STEP 2: READ AS PHRASES, NOT CHARACTERS**
+
+If you get: "H o l d 4 O m m g r o u t"
+→ STOP - This is character-level failure
+→ Re-attempt reading as connected words
+→ Expected: "Hold 40mm grout under base plate"
+
+**STEP 3: USE ENGINEERING VOCABULARY**
+
+Comments contain these patterns:
+
+- Installation: "Hold [X]mm grout", "Hot dip galvanised per AS/NZS [code]"
+- Structural: "Main support beam", "Fly brace @ [spacing] centres"
+- Verification: "CHECK ACTUAL SIZE ON SITE", "Verify with supplier"
+- Status: "Existing steel", "Timber beam replaced [year]"
+- Modifications: "DELETED - NOT REQ'D", "[handwritten: 'CHANGED TO...']"
+- Details: "See Detail D-[number]/S-[number]"
+
+If extracted comment matches NONE of these patterns:
+→ Likely OCR failure
+→ Output: "[Comment illegible - manual review required]"
+→ DO NOT output gibberish
+
+**STEP 4: HANDWRITTEN ANNOTATIONS**
+
+- Usually appear in quotes, brackets, or different ink color
+- Format as: [handwritten: "exact text"]
+- Keep WITH the row they modify
+- Examples:
+  - [handwritten: "CHANGED TO 310UC137 - PMG"]
+  - [handwritten red pen: "camber 20mm"]
+  - [handwritten: "DELETED - NOT REQ'D"]
+
+## BEAM SIZE FORMAT RULES
+
+### Valid Format Examples
+
+**UC/UB Universal Sections:**
+✓ 310UC137    (310mm UC section, 137 kg/m)
+✓ 250UB37.2   (250mm UB section, 37.2 kg/m)
+✓ 460UB82.1   (460mm UB section, 82.1 kg/m)
+✓ 200UC46.2   (200mm UC section, 46.2 kg/m)
+
+✗ 310UC15     (too short - missing digit)
+✗ 250UB77.2   (check for OCR error: 7→3, likely 250UB37.2)
+✗ 3IOUCIS8    (OCR failure: I→1, S→5, likely 310UC158)
+
+**Welded Beams (WB):**
+✓ WB1220×6.0  (1220mm deep, 6.0mm thick web)
+✓ WB610×8.0   (610mm deep, 8.0mm thick web)
+
+✗ WB 610 x 27     (spaces, wrong format)
+✗ WB 612.2        (missing × and second dimension)
+✗ WB1220x6.0      (lowercase x instead of ×)
+
+If you see "WB" + anything else:
+→ FLAG: "WB size format appears incorrect"
+→ Expected format: WB[depth]×[thickness]
+→ Attempt correction if confident (e.g., "WB 612.2" might be "WB1220×6.0")
+
+**PFC Sections:**
+✓ 250PFC  (250mm parallel flange channel)
+✓ 200PFC
+
+## ERROR FLAGGING PROTOCOL
+
+Use three-tier system:
+
+**⚠️ WARNING (Likely correct but verify)**
+- "Grade '300' appears to be a number - please verify this is correct"
+- "Size '250UB77.2' - check if should be '250UB37.2' (OCR 7→3 error)"
+- "Quantity is 1, but similar entries have quantity >1 - please verify"
+
+**🔍 REVIEW REQUIRED (Uncertain extraction)**
+- "WB size format unusual - manual verification recommended"
+- "Comment may be incomplete due to coffee stain"
+- "Handwritten annotation partially illegible"
+
+**🚫 CRITICAL ERROR (Definitely wrong - must fix before use)**
+- "Comment text garbled - OCR failed completely"
+- "Size format invalid - MANUAL VERIFICATION REQUIRED before use"
+- "Column alignment appears corrupted"
+
+For each flag, always provide:
+- What you extracted
+- Why it's flagged (specific reason)
+- Suggested correction (if confident)
+
+## SPECIAL HANDLING FOR POOR QUALITY
+
+**Coffee Stains / Smudges**
+If part of text is obscured:
+→ Extract visible portions
+→ Note: "[coffee stain obscures remainder]"
+→ Example: "Paint System A required [coffee stain]"
+
+**Illegible Handwriting**
+If handwritten note is truly unreadable:
+→ "[handwritten annotation - illegible]"
+→ Do NOT attempt to guess
+
+**Missing Data / Empty Cells**
+- If cell is empty: "—" (em dash)
+- If "N/A" is written: "N/A"
+- If "Not marked" is written: "Not marked"
+- These have different meanings - check actual cell content
+
+**Damaged/Faded Text**
+- Try reading from context of adjacent cells
+- Check if information repeats in another row
+- If still unclear: "[text faded - illegible]"
+
+## COLUMN-SPECIFIC STRATEGIES
+
+**HIGH-RELIABILITY (Usually clear typed text)**
+Columns: Mark, Size, Qty, Length
+Strategy:
+- Extract normally
+- Validate against format rules
+- Flag format violations immediately
+
+**MEDIUM-RELIABILITY (Typed but may have issues)**
+Columns: Grade, Paint System
+Strategy:
+- Extract text
+- Cross-reference with known values:
+  - Grades: 300, 300PLUS, C300, HA350, Not marked
+  - Paint: P1 (2 coats), HD Galv, Paint System A, N/A
+- If unusual value → flag for verification
+
+**LOW-RELIABILITY (Handwritten, stained, complex)**
+Column: Comments
+Strategy:
+- Use PASS 3 protocol (see above)
+- Read as phrases using engineering vocabulary
+- If garbled after 2 attempts → mark as [ILLEGIBLE]
+- NEVER output character soup
+
+## OUTPUT FORMAT
+
+Return data in this structure for each row:
 
 IF BEAM SCHEDULE:
 {{
-  "Mark": Short identifier from MARK column (e.g., "B1", "NB-02"),
-  "Size": Complete section size (e.g., "310UC137", "250UB37.2", "WB1220×6.0"),
-  "Qty": Quantity number (integer, no units),
-  "Length": Length with units (e.g., "5400 mm"),
-  "Grade": Material grade (e.g., "300PLUS", "G300", "Not marked", "N/A"),
-  "PaintSystem": Paint/finish specification (e.g., "P1 (2 coats)", "HD Galv."),
-  "Comments": ALL text from Comments column - EXTRACT EXACTLY AS SHOWN, even if garbled
+  "Mark": "B1",
+  "Size": "310UC158",
+  "Qty": 2,
+  "Length": "5400 mm",
+  "Grade": "300",
+  "PaintSystem": "N/A",
+  "Comments": "Existing steel. Column conversion deferred. [handwritten: 'CHANGED TO 310UC137 - PMG']"
 }}
 
 IF COLUMN SCHEDULE:
 {{
-  "Mark": Short identifier from MARK column,
-  "SectionType": Section type from SECTION TYPE column,
-  "Size": Complete size designation (e.g., "310 UC 158"),
-  "Length": Length with units,
-  "Grade": Material grade,
-  "BasePlate": Base plate specification or "N/A",
-  "CapPlate": Cap plate specification or "N/A",
-  "Finish": Finish specification,
-  "Comments": ALL text from Comments column - EXTRACT EXACTLY AS SHOWN
+  "Mark": "C1",
+  "SectionType": "UC",
+  "Size": "310 UC 158",
+  "Length": "5400 mm",
+  "Grade": "300",
+  "BasePlate": "N/A",
+  "CapPlate": "N/A",
+  "Finish": "HD Galv",
+  "Comments": "Existing column"
 }}
 
-SPECIFIC FORMAT RULES:
+**Confidence levels:**
+- `high`: 95%+ confident, minimal ambiguity
+- `medium`: 70-94% confident, some uncertainty
+- `low`: <70% confident, needs verification
 
-BEAM SIZE PATTERNS:
-✓ Correct: "310UC137", "250UB37.2", "WB1220×6.0", "460UB82.1"
-✗ Wrong: "310UC15" (too short), "WB 610 x 27" (spaces), "250UB77.2" (check for 7→3 error)
+## PRE-OUTPUT VALIDATION CHECKLIST
 
-If you see "WB" followed by anything other than [number]×[number]:
-→ FLAG in comments: "WB size format appears incorrect"
-→ Attempt correction only if confident: "WB 612.2" might be "WB1220×6.0"
+Before returning extracted data, verify EVERY row passes these checks:
 
-HANDWRITTEN ANNOTATIONS:
-- Usually in quotes or brackets: "CHANGED TO 310UC137 - PMG"
-- Include them in square brackets: [handwritten: "text"]
-- Keep them WITH the row they modify
+### ✓ Format Validation
+- [ ] Size matches valid beam format (UC/UB/WB/PFC)
+- [ ] Qty is integer between 1-20
+- [ ] Length is realistic (1000-10000mm typical)
+- [ ] Grade is known steel grade OR "Not marked"
+- [ ] Paint System is valid code or N/A
 
-COMMENTS WITH SPECIAL TERMS:
-- Preserve exact technical terms: "camber 20mm", "fly brace @ 1500 centres"
-- Don't paraphrase: "AS/NZS 4680" not "Australian Standard 4680"
-- If text appears garbled (>30% non-dictionary words), preserve it EXACTLY as shown
-- If completely unintelligible, mark: [COMMENT UNCLEAR - manual review required]
+### ✓ Content Quality
+- [ ] Comments are readable sentences (NOT "H o l d 4 O m...")
+- [ ] Handwritten notes are in [brackets]
+- [ ] Section headers not mixed into row data
+- [ ] No data from one column leaked into another
 
-COMMENTS FIELD - ABSOLUTE RULES:
-- Extract character-by-character, exactly as shown in PDF
-- If you see "H H o o t l d d", extract it exactly as "H H o o t l d d"
-- If you see "[coffee sta", extract it exactly as "[coffee sta"
-- DO NOT attempt to "fix" or "decode" garbled text
-- DO NOT combine separate words that are spaced out
-- Preserve all brackets, quotes, and special characters exactly
+### ✓ Unacceptable Outputs Eliminated
 
-VALIDATION CHECKS:
-1. Size column: Check against beam format patterns
-2. Quantity: Must be integer 1-20 (flag if outside range)
-3. Length: Must be number + "mm" or "m"
-4. Grade: Known steel grades (300PLUS, 350L0, HA350, AS1594, G300) or "N/A", "Not marked", "-"
-   - If Grade is a decimal number like "37.2", this is MISALIGNED (belongs in Size column)
+**NEVER OUTPUT THESE:**
+❌ "H o l d 4 O m g r o u t u n d e r b a s e p l a t e"
+❌ "W p e e b r b A e S a 1 m 5 9 - 4 . n o V n e"
+❌ "o x n i s s t i i t n e g . c C o o l r u r m o n"
+❌ "Colour: onsistent" (garbled word)
 
-ERROR FLAGGING:
-⚠️ WARNING (likely correct but verify):
-- "Grade '300' appears to be number - please verify"
-- "Size '250UB77.2' - check if should be '250UB37.2'"
+**If your comment output looks like these → YOU FAILED**
 
-🔍 REVIEW REQUIRED (uncertain):
-- "WB size format unusual - manual verification recommended"
-- "Quantity 1 seems low for this beam type"
+**Correct approach:**
+✓ "[Comment illegible - manual transcription required]"
+✓ "[Comment partially obscured by coffee stain]"
+✓ "Hold 40mm grout under base plate"
 
-🚫 CRITICAL ERROR (definitely wrong):
-- "Comment text garbled - OCR failed"
-- "Size format invalid - MUST verify before use"
+## SPECIAL CASES - KNOWN ISSUES
 
-PRIORITY ORDER:
-1. Accuracy > Speed
-2. Explicit uncertainty > Silent errors  
-3. Preserving original text > "fixing" it
-4. Flagging issues > Hiding them
+**Case 1: NB-02 Welded Beam**
+This beam consistently causes problems:
 
-Remember: Wrong beam size = wrong steel ordered = construction delays + safety risk.
-When in doubt, FLAG IT.
+Common misreadings:
+- Size: "WB 610 x 27", "WB 612.2", "WB1220x6.0"
+- Quantity: 1 (should be 2)
+
+Correct values:
+- Size: WB1220×6.0 (1220mm deep, 6mm web)
+- Qty: 2
+- Grade: HA350
+- Comment should mention: "Web beam", "non-standard section per AS1594", "See Detail D-12/S-500"
+
+If you extract this beam, double-check these fields.
+
+**Case 2: Grade vs. Size Confusion**
+Sometimes size weight gets misread as grade:
+
+Wrong:
+- Size: 250UB77.2, Grade: 37.2
+
+Right:
+- Size: 250UB37.2, Grade: Not marked
+
+Detection: If grade is a decimal number matching part of size → column misalignment
+
+**Case 3: "Not marked" vs "N/A"**
+These mean different things:
+- "Not marked" = explicitly stated in document (usually Grade column)
+- "N/A" = empty cell or dash (—)
+
+Don't convert one to the other. Check actual PDF cell content.
+
+## PRIORITY HIERARCHY
+
+When conflicts arise, prioritize in this order:
+
+1. **Safety** - Flag anything that could cause structural issues
+2. **Accuracy** - Correct data > fast extraction
+3. **Explicitness** - Clear flags > silent assumptions
+4. **Completeness** - Better to mark [ILLEGIBLE] than skip
+
+Remember:
+- Wrong beam size = wrong steel ordered = major cost/delay
+- Missing installation note = improper construction = safety risk
+- When in doubt, FLAG IT
+
+## FINAL INSTRUCTION
+
+You are extracting from engineering documents where errors have real consequences. Your output will be used to:
+- Order steel materials
+- Fabricate connections
+- Install beams
+- Verify compliance
+
+Your responsibility:
+- Extract accurately
+- Flag uncertainties explicitly
+- Never hide problems
+- Make verification easy for engineers
+
+Success criteria:
+- All beam sizes in valid format
+- All comments readable (or marked [ILLEGIBLE])
+- All uncertainties flagged with specific reasons
+- Zero silent errors
+
+Begin extraction. For each row, apply all validation rules and output in the specified JSON format.
 
 Return ONLY a valid JSON array (no markdown, no explanation, no code blocks).
 
@@ -1232,7 +1506,13 @@ HTML_TEMPLATE = """
             <tbody>
             {% for row in results %}
             <tr {% if row.get('requires_manual_verification') %}class="requires-manual-verification"{% elif row.get('has_critical_errors') %}class="has-critical-errors"{% endif %}>
-                <td>{{ row.Filename }}</td>
+                <td>{{ row.Filename }}
+                    {% if row.get('requires_manual_verification') %}
+                    <div class="critical-error-banner" style="margin-top: 8px;">
+                        <div class="critical-error-header">🚫 MANUAL VERIFICATION REQUIRED</div>
+                    </div>
+                    {% endif %}
+                </td>
                     {% if department == 'finance' %}
                 <td>{{ row.Vendor }}</td>
                 <td>{{ row.Date }}</td>
@@ -1325,9 +1605,9 @@ HTML_TEMPLATE = """
                         </div>
                         {% endif %}
                         {% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}
-                        {% if row.get('critical_errors') %}
-                        <div class="critical-error">
-                            <div class="critical-error-header">Critical Errors Detected:</div>
+                        {% if row.get('critical_errors') and row.get('requires_manual_verification') %}
+                        <div class="critical-error" style="margin-top: 8px;">
+                            <div class="critical-error-header">🚫 Critical Errors - Manual Verification Required:</div>
                             {% for error in row.critical_errors %}
                             <div class="critical-error-item">{{ error }}</div>
                             {% endfor %}
@@ -1670,16 +1950,8 @@ def validate_engineering_field(field_name, value, entry):
     
     value_str = str(value).strip()
     
-    # Cross-field validation: Check if Grade contains a number (likely misaligned)
-    if field_name == 'Grade':
-        # Grade should NOT be a decimal number (that's likely size data)
-        if re.match(r'^\d+\.\d+$', value_str):
-            result['errors'].append(f"Grade '{value_str}' appears to be a number (likely misaligned from Size column) - please verify column alignment")
-            result['confidence'] = 'low'
-        # Grade should NOT be just digits
-        elif re.match(r'^\d+$', value_str) and len(value_str) <= 3:
-            result['errors'].append(f"Grade '{value_str}' appears to be a number - please verify this is correct")
-            result['confidence'] = 'low'
+    # Note: Grade validation is handled in validate_engineering_field function
+    # Don't duplicate validation here to avoid duplicate error messages
     
     # Check for OCR character errors in Size field
     if field_name == 'Size':
@@ -1743,7 +2015,6 @@ def validate_engineering_field(field_name, value, entry):
     # Validate Grade field
     elif field_name == 'Grade':
         # Check for obvious OCR errors (very specific patterns that are clearly wrong)
-        # Only flag patterns that are almost certainly errors, not unusual but valid grades
         suspicious_patterns = {
             'JSO': 'likely OCR error for HA350',
             'JS0': 'likely OCR error for HA350',
@@ -1753,6 +2024,13 @@ def validate_engineering_field(field_name, value, entry):
         if value_str.upper() in suspicious_patterns:
             result['errors'].append(f"Grade '{value_str}' appears to be OCR error ({suspicious_patterns[value_str.upper()]}) - please verify")
             result['confidence'] = 'low'
+        
+        # Grade should NOT be a decimal number (that's likely size data misaligned)
+        if re.match(r'^\d+\.\d+$', value_str):
+            result['errors'].append(f"Grade '{value_str}' appears to be a number (likely misaligned from Size column) - please verify column alignment")
+            result['confidence'] = 'low'
+        # Note: "300" as a standalone number IS a valid steel grade designation (Grade 300 steel)
+        # Don't flag it - only flag decimal numbers which are clearly wrong
         
         # Only flag if format is completely invalid (contains invalid characters)
         # Allow alphanumeric, spaces, hyphens, periods, slashes (for standards like AS/NZS)
