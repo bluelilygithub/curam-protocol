@@ -231,14 +231,16 @@ def build_prompt(text, doc_type):
         - "Comments": All notes and specifications from COMMENTS column
         
         CRITICAL RULES:
-        1. FIRST identify ALL column headers to determine schedule type
+        1. FIRST identify ALL column headers to determine schedule type - map each field to its correct column
         2. Mark values are SHORT (2-6 chars) like "B-101", "C1" - NOT detail references like "D1/S-500"
         3. Extract Mark ONLY from MARK column, never from Comments/Remarks
-        4. Extract complete values exactly as shown in PDF
+        4. Extract complete values exactly as shown in PDF, ensuring each field comes from its correct column
         5. Create ONE object per UNIQUE MARK - do NOT split same mark into multiple rows
         6. If multiple lengths exist for one mark, combine in Length field: "1200 mm, 2400 mm"
         7. Use "N/A" for missing fields or non-existent columns
-        8. Verify data makes engineering sense (Length is numeric with units, Grade is grade designation, etc.)
+        8. Verify data makes engineering sense (Length is numeric with units, Grade is grade designation, NOT a number)
+        9. COLUMN ALIGNMENT: Ensure each field comes from its designated column - if Grade contains a number like "37.2", this is likely misaligned (should be in Size column)
+        10. OCR CHARACTER CONFUSION: Watch for common OCR errors: 3↔7, 0↔O, 1↔I, 5↔S. If a number seems wrong, check context (e.g., "250UB77.2" might be "250UB37.2")
         
         EXTRACTION GUIDELINES (be flexible, extract what you see):
         - Extract values as they appear in the PDF, preserving original format
@@ -250,6 +252,20 @@ def build_prompt(text, doc_type):
         - Length can be in mm or m, with or without spaces
         - Quantity can be any positive whole number
         - Size formats vary (e.g., "460UB82.1", "200PFC", "75×75×4 SHS", "WB1220×6.0", "WB 610 × 6.0 × 305 WT")
+        
+        COLUMN ALIGNMENT VERIFICATION (CRITICAL):
+        - Grade field should contain grade designations (300PLUS, 350L0, HA350, "Not marked", "N/A", "-", etc.) - NEVER a decimal number
+        - If Grade contains a decimal number like "37.2" or "77.2", this is MISALIGNED - it belongs in the Size column, not Grade
+        - Size field should contain complete section designations (e.g., "250UB37.2", "460UB82.1") - the decimal part is part of the size
+        - Verify each field matches its expected data type: Grade = text/designation, Size = section code, Qty = whole number
+        - If you see "37.2" in Grade column, check if Size column is missing this value - likely column misalignment
+        
+        OCR CHARACTER CORRECTION (when confident):
+        - Common substitutions: 3↔7, 0↔O, 1↔I, 5↔S
+        - If "250UB77.2" appears but similar entries show "250UB37.2" pattern, correct 7→3
+        - If "WB 610 x 2 x 27.2" appears, this is likely wrong format - welded beams should be "WB[depth]×[thickness]" (e.g., "WB1220×6.0")
+        - Check quantity carefully - if table shows "2" but you extract "1", verify you're reading the correct cell
+        - Only correct if you're highly confident based on context, similar entries, and column headers
         
         Return ONLY a valid JSON array (no markdown, no explanation, no code blocks).
 
@@ -1445,6 +1461,29 @@ def detect_low_confidence(text):
     
     return 'high'
 
+def detect_ocr_character_errors(value_str, field_name):
+    """
+    Detect common OCR character substitution errors.
+    Returns list of potential corrections.
+    """
+    errors = []
+    
+    # Common OCR substitutions: 3↔7, 0↔O, 1↔I, 5↔S
+    # Check for suspicious patterns in size fields
+    if field_name == 'Size' and 'UB' in value_str.upper():
+        # Pattern: "250UB77.2" where 77 might be 37 (3→7 error)
+        match = re.search(r'(\d+)UB(\d+)\.(\d+)', value_str)
+        if match:
+            prefix = match.group(1)
+            middle = match.group(2)
+            suffix = match.group(3)
+            # If middle number is 77, 70, 73, etc., might be 37, 30, 33
+            if middle.startswith('7') and len(middle) == 2:
+                potential = middle.replace('7', '3', 1)
+                errors.append(f"Possible OCR error: '{value_str}' might be '{prefix}UB{potential}.{suffix}' (7→3 substitution)")
+    
+    return errors
+
 def validate_engineering_field(field_name, value, entry):
     """
     Validate engineering field values and detect critical errors.
@@ -1456,6 +1495,24 @@ def validate_engineering_field(field_name, value, entry):
         return result
     
     value_str = str(value).strip()
+    
+    # Cross-field validation: Check if Grade contains a number (likely misaligned)
+    if field_name == 'Grade':
+        # Grade should NOT be a decimal number (that's likely size data)
+        if re.match(r'^\d+\.\d+$', value_str):
+            result['errors'].append(f"Grade '{value_str}' appears to be a number (likely misaligned from Size column) - please verify column alignment")
+            result['confidence'] = 'low'
+        # Grade should NOT be just digits
+        elif re.match(r'^\d+$', value_str) and len(value_str) <= 3:
+            result['errors'].append(f"Grade '{value_str}' appears to be a number - please verify this is correct")
+            result['confidence'] = 'low'
+    
+    # Check for OCR character errors in Size field
+    if field_name == 'Size':
+        ocr_errors = detect_ocr_character_errors(value_str, field_name)
+        if ocr_errors:
+            result['errors'].extend(ocr_errors)
+            result['confidence'] = 'low'
     
     # Validate Length field
     if field_name == 'Length':
@@ -1493,6 +1550,7 @@ def validate_engineering_field(field_name, value, entry):
                 result['errors'].append(f"Quantity '{qty}' seems unusually high - please verify")
                 if result['confidence'] == 'high':
                     result['confidence'] = 'medium'
+            # Note: We can't easily compare with other entries here, but the prompt should handle this
         except ValueError:
             result['errors'].append(f"Quantity is not a valid number: '{value_str}'")
             result['confidence'] = 'low'
@@ -1520,6 +1578,12 @@ def validate_engineering_field(field_name, value, entry):
     
     # Validate Size field
     elif field_name == 'Size':
+        # Check for OCR character errors first
+        ocr_errors = detect_ocr_character_errors(value_str, field_name)
+        if ocr_errors:
+            result['errors'].extend(ocr_errors)
+            result['confidence'] = 'low'
+        
         # Only flag obvious format issues, not variations in valid formats
         # Welded beams can have various formats: "WB1220×6.0", "WB 1220 x 6.0", "WB1220 x 6.0", etc.
         if 'WB' in value_str.upper():
@@ -1528,8 +1592,21 @@ def validate_engineering_field(field_name, value, entry):
             if len(numbers) >= 2:
                 first_num = int(numbers[0])
                 second_num = int(numbers[1])
+                # Flag if format looks completely wrong (e.g., "WB 610 x 2 x 27.2" should be "WB1220×6.0")
+                # Pattern: multiple small numbers suggests wrong format or column misalignment
+                if len(numbers) >= 3:
+                    # If we have 3+ numbers and they're all small, this is likely wrong
+                    if all(int(n) < 1000 for n in numbers[:3]):
+                        result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam should be format like 'WB1220×6.0' (depth × thickness, typically 2 numbers). This may indicate column misalignment.")
+                        result['confidence'] = 'low'
+                    # If pattern is "WB [num] x [num] x [num]" with small numbers, definitely wrong
+                    elif ' x ' in value_str or ' X ' in value_str:
+                        parts = re.split(r'\s+[xX]\s+', value_str)
+                        if len(parts) >= 3 and all(any(c.isdigit() for c in p) for p in parts[:3]):
+                            result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam format should be 'WB[depth]×[thickness]' (e.g., 'WB1220×6.0'), not multiple dimensions separated by 'x'")
+                            result['confidence'] = 'low'
                 # Only flag if first number is suspiciously small AND second is large (likely reversed)
-                if first_num < 50 and second_num > 1000:
+                elif first_num < 50 and second_num > 1000:
                     result['errors'].append(f"Size format may be incorrect: '{value_str}' (dimensions may be reversed - please verify)")
                     result['confidence'] = 'low'
         
