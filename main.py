@@ -2402,9 +2402,8 @@ def validate_engineering_field(field_name, value, entry):
 
 def extract_text(file_obj):
     """
-    Extract text from PDF or image files.
-    For PDFs: Uses pdfplumber
-    For images: Uses OCR (pytesseract) if available, otherwise returns error
+    Extract text from PDF files.
+    For images, returns a special marker that indicates the file should be sent directly to Gemini vision API.
     """
     # Check if file_obj is a string path or file object
     file_path = None
@@ -2413,21 +2412,8 @@ def extract_text(file_obj):
         # Check file extension
         file_ext = os.path.splitext(file_path)[1].lower()
         if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-            # Try to use OCR for image files
-            try:
-                from PIL import Image
-                import pytesseract
-                
-                # Open and process image
-                img = Image.open(file_path)
-                text = pytesseract.image_to_string(img)
-                if not text.strip():
-                    return f"Error: No text extracted from image (OCR returned empty)"
-                return text
-            except ImportError:
-                return f"Error: Image processing requires pytesseract and PIL. Install with: pip install pytesseract pillow"
-            except Exception as e:
-                return f"Error: OCR failed for image: {e}"
+            # Return special marker for image files - will be handled by Gemini vision API
+            return f"[IMAGE_FILE:{file_path}]"
     
     # PDF processing
     text = ""
@@ -2444,8 +2430,14 @@ def extract_text(file_obj):
         return f"Error: {e}"
     return text
 
-def analyze_gemini(text, doc_type):
-    """Call Gemini with a doc-type-specific prompt and return entries, error, model used, attempt log, action log, and schedule_type."""
+def analyze_gemini(text, doc_type, image_path=None):
+    """Call Gemini with a doc-type-specific prompt and return entries, error, model used, attempt log, action log, and schedule_type.
+    
+    Args:
+        text: Text content or [IMAGE_FILE:path] marker
+        doc_type: Document type (engineering, finance, transmittal)
+        image_path: Optional path to image file for vision processing
+    """
     # For engineering, we'll detect schedule type from returned data
     if doc_type == "engineering":
         fields = ENGINEERING_BEAM_FIELDS  # Default, will detect if column schedule
@@ -2462,7 +2454,17 @@ def analyze_gemini(text, doc_type):
     if not api_key:
         return [error_entry("MISSING API KEY")], "MISSING API KEY", None, [], [], None
 
-    if not text or text.startswith("Error:"):
+    # Check if this is an image file marker
+    if text and text.startswith("[IMAGE_FILE:"):
+        image_path = text.replace("[IMAGE_FILE:", "").rstrip("]")
+        if not os.path.exists(image_path):
+            return [error_entry(f"Image file not found: {image_path}")], f"Image file not found: {image_path}", None, [], [], None
+        text = None  # Will use image instead
+    
+    if not text and not image_path:
+        return [error_entry("No content provided for analysis")], "No content provided for analysis", None, [], [], None
+    
+    if text and text.startswith("Error:"):
         return [error_entry(f"Text extraction failed: {text}")], f"Text extraction failed: {text}", None, [], [], None
 
     available_models = get_available_models()
@@ -2507,7 +2509,8 @@ def analyze_gemini(text, doc_type):
         else TRANSMITTAL_PROMPT_LIMIT if doc_type == "transmittal"
         else None
     )
-    prompt_text = prepare_prompt_text(text, doc_type, prompt_limit)
+    # For images, we still need prompt text (empty string is fine, prompt will be built)
+    prompt_text = prepare_prompt_text(text or "", doc_type, prompt_limit) if text else ""
     prompt = build_prompt(prompt_text, doc_type)
     if prompt_limit:
         action_log.append(f"Prompt truncated to {prompt_limit} characters for {doc_type} document")
@@ -2530,9 +2533,37 @@ def analyze_gemini(text, doc_type):
                 model = genai.GenerativeModel(model_name)
                 # Use longer timeout for engineering (large PDFs), shorter for others
                 timeout_seconds = 60 if doc_type == "engineering" else 30
-                response = model.generate_content(prompt, request_options={"timeout": timeout_seconds})
+                
+                # Prepare content for Gemini
+                if image_path:
+                    # Use Gemini vision API for images
+                    import pathlib
+                    from PIL import Image
+                    image_file = pathlib.Path(image_path)
+                    if not image_file.exists():
+                        attempt_detail["status"] = "error"
+                        attempt_detail["message"] = f"Image file not found: {image_path}"
+                        action_log.append(f"✗ Image file not found: {image_path}")
+                        continue
+                    
+                    # Open image and convert to format Gemini expects
+                    try:
+                        img = Image.open(image_path)
+                        # Create content with image and prompt - Gemini accepts PIL Image objects
+                        content_parts = [img, prompt]
+                        response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
+                        action_log.append(f"✓ Vision API call succeeded with {model_name}")
+                    except Exception as img_error:
+                        attempt_detail["status"] = "error"
+                        attempt_detail["message"] = f"Failed to open image: {img_error}"
+                        action_log.append(f"✗ Failed to open image: {img_error}")
+                        continue
+                else:
+                    # Regular text-based processing
+                    response = model.generate_content(prompt, request_options={"timeout": timeout_seconds})
+                    action_log.append(f"✓ API call succeeded with {model_name}")
+                
                 resolved_model = model_name
-                action_log.append(f"✓ API call succeeded with {model_name}")
 
                 if not response or not hasattr(response, 'text') or not response.text:
                     print(f"Error: Empty response from Gemini API with model {model_name}")
@@ -4440,18 +4471,29 @@ def index_automater():
                 
                     filename = os.path.basename(sample_path)
                     model_actions.append(f"Processing file: {filename} (path: {sample_path})")
-                    model_actions.append(f"Extracting text from {filename}")
-                    text = extract_text(sample_path)
-                    if text.startswith("Error:"):
-                        model_actions.append(f"✗ Text extraction failed for {filename}: {text}")
-                        if not error_message:
-                            error_message = f"Text extraction failed for {filename}"
-                        continue
+                    
+                    # Check if it's an image file
+                    file_ext = os.path.splitext(sample_path)[1].lower()
+                    is_image = file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']
+                    
+                    image_path = None
+                    if is_image:
+                        model_actions.append(f"Detected image file: {filename} - will use Gemini vision API")
+                        image_path = sample_path
+                        text = f"[IMAGE_FILE:{sample_path}]"
                     else:
-                        model_actions.append(f"✓ Text extracted successfully ({len(text)} characters)")
+                        model_actions.append(f"Extracting text from {filename}")
+                        text = extract_text(sample_path)
+                        if text.startswith("Error:"):
+                            model_actions.append(f"✗ Text extraction failed for {filename}: {text}")
+                            if not error_message:
+                                error_message = f"Text extraction failed for {filename}"
+                            continue
+                        else:
+                            model_actions.append(f"✓ Text extracted successfully ({len(text)} characters)")
                     
                     model_actions.append(f"Analyzing {filename} with AI models")
-                    entries, api_error, model_used, attempt_log, file_action_log, schedule_type = analyze_gemini(text, department)
+                    entries, api_error, model_used, attempt_log, file_action_log, schedule_type = analyze_gemini(text, department, image_path)
                     if file_action_log:
                         model_actions.extend(file_action_log)
                     if model_used:
