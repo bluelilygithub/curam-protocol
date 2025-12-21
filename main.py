@@ -1470,19 +1470,37 @@ def detect_ocr_character_errors(value_str, field_name):
     """
     errors = []
     
-    # Common OCR substitutions: 3↔7, 0↔O, 1↔I, 5↔S
+    # Common OCR substitutions: 3↔7, 0↔O, 1↔I, 5↔S, 8↔5, 6↔0
     # Check for suspicious patterns in size fields
-    if field_name == 'Size' and 'UB' in value_str.upper():
-        # Pattern: "250UB77.2" where 77 might be 37 (3→7 error)
-        match = re.search(r'(\d+)UB(\d+)\.(\d+)', value_str)
-        if match:
-            prefix = match.group(1)
-            middle = match.group(2)
-            suffix = match.group(3)
-            # If middle number is 77, 70, 73, etc., might be 37, 30, 33
-            if middle.startswith('7') and len(middle) == 2:
-                potential = middle.replace('7', '3', 1)
-                errors.append(f"Possible OCR error: '{value_str}' might be '{prefix}UB{potential}.{suffix}' (7→3 substitution)")
+    if field_name == 'Size':
+        # Universal Beams (UB) pattern: "250UB77.2" where 77 might be 37 (3→7 error)
+        if 'UB' in value_str.upper():
+            match = re.search(r'(\d+)UB(\d+)\.(\d+)', value_str)
+            if match:
+                prefix = match.group(1)
+                middle = match.group(2)
+                suffix = match.group(3)
+                # If middle number is 77, 70, 73, etc., might be 37, 30, 33
+                if middle.startswith('7') and len(middle) == 2:
+                    potential = middle.replace('7', '3', 1)
+                    errors.append(f"Possible OCR error: '{value_str}' might be '{prefix}UB{potential}.{suffix}' (7→3 substitution)")
+        
+        # Universal Columns (UC) pattern: "310UC118" where 118 might be 158 (8→5 error, or 1→5)
+        if 'UC' in value_str.upper():
+            match = re.search(r'(\d+)UC(\d+)', value_str)
+            if match:
+                prefix = match.group(1)
+                suffix = match.group(2)
+                # Check for suspicious patterns: 118 (might be 158), 108 (might be 158)
+                if suffix in ['118', '108', '128']:
+                    # Common UC sizes: 158, 137, etc. - flag for review
+                    errors.append(f"Possible OCR error in UC size: '{value_str}' - verify suffix '{suffix}' (common substitutions: 8↔5, 0↔5)")
+        
+        # Welded Beams (WB) - check for wrong format patterns
+        if 'WB' in value_str.upper():
+            # Pattern like "WB 612.200" or "WB 610 x 27.2" - wrong format
+            if re.search(r'WB\s*\d+\.\d+', value_str) or re.search(r'WB\s*\d+\s+x\s+\d+\.\d+', value_str):
+                errors.append(f"Size format appears incorrect: '{value_str}' - welded beam should be format 'WB[depth]×[thickness]' (e.g., 'WB1220×6.0')")
     
     return errors
 
@@ -1602,7 +1620,12 @@ def validate_engineering_field(field_name, value, entry):
         if 'WB' in value_str.upper():
             # Check for very suspicious patterns (e.g., "WB86 x 122" where first number is tiny)
             numbers = re.findall(r'\d+', value_str)
-            if len(numbers) >= 2:
+            
+            # Pattern: "WB 612.200" or "WB 610 x 27.2" - wrong format (should be "WB1220×6.0")
+            if re.search(r'WB\s*\d+\.\d+', value_str):
+                result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam should be format 'WB[depth]×[thickness]' (e.g., 'WB1220×6.0'), not 'WB[number].[number]'")
+                result['confidence'] = 'low'
+            elif len(numbers) >= 2:
                 first_num = int(numbers[0])
                 second_num = int(numbers[1])
                 # Flag if format looks completely wrong (e.g., "WB 610 x 2 x 27.2" should be "WB1220×6.0")
@@ -1618,6 +1641,11 @@ def validate_engineering_field(field_name, value, entry):
                         if len(parts) >= 3 and all(any(c.isdigit() for c in p) for p in parts[:3]):
                             result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam format should be 'WB[depth]×[thickness]' (e.g., 'WB1220×6.0'), not multiple dimensions separated by 'x'")
                             result['confidence'] = 'low'
+                # Pattern: "WB 610 x 27.2" (2 numbers, but wrong format)
+                elif ' x ' in value_str or ' X ' in value_str:
+                    if first_num < 1000 and second_num < 100:
+                        result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam should be 'WB[depth]×[thickness]' where depth is typically 600-2000mm and thickness is 4-20mm (e.g., 'WB1220×6.0')")
+                        result['confidence'] = 'low'
                 # Only flag if first number is suspiciously small AND second is large (likely reversed)
                 elif first_num < 50 and second_num > 1000:
                     result['errors'].append(f"Size format may be incorrect: '{value_str}' (dimensions may be reversed - please verify)")
@@ -3721,6 +3749,7 @@ def index_automater():
                                 else:
                                     entry['TotalFormatted'] = format_currency(entry.get('Total', ''))
                                     # Add confidence indicators and validation for engineering fields
+                                    # CRITICAL: Error flagging system must always be active for safety
                                     if department == "engineering":
                                         entry['critical_errors'] = []
                                         # Check confidence and validate key fields
@@ -3741,6 +3770,7 @@ def index_automater():
                                                         entry[f'{field}_confidence'] = 'medium'
                                         
                                         # Mark entry as having critical errors if any found
+                                        # This flagging system is essential for safety - never remove it
                                         if entry['critical_errors']:
                                             entry['has_critical_errors'] = True
                                 results.append(entry)
@@ -3762,10 +3792,15 @@ def index_automater():
                                             if similar_entries:
                                                 # Check if any similar entries have quantity > 1
                                                 higher_qty_entries = [e for e in similar_entries if int(e.get('Qty', 0)) > 1]
-                                                if higher_qty_entries and entry.get('has_critical_errors'):
-                                                    # Only flag if entry already has other issues (to avoid false positives)
-                                                    entry['critical_errors'].append(f"Quantity is 1, but similar entries (e.g., {higher_qty_entries[0].get('Mark')}) have quantity {higher_qty_entries[0].get('Qty')} - please verify column alignment")
-                                                    entry['has_critical_errors'] = True
+                                                if higher_qty_entries:
+                                                    # Flag quantity issues - especially if entry has other problems
+                                                    if entry.get('has_critical_errors'):
+                                                        entry['critical_errors'].append(f"Quantity is 1, but similar entries (e.g., {higher_qty_entries[0].get('Mark')}) have quantity {higher_qty_entries[0].get('Qty')} - please verify column alignment")
+                                                    else:
+                                                        # Even if no other errors, flag for review if pattern is clear
+                                                        if len(higher_qty_entries) >= 2:  # Multiple similar entries with higher qty
+                                                            entry['critical_errors'].append(f"Quantity is 1, but {len(higher_qty_entries)} similar entries have quantity > 1 - please verify")
+                                                            entry['has_critical_errors'] = True
                             # Store schedule type for engineering documents (use first detected type)
                             if department == "engineering" and schedule_type and not detected_schedule_type:
                                 detected_schedule_type = schedule_type
