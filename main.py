@@ -742,6 +742,131 @@ BEFORE SUBMITTING EXTRACTION, VERIFY:
 □ Corrections explained? (Showed original + fixed value)
 □ Suggested fixes provided? (When confident about correction)
 
+## IMAGE PROCESSING - CRITICAL FOR JPEG/PNG FILES
+
+When processing image files (JPEG, PNG, etc.) instead of PDFs:
+
+**CRITICAL DIFFERENCES:**
+
+1. **Table Structure Detection**
+   - Images require visual table recognition
+   - Look for column headers visually
+   - Identify row boundaries by visual lines/spacing
+   - Map each cell to its column header
+
+2. **Size Column - HIGHEST PRIORITY**
+   - The Size column is THE MOST CRITICAL field
+   - NEVER extract Size as "N/A" unless cell is truly empty
+   - Size column typically contains: "310UC158", "250UB37.2", "WB1220×6.0", "250PFC"
+   - If you see ANY text in the Size column area, extract it
+   - Common patterns to look for:
+     - UC/UB sections: Numbers + "UC" or "UB" + numbers
+     - Welded beams: "WB" + numbers + "×" + numbers
+     - PFC sections: Numbers + "PFC"
+
+3. **Visual Column Mapping**
+   - Identify columns by their HEADER labels (Mark, Size, Qty, Length, Grade, Paint System, Comments)
+   - Map each cell to the correct column based on vertical alignment
+   - Don't confuse columns - Size is separate from Mark, Qty, etc.
+
+4. **Multi-line Cell Handling**
+   - Some cells may span multiple lines visually
+   - Read ALL lines in a cell before moving to next cell
+   - Example: "250 UB / 37.2" should become "250UB37.2"
+
+5. **Length Units**
+   - Length column should include units: "5400 mm" not just "5400"
+   - If units are missing, add " mm" based on context
+
+**VALIDATION FOR IMAGES:**
+
+Before finalizing extraction, verify:
+- [ ] Size column has actual values (not all "N/A")
+- [ ] Length includes units ("mm" or "m")
+- [ ] Mark values match visible text (check for OCR errors like "NB-OI" → "NB-01")
+- [ ] Comments column checked (may contain important notes)
+
+**IF SIZE COLUMN IS ALL "N/A":**
+→ This is a CRITICAL ERROR
+→ Re-examine the image for Size column
+→ Look for beam size patterns in the table
+→ Size column is usually 2nd or 3rd column after Mark
+
+## IMAGE PROCESSING - CRITICAL FOR JPEG/PNG FILES
+
+When processing image files (JPEG, PNG, etc.) instead of PDFs:
+
+**CRITICAL DIFFERENCES:**
+
+1. **Table Structure Detection**
+   - Images require visual table recognition
+   - Look for column headers visually (Mark, Size, Qty, Length, Grade, Paint System, Comments)
+   - Identify row boundaries by visual lines/spacing
+   - Map each cell to its column header based on vertical alignment
+
+2. **Size Column - HIGHEST PRIORITY**
+   - The Size column is THE MOST CRITICAL field for engineering use
+   - NEVER extract Size as "N/A" unless cell is truly empty (white space)
+   - Size column typically contains: "310UC158", "250UB37.2", "WB1220×6.0", "250PFC"
+   - If you see ANY text in the Size column area, extract it
+   - Common patterns to look for:
+     - UC/UB sections: Numbers + "UC" or "UB" + numbers (e.g., "310UC158", "250UB37.2")
+     - Welded beams: "WB" + numbers + "×" + numbers (e.g., "WB1220×6.0")
+     - PFC sections: Numbers + "PFC" (e.g., "250PFC")
+   - Size column is usually 2nd or 3rd column after Mark
+   - If Size appears empty, look more carefully - it may be split across lines or have formatting
+
+3. **Visual Column Mapping**
+   - Identify columns by their HEADER labels at the top
+   - Map each cell to the correct column based on vertical alignment
+   - Don't confuse columns - Size is separate from Mark, Qty, Length, etc.
+   - Each row should have data in multiple columns
+
+4. **Multi-line Cell Handling**
+   - Some cells may span multiple lines visually
+   - Read ALL lines in a cell before moving to next cell
+   - Example: "250 UB / 37.2" should become "250UB37.2" (consolidate)
+
+5. **Length Units**
+   - Length column should include units: "5400 mm" not just "5400"
+   - If units are missing in the image, add " mm" based on engineering context
+
+6. **Mark Column OCR Errors**
+   - Watch for: "NB-OI" → should be "NB-01" (0→O, 1→I confusion)
+   - Verify mark values match visible text
+
+**VALIDATION FOR IMAGES:**
+
+Before finalizing extraction, verify:
+- [ ] Size column has actual values (not all "N/A")
+- [ ] Length includes units ("mm" or "m")
+- [ ] Mark values match visible text (check for OCR errors)
+- [ ] Comments column checked (may contain important notes)
+
+**IF SIZE COLUMN IS ALL "N/A":**
+→ This is a CRITICAL ERROR
+→ Re-examine the image for Size column
+→ Look for beam size patterns in the table
+→ Size column is usually 2nd or 3rd column after Mark
+→ Check if sizes are split across multiple lines
+→ Verify you're reading the correct column
+
+**IMAGE-SPECIFIC EXTRACTION PROTOCOL:**
+
+1. First, identify all column headers visually
+2. For each row, read across horizontally:
+   - Mark (first column)
+   - Size (CRITICAL - usually 2nd column)
+   - Qty (quantity)
+   - Length (with units)
+   - Grade
+   - Paint System
+   - Comments
+3. If Size appears empty, look more carefully:
+   - Check if text is split across lines
+   - Check if formatting makes it hard to see
+   - Check adjacent columns - Size might be misaligned
+
 ## DOMAIN-SPECIFIC CUSTOMIZATION - ENGINEERING DOCUMENTS
 
 ### Format Validation Rules
