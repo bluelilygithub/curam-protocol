@@ -1929,11 +1929,9 @@ HTML_TEMPLATE = """
                 </label>
                 <div class="slider-container">
                     <input type="range" name="staff_count_slider" id="staff_count_slider" 
-                           value="{{ staff_count }}" min="10" max="500" step="5" 
-                           oninput="updateStaffCalculation(this.value)">
+                           value="{{ staff_count }}" min="10" max="500" step="5">
                     <input type="number" name="staff_count" id="staff_count" 
-                           value="{{ staff_count }}" min="10" max="500" step="5" required
-                           oninput="updateStaffCalculation(this.value)">
+                           value="{{ staff_count }}" min="10" max="500" step="5" required>
                 </div>
                 <div id="doc-staff-estimate" style="margin-top: 0.5rem; color: #4B5563; font-size: 0.875rem;">
                     <!-- Auto-populated by JavaScript -->
@@ -1990,9 +1988,25 @@ HTML_TEMPLATE = """
             }
         }
         
+        // Sync slider and number input bidirectionally
         document.addEventListener('DOMContentLoaded', function() {
+            const staffSlider = document.getElementById('staff_count_slider');
             const staffInput = document.getElementById('staff_count');
-            if (staffInput) {
+            
+            if (staffSlider && staffInput) {
+                // When slider changes, update number input
+                staffSlider.addEventListener('input', function() {
+                    staffInput.value = this.value;
+                    updateStaffCalculation(parseInt(this.value));
+                });
+                
+                // When number input changes, update slider
+                staffInput.addEventListener('input', function() {
+                    staffSlider.value = this.value;
+                    updateStaffCalculation(parseInt(this.value));
+                });
+                
+                // Initialize on page load
                 updateStaffCalculation(parseInt(staffInput.value) || {{ staff_count }});
             }
         });
