@@ -2104,7 +2104,28 @@ HTML_TEMPLATE = """
 def roi_calculator():
     try:
         step = int(request.args.get('step', request.form.get('step', 1)))
-        industry = request.args.get('industry') or request.form.get('industry') or session.get('industry')
+        
+        # Clear session industry if not provided in URL (don't assume from cache)
+        industry_from_url = request.args.get('industry')
+        industry_from_form = request.form.get('industry')
+        
+        # Only use session industry if there's no URL parameter and we're continuing from a form
+        if industry_from_url:
+            # Industry provided in URL - use it and save to session
+            industry = industry_from_url
+            session['industry'] = industry
+        elif industry_from_form:
+            # Industry from form submission - use it and save to session
+            industry = industry_from_form
+            session['industry'] = industry
+        elif request.method == 'GET' and step == 1:
+            # Fresh page load on step 1 - clear any cached industry
+            industry = None
+            if 'industry' in session:
+                del session['industry']
+        else:
+            # For other cases (e.g., continuing from previous step), use session if available
+            industry = session.get('industry')
         
         # Normalize industry name (strip whitespace, handle URL encoding)
         if industry:
