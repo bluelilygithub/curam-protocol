@@ -704,11 +704,27 @@ def get_readiness_response(selection):
     return responses.get(selection, responses["mixed"])
 
 def calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_config):
-    """Calculate all financial metrics"""
-    automation_potential = industry_config.get('automation_potential', 0.40)  # Default to 40%
+    """Calculate all financial metrics with pain score weighting"""
+    base_automation_potential = industry_config.get('automation_potential', 0.40)  # Default to 40%
     
-    # Annual burn rate
-    annual_burn = staff_count * weekly_waste * avg_rate * 48
+    # Get pain score multiplier (0.85× to 1.35× based on pain point)
+    # Pain scores: 0=0.85×, 3=0.90×, 5=1.00×, 6=1.05×, 7=1.15×, 8=1.25×, 10=1.35×
+    pain_multipliers = {
+        0: 0.85,   # Low pain - less automation potential
+        3: 0.90,
+        5: 1.00,   # Medium pain - baseline
+        6: 1.05,
+        7: 1.15,
+        8: 1.25,
+        10: 1.35  # High pain - maximum automation potential
+    }
+    multiplier = pain_multipliers.get(pain_point, 1.00)
+    
+    # Apply multiplier to automation potential
+    automation_potential = min(base_automation_potential * multiplier, 0.70)  # Cap at 70%
+    
+    # FIXED: Annual burn rate - weekly_waste is already firm-wide, don't multiply by staff_count
+    annual_burn = weekly_waste * avg_rate * 48
     
     # Tier 1 Opportunity (dynamic reduction) - Immediate savings from basic automation
     tier_1_savings = annual_burn * automation_potential
@@ -720,9 +736,12 @@ def calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_
     tier_2_savings = annual_burn * tier_2_potential
     tier_2_cost = annual_burn - tier_2_savings
     
-    # Revenue capacity (if all hours were billable)
-    capacity_hours = staff_count * weekly_waste * 48
+    # FIXED: Revenue capacity - weekly_waste is already firm-wide
+    capacity_hours = weekly_waste * 48
     potential_revenue = capacity_hours * avg_rate
+    
+    # Calculate hours per staff for validation
+    hours_per_staff_per_week = weekly_waste / staff_count if staff_count > 0 else 0
     
     return {
         "annual_burn": annual_burn,
@@ -734,7 +753,10 @@ def calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_
         "potential_revenue": potential_revenue,
         "pain_point": pain_point,
         "weekly_waste": weekly_waste,
-        "automation_potential": automation_potential,  # Include for dynamic display
+        "hours_per_staff_per_week": hours_per_staff_per_week,  # For validation
+        "automation_potential": automation_potential,  # Adjusted by multiplier
+        "base_automation_potential": base_automation_potential,  # Original before multiplier
+        "pain_multiplier": multiplier,  # Multiplier applied
         "tier_2_potential": tier_2_potential  # Include for dynamic display
     }
 
@@ -1582,7 +1604,10 @@ HTML_TEMPLATE = """
             <ul style="list-style: none; padding: 0; margin: 0;">
                 <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-bottom: 1px solid #E5E7EB;">
                     <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
-                    Your staff spend <strong style="color: #0B1221;">{{ calculations.weekly_waste }} hours/week</strong> on manual document processing
+                    Your firm spends <strong style="color: #0B1221;">{{ calculations.weekly_waste }} hours/week</strong> firm-wide on manual document processing
+                    {% if calculations.get('hours_per_staff_per_week') %}
+                    <br><small style="color: #6B7280;">({{ "{:.1f}".format(calculations.hours_per_staff_per_week) }} hours per staff member per week)</small>
+                    {% endif %}
                 </li>
                 <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-bottom: 1px solid #E5E7EB;">
                     <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
@@ -1596,6 +1621,15 @@ HTML_TEMPLATE = """
                     <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
                     If you could automate {{ tier1_percentage }}% of this work, you'd save <strong style="color: #0B1221;">{{ format_currency(calculations.tier_1_savings) }}/year</strong>
                 </li>
+                {% if multiplier_display and multiplier_display != '1.00×' %}
+                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-top: 2px solid #E5E7EB; margin-top: 0.5rem; padding-top: 0.75rem;">
+                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
+                    <strong style="color: #0B1221;">Document-specific multiplier:</strong> {{ multiplier_display }} applied based on your selected bottleneck
+                    {% if automation_note %}
+                    <br><small style="color: #6B7280; font-style: italic;">{{ automation_note }}</small>
+                    {% endif %}
+                </li>
+                {% endif %}
             </ul>
         </div>
         
@@ -2333,8 +2367,25 @@ def roi_calculator():
                 }
             }
             
-            # Analysis text
+            # Analysis text with validation warnings
             analysis_text = []
+            validation_warnings = []
+            
+            # Validation: Check for unrealistic hours per staff
+            hours_per_staff = calculations.get('hours_per_staff_per_week', 0)
+            if hours_per_staff > 25:
+                validation_warnings.append(f"⚠️ <strong>Unrealistic Input:</strong> Your inputs suggest {hours_per_staff:.1f} hours per staff per week on manual documentation. This exceeds a typical 40-hour work week. Please verify your firm-wide hours are correct.")
+            elif hours_per_staff > 15:
+                validation_warnings.append(f"⚠️ <strong>High Time Allocation:</strong> Your inputs suggest {hours_per_staff:.1f} hours per staff per week on manual documentation. This is unusually high. Please verify your firm-wide hours are correct.")
+            
+            # Validation: Check for very low hours per staff
+            if hours_per_staff < 0.5 and staff_count > 20:
+                validation_warnings.append(f"ℹ️ <strong>Low Time Allocation:</strong> Your inputs suggest {hours_per_staff:.1f} hours per staff per week. This seems low for a firm of {staff_count} staff. Please verify your firm-wide hours are correct.")
+            
+            # Add validation warnings first
+            analysis_text.extend(validation_warnings)
+            
+            # Business insights
             if calculations['pain_point'] >= 8:
                 analysis_text.append("⚠️ <strong>High Risk Profile:</strong> You have a high risk profile for transcription errors that could impact project quality and compliance.")
             if calculations['weekly_waste'] > 5:
@@ -2344,6 +2395,21 @@ def roi_calculator():
                 analysis_text.append(f"💰 <strong>Significant Opportunity:</strong> With an annual revenue leakage of {format_currency(calculations['annual_burn'])}, automation could deliver substantial ROI within the first year.")
             if not analysis_text:
                 analysis_text.append("✅ Your organization shows moderate efficiency opportunities. Automation can still deliver meaningful improvements.")
+            
+            # Get multiplier info for display
+            pain_multiplier = calculations.get('pain_multiplier', 1.00)
+            multiplier_display = f"{pain_multiplier:.2f}×" if pain_multiplier != 1.00 else "1.00×"
+            
+            # Get automation note based on pain point
+            automation_note = ""
+            if pain_point >= 10:
+                automation_note = "Maximum ROI opportunity - high automation potential"
+            elif pain_point >= 8:
+                automation_note = "High automation potential"
+            elif pain_point >= 6:
+                automation_note = "Moderate-high automation potential"
+            elif pain_point <= 3:
+                automation_note = "Lower automation potential - consider process improvements first"
             
             # Get platform and other values for display
             platform = session.get('platform', 'M365/SharePoint')
@@ -2393,6 +2459,8 @@ def roi_calculator():
                 pain_point_description=pain_point_description,
                 tier1_percentage=tier1_percentage,
                 automation_potential=automation_potential,
+                multiplier_display=multiplier_display,
+                automation_note=automation_note,
                 chart_json=json.dumps(chart_data, cls=plotly.utils.PlotlyJSONEncoder),
                 analysis_text=analysis_text,
                 ai_opportunities=ai_opportunities,
