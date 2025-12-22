@@ -55,6 +55,20 @@
                         </a>
                         <a href="roi.html" class="btn btn-outline">Calculate Your ROI</a>
                     </div>
+                    <div style="margin-top: 20px;">
+                        <a href="#phase-cards" class="hero-tertiary-link" style="color: rgba(255, 255, 255, 0.9); text-decoration: none; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; transition: opacity 0.3s;">
+                            How does Phase 1 work? <span style="display: inline-block; animation: bounce 2s infinite;">↓</span>
+                        </a>
+                    </div>
+                    <style>
+                        @keyframes bounce {
+                            0%, 100% { transform: translateY(0); }
+                            50% { transform: translateY(5px); }
+                        }
+                        .hero-tertiary-link:hover {
+                            opacity: 0.8;
+                        }
+                    </style>
                 </div>
                 
                 <!-- Right Stats Grid (STATIC - NO ROTATION) -->
@@ -98,6 +112,14 @@
                 (compatible with Azure OpenAI, AWS Bedrock, Google Vertex, or Anthropic) 
                 and fine-tune them with your own PDFs during Phase 1—so you're funding 
                 proven extraction on YOUR data in YOUR cloud, not prototype development.</div>
+        </div>
+    </section>
+
+    <!-- 5. PHASE CARDS SECTION -->
+    <section id="phase-cards" class="methodology">
+        <div class="container">
+            <h2 class="section-headline">The Four-Phase System</h2>
+            <p class="section-subhead">Each phase builds on the last, with clear exit points and value delivery at every stage.</p>
 
             <div class="protocol-diagram">
                 <div class="protocol-phase">
@@ -219,52 +241,7 @@
         </div>
     </section>
 
-    <!-- 3. CASE STUDY SECTION -->
-    <section class="section trust-section">
-        <div class="container">
-
-            <!-- Featured Case Study (Below metrics) -->
-            <div class="featured-case-study">
-                <div class="case-study-badge">Recent Feasibility Sprint</div>
-                <h3 class="case-study-title">70-Person Engineering Firm Achieved 65% Admin Burden Reduction</h3>
-                <p class="case-study-description">
-                    A realistic scenario demonstrating how a typical mid-sized structural engineering firm used The Protocol to automate drawing registers, concrete test reports, and beam schedules—recovering <strong>15 hours per week</strong> of engineering capacity.
-                </p>
-                <div class="case-study-results">
-                    <div class="case-study-stat">
-                        <span class="stat-value">65%</span>
-                        <span class="stat-label">Admin Reduction</span>
-                    </div>
-                    <div class="case-study-stat">
-                        <span class="stat-value">4.8x</span>
-                        <span class="stat-label">ROI Achieved</span>
-                    </div>
-                    <div class="case-study-stat">
-                        <span class="stat-value">3.2 months</span>
-                        <span class="stat-label">Payback Period</span>
-                    </div>
-                    <div class="case-study-stat">
-                        <span class="stat-value">15 hrs/wk</span>
-                        <span class="stat-label">Time Recovered</span>
-                    </div>
-                </div>
-                <div style="text-align: center; margin-top: var(--spacing-xl);">
-                    <a href="case-study.html" class="btn btn-secondary">Read Full Case Study →</a>
-                </div>
-
-                <!-- Sector Navigation -->
-                <div class="case-study-footer">
-                    <p class="case-study-footer-label">Interested in other sectors?</p>
-                    <div class="case-study-footer-links">
-                        <a href="professional-services.html" class="case-study-footer-link">Professional Services →</a>
-                        <a href="logistics-compliance.html" class="case-study-footer-link">Logistics & Compliance →</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 4. CHOOSE YOUR INDUSTRY SECTION -->
+    <!-- 3. CHOOSE YOUR INDUSTRY SECTION -->
     <section id="choose-industry" class="section section-alt">
         <div class="container">
             <h2 class="section-headline">Choose Your Industry</h2>
@@ -314,53 +291,98 @@
         </div>
     </section>
 
-    <!-- 5. OBJECTION HANDLER SECTION -->
-    <section class="selector">
+    <!-- 4. CASE STUDY SECTION -->
+    <section class="section trust-section">
         <div class="container">
-            <h2 class="section-headline">What is your largest bottleneck?</h2>
-            <p class="section-subhead">You don't need to solve everything at once. </p>
-            
-            <div class="selector-grid">
-                <div class="selector-row" data-phase="phase-1">
-                    <div class="selector-blocker">
-                        <div class="blocker-label">Objection</div>
-                        <p class="blocker-text">"I don't believe AI can handle our messy documents."</p>
+
+            <!-- Featured Case Study (Below metrics) -->
+            <div class="featured-case-study">
+                <div class="case-study-badge">Recent Feasibility Sprint</div>
+                <h3 class="case-study-title">70-Person Engineering Firm Achieved 65% Admin Burden Reduction</h3>
+                <p class="case-study-description">
+                    A realistic scenario demonstrating how a typical mid-sized structural engineering firm used The Protocol to automate drawing registers, concrete test reports, and beam schedules—recovering <strong>15 hours per week</strong> of engineering capacity.
+                </p>
+                <div class="case-study-results">
+                    <div class="case-study-stat">
+                        <span class="stat-value">65%</span>
+                        <span class="stat-label">Admin Reduction</span>
                     </div>
-                    <div class="selector-arrow">→</div>
-                    <div class="selector-solution">
-                        <div class="solution-label">Solution</div>
-                        <p class="solution-text"><strong><a href="/phase-1-feasibility.html">Start at Phase 1 (Feasibility)</a></strong></p>
+                    <div class="case-study-stat">
+                        <span class="stat-value">4.8x</span>
+                        <span class="stat-label">ROI Achieved</span>
+                    </div>
+                    <div class="case-study-stat">
+                        <span class="stat-value">3.2 months</span>
+                        <span class="stat-label">Payback Period</span>
+                    </div>
+                    <div class="case-study-stat">
+                        <span class="stat-value">15 hrs/wk</span>
+                        <span class="stat-label">Time Recovered</span>
                     </div>
                 </div>
-                
-                <div class="selector-row" data-phase="phase-2">
-                    <div class="selector-blocker">
-                        <div class="blocker-label">Objection</div>
-                        <p class="blocker-text">"I know it works, but I need a budget and plan."</p>
-                    </div>
-                    <div class="selector-arrow">→</div>
-                    <div class="selector-solution">
-                        <div class="solution-label">Solution</div>
-                        <p class="solution-text"><strong><a href="/phase-2-roadmap.html">Start at Phase 2 (Roadmap)</a></strong></p>
-                    </div>
+                <div style="text-align: center; margin-top: var(--spacing-xl);">
+                    <a href="case-study.html" class="btn btn-secondary">Read Full Case Study →</a>
                 </div>
-                
-                <div class="selector-row" data-phase="phase-3">
-                    <div class="selector-blocker">
-                        <div class="blocker-label">Objection</div>
-                        <p class="blocker-text">"I am blocked by IT security or Insurance."</p>
-                    </div>
-                    <div class="selector-arrow">→</div>
-                    <div class="selector-solution">
-                        <div class="solution-label">Solution</div>
-                        <p class="solution-text"><strong><a href="/phase-3-compliance.html">Start at Phase 3 (Compliance)</a></strong></p>
+
+                <!-- Sector Navigation -->
+                <div class="case-study-footer">
+                    <p class="case-study-footer-label">Interested in other sectors?</p>
+                    <div class="case-study-footer-links">
+                        <a href="professional-services.html" class="case-study-footer-link">Professional Services →</a>
+                        <a href="logistics-compliance.html" class="case-study-footer-link">Logistics & Compliance →</a>
                     </div>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- 6. FAQ / TECHNICAL DUE DILIGENCE SECTION -->
+    <!-- 6. BOTTLENECK DIAGNOSTIC SECTION -->
+    <section class="selector">
+        <div class="container">
+            <h2 class="section-headline">What's blocking you from starting?</h2>
+            <p class="section-subhead">Identify your bottleneck and get the right diagnostic tool.</p>
+            
+            <div class="selector-grid">
+                <div class="selector-row" data-phase="phase-1">
+                    <div class="selector-blocker">
+                        <div class="blocker-label">Bottleneck</div>
+                        <p class="blocker-text">"I don't believe AI works for our documents."</p>
+                    </div>
+                    <div class="selector-arrow">→</div>
+                    <div class="selector-solution">
+                        <div class="solution-label">Diagnostic</div>
+                        <p class="solution-text"><strong><a href="contact.html?option=phase-1">Take our 2-min Technical Readiness Quiz</a></strong></p>
+                    </div>
+                </div>
+                
+                <div class="selector-row" data-phase="phase-2">
+                    <div class="selector-blocker">
+                        <div class="blocker-label">Bottleneck</div>
+                        <p class="blocker-text">"I need a budget and business case."</p>
+                    </div>
+                    <div class="selector-arrow">→</div>
+                    <div class="selector-solution">
+                        <div class="solution-label">Diagnostic</div>
+                        <p class="solution-text"><strong><a href="roi.html">Calculate Your ROI</a></strong></p>
+                    </div>
+                </div>
+                
+                <div class="selector-row" data-phase="phase-3">
+                    <div class="selector-blocker">
+                        <div class="blocker-label">Bottleneck</div>
+                        <p class="blocker-text">"I'm blocked by IT security or compliance."</p>
+                    </div>
+                    <div class="selector-arrow">→</div>
+                    <div class="selector-solution">
+                        <div class="solution-label">Diagnostic</div>
+                        <p class="solution-text"><strong><a href="contact.html?option=phase-3">Download our Security Checklist</a></strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 7. FAQ / TECHNICAL DUE DILIGENCE SECTION -->
     <section id="faq" class="faq" >
         <div class="container">
             <h2 class="section-headline">
@@ -492,7 +514,7 @@
         </div>
     </section>
 
-    <!-- 7. FINAL CTA SECTION -->
+    <!-- 8. FINAL CTA SECTION -->
     <section class="section cta-section">
         <div class="container">
             <div class="cta-content">
