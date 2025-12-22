@@ -127,8 +127,8 @@ AI_OPPORTUNITIES = {
 INDUSTRIES = {
     "Architecture & Building Services": {
         "context": "Architecture and building services firms (10-100 staff)",
-        # Conservative v3.1 fields
-        "doc_staff_percentage": 0.85,
+        # Conservative v3.1 fields with firm size scaling
+        "doc_staff_percentage_base": 0.75,  # Base percentage (medium firm) - will be scaled
         "doc_staff_hours_per_week": 5.0,
         "doc_staff_typical_rate": 130,
         "proven_tasks": {
@@ -800,18 +800,65 @@ def get_readiness_response(selection):
     }
     return responses.get(selection, responses["mixed"])
 
+def get_doc_staff_percentage(total_staff, industry_config):
+    """
+    Calculate documentation staff percentage with firm size scaling.
+    
+    Rationale:
+    - Small firms (<20): Flat structure, everyone does everything → +10%
+    - Medium firms (20-50): Baseline structure → use base %
+    - Large firms (50-100): More management layers → -5%
+    - Very large (100+): Significant hierarchy → -10%
+    
+    Args:
+        total_staff: Total number of technical staff
+        industry_config: Industry configuration dictionary
+    
+    Returns:
+        float: Scaled documentation staff percentage (0.0-1.0)
+    """
+    base_percentage = industry_config.get('doc_staff_percentage_base', 0.75)
+    
+    # Apply firm size scaling
+    if total_staff < 20:
+        # Small firm: flat structure, most people do documentation
+        scaled_percentage = base_percentage + 0.10
+        # Cap at 90% (always have some senior staff)
+        return min(scaled_percentage, 0.90)
+        
+    elif total_staff < 50:
+        # Medium firm: use baseline
+        return base_percentage
+        
+    elif total_staff < 100:
+        # Large firm: more management, fewer doing documentation
+        scaled_percentage = base_percentage - 0.05
+        # Floor at 65% (always need significant documentation staff)
+        return max(scaled_percentage, 0.65)
+        
+    else:
+        # Very large firm: significant hierarchy
+        scaled_percentage = base_percentage - 0.10
+        # Floor at 60%
+        return max(scaled_percentage, 0.60)
+
 def calculate_conservative_roi(total_staff, industry_config):
     """
     Calculate CONSERVATIVE ROI based on proven low-hanging fruit only.
+    Includes firm size scaling for documentation staff percentage.
     
     Philosophy: Show minimum proven savings on known repetitive tasks,
     not aspirational total opportunity. Focus on documentation staff
     (junior/mid-level) who actually do the work.
     """
     
-    # Calculate documentation staff (excludes partners/principals)
-    doc_staff_percentage = industry_config.get('doc_staff_percentage', 0.85)
+    # Calculate documentation staff with FIRM SIZE SCALING
+    base_percentage = industry_config.get('doc_staff_percentage_base', 0.75)
+    doc_staff_percentage = get_doc_staff_percentage(total_staff, industry_config)
     doc_staff_count = int(total_staff * doc_staff_percentage)
+    
+    # Store both base and scaled for transparency
+    base_doc_staff = int(total_staff * base_percentage)
     
     # Use conservative hours and rate
     hours_per_doc_staff = industry_config.get('doc_staff_hours_per_week', 5.0)
@@ -876,11 +923,29 @@ def calculate_conservative_roi(total_staff, industry_config):
     tier_2_potential = min(weighted_potential + 0.25, 0.70)  # More conservative
     tier_2_savings = total_weekly_hours * tier_2_potential * typical_doc_rate * 48
     
+    # Determine firm size category for display
+    if total_staff < 20:
+        firm_size_category = "Small"
+        scaling_note = "Flat structure: most staff do documentation"
+    elif total_staff < 50:
+        firm_size_category = "Medium"
+        scaling_note = "Typical structure: baseline percentage"
+    elif total_staff < 100:
+        firm_size_category = "Large"
+        scaling_note = "More management: fewer staff do documentation"
+    else:
+        firm_size_category = "Very Large"
+        scaling_note = "Significant hierarchy: much less documentation staff"
+    
     return {
         "mode": "conservative_proven",
         "total_staff": total_staff,
         "doc_staff_count": doc_staff_count,
         "doc_staff_percentage": doc_staff_percentage * 100,
+        "base_doc_staff_percentage": base_percentage * 100,
+        "base_doc_staff_count": base_doc_staff,
+        "firm_size_category": firm_size_category,
+        "scaling_note": scaling_note,
         "hours_per_doc_staff": hours_per_doc_staff,
         "typical_doc_rate": typical_doc_rate,
         "total_weekly_hours": total_weekly_hours,
@@ -1870,6 +1935,21 @@ HTML_TEMPLATE = """
             color: #4B5563;
             margin-bottom: 0.5rem;
         }
+        .scaling-insight {
+            background: #EFF6FF;
+            border-left: 4px solid #3B82F6;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .scaling-insight h4 {
+            color: #1E40AF;
+            margin-bottom: 0.75rem;
+        }
+        .scaling-insight p {
+            margin: 0.5rem 0;
+            color: #1E3A8A;
+        }
     </style>
 </head>
 <body>
@@ -1971,18 +2051,53 @@ HTML_TEMPLATE = """
         </form>
         
         <script>
+        function getDocStaffPercentage(totalStaff, basePercentage) {
+            // Firm size scaling logic
+            if (totalStaff < 20) {
+                return Math.min(basePercentage + 0.10, 0.90);
+            } else if (totalStaff < 50) {
+                return basePercentage;
+            } else if (totalStaff < 100) {
+                return Math.max(basePercentage - 0.05, 0.65);
+            } else {
+                return Math.max(basePercentage - 0.10, 0.60);
+            }
+        }
+        
         function updateStaffCalculation(totalStaff) {
-            const docStaffPercentage = {{ industry_config.get('doc_staff_percentage', 0.85) }};
-            const docStaff = Math.round(totalStaff * docStaffPercentage);
+            // Industry-specific documentation staff base percentage
+            const basePercentage = {{ industry_config.get('doc_staff_percentage_base', 0.75) }};
+            
+            // Apply firm size scaling
+            const scaledPercentage = getDocStaffPercentage(totalStaff, basePercentage);
+            
+            const docStaff = Math.round(totalStaff * scaledPercentage);
             const nonDocStaff = totalStaff - docStaff;
+            const percentDisplay = Math.round(scaledPercentage * 100);
+            
+            // Determine firm size category
+            let firmSize, scalingReason;
+            if (totalStaff < 20) {
+                firmSize = "Small firm";
+                scalingReason = "flat structure, most staff do documentation";
+            } else if (totalStaff < 50) {
+                firmSize = "Medium firm";
+                scalingReason = "typical structure";
+            } else if (totalStaff < 100) {
+                firmSize = "Large firm";
+                scalingReason = "more management, fewer doing documentation";
+            } else {
+                firmSize = "Very large firm";
+                scalingReason = "significant hierarchy";
+            }
             
             const estimateDiv = document.getElementById('doc-staff-estimate');
             if (estimateDiv) {
                 estimateDiv.innerHTML = `
-                    <strong>Estimated breakdown:</strong><br>
-                    → ${docStaff} documentation staff (junior/mid-level: coordinators, admin)<br>
-                    → ${nonDocStaff} senior staff/partners (primarily review/approve, not data entry)
-                    <br><br>
+                    <strong>${firmSize} (${scalingReason}):</strong><br>
+                    → ${docStaff} documentation staff (${percentDisplay}%): junior/mid-level coordinators, admin<br>
+                    → ${nonDocStaff} senior staff/partners (${100-percentDisplay}%): primarily review/approve<br>
+                    <br>
                     <em>We calculate savings based on the ${docStaff} staff who do repetitive documentation work.</em>
                 `;
             }
@@ -2037,6 +2152,10 @@ HTML_TEMPLATE = """
                 <span class="profile-value">{{ calculations.total_staff }}</span>
             </div>
             <div class="profile-item">
+                <span class="profile-label">Firm Size Category:</span>
+                <span class="profile-value">{{ calculations.firm_size_category }}</span>
+            </div>
+            <div class="profile-item">
                 <span class="profile-label">Documentation Staff:</span>
                 <span class="profile-value">{{ calculations.doc_staff_count }} ({{ calculations.doc_staff_percentage|round(0)|int }}%)</span>
             </div>
@@ -2056,6 +2175,20 @@ HTML_TEMPLATE = """
                 <span class="profile-label">Total Documentation Time:</span>
                 <span class="profile-value">{{ calculations.total_weekly_hours|round(0)|int }} hours/week firm-wide</span>
             </div>
+        </div>
+        
+        <div class="scaling-insight">
+            <h4>📊 Firm Size Adjustment Applied</h4>
+            <p><strong>{{ calculations.scaling_note }}</strong></p>
+            {% if calculations.firm_size_category == "Small" %}
+                <p>In smaller firms (<20 staff), organizational structures are flatter. Most technical staff are involved in documentation because there are fewer specialized administrative roles. We've adjusted the documentation staff percentage <strong>upward</strong> to {{ calculations.doc_staff_percentage|round(0)|int }}% (from {{ calculations.base_doc_staff_percentage|round(0)|int }}% industry baseline).</p>
+            {% elif calculations.firm_size_category == "Medium" %}
+                <p>Your firm size represents typical industry structure. We're using the baseline {{ calculations.doc_staff_percentage|round(0)|int }}% for documentation staff in {{ industry }}.</p>
+            {% elif calculations.firm_size_category == "Large" %}
+                <p>In larger firms (50-100 staff), there are more management layers and specialized roles. Senior staff and team leads spend proportionally less time on manual documentation. We've adjusted the documentation staff percentage <strong>downward</strong> to {{ calculations.doc_staff_percentage|round(0)|int }}% (from {{ calculations.base_doc_staff_percentage|round(0)|int }}% industry baseline).</p>
+            {% else %}
+                <p>In very large firms (100+ staff), organizational hierarchy is significant. Senior staff, principals, and managers form a substantial portion of headcount but primarily focus on oversight and client relationships. We've adjusted the documentation staff percentage <strong>downward</strong> to {{ calculations.doc_staff_percentage|round(0)|int }}% (from {{ calculations.base_doc_staff_percentage|round(0)|int }}% industry baseline).</p>
+            {% endif %}
         </div>
         
         <div class="insight-callout">
