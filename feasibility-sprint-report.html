@@ -103,11 +103,18 @@
         <div class="container" style="max-width: 1000px;">
             <div class="important-notice" style="margin-bottom: 2rem;">
                 <strong style="color: var(--color-gold); font-size: 1.1rem;">Why This Report Is Worth $1,500</strong>
-                <p style="margin: 0.75rem 0 0 0; color: var(--text-secondary);">
-                    <strong style="color: var(--color-white);">✓ Technical Proof:</strong> We test 15 of YOUR actual documents to prove AI works on your specific formats—before you spend more. 
-                    <strong style="color: var(--color-white);">✓ Preliminary ROI:</strong> Initial numbers based on YOUR staff count and rates to evaluate if it's worth proceeding. 
-                    <strong style="color: var(--color-white);">✓ Go/No-Go Decision:</strong> If accuracy < 90%, you just saved $7,500+ on a Phase 2 deep dive that wouldn't have worked.
-                    <br><br>
+                <ul style="margin: 0.75rem 0 0 0; padding-left: 1.5rem; color: var(--text-secondary);">
+                    <li style="margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-white);">Technical Proof:</strong> We test 15 of YOUR actual documents to prove AI works on your specific formats—before you spend more.
+                    </li>
+                    <li style="margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-white);">Preliminary ROI:</strong> Initial numbers based on YOUR staff count and rates to evaluate if it's worth proceeding.
+                    </li>
+                    <li style="margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-white);">Go/No-Go Decision:</strong> If accuracy < 90%, you just saved $7,500+ on a Phase 2 deep dive that wouldn't have worked.
+                    </li>
+                </ul>
+                <p style="margin: 1rem 0 0 0; color: var(--text-secondary);">
                     <em>Example below: 50-person firm (35 doing documentation work at $130/hr). This feasibility sprint validates whether to proceed to Phase 2 (the board-ready report).</em>
                 </p>
             </div>
@@ -266,13 +273,13 @@
                             
                             <div class="report-validation-grid">
                                 <div class="report-validation-card success">
-                                    <h3>✅ Structured Extraction</h3>
-                                    <p><strong>100% Accuracy</strong> on standard members (B-101, R-02). System correctly grouped "Hot Dip Galv" items for separate procurement workflows.</p>
+                                    <h3><span style="margin-right: 0.5rem;">✅</span>Structured Extraction</h3>
+                                    <p style="margin-left: 1.75rem;"><strong>100% Accuracy</strong> on standard members (B-101, R-02). System correctly grouped "Hot Dip Galv" items for separate procurement workflows.</p>
                                 </div>
 
                                 <div class="report-validation-card warning">
-                                    <h3>⚠️ "Human-in-Loop" Trigger</h3>
-                                    <p><strong>Variable Lengths:</strong> Item <code>STR-1</code> contains "VARIES 1200-2400". AI flagged this as "Non-Procureable" requiring CAD model reference.</p>
+                                    <h3><span style="margin-right: 0.5rem;">⚠️</span>"Human-in-Loop" Trigger</h3>
+                                    <p style="margin-left: 1.75rem;"><strong>Variable Lengths:</strong> Item <code>STR-1</code> contains "VARIES 1200-2400". AI flagged this as "Non-Procureable" requiring CAD model reference.</p>
                                 </div>
                             </div>
 
@@ -501,13 +508,13 @@
                             
                             <div class="report-validation-grid">
                                 <div class="report-validation-card success">
-                                    <h3>✅ Standard Fields</h3>
-                                    <p><strong>100% Accuracy</strong> on vendor name, ABN, invoice date, total, and GST. System correctly parsed multi-line item descriptions.</p>
+                                    <h3><span style="margin-right: 0.5rem;">✅</span>Standard Fields</h3>
+                                    <p style="margin-left: 1.75rem;"><strong>100% Accuracy</strong> on vendor name, ABN, invoice date, total, and GST. System correctly parsed multi-line item descriptions.</p>
                                 </div>
 
                                 <div class="report-validation-card warning">
-                                    <h3>⚠️ "Human-in-Loop" Trigger</h3>
-                                    <p><strong>Ambiguous GL Code:</strong> Line item "Office supplies & software licenses" spans two GL codes. AI suggested split: 60% (6200 - Office), 40% (6410 - Software).</p>
+                                    <h3><span style="margin-right: 0.5rem;">⚠️</span>"Human-in-Loop" Trigger</h3>
+                                    <p style="margin-left: 1.75rem;"><strong>Ambiguous GL Code:</strong> Line item "Office supplies & software licenses" spans two GL codes. AI suggested split: 60% (6200 - Office), 40% (6410 - Software).</p>
                                 </div>
                             </div>
 
@@ -736,13 +743,13 @@
                             
                             <div class="report-validation-grid">
                                 <div class="report-validation-card success">
-                                    <h3>✅ Printed Fields</h3>
-                                    <p><strong>98% Accuracy</strong> on container numbers, seal IDs, weights, and commodity codes. System correctly parsed multi-container shipments.</p>
+                                    <h3><span style="margin-right: 0.5rem;">✅</span>Printed Fields</h3>
+                                    <p style="margin-left: 1.75rem;"><strong>98% Accuracy</strong> on container numbers, seal IDs, weights, and commodity codes. System correctly parsed multi-container shipments.</p>
                                 </div>
 
                                 <div class="report-validation-card warning">
-                                    <h3>⚠️ "Human-in-Loop" Trigger</h3>
-                                    <p><strong>Handwritten Amendment:</strong> Container weight shows a pen-correction from "22,400" to "24,200". AI flagged this for verification due to 8% variance from manifest weight.</p>
+                                    <h3><span style="margin-right: 0.5rem;">⚠️</span>"Human-in-Loop" Trigger</h3>
+                                    <p style="margin-left: 1.75rem;"><strong>Handwritten Amendment:</strong> Container weight shows a pen-correction from "22,400" to "24,200". AI flagged this for verification due to 8% variance from manifest weight.</p>
                                 </div>
                             </div>
 
