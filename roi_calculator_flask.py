@@ -127,6 +127,72 @@ AI_OPPORTUNITIES = {
 INDUSTRIES = {
     "Architecture & Building Services": {
         "context": "Architecture and building services firms (10-100 staff)",
+        # Conservative v3.1 fields
+        "doc_staff_percentage": 0.85,
+        "doc_staff_hours_per_week": 5.0,
+        "doc_staff_typical_rate": 130,
+        "proven_tasks": {
+            "transmittals": 0.25,
+            "specifications": 0.20,
+            "drawing_registers": 0.18,
+            "site_diaries": 0.22,
+            "other": 0.15
+        },
+        "tasks": [
+            {
+                "id": "transmittals",
+                "name": "Document Transmittals",
+                "complexity": 10,
+                "complexity_label": "High (Proven ROI)",
+                "description": "Manual PDF creation, tracking, distribution - highly repetitive",
+                "automation_potential": 0.50,
+                "multiplier": 1.35,
+                "proven_success_rate": 0.90,
+                "is_low_hanging_fruit": True
+            },
+            {
+                "id": "specifications",
+                "name": "Specification Writing",
+                "complexity": 7,
+                "complexity_label": "Medium-High (Proven ROI)",
+                "description": "Template-based spec generation from Masterspec/Natspec",
+                "automation_potential": 0.45,
+                "multiplier": 1.20,
+                "proven_success_rate": 0.85
+            },
+            {
+                "id": "drawing_registers",
+                "name": "Drawing Register Compilation",
+                "complexity": 6,
+                "complexity_label": "Medium (Proven ROI)",
+                "description": "Manual Excel compilation from title blocks and metadata",
+                "automation_potential": 0.40,
+                "multiplier": 1.00,
+                "proven_success_rate": 0.88
+            },
+            {
+                "id": "site_diaries",
+                "name": "Site Diary Digitization",
+                "complexity": 4,
+                "complexity_label": "Medium (Requires Validation)",
+                "description": "Converting handwritten notes to digital - requires judgment",
+                "automation_potential": 0.30,
+                "multiplier": 0.85,
+                "proven_success_rate": 0.75,
+                "requires_phase_1": True
+            },
+            {
+                "id": "other",
+                "name": "Other Documentation",
+                "complexity": 5,
+                "complexity_label": "Medium (Varies)",
+                "description": "Various administrative tasks",
+                "automation_potential": 0.35,
+                "multiplier": 1.00,
+                "proven_success_rate": 0.80
+            }
+        ],
+        # Legacy fields for backward compatibility
         "hours_per_staff_per_week": 4.0,
         "task_breakdown": {
             "transmittals": 0.23,
@@ -135,58 +201,8 @@ INDUSTRIES = {
             "site_diaries": 0.28,
             "other": 0.16
         },
-        "tasks": [
-            {
-                "id": "site_diaries",
-                "name": "Site Diaries",
-                "complexity": 3,
-                "complexity_label": "Low-Medium",
-                "description": "Digital forms, minimal typing - requires human judgment for incidents",
-                "automation_potential": 0.34,
-                "multiplier": 0.85
-            },
-            {
-                "id": "transmittals",
-                "name": "Document Transmittals",
-                "complexity": 10,
-                "complexity_label": "High",
-                "description": "Manual creation and tracking - highly repetitive, rule-based, structured",
-                "automation_potential": 0.54,
-                "multiplier": 1.35,
-                "is_highest_roi": True
-            },
-            {
-                "id": "specifications",
-                "name": "Specification Writing",
-                "complexity": 7,
-                "complexity_label": "Medium-High",
-                "description": "Copy-paste from Masterspec/Natspec - template-based with judgment",
-                "automation_potential": 0.48,
-                "multiplier": 1.20
-            },
-            {
-                "id": "drawing_registers",
-                "name": "Drawing Registers",
-                "complexity": 5,
-                "complexity_label": "Medium",
-                "description": "Manual Excel compilation from mixed sources",
-                "automation_potential": 0.40,
-                "multiplier": 1.00
-            },
-            {
-                "id": "other",
-                "name": "Other Documentation",
-                "complexity": 5,
-                "complexity_label": "Medium",
-                "description": "Various administrative tasks",
-                "automation_potential": 0.40,
-                "multiplier": 1.00
-            }
-        ],
         "demo_documents": "drawing registers, BIM schedules, or document transmittals",
         "automation_potential": 0.40,
-        # Legacy support (deprecated)
-        "pain_point_question": "What's your biggest documentation bottleneck?",
         "q1_label": "What's your biggest documentation bottleneck?",
         "q1_options": {
             "Drawing Registers (Automated BIM export)": 0,
@@ -783,6 +799,104 @@ def get_readiness_response(selection):
         }
     }
     return responses.get(selection, responses["mixed"])
+
+def calculate_conservative_roi(total_staff, industry_config):
+    """
+    Calculate CONSERVATIVE ROI based on proven low-hanging fruit only.
+    
+    Philosophy: Show minimum proven savings on known repetitive tasks,
+    not aspirational total opportunity. Focus on documentation staff
+    (junior/mid-level) who actually do the work.
+    """
+    
+    # Calculate documentation staff (excludes partners/principals)
+    doc_staff_percentage = industry_config.get('doc_staff_percentage', 0.85)
+    doc_staff_count = int(total_staff * doc_staff_percentage)
+    
+    # Use conservative hours and rate
+    hours_per_doc_staff = industry_config.get('doc_staff_hours_per_week', 5.0)
+    typical_doc_rate = industry_config.get('doc_staff_typical_rate', 130)
+    
+    # Calculate totals
+    total_weekly_hours = doc_staff_count * hours_per_doc_staff
+    annual_cost = total_weekly_hours * typical_doc_rate * 48
+    
+    # Get proven task breakdown
+    proven_tasks = industry_config.get('proven_tasks', {})
+    tasks = industry_config.get('tasks', [])
+    
+    # Calculate per-task conservative savings
+    task_analysis = []
+    total_recoverable_hours = 0
+    total_proven_savings = 0
+    
+    for task in tasks:
+        task_id = task['id']
+        task_percentage = proven_tasks.get(task_id, 0)
+        task_hours = total_weekly_hours * task_percentage
+        
+        # Use conservative automation potential
+        automation_potential = task['automation_potential']
+        
+        # Apply success rate (conservative adjustment)
+        proven_success_rate = task.get('proven_success_rate', 0.85)
+        conservative_potential = automation_potential * proven_success_rate
+        
+        recoverable_hours = task_hours * conservative_potential
+        annual_savings = recoverable_hours * typical_doc_rate * 48
+        
+        task_analysis.append({
+            'id': task_id,
+            'name': task['name'],
+            'complexity': task['complexity'],
+            'complexity_label': task['complexity_label'],
+            'description': task['description'],
+            'hours_per_week': task_hours,
+            'percentage_of_total': task_percentage * 100,
+            'automation_potential': automation_potential,
+            'proven_success_rate': proven_success_rate,
+            'conservative_potential': conservative_potential,
+            'recoverable_hours_per_week': recoverable_hours,
+            'annual_savings': annual_savings,
+            'multiplier': task['multiplier'],
+            'is_low_hanging_fruit': task.get('is_low_hanging_fruit', False),
+            'requires_phase_1': task.get('requires_phase_1', False)
+        })
+        
+        total_recoverable_hours += recoverable_hours
+        total_proven_savings += annual_savings
+    
+    # Sort by annual savings (highest proven ROI first)
+    task_analysis.sort(key=lambda x: x['annual_savings'], reverse=True)
+    
+    # Calculate weighted average (conservative)
+    weighted_potential = total_recoverable_hours / total_weekly_hours if total_weekly_hours > 0 else 0
+    
+    # Tier 2 is aspirational - show but don't emphasize
+    tier_2_potential = min(weighted_potential + 0.25, 0.70)  # More conservative
+    tier_2_savings = total_weekly_hours * tier_2_potential * typical_doc_rate * 48
+    
+    return {
+        "mode": "conservative_proven",
+        "total_staff": total_staff,
+        "doc_staff_count": doc_staff_count,
+        "doc_staff_percentage": doc_staff_percentage * 100,
+        "hours_per_doc_staff": hours_per_doc_staff,
+        "typical_doc_rate": typical_doc_rate,
+        "total_weekly_hours": total_weekly_hours,
+        "annual_cost": annual_cost,
+        "task_analysis": task_analysis,
+        "total_recoverable_hours": total_recoverable_hours,
+        "weighted_potential": weighted_potential,
+        "proven_tier_1_savings": total_proven_savings,
+        "tier_2_potential": tier_2_potential,
+        "tier_2_savings": tier_2_savings,
+        "capacity_hours": total_recoverable_hours * 48,
+        "potential_revenue": total_proven_savings,
+        # Legacy fields for backward compatibility
+        "annual_burn": annual_cost,
+        "tier_1_savings": total_proven_savings
+    }
 
 def calculate_metrics_v3(staff_count, avg_rate, industry_config):
     """
@@ -1670,6 +1784,92 @@ HTML_TEMPLATE = """
             color: #0B1221;
             font-weight: 600;
         }
+        .conservative-framing-notice {
+            background: linear-gradient(135deg, #FFFBF0, #FFF9E6);
+            border: 2px solid #D4AF37;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+        .conservative-framing-notice h2 {
+            color: #0B1221;
+            margin-bottom: 1rem;
+        }
+        .methodology-notice {
+            background: #F8F9FA;
+            border-left: 4px solid #4B5563;
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+            color: #4B5563;
+        }
+        .info-callout {
+            background: #EFF6FF;
+            border: 1px solid #3B82F6;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .info-callout h4 {
+            color: #1E40AF;
+            margin-bottom: 0.5rem;
+        }
+        .info-callout ul {
+            margin: 0.5rem 0 0.5rem 1.5rem;
+        }
+        .insight-callout {
+            background: #F0FDF4;
+            border-left: 4px solid #10B981;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .conservative-summary-box {
+            background: white;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+        .conservative-summary-box ul {
+            margin: 0.5rem 0 1rem 1.5rem;
+        }
+        .conservative-summary-box li {
+            margin: 0.5rem 0;
+        }
+        .validation-badge {
+            display: inline-block;
+            background: #F59E0B;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .task-warning {
+            background: #FEF3C7;
+            border: 1px solid #F59E0B;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+        .roi-result-card-primary {
+            border: 3px solid #D4AF37;
+            background: linear-gradient(to bottom, #FFFBF0, white);
+        }
+        .tier-2-note {
+            background: #F3F4F6;
+            border: 1px dashed #9CA3AF;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+        .tier-2-note h4 {
+            color: #4B5563;
+            margin-bottom: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -1714,51 +1914,89 @@ HTML_TEMPLATE = """
             <span class="step">3</span>
             <span class="step">4</span>
         </div>
-        <h1>Input Your Baseline Data{% if industry %}: {{ industry }}{% endif %}</h1>
+        <h1>Your Firm Profile</h1>
+        <h2>We'll calculate savings on proven, repetitive documentation tasks</h2>
         <hr>
         <form method="POST" action="{{ url_for('roi_calculator.roi_calculator') }}">
             <input type="hidden" name="step" value="2">
             <input type="hidden" name="industry" value="{{ industry }}">
-            <h3>Universal Inputs</h3>
+            
             <div class="form-group">
-                <label>Number of Billable Technical Staff <small style="color: #4B5563; font-weight: normal;">(includes senior, mid-level, and entry-level billable staff)</small></label>
+                <label>Total Technical Staff 
+                    <small style="color: #4B5563; font-weight: normal;">
+                        (includes all billable staff - we'll calculate documentation staff from this)
+                    </small>
+                </label>
                 <div class="slider-container">
                     <input type="range" name="staff_count_slider" id="staff_count_slider" 
                            value="{{ staff_count }}" min="10" max="500" step="5" 
-                           oninput="document.getElementById('staff_count').value = this.value">
+                           oninput="updateStaffCalculation(this.value)">
                     <input type="number" name="staff_count" id="staff_count" 
                            value="{{ staff_count }}" min="10" max="500" step="5" required
-                           oninput="document.getElementById('staff_count_slider').value = this.value">
+                           oninput="updateStaffCalculation(this.value)">
+                </div>
+                <div id="doc-staff-estimate" style="margin-top: 0.5rem; color: #4B5563; font-size: 0.875rem;">
+                    <!-- Auto-populated by JavaScript -->
                 </div>
             </div>
-            <div class="form-group">
-                <label>Average Billable Rate (AUD)</label>
-                <div class="slider-container">
-                    <input type="range" name="avg_rate_slider" id="avg_rate_slider" 
-                           value="{{ avg_rate }}" min="50" max="500" step="1" 
-                           oninput="document.getElementById('avg_rate').value = Math.round(this.value)">
-                    <input type="number" name="avg_rate" id="avg_rate" 
-                           value="{{ avg_rate }}" min="50" max="500" step="1" required
-                           oninput="document.getElementById('avg_rate_slider').value = this.value">
-                </div>
-            </div>
+            
             <div class="form-group">
                 <label>Core Tech Stack</label>
                 <div class="radio-group-container">
                     {% for option in ['M365/SharePoint', 'Google Workspace', 'Other'] %}
                     <div class="radio-group">
-                        <input type="radio" name="platform" value="{{ option }}" id="platform_{{ loop.index }}" 
+                        <input type="radio" name="platform" value="{{ option }}" 
+                               id="platform_{{ loop.index }}" 
                                {% if platform == option %}checked{% endif %}>
                         <label for="platform_{{ loop.index }}">{{ option }}</label>
                     </div>
                     {% endfor %}
                 </div>
             </div>
+            
+            <div class="info-callout">
+                <h4>💡 What We're Calculating</h4>
+                <p>This calculator estimates savings on <strong>proven, repetitive documentation tasks</strong> that we know exist in {{ industry }} firms:</p>
+                <ul>
+                    <li>Manual transmittal creation and tracking</li>
+                    <li>Specification writing from templates</li>
+                    <li>Drawing register compilation</li>
+                    <li>Other routine documentation</li>
+                </ul>
+                <p><strong>This is LOW-HANGING FRUIT only.</strong> There may be additional opportunities, but we're showing what we KNOW we can help with based on 80+ similar implementations.</p>
+            </div>
+            
             <div class="btn-group">
                 <a href="{{ url_for('roi_calculator.roi_calculator') }}" class="btn btn-secondary">← Back</a>
-                <button type="submit" name="action" value="calculate" class="btn">Calculate ROI →</button>
+                <button type="submit" name="action" value="calculate" class="btn">Calculate Conservative ROI →</button>
             </div>
         </form>
+        
+        <script>
+        function updateStaffCalculation(totalStaff) {
+            const docStaffPercentage = {{ industry_config.get('doc_staff_percentage', 0.85) }};
+            const docStaff = Math.round(totalStaff * docStaffPercentage);
+            const nonDocStaff = totalStaff - docStaff;
+            
+            const estimateDiv = document.getElementById('doc-staff-estimate');
+            if (estimateDiv) {
+                estimateDiv.innerHTML = `
+                    <strong>Estimated breakdown:</strong><br>
+                    → ${docStaff} documentation staff (junior/mid-level: coordinators, admin)<br>
+                    → ${nonDocStaff} senior staff/partners (primarily review/approve, not data entry)
+                    <br><br>
+                    <em>We calculate savings based on the ${docStaff} staff who do repetitive documentation work.</em>
+                `;
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const staffInput = document.getElementById('staff_count');
+            if (staffInput) {
+                updateStaffCalculation(parseInt(staffInput.value) || {{ staff_count }});
+            }
+        });
+        </script>
         
         {% elif step == 3 %}
         <div class="step-indicator">
@@ -1767,39 +2005,49 @@ HTML_TEMPLATE = """
             <span class="step active">3</span>
             <span class="step">4</span>
         </div>
-        <h1>Your ROI Analysis</h1>
-        <hr>
-        <div class="scroll-indicator" id="scrollIndicator" onclick="scrollToNext()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M7 13l5 5 5-5M7 6l5 5 5-5"/>
-            </svg>
+        <div class="conservative-framing-notice">
+            <h2>🎯 Your Low-Hanging Fruit Opportunity</h2>
+            <p><strong>Conservative Estimate:</strong> This analysis shows savings on <strong>proven, repetitive tasks</strong> that we KNOW exist in {{ industry }} firms. This is the minimum opportunity - there may be additional savings once we analyze YOUR specific workflows in Phase 1.</p>
         </div>
-        <div class="important-notice">
-            <p><strong>⚠️ Methodology:</strong> This analysis is based on industry averages from 80+ similar firms. We estimate your firm spends approximately <strong>{{ calculations.hours_per_staff_per_week }} hours per staff member per week</strong> on documentation ({{ calculations.total_weekly_hours|round(0)|int }} hours firm-wide). Your actual time allocation may differ—Phase 1 measures your specific baseline.</p>
+        
+        <div class="methodology-notice">
+            <p><strong>⚠️ Methodology:</strong> Based on {{ calculations.doc_staff_count }} documentation staff ({{ calculations.doc_staff_percentage|round(0)|int }}% of your {{ calculations.total_staff }} total staff). We estimate these junior/mid-level staff spend ~{{ calculations.hours_per_doc_staff }} hours/week on routine documentation at an average rate of ${{ calculations.typical_doc_rate }}/hr. <strong>Senior staff and partners who only review/approve are excluded.</strong></p>
         </div>
+        
         <hr>
-        <h2>Your Firm Profile</h2>
+        
+        <h2>Your Documentation Staff Profile</h2>
         <div class="profile-summary">
             <div class="profile-item">
-                <span class="profile-label">Industry:</span>
-                <span class="profile-value">{{ industry }}</span>
+                <span class="profile-label">Total Technical Staff:</span>
+                <span class="profile-value">{{ calculations.total_staff }}</span>
             </div>
             <div class="profile-item">
-                <span class="profile-label">Technical Staff:</span>
-                <span class="profile-value">{{ staff_count }}</span>
+                <span class="profile-label">Documentation Staff:</span>
+                <span class="profile-value">{{ calculations.doc_staff_count }} ({{ calculations.doc_staff_percentage|round(0)|int }}%)</span>
             </div>
             <div class="profile-item">
-                <span class="profile-label">Average Rate:</span>
-                <span class="profile-value">${{ avg_rate }}/hour</span>
+                <span class="profile-label">Excluded (Senior/Partners):</span>
+                <span class="profile-value">{{ calculations.total_staff - calculations.doc_staff_count }} ({{ (100 - calculations.doc_staff_percentage)|round(0)|int }}%)</span>
             </div>
             <div class="profile-item">
-                <span class="profile-label">Estimated Documentation Time:</span>
+                <span class="profile-label">Doc Staff Typical Rate:</span>
+                <span class="profile-value">${{ calculations.typical_doc_rate }}/hour</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Hours/Week per Doc Staff:</span>
+                <span class="profile-value">{{ calculations.hours_per_doc_staff }} hours</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Total Documentation Time:</span>
                 <span class="profile-value">{{ calculations.total_weekly_hours|round(0)|int }} hours/week firm-wide</span>
             </div>
-            <div class="profile-item">
-                <span class="profile-label">Per Staff Average:</span>
-                <span class="profile-value">{{ calculations.hours_per_staff_per_week }} hours/week</span>
-            </div>
+        </div>
+        
+        <div class="insight-callout">
+            <h4>💡 Why We Focus on Documentation Staff</h4>
+            <p>Partners and senior staff ({{ calculations.total_staff - calculations.doc_staff_count }} people in your firm) primarily review and approve work - they don't spend significant time on <strong>repetitive manual tasks</strong> like data entry, formatting, or compilation.</p>
+            <p>The {{ calculations.doc_staff_count }} documentation staff (coordinators, junior/mid-level engineers, admin) are where the automation opportunity exists. <strong>These are conservative estimates based on proven implementations.</strong></p>
         </div>
         <hr>
         <!-- BIG SCARY NUMBER -->
@@ -1811,50 +2059,62 @@ HTML_TEMPLATE = """
         
         <hr>
         
-        <h2>Documentation Task Breakdown</h2>
-        <p class="section-subhead">Common documentation tasks in {{ industry }}:</p>
+        <h2>Proven Low-Hanging Fruit Tasks</h2>
+        <p class="section-subhead">These are repetitive tasks we KNOW exist in {{ industry }} firms and have proven automation success:</p>
         
         <div class="task-breakdown">
             {% if calculations.get('task_analysis') %}
                 {% for task in calculations.task_analysis %}
-                <div class="task-card {% if task.is_highest_roi %}task-card-highlight{% endif %}">
+                <div class="task-card {% if task.is_low_hanging_fruit %}task-card-highlight{% endif %}">
                     <div class="task-header">
                         <h3>
                             {{ task.name }} 
                             <span class="complexity-badge complexity-{{ task.complexity }}">
                                 [{{ task.complexity }}/10]
                             </span>
-                            {% if task.is_highest_roi %}
-                            <span class="roi-badge">⭐ HIGHEST ROI</span>
+                            {% if task.is_low_hanging_fruit %}
+                            <span class="roi-badge">🎯 LOW-HANGING FRUIT</span>
+                            {% endif %}
+                            {% if task.requires_phase_1 %}
+                            <span class="validation-badge">⚠️ NEEDS VALIDATION</span>
                             {% endif %}
                         </h3>
                     </div>
                     <div class="task-details">
                         <div class="task-stat">
                             <span class="stat-label">Estimated Time:</span>
-                            <span class="stat-value">{{ task.hours_per_week|round(1) }} hrs/week ({{ task.percentage_of_total|round(0)|int }}% of total)</span>
-                        </div>
-                        <div class="task-stat">
-                            <span class="stat-label">Complexity:</span>
-                            <span class="stat-value">{{ task.complexity_label }}</span>
+                            <span class="stat-value">{{ task.hours_per_week|round(1) }} hrs/week ({{ task.percentage_of_total|round(0)|int }}% of doc time)</span>
                         </div>
                         <div class="task-stat">
                             <span class="stat-label">Description:</span>
                             <span class="stat-value">{{ task.description }}</span>
                         </div>
                         <div class="task-stat">
-                            <span class="stat-label">Automation Potential:</span>
-                            <span class="stat-value">{{ (task.automation_potential * 100)|round(0)|int }}% ({{ task.multiplier }}× multiplier)</span>
+                            <span class="stat-label">Automation Potential (Lab Testing):</span>
+                            <span class="stat-value">{{ (task.automation_potential * 100)|round(0)|int }}%</span>
+                        </div>
+                        <div class="task-stat">
+                            <span class="stat-label">Proven Success Rate:</span>
+                            <span class="stat-value">{{ (task.proven_success_rate * 100)|round(0)|int }}% of implementations succeed</span>
+                        </div>
+                        <div class="task-stat">
+                            <span class="stat-label">Conservative Estimate:</span>
+                            <span class="stat-value">{{ (task.conservative_potential * 100)|round(0)|int }}% (potential × success rate)</span>
                         </div>
                         <div class="task-stat">
                             <span class="stat-label">Recoverable Time:</span>
                             <span class="stat-value">{{ task.recoverable_hours_per_week|round(1) }} hrs/week</span>
                         </div>
                         <div class="task-stat">
-                            <span class="stat-label">Annual Value:</span>
+                            <span class="stat-label">Minimum Annual Value:</span>
                             <span class="stat-value">${{ "{:,.0f}".format(task.annual_savings) }}</span>
                         </div>
                     </div>
+                    {% if task.requires_phase_1 %}
+                    <div class="task-warning">
+                        <strong>⚠️ Validation Required:</strong> This task requires human judgment. Phase 1 will test if YOUR specific documents are suitable for automation.
+                    </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             {% else %}
@@ -1864,31 +2124,54 @@ HTML_TEMPLATE = """
         
         <hr>
         
-        <h2>Total Opportunity Summary</h2>
+        <h2>Conservative Opportunity Summary</h2>
+        
+        <div class="conservative-summary-box">
+            <p><strong>What This Represents:</strong></p>
+            <ul>
+                <li>✅ Proven repetitive tasks (not aspirational)</li>
+                <li>✅ Conservative automation rates (actual success rates applied)</li>
+                <li>✅ Documentation staff only (excludes senior/partners)</li>
+                <li>✅ Low-hanging fruit (quick wins, not total transformation)</li>
+            </ul>
+            <p><strong>What This DOESN'T Include:</strong></p>
+            <ul>
+                <li>❌ Additional tasks we haven't identified yet</li>
+                <li>❌ Workflow improvements beyond automation</li>
+                <li>❌ Time savings for senior staff (review/approval time)</li>
+                <li>❌ Aspirational "maximum potential" scenarios</li>
+            </ul>
+        </div>
+        
         <div class="roi-result-grid">
             <div class="roi-result-card">
-                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.annual_burn) }}</div>
-                <div class="roi-result-label">Annual Revenue Leakage</div>
-                <p class="roi-result-description">Total cost of time spent on manual documentation</p>
+                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.get('annual_cost', calculations.get('annual_burn', 0))) }}</div>
+                <div class="roi-result-label">Annual Documentation Cost</div>
+                <p class="roi-result-description">{{ calculations.doc_staff_count }} doc staff × {{ calculations.hours_per_doc_staff }} hrs/week × ${{ calculations.typical_doc_rate }}/hr</p>
+            </div>
+            
+            <div class="roi-result-card roi-result-card-primary">
+                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0))) }}</div>
+                <div class="roi-result-label">Proven Low-Hanging Fruit ({{ (calculations.weighted_potential * 100)|round(0)|int }}%)</div>
+                <p class="roi-result-description"><strong>Conservative estimate</strong> on tasks we KNOW we can automate</p>
             </div>
             
             <div class="roi-result-card">
-                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.tier_1_savings) }}</div>
-                <div class="roi-result-label">Tier 1 Opportunity ({{ (calculations.weighted_automation_potential * 100)|round(0)|int }}% Weighted Avg)</div>
-                <p class="roi-result-description">Immediate savings from automating high-ROI tasks</p>
-            </div>
-            
-            <div class="roi-result-card">
-                <div class="roi-result-stat">{{ calculations.total_recoverable_hours_per_week|round(0)|int }}</div>
+                <div class="roi-result-stat">{{ calculations.get('total_recoverable_hours', calculations.get('total_recoverable_hours_per_week', 0))|round(0)|int }}</div>
                 <div class="roi-result-label">Hours Recoverable per Week</div>
                 <p class="roi-result-description">Time that can be redirected to billable work</p>
             </div>
             
             <div class="roi-result-card">
-                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.potential_revenue) }}</div>
+                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.get('potential_revenue', 0)) }}</div>
                 <div class="roi-result-label">Revenue Opportunity</div>
                 <p class="roi-result-description">If recovered hours are billed to clients</p>
             </div>
+        </div>
+        
+        <div class="tier-2-note">
+            <h4>📈 Tier 2 Opportunity: ${{ "{:,.0f}".format(calculations.get('tier_2_savings', 0)) }}</h4>
+            <p>With expanded automation and workflow optimization (typically 12-18 months), firms achieve {{ (calculations.get('tier_2_potential', 0.70) * 100)|round(0)|int }}% efficiency gains. <strong>But let's prove Phase 1 first.</strong></p>
         </div>
         
         <div class="complexity-legend">
@@ -2521,14 +2804,10 @@ def roi_calculator():
                 staff_count_str = request.form.get('staff_count', '').strip()
                 staff_count = int(staff_count_str) if staff_count_str else int(session.get('staff_count', 50))
                 
-                avg_rate_str = request.form.get('avg_rate', '').strip()
-                avg_rate = float(avg_rate_str) if avg_rate_str else float(session.get('avg_rate', 185))
-                
                 platform = request.form.get('platform', '').strip() or session.get('platform', 'M365/SharePoint')
                 
-                # Save to session (removed pain_point and weekly_waste)
+                # Save to session (removed pain_point, weekly_waste, and avg_rate)
                 session['staff_count'] = staff_count
-                session['avg_rate'] = avg_rate
                 session['platform'] = platform
                 session['industry'] = industry
                 
@@ -2537,18 +2816,18 @@ def roi_calculator():
                     del session['pain_point']
                 if 'weekly_waste' in session:
                     del session['weekly_waste']
+                if 'avg_rate' in session:
+                    del session['avg_rate']
                 
                 # Redirect to step 3 with values in URL as backup (in case session doesn't persist)
                 return redirect(url_for('roi_calculator.roi_calculator', 
                                       step=3,
                                       staff_count=staff_count,
-                                      avg_rate=avg_rate,
                                       platform=platform,
                                       industry=industry))
             
             # Get values from session or defaults
             staff_count = int(request.form.get('staff_count', session.get('staff_count', 50)))
-            avg_rate = float(request.form.get('avg_rate', session.get('avg_rate', 185)))
             platform = request.form.get('platform', session.get('platform', 'M365/SharePoint'))
             
             return render_template_string(HTML_TEMPLATE,
@@ -2556,7 +2835,6 @@ def roi_calculator():
                 industry=industry,
                 industry_config=industry_config,
                 staff_count=staff_count,
-                avg_rate=avg_rate,
                 platform=platform)
         
         # Step 3: Results
@@ -2570,30 +2848,29 @@ def roi_calculator():
             # Validate values are within acceptable ranges (but don't reset to defaults if they're valid)
             if staff_count < 10:
                 staff_count = max(10, staff_count)  # Ensure minimum, but don't override user input
-            if avg_rate < 50:
-                avg_rate = max(50, avg_rate)  # Ensure minimum, but don't override user input
             
             # Clean up old session variables
             if 'weekly_waste' in session:
                 del session['weekly_waste']
             if 'pain_point' in session:
                 del session['pain_point']
+            if 'avg_rate' in session:
+                del session['avg_rate']  # No longer needed - uses industry default
             
             # Save to session to ensure persistence
             session['staff_count'] = staff_count
-            session['avg_rate'] = avg_rate
             session['platform'] = platform
             
             # Get industry config for automation potential
             industry_config = INDUSTRIES.get(industry, {})
             
-            # Use new v3 calculation (auto-calculates hours, analyzes all tasks)
-            calculations = calculate_metrics_v3(staff_count, avg_rate, industry_config)
+            # Use conservative ROI calculation (v3.1)
+            calculations = calculate_conservative_roi(staff_count, industry_config)
             session['calculations'] = calculations
             
             # Format automation potential as percentage for display
-            weighted_automation_potential = calculations.get('weighted_automation_potential', 0.40)
-            tier1_percentage = int(weighted_automation_potential * 100)
+            weighted_potential = calculations.get('weighted_potential', 0.40)
+            tier1_percentage = int(weighted_potential * 100)
             
             # Create chart data with proper formatting
             tier2_percentage = int(calculations.get('tier_2_potential', 0.70) * 100)
@@ -2601,15 +2878,15 @@ def roi_calculator():
                 "data": [{
                     "x": ["Current<br>State", f"Tier 1<br>({tier1_percentage}% Reduction)", f"Tier 2<br>({tier2_percentage}% Reduction)"],
                     "y": [
-                        calculations['annual_burn'],
-                        calculations['annual_burn'] - calculations['tier_1_savings'],
-                        calculations.get('tier_2_cost', calculations['annual_burn'] - calculations['tier_2_savings'])
+                        calculations.get('annual_cost', calculations.get('annual_burn', 0)),
+                        calculations.get('annual_cost', calculations.get('annual_burn', 0)) - calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0)),
+                        calculations.get('annual_cost', calculations.get('annual_burn', 0)) - calculations.get('tier_2_savings', 0)
                     ],
                     "type": "bar",
                     "marker": {"color": ["#0B1221", "#D4AF37", "#B8941F"]},
-                    "text": [format_currency(calculations['annual_burn']), 
-                            format_currency(calculations['annual_burn'] - calculations['tier_1_savings']),
-                            format_currency(calculations.get('tier_2_cost', calculations['annual_burn'] - calculations['tier_2_savings']))],
+                    "text": [format_currency(calculations.get('annual_cost', calculations.get('annual_burn', 0))), 
+                            format_currency(calculations.get('annual_cost', calculations.get('annual_burn', 0)) - calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0))),
+                            format_currency(calculations.get('annual_cost', calculations.get('annual_burn', 0)) - calculations.get('tier_2_savings', 0))],
                     "textposition": "outside",
                     "hovertemplate": "%{y:$,.0f}<extra></extra>",
                     "textfont": {"size": 12}
@@ -2636,15 +2913,19 @@ def roi_calculator():
             # Analysis text
             analysis_text = []
             
-            # Business insights based on new calculation structure
-            if calculations['annual_burn'] > 100000:
-                analysis_text.append(f"💰 <strong>Significant Opportunity:</strong> With an annual revenue leakage of {format_currency(calculations['annual_burn'])}, automation could deliver substantial ROI within the first year.")
+            # Business insights based on conservative calculation
+            annual_cost = calculations.get('annual_cost', calculations.get('annual_burn', 0))
+            if annual_cost > 100000:
+                analysis_text.append(f"💰 <strong>Conservative Opportunity:</strong> With an annual documentation cost of {format_currency(annual_cost)}, proven automation could deliver substantial ROI within the first year.")
             
-            # Find highest ROI task
+            # Find highest ROI task (low-hanging fruit)
             highest_roi_task = None
             if calculations.get('task_analysis'):
                 highest_roi_task = calculations['task_analysis'][0]  # Already sorted by ROI
-                analysis_text.append(f"⭐ <strong>Highest ROI Opportunity:</strong> {highest_roi_task['name']} has the highest automation potential ({int(highest_roi_task['automation_potential'] * 100)}%) and could save {format_currency(highest_roi_task['annual_savings'])} annually.")
+                if highest_roi_task.get('is_low_hanging_fruit'):
+                    analysis_text.append(f"🎯 <strong>Low-Hanging Fruit:</strong> {highest_roi_task['name']} is a proven repetitive task with {int(highest_roi_task['conservative_potential'] * 100)}% conservative automation potential, saving {format_currency(highest_roi_task['annual_savings'])} annually.")
+                else:
+                    analysis_text.append(f"⭐ <strong>Highest ROI Opportunity:</strong> {highest_roi_task['name']} has the highest proven savings at {format_currency(highest_roi_task['annual_savings'])} annually.")
             
             if not analysis_text:
                 analysis_text.append("✅ Your organization shows moderate efficiency opportunities. Automation can still deliver meaningful improvements.")
@@ -2658,14 +2939,14 @@ def roi_calculator():
             # Generate automation roadmap from task analysis
             roadmap = generate_automation_roadmap_v3(
                 calculations.get('task_analysis', []),
-                staff_count,
-                avg_rate
+                calculations.get('doc_staff_count', staff_count),
+                calculations.get('typical_doc_rate', 130)
             )
             
             # Calculate additional metrics for universal template
             total_weekly_hours = calculations.get('total_weekly_hours', 0)
             total_annual_hours = total_weekly_hours * 48
-            tier1_savings = calculations['tier_1_savings']
+            tier1_savings = calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0))
             
             # Industry slug for URL
             industry_slug = industry.lower().replace(' & ', '-').replace(' ', '-')
@@ -2676,14 +2957,14 @@ def roi_calculator():
                 industry_config=industry_config,
                 industry_slug=industry_slug,
                 staff_count=staff_count,
-                avg_rate=avg_rate,
+                avg_rate=calculations.get('typical_doc_rate', 130),  # Use doc staff rate
                 platform=platform,
                 calculations=calculations,
                 total_weekly_hours=total_weekly_hours,
                 total_annual_hours=total_annual_hours,
                 tier1_savings=tier1_savings,
                 tier1_percentage=tier1_percentage,
-                automation_potential=weighted_automation_potential,
+                automation_potential=weighted_potential,
                 chart_json=json.dumps(chart_data, cls=plotly.utils.PlotlyJSONEncoder),
                 analysis_text=analysis_text,
                 ai_opportunities=ai_opportunities,
@@ -2922,4 +3203,5 @@ def test_route():
 
 # Note: This blueprint should be registered in main.py
 # Example: app.register_blueprint(roi_app, url_prefix='/roi-calculator')
+
 
