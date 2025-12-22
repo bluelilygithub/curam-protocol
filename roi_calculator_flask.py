@@ -2731,12 +2731,81 @@ HTML_TEMPLATE = """
                 📧 Email Report to Me
             </button>
         </div>
+        
+        <!-- Email Modal -->
+        <div id="emailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+                <h3 style="color: #0B1221; margin-top: 0; margin-bottom: 0.5rem;">Email Your ROI Report</h3>
+                <p style="color: #4B5563; margin-bottom: 1.5rem;">Enter your email address to receive your personalized ROI Business Case PDF.</p>
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label for="emailInput" style="display: block; color: #0B1221; font-weight: 600; margin-bottom: 0.5rem;">Email Address</label>
+                    <input type="email" id="emailInput" placeholder="your.email@company.com" style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem; box-sizing: border-box;" required>
+                </div>
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                    <button onclick="closeEmailModal()" style="background: #E5E7EB; color: #4B5563; border: none; border-radius: 6px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                        Cancel
+                    </button>
+                    <button onclick="sendEmail()" style="background: #D4AF37; color: #0B1221; border: none; border-radius: 6px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                        📧 Send Report
+                    </button>
+                </div>
+                <div id="emailError" style="display: none; color: #DC2626; background: #FEE2E2; padding: 0.75rem; border-radius: 6px; margin-top: 1rem; font-size: 0.9rem;"></div>
+            </div>
+        </div>
+        
+        <!-- Success Modal -->
+        <div id="successModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 450px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2); text-align: center;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                <h3 style="color: #0B1221; margin-top: 0; margin-bottom: 0.5rem;">Report Sent Successfully!</h3>
+                <p id="successMessage" style="color: #4B5563; margin-bottom: 1.5rem;">Check your inbox for your ROI Business Case PDF.</p>
+                <button onclick="closeSuccessModal()" style="background: #D4AF37; color: #0B1221; border: none; border-radius: 6px; padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                    Got it!
+                </button>
+            </div>
+        </div>
+        
         <script>
         function emailPDF() {
-            const email = prompt("Enter your email address:");
-            if (!email) return;
+            document.getElementById('emailModal').style.display = 'flex';
+            document.getElementById('emailInput').focus();
+        }
+        
+        function closeEmailModal() {
+            document.getElementById('emailModal').style.display = 'none';
+            document.getElementById('emailInput').value = '';
+            document.getElementById('emailError').style.display = 'none';
+        }
+        
+        function closeSuccessModal() {
+            document.getElementById('successModal').style.display = 'none';
+        }
+        
+        function sendEmail() {
+            const emailInput = document.getElementById('emailInput');
+            const email = emailInput.value.trim();
+            const errorDiv = document.getElementById('emailError');
             
-            // Get session data for email
+            // Basic validation
+            if (!email) {
+                errorDiv.textContent = 'Please enter an email address.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            if (!email.includes('@') || !email.includes('.')) {
+                errorDiv.textContent = 'Please enter a valid email address.';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            // Hide error and disable button
+            errorDiv.style.display = 'none';
+            const sendBtn = event.target;
+            sendBtn.textContent = 'Sending...';
+            sendBtn.disabled = true;
+            
+            // Send email
             fetch('{{ url_for("roi_calculator.email_report") }}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -2747,14 +2816,50 @@ HTML_TEMPLATE = """
             })
             .then(r => r.json())
             .then(data => {
-                if (data.success) alert('Report sent to ' + email);
-                else alert('Error sending email: ' + (data.error || 'Unknown error'));
+                if (data.success) {
+                    closeEmailModal();
+                    document.getElementById('successMessage').textContent = 'Your ROI Business Case has been sent to ' + email;
+                    document.getElementById('successModal').style.display = 'flex';
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to send email. Please try again.';
+                    errorDiv.style.display = 'block';
+                    sendBtn.textContent = '📧 Send Report';
+                    sendBtn.disabled = false;
+                }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error sending email. Please try again.');
+                errorDiv.textContent = 'Network error. Please check your connection and try again.';
+                errorDiv.style.display = 'block';
+                sendBtn.textContent = '📧 Send Report';
+                sendBtn.disabled = false;
             });
         }
+        
+        // Allow Enter key to submit
+        document.addEventListener('DOMContentLoaded', function() {
+            const emailInput = document.getElementById('emailInput');
+            if (emailInput) {
+                emailInput.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        sendEmail();
+                    }
+                });
+            }
+        });
+        
+        // Close modal on outside click
+        document.getElementById('emailModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEmailModal();
+            }
+        });
+        
+        document.getElementById('successModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeSuccessModal();
+            }
+        });
         </script>
         <hr>
         <h3>Next Steps</h3>
