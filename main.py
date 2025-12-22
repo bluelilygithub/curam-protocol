@@ -145,7 +145,7 @@ ALLOWED_SAMPLE_PATHS = {
 
 # Cache for available models
 _available_models = None
-FINANCE_FIELDS = ["Vendor", "Date", "InvoiceNum", "Cost", "GST", "FinalAmount", "Summary"]
+FINANCE_FIELDS = ["Vendor", "Date", "InvoiceNum", "Cost", "GST", "FinalAmount", "Summary", "LineItems", "ShippingTerms", "HSCodes", "Currency", "ABN", "POReference", "PaymentTerms", "DueDate", "PortOfLoading", "PortOfDischarge", "VesselVoyage", "BillOfLading", "Flags"]
 ENGINEERING_BEAM_FIELDS = ["Mark", "Size", "Qty", "Length", "Grade", "PaintSystem", "Comments"]
 ENGINEERING_COLUMN_FIELDS = ["Mark", "SectionType", "Size", "Length", "Grade", "BasePlate", "CapPlate", "Finish", "Comments"]
 TRANSMITTAL_FIELDS = ["DwgNo", "Rev", "Title", "Scale"]
@@ -1620,10 +1620,261 @@ TEXT: {text}
         TEXT: {text}
         """
     return f"""
-    Extract specific fields from this invoice text as JSON.
-    Fields: Vendor, Date (YYYY-MM-DD), InvoiceNum, Cost (pre-tax amount), GST (tax component, use "N/A" if not listed), FinalAmount (total payable), Summary (3-5 words).
-    Keys: "Vendor", "Date", "InvoiceNum", "Cost", "GST", "FinalAmount", "Summary".
-    Use "N/A" for missing fields. Return ONLY JSON.
+    Extract comprehensive invoice data from this document as JSON.
+    
+    ## DOCUMENT TYPE DETECTION
+    
+    First, identify the document type:
+    
+    **INVOICE/COMMERCIAL INVOICE:**
+    - Contains: Invoice number, vendor, amounts, line items
+    - Purpose: Payment request, customs clearance
+    - Extract: Full details including line items
+    
+    **RECEIPT:**
+    - Contains: Transaction completed, payment method
+    - Purpose: Proof of payment
+    - Extract: Summary level sufficient (line items optional if < 5 items)
+    
+    **TAX INVOICE (Australian):**
+    - Contains: ABN, GST breakdown
+    - Purpose: Tax compliance
+    - Extract: ABN mandatory, GST details critical
+    
+    **PRO FORMA INVOICE:**
+    - Flag as: "Pro Forma - Not for payment"
+    - Extract same fields but note status
+    
+    ## CORE FIELDS - ALWAYS EXTRACT
+    
+    **Header Information (Required):**
+    - "Vendor": Vendor/supplier name (clean, no extra text)
+    - "InvoiceNum": Invoice number/reference (or "N/A" if receipt)
+    - "Date": Invoice date (standardize to YYYY-MM-DD format)
+    - "Currency": Document currency (default to AUD if Australian vendor, or extract from document)
+    
+    **Financial Totals (Required):**
+    - "Cost": Subtotal (before tax, numeric, no currency symbols)
+    - "GST": Tax/GST amount (numeric, use "N/A" if exempt/international/not listed)
+    - "FinalAmount": Total amount payable (numeric, no currency symbols)
+    
+    **Financial Validation:**
+    - Verify: Subtotal + Tax = Total (within $0.01 tolerance)
+    - If Australian vendor: Check for ABN and GST
+    - If international: Currency must be specified
+    
+    ## LINE ITEMS EXTRACTION - CRITICAL ENHANCEMENT
+    
+    **When to Extract Line Items:**
+    Extract line items when:
+    - Invoice has itemized table/list
+    - More than 2 distinct products/services
+    - Quantities and unit prices are listed
+    
+    Skip line items when:
+    - Simple receipt (< 5 items)
+    - Only summary available
+    - User requests summary only
+    
+    **Line Item Format:**
+    Each line item object should contain:
+    - "ItemNumber": Line/item number (if present, otherwise auto-number: "001", "002", etc.)
+    - "PartNumber": Part/product number/SKU (critical for inventory, use "N/A" if not present)
+    - "HSCode": HS/tariff code per line item (format: "XXXX.XX.XX", optional)
+    - "Description": Item description/product name (clean, no formatting artifacts)
+    - "Quantity": Quantity (numeric only, extract unit if separate)
+    - "UnitPrice": Unit price (decimal format, numeric)
+    - "LineTotal": Line total amount (Qty × Unit Price, numeric)
+    - "Currency": Currency for this line (if different from invoice total)
+    
+    **Line Item Extraction Protocol:**
+    
+    STEP 1: Identify table structure
+    - Locate headers: Line/Item #, Part #, Description, Qty, Unit Price, Total
+    - Map columns (may have different names: "Item", "Product", "SKU", "Part No", etc.)
+    - Note multi-page continuation markers
+    
+    STEP 2: Extract each row
+    For each line item:
+    - Extract all available fields
+    - Handle merged cells/wrapped text (combine continuation lines into single description)
+    - Don't create duplicate line items from subtotals
+    
+    STEP 3: Validate extraction
+    - Calculate: Σ(line totals) should equal invoice subtotal
+    - Check: All required fields populated
+    - Flag: Missing part numbers or quantities
+    - Warn: If calculated total ≠ invoice total (>$0.50 difference)
+    
+    STEP 4: Handle pagination
+    - Note "CONTINUED ON PAGE X" markers
+    - Consolidate items across pages
+    - Verify total line count matches invoice claim
+    
+    **Common Line Item Challenges:**
+    - MULTI-PAGE INVOICES: Track continuation across pages, aggregate all items
+    - MERGED CELLS: Description may span multiple rows, combine into single description
+    - SUBTOTALS: Ignore intermediate subtotals, only extract individual line items
+    - MISSING COLUMNS: If no Part #, use "N/A"; if no HS code, skip (optional); if no Line #, auto-number
+    
+    ## BUSINESS CONTEXT EXTRACTION
+    
+    **Tax Compliance Fields:**
+    For Australian Invoices:
+    - "ABN": Extract 11-digit number (format: XX XXX XXX XXX, use "N/A" if not present)
+    - "GSTIncluded": Note if "GST Included" or separate line (boolean or "N/A")
+    - "TaxInvoice": Flag if explicitly stated "Tax Invoice" (boolean)
+    
+    For International Invoices:
+    - "CountryOfOrigin": Country of origin (if specified)
+    - "HSCodes": Array of HS codes (per line item or overall)
+    - "CustomsDeclaration": Customs declaration statements (if present)
+    
+    **Purchase Order Tracking:**
+    - "POReference": PO Number (look for "PO Ref", "PO #", "Purchase Order", clean format: "AU-PO-77441" not "PO REF: AU-PO-77441")
+    - "CustomerReference": Customer reference number (if present)
+    - "ProjectNumber": Project number (if present)
+    
+    **Payment Terms:**
+    - "PaymentTerms": Payment terms (e.g., "NET 30 DAYS", "60 DAYS FROM B/L DATE")
+    - "DueDate": Due date (calculate from invoice date + terms, format YYYY-MM-DD)
+    - "PaymentMethod": Payment method if specified (Wire, LC, etc.)
+    
+    **Shipping Information (International):**
+    For commercial invoices with shipping:
+    - "ShippingTerms": Incoterms (FOB, CIF, DAP, EXW, DDP, FCA, CFR, CPT, etc.)
+    - "PortOfLoading": Port of loading with code (e.g., "SHENZHEN (CNSZN)")
+    - "PortOfDischarge": Port of discharge with code (e.g., "BRISBANE (AUBNE)")
+    - "VesselVoyage": Vessel/voyage number (e.g., "MAERSK BRISBANE V.240W")
+    - "BillOfLading": Bill of Lading reference
+    - "AirWaybill": Air Waybill number (if airfreight)
+    
+    ## VALIDATION & QUALITY CHECKS
+    
+    **Mandatory Validation:**
+    
+    FINANCIAL VALIDATION:
+    ✓ Subtotal + Tax = Total (tolerance: ±$0.10)
+    ✓ All line totals sum to subtotal (tolerance: ±$1.00)
+    ✓ Unit price × Quantity = Line total (per line)
+    ✓ Currency consistent throughout
+    
+    FLAG IF:
+    ⚠️ Totals don't match → Add to flags: "Calculation mismatch - verify manually"
+    ⚠️ Missing currency → Add to flags: "Currency not specified - assumed [X]"
+    ⚠️ Tax rate unusual → Add to flags: "GST 10% expected for AU, found X%"
+    
+    CRITICAL IF:
+    🚫 Total amount missing → "CRITICAL: Cannot determine payable amount"
+    🚫 Vendor name unclear → "CRITICAL: Vendor identification uncertain"
+    
+    **Business Rule Validation:**
+    
+    AUSTRALIAN INVOICES:
+    - Must have ABN if > $82.50 (GST threshold)
+    - GST should be 10% of subtotal
+    - "Tax Invoice" required for GST claims
+    
+    INTERNATIONAL INVOICES:
+    - Currency must be specified
+    - HS codes required for customs (flag if missing)
+    - Incoterms should be present (flag if missing)
+    
+    PAYMENT TERMS:
+    - If "Net X Days": Calculate due date
+    - If date-specific: Extract as-is
+    - If missing: Flag as "Payment terms not specified"
+    
+    ## SUMMARY GENERATION
+    
+    **Intelligent Summary Rules:**
+    Instead of generic descriptions, create intelligent summaries:
+    
+    For invoices with line items:
+    - Mention item count
+    - Categorize items logically (e.g., "Hydraulic components, Engine parts, Mechanical")
+    - Highlight 2-3 most expensive items
+    - Keep under 100 characters if possible
+    
+    Example:
+    ❌ DON'T: "Construction and forestry parts"
+    ✅ DO: "20 line items: Hydraulic components (filters, cylinders), Engine parts (gaskets, pistons). Major: Hydraulic cylinders ($4,000), Bearings ($2,400)"
+    
+    For simple receipts:
+    - Brief description of transaction type
+    - Payment method if relevant
+    
+    ## ERROR HANDLING & EDGE CASES
+    
+    **Missing Information:**
+    - Invoice Number: Try "Receipt #", "Ref #", or mark "N/A"
+    - Date: Try multiple formats, flag if ambiguous
+    - Total: CRITICAL - must find or flag for manual review
+    - Currency: Infer from vendor location if not stated
+    
+    **Calculation Mismatches:**
+    If totals don't add up:
+    1. Re-check extraction (common: missed a line item)
+    2. Check for shipping/handling fees
+    3. Check for discounts/adjustments
+    4. If still mismatch > $1.00:
+       → Flag: "⚠️ Calculation discrepancy: Calculated $X vs Invoice $Y"
+       → Use invoice stated total (assume correct)
+       → Note for manual verification
+    
+    **Multi-Currency:**
+    If line items in different currency than total:
+    - Note exchange rate if provided
+    - Flag conversion if not clear
+    - Example: "Items in EUR, Total in USD @ 1.08 rate"
+    
+    ## OUTPUT FORMAT
+    
+    Return a JSON object with this structure:
+    
+    {{
+      "Vendor": "vendor name",
+      "Date": "YYYY-MM-DD",
+      "InvoiceNum": "invoice number or N/A",
+      "Currency": "AUD/USD/etc",
+      "Cost": numeric_subtotal,
+      "GST": numeric_tax_or_N/A,
+      "FinalAmount": numeric_total,
+      "Summary": "intelligent summary with item count and categorization",
+      "LineItems": [
+        {{
+          "ItemNumber": "001",
+          "PartNumber": "part number or N/A",
+          "HSCode": "XXXX.XX.XX or N/A",
+          "Description": "item description",
+          "Quantity": numeric_quantity,
+          "UnitPrice": numeric_price,
+          "LineTotal": numeric_total,
+          "Currency": "currency if different"
+        }}
+      ],
+      "ABN": "11-digit ABN or N/A",
+      "POReference": "PO number or N/A",
+      "PaymentTerms": "payment terms or N/A",
+      "DueDate": "YYYY-MM-DD or N/A",
+      "ShippingTerms": "Incoterms or N/A",
+      "PortOfLoading": "port with code or N/A",
+      "PortOfDischarge": "port with code or N/A",
+      "VesselVoyage": "vessel info or N/A",
+      "BillOfLading": "B/L reference or N/A",
+      "HSCodes": ["array of HS codes if present"],
+      "Flags": ["array of validation flags and warnings"]
+    }}
+    
+    **Important:**
+    - Use empty array [] for LineItems if no line items present
+    - Use empty array [] for HSCodes if none present
+    - Use empty array [] for Flags if no issues
+    - Use "N/A" for missing string fields
+    - Calculate line item totals and validate against invoice subtotal
+    - Include validation flags for any discrepancies or uncertainties
+    
+    Return ONLY valid JSON (no markdown, no explanation, no code blocks).
 
     TEXT: {text}
     """
@@ -2569,10 +2820,20 @@ HTML_TEMPLATE = """
                 <th>Vendor</th>
                 <th>Date</th>
                 <th>Invoice #</th>
+                <th>Currency</th>
                     <th class="currency">Cost</th>
                     <th class="currency">GST</th>
                     <th class="currency">Final Amount</th>
                 <th>Summary</th>
+                {% if file_results[0].get('POReference') and file_results[0].POReference != 'N/A' %}
+                <th>PO Ref</th>
+                {% endif %}
+                {% if file_results[0].get('PaymentTerms') and file_results[0].PaymentTerms != 'N/A' %}
+                <th>Payment Terms</th>
+                {% endif %}
+                {% if file_results[0].get('ShippingTerms') and file_results[0].ShippingTerms != 'N/A' %}
+                <th>Shipping Terms</th>
+                {% endif %}
             </tr>
             </thead>
             <tbody>
@@ -2581,15 +2842,110 @@ HTML_TEMPLATE = """
                 <td>{{ row.Vendor }}</td>
                 <td>{{ row.Date }}</td>
                 <td>{{ row.InvoiceNum }}</td>
+                <td>{{ row.Currency or 'N/A' }}</td>
                     <td class="currency">{{ row.CostFormatted or row.Cost or 'N/A' }}</td>
                     <td class="currency">{{ row.GSTFormatted if row.GSTFormatted and row.GSTFormatted != 'N/A' else (row.GST or 'N/A') }}</td>
                     <td class="currency">{{ row.FinalAmountFormatted or row.TotalFormatted or row.FinalAmount or row.Total or 'N/A' }}</td>
                 <td>{{ row.Summary }}</td>
+                {% if file_results[0].get('POReference') and file_results[0].POReference != 'N/A' %}
+                <td>{{ row.POReference or 'N/A' }}</td>
+                {% endif %}
+                {% if file_results[0].get('PaymentTerms') and file_results[0].PaymentTerms != 'N/A' %}
+                <td>{{ row.PaymentTerms or 'N/A' }}{% if row.DueDate and row.DueDate != 'N/A' %}<br><small style="color: #666;">Due: {{ row.DueDate }}</small>{% endif %}</td>
+                {% endif %}
+                {% if file_results[0].get('ShippingTerms') and file_results[0].ShippingTerms != 'N/A' %}
+                <td>{{ row.ShippingTerms or 'N/A' }}{% if row.PortOfLoading and row.PortOfLoading != 'N/A' %}<br><small style="color: #666;">{{ row.PortOfLoading }} → {{ row.PortOfDischarge or '' }}</small>{% endif %}</td>
+                {% endif %}
             </tr>
             {% endfor %}
             </tbody>
         </table>
             </div>
+            {# Display Business Context Information #}
+            {% for row in file_results %}
+            {% if row.get('ABN') or row.get('VesselVoyage') or row.get('BillOfLading') or (row.get('Flags') and row.Flags|length > 0) %}
+            <div style="padding: 15px 20px; border-top: 1px solid #e0e0e0; background: #f9f9f9;">
+                <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #2c3e50;">Additional Information</h4>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 13px;">
+                    {% if row.ABN and row.ABN != 'N/A' %}
+                    <div><strong>ABN:</strong> {{ row.ABN }}</div>
+                    {% endif %}
+                    {% if row.VesselVoyage and row.VesselVoyage != 'N/A' %}
+                    <div><strong>Vessel:</strong> {{ row.VesselVoyage }}</div>
+                    {% endif %}
+                    {% if row.BillOfLading and row.BillOfLading != 'N/A' %}
+                    <div><strong>B/L Reference:</strong> {{ row.BillOfLading }}</div>
+                    {% endif %}
+                </div>
+                {% if row.get('Flags') and row.Flags|length > 0 %}
+                <div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;">
+                    <strong style="color: #856404;">⚠️ Flags:</strong>
+                    <ul style="margin: 5px 0 0 0; padding-left: 20px; color: #856404;">
+                        {% for flag in row.Flags %}
+                        <li>{{ flag }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+            {# Display Line Items if present #}
+            {% for row in file_results %}
+            {% if row.get('LineItems') and row.LineItems|length > 0 %}
+            <div style="padding: 20px; border-top: 2px solid #e0e0e0; background: #f9f9f9;">
+                <h3 style="margin: 0 0 15px 0; font-size: 16px; color: #2c3e50;">Line Items</h3>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; background: white;">
+                        <thead>
+                            <tr style="background: #f5f5f5;">
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Item #</th>
+                                {% if row.LineItems[0].get('PartNumber') and row.LineItems[0].PartNumber != 'N/A' %}
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Part #</th>
+                                {% endif %}
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Description</th>
+                                {% if row.LineItems[0].get('HSCode') and row.LineItems[0].HSCode != 'N/A' %}
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">HS Code</th>
+                                {% endif %}
+                                <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Quantity</th>
+                                <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Unit Price</th>
+                                <th style="padding: 10px; text-align: right; border: 1px solid #ddd;">Line Total</th>
+                                {% if row.LineItems[0].get('SKU') and row.LineItems[0].SKU != 'N/A' %}
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">SKU</th>
+                                {% endif %}
+                                {% if row.LineItems[0].get('Category') and row.LineItems[0].Category != 'N/A' %}
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Category</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in row.LineItems %}
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.ItemNumber or '—' }}</td>
+                                {% if row.LineItems[0].get('PartNumber') and row.LineItems[0].PartNumber != 'N/A' %}
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.PartNumber or '—' }}</td>
+                                {% endif %}
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.Description or 'N/A' }}</td>
+                                {% if row.LineItems[0].get('HSCode') and row.LineItems[0].HSCode != 'N/A' %}
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.HSCode or '—' }}</td>
+                                {% endif %}
+                                <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ item.Quantity or 'N/A' }}</td>
+                                <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ item.UnitPrice or 'N/A' }}</td>
+                                <td style="padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;">{{ item.LineTotal or 'N/A' }}</td>
+                                {% if row.LineItems[0].get('SKU') and row.LineItems[0].SKU != 'N/A' %}
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.SKU or '—' }}</td>
+                                {% endif %}
+                                {% if row.LineItems[0].get('Category') and row.LineItems[0].Category != 'N/A' %}
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.Category or '—' }}</td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
         </div>
         {% endfor %}
         {% endif %}
@@ -5462,9 +5818,16 @@ def export_csv():
                 )
             else:
                 df_export[currency_col] = "N/A"
-        columns = ['Filename', 'Vendor', 'Date', 'InvoiceNum', 'Cost', 'GST', 'FinalAmount', 'Summary']
+        columns = ['Filename', 'Vendor', 'Date', 'InvoiceNum', 'Currency', 'Cost', 'GST', 'FinalAmount', 'Summary', 'ABN', 'POReference', 'PaymentTerms', 'DueDate', 'ShippingTerms', 'PortOfLoading', 'PortOfDischarge', 'VesselVoyage', 'BillOfLading', 'HSCodes', 'LineItems', 'Flags']
         df_export = df_export[[col for col in columns if col in df_export.columns]]
-        df_export.columns = ['Filename', 'Vendor', 'Date', 'Invoice #', 'Cost', 'GST', 'Final Amount', 'Summary']
+        # Convert arrays to strings for CSV
+        if 'HSCodes' in df_export.columns:
+            df_export['HSCodes'] = df_export['HSCodes'].apply(lambda x: ', '.join(x) if isinstance(x, list) else (x or ''))
+        if 'LineItems' in df_export.columns:
+            df_export['LineItems'] = df_export['LineItems'].apply(lambda x: json.dumps(x) if isinstance(x, list) else (x or ''))
+        if 'Flags' in df_export.columns:
+            df_export['Flags'] = df_export['Flags'].apply(lambda x: '; '.join(x) if isinstance(x, list) else (x or ''))
+        df_export.columns = ['Filename', 'Vendor', 'Date', 'Invoice #', 'Currency', 'Cost', 'GST', 'Final Amount', 'Summary', 'ABN', 'PO Reference', 'Payment Terms', 'Due Date', 'Shipping Terms', 'Port of Loading', 'Port of Discharge', 'Vessel/Voyage', 'Bill of Lading', 'HS Codes', 'Line Items', 'Flags']
     elif department == 'transmittal':
         df_export = df.copy()
         columns = ['Filename', 'DwgNo', 'Rev', 'Title', 'Scale']
