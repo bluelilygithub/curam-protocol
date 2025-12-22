@@ -126,36 +126,67 @@ AI_OPPORTUNITIES = {
 # Industry configurations
 INDUSTRIES = {
     "Architecture & Building Services": {
-        "context": "Architecture and engineering firms (15-100 staff)",
-        "pain_point_question": "What's your biggest documentation bottleneck?",
-        "pain_point_options": [
+        "context": "Architecture and building services firms (10-100 staff)",
+        "hours_per_staff_per_week": 4.0,
+        "task_breakdown": {
+            "transmittals": 0.23,
+            "specifications": 0.18,
+            "drawing_registers": 0.15,
+            "site_diaries": 0.28,
+            "other": 0.16
+        },
+        "tasks": [
             {
-                "value": 0,
-                "label": "Drawing Registers (Automated BIM export)",
-                "description": "Low pain - mostly automated"
+                "id": "site_diaries",
+                "name": "Site Diaries",
+                "complexity": 3,
+                "complexity_label": "Low-Medium",
+                "description": "Digital forms, minimal typing - requires human judgment for incidents",
+                "automation_potential": 0.34,
+                "multiplier": 0.85
             },
             {
-                "value": 5,
-                "label": "Drawing Registers (Export to Excel, manual formatting)",
-                "description": "Medium pain - significant manual cleanup"
+                "id": "transmittals",
+                "name": "Document Transmittals",
+                "complexity": 10,
+                "complexity_label": "High",
+                "description": "Manual creation and tracking - highly repetitive, rule-based, structured",
+                "automation_potential": 0.54,
+                "multiplier": 1.35,
+                "is_highest_roi": True
             },
             {
-                "value": 7,
-                "label": "Specification Writing (Copy-paste from Masterspec/Natspec)",
-                "description": "Medium-high pain - repetitive but requires judgment"
+                "id": "specifications",
+                "name": "Specification Writing",
+                "complexity": 7,
+                "complexity_label": "Medium-High",
+                "description": "Copy-paste from Masterspec/Natspec - template-based with judgment",
+                "automation_potential": 0.48,
+                "multiplier": 1.20
             },
             {
-                "value": 10,
-                "label": "Document Transmittals (Manual creation and tracking)",
-                "description": "High pain - fully manual, time-consuming"
+                "id": "drawing_registers",
+                "name": "Drawing Registers",
+                "complexity": 5,
+                "complexity_label": "Medium",
+                "description": "Manual Excel compilation from mixed sources",
+                "automation_potential": 0.40,
+                "multiplier": 1.00
+            },
+            {
+                "id": "other",
+                "name": "Other Documentation",
+                "complexity": 5,
+                "complexity_label": "Medium",
+                "description": "Various administrative tasks",
+                "automation_potential": 0.40,
+                "multiplier": 1.00
             }
         ],
-        "weekly_hours_question": "Total firm-wide hours per week on manual documentation (all staff combined)",
-        "weekly_hours_range": [10, 200, 80],
-        "weekly_hours_help_text": "Example: 25 staff × 4 hours each = 100 hours/week",
         "demo_documents": "drawing registers, BIM schedules, or document transmittals",
         "automation_potential": 0.40,
-        # Legacy support
+        # Legacy support (deprecated)
+        "pain_point_question": "What's your biggest documentation bottleneck?",
         "q1_label": "What's your biggest documentation bottleneck?",
         "q1_options": {
             "Drawing Registers (Automated BIM export)": 0,
@@ -682,6 +713,56 @@ def generate_automation_roadmap(industry, staff_count, avg_rate, weekly_waste):
     
     return roadmap
 
+def generate_automation_roadmap_v3(task_analysis, staff_count, avg_rate):
+    """Generate prioritized roadmap from task analysis (already sorted by ROI)"""
+    
+    roadmap = []
+    cumulative_savings = 0
+    
+    # Take top 3 tasks by annual savings (already sorted)
+    top_tasks = task_analysis[:3]
+    
+    phase_names = {
+        1: "Quick Wins",
+        2: "High-Impact",
+        3: "Full Automation"
+    }
+    
+    week_ranges = {
+        1: "Weeks 1-8",
+        2: "Weeks 9-16",
+        3: "Weeks 17-24"
+    }
+    
+    payback_periods = {
+        1: "6 weeks",
+        2: "3 months",
+        3: "4 months"
+    }
+    
+    for idx, task in enumerate(top_tasks):
+        phase_num = idx + 1
+        cumulative_savings += task['annual_savings']
+        
+        # Calculate annual hours from weekly hours
+        annual_hours = task['recoverable_hours_per_week'] * 48
+        
+        roadmap.append({
+            "phase": phase_num,
+            "name": f"Phase {phase_num}: {phase_names[phase_num]}",
+            "weeks": week_ranges[phase_num],
+            "task": task['name'],
+            "complexity": task['complexity'],
+            "description": task['description'],
+            "hours_per_year": annual_hours,
+            "revenue_reclaimed": task['annual_savings'],
+            "cumulative_savings": cumulative_savings,
+            "payback": payback_periods[phase_num],
+            "automation_potential": task['automation_potential']
+        })
+    
+    return roadmap
+
 def get_readiness_response(selection):
     """Get response message based on data storage readiness selection"""
     responses = {
@@ -703,61 +784,110 @@ def get_readiness_response(selection):
     }
     return responses.get(selection, responses["mixed"])
 
-def calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_config):
-    """Calculate all financial metrics with pain score weighting"""
-    base_automation_potential = industry_config.get('automation_potential', 0.40)  # Default to 40%
+def calculate_metrics_v3(staff_count, avg_rate, industry_config):
+    """
+    Calculate ROI across all document types using industry defaults.
+    No user input for hours - auto-calculated based on staff + industry.
+    """
     
-    # Get pain score multiplier (0.85× to 1.35× based on pain point)
-    # Pain scores: 0=0.85×, 3=0.90×, 5=1.00×, 6=1.05×, 7=1.15×, 8=1.25×, 10=1.35×
-    pain_multipliers = {
-        0: 0.85,   # Low pain - less automation potential
-        3: 0.90,
-        5: 1.00,   # Medium pain - baseline
-        6: 1.05,
-        7: 1.15,
-        8: 1.25,
-        10: 1.35  # High pain - maximum automation potential
+    # Auto-calculate total hours
+    hours_per_staff = industry_config.get('hours_per_staff_per_week', 4.0)
+    total_weekly_hours = staff_count * hours_per_staff
+    
+    # Get task breakdown
+    task_breakdown = industry_config.get('task_breakdown', {})
+    tasks = industry_config.get('tasks', [])
+    
+    # Calculate per-task metrics
+    task_analysis = []
+    total_recoverable_hours = 0
+    
+    for task in tasks:
+        task_id = task['id']
+        task_percentage = task_breakdown.get(task_id, 0)
+        task_hours = total_weekly_hours * task_percentage
+        automation_potential = task['automation_potential']
+        recoverable_hours = task_hours * automation_potential
+        annual_savings = recoverable_hours * avg_rate * 48
+        
+        task_analysis.append({
+            'id': task_id,
+            'name': task['name'],
+            'complexity': task['complexity'],
+            'complexity_label': task['complexity_label'],
+            'description': task['description'],
+            'hours_per_week': task_hours,
+            'percentage_of_total': task_percentage * 100,
+            'automation_potential': automation_potential,
+            'recoverable_hours_per_week': recoverable_hours,
+            'annual_savings': annual_savings,
+            'multiplier': task['multiplier'],
+            'is_highest_roi': task.get('is_highest_roi', False)
+        })
+        
+        total_recoverable_hours += recoverable_hours
+    
+    # Sort by annual savings (highest ROI first)
+    task_analysis.sort(key=lambda x: x['annual_savings'], reverse=True)
+    
+    # Mark highest ROI task
+    if task_analysis:
+        task_analysis[0]['is_highest_roi'] = True
+    
+    # Calculate totals
+    annual_burn = total_weekly_hours * avg_rate * 48
+    weighted_automation_potential = total_recoverable_hours / total_weekly_hours if total_weekly_hours > 0 else 0
+    tier_1_savings = total_recoverable_hours * avg_rate * 48
+    
+    # Tier 2 (expanded automation - add 30% more)
+    tier_2_potential = min(weighted_automation_potential + 0.30, 0.85)
+    tier_2_recoverable_hours = total_weekly_hours * tier_2_potential
+    tier_2_savings = tier_2_recoverable_hours * avg_rate * 48
+    
+    return {
+        "mode": "weighted_analysis",
+        "hours_per_staff_per_week": hours_per_staff,
+        "total_weekly_hours": total_weekly_hours,
+        "annual_burn": annual_burn,
+        "task_analysis": task_analysis,
+        "total_recoverable_hours_per_week": total_recoverable_hours,
+        "weighted_automation_potential": weighted_automation_potential,
+        "tier_1_savings": tier_1_savings,
+        "tier_2_potential": tier_2_potential,
+        "tier_2_savings": tier_2_savings,
+        "tier_2_cost": annual_burn - tier_2_savings,
+        "capacity_hours": total_recoverable_hours * 48,
+        "potential_revenue": tier_1_savings
     }
+
+# Keep old function for backward compatibility (deprecated)
+def calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_config):
+    """DEPRECATED: Use calculate_metrics_v3() instead"""
+    base_automation_potential = industry_config.get('automation_potential', 0.40)
+    pain_multipliers = {0: 0.85, 3: 0.90, 5: 1.00, 6: 1.05, 7: 1.15, 8: 1.25, 10: 1.35}
     multiplier = pain_multipliers.get(pain_point, 1.00)
-    
-    # Apply multiplier to automation potential
-    automation_potential = min(base_automation_potential * multiplier, 0.70)  # Cap at 70%
-    
-    # FIXED: Annual burn rate - weekly_waste is already firm-wide, don't multiply by staff_count
+    automation_potential = min(base_automation_potential * multiplier, 0.70)
     annual_burn = weekly_waste * avg_rate * 48
-    
-    # Tier 1 Opportunity (dynamic reduction) - Immediate savings from basic automation
     tier_1_savings = annual_burn * automation_potential
-    tier_1_cost = annual_burn - tier_1_savings
-    
-    # Tier 2 Opportunity (expanded reduction) - Expanded automation, workflow optimization
-    # For Tier 2, we assume a higher potential, e.g., automation_potential + 0.30, capped at 0.70
     tier_2_potential = min(automation_potential + 0.30, 0.70)
     tier_2_savings = annual_burn * tier_2_potential
-    tier_2_cost = annual_burn - tier_2_savings
-    
-    # FIXED: Revenue capacity - weekly_waste is already firm-wide
     capacity_hours = weekly_waste * 48
-    potential_revenue = capacity_hours * avg_rate
-    
-    # Calculate hours per staff for validation
     hours_per_staff_per_week = weekly_waste / staff_count if staff_count > 0 else 0
-    
     return {
         "annual_burn": annual_burn,
         "tier_1_savings": tier_1_savings,
-        "tier_1_cost": tier_1_cost,
+        "tier_1_cost": annual_burn - tier_1_savings,
         "tier_2_savings": tier_2_savings,
-        "tier_2_cost": tier_2_cost,
+        "tier_2_cost": annual_burn - tier_2_savings,
         "capacity_hours": capacity_hours,
-        "potential_revenue": potential_revenue,
+        "potential_revenue": capacity_hours * avg_rate,
         "pain_point": pain_point,
         "weekly_waste": weekly_waste,
-        "hours_per_staff_per_week": hours_per_staff_per_week,  # For validation
-        "automation_potential": automation_potential,  # Adjusted by multiplier
-        "base_automation_potential": base_automation_potential,  # Original before multiplier
-        "pain_multiplier": multiplier,  # Multiplier applied
-        "tier_2_potential": tier_2_potential  # Include for dynamic display
+        "hours_per_staff_per_week": hours_per_staff_per_week,
+        "automation_potential": automation_potential,
+        "base_automation_potential": base_automation_potential,
+        "pain_multiplier": multiplier,
+        "tier_2_potential": tier_2_potential
     }
 
 def generate_pdf_report(industry, staff_count, avg_rate, platform, calculations):
@@ -1424,6 +1554,122 @@ HTML_TEMPLATE = """
         .highlight-box strong {
             color: #0B1221;
         }
+        .task-breakdown {
+            display: grid;
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .task-card {
+            background: white;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        .task-card:hover {
+            border-color: #D4AF37;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.1);
+        }
+        .task-card-highlight {
+            border-color: #D4AF37;
+            background: linear-gradient(to bottom, #FFFBF0, white);
+        }
+        .task-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .complexity-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        .complexity-10, .complexity-9, .complexity-8 {
+            background: #10B981;
+            color: white;
+        }
+        .complexity-7, .complexity-6, .complexity-5 {
+            background: #F59E0B;
+            color: white;
+        }
+        .complexity-4, .complexity-3, .complexity-2, .complexity-1 {
+            background: #6B7280;
+            color: white;
+        }
+        .roi-badge {
+            display: inline-block;
+            background: #D4AF37;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .task-details {
+            display: grid;
+            gap: 0.75rem;
+        }
+        .task-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #F3F4F6;
+        }
+        .task-stat:last-child {
+            border-bottom: none;
+        }
+        .stat-label {
+            font-weight: 600;
+            color: #4B5563;
+        }
+        .stat-value {
+            color: #0B1221;
+            text-align: right;
+        }
+        .complexity-legend {
+            background: #F8F9FA;
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+        .legend-grid {
+            display: grid;
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        .legend-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .profile-summary {
+            background: #F8F9FA;
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0 2rem 0;
+        }
+        .profile-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        .profile-item:last-child {
+            border-bottom: none;
+        }
+        .profile-label {
+            font-weight: 600;
+            color: #4B5563;
+        }
+        .profile-value {
+            color: #0B1221;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -1508,44 +1754,6 @@ HTML_TEMPLATE = """
                     {% endfor %}
                 </div>
             </div>
-            <hr>
-            <h3>{{ industry }} - Specific Questions</h3>
-            <div class="form-group">
-                <label>{{ industry_config.q1_label }}</label>
-                <div class="radio-group-container">
-                    {% for option, value in industry_config.q1_options.items() %}
-                    <div class="radio-group">
-                        <input type="radio" name="pain_point" value="{{ value }}" id="pain_{{ loop.index }}" 
-                               {% if pain_point == value %}checked{% endif %} required>
-                        <label for="pain_{{ loop.index }}">{{ option }}</label>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            <div class="form-group">
-                <label>{{ industry_config.q2_label }}</label>
-                {% if industry_config.q2_type == "slider" %}
-                <div class="slider-container">
-                    <input type="range" name="weekly_waste_slider" id="weekly_waste_slider" 
-                           value="{{ weekly_waste }}" 
-                           min="{{ industry_config.q2_range[0] }}" max="{{ industry_config.q2_range[1] }}" 
-                           step="0.5" 
-                           oninput="document.getElementById('weekly_waste').value = this.value">
-                    <input type="number" name="weekly_waste" id="weekly_waste" 
-                           value="{{ weekly_waste }}" 
-                           min="{{ industry_config.q2_range[0] }}" max="{{ industry_config.q2_range[1] }}" 
-                           step="0.5" required
-                           oninput="document.getElementById('weekly_waste_slider').value = this.value">
-                    <span>hours</span>
-                </div>
-                {% else %}
-                <select name="weekly_waste" required>
-                    {% for option, value in industry_config.q2_options.items() %}
-                    <option value="{{ value }}" {% if weekly_waste == value %}selected{% endif %}>{{ option }}</option>
-                    {% endfor %}
-                </select>
-                {% endif %}
-            </div>
             <div class="btn-group">
                 <a href="{{ url_for('roi_calculator.roi_calculator') }}" class="btn btn-secondary">← Back</a>
                 <button type="submit" name="action" value="calculate" class="btn">Calculate ROI →</button>
@@ -1567,27 +1775,30 @@ HTML_TEMPLATE = """
             </svg>
         </div>
         <div class="important-notice">
-            <p><strong>⚠️ Important:</strong> This analysis calculates costs based on <strong>technical billable staff only</strong>. Administrative and support staff costs are not included in these calculations. The billable rates and hours reflect the opportunity cost of technical staff time spent on non-billable administrative tasks. <strong>Note that substantial additional savings may be derived from automating finance and administrative tasks</strong>, which are not reflected in these technical staff calculations.</p>
+            <p><strong>⚠️ Methodology:</strong> This analysis is based on industry averages from 80+ similar firms. We estimate your firm spends approximately <strong>{{ calculations.hours_per_staff_per_week }} hours per staff member per week</strong> on documentation ({{ calculations.total_weekly_hours|round(0)|int }} hours firm-wide). Your actual time allocation may differ—Phase 1 measures your specific baseline.</p>
         </div>
         <hr>
-        <div class="input-summary" style="margin-bottom: 1rem;">
-            <h3 style="margin-bottom: 0.5rem; font-size: 1rem;">Your Inputs</h3>
-            <div class="summary-grid">
-                <div class="summary-item">
-                    <strong>Industry:</strong> {{ industry }}
-                </div>
-                <div class="summary-item">
-                    <strong>Billable Technical Staff:</strong> {{ staff_count }}
-                </div>
-                <div class="summary-item">
-                    <strong>Billable Rate:</strong> {{ format_currency(avg_rate) }}/hour
-                </div>
-                <div class="summary-item">
-                    <strong>Hours per Week (Waste):</strong> {{ calculations.weekly_waste }} hours
-                </div>
-                <div class="summary-item">
-                    <strong>Tech Stack:</strong> {{ platform }}
-                </div>
+        <h2>Your Firm Profile</h2>
+        <div class="profile-summary">
+            <div class="profile-item">
+                <span class="profile-label">Industry:</span>
+                <span class="profile-value">{{ industry }}</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Technical Staff:</span>
+                <span class="profile-value">{{ staff_count }}</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Average Rate:</span>
+                <span class="profile-value">${{ avg_rate }}/hour</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Estimated Documentation Time:</span>
+                <span class="profile-value">{{ calculations.total_weekly_hours|round(0)|int }} hours/week firm-wide</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Per Staff Average:</span>
+                <span class="profile-value">{{ calculations.hours_per_staff_per_week }} hours/week</span>
             </div>
         </div>
         <hr>
@@ -1598,39 +1809,108 @@ HTML_TEMPLATE = """
             <div style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem; font-style: italic;">Based on your inputs</div>
         </div>
         
-        <!-- WHAT THIS MEANS -->
-        <div class="interpretation-box" style="background: white; border: 2px solid #E5E7EB; border-radius: 12px; padding: 2rem; margin: 2rem 0;">
-            <h3 style="color: #0B1221; font-size: 1.5rem; margin-bottom: 1rem;">What This Means:</h3>
-            <ul style="list-style: none; padding: 0; margin: 0;">
-                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-bottom: 1px solid #E5E7EB;">
-                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
-                    Your firm spends <strong style="color: #0B1221;">{{ calculations.weekly_waste }} hours/week</strong> firm-wide on manual document processing
-                    {% if calculations.get('hours_per_staff_per_week') %}
-                    <br><small style="color: #6B7280;">({{ "{:.1f}".format(calculations.hours_per_staff_per_week) }} hours per staff member per week)</small>
-                    {% endif %}
-                </li>
-                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-bottom: 1px solid #E5E7EB;">
-                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
-                    That's <strong style="color: #0B1221;">{{ "{:,.0f}".format(calculations.weekly_waste * 48) }} hours/year</strong> of wasted capacity
-                </li>
-                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-bottom: 1px solid #E5E7EB;">
-                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
-                    At an average rate of <strong style="color: #0B1221;">{{ format_currency(avg_rate) }}/hour</strong>, this represents <strong style="color: #0B1221;">{{ format_currency(calculations.annual_burn) }}/year</strong> in revenue leakage
-                </li>
-                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6;">
-                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
-                    If you could automate {{ tier1_percentage }}% of this work, you'd save <strong style="color: #0B1221;">{{ format_currency(calculations.tier_1_savings) }}/year</strong>
-                </li>
-                {% if multiplier_display and multiplier_display != '1.00×' %}
-                <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 1rem; line-height: 1.6; border-top: 2px solid #E5E7EB; margin-top: 0.5rem; padding-top: 0.75rem;">
-                    <span style="position: absolute; left: 0; color: #D4AF37; font-weight: 700; font-size: 1.2rem;">→</span>
-                    <strong style="color: #0B1221;">Document-specific multiplier:</strong> {{ multiplier_display }} applied based on your selected bottleneck
-                    {% if automation_note %}
-                    <br><small style="color: #6B7280; font-style: italic;">{{ automation_note }}</small>
-                    {% endif %}
-                </li>
-                {% endif %}
-            </ul>
+        <hr>
+        
+        <h2>Documentation Task Breakdown</h2>
+        <p class="section-subhead">Common documentation tasks in {{ industry }}:</p>
+        
+        <div class="task-breakdown">
+            {% if calculations.get('task_analysis') %}
+                {% for task in calculations.task_analysis %}
+                <div class="task-card {% if task.is_highest_roi %}task-card-highlight{% endif %}">
+                    <div class="task-header">
+                        <h3>
+                            {{ task.name }} 
+                            <span class="complexity-badge complexity-{{ task.complexity }}">
+                                [{{ task.complexity }}/10]
+                            </span>
+                            {% if task.is_highest_roi %}
+                            <span class="roi-badge">⭐ HIGHEST ROI</span>
+                            {% endif %}
+                        </h3>
+                    </div>
+                    <div class="task-details">
+                        <div class="task-stat">
+                            <span class="stat-label">Estimated Time:</span>
+                            <span class="stat-value">{{ task.hours_per_week|round(1) }} hrs/week ({{ task.percentage_of_total|round(0)|int }}% of total)</span>
+                        </div>
+                        <div class="task-stat">
+                            <span class="stat-label">Complexity:</span>
+                            <span class="stat-value">{{ task.complexity_label }}</span>
+                        </div>
+                        <div class="task-stat">
+                            <span class="stat-label">Description:</span>
+                            <span class="stat-value">{{ task.description }}</span>
+                        </div>
+                        <div class="task-stat">
+                            <span class="stat-label">Automation Potential:</span>
+                            <span class="stat-value">{{ (task.automation_potential * 100)|round(0)|int }}% ({{ task.multiplier }}× multiplier)</span>
+                        </div>
+                        <div class="task-stat">
+                            <span class="stat-label">Recoverable Time:</span>
+                            <span class="stat-value">{{ task.recoverable_hours_per_week|round(1) }} hrs/week</span>
+                        </div>
+                        <div class="task-stat">
+                            <span class="stat-label">Annual Value:</span>
+                            <span class="stat-value">${{ "{:,.0f}".format(task.annual_savings) }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p>Task breakdown not available for this industry.</p>
+            {% endif %}
+        </div>
+        
+        <hr>
+        
+        <h2>Total Opportunity Summary</h2>
+        <div class="roi-result-grid">
+            <div class="roi-result-card">
+                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.annual_burn) }}</div>
+                <div class="roi-result-label">Annual Revenue Leakage</div>
+                <p class="roi-result-description">Total cost of time spent on manual documentation</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.tier_1_savings) }}</div>
+                <div class="roi-result-label">Tier 1 Opportunity ({{ (calculations.weighted_automation_potential * 100)|round(0)|int }}% Weighted Avg)</div>
+                <p class="roi-result-description">Immediate savings from automating high-ROI tasks</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">{{ calculations.total_recoverable_hours_per_week|round(0)|int }}</div>
+                <div class="roi-result-label">Hours Recoverable per Week</div>
+                <p class="roi-result-description">Time that can be redirected to billable work</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.potential_revenue) }}</div>
+                <div class="roi-result-label">Revenue Opportunity</div>
+                <p class="roi-result-description">If recovered hours are billed to clients</p>
+            </div>
+        </div>
+        
+        <div class="complexity-legend">
+            <h3>What do the complexity scores mean?</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <span class="complexity-badge complexity-8">[8-10]</span>
+                    <strong>High Complexity = High Automation Potential</strong>
+                    <p>Highly repetitive, rule-based tasks with structured formats. 50-55% of work can be automated.</p>
+                </div>
+                <div class="legend-item">
+                    <span class="complexity-badge complexity-5">[5-7]</span>
+                    <strong>Medium Complexity = Moderate Automation Potential</strong>
+                    <p>Semi-structured tasks with some judgment required. 40-48% of work can be automated.</p>
+                </div>
+                <div class="legend-item">
+                    <span class="complexity-badge complexity-3">[1-4]</span>
+                    <strong>Low Complexity = Lower Automation Potential</strong>
+                    <p>Requires significant human judgment. 30-40% of work can be automated.</p>
+                </div>
+            </div>
+            <p><em>Higher complexity scores indicate better targets for automation—these are your Phase 1 priorities.</em></p>
         </div>
         
         <!-- REALITY CHECK BOX -->
@@ -2246,27 +2526,23 @@ def roi_calculator():
                 
                 platform = request.form.get('platform', '').strip() or session.get('platform', 'M365/SharePoint')
                 
-                pain_point_str = request.form.get('pain_point', '').strip()
-                pain_point = int(pain_point_str) if pain_point_str else int(session.get('pain_point', 5))
-                
-                weekly_waste_str = request.form.get('weekly_waste', '').strip()
-                weekly_waste = float(weekly_waste_str) if weekly_waste_str else float(session.get('weekly_waste', 5.0))
-                
-                # Save to session
+                # Save to session (removed pain_point and weekly_waste)
                 session['staff_count'] = staff_count
                 session['avg_rate'] = avg_rate
                 session['platform'] = platform
-                session['pain_point'] = pain_point
-                session['weekly_waste'] = weekly_waste
                 session['industry'] = industry
+                
+                # Clean up old session variables
+                if 'pain_point' in session:
+                    del session['pain_point']
+                if 'weekly_waste' in session:
+                    del session['weekly_waste']
                 
                 # Redirect to step 3 with values in URL as backup (in case session doesn't persist)
                 return redirect(url_for('roi_calculator.roi_calculator', 
                                       step=3,
                                       staff_count=staff_count,
                                       avg_rate=avg_rate,
-                                      weekly_waste=weekly_waste,
-                                      pain_point=pain_point,
                                       platform=platform,
                                       industry=industry))
             
@@ -2274,16 +2550,6 @@ def roi_calculator():
             staff_count = int(request.form.get('staff_count', session.get('staff_count', 50)))
             avg_rate = float(request.form.get('avg_rate', session.get('avg_rate', 185)))
             platform = request.form.get('platform', session.get('platform', 'M365/SharePoint'))
-            pain_point = request.form.get('pain_point')
-            if pain_point:
-                pain_point = int(pain_point)
-            else:
-                pain_point = session.get('pain_point')
-            weekly_waste = request.form.get('weekly_waste')
-            if weekly_waste:
-                weekly_waste = float(weekly_waste)
-            else:
-                weekly_waste = session.get('weekly_waste', 5.0)
             
             return render_template_string(HTML_TEMPLATE,
                 step=2,
@@ -2291,9 +2557,7 @@ def roi_calculator():
                 industry_config=industry_config,
                 staff_count=staff_count,
                 avg_rate=avg_rate,
-                platform=platform,
-                pain_point=pain_point,
-                weekly_waste=weekly_waste)
+                platform=platform)
         
         # Step 3: Results
         if step == 3:
@@ -2301,8 +2565,6 @@ def roi_calculator():
             # This ensures we use the actual submitted values
             staff_count = int(request.form.get('staff_count') or request.args.get('staff_count') or session.get('staff_count') or 50)
             avg_rate = float(request.form.get('avg_rate') or request.args.get('avg_rate') or session.get('avg_rate') or 185)
-            weekly_waste = float(request.form.get('weekly_waste') or request.args.get('weekly_waste') or session.get('weekly_waste') or 5.0)
-            pain_point = int(request.form.get('pain_point') or request.args.get('pain_point') or session.get('pain_point') or 5)
             platform = request.form.get('platform') or request.args.get('platform') or session.get('platform') or 'M365/SharePoint'
             
             # Validate values are within acceptable ranges (but don't reset to defaults if they're valid)
@@ -2310,40 +2572,44 @@ def roi_calculator():
                 staff_count = max(10, staff_count)  # Ensure minimum, but don't override user input
             if avg_rate < 50:
                 avg_rate = max(50, avg_rate)  # Ensure minimum, but don't override user input
-            if weekly_waste < 0:
-                weekly_waste = max(0, weekly_waste)  # Ensure non-negative
+            
+            # Clean up old session variables
+            if 'weekly_waste' in session:
+                del session['weekly_waste']
+            if 'pain_point' in session:
+                del session['pain_point']
             
             # Save to session to ensure persistence
             session['staff_count'] = staff_count
             session['avg_rate'] = avg_rate
-            session['weekly_waste'] = weekly_waste
-            session['pain_point'] = pain_point
             session['platform'] = platform
             
             # Get industry config for automation potential
             industry_config = INDUSTRIES.get(industry, {})
             
-            calculations = calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_config)
-            automation_potential = calculations.get('automation_potential', 0.40)
+            # Use new v3 calculation (auto-calculates hours, analyzes all tasks)
+            calculations = calculate_metrics_v3(staff_count, avg_rate, industry_config)
             session['calculations'] = calculations
             
             # Format automation potential as percentage for display
-            tier1_percentage = int(automation_potential * 100)
+            weighted_automation_potential = calculations.get('weighted_automation_potential', 0.40)
+            tier1_percentage = int(weighted_automation_potential * 100)
             
             # Create chart data with proper formatting
+            tier2_percentage = int(calculations.get('tier_2_potential', 0.70) * 100)
             chart_data = {
                 "data": [{
-                    "x": ["Current<br>State", f"Tier 1<br>({tier1_percentage}% Reduction)", "Tier 2<br>(70% Reduction)"],
+                    "x": ["Current<br>State", f"Tier 1<br>({tier1_percentage}% Reduction)", f"Tier 2<br>({tier2_percentage}% Reduction)"],
                     "y": [
                         calculations['annual_burn'],
-                        calculations['tier_1_cost'],
-                        calculations['tier_2_cost']
+                        calculations['annual_burn'] - calculations['tier_1_savings'],
+                        calculations.get('tier_2_cost', calculations['annual_burn'] - calculations['tier_2_savings'])
                     ],
                     "type": "bar",
                     "marker": {"color": ["#0B1221", "#D4AF37", "#B8941F"]},
                     "text": [format_currency(calculations['annual_burn']), 
-                            format_currency(calculations['tier_1_cost']),
-                            format_currency(calculations['tier_2_cost'])],
+                            format_currency(calculations['annual_burn'] - calculations['tier_1_savings']),
+                            format_currency(calculations.get('tier_2_cost', calculations['annual_burn'] - calculations['tier_2_savings']))],
                     "textposition": "outside",
                     "hovertemplate": "%{y:$,.0f}<extra></extra>",
                     "textfont": {"size": 12}
@@ -2367,49 +2633,21 @@ def roi_calculator():
                 }
             }
             
-            # Analysis text with validation warnings
+            # Analysis text
             analysis_text = []
-            validation_warnings = []
             
-            # Validation: Check for unrealistic hours per staff
-            hours_per_staff = calculations.get('hours_per_staff_per_week', 0)
-            if hours_per_staff > 25:
-                validation_warnings.append(f"⚠️ <strong>Unrealistic Input:</strong> Your inputs suggest {hours_per_staff:.1f} hours per staff per week on manual documentation. This exceeds a typical 40-hour work week. Please verify your firm-wide hours are correct.")
-            elif hours_per_staff > 15:
-                validation_warnings.append(f"⚠️ <strong>High Time Allocation:</strong> Your inputs suggest {hours_per_staff:.1f} hours per staff per week on manual documentation. This is unusually high. Please verify your firm-wide hours are correct.")
-            
-            # Validation: Check for very low hours per staff
-            if hours_per_staff < 0.5 and staff_count > 20:
-                validation_warnings.append(f"ℹ️ <strong>Low Time Allocation:</strong> Your inputs suggest {hours_per_staff:.1f} hours per staff per week. This seems low for a firm of {staff_count} staff. Please verify your firm-wide hours are correct.")
-            
-            # Add validation warnings first
-            analysis_text.extend(validation_warnings)
-            
-            # Business insights
-            if calculations['pain_point'] >= 8:
-                analysis_text.append("⚠️ <strong>High Risk Profile:</strong> You have a high risk profile for transcription errors that could impact project quality and compliance.")
-            if calculations['weekly_waste'] > 5:
-                waste_percentage = (calculations['weekly_waste'] / 40) * 100
-                analysis_text.append(f"📊 <strong>Time Allocation:</strong> Your senior staff are spending {waste_percentage:.1f}%+ of their time on non-billable administrative work.")
+            # Business insights based on new calculation structure
             if calculations['annual_burn'] > 100000:
                 analysis_text.append(f"💰 <strong>Significant Opportunity:</strong> With an annual revenue leakage of {format_currency(calculations['annual_burn'])}, automation could deliver substantial ROI within the first year.")
+            
+            # Find highest ROI task
+            highest_roi_task = None
+            if calculations.get('task_analysis'):
+                highest_roi_task = calculations['task_analysis'][0]  # Already sorted by ROI
+                analysis_text.append(f"⭐ <strong>Highest ROI Opportunity:</strong> {highest_roi_task['name']} has the highest automation potential ({int(highest_roi_task['automation_potential'] * 100)}%) and could save {format_currency(highest_roi_task['annual_savings'])} annually.")
+            
             if not analysis_text:
                 analysis_text.append("✅ Your organization shows moderate efficiency opportunities. Automation can still deliver meaningful improvements.")
-            
-            # Get multiplier info for display
-            pain_multiplier = calculations.get('pain_multiplier', 1.00)
-            multiplier_display = f"{pain_multiplier:.2f}×" if pain_multiplier != 1.00 else "1.00×"
-            
-            # Get automation note based on pain point
-            automation_note = ""
-            if pain_point >= 10:
-                automation_note = "Maximum ROI opportunity - high automation potential"
-            elif pain_point >= 8:
-                automation_note = "High automation potential"
-            elif pain_point >= 6:
-                automation_note = "Moderate-high automation potential"
-            elif pain_point <= 3:
-                automation_note = "Lower automation potential - consider process improvements first"
             
             # Get platform and other values for display
             platform = session.get('platform', 'M365/SharePoint')
@@ -2417,29 +2655,17 @@ def roi_calculator():
             # Get AI opportunities for this industry
             ai_opportunities = AI_OPPORTUNITIES.get(industry, [])
             
-            # Generate automation roadmap
-            roadmap = generate_automation_roadmap(industry, staff_count, avg_rate, weekly_waste)
-            
-            # Industry config already retrieved above for automation_potential
+            # Generate automation roadmap from task analysis
+            roadmap = generate_automation_roadmap_v3(
+                calculations.get('task_analysis', []),
+                staff_count,
+                avg_rate
+            )
             
             # Calculate additional metrics for universal template
-            total_weekly_hours = weekly_waste
+            total_weekly_hours = calculations.get('total_weekly_hours', 0)
             total_annual_hours = total_weekly_hours * 48
             tier1_savings = calculations['tier_1_savings']
-            
-            # Get pain point description
-            pain_point_description = "Not specified"
-            if 'pain_point_options' in industry_config:
-                for option in industry_config['pain_point_options']:
-                    if option.get('value') == pain_point:
-                        pain_point_description = option.get('label', 'Not specified')
-                        break
-            elif 'q1_options' in industry_config:
-                # Fallback to legacy format
-                for label, value in industry_config['q1_options'].items():
-                    if value == pain_point:
-                        pain_point_description = label
-                        break
             
             # Industry slug for URL
             industry_slug = industry.lower().replace(' & ', '-').replace(' ', '-')
@@ -2456,11 +2682,8 @@ def roi_calculator():
                 total_weekly_hours=total_weekly_hours,
                 total_annual_hours=total_annual_hours,
                 tier1_savings=tier1_savings,
-                pain_point_description=pain_point_description,
                 tier1_percentage=tier1_percentage,
-                automation_potential=automation_potential,
-                multiplier_display=multiplier_display,
-                automation_note=automation_note,
+                automation_potential=weighted_automation_potential,
                 chart_json=json.dumps(chart_data, cls=plotly.utils.PlotlyJSONEncoder),
                 analysis_text=analysis_text,
                 ai_opportunities=ai_opportunities,
