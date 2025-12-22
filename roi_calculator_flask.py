@@ -1163,6 +1163,29 @@ HTML_TEMPLATE = """
             margin-left: 0.5rem;
             cursor: pointer;
         }
+        /* Horizontal radio groups on desktop */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group > label {
+            margin-bottom: 0.75rem;
+        }
+        .form-group .radio-group-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        @media (min-width: 768px) {
+            .form-group .radio-group-container {
+                flex-direction: row;
+                gap: 2rem;
+                flex-wrap: wrap;
+            }
+            .form-group .radio-group {
+                margin: 0;
+            }
+        }
         .slider-container {
             display: flex;
             align-items: center;
@@ -1453,25 +1476,29 @@ HTML_TEMPLATE = """
             </div>
             <div class="form-group">
                 <label>Core Tech Stack</label>
-                {% for option in ['M365/SharePoint', 'Google Workspace', 'Other'] %}
-                <div class="radio-group">
-                    <input type="radio" name="platform" value="{{ option }}" id="platform_{{ loop.index }}" 
-                           {% if platform == option %}checked{% endif %}>
-                    <label for="platform_{{ loop.index }}">{{ option }}</label>
+                <div class="radio-group-container">
+                    {% for option in ['M365/SharePoint', 'Google Workspace', 'Other'] %}
+                    <div class="radio-group">
+                        <input type="radio" name="platform" value="{{ option }}" id="platform_{{ loop.index }}" 
+                               {% if platform == option %}checked{% endif %}>
+                        <label for="platform_{{ loop.index }}">{{ option }}</label>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
             </div>
             <hr>
             <h3>{{ industry }} - Specific Questions</h3>
             <div class="form-group">
                 <label>{{ industry_config.q1_label }}</label>
-                {% for option, value in industry_config.q1_options.items() %}
-                <div class="radio-group">
-                    <input type="radio" name="pain_point" value="{{ value }}" id="pain_{{ loop.index }}" 
-                           {% if pain_point == value %}checked{% endif %} required>
-                    <label for="pain_{{ loop.index }}">{{ option }}</label>
+                <div class="radio-group-container">
+                    {% for option, value in industry_config.q1_options.items() %}
+                    <div class="radio-group">
+                        <input type="radio" name="pain_point" value="{{ value }}" id="pain_{{ loop.index }}" 
+                               {% if pain_point == value %}checked{% endif %} required>
+                        <label for="pain_{{ loop.index }}">{{ option }}</label>
+                    </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
             </div>
             <div class="form-group">
                 <label>{{ industry_config.q2_label }}</label>
