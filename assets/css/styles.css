@@ -12357,3 +12357,413 @@ h1, h2, h3, h4 {
     font-size: 2rem;
   }
 }
+
+/* ========================================
+   TARGET MARKETS PAGE - SPECIFIC STYLES
+   ======================================== */
+
+/* Hero Section for Target Markets */
+.hero .container {
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+}
+
+/* Hero Subtitle */
+.hero-subtitle {
+  font-size: 1.125rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  max-width: 800px;
+  margin: 0 auto 2rem;
+  text-align: center;
+}
+
+/* Hero Qualification Badges */
+.qualification-badges {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 2rem 0;
+}
+
+.qual-badge {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* CTA Group */
+.cta-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
+  margin-top: 2rem;
+}
+
+/* Industry Cards (Sector Selection) */
+.sector-selection .industry-card {
+  background: var(--navy-deep);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--border-radius-lg);
+  padding: 2rem;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  transition: var(--transition);
+  position: relative;
+}
+
+.sector-selection .industry-card:hover {
+  border-color: var(--color-gold);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
+  transform: translateY(-2px);
+}
+
+.sector-selection .industry-card h3 {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+}
+
+.sector-selection .industry-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.5rem 0;
+  flex: 1;
+}
+
+.sector-selection .industry-list li {
+  padding: 0.4rem 0;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+}
+
+.sector-selection .industry-list li:before {
+  content: "→ ";
+  color: var(--color-gold);
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.sector-selection .card-footer {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  margin-top: auto;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.sector-selection .card-link {
+  display: inline-block;
+  margin-top: 1rem;
+  color: var(--color-gold);
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.sector-selection .industry-card:hover .card-link {
+  text-decoration: underline;
+}
+
+.sector-selection .card-badge {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: var(--color-gold);
+  color: var(--navy-deep);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Pain Point Cards */
+.pain-points-section .pain-card {
+  background: var(--navy-deep);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-subtle);
+}
+
+.pain-points-section .pain-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  display: block;
+}
+
+.pain-points-section .pain-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+  font-size: 1.25rem;
+}
+
+.pain-points-section .pain-card p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Profile Grid */
+.firm-profile-section .profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 2rem;
+  margin-bottom: 3rem;
+}
+
+.firm-profile-section .profile-column h3 {
+  font-size: 1.125rem;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-gold);
+}
+
+.firm-profile-section .profile-column ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.firm-profile-section .profile-column li {
+  padding: 0.75rem 0;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  line-height: 1.5;
+}
+
+.firm-profile-section .profile-column li:last-child {
+  border-bottom: none;
+}
+
+/* Sweet Spot Callout */
+.highlight-box.sweet-spot {
+  background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.05));
+  border: 2px solid var(--color-gold);
+  text-align: center;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sweet-spot h3 {
+  text-align: center;
+  font-size: 1.75rem;
+  margin-bottom: 2rem;
+  color: var(--text-primary);
+}
+
+.sweet-spot-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+  width: 100%;
+}
+
+.sweet-spot-stats .stat {
+  text-align: center;
+}
+
+.sweet-spot-stats .stat-value {
+  display: block;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-gold);
+  margin-bottom: 0.5rem;
+}
+
+.sweet-spot-stats .stat-label {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.callout-conclusion {
+  text-align: center;
+  font-size: 1.125rem;
+  margin-top: 1.5rem;
+  color: var(--text-primary);
+}
+
+/* Feature Items (Why Industries) */
+.why-industries-section .feature-item {
+  text-align: center;
+}
+
+.why-industries-section .feature-number {
+  display: inline-block;
+  width: 48px;
+  height: 48px;
+  background: var(--color-gold);
+  color: var(--navy-deep);
+  border-radius: 50%;
+  line-height: 48px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.why-industries-section .feature-item h3 {
+  font-size: 1.125rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.why-industries-section .feature-item p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* CTA Cards (Final Section) */
+.final-cta-section .cta-card {
+  background: var(--navy-deep);
+  border: 2px solid var(--border-subtle);
+  border-radius: var(--border-radius-lg);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.final-cta-section .cta-card-primary {
+  border-color: var(--color-gold);
+  background: linear-gradient(to bottom, rgba(212, 175, 55, 0.1), var(--navy-deep));
+}
+
+.final-cta-section .card-badge-primary {
+  position: absolute;
+  top: -12px;
+  right: 20px;
+  background: var(--color-gold);
+  color: var(--navy-deep);
+  padding: 0.25rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.final-cta-section .cta-card h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+}
+
+.final-cta-section .cta-card p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+  flex: 1;
+}
+
+.final-cta-section .honesty-note {
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 1.5rem;
+}
+
+.btn-block {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+/* Utility Classes */
+.note-text {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  margin-top: 2rem;
+}
+
+.note-text a {
+  color: var(--color-gold);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.note-text a:hover {
+  text-decoration: underline;
+}
+
+.center-text {
+  text-align: center;
+}
+
+/* Responsive Grid Utilities */
+.card-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2rem;
+}
+
+.card-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+}
+
+.features-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 2rem;
+}
+
+/* Mobile Responsiveness for Target Markets Page */
+@media (max-width: 768px) {
+  .qualification-badges {
+    gap: 0.75rem;
+  }
+  
+  .qual-badge {
+    font-size: 0.8125rem;
+    padding: 0.4rem 0.75rem;
+  }
+  
+  .cta-group {
+    flex-direction: column;
+  }
+  
+  .cta-group .btn {
+    width: 100%;
+  }
+  
+  .card-grid-2,
+  .card-grid-3,
+  .features-grid-4,
+  .firm-profile-section .profile-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .sweet-spot-stats {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 1rem;
+  }
+}

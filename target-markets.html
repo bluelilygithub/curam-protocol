@@ -12,527 +12,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <style>
-/* Hero Qualification Section */
-.hero-qualification {
-    background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
-    color: white;
-    padding: 4rem 0;
-    text-align: center;
-}
-
-.hero-qualification h1 {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-}
-
-.qualification-intro {
-    font-size: 1.25rem;
-    margin-bottom: 2rem;
-    color: #94A3B8;
-}
-
-.qualification-checklist {
-    max-width: 800px;
-    margin: 0 auto 3rem;
-    display: grid;
-    gap: 1.5rem;
-}
-
-.check-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    text-align: left;
-    background: rgba(255, 255, 255, 0.05);
-    padding: 1.25rem;
-    border-radius: 8px;
-    transition: all 0.3s ease;
-}
-
-.check-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    transform: translateX(8px);
-}
-
-.check-icon {
-    flex-shrink: 0;
-}
-
-.check-content {
-    flex: 1;
-    color: #E2E8F0;
-}
-
-.check-content strong {
-    color: white;
-}
-
-.hero-cta {
-    margin-top: 3rem;
-}
-
-.cta-question {
-    font-size: 1.125rem;
-    font-weight: 600;
-    margin-bottom: 1.5rem;
-    color: #D4AF37;
-}
-
-.cta-buttons {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-.btn-large {
-    font-size: 1.125rem;
-    padding: 1rem 2.5rem;
-}
-
-/* Sector Selector */
-.sector-selector {
-    padding: 5rem 0;
-    background: white;
-}
-
-.sector-selector h2 {
-    text-align: center;
-    font-size: 2.25rem;
-    margin-bottom: 1rem;
-}
-
-.section-intro {
-    text-align: center;
-    font-size: 1.125rem;
-    color: #64748B;
-    max-width: 700px;
-    margin: 0 auto 3rem;
-}
-
-.sector-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 2rem;
-    margin-bottom: 2rem;
-}
-
-.sector-card {
-    background: white;
-    border: 2px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 2rem;
-    text-decoration: none;
-    color: inherit;
-    transition: all 0.3s ease;
-    display: flex;
-    flex-direction: column;
-}
-
-.sector-card:hover {
-    border-color: #D4AF37;
-    box-shadow: 0 8px 24px rgba(212, 175, 55, 0.15);
-    transform: translateY(-4px);
-}
-
-.sector-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #E2E8F0;
-}
-
-.sector-header h3 {
-    font-size: 1.5rem;
-    color: #0F172A;
-}
-
-.sector-badge {
-    background: #D4AF37;
-    color: white;
-    padding: 0.25rem 0.75rem;
-    border-radius: 20px;
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-.sector-content {
-    flex: 1;
-}
-
-.sector-content h4 {
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    color: #64748B;
-    margin-bottom: 0.5rem;
-}
-
-.sector-list {
-    list-style: none;
-    padding: 0;
-    margin: 0 0 1.5rem 0;
-}
-
-.sector-list li {
-    padding: 0.5rem 0;
-    color: #475569;
-}
-
-.sector-list li:before {
-    content: "→ ";
-    color: #D4AF37;
-    font-weight: bold;
-}
-
-.sector-documents {
-    background: #F8FAFC;
-    padding: 1rem;
-    border-radius: 6px;
-    margin-top: 1rem;
-}
-
-.sector-documents p {
-    margin: 0;
-    color: #475569;
-    font-size: 0.9375rem;
-}
-
-.sector-footer {
-    margin-top: 1.5rem;
-    padding-top: 1rem;
-    border-top: 1px solid #E2E8F0;
-}
-
-.sector-link {
-    color: #D4AF37;
-    font-weight: 600;
-    transition: all 0.3s ease;
-}
-
-.sector-card:hover .sector-link {
-    text-decoration: underline;
-}
-
-.sector-note {
-    text-align: center;
-    color: #64748B;
-    font-size: 0.9375rem;
-}
-
-.sector-note a {
-    color: #D4AF37;
-    font-weight: 600;
-}
-
-/* Pain Points */
-.pain-points {
-    padding: 5rem 0;
-    background: #F8FAFC;
-}
-
-.pain-points h2 {
-    text-align: center;
-    font-size: 2.25rem;
-    margin-bottom: 1rem;
-}
-
-.pain-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
-    margin-bottom: 3rem;
-}
-
-.pain-item {
-    background: white;
-    padding: 2rem;
-    border-radius: 12px;
-    border: 1px solid #E2E8F0;
-}
-
-.pain-icon {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-}
-
-.pain-item h3 {
-    font-size: 1.25rem;
-    margin-bottom: 0.75rem;
-    color: #0F172A;
-}
-
-.pain-item p {
-    color: #475569;
-    line-height: 1.6;
-}
-
-.pain-cta {
-    text-align: center;
-    margin-top: 3rem;
-}
-
-/* Firm Profile */
-.firm-profile {
-    padding: 5rem 0;
-    background: white;
-}
-
-.firm-profile h2 {
-    text-align: center;
-    font-size: 2.25rem;
-    margin-bottom: 1rem;
-}
-
-.profile-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 2rem;
-    margin-bottom: 3rem;
-}
-
-.profile-category h3 {
-    font-size: 1.125rem;
-    color: #0F172A;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #D4AF37;
-}
-
-.profile-category ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.profile-category li {
-    padding: 0.75rem 0;
-    color: #475569;
-    border-bottom: 1px solid #F1F5F9;
-}
-
-.profile-category li:last-child {
-    border-bottom: none;
-}
-
-.sweet-spot-callout {
-    background: linear-gradient(135deg, #FFFBF0, #FFF9E6);
-    border: 2px solid #D4AF37;
-    border-radius: 12px;
-    padding: 2.5rem;
-    margin-top: 3rem;
-}
-
-.sweet-spot-callout h3 {
-    text-align: center;
-    font-size: 1.75rem;
-    margin-bottom: 2rem;
-    color: #0F172A;
-}
-
-.sweet-spot-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 2rem;
-    margin-bottom: 2rem;
-}
-
-.sweet-stat {
-    text-align: center;
-}
-
-.stat-number {
-    display: block;
-    font-size: 2rem;
-    font-weight: 700;
-    color: #D4AF37;
-    margin-bottom: 0.5rem;
-}
-
-.stat-label {
-    display: block;
-    font-size: 0.9375rem;
-    color: #64748B;
-}
-
-.sweet-spot-conclusion {
-    text-align: center;
-    font-size: 1.125rem;
-    margin-top: 1.5rem;
-    color: #0F172A;
-}
-
-/* Why Industries */
-.why-industries {
-    padding: 5rem 0;
-    background: #F8FAFC;
-}
-
-.why-industries h2 {
-    text-align: center;
-    font-size: 2.25rem;
-    margin-bottom: 1rem;
-}
-
-.why-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 2rem;
-}
-
-.why-item {
-    text-align: center;
-}
-
-.why-number {
-    display: inline-block;
-    width: 48px;
-    height: 48px;
-    background: #D4AF37;
-    color: white;
-    border-radius: 50%;
-    line-height: 48px;
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-}
-
-.why-item h3 {
-    font-size: 1.25rem;
-    margin-bottom: 0.75rem;
-    color: #0F172A;
-}
-
-.why-item p {
-    color: #475569;
-    line-height: 1.6;
-}
-
-/* Final Conversion */
-.final-conversion {
-    padding: 5rem 0;
-    background: white;
-}
-
-.final-conversion h2 {
-    text-align: center;
-    font-size: 2.25rem;
-    margin-bottom: 3rem;
-}
-
-.conversion-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 2rem;
-    margin-bottom: 2rem;
-}
-
-.conversion-card {
-    background: white;
-    border: 2px solid #E2E8F0;
-    border-radius: 12px;
-    padding: 2rem;
-    position: relative;
-}
-
-.conversion-primary {
-    border-color: #D4AF37;
-    background: linear-gradient(to bottom, #FFFBF0, white);
-}
-
-.conversion-badge {
-    position: absolute;
-    top: -12px;
-    right: 20px;
-    background: #D4AF37;
-    color: white;
-    padding: 0.25rem 1rem;
-    border-radius: 20px;
-    font-size: 0.875rem;
-    font-weight: 600;
-}
-
-.conversion-card h3 {
-    font-size: 1.5rem;
-    margin-bottom: 1rem;
-    color: #0F172A;
-}
-
-.conversion-card p {
-    color: #475569;
-    margin-bottom: 1.5rem;
-    line-height: 1.6;
-}
-
-.conversion-honesty {
-    font-size: 0.9375rem;
-    font-style: italic;
-    color: #64748B;
-    background: #F8FAFC;
-    padding: 1rem;
-    border-radius: 6px;
-}
-
-.conversion-footer {
-    text-align: center;
-    margin-top: 3rem;
-    padding-top: 2rem;
-    border-top: 1px solid #E2E8F0;
-}
-
-.conversion-footer p {
-    color: #64748B;
-    margin-bottom: 1rem;
-}
-
-.btn-link {
-    color: #D4AF37;
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.btn-link:hover {
-    text-decoration: underline;
-}
-
-/* Mobile Responsiveness */
-@media (max-width: 768px) {
-    .hero-qualification h1 {
-        font-size: 1.75rem;
-    }
-    
-    .qualification-checklist {
-        gap: 1rem;
-    }
-    
-    .check-item {
-        padding: 1rem;
-    }
-    
-    .cta-buttons {
-        flex-direction: column;
-    }
-    
-    .btn-large {
-        width: 100%;
-    }
-    
-    .sector-cards,
-    .pain-grid,
-    .profile-grid,
-    .why-grid,
-    .conversion-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .sweet-spot-grid {
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
-    }
-}
-    </style>
 </head>
 <body>
     <!-- Scroll Down Button -->
@@ -546,250 +25,147 @@
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
-    <!-- STEP 1: Hero Qualification Section -->
-    <section class="hero-qualification">
+    <!-- HERO: Use existing hero pattern -->
+    <section class="hero">
         <div class="container">
             <h1>Is Your Firm Ready for Document Automation?</h1>
+            <p class="hero-subtitle">We serve Australian SMEs (10-100 staff) spending 50+ hours/month on manual document processing.</p>
             
-            <div class="qualification-intro">
-                <p>You're in the right place if you have:</p>
+            <div class="qualification-badges">
+                <span class="qual-badge">50+ hrs/month on docs</span>
+                <span class="qual-badge">Cloud infrastructure</span>
+                <span class="qual-badge">$10k-50k budget</span>
+                <span class="qual-badge">Risk-averse culture</span>
             </div>
             
-            <div class="qualification-checklist">
-                <div class="check-item">
-                    <div class="check-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="#10B981" stroke-width="2"/>
-                            <path d="M8 12l2 2 4-4" stroke="#10B981" stroke-width="2"/>
-                        </svg>
-                    </div>
-                    <div class="check-content">
-                        <strong>50+ hours/month</strong> spent on manual document processing
-                    </div>
-                </div>
-                
-                <div class="check-item">
-                    <div class="check-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="#10B981" stroke-width="2"/>
-                            <path d="M8 12l2 2 4-4" stroke="#10B981" stroke-width="2"/>
-                        </svg>
-                    </div>
-                    <div class="check-content">
-                        <strong>10-100 technical staff</strong> with high hourly rates
-                    </div>
-                </div>
-                
-                <div class="check-item">
-                    <div class="check-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="#10B981" stroke-width="2"/>
-                            <path d="M8 12l2 2 4-4" stroke="#10B981" stroke-width="2"/>
-                        </svg>
-                    </div>
-                    <div class="check-content">
-                        <strong>Cloud infrastructure</strong> (M365, Google Workspace, or AWS)
-                    </div>
-                </div>
-                
-                <div class="check-item">
-                    <div class="check-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="#10B981" stroke-width="2"/>
-                            <path d="M8 12l2 2 4-4" stroke="#10B981" stroke-width="2"/>
-                        </svg>
-                    </div>
-                    <div class="check-content">
-                        <strong>$10k-50k project budget</strong> for efficiency improvements
-                    </div>
-                </div>
-                
-                <div class="check-item">
-                    <div class="check-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="#10B981" stroke-width="2"/>
-                            <path d="M8 12l2 2 4-4" stroke="#10B981" stroke-width="2"/>
-                        </svg>
-                    </div>
-                    <div class="check-content">
-                        <strong>Repetitive documents</strong> (invoices, contracts, reports, registers)
-                    </div>
-                </div>
-                
-                <div class="check-item">
-                    <div class="check-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="#10B981" stroke-width="2"/>
-                            <path d="M8 12l2 2 4-4" stroke="#10B981" stroke-width="2"/>
-                        </svg>
-                    </div>
-                    <div class="check-content">
-                        <strong>Risk-averse culture</strong> needing proof before investment
-                    </div>
-                </div>
-            </div>
-            
-            <div class="hero-cta">
-                <p class="cta-question">Check 3+ boxes?</p>
-                <div class="cta-buttons">
-                    <a href="contact.html" class="btn btn-primary btn-large">Book 15-Min Diagnostic →</a>
-                    <a href="roi.html" class="btn btn-secondary">Calculate Your ROI First</a>
-                </div>
+            <div class="cta-group">
+                <a href="contact.html" class="btn btn-primary">Book 15-Min Diagnostic →</a>
+                <a href="roi.html" class="btn btn-secondary">Calculate ROI First</a>
             </div>
         </div>
     </section>
 
-    <!-- STEP 2: Sector Selector (moved to position #2) -->
-    <section class="sector-selector">
+    <!-- SECTION 1: Sector Selector - Use .section (white bg) -->
+    <section class="section sector-selection">
         <div class="container">
-            <h2>Choose Your Industry</h2>
-            <p class="section-intro">We specialize in three document-intensive sectors. Select yours to see specific solutions:</p>
+            <h2 class="section-headline">Choose Your Industry</h2>
+            <p class="section-subhead">We specialize in three document-intensive sectors across Australia:</p>
             
-            <div class="sector-cards">
+            <div class="card-grid-3">
                 
-                <!-- Built Environment Card -->
-                <a href="built-environment.html" class="sector-card">
-                    <div class="sector-header">
-                        <h3>Built Environment</h3>
-                        <span class="sector-badge">1,200+ QLD Firms</span>
+                <a href="built-environment.html" class="industry-card">
+                    <div class="card-badge">1,200+ QLD Firms</div>
+                    <h3>Built Environment</h3>
+                    <ul class="industry-list">
+                        <li>Engineering Consultancies</li>
+                        <li>Architecture Firms</li>
+                        <li>Construction Companies</li>
+                        <li>Mining Services</li>
+                        <li>Property Management</li>
+                    </ul>
+                    <div class="card-footer">
+                        <strong>Documents:</strong> Transmittals, specifications, drawing registers, site diaries
                     </div>
-                    <div class="sector-content">
-                        <h4>Industries:</h4>
-                        <ul class="sector-list">
-                            <li>Engineering Consultancies</li>
-                            <li>Architecture Firms</li>
-                            <li>Construction Companies</li>
-                            <li>Mining Services</li>
-                            <li>Property Management</li>
-                        </ul>
-                        <div class="sector-documents">
-                            <h4>Document Types:</h4>
-                            <p>Transmittals, specifications, drawing registers, site diaries, compliance reports</p>
-                        </div>
-                    </div>
-                    <div class="sector-footer">
-                        <span class="sector-link">See Built Environment Solutions →</span>
-                    </div>
+                    <span class="card-link">See Solutions →</span>
                 </a>
                 
-                <!-- Professional Services Card -->
-                <a href="professional-services.html" class="sector-card">
-                    <div class="sector-header">
-                        <h3>Professional Services</h3>
-                        <span class="sector-badge">2,500+ QLD Firms</span>
+                <a href="professional-services.html" class="industry-card">
+                    <div class="card-badge">2,500+ QLD Firms</div>
+                    <h3>Professional Services</h3>
+                    <ul class="industry-list">
+                        <li>Accounting & Advisory</li>
+                        <li>Legal Practices</li>
+                        <li>Wealth Management</li>
+                        <li>Insurance Underwriting</li>
+                    </ul>
+                    <div class="card-footer">
+                        <strong>Documents:</strong> Invoices, contracts, statements, trust reconciliations
                     </div>
-                    <div class="sector-content">
-                        <h4>Industries:</h4>
-                        <ul class="sector-list">
-                            <li>Accounting & Advisory</li>
-                            <li>Legal Practices</li>
-                            <li>Wealth Management</li>
-                            <li>Insurance Underwriting</li>
-                        </ul>
-                        <div class="sector-documents">
-                            <h4>Document Types:</h4>
-                            <p>Invoices, contracts, statements, trust reconciliations, policy applications</p>
-                        </div>
-                    </div>
-                    <div class="sector-footer">
-                        <span class="sector-link">See Professional Services Solutions →</span>
-                    </div>
+                    <span class="card-link">See Solutions →</span>
                 </a>
                 
-                <!-- Logistics & Compliance Card -->
-                <a href="logistics-compliance.html" class="sector-card">
-                    <div class="sector-header">
-                        <h3>Logistics & Compliance</h3>
-                        <span class="sector-badge">800+ QLD Firms</span>
+                <a href="logistics-compliance.html" class="industry-card">
+                    <div class="card-badge">800+ QLD Firms</div>
+                    <h3>Logistics & Compliance</h3>
+                    <ul class="industry-list">
+                        <li>Logistics & Freight</li>
+                        <li>Healthcare Administration</li>
+                        <li>Government Contractors</li>
+                    </ul>
+                    <div class="card-footer">
+                        <strong>Documents:</strong> Bills of lading, PODs, customs docs, grant reports
                     </div>
-                    <div class="sector-content">
-                        <h4>Industries:</h4>
-                        <ul class="sector-list">
-                            <li>Logistics & Freight</li>
-                            <li>Healthcare Administration</li>
-                            <li>Government Contractors</li>
-                        </ul>
-                        <div class="sector-documents">
-                            <h4>Document Types:</h4>
-                            <p>Bills of lading, PODs, customs docs, grant reports, NDIS audit trails</p>
-                        </div>
-                    </div>
-                    <div class="sector-footer">
-                        <span class="sector-link">See Logistics & Compliance Solutions →</span>
-                    </div>
+                    <span class="card-link">See Solutions →</span>
                 </a>
                 
             </div>
             
-            <p class="sector-note">Don't see your industry? <a href="contact.html">Book a call</a> - we work with any document-heavy business.</p>
+            <p class="note-text">Don't see your industry? <a href="contact.html">Book a call</a> - we work with any document-heavy business.</p>
         </div>
     </section>
 
-    <!-- STEP 3: Pain Points Section (rewritten) -->
-    <section class="pain-points">
+    <!-- SECTION 2: Pain Points - Use .alt-section (gray bg) -->
+    <section class="section-alt pain-points-section">
         <div class="container">
-            <h2>Do These Problems Sound Familiar?</h2>
-            <p class="section-intro">These are the daily frustrations that bring firms to us:</p>
+            <h2 class="section-headline">Do These Problems Sound Familiar?</h2>
+            <p class="section-subhead">These are the daily frustrations that bring firms to us:</p>
             
-            <div class="pain-grid">
+            <div class="card-grid-2">
                 
-                <div class="pain-item">
+                <div class="pain-card">
                     <div class="pain-icon">⏰</div>
                     <h3>Wasted Billable Hours</h3>
-                    <p>Your $150-$300/hour staff are spending 5-15 hours per week on data entry, document compilation, and manual transcription instead of billable client work.</p>
+                    <p>Your $150-$300/hour staff spend 5-15 hours per week on data entry and document compilation instead of billable client work.</p>
                 </div>
                 
-                <div class="pain-item">
+                <div class="pain-card">
                     <div class="pain-icon">📄</div>
                     <h3>Repetitive Document Processing</h3>
-                    <p>Every invoice, transmittal, or report requires manual data extraction. Same task, different document, over and over—eating up capacity.</p>
+                    <p>Every invoice, transmittal, or report requires manual data extraction. Same task, different document, over and over.</p>
                 </div>
                 
-                <div class="pain-item">
+                <div class="pain-card">
                     <div class="pain-icon">🐌</div>
                     <h3>Workflow Bottlenecks</h3>
-                    <p>Documents pile up waiting for someone to manually process them. Projects delay because registers aren't updated. Clients wait for invoices to be entered.</p>
+                    <p>Documents pile up waiting for manual processing. Projects delay because registers aren't updated.</p>
                 </div>
                 
-                <div class="pain-item">
+                <div class="pain-card">
                     <div class="pain-icon">⚠️</div>
                     <h3>Human Error Risk</h3>
-                    <p>Manual transcription mistakes cost thousands—wrong numbers in contracts, missed compliance requirements, incorrect billing. One typo = major problem.</p>
+                    <p>Manual transcription mistakes cost thousands—wrong numbers in contracts, missed compliance requirements, incorrect billing.</p>
                 </div>
                 
-                <div class="pain-item">
+                <div class="pain-card">
                     <div class="pain-icon">💼</div>
                     <h3>Junior Staff Burden</h3>
-                    <p>Your coordinators and junior engineers spend 30-50% of their time on admin. They're burned out and underutilized—and you're paying for it.</p>
+                    <p>Your coordinators spend 30-50% of their time on admin. They're burned out and underutilized.</p>
                 </div>
                 
-                <div class="pain-item">
+                <div class="pain-card">
                     <div class="pain-icon">🔒</div>
                     <h3>Failed AI Attempts</h3>
-                    <p>You've been burned by AI vendors who promised transformation but couldn't handle your messy real-world documents. Now you're skeptical—rightfully so.</p>
+                    <p>You've been burned by AI vendors who couldn't handle your messy real-world documents. Now you're skeptical—rightfully so.</p>
                 </div>
                 
             </div>
             
-            <div class="pain-cta">
-                <p class="cta-question">Nodding your head?</p>
-                <div class="cta-buttons">
-                    <a href="contact.html" class="btn btn-primary">Let's Fix This →</a>
-                    <a href="roi.html" class="btn btn-secondary">Show Me the Numbers</a>
-                </div>
+            <div class="cta-group">
+                <a href="contact.html" class="btn btn-primary">Let's Fix This →</a>
+                <a href="roi.html" class="btn btn-secondary">Show Me the Numbers</a>
             </div>
         </div>
     </section>
 
-    <!-- STEP 4: Firm Profile Section (consolidated) -->
-    <section class="firm-profile">
+    <!-- SECTION 3: Firm Profile - Use .section (white bg) -->
+    <section class="section firm-profile-section">
         <div class="container">
-            <h2>Who We're Built For</h2>
-            <p class="section-intro">The Protocol works best for firms with these characteristics:</p>
+            <h2 class="section-headline">Who We're Built For</h2>
+            <p class="section-subhead">The Protocol works best for firms with these characteristics:</p>
             
             <div class="profile-grid">
                 
-                <div class="profile-category">
+                <div class="profile-column">
                     <h3>Size & Structure</h3>
                     <ul>
                         <li><strong>10-100 employees</strong> - established but not enterprise</li>
@@ -799,87 +175,88 @@
                     </ul>
                 </div>
                 
-                <div class="profile-category">
+                <div class="profile-column">
                     <h3>Technology Environment</h3>
                     <ul>
-                        <li><strong>Cloud infrastructure:</strong> Microsoft 365, Google Workspace, AWS, or Azure</li>
-                        <li><strong>Existing tools:</strong> Xero, MYOB, QuickBooks, industry-specific software</li>
-                        <li><strong>Integration needs:</strong> Bridging system gaps manually today</li>
+                        <li><strong>Cloud infrastructure:</strong> M365, Google Workspace, AWS, Azure</li>
+                        <li><strong>Existing tools:</strong> Xero, MYOB, QuickBooks, industry software</li>
+                        <li><strong>Integration needs:</strong> Bridging system gaps manually</li>
                         <li><strong>Security requirements:</strong> Data must stay in Australia</li>
                     </ul>
                 </div>
                 
-                <div class="profile-category">
+                <div class="profile-column">
                     <h3>Compliance & Risk</h3>
                     <ul>
-                        <li><strong>Professional Indemnity insurance</strong> with IT security requirements</li>
+                        <li><strong>Professional Indemnity insurance</strong> with IT requirements</li>
                         <li><strong>ISO 27001 compliance</strong> aspirations or mandates</li>
                         <li><strong>Audit trail requirements</strong> for client work</li>
                         <li><strong>Risk-averse culture</strong> - won't deploy unproven tech</li>
                     </ul>
                 </div>
                 
-                <div class="profile-category">
+                <div class="profile-column">
                     <h3>Decision-Making Style</h3>
                     <ul>
                         <li><strong>Skeptical but open:</strong> "Show me proof, then we'll talk"</li>
-                        <li><strong>Budget-conscious:</strong> Need board approval with ROI justification</li>
-                        <li><strong>Prefer validation:</strong> Want phased approach with exit points</li>
-                        <li><strong>Long-term thinking:</strong> Want to own the solution, not rent it</li>
+                        <li><strong>Budget-conscious:</strong> Need board approval with ROI</li>
+                        <li><strong>Prefer validation:</strong> Want phased approach with exits</li>
+                        <li><strong>Long-term thinking:</strong> Want to own it, not rent it</li>
                     </ul>
                 </div>
                 
             </div>
             
-            <div class="sweet-spot-callout">
+            <!-- Sweet Spot Callout - use existing callout/highlight pattern -->
+            <div class="highlight-box sweet-spot">
                 <h3>The Sweet Spot</h3>
-                <div class="sweet-spot-grid">
-                    <div class="sweet-stat">
-                        <div class="stat-number">50+ hrs/month</div>
-                        <div class="stat-label">on manual document processing</div>
+                <div class="sweet-spot-stats">
+                    <div class="stat">
+                        <span class="stat-value">50+ hrs/month</span>
+                        <span class="stat-label">on manual document processing</span>
                     </div>
-                    <div class="sweet-stat">
-                        <div class="stat-number">$80k+/year</div>
-                        <div class="stat-label">in junior staff salary doing data entry</div>
+                    <div class="stat">
+                        <span class="stat-value">$80k+/year</span>
+                        <span class="stat-label">in junior staff salary doing data entry</span>
                     </div>
-                    <div class="sweet-stat">
-                        <div class="stat-number">Cloud-based</div>
-                        <div class="stat-label">but manually bridging system gaps</div>
+                    <div class="stat">
+                        <span class="stat-value">Cloud-based</span>
+                        <span class="stat-label">but manually bridging system gaps</span>
                     </div>
                 </div>
-                <p class="sweet-spot-conclusion"><strong>If this describes you, The Protocol was built for your exact situation.</strong></p>
+                <p class="callout-conclusion"><strong>If this describes you, The Protocol was built for your exact situation.</strong></p>
             </div>
         </div>
     </section>
 
-    <!-- STEP 5: Why These Industries (simplified) -->
-    <section class="why-industries">
+    <!-- SECTION 4: Why These Industries - Use .alt-section (gray bg) -->
+    <section class="section-alt why-industries-section">
         <div class="container">
-            <h2>Why We Focus on These Sectors</h2>
-            <p class="section-intro">These industries share four characteristics that make them perfect for The Protocol:</p>
+            <h2 class="section-headline">Why We Focus on These Sectors</h2>
+            <p class="section-subhead">These industries share four characteristics that make them perfect for The Protocol:</p>
             
-            <div class="why-grid">
+            <div class="features-grid-4">
                 
-                <div class="why-item">
-                    <div class="why-number">01</div>
+                <div class="feature-item">
+                    <div class="feature-number">01</div>
                     <h3>High Document Volumes</h3>
                     <p>Process hundreds to thousands of similar documents monthly—invoices, contracts, reports, transmittals. High volume = high ROI potential.</p>
                 </div>
                 
-                <div class="why-item">
-                    <div class="why-number">02</div>
+                <div class="feature-item">
+                    <div class="feature-number">02</div>
                     <h3>Expensive Staff Time</h3>
                     <p>Junior coordinators earn $60k-$90k. Mid-level staff earn $100k-$150k. Every hour on admin is an expensive hour wasted.</p>
                 </div>
                 
-                <div class="why-item">
-                    <div class="why-number">03</div>
+                <div class="feature-item">
+                    <div class="feature-number">03</div>
                     <h3>Compliance Requirements</h3>
                     <p>Need audit trails, data sovereignty, and PI insurance compliance. Can't use generic cloud tools—need private cloud deployment.</p>
                 </div>
                 
-                <div class="why-item">
-                    <div class="why-number">04</div>
+                <div class="feature-item">
+                    <div class="feature-number">04</div>
                     <h3>Existing Infrastructure</h3>
                     <p>Already using M365, Google, or AWS. Already have the foundation—just need intelligent automation on top.</p>
                 </div>
@@ -888,39 +265,36 @@
         </div>
     </section>
 
-    <!-- STEP 6: Final Conversion Section -->
-    <section class="final-conversion">
+    <!-- SECTION 5: Final Conversion - Use .section (white bg) -->
+    <section class="section final-cta-section">
         <div class="container">
-            <h2>Ready to See If You're a Fit?</h2>
+            <h2 class="section-headline">Ready to See If You're a Fit?</h2>
             
-            <div class="conversion-grid">
+            <div class="card-grid-3">
                 
-                <div class="conversion-card conversion-primary">
-                    <div class="conversion-badge">Most Popular</div>
+                <div class="cta-card cta-card-primary">
+                    <div class="card-badge-primary">Most Popular</div>
                     <h3>Book a 15-Minute Diagnostic</h3>
                     <p>We'll assess your workflows, explain which phase makes sense for you, and give you a realistic timeline and budget.</p>
-                    <p class="conversion-honesty">Most diagnostic calls end with "Phase 1 isn't right for you yet" or "Try this first." We're not here to sell—we're here to solve.</p>
-                    <a href="contact.html" class="btn btn-primary btn-large">Book Diagnostic Call →</a>
+                    <p class="honesty-note">Most diagnostic calls end with "Phase 1 isn't right for you yet" or "Try this first." We're not here to sell—we're here to solve.</p>
+                    <a href="contact.html" class="btn btn-primary btn-block">Book Diagnostic Call →</a>
                 </div>
                 
-                <div class="conversion-card">
+                <div class="cta-card">
                     <h3>Calculate Your ROI</h3>
                     <p>See what automation could save your firm. Based on your industry, staff count, and document volume.</p>
-                    <a href="roi.html" class="btn btn-secondary">Try ROI Calculator →</a>
+                    <a href="roi.html" class="btn btn-secondary btn-block">Try ROI Calculator →</a>
                 </div>
                 
-                <div class="conversion-card">
+                <div class="cta-card">
                     <h3>See Sample Reports</h3>
                     <p>View actual feasibility reports and strategic roadmaps we've delivered to firms like yours.</p>
-                    <a href="feasibility-sprint-report.html" class="btn btn-secondary">View Sample Reports →</a>
+                    <a href="feasibility-sprint-report.html" class="btn btn-secondary btn-block">View Sample Reports →</a>
                 </div>
                 
             </div>
             
-            <div class="conversion-footer">
-                <p><strong>Not sure which option?</strong> Start with the ROI calculator—it takes 2 minutes and shows you realistic savings potential.</p>
-                <a href="roi.html" class="btn-link">Calculate ROI →</a>
-            </div>
+            <p class="note-text center-text">Not sure which option? Start with the ROI calculator—it takes 2 minutes and shows you realistic savings potential. <a href="roi.html">Calculate ROI →</a></p>
         </div>
     </section>
 
@@ -933,7 +307,7 @@
     <!-- Analytics Tracking -->
     <script>
     // Track sector card clicks
-    document.querySelectorAll('.sector-card').forEach(card => {
+    document.querySelectorAll('.industry-card').forEach(card => {
         card.addEventListener('click', function(e) {
             const sector = this.querySelector('h3').textContent;
             if (typeof gtag !== 'undefined') {
