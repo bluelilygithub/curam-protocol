@@ -1387,28 +1387,6 @@ HTML_TEMPLATE = """
         .roadmap-phase li {
             margin-bottom: 0.25rem;
         }
-        .email-capture-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        .email-capture-modal.active {
-            display: flex;
-        }
-        .email-capture-content {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            max-width: 500px;
-            width: 90%;
-        }
         .scroll-indicator {
             position: fixed;
             bottom: 2rem;
@@ -2623,8 +2601,7 @@ HTML_TEMPLATE = """
             <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #E5E7EB;">
                 <p style="color: #4B5563; margin-bottom: 1rem;"><strong>💡 Most firms see ROI by end of Phase 1</strong></p>
                 <div class="btn-group">
-                    <button onclick="showEmailModal()" class="btn">📧 Email Me This Roadmap</button>
-                    <a href="{{ booking_url }}" class="btn btn-secondary">📞 Book Consultation Call</a>
+                    <a href="{{ booking_url }}" class="btn">📞 Book Consultation Call</a>
                 </div>
             </div>
         </div>
@@ -2675,30 +2652,6 @@ HTML_TEMPLATE = """
             <a href="{{ url_for('roi_calculator.roi_calculator', step=2, industry=industry) }}" class="btn btn-secondary">← Back to Data Entry</a>
             <a href="{{ url_for('roi_calculator.roi_calculator', step=4) }}" class="btn">Generate PDF Report →</a>
         </div>
-        <!-- Email Capture Modal -->
-        <div id="email-modal" class="email-capture-modal">
-            <div class="email-capture-content">
-                <h3 style="color: #0B1221; margin-bottom: 1rem;">Get Your Custom Roadmap</h3>
-                <p style="color: #4B5563; margin-bottom: 1.5rem;">Enter your email to receive your personalized automation roadmap with all calculations and implementation phases.</p>
-                <form id="email-form" onsubmit="submitEmailForm(event)">
-                    <div class="form-group">
-                        <label>Email Address</label>
-                        <input type="email" name="email" id="roadmap-email" required 
-                               style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;">
-                    </div>
-                    <div class="form-group">
-                        <label>Company Name (Optional)</label>
-                        <input type="text" name="company" id="roadmap-company" 
-                               style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;">
-                    </div>
-                    <div class="btn-group" style="margin-top: 1.5rem;">
-                        <button type="submit" class="btn">Send Roadmap</button>
-                        <button type="button" onclick="closeEmailModal()" class="btn btn-secondary">Cancel</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
         <script>
             var chartData = {{ chart_json|safe }};
@@ -2727,15 +2680,6 @@ HTML_TEMPLATE = """
                     document.getElementById('response-message').textContent = response.message;
                     document.getElementById('readiness-response').style.display = 'block';
                 }
-            }
-            
-            function showEmailModal() {
-                document.getElementById('email-modal').classList.add('active');
-            }
-            
-            function closeEmailModal() {
-                document.getElementById('email-modal').classList.remove('active');
-                document.getElementById('email-form').reset();
             }
             
             // Scroll indicator functionality
@@ -2767,43 +2711,6 @@ HTML_TEMPLATE = """
             window.addEventListener('load', updateScrollIndicator);
             window.addEventListener('resize', updateScrollIndicator);
             
-            function submitEmailForm(event) {
-                event.preventDefault();
-                var email = document.getElementById('roadmap-email').value;
-                var company = document.getElementById('roadmap-company').value;
-                
-                // Submit to backend
-                fetch('{{ url_for("roi_calculator.send_roadmap_email") }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: email,
-                        company: company
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Roadmap sent! Check your email.');
-                        closeEmailModal();
-                    } else {
-                        alert('Error: ' + (data.error || 'Failed to send email'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Error sending email. Please try again.');
-                });
-            }
-            
-            // Close modal on outside click
-            document.getElementById('email-modal').addEventListener('click', function(e) {
-                if (e.target === this) {
-                    closeEmailModal();
-                }
-            });
         </script>
         
         {% elif step == 4 %}
