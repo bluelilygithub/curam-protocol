@@ -1,4 +1,6 @@
 import os
+import base64
+import requests
 from flask import render_template_string, request, session, send_file, Response, url_for, redirect
 import pandas as pd
 import plotly.graph_objects as go
@@ -2720,15 +2722,12 @@ HTML_TEMPLATE = """
             <a href="{{ url_for('roi_calculator.roi_calculator', step=3) }}" class="step completed">3</a>
             <span class="step active">4</span>
         </div>
-        <h1>Download Your Business Case</h1>
+        <h1>Get Your Business Case Report</h1>
         <hr>
-        <h3>Your PDF Report is Ready</h3>
-        <p>Click the button below to download your personalized ROI Business Case PDF.</p>
+        <h3>Your ROI Report is Ready</h3>
+        <p>Enter your email address below to receive your personalized ROI Business Case PDF report.</p>
         <div class="btn-group">
-            <a href="{{ url_for('roi_calculator.download_pdf') }}" class="btn">📥 Download Business Case PDF</a>
-        </div>
-        <div style="margin-top: 20px;">
-            <button onclick="emailPDF()" style="background: #1e3a8a; padding: 12px 24px; border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 1rem; font-weight: 600;">
+            <button onclick="emailPDF()" style="background: #D4AF37; color: #0B1221; padding: 16px 32px; border: none; border-radius: 8px; cursor: pointer; font-size: 1.1rem; font-weight: 700; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s ease;">
                 📧 Email Report to Me
             </button>
         </div>
@@ -3058,8 +3057,10 @@ def roi_calculator():
 
 @roi_app.route('/email-report', methods=['POST'])
 def email_report():
-    """Email PDF report to user"""
-    from flask import jsonify
+    """Email PDF report to user using MailChannels API"""
+    from flask import jsonify, current_app
+    import requests
+    import base64
     
     try:
         data = request.get_json()
@@ -3076,7 +3077,6 @@ def email_report():
         avg_rate = session.get('avg_rate', 185)
         platform = session.get('platform', 'M365/SharePoint')
         calculations = session.get('calculations')
-        weekly_waste = session.get('weekly_waste', 5.0)
         
         if not calculations:
             return jsonify({"success": False, "error": "No calculations found. Please complete the calculator first."}), 400
@@ -3085,26 +3085,98 @@ def email_report():
         pdf_buffer = generate_pdf_report(industry, staff_count, avg_rate, platform, calculations)
         pdf_bytes = pdf_buffer.getvalue()
         
-        # TODO: Integrate with your email service (SendGrid, AWS SES, etc.)
-        # For now, just log it
-        print(f"PDF EMAIL REQUEST:")
-        print(f"  To: {email}")
-        print(f"  Industry: {industry}")
-        print(f"  PDF size: {len(pdf_bytes)} bytes")
+        # Encode PDF as base64 for MailChannels
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
         
-        # In production, send email with PDF attachment here
-        # send_email_with_attachment(
-        #     to=email,
-        #     subject="Your ROI Business Case Report",
-        #     body="Please find your personalized ROI Business Case report attached.",
-        #     attachment=pdf_bytes,
-        #     filename="roi_business_case.pdf"
-        # )
+        # Get MailChannels API key
+        mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
         
-        return jsonify({"success": True, "message": "Report sent successfully"})
+        # Prepare email data for MailChannels
+        email_data = {
+            "personalizations": [
+                {
+                    "to": [{"email": email}],
+                    "cc": [{"email": "michaelbarrett@bluelily.com.au"}]
+                }
+            ],
+            "from": {
+                "email": "noreply@curam-ai.com.au",
+                "name": "Curam AI"
+            },
+            "subject": f"Your ROI Business Case Report - {industry}",
+            "content": [
+                {
+                    "type": "text/plain",
+                    "value": f"Thank you for using the Curam AI ROI Calculator.\n\nPlease find your personalized ROI Business Case report attached.\n\nIndustry: {industry}\nStaff Count: {staff_count}\nAverage Rate: ${avg_rate}/hour\n\nNext Steps:\n1. Review the report with your leadership team\n2. Book a discovery call to validate these numbers\n3. Discuss implementation roadmap\n\nBest regards,\nThe Curam AI Team"
+                },
+                {
+                    "type": "text/html",
+                    "value": f"""
+                    <html>
+                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #4B5563;">
+                        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <h2 style="color: #0B1221;">Your ROI Business Case Report</h2>
+                            <p>Thank you for using the Curam AI ROI Calculator.</p>
+                            <p>Please find your personalized ROI Business Case report attached.</p>
+                            
+                            <div style="background: #F8F9FA; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                                <h3 style="color: #0B1221; margin-top: 0;">Report Details:</h3>
+                                <ul style="list-style: none; padding: 0;">
+                                    <li><strong>Industry:</strong> {industry}</li>
+                                    <li><strong>Staff Count:</strong> {staff_count}</li>
+                                    <li><strong>Average Rate:</strong> ${avg_rate}/hour</li>
+                                </ul>
+                            </div>
+                            
+                            <h3 style="color: #0B1221;">Next Steps:</h3>
+                            <ol>
+                                <li>Review the report with your leadership team</li>
+                                <li>Book a discovery call to validate these numbers</li>
+                                <li>Discuss implementation roadmap</li>
+                            </ol>
+                            
+                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+                                <p style="color: #6B7280; font-size: 0.9em;">
+                                    Best regards,<br>
+                                    <strong>The Curam AI Team</strong>
+                                </p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                }
+            ],
+            "attachments": [
+                {
+                    "content": pdf_base64,
+                    "filename": f"Curam_AI_ROI_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    "type": "application/pdf",
+                    "disposition": "attachment"
+                }
+            ]
+        }
+        
+        # Set headers
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        if mailchannels_api_key:
+            headers['X-Api-Key'] = mailchannels_api_key
+        
+        # Send email via MailChannels API
+        mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
+        response = requests.post(mailchannels_url, json=email_data, headers=headers, timeout=30)
+        
+        if response.status_code == 202:
+            current_app.logger.info(f"ROI report sent successfully to {email} (CC: michaelbarrett@bluelily.com.au)")
+            return jsonify({"success": True, "message": "Report sent successfully! Check your email."})
+        else:
+            current_app.logger.error(f"MailChannels API error: {response.status_code} - {response.text}")
+            return jsonify({"success": False, "error": "Failed to send email. Please try again later."}), 500
         
     except Exception as e:
-        print(f"Error sending email report: {e}")
+        current_app.logger.error(f"Error sending email report: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @roi_app.route('/send-roadmap-email', methods=['POST'])
