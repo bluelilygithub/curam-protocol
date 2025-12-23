@@ -10,6 +10,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* 4-column methodology-grid for legal services page */
+        .methodology-grid[style*="repeat(4, 1fr)"] {
+            grid-template-columns: repeat(4, 1fr) !important;
+        }
+        @media (max-width: 1200px) {
+            .methodology-grid[style*="repeat(4, 1fr)"] {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        @media (max-width: 640px) {
+            .methodology-grid[style*="repeat(4, 1fr)"] {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Scroll Down Button -->
@@ -41,7 +57,7 @@
                 <p class="hero-eyebrow">For Legal Practices & Law Firms</p>
                 <h1 class="hero-headline">Stop Losing Billable Hours<br><span class="text-accent">to Manual Administrative Work</span></h1>
                 <p class="hero-subheadline">
-                    Your fee earners are spending 8-12 hours per week on work that doesn't appear on timesheets. Contract review, matter intake, and legal research are consuming billable capacity—costing your firm $850K+ annually in revenue leakage.
+                    Your paralegals and junior associates are spending 8-12 hours per week on manual contract data entry, matter setup, and precedent searching instead of billable work. This administrative burden is bottlenecking your partners and senior associates—costing your firm $850K+ annually in lost capacity.
                 </p>
                 <div class="hero-cta-group">
                     <a href="roi.html?industry=legal" class="btn btn-primary">Calculate Your ROI</a>
@@ -68,7 +84,7 @@
             <p class="section-subhead">
                 You're caught in a squeeze that's eroding margins and limiting growth:
             </p>
-            <div class="methodology-grid">
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="methodology-card methodology-card-border-red">
                     <div class="methodology-content">
                         <h3>
@@ -112,20 +128,87 @@
                     </svg>
                 </div>
                 <p class="highlight-text">
-                    <strong>The Result:</strong> Your fee earners are trapped doing $200/hour administrative work instead of $350/hour client-facing work—turning away new matters because you're at capacity, watching talent leave for in-house roles, and seeing your realization rates decline despite revenue growth.
+                    <strong>The Result:</strong> Your paralegals ($100/hr) are trapped doing manual contract data entry. Your junior associates ($225/hr) are spending hours searching for precedents. Your partners and senior associates are bottlenecked reviewing their work instead of taking on more client matters—turning away new matters because you're at capacity, watching talent leave for in-house roles, and seeing your realization rates decline despite revenue growth.
                 </p>
             </div>
         </div>
     </section>
 
-    <!-- Solution Section -->
+    <!-- Who Benefits Section -->
     <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">Who Benefits from Automation?</h2>
+            <p class="section-subhead">
+                Different roles, different pain points. Here's how automation impacts each level of your firm:
+            </p>
+            <div class="deliverable-grid">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <h3>Paralegals</h3>
+                        <p class="deliverable-subtitle">$80-120/hr</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li><strong>Currently:</strong> Manual contract data entry, matter setup, document filing</li>
+                        <li><strong>After:</strong> Focus on billable support work, client communication</li>
+                        <li><strong>Time Saved:</strong> 8-10 hrs/week per paralegal</li>
+                    </ul>
+                </div>
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                                <circle cx="9" cy="7" r="4"/>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                        </div>
+                        <h3>Junior Associates</h3>
+                        <p class="deliverable-subtitle">$200-250/hr</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li><strong>Currently:</strong> Searching for precedents, basic document review</li>
+                        <li><strong>After:</strong> Focus on billable research, client-facing drafting</li>
+                        <li><strong>Time Saved:</strong> 5-7 hrs/week per junior associate</li>
+                    </ul>
+                </div>
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                        </div>
+                        <h3>Partners & Senior Associates</h3>
+                        <p class="deliverable-subtitle">$300-600/hr</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li><strong>Currently:</strong> Bottlenecked reviewing paralegal/junior work</li>
+                        <li><strong>After:</strong> Review burden reduced, capacity to take 2-4 more matters</li>
+                        <li><strong>Strategic Impact:</strong> $300-500K additional revenue capacity</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution Section -->
+    <section class="section">
         <div class="container">
             <h2 class="section-headline">What If You Could Automate All of It?<br><span class="text-accent">The Curam-Ai Protocol™ for Legal Firms</span></h2>
             <p class="section-subhead">
                 We automate document-heavy legal workflows while keeping everything inside your Microsoft 365 environment.
             </p>
-            <div class="methodology-grid">
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="methodology-card">
                     <div class="methodology-number">1</div>
                     <div class="methodology-content">
@@ -181,7 +264,7 @@
             <p class="section-subhead">
                 Generic tools capture text. We capture the judgment calls that usually require a human.
             </p>
-            <div class="methodology-grid">
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="methodology-card">
                     <div class="methodology-number">1</div>
                     <div class="methodology-content">
@@ -286,9 +369,9 @@
             
             <div class="roi-results-grid">
                 <div class="roi-result-card">
-                    <div class="roi-result-stat">420</div>
+                    <div class="roi-result-stat">110</div>
                     <div class="roi-result-label">Hours/week recovered</div>
-                    <p class="roi-result-description">35-lawyer firm recovered 12 hours per fee earner per week</p>
+                    <p class="roi-result-description">35-person firm: 50 hrs paralegals + 60 hrs junior associates</p>
                 </div>
                 
                 <div class="roi-result-card">
@@ -304,14 +387,14 @@
                 </div>
                 
                 <div class="roi-result-card">
-                    <div class="roi-result-stat">$960K</div>
-                    <div class="roi-result-label">Year 1 Revenue Recovery</div>
-                    <p class="roi-result-description">Melbourne commercial law firm case study</p>
+                    <div class="roi-result-stat">$1.24M</div>
+                    <div class="roi-result-label">Year 1 Total Benefit</div>
+                    <p class="roi-result-description">$888K cost savings + $350K additional revenue capacity</p>
                 </div>
             </div>
             
             <div class="highlight-box footnote">
-                <p><strong>Case Study:</strong> 35-lawyer Melbourne commercial firm automated contract review and matter intake. Result: 12 hours/week per fee earner recovered, 98.5% extraction accuracy, 6-week payback period. <a href="case-study.html" style="color: var(--color-gold);">Read the full breakdown →</a></p>
+                <p><strong>Case Study:</strong> 35-person Melbourne commercial firm (6 partners, 14 senior associates, 10 junior associates, 5 paralegals) automated contract review and matter intake. Results: 5 paralegals freed 10 hrs/week each (50 hrs total) = $240K cost savings. 10 junior associates freed 6 hrs/week each (60 hrs total) = $648K cost savings. Partners/seniors able to take 3-4 more matters = $350K additional revenue. Total Year 1 Benefit: $1.24M on $50K investment (25x ROI). <a href="case-study.html" style="color: var(--color-gold);">Read the full breakdown →</a></p>
             </div>
         </div>
     </section>
@@ -320,7 +403,7 @@
     <section class="section">
         <div class="container">
             <h2 class="section-headline">How The Protocol Works</h2>
-            <div class="methodology-grid">
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="methodology-card">
                     <div class="methodology-number">1</div>
                     <div class="methodology-content">
