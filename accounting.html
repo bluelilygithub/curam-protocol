@@ -11,6 +11,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* 4-column methodology-grid for accounting page */
+        .methodology-grid[style*="repeat(4, 1fr)"] {
+            grid-template-columns: repeat(4, 1fr) !important;
+        }
+        @media (max-width: 1200px) {
+            .methodology-grid[style*="repeat(4, 1fr)"] {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        @media (max-width: 640px) {
+            .methodology-grid[style*="repeat(4, 1fr)"] {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Scroll Down Button -->
@@ -68,7 +84,7 @@
             <p class="section-subhead">
                 You're caught in a squeeze that's eroding margins and limiting growth:
             </p>
-            <div class="methodology-grid">
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="methodology-card methodology-card-border-red">
                     <div class="methodology-content">
                         <h3>
@@ -178,7 +194,7 @@
             <p class="section-subhead">
                 Generic tools capture data. We capture the judgment calls that usually require a human.
             </p>
-            <div class="methodology-grid">
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="methodology-card">
                     <div class="methodology-number">1</div>
                     <div class="methodology-content">
@@ -308,7 +324,7 @@
             <p class="section-subhead">
                 Every feature designed with compliance, security, and team adoption in mind.
             </p>
-            <div class="methodology-grid">
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="methodology-card methodology-card-border-blue">
                     <div class="methodology-icon">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -401,7 +417,7 @@
     <section class="section">
         <div class="container">
             <h2 class="section-headline">How The Protocol Works</h2>
-            <div class="methodology-grid">
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
                 <div class="methodology-card">
                     <div class="methodology-number">1</div>
                     <div class="methodology-content">
