@@ -3815,9 +3815,10 @@ def target_markets():
 
 @app.route('/accounting')
 @app.route('/accounting.html')
+@app.route('/industries/accounting.html')
 def accounting_page():
     try:
-        return send_file('accounting.html')
+        return send_file('industries/accounting.html')
     except:
         return "Accounting page not found.", 404
 
@@ -3847,25 +3848,28 @@ def built_environment_page():
 
 @app.route('/legal-services')
 @app.route('/legal-services.html')
+@app.route('/industries/legal-services.html')
 def legal_services_page():
     try:
-        return send_file('legal-services.html')
+        return send_file('industries/legal-services.html')
     except:
         return "Legal Services page not found.", 404
 
 @app.route('/wealth-management')
 @app.route('/wealth-management.html')
+@app.route('/industries/wealth-management.html')
 def wealth_management_page():
     try:
-        return send_file('wealth-management.html')
+        return send_file('industries/wealth-management.html')
     except:
         return "Wealth Management page not found.", 404
 
 @app.route('/insurance-underwriting')
 @app.route('/insurance-underwriting.html')
+@app.route('/industries/insurance-underwriting.html')
 def insurance_underwriting_page():
     try:
-        return send_file('insurance-underwriting.html')
+        return send_file('industries/insurance-underwriting.html')
     except:
         return "Insurance Underwriting page not found.", 404
 
@@ -3873,9 +3877,10 @@ def insurance_underwriting_page():
 @app.route('/logistics-freight.html')
 @app.route('/logistics')
 @app.route('/logistics.html')
+@app.route('/industries/logistics-freight.html')
 def logistics_freight_page():
     try:
-        return send_file('logistics-freight.html')
+        return send_file('industries/logistics-freight.html')
     except:
         return "Logistics & Freight page not found.", 404
 
@@ -3883,9 +3888,10 @@ def logistics_freight_page():
 @app.route('/healthcare-admin.html')
 @app.route('/healthcare')
 @app.route('/healthcare.html')
+@app.route('/industries/healthcare-admin.html')
 def healthcare_admin_page():
     try:
-        return send_file('healthcare-admin.html')
+        return send_file('industries/healthcare-admin.html')
     except:
         return "Healthcare Admin page not found.", 404
 
@@ -3893,33 +3899,37 @@ def healthcare_admin_page():
 @app.route('/government-contractors.html')
 @app.route('/government')
 @app.route('/government.html')
+@app.route('/industries/government-contractors.html')
 def government_contractors_page():
     try:
-        return send_file('government-contractors.html')
+        return send_file('industries/government-contractors.html')
     except:
         return "Government Contractors page not found.", 404
 
 @app.route('/construction')
 @app.route('/construction.html')
+@app.route('/industries/construction.html')
 def construction_page():
     try:
-        return send_file('construction.html')
+        return send_file('industries/construction.html')
     except:
         return "Construction page not found.", 404
 
 @app.route('/architecture')
 @app.route('/architecture.html')
+@app.route('/industries/architecture.html')
 def architecture_page():
     try:
-        return send_file('architecture.html')
+        return send_file('industries/architecture.html')
     except:
         return "Architecture page not found.", 404
 
 @app.route('/engineering')
 @app.route('/engineering.html')
+@app.route('/industries/engineering.html')
 def engineering_page():
     try:
-        return send_file('engineering.html')
+        return send_file('industries/engineering.html')
     except:
         return "Engineering page not found.", 404
 
@@ -3927,9 +3937,10 @@ def engineering_page():
 @app.route('/mining-services.html')
 @app.route('/mining')
 @app.route('/mining.html')
+@app.route('/industries/mining-services.html')
 def mining_services_page():
     try:
-        return send_file('mining-services.html')
+        return send_file('industries/mining-services.html')
     except:
         return "Mining Services page not found.", 404
 
@@ -3937,9 +3948,10 @@ def mining_services_page():
 @app.route('/property-management.html')
 @app.route('/property')
 @app.route('/property.html')
+@app.route('/industries/property-management.html')
 def property_management_page():
     try:
-        return send_file('property-management.html')
+        return send_file('industries/property-management.html')
     except:
         return "Property Management page not found.", 404
 
