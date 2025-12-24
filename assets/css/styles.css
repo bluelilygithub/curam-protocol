@@ -12871,8 +12871,7 @@ h1, h2, h3, h4 {
 }
 
 .breakdown-title {
-    font-family: var(--font-sans);
-    font-size: 1rem;
+    font-size: 1.15rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--color-gold);
@@ -12896,8 +12895,7 @@ h1, h2, h3, h4 {
 
 .breakdown-label {
     display: block;
-    font-family: var(--font-sans);
-    font-size: 1rem;
+    font-size: 1.125rem;
     color: var(--text-secondary);
     margin-bottom: 0.5rem;
     font-weight: 500;
@@ -12905,26 +12903,23 @@ h1, h2, h3, h4 {
 
 .breakdown-math {
     display: block;
-    font-family: var(--font-sans);
-    font-size: 0.9375rem;
+    font-size: 1rem;
     color: var(--text-muted);
     margin-bottom: 0.5rem;
 }
 
 .breakdown-value {
     display: block;
-    font-family: var(--font-sans);
     font-size: 2rem;
     font-weight: 700;
     color: var(--text-primary);
 }
 
 .breakdown-plus {
-    font-family: var(--font-sans);
-    font-size: 2rem;
+    font-size: 3rem;
     color: var(--color-gold);
     opacity: 0.5;
-    font-weight: 300;
+    font-weight: 500;
 }
 
 .breakdown-summary {
