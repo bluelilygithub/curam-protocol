@@ -12870,12 +12870,13 @@ h1, h2, h3, h4 {
 }
 
 .breakdown-title {
-    font-size: 0.875rem;
+    font-size: 1rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--color-gold);
     margin-bottom: var(--spacing-xl);
     text-align: center;
+    font-weight: 600;
 }
 
 .breakdown-row {
@@ -12893,14 +12894,15 @@ h1, h2, h3, h4 {
 
 .breakdown-label {
     display: block;
-    font-size: 0.875rem;
+    font-size: 1rem;
     color: var(--text-secondary);
     margin-bottom: 0.5rem;
+    font-weight: 500;
 }
 
 .breakdown-math {
     display: block;
-    font-size: 0.75rem;
+    font-size: 0.9375rem;
     color: var(--text-muted);
     font-family: monospace;
     margin-bottom: 0.5rem;
@@ -12908,15 +12910,16 @@ h1, h2, h3, h4 {
 
 .breakdown-value {
     display: block;
-    font-size: 1.5rem;
+    font-size: 2rem;
     font-weight: 700;
     color: var(--text-primary);
 }
 
 .breakdown-plus {
-    font-size: 1.5rem;
+    font-size: 2rem;
     color: var(--color-gold);
     opacity: 0.5;
+    font-weight: 300;
 }
 
 .breakdown-summary {
@@ -12929,22 +12932,24 @@ h1, h2, h3, h4 {
 }
 
 .investment-tag {
-    font-size: 0.875rem;
+    font-size: 1rem;
     color: var(--text-muted);
-    padding: 0.25rem 0.75rem;
+    padding: 0.5rem 1rem;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 4px;
 }
 
 .total-benefit-tag {
-    font-size: 1.125rem;
+    font-size: 1.25rem;
     color: var(--text-primary);
+    font-weight: 500;
 }
 
 .total-benefit-tag strong {
     color: var(--color-gold);
-    font-size: 1.5rem;
+    font-size: 2rem;
     margin-left: 0.5rem;
+    font-weight: 700;
 }
 
 /* Mobile Responsiveness for ROI Breakdown */
