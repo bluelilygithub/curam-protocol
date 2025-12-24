@@ -8602,11 +8602,46 @@ h1, h2, h3, h4 {
     display: grid;
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-2xl);
+    grid-template-columns: 1fr;
 }
 
 @media (min-width: 768px) {
     .methodology-grid {
         grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* 4-column grid responsive behavior */
+.methodology-grid-4col {
+    grid-template-columns: 1fr !important;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .methodology-grid-4col {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (min-width: 1024px) {
+    .methodology-grid-4col {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+}
+
+/* Legacy support for inline styles */
+.methodology-grid[style*="grid-template-columns: repeat(4, 1fr)"] {
+    grid-template-columns: 1fr !important;
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .methodology-grid[style*="grid-template-columns: repeat(4, 1fr)"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}
+
+@media (min-width: 1024px) {
+    .methodology-grid[style*="grid-template-columns: repeat(4, 1fr)"] {
+        grid-template-columns: repeat(4, 1fr) !important;
     }
 }
 
@@ -8618,6 +8653,10 @@ h1, h2, h3, h4 {
     display: flex;
     gap: var(--spacing-lg);
     transition: var(--transition);
+}
+
+.methodology-content {
+    flex: 1;
 }
 
 .methodology-card:hover {
@@ -8955,8 +8994,10 @@ h1, h2, h3, h4 {
 }
 
 .cta-subtitle {
-    margin: 24px;
-    font-size: smaller;
+    margin-top: 1.5rem;
+    margin-bottom: 0;
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
 }
 
 .cta-content {
