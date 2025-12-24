@@ -8611,37 +8611,20 @@ h1, h2, h3, h4 {
     }
 }
 
-/* 4-column grid responsive behavior */
-.methodology-grid-4col {
-    grid-template-columns: 1fr !important;
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-    .methodology-grid-4col {
-        grid-template-columns: repeat(2, 1fr) !important;
-    }
-}
-
-@media (min-width: 1024px) {
-    .methodology-grid-4col {
-        grid-template-columns: repeat(4, 1fr) !important;
-    }
-}
-
-/* Legacy support for inline styles */
+/* 4-column grid responsive behavior for inline styles */
 .methodology-grid[style*="grid-template-columns: repeat(4, 1fr)"] {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: repeat(4, 1fr) !important;
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (max-width: 1200px) {
     .methodology-grid[style*="grid-template-columns: repeat(4, 1fr)"] {
         grid-template-columns: repeat(2, 1fr) !important;
     }
 }
 
-@media (min-width: 1024px) {
+@media (max-width: 640px) {
     .methodology-grid[style*="grid-template-columns: repeat(4, 1fr)"] {
-        grid-template-columns: repeat(4, 1fr) !important;
+        grid-template-columns: 1fr !important;
     }
 }
 
