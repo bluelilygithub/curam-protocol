@@ -2,7 +2,7 @@ import os
 import json
 import re
 from flask import Flask, request, render_template_string, session, Response, send_file, abort, url_for, send_from_directory, redirect, jsonify
-import google.generativeai as genai
+import google.genai as genai
 import pdfplumber
 import pandas as pd
 import io
