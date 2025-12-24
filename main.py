@@ -3672,13 +3672,7 @@ def analyze_gemini(text, doc_type, image_path=None):
                 action_log.append(f"JSON parse error for {model_name}: {str(e)}")
                 continue
 
-            except Exception as e:
-                # Handle gRPC errors if grpc is available, otherwise catch all exceptions
-                if grpc and isinstance(e, grpc.RpcError):
-                    pass  # It's a gRPC error
-                elif isinstance(e, TimeoutError):
-                    pass  # It's a timeout
-                # Continue with error handling for any exception
+            except (TimeoutError,) + ((grpc.RpcError,) if grpc else ()) as e:
                 error_type = type(e).__name__
                 error_msg = str(e)
                 print(f"Gemini timeout/error with {model_name}: {error_type}: {error_msg}")
