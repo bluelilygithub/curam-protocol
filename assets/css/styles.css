@@ -12867,9 +12867,11 @@ h1, h2, h3, h4 {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--border-subtle);
     border-radius: var(--border-radius-lg);
+    font-family: var(--font-sans);
 }
 
 .breakdown-title {
+    font-family: var(--font-sans);
     font-size: 1rem;
     text-transform: uppercase;
     letter-spacing: 0.1em;
@@ -12894,6 +12896,7 @@ h1, h2, h3, h4 {
 
 .breakdown-label {
     display: block;
+    font-family: var(--font-sans);
     font-size: 1rem;
     color: var(--text-secondary);
     margin-bottom: 0.5rem;
@@ -12902,20 +12905,22 @@ h1, h2, h3, h4 {
 
 .breakdown-math {
     display: block;
+    font-family: var(--font-sans);
     font-size: 0.9375rem;
     color: var(--text-muted);
-    font-family: monospace;
     margin-bottom: 0.5rem;
 }
 
 .breakdown-value {
     display: block;
+    font-family: var(--font-sans);
     font-size: 2rem;
     font-weight: 700;
     color: var(--text-primary);
 }
 
 .breakdown-plus {
+    font-family: var(--font-sans);
     font-size: 2rem;
     color: var(--color-gold);
     opacity: 0.5;
@@ -12932,6 +12937,7 @@ h1, h2, h3, h4 {
 }
 
 .investment-tag {
+    font-family: var(--font-sans);
     font-size: 1rem;
     color: var(--text-muted);
     padding: 0.5rem 1rem;
@@ -12940,12 +12946,14 @@ h1, h2, h3, h4 {
 }
 
 .total-benefit-tag {
+    font-family: var(--font-sans);
     font-size: 1.25rem;
     color: var(--text-primary);
     font-weight: 500;
 }
 
 .total-benefit-tag strong {
+    font-family: var(--font-sans);
     color: var(--color-gold);
     font-size: 2rem;
     margin-left: 0.5rem;
