@@ -6,7 +6,10 @@ import google.genai as genai
 import pdfplumber
 import pandas as pd
 import io
-import grpc
+try:
+    import grpc
+except ImportError:
+    grpc = None
 import time
 from werkzeug.utils import secure_filename
 import requests
@@ -3669,7 +3672,13 @@ def analyze_gemini(text, doc_type, image_path=None):
                 action_log.append(f"JSON parse error for {model_name}: {str(e)}")
                 continue
 
-            except (grpc.RpcError, TimeoutError) as e:
+            except Exception as e:
+                # Handle gRPC errors if grpc is available, otherwise catch all exceptions
+                if grpc and isinstance(e, grpc.RpcError):
+                    pass  # It's a gRPC error
+                elif isinstance(e, TimeoutError):
+                    pass  # It's a timeout
+                # Continue with error handling for any exception
                 error_type = type(e).__name__
                 error_msg = str(e)
                 print(f"Gemini timeout/error with {model_name}: {error_type}: {error_msg}")
