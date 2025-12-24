@@ -12859,3 +12859,105 @@ h1, h2, h3, h4 {
     font-size: 1rem;
   }
 }
+
+/* ROI Breakdown Container Styles */
+.roi-breakdown-container {
+    margin-top: var(--spacing-3xl);
+    padding: var(--spacing-xl);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--border-radius-lg);
+}
+
+.breakdown-title {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-gold);
+    margin-bottom: var(--spacing-xl);
+    text-align: center;
+}
+
+.breakdown-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-xl);
+}
+
+.breakdown-item {
+    flex: 1;
+    text-align: center;
+}
+
+.breakdown-label {
+    display: block;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.breakdown-math {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: monospace;
+    margin-bottom: 0.5rem;
+}
+
+.breakdown-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.breakdown-plus {
+    font-size: 1.5rem;
+    color: var(--color-gold);
+    opacity: 0.5;
+}
+
+.breakdown-summary {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--border-subtle);
+}
+
+.investment-tag {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    padding: 0.25rem 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.total-benefit-tag {
+    font-size: 1.125rem;
+    color: var(--text-primary);
+}
+
+.total-benefit-tag strong {
+    color: var(--color-gold);
+    font-size: 1.5rem;
+    margin-left: 0.5rem;
+}
+
+/* Mobile Responsiveness for ROI Breakdown */
+@media (max-width: 768px) {
+    .breakdown-row {
+        flex-direction: column;
+    }
+    .breakdown-plus {
+        transform: rotate(90deg);
+        margin: var(--spacing-sm) 0;
+    }
+    .breakdown-summary {
+        flex-direction: column;
+        gap: var(--spacing-md);
+    }
+}
