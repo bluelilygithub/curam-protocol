@@ -2200,6 +2200,11 @@ HTML_TEMPLATE = """
             .conservative-summary-box ul {
                 grid-template-columns: 1fr;
             }
+            
+            /* CTA Grid Mobile */
+            .cta-grid {
+                grid-template-columns: 1fr !important;
+            }
         }
         
         /* FIX 11: TIER 2 DE-EMPHASIS */
@@ -2915,9 +2920,39 @@ HTML_TEMPLATE = """
             </ul>
             <p>Automation doesn't just save time—it unlocks capacity that can be redirected to revenue-generating activities, giving you a competitive advantage and improving your bottom line.</p>
         </div>
-        <div class="btn-group">
-            <a href="{{ url_for('roi_calculator.roi_calculator', step=2, industry=industry) }}" class="btn btn-secondary">← Back to Data Entry</a>
-            <a href="{{ url_for('roi_calculator.roi_calculator', step=4) }}" class="btn">Generate PDF Report →</a>
+        
+        <!-- NEXT STEPS CTA SECTION -->
+        <div style="background: linear-gradient(135deg, #0B1221, #1a2332); border-radius: 16px; padding: 3rem 2rem; margin: 3rem 0; text-align: center;">
+            <h2 style="color: #D4AF37; font-size: 2rem; margin-bottom: 1rem;">Ready to Prove This Works?</h2>
+            <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; max-width: 600px; margin: 0 auto 2rem auto; line-height: 1.6;">
+                This calculator shows <strong>${{ '{:,.0f}'.format(calculations['tier_1_savings']) }} in potential savings</strong> based on industry averages. 
+                Want to test this on YOUR actual documents?
+            </p>
+            
+            <div class="cta-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; max-width: 700px; margin: 0 auto;">
+                <!-- Email PDF Button -->
+                <a href="{{ url_for('roi_calculator.roi_calculator', step=4) }}" class="btn" style="background: white; color: #0B1221; padding: 1.25rem 2rem; font-size: 1.1rem; border: 2px solid #D4AF37; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-decoration: none;">
+                    <span style="font-size: 1.5rem;">📧</span>
+                    <span style="font-weight: 700;">Email This Report</span>
+                    <span style="font-size: 0.85rem; opacity: 0.7;">Get PDF sent to your inbox</span>
+                </a>
+                
+                <!-- Book Phase 1 Button -->
+                <a href="/contact.html?option=phase-1" class="btn-primary-huge" style="background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; padding: 1.25rem 2rem; font-size: 1.1rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-decoration: none; border: 2px solid #FFD700;">
+                    <span style="font-size: 1.5rem;">🚀</span>
+                    <span style="font-weight: 700;">Book $1,500 Feasibility Sprint</span>
+                    <span style="font-size: 0.85rem;">Test YOUR documents in 48 hours</span>
+                </a>
+            </div>
+            
+            <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.9rem; margin-top: 2rem;">
+                90%+ accuracy guarantee • Full refund if we miss the target • 48-hour turnaround
+            </p>
+        </div>
+
+        <!-- Back Button -->
+        <div class="btn-group" style="justify-content: center; margin-top: 2rem;">
+            <a href="{{ url_for('roi_calculator.roi_calculator', step=2, industry=industry) }}" class="btn btn-secondary" style="opacity: 0.6;">← Adjust Your Inputs</a>
         </div>
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
         <script>
