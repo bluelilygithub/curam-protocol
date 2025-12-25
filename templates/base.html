@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Curam-Ai Protocol{% endblock %}</title>
     <meta name="description" content="{% block description %}AI automation for mid-market professional services{% endblock %}">
-    <link rel="icon" type="image/png" href="{{ url_for('assets', filename='images/curam-ai-logo.png') }}">
-    <link rel="stylesheet" href="{{ url_for('assets', filename='css/styles.css') }}">
+    <link rel="icon" type="image/png" href="/assets/images/curam-ai-logo.png">
+    <link rel="stylesheet" href="/assets/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -23,8 +23,8 @@
     <nav class="navbar">
         <div class="container">
             <div class="nav-brand">
-                <a href="{{ url_for('homepage') }}" class="nav-brand-link">
-                    <img src="{{ url_for('assets', filename='images/curam-ai-logo.png') }}" alt="Curam-Ai" class="logo-image">
+                <a href="/homepage.html" class="nav-brand-link">
+                    <img src="/assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
                     <span class="logo-text">Curam-Ai</span>
                 </a>
             </div>
@@ -38,38 +38,38 @@
                     </div>
                 </div>
                 <ul class="nav-menu">
-                    <li><a href="{{ url_for('about_page') }}">About</a></li>
+                    <li><a href="/about.html">About</a></li>
                     <li class="nav-dropdown">
-                        <a href="{{ url_for('target_markets_page') }}">Target Markets <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></a>
+                        <a href="/target-markets.html">Target Markets <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></a>
                         <ul class="dropdown-menu">
-                            <li class="dropdown-parent-link"><a href="{{ url_for('target_markets_page') }}">Target Markets</a></li>
-                            <li><a href="{{ url_for('professional_services_page') }}">Professional Services</a></li>
-                            <li><a href="{{ url_for('logistics_compliance_page') }}">Logistics & Compliance</a></li>
-                            <li><a href="{{ url_for('built_environment_page') }}">Built Environment</a></li>
+                            <li class="dropdown-parent-link"><a href="/target-markets.html">Target Markets</a></li>
+                            <li><a href="/professional-services.html">Professional Services</a></li>
+                            <li><a href="/logistics-compliance.html">Logistics & Compliance</a></li>
+                            <li><a href="/built-environment.html">Built Environment</a></li>
                         </ul>
                     </li>
                     <li class="nav-dropdown">
-                        <a href="{{ url_for('curam_ai_protocol') }}">The Protocol <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></a>
+                        <a href="/curam-ai-protocol.html">The Protocol <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></a>
                         <ul class="dropdown-menu">
-                            <li class="dropdown-parent-link"><a href="{{ url_for('curam_ai_protocol') }}">The Protocol</a></li>
-                            <li><a href="{{ url_for('phase_1_feasibility') }}">Phase 1: Feasibility Sprint</a></li>
-                            <li><a href="{{ url_for('phase_2_roadmap') }}">Phase 2: The Roadmap</a></li>
-                            <li><a href="{{ url_for('phase_3_compliance') }}">Phase 3: Compliance Shield</a></li>
-                            <li><a href="{{ url_for('phase_4_implementation') }}">Phase 4: Implementation</a></li>
+                            <li class="dropdown-parent-link"><a href="/curam-ai-protocol.html">The Protocol</a></li>
+                            <li><a href="/phase-1-feasibility.html">Phase 1: Feasibility Sprint</a></li>
+                            <li><a href="/phase-2-roadmap.html">Phase 2: The Roadmap</a></li>
+                            <li><a href="/phase-3-compliance.html">Phase 3: Compliance Shield</a></li>
+                            <li><a href="/phase-4-implementation.html">Phase 4: Implementation</a></li>
                         </ul>
                     </li>
                     <li class="nav-dropdown">
                         <a href="#">Resources <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></a>
                         <ul class="dropdown-menu">
-                            <li><a href="{{ url_for('roi_calculator') }}">ROI Calculator</a></li>
-                            <li><a href="{{ url_for('feasibility_preview') }}">Try Live Demo</a></li>
-                            <li><a href="{{ url_for('case_study_page') }}">Engineering Case Study</a></li>
-                            <li><a href="{{ url_for('feasibility_sprint_report') }}">Phase 1 Sample Report</a></li>
-                            <li><a href="{{ url_for('blog_page') }}">Blog</a></li>
+                            <li><a href="/roi.html">ROI Calculator</a></li>
+                            <li><a href="/feasibility-preview.html">Try Live Demo</a></li>
+                            <li><a href="/case-study.html">Engineering Case Study</a></li>
+                            <li><a href="/feasibility-sprint-report.html">Phase 1 Sample Report</a></li>
+                            <li><a href="/blog.html">Blog</a></li>
                         </ul>
                     </li>
-                    <li><a href="{{ url_for('faq_page') }}">FAQ</a></li>
-                    <li><a href="{{ url_for('contact_page') }}" class="btn-nav">Contact</a></li>
+                    <li><a href="/faq.html">FAQ</a></li>
+                    <li><a href="/contact.html" class="btn-nav">Contact</a></li>
                 </ul>
             </div>
         </div>
@@ -82,7 +82,7 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-brand">
-                    <img src="{{ url_for('assets', filename='images/curam-ai-logo.png') }}" alt="Curam-Ai" class="logo-image">
+                    <img src="/assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
                     <span class="logo-text">Curam-Ai</span>
                     <p class="footer-tagline">The Curam-Ai Protocol™</p>
                 </div>
@@ -91,31 +91,31 @@
                     <div class="footer-column">
                         <h4>The Protocol</h4>
                         <ul>
-                            <li><a href="{{ url_for('phase_1_feasibility') }}">Phase 1: Feasibility</a></li>
-                            <li><a href="{{ url_for('phase_2_roadmap') }}">Phase 2: Roadmap</a></li>
-                            <li><a href="{{ url_for('phase_3_compliance') }}">Phase 3: Compliance</a></li>
-                            <li><a href="{{ url_for('phase_4_implementation') }}">Phase 4: Deployment</a></li>
+                            <li><a href="/phase-1-feasibility.html">Phase 1: Feasibility</a></li>
+                            <li><a href="/phase-2-roadmap.html">Phase 2: Roadmap</a></li>
+                            <li><a href="/phase-3-compliance.html">Phase 3: Compliance</a></li>
+                            <li><a href="/phase-4-implementation.html">Phase 4: Deployment</a></li>
                         </ul>
                     </div>
                     
                     <div class="footer-column">
                         <h4>Learn</h4>
                         <ul>
-                            <li><a href="{{ url_for('roi_calculator') }}">ROI Calculator</a></li>
-                            <li><a href="{{ url_for('how_it_works') }}">How It Works</a></li>
-                            <li><a href="{{ url_for('faq_page') }}">FAQ</a></li>
-                            <li><a href="{{ url_for('about_page') }}">About</a></li>
-                            <li><a href="{{ url_for('contact_page') }}">Contact</a></li>
-                            <li><a href="{{ url_for('sitemap_page') }}">Sitemap</a></li>
+                            <li><a href="/roi.html">ROI Calculator</a></li>
+                            <li><a href="/how-it-works.html">How It Works</a></li>
+                            <li><a href="/faq.html">FAQ</a></li>
+                            <li><a href="/about.html">About</a></li>
+                            <li><a href="/contact.html">Contact</a></li>
+                            <li><a href="/sitemap.html">Sitemap</a></li>
                         </ul>
                     </div>
                     
                     <div class="footer-column">
                         <h4>Sectors</h4>
                         <ul>
-                            <li><a href="{{ url_for('professional_services_page') }}">Professional Services</a></li>
-                            <li><a href="{{ url_for('built_environment_page') }}">Built Environment</a></li>
-                            <li><a href="{{ url_for('logistics_compliance_page') }}">Logistics & Compliance</a></li>
+                            <li><a href="/professional-services.html">Professional Services</a></li>
+                            <li><a href="/built-environment.html">Built Environment</a></li>
+                            <li><a href="/logistics-compliance.html">Logistics & Compliance</a></li>
                         </ul>
                     </div>
                     
@@ -123,8 +123,8 @@
                         <h4>Act Now</h4>
                         <p>Book a free pre-screen or diagnostic call.</p>
                         <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: var(--spacing-md);">
-                            <a href="{{ url_for('contact_page') }}?option=phase-1" class="btn btn-primary" style="text-align: center;">Book Phase 1</a>
-                            <a href="{{ url_for('contact_page') }}?option=diagnostic" class="btn btn-outline" style="text-align: center;">Diagnostic Call</a>
+                            <a href="/contact.html?option=phase-1" class="btn btn-primary" style="text-align: center;">Book Phase 1</a>
+                            <a href="/contact.html?option=diagnostic" class="btn btn-outline" style="text-align: center;">Diagnostic Call</a>
                         </div>
                     </div>
                 </div>
@@ -136,7 +136,7 @@
         </div>
     </footer>
 
-    <script src="{{ url_for('assets', filename='js/main.js') }}"></script>
+    <script src="/assets/js/main.js"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>
