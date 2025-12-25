@@ -2467,7 +2467,7 @@ HTML_TEMPLATE = """
         <hr>
         <!-- BIG SCARY NUMBER -->
         <div class="annual-burn-section" style="background: linear-gradient(135deg, #0B1221, #1a2332); border-radius: 16px; padding: 3rem 2rem; text-align: center; margin: 2rem 0; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);">
-            <div style="color: #D4AF37; font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1rem;">Annual Waste on Manual Processing</div>
+            <div style="color: #D4AF37; font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1rem;">Estimated Annual Documentation Cost</div>
             <div style="font-size: 4rem; font-weight: 800; background: linear-gradient(135deg, #D4AF37, #FFD700); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem; line-height: 1;">{{ format_currency(calculations.annual_burn) }}</div>
             <div style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem; font-style: italic;">Based on your inputs</div>
         </div>
@@ -2579,7 +2579,7 @@ HTML_TEMPLATE = """
             
             <div class="roi-result-card">
                 <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.get('potential_revenue', 0)) }}</div>
-                <div class="roi-result-label">Revenue Opportunity</div>
+                <div class="roi-result-label">Revenue Opportunity<sup>*</sup></div>
                 <p class="roi-result-description">If recovered hours are billed to clients</p>
             </div>
         </div>
@@ -2646,8 +2646,8 @@ HTML_TEMPLATE = """
         </div>
         
         <!-- Utilization Disclaimer -->
-        <p class="disclaimer" style="font-size: 0.9em; color: #cbd5e1; margin-bottom: 20px; padding: 1rem; background: rgba(203, 213, 225, 0.1); border-left: 3px solid #cbd5e1; border-radius: 6px;">
-            *Assumes 70% of recovered time converts to billable work. Actual results depend on 
+        <p class="disclaimer" style="font-size: 0.95em; color: #4B5563; margin-bottom: 20px; padding: 1rem; background: #F8F9FA; border-left: 3px solid #D4AF37; border-radius: 6px;">
+            <sup>*</sup>Assumes 70% of recovered time converts to billable work. Actual results depend on 
             firm capacity and client demand.
         </p>
         
@@ -2665,10 +2665,7 @@ HTML_TEMPLATE = """
                 <div class="metric-value">{{ "{:,.0f}".format(calculations.capacity_hours) }}</div>
                 <div class="metric-label">Capacity Hours</div>
             </div>
-            <div class="metric-card">
-                <div class="metric-value">{{ format_currency(calculations.potential_revenue) }}</div>
-                <div class="metric-label">Revenue Opportunity</div>
-            </div>
+            <!-- Removed duplicate Revenue Opportunity card - already shown above -->
         </div>
         <hr>
         {% if industry == "Accounting & Advisory" %}
@@ -2719,7 +2716,7 @@ HTML_TEMPLATE = """
                     <ul style="list-style: none; padding: 0; margin: 0;">
                         <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
                             <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
-                            30 of YOUR documents ({{ demo_docs }})
+                            15 of YOUR documents (including 5 receipts, plus {{ demo_docs }})
                         </li>
                         <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
                             <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
@@ -2767,7 +2764,7 @@ HTML_TEMPLATE = """
                     you get a <strong style="color: #0B1221;">full refund</strong>. No questions asked. No fine print.
                 </p>
                 <div style="font-size: 0.9rem; color: #6B7280; background: #F8F9FA; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
-                    <strong>Only condition:</strong> You provide 30 {% if industry_config.demo_documents %}{{ industry_config.demo_documents }}{% else %}documents{% endif %} and respond 
+                    <strong>Only condition:</strong> You provide 15 documents (5 receipts + 10 {% if industry_config.demo_documents %}{{ industry_config.demo_documents }}{% else %}drawings/schedules/transmittals{% endif %}) and respond 
                     to clarification questions promptly. We can't test if you don't participate.
                 </div>
             </div>
@@ -2902,19 +2899,19 @@ HTML_TEMPLATE = """
             <p>This represents the total cost of wasted time spent on manual administrative tasks. Calculated as:</p>
             <ul>
                 <li><strong>Staff Count</strong> × <strong>Weekly Waste Hours</strong> × <strong>Billable Rate</strong> × <strong>48 weeks</strong></li>
-                <li>Example: 50 staff × 5 hours/week × $185/hour × 48 weeks = $2,220,000 annually</li>
+                <li>Your firm: {{ calculations.doc_staff_count }} staff × {{ calculations.hours_per_doc_staff }} hours/week × ${{ calculations.typical_doc_rate }}/hour × 48 weeks = {{ format_currency(calculations.annual_burn) }} annually</li>
             </ul>
             <p><strong>Capacity Hours:</strong></p>
             <p>The total billable hours currently lost to non-billable administrative work:</p>
             <ul>
                 <li><strong>Staff Count</strong> × <strong>Weekly Waste Hours</strong> × <strong>48 weeks</strong></li>
-                <li>Example: 50 staff × 5 hours/week × 48 weeks = 12,000 hours/year</li>
+                <li>Your firm: {{ calculations.get('total_recoverable_hours', calculations.get('total_recoverable_hours_per_week', 0))|round(0)|int }} hours/week × 48 weeks = {{ "{:,.0f}".format(calculations.capacity_hours) }} hours/year</li>
             </ul>
             <p><strong>Potential Revenue Opportunity:</strong></p>
             <p>If these hours were freed up and could be billed to clients:</p>
             <ul>
                 <li><strong>Capacity Hours</strong> × <strong>Billable Rate</strong></li>
-                <li>Example: 12,000 hours × $185/hour = $2,220,000 in potential revenue</li>
+                <li>Your firm: {{ "{:,.0f}".format(calculations.capacity_hours) }} hours × ${{ calculations.typical_doc_rate }}/hour = {{ format_currency(calculations.potential_revenue) }} in potential revenue</li>
             </ul>
             <p><strong>Tier 1 Opportunity (Immediate Opportunity - {{ tier1_percentage }}% Reduction):</strong></p>
             <p>A conservative estimate assuming {{ tier1_percentage }}% reduction in administrative time through Phase 1 automation (e.g., automated data extraction, document processing):</p>
@@ -3368,10 +3365,12 @@ def roi_calculator():
             highest_roi_task = None
             if calculations.get('task_analysis'):
                 highest_roi_task = calculations['task_analysis'][0]  # Already sorted by ROI
+                tier1_savings = calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0))
+                task_percentage = (highest_roi_task['annual_savings'] / tier1_savings * 100) if tier1_savings > 0 else 0
                 if highest_roi_task.get('is_low_hanging_fruit'):
-                    analysis_text.append(f"🎯 <strong>Low-Hanging Fruit:</strong> {highest_roi_task['name']} is a proven repetitive task with {int(highest_roi_task['conservative_potential'] * 100)}% conservative automation potential, saving {format_currency(highest_roi_task['annual_savings'])} annually.")
+                    analysis_text.append(f"🎯 <strong>Low-Hanging Fruit:</strong> {highest_roi_task['name']} (your #1 opportunity) is a proven repetitive task with {int(highest_roi_task['conservative_potential'] * 100)}% conservative automation potential, saving {format_currency(highest_roi_task['annual_savings'])} annually—this represents {int(task_percentage)}% of your total Tier 1 savings.")
                 else:
-                    analysis_text.append(f"⭐ <strong>Highest ROI Opportunity:</strong> {highest_roi_task['name']} has the highest proven savings at {format_currency(highest_roi_task['annual_savings'])} annually.")
+                    analysis_text.append(f"⭐ <strong>Highest ROI Opportunity:</strong> {highest_roi_task['name']} (your #1 opportunity) has the highest proven savings at {format_currency(highest_roi_task['annual_savings'])} annually—this represents {int(task_percentage)}% of your total Tier 1 savings.")
             
             if not analysis_text:
                 analysis_text.append("✅ Your organization shows moderate efficiency opportunities. Automation can still deliver meaningful improvements.")
