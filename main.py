@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from flask import Flask, request, render_template_string, session, Response, send_file, abort, url_for, send_from_directory, redirect, jsonify
+from flask import Flask, request, render_template, render_template_string, session, Response, send_file, abort, url_for, send_from_directory, redirect, jsonify
 import google.generativeai as genai
 import pdfplumber
 import pandas as pd
@@ -21,7 +21,7 @@ try:
 except ImportError:
     google_exceptions = None
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # --- CONFIGURATION ---
@@ -3740,8 +3740,9 @@ def analyze_gemini(text, doc_type, image_path=None):
     return [error_entry(last_error or "All models failed")], last_error or "All models failed", resolved_model, attempt_log, action_log, None
 
 # --- ROUTES ---
-# Serve static assets (CSS, JS, images)
+# Serve static assets (CSS, JS, images) - support both 'assets' and 'static' paths
 @app.route('/assets/<path:filename>')
+@app.route('/static/<path:filename>')
 def assets(filename):
     return send_from_directory('assets', filename)
 
@@ -3818,7 +3819,7 @@ def target_markets():
 @app.route('/industries/accounting.html')
 def accounting_page():
     try:
-        return send_file('industries/accounting.html')
+        return render_template('industries/accounting.html')
     except:
         return "Accounting page not found.", 404
 
@@ -3851,7 +3852,7 @@ def built_environment_page():
 @app.route('/industries/legal-services.html')
 def legal_services_page():
     try:
-        return send_file('industries/legal-services.html')
+        return render_template('industries/legal-services.html')
     except:
         return "Legal Services page not found.", 404
 
@@ -3860,7 +3861,7 @@ def legal_services_page():
 @app.route('/industries/wealth-management.html')
 def wealth_management_page():
     try:
-        return send_file('industries/wealth-management.html')
+        return render_template('industries/wealth-management.html')
     except:
         return "Wealth Management page not found.", 404
 
@@ -3869,7 +3870,7 @@ def wealth_management_page():
 @app.route('/industries/insurance-underwriting.html')
 def insurance_underwriting_page():
     try:
-        return send_file('industries/insurance-underwriting.html')
+        return render_template('industries/insurance-underwriting.html')
     except:
         return "Insurance Underwriting page not found.", 404
 
@@ -3880,7 +3881,7 @@ def insurance_underwriting_page():
 @app.route('/industries/logistics-freight.html')
 def logistics_freight_page():
     try:
-        return send_file('industries/logistics-freight.html')
+        return render_template('industries/logistics-freight.html')
     except:
         return "Logistics & Freight page not found.", 404
 
@@ -3891,7 +3892,7 @@ def logistics_freight_page():
 @app.route('/industries/healthcare-admin.html')
 def healthcare_admin_page():
     try:
-        return send_file('industries/healthcare-admin.html')
+        return render_template('industries/healthcare-admin.html')
     except:
         return "Healthcare Admin page not found.", 404
 
@@ -3902,7 +3903,7 @@ def healthcare_admin_page():
 @app.route('/industries/government-contractors.html')
 def government_contractors_page():
     try:
-        return send_file('industries/government-contractors.html')
+        return render_template('industries/government-contractors.html')
     except:
         return "Government Contractors page not found.", 404
 
@@ -3911,7 +3912,7 @@ def government_contractors_page():
 @app.route('/industries/construction.html')
 def construction_page():
     try:
-        return send_file('industries/construction.html')
+        return render_template('industries/construction.html')
     except:
         return "Construction page not found.", 404
 
@@ -3920,7 +3921,7 @@ def construction_page():
 @app.route('/industries/architecture.html')
 def architecture_page():
     try:
-        return send_file('industries/architecture.html')
+        return render_template('industries/architecture.html')
     except:
         return "Architecture page not found.", 404
 
@@ -3929,7 +3930,7 @@ def architecture_page():
 @app.route('/industries/engineering.html')
 def engineering_page():
     try:
-        return send_file('industries/engineering.html')
+        return render_template('industries/engineering.html')
     except:
         return "Engineering page not found.", 404
 
@@ -3940,7 +3941,7 @@ def engineering_page():
 @app.route('/industries/mining-services.html')
 def mining_services_page():
     try:
-        return send_file('industries/mining-services.html')
+        return render_template('industries/mining-services.html')
     except:
         return "Mining Services page not found.", 404
 
@@ -3951,7 +3952,7 @@ def mining_services_page():
 @app.route('/industries/property-management.html')
 def property_management_page():
     try:
-        return send_file('industries/property-management.html')
+        return render_template('industries/property-management.html')
     except:
         return "Property Management page not found.", 404
 

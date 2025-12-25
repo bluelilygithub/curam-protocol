@@ -1,0 +1,638 @@
+{% extends "base.html" %}
+
+{% block title %}AI Automation for Healthcare Administration | Curam-Ai Protocol{% endblock %}
+{% block description %}Automate patient intake and referral processing for Australian healthcare practices. Free admin staff and practice managers from manual data entry.{% endblock %}
+
+{% block content %}
+<section class="hero services-hero">
+        <div class="hero-background">
+            <div class="hero-gradient"></div>
+            <div class="hero-pattern"></div>
+            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+            </svg>
+            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+            </svg>
+        </div>
+        <div class="container">
+            <div class="hero-content">
+                <p class="hero-eyebrow">For Healthcare Practices & Medical Administrators</p>
+                <h1 class="hero-headline">Your Admin Staff Are Burning Capacity<br><span class="text-accent">on Manual Patient Intake</span></h1>
+                <p class="hero-subheadline">
+                    Reception staff spend 10+ hours per week manually entering patient intake forms into your practice management system. Practice managers spend 8+ hours per week processing referrals and verifying Medicare codes. This administrative burden bottlenecks your GPs—who can't see new patients because intake is backlogged. The result? You're turning away $350K+ in annual clinical capacity while paying $1M for manual work that AI can handle.
+                </p>
+                <div class="hero-cta-group">
+                    <a href="{{ url_for('roi_calculator') }}?industry=healthcare" class="btn btn-primary">Calculate Your ROI</a>
+                    <a href="{{ url_for('feasibility_sprint_report') }}?industrysector=healthcare" class="btn btn-secondary">See Phase 1 Sample</a>
+                    <a href="{{ url_for('contact_page') }}" class="btn btn-tertiary" style="background: transparent; border: 2px solid white; color: white; font-weight: 600; text-decoration: none; display: inline-block; padding: 0.75rem 2rem; border-radius: 6px; transition: all 0.3s ease;">Book Feasibility Sprint</a>
+                </div>
+                
+                <div class="hero-guarantee">
+                    <p class="guarantee-text">
+                        <strong>Risk-Free Testing:</strong> $1,500 is fully refundable if we can't 
+                        achieve 90%+ accuracy on your documents—provided you supply the documents and 
+                        respond to clarification questions promptly.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">The Healthcare Administration Trap:<br><span class="text-accent">Paying Premium Staff for Data Entry Work</span></h2>
+            <p class="section-subhead">
+                Your practice is caught in a capacity squeeze that's costing you patients:
+            </p>
+            <div class="methodology-grid">
+                <div class="methodology-card methodology-card-border-red">
+                    <div class="methodology-content">
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="m18 15-6-6-6 6"/>
+                            </svg>
+                            Pressure from Above
+                        </h3>
+                        <p class="methodology-desc">Hospital systems deploying enterprise EMR automation for patient flow, prior authorization, and clinical documentation—competing on efficiency AND patient experience.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-yellow">
+                    <div class="methodology-content">
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="m6 9 6 6 6-6"/>
+                            </svg>
+                            Pressure from Below
+                        </h3>
+                        <p class="methodology-desc">Telehealth platforms handling simple consults with automated intake. Patients asking: "Why in-person visits?" Your commodity work is being automated away.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-green">
+                    <div class="methodology-content">
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                            </svg>
+                            The Hidden Cost
+                        </h3>
+                        <p class="methodology-desc">Your admin staff and practice managers are trapped doing manual patient intake and referral processing. Your GPs are bottlenecked. You can't accept new patients without hiring—but hiring is expensive and slow.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="highlight-box">
+                <div class="highlight-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-accent)" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </div>
+                <p class="highlight-text">
+                    <strong>The Reality:</strong> A 50-person practice pays $1M annually for admin staff and practice managers to do manual patient intake and referral processing. Meanwhile, GPs turn away new patients (intake backlog = 2-3 week wait times). Plus: $50K+ lost annually to Medicare coding errors. Total opportunity cost: <strong>$1.37M per year</strong> that could be recovered through automation.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">What If You Freed 270 Hours/Week<br><span class="text-accent">of Administrative Capacity?</span></h2>
+            <p class="section-subhead">
+                You don't need a radical transformation. Automating patient intake and referral processing frees administrative capacity for patient coordination.
+            </p>
+            <div class="deliverable-grid deliverable-grid-spaced">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="1" x2="12" y2="23"/>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                        </div>
+                        <h3>The Baseline</h3>
+                        <p class="deliverable-subtitle">50-Person Practice</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>20 GPs/Specialists, 15 Practice Managers, 15 Admin Staff</li>
+                        <li>Admin Rate: $70/hr (loaded cost)</li>
+                        <li>Practice Manager Rate: $90/hr (loaded cost)</li>
+                        <li><strong>Constraint:</strong> Admin at capacity. Intake backlog = 2-3 weeks. GPs can't see new patients.</li>
+                    </ul>
+                </div>
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                        </div>
+                        <h3>The Protocol Effect</h3>
+                        <p class="deliverable-subtitle">Capacity Unlocked</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li><strong>Automate:</strong> Patient intake + referral processing + Medicare coding (270 hrs/week)</li>
+                        <li><strong>Admin:</strong> 150 hrs/week × $70 × 48 weeks = $504K</li>
+                        <li><strong>Practice Mgrs:</strong> 120 hrs/week × $90 × 48 weeks = $518K</li>
+                        <li><strong>GPs:</strong> Can see 20-30 more patients/week = $350K clinical capacity</li>
+                        <li><strong>Plus:</strong> Eliminate $50K Medicare coding errors</li>
+                        <li><strong class="revenue-highlight">Total: $1.42M Year 1 Benefit</strong></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="warning-callout">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <p><strong>Investment vs Return:</strong> Total project cost ~$50k. ROI is 28x in Year 1, without hiring a single additional staff member.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">Beyond Basic OCR.<br><span class="text-accent">We Automate Clinical Logic.</span></h2>
+            <p class="section-subhead">
+                Generic tools capture data. We capture the clinical decisions that usually require a human.
+            </p>
+            <div class="methodology-grid">
+                <div class="methodology-card">
+                    <div class="methodology-number">1</div>
+                    <div class="methodology-content">
+                        <h3>Patient Intake Processing</h3>
+                        <p class="methodology-desc methodology-desc-spaced">Automated extraction from patient forms with insurance validation.</p>
+                        <div class="code-vignette">
+                            Source A: <span class="code-vignette-success">Patient Intake Form (45 fields)</span><br>
+                            Source B: <span class="code-vignette-success">Medicare Card (verified)</span><br>
+                            Source C: <span class="code-vignette-success">Private Health Insurance</span><br>
+                            <hr class="code-vignette-divider">
+                            <strong>AI Output:</strong> <span class="code-vignette-success">Insurance validated, patient record created</span><br>
+                            <strong>Action:</strong> Auto-populate practice system, schedule appointment
+                        </div>
+                        <p class="time-savings">Result: 15 minutes per patient → 2 min verification</p>
+                    </div>
+                </div>
+
+                <div class="methodology-card">
+                    <div class="methodology-number">2</div>
+                    <div class="methodology-content">
+                        <h3>Referral Processing</h3>
+                        <p class="methodology-desc methodology-desc-spaced">Automated referral triaging with priority classification.</p>
+                        <div class="code-vignette">
+                            <strong>Manual:</strong> Read GP letter → Extract patient info → Classify urgency → Assign specialist<br>
+                            <strong>Time:</strong> <span class="code-vignette-error">20-30 minutes</span><br>
+                            <hr class="code-vignette-divider">
+                            <strong>AI Process:</strong> Extract patient → Detect urgency → Auto-assign specialist<br>
+                            <strong>Time:</strong> <span class="code-vignette-success">5 min verification</span>
+                        </div>
+                        <p class="time-savings">Result: Process 100+ referrals/day vs 20/day manually</p>
+                    </div>
+                </div>
+
+                <div class="methodology-card">
+                    <div class="methodology-number">3</div>
+                    <div class="methodology-content">
+                        <h3>Medicare Coding Intelligence</h3>
+                        <p class="methodology-desc methodology-desc-spaced">Automated billing code suggestion from clinical notes.</p>
+                        <div class="code-vignette">
+                            <strong>Clinical Note:</strong> "Annual check-up, BP 140/90, cholesterol panel ordered"<br>
+                            <strong>AI Suggestion:</strong><br>
+                            Primary: <span class="code-vignette-success">Item 23 (GP consultation)</span><br>
+                            Secondary: <span class="code-vignette-info">Item 66551 (lipid studies)</span><br>
+                            <strong>Confidence:</strong> <span class="code-vignette-success">98%</span>
+                        </div>
+                        <p class="time-savings">Result: Eliminates $50K+ annual coding errors</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">Privacy Act Compliant</h2>
+            <p class="section-subhead">
+                Patient privacy, compliance, and clinical safety built in.
+            </p>
+            <div class="deliverable-grid">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                        </div>
+                        <h3>Governance First</h3>
+                        <p class="deliverable-subtitle">For Compliance Officers</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Data Sovereignty:</strong> Data never leaves your M365 tenant—patient privacy maintained.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Audit Trails:</strong> Every AI decision logged for Medicare compliance.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Privacy Act Compliant:</strong> Medicare coding standards validated.
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                        </div>
+                        <h3>Efficiency</h3>
+                        <p class="deliverable-subtitle">For Practice Managers</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Speed:</strong> Process 500+ patient forms/month without adding headcount.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Integration:</strong> Direct API to MedicalDirector, Best Practice, custom systems.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Accuracy:</strong> >99% extraction accuracy on patient data.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">Built for Australian Healthcare Practices</h2>
+            <p class="section-subhead">
+                Compliance, privacy, and team adoption built in.
+            </p>
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="methodology-card methodology-card-border-blue">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Privacy Act Compliant</h3>
+                        <p class="methodology-desc">Australian data sovereignty, full audit trails, Medicare aligned.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-green">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Cybersecure</h3>
+                        <p class="methodology-desc">ISO 27001 standards, no external data sharing.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-purple">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="8" height="18" x="8" y="4" rx="1"/>
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2"/>
+                            <path d="M9 9h6"/>
+                            <path d="M9 13h6"/>
+                            <path d="M9 17h6"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Team Training</h3>
+                        <p class="methodology-desc">Hands-on sessions; human oversight on all patient data.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-orange">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Quick ROI</h3>
+                        <p class="methodology-desc">Phase 1 tests your docs in 48hrs ($1,500 refund if &lt;90% accuracy).</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">Projected ROI for a 50-Person Healthcare Practice</h2>
+            <p class="section-subhead">
+                Conservative capacity recovery estimates based on industry benchmarks for document processing and loaded cost rates.
+            </p>
+            
+            <div class="roi-results-grid">
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">270 hrs</div>
+                    <div class="roi-result-label">Admin capacity freed per week</div>
+                    <p class="roi-result-description">150 hrs admin + 120 hrs practice managers</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">$1.02M</div>
+                    <div class="roi-result-label">Annual direct capacity freed</div>
+                    <p class="roi-result-description">At loaded cost rates</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">$400K</div>
+                    <div class="roi-result-label">Additional clinical capacity</div>
+                    <p class="roi-result-description">20-30 more patients/week + coding errors avoided</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">28x</div>
+                    <div class="roi-result-label">Projected ROI Year 1</div>
+                    <p class="roi-result-description">$1.42M benefit on $50K investment</p>
+                </div>
+            </div>
+            
+            <div class="roi-breakdown-container">
+                <h3 class="breakdown-title">How the $1.42M Benefit is Calculated:</h3>
+                
+                <div class="breakdown-row">
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Admin Capacity</span>
+                        <span class="breakdown-math">150 hrs/wk × $70/hr × 48 wks</span>
+                        <span class="breakdown-value">$504K</span>
+                    </div>
+
+                    <div class="breakdown-plus">+</div>
+
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Practice Manager Capacity</span>
+                        <span class="breakdown-math">120 hrs/wk × $90/hr × 48 wks</span>
+                        <span class="breakdown-value">$518K</span>
+                    </div>
+
+                    <div class="breakdown-plus">+</div>
+
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Clinical Growth</span>
+                        <span class="breakdown-math">20-30 More Patients/wk + Coding Errors</span>
+                        <span class="breakdown-value">$400K</span>
+                    </div>
+                </div>
+
+                <div class="breakdown-summary">
+                    <div class="investment-tag">Investment: $50K</div>
+                    <div class="total-benefit-tag">Total Year 1 Benefit: <strong>$1,422,000</strong></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">How The Protocol Works</h2>
+             <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="methodology-card">
+                
+                    <div class="methodology-content">
+                        <h3>Feasibility Sprint</h3>
+                        <p class="methodology-count">48 Hours • $1,500</p>
+                        <p class="methodology-desc">We test your 15 most complex documents. If we don't hit 90% accuracy, you get a full refund.</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                 
+                    <div class="methodology-content">
+                        <h3>Readiness Roadmap</h3>
+                        <p class="methodology-count">3 Weeks • $7,500</p>
+                        <p class="methodology-desc">We interview staff to map your workflow and quantify the ROI.</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                   
+                    <div class="methodology-content">
+                        <h3>Compliance Shield</h3>
+                        <p class="methodology-count">2 Weeks • $8-12k</p>
+                        <p class="methodology-desc">Pre-audit pack for Privacy Act compliance.</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                  
+                    <div class="methodology-content">
+                        <h3>Implementation</h3>
+                        <p class="methodology-count">30 Days • $20-30k</p>
+                        <p class="methodology-desc">Production deployment. You own the source code. Zero licensing fees.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">Healthcare Practice FAQs</h2>
+            <p class="section-subhead">Critical questions from practice managers about capacity, compliance, and integration.</p>
+            <div class="faq-accordion">
+            
+            <!-- QUESTION 1: QUALIFIER - Integration -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Which practice management systems do you integrate with?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We build custom integrations with practice management systems via API.</strong></p>
+                    <p><strong>Compatible systems include:</strong></p>
+                    <ul>
+                        <li><strong>Australian PM Systems:</strong> MedicalDirector, Best Practice, Genie Solutions, Zedmed, Communicare</li>
+                        <li><strong>Cloud-based:</strong> Powerchart, Helix, custom cloud systems</li>
+                        <li><strong>Hospital Systems:</strong> Epic, Cerner, custom EMR systems</li>
+                        <li><strong>Custom systems:</strong> Any practice management system with API access or data export capability</li>
+                    </ul>
+                    <p><strong>Integration approach:</strong> During Phase 2, we assess your specific PM system, review API documentation, and confirm integration feasibility before you commit to implementation. The automation sits "on top" of your existing system—staff don't need to learn new software.</p>
+                    <p>If your system doesn't provide API access, we can work with CSV/Excel exports or file-based integrations as an interim solution.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 2: QUALIFIER - Compliance -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Does this comply with Privacy Act requirements and Medicare coding standards?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. We configure Privacy Act-aligned compliance rules and Medicare safeguards during Phase 2.</strong></p>
+                    <p><strong>Compliance features we build:</strong></p>
+                    <ul>
+                        <li><strong>Privacy Act Compliance:</strong> All patient data remains within your Microsoft 365/Azure tenant in Australia—patient privacy maintained</li>
+                        <li><strong>Medicare Coding Standards:</strong> Automated validation against Medicare item numbers and billing requirements</li>
+                        <li><strong>Data Sovereignty:</strong> All processing occurs within your private cloud environment. No patient data sent to third-party providers like OpenAI</li>
+                        <li><strong>Audit Trails:</strong> Every AI decision, patient data access, and billing code suggestion logged immutably for Medicare audits</li>
+                    </ul>
+                    <p><strong>Data security:</strong> All data remains within your Microsoft 365 tenant in Australia. We use Azure AI with encryption. We document the entire data flow for Privacy Act compliance.</p>
+                    <p>Phase 3 (Compliance Shield) documents how the system maintains Privacy Act compliance and Medicare requirements for your practice.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 3: SELLER - Automation Capability -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this automate patient intake forms and referral processing?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. The system can automate both patient intake forms and referral processing.</strong></p>
+                    <p><strong>Patient Intake Processing:</strong></p>
+                    <ul>
+                        <li>Extract patient demographics, insurance information, and medical history from intake forms</li>
+                        <li>Validate Medicare cards and private health insurance details automatically</li>
+                        <li>Auto-populate practice management system with patient records</li>
+                        <li>Schedule appointments and flag urgent cases for review</li>
+                    </ul>
+                    <p><strong>Referral Processing:</strong></p>
+                    <ul>
+                        <li>Extract patient information, referring doctor details, and clinical notes from referral letters</li>
+                        <li>Classify referral urgency and priority automatically</li>
+                        <li>Match referrals to appropriate specialists based on clinical requirements</li>
+                        <li>Generate referral logs and tracking reports</li>
+                    </ul>
+                    <p><strong>Expected result:</strong> What currently takes 15 minutes per patient intake reduces to 2 minutes of verification. Referral processing that takes 20-30 minutes per referral reduces to 5 minutes of review.</p>
+                    <p>The exact workflow is mapped during Phase 2 (Readiness Roadmap), where we interview your practice managers and admin staff to understand your current patient intake and referral processes.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 4: SELLER - Capacity Increase -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>How many more patients can GPs handle with this automation?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Expected capacity increase: 20-30 additional patients per GP per week (Year 1).</strong></p>
+                    <p><strong>How this works:</strong></p>
+                    <ul>
+                        <li>Admin staff freed from manual patient intake (150 hrs/week capacity recovered)</li>
+                        <li>Practice managers freed from referral processing and Medicare coding tasks (120 hrs/week capacity recovered)</li>
+                        <li>GPs can redirect this capacity to patient care instead of waiting for intake backlogs</li>
+                    </ul>
+                    <p><strong>Time savings per task:</strong></p>
+                    <ul>
+                        <li>Patient intake: 15 minutes → 2 minutes (verification only)</li>
+                        <li>Referral processing: 20-30 minutes → 5 minutes (review only)</li>
+                        <li>Medicare coding: 10-15 minutes → 2-3 minutes (approval only)</li>
+                        <li>Appointment scheduling: 5 minutes → 1 minute (verification only)</li>
+                    </ul>
+                    <p><strong>Business impact:</strong> The exact capacity increase depends on your current patient volume and appointment mix. Phase 2 quantifies this with your actual patient data and GP workload.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 5: SELLER - Custom Templates -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this handle our practice's custom patient intake forms and referral templates?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. Phase 1 specifically tests YOUR patient forms and referral templates, not generic demo documents.</strong></p>
+                    <p><strong>What we can process:</strong></p>
+                    <ul>
+                        <li><strong>Custom Intake Forms:</strong> Practice-specific patient registration forms, medical history questionnaires, insurance verification forms</li>
+                        <li><strong>Referral Templates:</strong> GP referral letters, specialist referral formats, hospital referral documents</li>
+                        <li><strong>Multi-format Documents:</strong> PDF forms, scanned handwritten notes, digital forms, faxed documents</li>
+                        <li><strong>Clinical Documents:</strong> Lab results, imaging reports, discharge summaries</li>
+                    </ul>
+                    <p><strong>Phase 1 testing approach:</strong> You provide 10-15 of your actual patient intake forms and referral documents (you can redact patient names and personal information). We extract patient demographics, insurance details, clinical notes, referral information, and other critical data. If we can't achieve 90% extraction accuracy on YOUR specific forms and templates, you receive a full $1,500 refund.</p>
+                    <p>This eliminates the risk of implementing a solution that works on demo documents but fails on your real-world patient forms and referral documentation.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 6: DEFENDER - AI Mistakes -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if the AI makes a mistake on a critical field like a patient's Medicare number or billing code?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We build a three-layer validation system to prevent costly errors:</strong></p>
+                    <p><strong>Layer 1 - Confidence Scoring:</strong> If the AI's confidence score is below 90% on critical fields (patient IDs, Medicare numbers, billing codes, insurance details), the document is automatically flagged for human review.</p>
+                    <p><strong>Layer 2 - Business Logic Validation:</strong> We configure rules specific to your requirements. Examples: "Medicare numbers must match format," "Billing codes must be valid Medicare items," "Insurance details must match provider database." Mismatches trigger alerts.</p>
+                    <p><strong>Layer 3 - Human Review Queue:</strong> Flagged records route to your practice manager within the same workflow. Review takes 30-60 seconds to confirm or correct.</p>
+                    <p><strong>Target accuracy:</strong> 99%+ on production documents after model training. The small percentage flagged for review prevents catastrophic errors (incorrect patient records, wrong billing codes, Medicare audit failures).</p>
+                    <p>System designed to "fail safe." Coding suggestions below 95% confidence flagged for human review. Practice managers verify before submission. You're eliminating typing, not eliminating oversight.</p>
+                    <p>We carry Professional Indemnity insurance. Policy details are provided during the contract phase.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 7: DEFENDER - Exit Gates -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if we decide not to proceed after Phase 1 or 2?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Each phase is a decision gate. You control whether to proceed.</strong></p>
+                    <p><strong>Phase 1 exit:</strong> If we don't achieve 90% extraction accuracy on your documents, you receive a full $1,500 refund. No questions asked.</p>
+                    <p><strong>Phase 2 exit:</strong> If the Readiness Roadmap shows implementation isn't viable for your workflow or practice structure, you stop with the strategic analysis. You've invested $9,000 total and have a clear answer on feasibility.</p>
+                    <p><strong>No long-term contracts.</strong> You're not locked into Phase 4 implementation until you've seen proof in Phase 1 and a detailed plan in Phase 2.</p>
+                </div>
+            </div>
+
+            </div>
+            
+            <!-- CTA BOX -->
+            <div class="methodology-content" style="margin-top: var(--spacing-xl);">
+                <h3 style="margin-top: 0; margin-bottom: var(--spacing-sm);">Have Questions About Your Specific Workflow?</h3>
+                <p style="margin-bottom: var(--spacing-md);">Healthcare practice workflows vary by practice type, PM systems, and compliance requirements. Book a 15-minute diagnostic call to discuss your specific situation.</p>
+                <a href="{{ url_for('contact_page') }}" class="btn btn-primary">Book Diagnostic Call</a>
+            </div>
+            
+        </div>
+    </section>
+
+    <section class="section cta-section">
+        <div class="container">
+            <div class="cta-content">
+                <h2 class="section-headline">You've Seen the Opportunity.<br>Now See the Proof.</h2>
+                <p class="cta-content-text">
+                    Phase 1 extracts from YOUR patient forms with YOUR data. See what 90%+ target accuracy looks like in a feasibility sprint.
+                </p>
+                <div class="cta-buttons-group">
+                    <a href="{{ url_for('feasibility_sprint_report') }}?industrysector=healthcare" class="btn btn-secondary btn-large">
+                        View Phase 1 Sample First
+                    </a>
+                    <a href="{{ url_for('contact_page') }}" class="btn btn-primary btn-large">
+                        Ready? Book Your Sprint
+                    </a>
+                </div>
+                <p class="cta-subtitle">
+                    Sample shows projected extraction accuracy, validation approach, and time analysis methodology.
+                </p>
+            </div>
+        </div>
+    </section>
+{% endblock %}

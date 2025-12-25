@@ -1,0 +1,623 @@
+{% extends "base.html" %}
+
+{% block title %}AI Automation for Civil & Structural Engineering Firms | Curam-Ai Protocol{% endblock %}
+{% block description %}Automate tender spec analysis and site diary processing for Australian engineering firms. Free document coordinators and engineers from manual transcription.{% endblock %}
+
+{% block content %}
+<section class="hero services-hero">
+        <div class="hero-background">
+            <div class="hero-gradient"></div>
+            <div class="hero-pattern"></div>
+            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+            </svg>
+            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+            </svg>
+        </div>
+        <div class="container">
+            <div class="hero-content">
+                <p class="hero-eyebrow">For Civil & Structural Engineering Firms</p>
+                <h1 class="hero-headline">Your Document Coordinators Are Burning Capacity<br><span class="text-accent">on Manual Tender Transcription</span></h1>
+                <p class="hero-subheadline">
+                    Document coordinators spend 6-8 hours per week manually entering tender spec data and transcribing site diaries. Mid-level engineers spend 5-7 hours per week reading 500-page tender documents to extract requirements. This administrative burden bottlenecks your senior engineers—who can't bid on more tenders because spec analysis capacity is maxed out. The result? You're turning away $300K+ in annual tender opportunities while paying $1.4M for manual work that AI can handle.
+                </p>
+                <div class="hero-cta-group">
+                    <a href="{{ url_for('roi_calculator') }}?industry=engineering" class="btn btn-primary">Calculate Your ROI</a>
+                    <a href="{{ url_for('feasibility_sprint_report') }}?industrysector=engineering" class="btn btn-secondary">See Phase 1 Sample</a>
+                    <a href="{{ url_for('contact_page') }}" class="btn btn-tertiary" style="background: transparent; border: 2px solid white; color: white; font-weight: 600; text-decoration: none; display: inline-block; padding: 0.75rem 2rem; border-radius: 6px; transition: all 0.3s ease;">Book Feasibility Sprint</a>
+                </div>
+                <div class="hero-guarantee">
+                    <p class="guarantee-text">
+                        <strong>Risk-Free Testing:</strong> $1,500 is fully refundable if we can't 
+                        achieve 90%+ accuracy on your documents—provided you supply the documents and 
+                        respond to clarification questions promptly.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">The Engineering Firm Capacity Trap:<br><span class="text-accent">Paying Premium Staff for Documentation Work</span></h2>
+            <p class="section-subhead">Your firm is caught in a capacity squeeze that's costing you tenders:</p>
+            <div class="methodology-grid">
+                <div class="methodology-card methodology-card-border-red">
+                    <div class="methodology-content">
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="m18 15-6-6-6 6"/>
+                            </svg>
+                            Pressure from Above
+                        </h3>
+                        <p class="methodology-desc">Large consultancies deploying enterprise document management for tender responses—competing on speed AND price.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-yellow">
+                    <div class="methodology-content">
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="m6 9 6 6 6-6"/>
+                            </svg>
+                            Pressure from Below
+                        </h3>
+                        <p class="methodology-desc">Digital platforms handling simple compliance work with automated workflows. Clients asking: "Why pay for standard reviews?" Your commodity work is being automated away.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-green">
+                    <div class="methodology-content">
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                            </svg>
+                            The Hidden Cost
+                        </h3>
+                        <p class="methodology-desc">Your coordinators and mid-level engineers are trapped doing manual tender transcription and spec analysis. Your senior engineers are bottlenecked. You can't bid on more tenders without hiring—but hiring is expensive and slow.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="highlight-box">
+                <div class="highlight-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-accent)" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </div>
+                <p class="highlight-text">
+                    <strong>The Reality:</strong> A 50-person firm pays $1.4M annually for coordinators and engineers to do manual tender spec analysis and site diary transcription. Meanwhile, senior engineers turn away tender opportunities (can only bid on 12/year due to spec analysis bottleneck). Total opportunity cost: <strong>$1.70M per year</strong> that could be recovered through automation.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">What If You Freed 190 Hours/Week<br><span class="text-accent">of Engineering Capacity?</span></h2>
+            <p class="section-subhead">You don't need a radical transformation. Automating tender spec extraction and site diary processing frees engineering capacity for technical design.</p>
+            <div class="deliverable-grid deliverable-grid-spaced">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="1" x2="12" y2="23"/>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                        </div>
+                        <h3>The Baseline</h3>
+                        <p class="deliverable-subtitle">50-Person Firm</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>10 Senior Engineers, 20 Mid-level Engineers, 15 Document Coordinators, 5 Project Managers</li>
+                        <li>Coordinator Rate: $130/hr (loaded cost)</li>
+                        <li>Engineer Rate: $175/hr (loaded cost)</li>
+                        <li><strong>Constraint:</strong> Coordinators/engineers at capacity. Can only bid on 12 tenders/year.</li>
+                    </ul>
+                </div>
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                        </div>
+                        <h3>The Protocol Effect</h3>
+                        <p class="deliverable-subtitle">Capacity Unlocked</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li><strong>Automate:</strong> Tender spec extraction + site diary transcription (190 hrs/week)</li>
+                        <li><strong>Coordinators:</strong> 90 hrs/week × $130 × 48 weeks = $562K</li>
+                        <li><strong>Engineers:</strong> 100 hrs/week × $175 × 48 weeks = $840K</li>
+                        <li><strong>Seniors:</strong> Can bid on 18 tenders/year (50% more) = $300K additional wins</li>
+                        <li><strong class="revenue-highlight">Total: $1.70M Year 1 Benefit</strong></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="warning-callout">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <p><strong>Investment vs Return:</strong> Total project cost ~$50k. ROI is 34x in Year 1, without hiring a single additional staff member.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">Beyond Basic OCR.<br><span class="text-accent">We Automate Engineering Logic.</span></h2>
+            <p class="section-subhead">Generic tools capture data. We capture the compliance decisions that usually require a human.</p>
+            <div class="methodology-grid">
+                <div class="methodology-card">
+                    <div class="methodology-number">1</div>
+                    <div class="methodology-content">
+                        <h3>Tender Specification Extraction</h3>
+                        <p class="methodology-desc methodology-desc-spaced">Automated extraction from 500+ page tender documents.</p>
+                        <div class="code-vignette">
+                            Source A: <span class="code-vignette-success">Tender Package (523 pages)</span><br>
+                            Source B: <span class="code-vignette-success">Technical Specs (Section 4.2.7)</span><br>
+                            <hr class="code-vignette-divider">
+                            <strong>AI Output:</strong> <span class="code-vignette-success">86 requirements extracted, categorized</span><br>
+                            <strong>Action:</strong> Auto-populate response template, flag conflicts
+                        </div>
+                        <p class="time-savings">Result: 15-20 hours → 2-3 hours review time</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                    <div class="methodology-number">2</div>
+                    <div class="methodology-content">
+                        <h3>Site Diary Digitization</h3>
+                        <p class="methodology-desc methodology-desc-spaced">Automated extraction from handwritten site logs.</p>
+                        <div class="code-vignette">
+                            <strong>Manual:</strong> Read handwriting → Transcribe → Log incidents → Alert WHS<br>
+                            <strong>Time:</strong> <span class="code-vignette-error">45 min per diary</span><br>
+                            <hr class="code-vignette-divider">
+                            <strong>AI Process:</strong> Extract text → Detect incidents → Auto-log → Send alerts<br>
+                            <strong>Time:</strong> <span class="code-vignette-success">5 min verification</span>
+                        </div>
+                        <p class="time-savings">Result: Eliminates 90% of manual transcription time</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                    <div class="methodology-number">3</div>
+                    <div class="methodology-content">
+                        <h3>Subcontractor Compliance Tracking</h3>
+                        <p class="methodology-desc methodology-desc-spaced">Automated monitoring of certifications and licenses.</p>
+                        <div class="code-vignette">
+                            <strong>Subcontractor:</strong> ABC Concrete Pty Ltd<br>
+                            License: <span class="code-vignette-success">QBCC 123456 (valid until 30-Jun-25)</span><br>
+                            Insurance: <span class="code-vignette-success">$20M PI (current)</span><br>
+                            SWMS: <span class="code-vignette-warning">Expires 15-Feb-25 (alert 30 days prior)</span>
+                        </div>
+                        <p class="time-savings">Result: Near-zero compliance gaps, prevents site shutdowns</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">WorkSafe QLD Compliant</h2>
+            <p class="section-subhead">
+                Compliance, audit trails, and safety built in.
+            </p>
+            <div class="deliverable-grid">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                        </div>
+                        <h3>Governance First</h3>
+                        <p class="deliverable-subtitle">For Compliance Officers</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Data Sovereignty:</strong> Data never leaves your M365 tenant—project confidentiality maintained.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Audit Trails:</strong> Every AI decision logged for WorkSafe QLD compliance.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>ISO 45001 Aligned:</strong> Site safety and WHS standards validated.
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                        </div>
+                        <h3>Efficiency</h3>
+                        <p class="deliverable-subtitle">For Project Managers</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Speed:</strong> Process 300+ site diaries/month without adding headcount.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Integration:</strong> Direct API to Procore, Aconex, 12d Model.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Accuracy:</strong> >99% extraction accuracy on tender specs.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">Built for Queensland Engineering Firms</h2>
+            <p class="section-subhead">Compliance, safety, and team adoption built in.</p>
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="methodology-card methodology-card-border-blue">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>WorkSafe Compliant</h3>
+                        <p class="methodology-desc">Queensland data sovereignty, full audit trails, ISO 45001 aligned.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-green">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Cybersecure</h3>
+                        <p class="methodology-desc">ISO 27001 standards, project confidentiality built-in.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-purple">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="8" height="18" x="8" y="4" rx="1"/>
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2"/>
+                            <path d="M9 9h6"/>
+                            <path d="M9 13h6"/>
+                            <path d="M9 17h6"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Team Training</h3>
+                        <p class="methodology-desc">Hands-on sessions; human oversight on all tender docs.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-orange">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Quick ROI</h3>
+                        <p class="methodology-desc">Phase 1 tests your docs in 48hrs ($1,500 refund if &lt;90% accuracy).</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">Projected ROI for a 50-Person Engineering Firm</h2>
+            <p class="section-subhead">
+                Conservative capacity recovery estimates based on industry benchmarks for document processing and loaded cost rates.
+            </p>
+            
+            <div class="roi-results-grid">
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">190 hrs</div>
+                    <div class="roi-result-label">Engineering capacity freed per week</div>
+                    <p class="roi-result-description">90 hrs coordinators + 100 hrs engineers</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">$1.40M</div>
+                    <div class="roi-result-label">Annual direct capacity freed</div>
+                    <p class="roi-result-description">At loaded cost rates</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">$300K</div>
+                    <div class="roi-result-label">Additional tender capacity</div>
+                    <p class="roi-result-description">Bid on 50% more tenders/year</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">34x</div>
+                    <div class="roi-result-label">Projected ROI Year 1</div>
+                    <p class="roi-result-description">$1.70M benefit on $50K investment</p>
+                </div>
+            </div>
+            
+            <div class="roi-breakdown-container">
+                <h3 class="breakdown-title">How the $1.70M Benefit is Calculated:</h3>
+                
+                <div class="breakdown-row">
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Coordinator Capacity</span>
+                        <span class="breakdown-math">90 hrs/wk × $130/hr × 48 wks</span>
+                        <span class="breakdown-value">$562K</span>
+                    </div>
+
+                    <div class="breakdown-plus">+</div>
+
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Engineer Capacity</span>
+                        <span class="breakdown-math">100 hrs/wk × $175/hr × 48 wks</span>
+                        <span class="breakdown-value">$840K</span>
+                    </div>
+
+                    <div class="breakdown-plus">+</div>
+
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Tender Growth</span>
+                        <span class="breakdown-math">50% More Tenders (Year 1)</span>
+                        <span class="breakdown-value">$300K</span>
+                    </div>
+                </div>
+
+                <div class="breakdown-summary">
+                    <div class="investment-tag">Investment: $50K</div>
+                    <div class="total-benefit-tag">Total Year 1 Benefit: <strong>$1,700,000</strong></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">How The Protocol Works</h2>
+           <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="methodology-card">
+                   
+                    <div class="methodology-content">
+                        <h3>Feasibility Sprint</h3>
+                        <p class="methodology-count">48 Hours • $1,500</p>
+                        <p class="methodology-desc">We test your 15 most complex documents. If we don't hit 90% accuracy, you get a full refund.</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                   
+                    <div class="methodology-content">
+                        <h3>Readiness Roadmap</h3>
+                        <p class="methodology-count">3 Weeks • $7,500</p>
+                        <p class="methodology-desc">We interview engineers and project managers to map your workflow and quantify the ROI.</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                  
+                    <div class="methodology-content">
+                        <h3>Compliance Shield</h3>
+                        <p class="methodology-count">2 Weeks • $8-12k</p>
+                        <p class="methodology-desc">Pre-audit pack for WorkSafe QLD compliance.</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                
+                    <div class="methodology-content">
+                        <h3>Implementation</h3>
+                        <p class="methodology-count">30 Days • $20-30k</p>
+                        <p class="methodology-desc">Production deployment. You own the source code. Zero licensing fees.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">Engineering Firm FAQs</h2>
+            <p class="section-subhead">Critical questions from project managers about capacity, compliance, and integration.</p>
+            <div class="faq-accordion">
+            
+            <!-- QUESTION 1: QUALIFIER - Integration -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Which project management systems do you integrate with?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We build custom integrations with project management systems via API.</strong></p>
+                    <p><strong>Compatible systems include:</strong></p>
+                    <ul>
+                        <li><strong>Enterprise PM:</strong> Procore, Aconex, ProjectWise, Asite, Viewpoint</li>
+                        <li><strong>Engineering-specific:</strong> 12d Model, AutoCAD, Civil 3D, custom CAD systems</li>
+                        <li><strong>Document Management:</strong> SharePoint, Documentum, Newforma, custom DMS</li>
+                        <li><strong>Custom systems:</strong> Any system with API access or data export capability</li>
+                    </ul>
+                    <p><strong>Integration approach:</strong> During Phase 2, we assess your specific PM system, review API documentation, and confirm integration feasibility before you commit to implementation. The automation sits "on top" of your existing system—staff don't need to learn new software.</p>
+                    <p>If your system doesn't provide API access, we can work with CSV/Excel exports or file-based integrations as an interim solution.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 2: QUALIFIER - Compliance -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Does this comply with WorkSafe Queensland and WHS regulatory requirements?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. We configure WorkSafe-aligned compliance rules and WHS safeguards during Phase 2.</strong></p>
+                    <p><strong>Compliance features we build:</strong></p>
+                    <ul>
+                        <li><strong>WorkSafe Queensland Compliance:</strong> Automated SWMS tracking, site diary digitization with complete audit trails, and subcontractor certificate monitoring</li>
+                        <li><strong>WHS Requirements:</strong> Full documentation of data flows, access controls, and professional responsibility frameworks for site safety</li>
+                        <li><strong>ISO 45001 Alignment:</strong> Automated extraction and validation of safety documentation, incident reporting, and compliance tracking</li>
+                        <li><strong>Audit Trails:</strong> Every AI decision, site diary entry, and compliance check logged immutably for WorkSafe audits</li>
+                    </ul>
+                    <p><strong>Data sovereignty:</strong> All processing occurs within your Microsoft 365/Azure tenant in Australia. Site documentation and safety records never leave your private cloud environment.</p>
+                    <p>Phase 3 (Compliance Shield) documents how the system maintains WorkSafe compliance and WHS requirements for your jurisdiction(s).</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 3: SELLER - Automation Capability -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this automate tender specification extraction and site diary digitization?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. The system can automate both tender specification extraction and site diary digitization.</strong></p>
+                    <p><strong>Tender Specification Extraction:</strong></p>
+                    <ul>
+                        <li>Extract key requirements, technical specifications, and compliance criteria from 500+ page tender packs</li>
+                        <li>Identify critical deadlines, submission requirements, and evaluation criteria automatically</li>
+                        <li>Generate tender response templates with extracted requirements pre-populated</li>
+                        <li>Flag compliance gaps and missing documentation requirements</li>
+                    </ul>
+                    <p><strong>Site Diary Digitization:</strong></p>
+                    <ul>
+                        <li>Extract data from handwritten site logs using OCR and handwriting recognition</li>
+                        <li>Capture weather, activities, personnel, equipment, and WHS information</li>
+                        <li>Generate digital site diaries with structured data for reporting and compliance</li>
+                        <li>Maintain complete audit trails for WorkSafe inspections</li>
+                    </ul>
+                    <p><strong>Expected result:</strong> What currently takes 15-20 hours per tender for specification analysis reduces to 2-3 hours of review. Site diary digitization that takes 6-8 hours per week reduces to 30-60 minutes of verification.</p>
+                    <p>The exact workflow is mapped during Phase 2 (Readiness Roadmap), where we interview your engineers and project managers to understand your current tender and site documentation processes.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 4: SELLER - Capacity Increase -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>How many more tenders can senior engineers handle with this automation?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Expected capacity increase: 50% more tenders per year (6 additional tenders for a firm bidding on 12/year).</strong></p>
+                    <p><strong>How this works:</strong></p>
+                    <ul>
+                        <li>Coordinators freed from manual tender transcription (90 hrs/week capacity recovered)</li>
+                        <li>Mid-level engineers freed from tender spec analysis (100 hrs/week capacity recovered)</li>
+                        <li>Senior engineers can redirect this capacity to technical design and tender strategy instead of supervising spec analysis</li>
+                    </ul>
+                    <p><strong>Time savings per task:</strong></p>
+                    <ul>
+                        <li>Tender specification analysis: 15-20 hours → 2-3 hours (review only)</li>
+                        <li>Site diary digitization: 6-8 hours/week → 30-60 minutes (verification only)</li>
+                        <li>Subcontractor compliance tracking: 3-4 hours/week → 15 minutes (approval only)</li>
+                        <li>SWMS processing: 2-3 hours/week → 15 minutes (review only)</li>
+                    </ul>
+                    <p><strong>Business impact:</strong> The exact capacity increase depends on your current tender volume and project mix. Phase 2 quantifies this with your actual tender data and engineering workload.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 5: SELLER - Custom Templates -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this handle technical documents like beam schedules and concrete test reports?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. Phase 1 specifically tests YOUR technical documents and tender formats, not generic demo documents.</strong></p>
+                    <p><strong>What we can process:</strong></p>
+                    <ul>
+                        <li><strong>Technical Documents:</strong> Beam schedules, concrete test reports, drawing registers, structural calculations</li>
+                        <li><strong>Custom Tender Formats:</strong> Client-specific tender packs, government tender formats, private sector RFPs</li>
+                        <li><strong>Site Diary Formats:</strong> Firm-specific site diary templates, handwritten logs, digital forms, photo-based diaries</li>
+                        <li><strong>Multi-format Documents:</strong> PDF tender packs, scanned handwritten logs, digital forms, Excel-based registers</li>
+                    </ul>
+                    <p><strong>Phase 1 testing approach:</strong> You provide 10-15 of your actual tender specs, site diary documents, and technical drawings (you can redact client/project names). We extract requirements, deadlines, technical specifications, site activities, WHS information, and other critical data. If we can't achieve 90% extraction accuracy on YOUR specific formats and templates, you receive a full $1,500 refund.</p>
+                    <p>This eliminates the risk of implementing a solution that works on demo documents but fails on your real-world tender packs, technical drawings, and site documentation.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 6: DEFENDER - AI Mistakes -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if the AI makes a mistake on a critical field like a tender deadline or technical specification?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We build a three-layer validation system to prevent costly errors:</strong></p>
+                    <p><strong>Layer 1 - Confidence Scoring:</strong> If the AI's confidence score is below 90% on critical fields (tender deadlines, technical specifications, safety incidents), the document is automatically flagged for human review.</p>
+                    <p><strong>Layer 2 - Business Logic Validation:</strong> We configure rules specific to your requirements. Examples: "Tender deadlines must be in the future," "Beam designations (UB/UC) must match engineering standards," "Safety incidents must be classified correctly." Mismatches trigger alerts.</p>
+                    <p><strong>Layer 3 - Human Review Queue:</strong> Flagged records route to your project manager or engineer within the same workflow. Review takes 30-60 seconds to confirm or correct.</p>
+                    <p><strong>Target accuracy:</strong> 99%+ on production documents after model training. The small percentage flagged for review prevents catastrophic errors (missed tender deadlines, incorrect technical specifications, safety reporting violations).</p>
+                    <p>We carry Professional Indemnity insurance. Policy details are provided during the contract phase.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 7: DEFENDER - Exit Gates -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if we decide not to proceed after Phase 1 or 2?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Each phase is a decision gate. You control whether to proceed.</strong></p>
+                    <p><strong>Phase 1 exit:</strong> If we don't achieve 90% extraction accuracy on your documents, you receive a full $1,500 refund. No questions asked.</p>
+                    <p><strong>Phase 2 exit:</strong> If the Readiness Roadmap shows implementation isn't viable for your workflow or firm structure, you stop with the strategic analysis. You've invested $9,000 total and have a clear answer on feasibility.</p>
+                    <p><strong>No long-term contracts.</strong> You're not locked into Phase 4 implementation until you've seen proof in Phase 1 and a detailed plan in Phase 2.</p>
+                </div>
+            </div>
+
+            </div>
+            
+            <!-- CTA BOX -->
+            <div class="methodology-content" style="margin-top: var(--spacing-xl);">
+                <h3 style="margin-top: 0; margin-bottom: var(--spacing-sm);">Have Questions About Your Specific Workflow?</h3>
+                <p style="margin-bottom: var(--spacing-md);">Engineering firm workflows vary by project type, PM systems, and regulatory requirements. Book a 15-minute diagnostic call to discuss your specific situation.</p>
+                <a href="{{ url_for('contact_page') }}" class="btn btn-primary">Book Diagnostic Call</a>
+            </div>
+            
+        </div>
+    </section>
+
+    <section class="section cta-section">
+        <div class="container">
+            <div class="cta-content">
+                <h2 class="section-headline">You've Seen the Opportunity.<br>Now See the Proof.</h2>
+                <p class="cta-content-text">
+                    Phase 1 extracts from YOUR tender specs with YOUR data. See what 90%+ target accuracy looks like in a feasibility sprint.
+                </p>
+                <div class="cta-buttons-group">
+                    <a href="{{ url_for('feasibility_sprint_report') }}?industrysector=engineering" class="btn btn-secondary btn-large">
+                        View Phase 1 Sample First
+                    </a>
+                    <a href="{{ url_for('contact_page') }}" class="btn btn-primary btn-large">
+                        Ready? Book Your Sprint
+                    </a>
+                </div>
+                <p class="cta-subtitle">
+                    Sample shows projected extraction accuracy, validation approach, and time analysis methodology.
+                </p>
+            </div>
+        </div>
+    </section>
+{% endblock %}

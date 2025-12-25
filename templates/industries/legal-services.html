@@ -1,0 +1,640 @@
+{% extends "base.html" %}
+
+{% block title %}AI Automation for Legal Firms | Curam-Ai Protocol{% endblock %}
+{% block description %}Automate contract data entry, matter setup, and precedent searching for Australian legal firms. Free paralegals and junior associates from manual work.{% endblock %}
+
+{% block content %}
+<section class="hero services-hero">
+        <div class="hero-background">
+            <div class="hero-gradient"></div>
+            <div class="hero-pattern"></div>
+            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+            </svg>
+            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+            </svg>
+        </div>
+        <div class="container">
+            <div class="hero-content">
+                <p class="hero-eyebrow">For Legal Practices & Law Firms</p>
+                <h1 class="hero-headline">Stop Losing Billable Hours<br><span class="text-accent">to Manual Document Work</span></h1>
+                <p class="hero-subheadline">
+                    Mid-sized legal firms hit a capacity wall: paralegals spend hours manually extracting contract terms, junior associates waste time searching for precedents, and partners turn away matters because junior capacity is maxed out. We automate the document-heavy work that bottlenecks your firm.
+                </p>
+                <div class="hero-cta-group">
+                    <a href="{{ url_for('roi_calculator') }}?industry=legal" class="btn btn-primary">Calculate Your ROI</a>
+                    <a href="{{ url_for('feasibility_sprint_report') }}?industrysector=legal" class="btn btn-secondary">See Phase 1 Sample</a>
+                    <a href="{{ url_for('contact_page') }}" class="btn btn-tertiary" style="background: transparent; border: 2px solid white; color: white; font-weight: 600; text-decoration: none; display: inline-block; padding: 0.75rem 2rem; border-radius: 6px; transition: all 0.3s ease;">Book Feasibility Sprint</a>
+                </div>
+                
+                <div class="hero-guarantee">
+                    <p class="guarantee-text">
+                        <strong>Risk-Free Testing:</strong> $1,500 is fully refundable if we can't 
+                        achieve 90%+ accuracy on your documents—provided you supply the documents and 
+                        respond to clarification questions promptly.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">The Mid-Market Legal Trap:<br><span class="text-accent">Too Complex for Templates, Too Small for Enterprise Solutions</span></h2>
+            <p class="section-subhead">
+                You're caught in a squeeze that's eroding margins and limiting growth:
+            </p>
+            <div class="methodology-grid">
+                <div class="methodology-card methodology-card-border-red">
+                    <div class="methodology-content">
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="m18 15-6-6-6 6"/>
+                            </svg>
+                            Pressure from Above
+                        </h3>
+                        <p class="methodology-desc">Alternative Legal Service Providers deploying enterprise AI for contract review and due diligence—competing on speed AND price.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-yellow">
+                    <div class="methodology-content">
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="m6 9 6 6 6-6"/>
+                            </svg>
+                            Pressure from Below
+                        </h3>
+                        <p class="methodology-desc">Lawpath and template services handling simple documents. Clients asking: "Why pay for standard contracts?" Your commodity work is being automated away.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-green">
+                    <div class="methodology-content">
+                        <h3>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                            </svg>
+                            The Gap: Your Opportunity
+                        </h3>
+                        <p class="methodology-desc">Complex contract work still requires junior and paralegal time. This is where you compete... but manual data entry is killing your capacity.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="highlight-box">
+                <div class="highlight-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-accent)" stroke-width="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
+                </div>
+                <p class="highlight-text">
+                    <strong>The Result:</strong> Paralegals trapped doing manual contract data entry. Junior associates wasting hours searching for precedents. Partners bottlenecked and turning away matters—seeing capacity flat despite demand growth.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">What If You Freed 105 Hours/Week<br><span class="text-accent">of Junior Capacity?</span></h2>
+            <p class="section-subhead">
+                You don't need a radical transformation. Automating contract data entry and precedent searching frees junior capacity for billable work.
+            </p>
+            <div class="deliverable-grid deliverable-grid-spaced">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="1" x2="12" y2="23"/>
+                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                            </svg>
+                        </div>
+                        <h3>The Baseline</h3>
+                        <p class="deliverable-subtitle">35-Person Firm</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>6 Partners, 14 Seniors, 10 Juniors, 5 Paralegals</li>
+                        <li>Paralegal Rate: $100/hr (loaded cost)</li>
+                        <li>Junior Rate: $225/hr (loaded cost)</li>
+                        <li><strong>Constraint:</strong> Juniors/paralegals maxed out on manual work. Partners turning away matters.</li>
+                    </ul>
+                </div>
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                        </div>
+                        <h3>The Protocol Effect</h3>
+                        <p class="deliverable-subtitle">Capacity Unlocked</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li><strong>Automate:</strong> Contract extraction + matter setup + precedent search (105 hrs/week)</li>
+                        <li><strong>Paralegals:</strong> 45 hrs/week × $100 × 48 weeks = $216K</li>
+                        <li><strong>Juniors:</strong> 60 hrs/week × $225 × 48 weeks = $648K</li>
+                        <li><strong>Partners:</strong> Can accept 3-4 more matters = $350K revenue</li>
+                        <li><strong class="revenue-highlight">Total: $1.21M Year 1 Benefit</strong></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="warning-callout">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <p><strong>Investment vs Return:</strong> Total project cost ~$50k. ROI is 24x in Year 1, without hiring a single additional staff member.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">Beyond Basic OCR.<br><span class="text-accent">We Automate Legal Judgment.</span></h2>
+            <p class="section-subhead">
+                Generic tools capture text. We capture the judgment calls that usually require a paralegal or junior associate.
+            </p>
+            <div class="methodology-grid">
+                <div class="methodology-card">
+                    <div class="methodology-number">1</div>
+                    <div class="methodology-content">
+                        <h3>Contract Intelligence</h3>
+                        <p class="methodology-desc methodology-desc-spaced">Automated extraction of key terms from complex contracts.</p>
+                        <div class="code-vignette">
+                            <strong>Input:</strong> 45-page commercial lease<br>
+                            <strong>Manual Process:</strong> <span class="code-vignette-error">Paralegal reads + types → 45 min</span><br>
+                            <hr class="code-vignette-divider">
+                            <strong>AI Output (2 min):</strong><br>
+                            Lessor: <span class="code-vignette-success">XYZ Corporation Pty Ltd</span><br>
+                            Term: <span class="code-vignette-success">5 years + 2×5 options</span><br>
+                            Rent Review: <span class="code-vignette-success">CPI + 2%</span><br>
+                            <span class="variance-badge">Non-standard: 8% cap → Partner review</span>
+                        </div>
+                        <p class="time-savings">Result: 45 min → 5 min verification</p>
+                    </div>
+                </div>
+
+                <div class="methodology-card">
+                    <div class="methodology-number">2</div>
+                    <div class="methodology-content">
+                        <h3>Matter Setup Automation</h3>
+                        <p class="methodology-desc methodology-desc-spaced">Intelligent matter creation from intake forms.</p>
+                        <div class="code-vignette">
+                            <strong>Manual:</strong> Read form → Check conflicts → Create folder → Assign practice area → Pre-fill letter<br>
+                            <strong>Time:</strong> <span class="code-vignette-error">60 minutes</span><br>
+                            <hr class="code-vignette-divider">
+                            <strong>AI Process:</strong><br>
+                            Extract data → Auto-check conflicts → Create folder → Suggest area (95%) → Pre-fill letter<br>
+                            <strong>Time:</strong> <span class="code-vignette-success">5 minutes verification</span>
+                        </div>
+                        <p class="time-savings">Result: Eliminates 55 min per new matter</p>
+                    </div>
+                </div>
+
+                <div class="methodology-card">
+                    <div class="methodology-number">3</div>
+                    <div class="methodology-content">
+                        <h3>Precedent Search</h3>
+                        <p class="methodology-desc methodology-desc-spaced">AI-powered search across all past matters.</p>
+                        <div class="code-vignette">
+                            <strong>Manual:</strong> Search DMS → Open 10+ files → Read → Copy snippets<br>
+                            <strong>Time:</strong> <span class="code-vignette-error">3-5 hours</span><br>
+                            <hr class="code-vignette-divider">
+                            <strong>AI Search:</strong> "Contract disputes with force majeure 2022-2024"<br>
+                            Retrieves: <span class="code-vignette-success">3 relevant matters + partner notes</span><br>
+                            <strong>Time:</strong> <span class="code-vignette-success">15 minutes</span>
+                        </div>
+                        <p class="time-savings">Result: Institutional knowledge searchable</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">Audit-Grade Reliability</h2>
+            <p class="section-subhead">
+                This isn't just about speed. It's about governance, privilege protection, and professional responsibility.
+            </p>
+            <div class="deliverable-grid">
+                <div class="deliverable-card deliverable-card-ceo">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                        </div>
+                        <h3>Governance First</h3>
+                        <p class="deliverable-subtitle">For Risk Managers</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Data Sovereignty:</strong> Data never leaves your M365 tenant—crucial for legal privilege.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Audit Trails:</strong> Every AI decision logged immutably for ethics compliance.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Law Society Aligned:</strong> Documentation for PI insurance and regulatory review.
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="deliverable-card deliverable-card-engineer">
+                    <div class="deliverable-header">
+                        <div class="deliverable-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                        </div>
+                        <h3>Efficiency</h3>
+                        <p class="deliverable-subtitle">For Operations</p>
+                    </div>
+                    <ul class="deliverable-list">
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Speed:</strong> Process 100+ contracts/week without adding headcount.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Integration:</strong> Direct API connection to ActionStep/LEAP/Smokeball.
+                        </li>
+                        <li>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <strong>Accuracy:</strong> >98% extraction accuracy on contract terms.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">Built for Australian Legal Firms</h2>
+            <p class="section-subhead">
+                Every feature designed with privilege protection, compliance, and team adoption in mind.
+            </p>
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="methodology-card methodology-card-border-blue">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Compliance Ready</h3>
+                        <p class="methodology-desc">Australian data sovereignty, full audit trails, Law Society aligned.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-green">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Privilege Protected</h3>
+                        <p class="methodology-desc">Legal professional privilege maintained. No third-party AI access.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-purple">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="8" height="18" x="8" y="4" rx="1"/>
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2"/>
+                            <path d="M9 9h6"/>
+                            <path d="M9 13h6"/>
+                            <path d="M9 17h6"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Team Training</h3>
+                        <p class="methodology-desc">Hands-on sessions included; human oversight on all outputs.</p>
+                    </div>
+                </div>
+                <div class="methodology-card methodology-card-border-orange">
+                    <div class="methodology-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </div>
+                    <div class="methodology-content">
+                        <h3>Quick ROI</h3>
+                        <p class="methodology-desc">Phase 1 tests your docs in 48hrs ($1,500 refund if &lt;90% accuracy).</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">Projected ROI for a 35-Person Legal Firm</h2>
+            <p class="section-subhead">
+                Conservative capacity recovery estimates based on industry benchmarks for document processing and loaded cost rates.
+            </p>
+            
+            <div class="roi-results-grid">
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">105 hrs</div>
+                    <div class="roi-result-label">Support capacity freed per week</div>
+                    <p class="roi-result-description">45 hrs paralegals + 60 hrs junior associates</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">$864K</div>
+                    <div class="roi-result-label">Annual direct capacity freed</div>
+                    <p class="roi-result-description">At loaded cost rates</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">$350K</div>
+                    <div class="roi-result-label">Additional matter capacity</div>
+                    <p class="roi-result-description">3-4 more matters/year</p>
+                </div>
+                
+                <div class="roi-result-card">
+                    <div class="roi-result-stat">24x</div>
+                    <div class="roi-result-label">Projected ROI Year 1</div>
+                    <p class="roi-result-description">$1.21M benefit on $50K investment</p>
+                </div>
+            </div>
+            
+            <div class="roi-breakdown-container">
+                <h3 class="breakdown-title">How the $1.21M Benefit is Calculated:</h3>
+                
+                <div class="breakdown-row">
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Paralegal Capacity</span>
+                        <span class="breakdown-math">45 hrs/wk × $100/hr × 48 wks</span>
+                        <span class="breakdown-value">$216K</span>
+                    </div>
+
+                    <div class="breakdown-plus">+</div>
+
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Junior Associate Capacity</span>
+                        <span class="breakdown-math">60 hrs/wk × $225/hr × 48 wks</span>
+                        <span class="breakdown-value">$648K</span>
+                    </div>
+
+                    <div class="breakdown-plus">+</div>
+
+                    <div class="breakdown-item">
+                        <span class="breakdown-label">Matter Growth</span>
+                        <span class="breakdown-math">3-4 New Matters (Year 1)</span>
+                        <span class="breakdown-value">$350K</span>
+                    </div>
+                </div>
+
+                <div class="breakdown-summary">
+                    <div class="investment-tag">Investment: $50K</div>
+                    <div class="total-benefit-tag">Total Year 1 Benefit: <strong>$1,214,000</strong></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">How The Protocol Works</h2>
+            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+                <div class="methodology-card">
+                    <div class="methodology-content">
+                        <h3>Feasibility Sprint</h3>
+                        <p class="methodology-count">48 Hours • $1,500</p>
+                        <p class="methodology-desc">We test your 15 most complex documents. If we don't hit 90% accuracy, you get a full refund.</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                    <div class="methodology-number">2</div>
+                    <div class="methodology-content">
+                        <h3>Readiness Roadmap</h3>
+                        <p class="methodology-count">3 Weeks • $7,500</p>
+                        <p class="methodology-desc">We interview staff to map your workflow logic and quantify the ROI.</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                    <div class="methodology-number">3</div>
+                    <div class="methodology-content">
+                        <h3>Compliance Shield</h3>
+                        <p class="methodology-count">2 Weeks • $8-12k</p>
+                        <p class="methodology-desc">Pre-audit pack for PI insurance proving privilege protection.</p>
+                    </div>
+                </div>
+                <div class="methodology-card">
+                    <div class="methodology-number">4</div>
+                    <div class="methodology-content">
+                        <h3>Implementation</h3>
+                        <p class="methodology-count">30 Days • $20-30k</p>
+                        <p class="methodology-desc">Production deployment. You own the source code. Zero licensing fees.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">Legal Firm FAQs</h2>
+            <p class="section-subhead">Critical questions from partners about capacity, compliance, and integration.</p>
+            <div class="faq-accordion">
+            
+            <!-- QUESTION 1: QUALIFIER - Integration -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Which practice management systems do you integrate with?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We build custom integrations with practice management systems via API.</strong></p>
+                    <p><strong>Compatible systems include:</strong></p>
+                    <ul>
+                        <li><strong>Australian PM Systems:</strong> ActionStep, LEAP, Smokeball, Practice Evolve, FilePro</li>
+                        <li><strong>Enterprise Systems:</strong> Aderant, Elite Enterprise, Time Matters, ProLaw</li>
+                        <li><strong>Cloud-based:</strong> Clio, MyCase, custom cloud systems</li>
+                        <li><strong>Custom systems:</strong> Any practice management system with API access or data export capability</li>
+                    </ul>
+                    <p><strong>Integration approach:</strong> During Phase 2, we assess your specific PM system, review API documentation, and confirm integration feasibility before you commit to implementation. The automation sits "on top" of your existing system—staff don't need to learn new software.</p>
+                    <p>If your system doesn't provide API access, we can work with CSV/Excel exports or file-based integrations as an interim solution.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 2: QUALIFIER - Compliance -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Does this comply with legal professional privilege and Law Society requirements?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. We configure privilege protection and Law Society-aligned compliance rules during Phase 2.</strong></p>
+                    <p><strong>Compliance features we build:</strong></p>
+                    <ul>
+                        <li><strong>Legal Professional Privilege:</strong> All client data remains within your Microsoft 365/Azure tenant in Australia—privilege maintained</li>
+                        <li><strong>Law Society Requirements:</strong> Full documentation of data flows, access controls, and professional responsibility frameworks</li>
+                        <li><strong>Data Sovereignty:</strong> All processing occurs within your private cloud environment. No client data sent to third-party providers like OpenAI</li>
+                        <li><strong>Audit Trails:</strong> Every AI decision, contract extraction, and matter access logged immutably for ethics compliance</li>
+                    </ul>
+                    <p><strong>Data security:</strong> All data remains within your Microsoft 365 tenant in Australia. We use Azure AI with encryption. We document the entire data flow for ethics committee review and Law Society compliance.</p>
+                    <p>Phase 3 (Compliance Shield) documents how the system maintains legal professional privilege and Law Society requirements for your jurisdiction(s).</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 3: SELLER - Automation Capability -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this automate contract data extraction and matter setup?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. The system can automate both contract data extraction and matter setup.</strong></p>
+                    <p><strong>Contract Data Extraction:</strong></p>
+                    <ul>
+                        <li>Extract key terms, parties, dates, and clauses from complex contracts</li>
+                        <li>Identify non-standard terms and flag for partner review</li>
+                        <li>Generate contract summaries and comparison reports</li>
+                        <li>Auto-populate matter files and contract registers</li>
+                    </ul>
+                    <p><strong>Matter Setup:</strong></p>
+                    <ul>
+                        <li>Extract client information, conflict check data, and practice area from intake forms</li>
+                        <li>Automatically create matter folders and assign practice areas</li>
+                        <li>Pre-fill engagement letters and matter templates</li>
+                        <li>Generate matter codes and billing structures</li>
+                    </ul>
+                    <p><strong>Expected result:</strong> What currently takes 45 minutes per contract for data extraction reduces to 5 minutes of verification. Matter setup that takes 60 minutes reduces to 5 minutes of review.</p>
+                    <p>The exact workflow is mapped during Phase 2 (Readiness Roadmap), where we interview your paralegals, junior associates, and partners to understand your current contract and matter processes.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 4: SELLER - Capacity Increase -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>How many more matters can partners handle with this automation?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Expected capacity increase: 3-4 additional matters per partner (Year 1).</strong></p>
+                    <p><strong>How this works:</strong></p>
+                    <ul>
+                        <li>Paralegals freed from manual contract data entry (45 hrs/week capacity recovered)</li>
+                        <li>Junior associates freed from contract review and matter setup tasks (60 hrs/week capacity recovered)</li>
+                        <li>Partners can redirect this capacity to client work and strategy instead of supervising document work</li>
+                    </ul>
+                    <p><strong>Time savings per task:</strong></p>
+                    <ul>
+                        <li>Contract data extraction: 45 minutes → 5 minutes (verification only)</li>
+                        <li>Matter setup: 60 minutes → 5 minutes (review only)</li>
+                        <li>Precedent searching: 3-5 hours → 15 minutes (verification only)</li>
+                        <li>Conflict checking: 20-30 minutes → 5 minutes (approval only)</li>
+                    </ul>
+                    <p><strong>Business impact:</strong> The exact capacity increase depends on your current matter mix and practice areas. Phase 2 quantifies this with your actual matter data and partner workload.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 5: SELLER - Custom Templates -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this handle our firm's custom contract formats and matter intake templates?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. Phase 1 specifically tests YOUR contract formats and matter templates, not generic demo documents.</strong></p>
+                    <p><strong>What we can process:</strong></p>
+                    <ul>
+                        <li><strong>Custom Contract Formats:</strong> Firm-specific contract templates, client-specific formats, industry-specific agreements</li>
+                        <li><strong>Matter Intake Templates:</strong> Practice area-specific intake forms, client onboarding documents, conflict check forms</li>
+                        <li><strong>Multi-format Documents:</strong> PDF contracts, scanned documents, Word documents, Excel-based registers</li>
+                        <li><strong>Complex Documents:</strong> Commercial leases, employment agreements, shareholder agreements, M&A documents</li>
+                    </ul>
+                    <p><strong>Phase 1 testing approach:</strong> You provide 10-15 of your actual contracts and matter intake documents (you can redact client names and confidential information). We extract contract terms, parties, dates, clauses, client information, and other critical data. If we can't achieve 90% extraction accuracy on YOUR specific formats and templates, you receive a full $1,500 refund.</p>
+                    <p>This eliminates the risk of implementing a solution that works on demo documents but fails on your real-world contracts and matter documentation.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 6: DEFENDER - AI Mistakes -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if the AI makes a mistake on a critical field like a contract term or client conflict check?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We build a three-layer validation system to prevent costly errors:</strong></p>
+                    <p><strong>Layer 1 - Confidence Scoring:</strong> If the AI's confidence score is below 90% on critical fields (contract terms, dates, parties, client information), the document is automatically flagged for human review.</p>
+                    <p><strong>Layer 2 - Business Logic Validation:</strong> We configure rules specific to your requirements. Examples: "Contract dates must be valid," "Non-standard terms must be flagged," "Client conflicts must be checked against database." Mismatches trigger alerts.</p>
+                    <p><strong>Layer 3 - Human Review Queue:</strong> Flagged records route to your paralegal or junior associate within the same workflow. Review takes 30-60 seconds to confirm or correct.</p>
+                    <p><strong>Target accuracy:</strong> 99%+ on production documents after model training. The small percentage flagged for review prevents catastrophic errors (missed contract terms, incorrect client information, privilege breaches).</p>
+                    <p>System designed to "fail safe." Extractions below 95% confidence flagged for human review. Paralegal verifies before commitment. You're eliminating typing, not eliminating oversight.</p>
+                    <p>We carry Professional Indemnity insurance. Policy details are provided during the contract phase.</p>
+                </div>
+            </div>
+
+            <!-- QUESTION 7: DEFENDER - Exit Gates -->
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if we decide not to proceed after Phase 1 or 2?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Each phase is a decision gate. You control whether to proceed.</strong></p>
+                    <p><strong>Phase 1 exit:</strong> If we don't achieve 90% extraction accuracy on your documents, you receive a full $1,500 refund. No questions asked.</p>
+                    <p><strong>Phase 2 exit:</strong> If the Readiness Roadmap shows implementation isn't viable for your workflow or firm structure, you stop with the strategic analysis. You've invested $9,000 total and have a clear answer on feasibility.</p>
+                    <p><strong>No long-term contracts.</strong> You're not locked into Phase 4 implementation until you've seen proof in Phase 1 and a detailed plan in Phase 2.</p>
+                </div>
+            </div>
+
+            </div>
+            
+            <!-- CTA BOX -->
+            <div class="methodology-content" style="margin-top: var(--spacing-xl);">
+                <h3 style="margin-top: 0; margin-bottom: var(--spacing-sm);">Have Questions About Your Specific Workflow?</h3>
+                <p style="margin-bottom: var(--spacing-md);">Legal firm workflows vary by practice area, matter types, and PM systems. Book a 15-minute diagnostic call to discuss your specific situation.</p>
+                <a href="{{ url_for('contact_page') }}" class="btn btn-primary">Book Diagnostic Call</a>
+            </div>
+            
+        </div>
+    </section>
+
+    <section class="section cta-section">
+        <div class="container">
+            <div class="cta-content">
+                <h2 class="section-headline">You've Seen the Opportunity.<br>Now See the Proof.</h2>
+                <p class="cta-content-text">
+                    Phase 1 extracts from YOUR contracts with YOUR data. See what 90%+ target accuracy looks like in a feasibility sprint.
+                </p>
+                <div class="cta-buttons-group">
+                    <a href="{{ url_for('feasibility_sprint_report') }}?industrysector=legal" class="btn btn-secondary btn-large">
+                        View Phase 1 Sample First
+                    </a>
+                    <a href="{{ url_for('contact_page') }}" class="btn btn-primary btn-large">
+                        Ready? Book Your Sprint
+                    </a>
+                </div>
+                <p class="cta-subtitle">
+                    Sample shows projected extraction accuracy, validation approach, and time analysis methodology.
+                </p>
+            </div>
+        </div>
+    </section>
+{% endblock %}
