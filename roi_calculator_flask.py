@@ -1109,8 +1109,7 @@ def generate_pdf_report(industry, staff_count, avg_rate, platform, calculations)
     inputs_data = [
         ["Industry", industry],
         ["Billable Technical Staff Count", str(staff_count)],
-        ["Average Billable Rate (AUD)", format_currency(avg_rate)],
-        ["Core Tech Stack", platform]
+        ["Average Billable Rate (AUD)", format_currency(avg_rate)]
     ]
     inputs_table = Table(inputs_data, colWidths=[3*inch, 4*inch])
     inputs_table.setStyle(TableStyle([
@@ -1995,20 +1994,6 @@ HTML_TEMPLATE = """
                 </div>
                 <div id="doc-staff-estimate" style="margin-top: 0.5rem; color: #4B5563; font-size: 0.875rem;">
                     <!-- Auto-populated by JavaScript -->
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label>Core Tech Stack</label>
-                <div class="radio-group-container">
-                    {% for option in ['M365/SharePoint', 'Google Workspace', 'Other'] %}
-                    <div class="radio-group">
-                        <input type="radio" name="platform" value="{{ option }}" 
-                               id="platform_{{ loop.index }}" 
-                               {% if platform == option %}checked{% endif %}>
-                        <label for="platform_{{ loop.index }}">{{ option }}</label>
-                    </div>
-                    {% endfor %}
                 </div>
             </div>
             
@@ -3359,7 +3344,6 @@ def generate_roadmap_email_html(email, company, industry, staff_count, avg_rate,
                 <p><strong>Industry:</strong> {industry}</p>
                 <p><strong>Billable Technical Staff:</strong> {staff_count}</p>
                 <p><strong>Billable Rate:</strong> ${avg_rate:,.0f}/hour</p>
-                <p><strong>Tech Stack:</strong> {platform}</p>
             </div>
             
             <div class="section">
