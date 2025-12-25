@@ -2068,6 +2068,15 @@ HTML_TEMPLATE = """
             order: 5 !important;
         }
         
+        /* FIX: CTA SECTION AT THE VERY END */
+        .cta-section-end {
+            order: 1000 !important;
+        }
+        
+        .back-button-final {
+            order: 1001 !important;
+        }
+        
         /* FIX 4: IMPROVE READABILITY & HIERARCHY */
         .conservative-framing-notice {
             background: #F8F9FA !important;
@@ -2922,10 +2931,10 @@ HTML_TEMPLATE = """
         </div>
         
         <!-- NEXT STEPS CTA SECTION -->
-        <div style="background: linear-gradient(135deg, #0B1221, #1a2332); border-radius: 16px; padding: 3rem 2rem; margin: 3rem 0; text-align: center;">
+        <div class="cta-section-end" style="background: linear-gradient(135deg, #0B1221, #1a2332); border-radius: 16px; padding: 3rem 2rem; margin: 3rem 0; text-align: center;">
             <h2 style="color: #D4AF37; font-size: 2rem; margin-bottom: 1rem;">Ready to Prove This Works?</h2>
             <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; max-width: 600px; margin: 0 auto 2rem auto; line-height: 1.6;">
-                This calculator shows <strong>${{ '{:,.0f}'.format(calculations['tier_1_savings']) }} in potential savings</strong> based on industry averages. 
+                This calculator shows <strong>${{ "{:,.0f}".format(calculations['tier_1_savings']) }} in potential savings</strong> based on industry averages. 
                 Want to test this on YOUR actual documents?
             </p>
             
@@ -2951,7 +2960,7 @@ HTML_TEMPLATE = """
         </div>
 
         <!-- Back Button -->
-        <div class="btn-group" style="justify-content: center; margin-top: 2rem;">
+        <div class="btn-group back-button-final" style="justify-content: center; margin-top: 2rem;">
             <a href="{{ url_for('roi_calculator.roi_calculator', step=2, industry=industry) }}" class="btn btn-secondary" style="opacity: 0.6;">← Adjust Your Inputs</a>
         </div>
         <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
