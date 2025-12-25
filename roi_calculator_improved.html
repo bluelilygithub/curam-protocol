@@ -30,8 +30,14 @@
         .step-indicator {
             display: flex;
             justify-content: center;
-            margin: 2rem 0;
+            padding: 1.5rem 0;
             gap: 1rem;
+            background: white;
+            border-bottom: 1px solid #E5E7EB;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         
         .step {
@@ -727,14 +733,15 @@
         <div class="scroll-progress-bar" id="scrollProgress"></div>
     </div>
     
+    <!-- Step Indicator (Breadcrumb) -->
+    <div class="step-indicator">
+        <span class="step completed">1</span>
+        <span class="step completed">2</span>
+        <span class="step active">3</span>
+        <span class="step">4</span>
+    </div>
+    
     <div class="container">
-        <!-- Step Indicator -->
-        <div class="step-indicator">
-            <span class="step completed">1</span>
-            <span class="step completed">2</span>
-            <span class="step active">3</span>
-            <span class="step">4</span>
-        </div>
         
         <!-- ==========================================
              SCREEN 1: THE ANSWER (HERO)
