@@ -2406,7 +2406,8 @@ HTML_TEMPLATE = """
         });
         </script>
         
-
+        {% endif %}
+        
         {% if step == 3 %}
         <div class="conservative-framing-notice">
             <h2>🎯 Your Low-Hanging Fruit Opportunity</h2>
