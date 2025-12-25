@@ -2248,6 +2248,16 @@ HTML_TEMPLATE = """
     </div>
     {% endif %}
     
+    {% if step == 3 %}
+    <!-- Step 3 Breadcrumb - Outside Container -->
+    <div class="step-indicator">
+        <a href="{{ url_for('roi_calculator.roi_calculator', step=1) }}" class="step completed">1</a>
+        <a href="{{ url_for('roi_calculator.roi_calculator', step=2, industry=industry) }}" class="step completed">2</a>
+        <span class="step active">3</span>
+        <span class="step">4</span>
+    </div>
+    {% endif %}
+    
     <div class="container">
         {% if step == 1 %}
         <h1>Calculate Your Automation ROI</h1>
@@ -2396,16 +2406,7 @@ HTML_TEMPLATE = """
         });
         </script>
         
-        {% elif step == 3 %}
-        <!-- Breadcrumb moved outside container -->
-        <div class="step-indicator">
-            <a href="{{ url_for('roi_calculator.roi_calculator', step=1) }}" class="step completed">1</a>
-            <a href="{{ url_for('roi_calculator.roi_calculator', step=2, industry=industry) }}" class="step completed">2</a>
-            <span class="step active">3</span>
-            <span class="step">4</span>
-        </div>
-        {% endif %}
-        
+
         {% if step == 3 %}
         <div class="conservative-framing-notice">
             <h2>🎯 Your Low-Hanging Fruit Opportunity</h2>
@@ -3818,5 +3819,3 @@ def generate_roadmap(industry_config, doc_staff_count, hours_per_week, avg_rate)
 
 # Note: This blueprint should be registered in main.py
 # Example: app.register_blueprint(roi_app, url_prefix='/roi-calculator')
-
-
