@@ -1225,8 +1225,14 @@ HTML_TEMPLATE = """
         .step-indicator {
             display: flex;
             justify-content: center;
-            margin: 2rem 0;
+            padding: 1.5rem 0;
             gap: 1rem;
+            background: white;
+            border-bottom: 1px solid #E5E7EB;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
         .step {
             width: 40px;
@@ -2009,16 +2015,7 @@ HTML_TEMPLATE = """
         }
         
         /* FIX 2: ADD CONTEXT LABEL TO $1,092,000 */
-        .annual-burn-section::before {
-            content: 'CONTEXT: ';
-            display: block;
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: #9CA3AF;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 0.5rem;
-        }
+        /* Removed redundant CONTEXT label */
         
         .annual-burn-section > div:first-child {
             font-size: 0 !important;
@@ -2046,7 +2043,7 @@ HTML_TEMPLATE = """
         }
         
         .profile-summary {
-            order: 100 !important;
+            /* order removed - stays in natural HTML position */
         }
         
         .scaling-insight {
@@ -2207,8 +2204,14 @@ HTML_TEMPLATE = """
         
         /* FIX 11: TIER 2 DE-EMPHASIS */
         .tier-2-note {
-            opacity: 0.5;
-            font-size: 0.85rem !important;
+            opacity: 0.8;
+            font-size: 0.9rem !important;
+            background: #F8F9FA;
+        }
+        
+        .tier-2-note h4 {
+            color: #374151;
+            font-weight: 600;
         }
         
         .tier-2-note:hover {
@@ -2235,14 +2238,18 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
+    {% if step == 1 %}
+    <!-- Breadcrumb moved outside container -->
+    <div class="step-indicator">
+        <a href="{{ url_for('roi_calculator.roi_calculator', step=1) }}" class="step active">1</a>
+        <span class="step">2</span>
+        <span class="step">3</span>
+        <span class="step">4</span>
+    </div>
+    {% endif %}
+    
     <div class="container">
         {% if step == 1 %}
-        <div class="step-indicator">
-            <a href="{{ url_for('roi_calculator.roi_calculator', step=1) }}" class="step active">1</a>
-            <span class="step">2</span>
-            <span class="step">3</span>
-            <span class="step">4</span>
-        </div>
         <h1>Calculate Your Automation ROI</h1>
         <h2>See how much margin you are losing to manual workflows.</h2>
         <hr>
@@ -2270,12 +2277,6 @@ HTML_TEMPLATE = """
         </form>
         
         {% elif step == 2 %}
-        <div class="step-indicator">
-            <a href="{{ url_for('roi_calculator.roi_calculator', step=1) }}" class="step completed">1</a>
-            <span class="step active">2</span>
-            <span class="step">3</span>
-            <span class="step">4</span>
-        </div>
         <h1>Your Firm Profile</h1>
         <h2>We'll calculate savings on proven, repetitive documentation tasks</h2>
         <hr>
@@ -2396,12 +2397,16 @@ HTML_TEMPLATE = """
         </script>
         
         {% elif step == 3 %}
+        <!-- Breadcrumb moved outside container -->
         <div class="step-indicator">
             <a href="{{ url_for('roi_calculator.roi_calculator', step=1) }}" class="step completed">1</a>
             <a href="{{ url_for('roi_calculator.roi_calculator', step=2, industry=industry) }}" class="step completed">2</a>
             <span class="step active">3</span>
             <span class="step">4</span>
         </div>
+        {% endif %}
+        
+        {% if step == 3 %}
         <div class="conservative-framing-notice">
             <h2>🎯 Your Low-Hanging Fruit Opportunity</h2>
             <p><strong>Conservative Estimate:</strong> This analysis shows savings on <strong>proven, repetitive tasks</strong> that we KNOW exist in {{ industry }} firms. This is the minimum opportunity - there may be additional savings once we analyze YOUR specific workflows in Phase 1.</p>
@@ -2476,6 +2481,10 @@ HTML_TEMPLATE = """
         
         <h2>Proven Low-Hanging Fruit Tasks</h2>
         <p class="section-subhead">These are repetitive tasks we KNOW exist in {{ industry }} firms and have proven automation success:</p>
+        
+        <p style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 1rem 1.5rem; border-radius: 0 8px 8px 0; font-weight: 600; color: #1E40AF; margin-bottom: 1.5rem;">
+            💡 We've analyzed all 5 tasks and ranked them by ROI potential. Your #1 quick-win opportunity is highlighted below.
+        </p>
         
         <div class="task-breakdown">
             {% if calculations.get('task_analysis') %}
@@ -2579,7 +2588,7 @@ HTML_TEMPLATE = """
             
             <div class="roi-result-card">
                 <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.get('potential_revenue', 0)) }}</div>
-                <div class="roi-result-label">Revenue Opportunity<sup>*</sup></div>
+                <div class="roi-result-label">Revenue Opportunity</div>
                 <p class="roi-result-description">If recovered hours are billed to clients</p>
             </div>
         </div>
@@ -2646,8 +2655,8 @@ HTML_TEMPLATE = """
         </div>
         
         <!-- Utilization Disclaimer -->
-        <p class="disclaimer" style="font-size: 0.95em; color: #4B5563; margin-bottom: 20px; padding: 1rem; background: #F8F9FA; border-left: 3px solid #D4AF37; border-radius: 6px;">
-            <sup>*</sup>Assumes 70% of recovered time converts to billable work. Actual results depend on 
+        <p class="disclaimer" style="font-size: 0.9em; color: #cbd5e1; margin-bottom: 20px; padding: 1rem; background: rgba(203, 213, 225, 0.1); border-left: 3px solid #cbd5e1; border-radius: 6px;">
+            *Assumes 70% of recovered time converts to billable work. Actual results depend on 
             firm capacity and client demand.
         </p>
         
@@ -2665,7 +2674,10 @@ HTML_TEMPLATE = """
                 <div class="metric-value">{{ "{:,.0f}".format(calculations.capacity_hours) }}</div>
                 <div class="metric-label">Capacity Hours</div>
             </div>
-            <!-- Removed duplicate Revenue Opportunity card - already shown above -->
+            <div class="metric-card">
+                <div class="metric-value">{{ format_currency(calculations.potential_revenue) }}</div>
+                <div class="metric-label">Revenue Opportunity</div>
+            </div>
         </div>
         <hr>
         {% if industry == "Accounting & Advisory" %}
@@ -2764,7 +2776,7 @@ HTML_TEMPLATE = """
                     you get a <strong style="color: #0B1221;">full refund</strong>. No questions asked. No fine print.
                 </p>
                 <div style="font-size: 0.9rem; color: #6B7280; background: #F8F9FA; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
-                    <strong>Only condition:</strong> You provide 15 documents (5 receipts + 10 {% if industry_config.demo_documents %}{{ industry_config.demo_documents }}{% else %}drawings/schedules/transmittals{% endif %}) and respond 
+                    <strong>Only condition:</strong> You provide 30 {% if industry_config.demo_documents %}{{ industry_config.demo_documents }}{% else %}documents{% endif %} and respond 
                     to clarification questions promptly. We can't test if you don't participate.
                 </div>
             </div>
@@ -2780,7 +2792,10 @@ HTML_TEMPLATE = """
             </div>
         </div>
         
-        <h3>Current State vs Future State</h3>
+        <h3>Your Cost Reduction Roadmap</h3>
+        <p style="color: #6B7280; font-size: 0.95rem; margin-bottom: 1rem;">
+            Annual documentation costs after each automation phase (bars show remaining cost):
+        </p>
         <div class="chart-container">
             <div id="chart"></div>
         </div>
@@ -2830,43 +2845,6 @@ HTML_TEMPLATE = """
         </div>
         <hr>
         
-        <!-- Implementation Reality Check -->
-        <div class="reality-check-box">
-            <h3>⚠️ Implementation Reality Check</h3>
-            <p style="margin-bottom: 1rem;">Quick question: How is your technical documentation currently stored?</p>
-            <form id="readiness-form" onsubmit="return false;">
-                <div class="radio-group" style="margin: 0.75rem 0;">
-                    <input type="radio" name="readiness" value="structured" id="readiness_structured" 
-                           onchange="showReadinessResponse('structured')">
-                    <label for="readiness_structured">
-                        <strong>Structured databases/SharePoint libraries</strong> with consistent naming<br>
-                        <small style="color: #4B5563;">✓ AI-Ready: Can start automation quickly</small>
-                    </label>
-                </div>
-                <div class="radio-group" style="margin: 0.75rem 0;">
-                    <input type="radio" name="readiness" value="mixed" id="readiness_mixed" 
-                           onchange="showReadinessResponse('mixed')">
-                    <label for="readiness_mixed">
-                        <strong>Shared drives</strong> with mixed file formats and inconsistent naming<br>
-                        <small style="color: #4B5563;">⚠️ Needs Prep: 2-4 weeks data structuring</small>
-                    </label>
-                </div>
-                <div class="radio-group" style="margin: 0.75rem 0;">
-                    <input type="radio" name="readiness" value="chaotic" id="readiness_chaotic" 
-                           onchange="showReadinessResponse('chaotic')">
-                    <label for="readiness_chaotic">
-                        <strong>Individual desktops, email attachments, paper files</strong><br>
-                        <small style="color: #4B5563;">🚨 High Friction: Requires data migration</small>
-                    </label>
-                </div>
-            </form>
-            <div id="readiness-response" class="reality-check-response" style="display: none;">
-                <h4 id="response-title"></h4>
-                <p id="response-message" style="margin: 0; color: #4B5563;"></p>
-            </div>
-        </div>
-        <hr>
-        
         <!-- Custom Automation Roadmap -->
         <div class="roadmap-container">
             <h3>🚀 Your Recommended Automation Roadmap</h3>
@@ -2899,19 +2877,19 @@ HTML_TEMPLATE = """
             <p>This represents the total cost of wasted time spent on manual administrative tasks. Calculated as:</p>
             <ul>
                 <li><strong>Staff Count</strong> × <strong>Weekly Waste Hours</strong> × <strong>Billable Rate</strong> × <strong>48 weeks</strong></li>
-                <li>Your firm: {{ calculations.doc_staff_count }} staff × {{ calculations.hours_per_doc_staff }} hours/week × ${{ calculations.typical_doc_rate }}/hour × 48 weeks = {{ format_currency(calculations.annual_burn) }} annually</li>
+                <li>Example: 50 staff × 5 hours/week × $185/hour × 48 weeks = $2,220,000 annually</li>
             </ul>
             <p><strong>Capacity Hours:</strong></p>
             <p>The total billable hours currently lost to non-billable administrative work:</p>
             <ul>
                 <li><strong>Staff Count</strong> × <strong>Weekly Waste Hours</strong> × <strong>48 weeks</strong></li>
-                <li>Your firm: {{ calculations.get('total_recoverable_hours', calculations.get('total_recoverable_hours_per_week', 0))|round(0)|int }} hours/week × 48 weeks = {{ "{:,.0f}".format(calculations.capacity_hours) }} hours/year</li>
+                <li>Example: 50 staff × 5 hours/week × 48 weeks = 12,000 hours/year</li>
             </ul>
             <p><strong>Potential Revenue Opportunity:</strong></p>
             <p>If these hours were freed up and could be billed to clients:</p>
             <ul>
                 <li><strong>Capacity Hours</strong> × <strong>Billable Rate</strong></li>
-                <li>Your firm: {{ "{:,.0f}".format(calculations.capacity_hours) }} hours × ${{ calculations.typical_doc_rate }}/hour = {{ format_currency(calculations.potential_revenue) }} in potential revenue</li>
+                <li>Example: 12,000 hours × $185/hour = $2,220,000 in potential revenue</li>
             </ul>
             <p><strong>Tier 1 Opportunity (Immediate Opportunity - {{ tier1_percentage }}% Reduction):</strong></p>
             <p>A conservative estimate assuming {{ tier1_percentage }}% reduction in administrative time through Phase 1 automation (e.g., automated data extraction, document processing):</p>
@@ -2943,31 +2921,6 @@ HTML_TEMPLATE = """
         <script>
             var chartData = {{ chart_json|safe }};
             Plotly.newPlot('chart', chartData.data, chartData.layout);
-            
-            // Readiness response data
-            var readinessResponses = {
-                structured: {
-                    title: "✅ Great! You're AI-Ready",
-                    message: "Your structured data infrastructure means we can start automation quickly. Let's discuss which high-value tasks to automate first to maximize your ROI."
-                },
-                mixed: {
-                    title: "⚠️ Needs Preparation (Most Common)",
-                    message: "Like 70% of firms, your data needs some preparation. We can show you the fastest path to AI-ready infrastructure—typically 2-4 weeks of data structuring before automation begins."
-                },
-                chaotic: {
-                    title: "🚨 High Friction (Not Uncommon)",
-                    message: "You're not alone—many firms start here. The good news: we've helped 50+ companies go from chaos to automated in 8-12 weeks. The key is a structured migration plan."
-                }
-            };
-            
-            function showReadinessResponse(selection) {
-                var response = readinessResponses[selection];
-                if (response) {
-                    document.getElementById('response-title').textContent = response.title;
-                    document.getElementById('response-message').textContent = response.message;
-                    document.getElementById('readiness-response').style.display = 'block';
-                }
-            }
             
             // Scroll indicator functionality
             function scrollToNext() {
@@ -3319,7 +3272,7 @@ def roi_calculator():
             tier2_percentage = int(calculations.get('tier_2_potential', 0.70) * 100)
             chart_data = {
                 "data": [{
-                    "x": ["Current<br>State", f"Tier 1<br>({tier1_percentage}% Reduction)", f"Tier 2<br>({tier2_percentage}% Reduction)"],
+                    "x": ["Today's<br>Cost", f"After Phase 1<br>(Save {format_currency(calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0)))})", f"After Phase 2<br>(Save {format_currency(calculations.get('tier_2_savings', 0))})"],
                     "y": [
                         calculations.get('annual_cost', calculations.get('annual_burn', 0)),
                         calculations.get('annual_cost', calculations.get('annual_burn', 0)) - calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0)),
@@ -3365,12 +3318,10 @@ def roi_calculator():
             highest_roi_task = None
             if calculations.get('task_analysis'):
                 highest_roi_task = calculations['task_analysis'][0]  # Already sorted by ROI
-                tier1_savings = calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0))
-                task_percentage = (highest_roi_task['annual_savings'] / tier1_savings * 100) if tier1_savings > 0 else 0
                 if highest_roi_task.get('is_low_hanging_fruit'):
-                    analysis_text.append(f"🎯 <strong>Low-Hanging Fruit:</strong> {highest_roi_task['name']} (your #1 opportunity) is a proven repetitive task with {int(highest_roi_task['conservative_potential'] * 100)}% conservative automation potential, saving {format_currency(highest_roi_task['annual_savings'])} annually—this represents {int(task_percentage)}% of your total Tier 1 savings.")
+                    analysis_text.append(f"🎯 <strong>Low-Hanging Fruit:</strong> {highest_roi_task['name']} is a proven repetitive task with {int(highest_roi_task['conservative_potential'] * 100)}% conservative automation potential, saving {format_currency(highest_roi_task['annual_savings'])} annually.")
                 else:
-                    analysis_text.append(f"⭐ <strong>Highest ROI Opportunity:</strong> {highest_roi_task['name']} (your #1 opportunity) has the highest proven savings at {format_currency(highest_roi_task['annual_savings'])} annually—this represents {int(task_percentage)}% of your total Tier 1 savings.")
+                    analysis_text.append(f"⭐ <strong>Highest ROI Opportunity:</strong> {highest_roi_task['name']} has the highest proven savings at {format_currency(highest_roi_task['annual_savings'])} annually.")
             
             if not analysis_text:
                 analysis_text.append("✅ Your organization shows moderate efficiency opportunities. Automation can still deliver meaningful improvements.")
