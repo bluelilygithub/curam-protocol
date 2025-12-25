@@ -1929,6 +1929,309 @@ HTML_TEMPLATE = """
             margin: 0.5rem 0;
             color: #1E3A8A;
         }
+        
+        /* ============================================================================
+           CSS-ONLY FIXES FOR IMPROVED UX (Phase 1)
+           Reorder visual hierarchy without changing HTML structure
+           ============================================================================ */
+        
+        /* FIX 1: REORDER VISUAL HIERARCHY WITH CSS */
+        /* Hide the big scary number initially */
+        .annual-burn-section {
+            order: 999 !important;
+            font-size: 0.85rem !important;
+            padding: 1.5rem !important;
+            margin-top: 3rem !important;
+            background: #F8F9FA !important;
+            border: 1px solid #E5E7EB !important;
+        }
+        
+        .annual-burn-section > div:first-child {
+            font-size: 0.85rem !important;
+            color: #6B7280 !important;
+        }
+        
+        .annual-burn-section > div:nth-child(2) {
+            font-size: 1.5rem !important;
+            background: none !important;
+            -webkit-background-clip: unset !important;
+            -webkit-text-fill-color: #4B5563 !important;
+            color: #4B5563 !important;
+        }
+        
+        .annual-burn-section > div:last-child {
+            font-size: 0.8rem !important;
+        }
+        
+        /* Promote the ROI results to hero position */
+        .roi-results-grid {
+            order: -999 !important;
+            margin-top: 0 !important;
+            margin-bottom: 3rem !important;
+        }
+        
+        /* Make the primary card REALLY stand out */
+        .roi-result-card-primary {
+            grid-column: 1 / -1 !important;
+            border: 4px solid #D4AF37 !important;
+            background: linear-gradient(135deg, #0B1221, #1a2332) !important;
+            padding: 3rem 2rem !important;
+            box-shadow: 0 20px 60px rgba(212, 175, 55, 0.3) !important;
+        }
+        
+        .roi-result-card-primary .roi-result-stat {
+            font-size: 5rem !important;
+            background: linear-gradient(135deg, #D4AF37, #FFD700) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+        }
+        
+        .roi-result-card-primary .roi-result-label {
+            color: #D4AF37 !important;
+            font-size: 1.3rem !important;
+            text-transform: uppercase !important;
+            letter-spacing: 2px !important;
+        }
+        
+        .roi-result-card-primary .roi-result-description {
+            color: rgba(255, 255, 255, 0.8) !important;
+            font-size: 1rem !important;
+        }
+        
+        /* Make other cards smaller and supportive */
+        .roi-results-grid .roi-result-card:not(.roi-result-card-primary) {
+            border: 1px solid #E5E7EB !important;
+        }
+        
+        .roi-results-grid .roi-result-card:not(.roi-result-card-primary) .roi-result-stat {
+            font-size: 2rem !important;
+            background: linear-gradient(135deg, #D4AF37, #B8941F) !important;
+        }
+        
+        /* FIX 2: ADD CONTEXT LABEL TO $1,092,000 */
+        .annual-burn-section::before {
+            content: 'CONTEXT: ';
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #9CA3AF;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .annual-burn-section > div:first-child {
+            font-size: 0 !important;
+        }
+        
+        .annual-burn-section > div:first-child::after {
+            content: 'Current Documentation Spend';
+            font-size: 0.9rem !important;
+            color: #6B7280 !important;
+            font-weight: 600 !important;
+        }
+        
+        /* FIX 3: REORDER SECTIONS WITH FLEXBOX */
+        .container {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .conservative-framing-notice {
+            order: -998 !important;
+        }
+        
+        .methodology-notice {
+            order: -997 !important;
+        }
+        
+        .profile-summary {
+            order: 100 !important;
+        }
+        
+        .scaling-insight {
+            order: 101 !important;
+        }
+        
+        .insight-callout {
+            order: 102 !important;
+        }
+        
+        .task-breakdown {
+            order: 50 !important;
+        }
+        
+        .phase1-explainer {
+            order: 10 !important;
+            border: 4px solid #D4AF37 !important;
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.15), rgba(212, 175, 55, 0.05)) !important;
+        }
+        
+        .reality-check-box {
+            order: 5 !important;
+        }
+        
+        /* FIX 4: IMPROVE READABILITY & HIERARCHY */
+        .conservative-framing-notice {
+            background: #F8F9FA !important;
+            border: 1px solid #E5E7EB !important;
+            padding: 1rem !important;
+        }
+        
+        .conservative-framing-notice h2 {
+            font-size: 1.2rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        .methodology-notice {
+            background: transparent !important;
+            border-left: 2px solid #E5E7EB !important;
+            padding: 0.75rem 1rem !important;
+            font-size: 0.85rem !important;
+        }
+        
+        /* FIX 5: IMPROVE CTA VISIBILITY */
+        .btn-primary-huge {
+            font-size: 1.5rem !important;
+            padding: 1.5rem 3rem !important;
+            box-shadow: 0 8px 24px rgba(212, 175, 55, 0.4) !important;
+            animation: pulse-cta 2s ease-in-out infinite !important;
+        }
+        
+        @keyframes pulse-cta {
+            0%, 100% {
+                box-shadow: 0 8px 24px rgba(212, 175, 55, 0.4);
+            }
+            50% {
+                box-shadow: 0 12px 32px rgba(212, 175, 55, 0.6);
+            }
+        }
+        
+        .btn-primary-huge:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 16px 40px rgba(212, 175, 55, 0.5) !important;
+        }
+        
+        /* FIX 6: FEATURED TASK HIGHLIGHTING */
+        .task-breakdown .task-card:first-child {
+            border: 3px solid #D4AF37 !important;
+            background: linear-gradient(to bottom, #FFFBF0, white) !important;
+            box-shadow: 0 8px 24px rgba(212, 175, 55, 0.2) !important;
+        }
+        
+        .task-breakdown .task-card:first-child::before {
+            content: '🎯 HIGHEST ROI';
+            display: block;
+            background: #D4AF37;
+            color: #0B1221;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-align: center;
+            padding: 0.5rem;
+            margin: -1.5rem -1.5rem 1rem -1.5rem;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        /* FIX 7: IMPROVE METRIC CARDS */
+        .metrics-grid {
+            order: 998 !important;
+            opacity: 0.6;
+        }
+        
+        .metrics-grid:hover {
+            opacity: 1;
+        }
+        
+        /* FIX 8: MOBILE RESPONSIVENESS */
+        @media (max-width: 768px) {
+            .roi-results-grid {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .roi-result-card-primary .roi-result-stat {
+                font-size: 3rem !important;
+            }
+            
+            .primary-metric {
+                font-size: 3rem !important;
+            }
+            
+            .annual-burn-section > div:nth-child(2) {
+                font-size: 1.2rem !important;
+            }
+            
+            .btn-primary-huge {
+                font-size: 1.2rem !important;
+                padding: 1rem 2rem !important;
+            }
+        }
+        
+        /* FIX 9: ADD SCROLL HINTS */
+        .conservative-framing-notice::after {
+            content: '↓ See your top 3 opportunities below';
+            display: block;
+            text-align: center;
+            margin-top: 1rem;
+            color: #D4AF37;
+            font-weight: 600;
+            font-size: 0.9rem;
+            animation: bounce 2s ease-in-out infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+        
+        /* FIX 10: IMPROVE CONSERVATIVE SUMMARY */
+        .conservative-summary-box {
+            background: linear-gradient(to right, #F0FDF4, white) !important;
+            border-left: 4px solid #10B981 !important;
+        }
+        
+        .conservative-summary-box ul {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .conservative-summary-box ul {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* FIX 11: TIER 2 DE-EMPHASIS */
+        .tier-2-note {
+            opacity: 0.5;
+            font-size: 0.85rem !important;
+        }
+        
+        .tier-2-note:hover {
+            opacity: 1;
+        }
+        
+        /* FIX 12: IMPROVE STEP INDICATOR */
+        .step.active {
+            width: 50px !important;
+            height: 50px !important;
+            font-size: 1.2rem !important;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4) !important;
+        }
+        
+        /* FIX 13: IMPROVE BUTTON HIERARCHY */
+        .btn-secondary {
+            opacity: 0.6 !important;
+            font-size: 0.9rem !important;
+        }
+        
+        .btn-secondary:hover {
+            opacity: 1 !important;
+        }
     </style>
 </head>
 <body>
@@ -3415,6 +3718,153 @@ def test_route():
         "message": "ROI Calculator blueprint is working",
         "available_industries": list(INDUSTRIES.keys())
     }
+
+@roi_app.route('/results-improved')
+def results_improved():
+    """Improved results page with inverted pyramid structure"""
+    from flask import render_template
+    from datetime import datetime
+    
+    industry = session.get('industry')
+    staff_count = session.get('staff_count', 50)
+    calculations = session.get('calculations')
+    
+    if not calculations:
+        return redirect(url_for('roi_calculator.roi_calculator', step=1))
+    
+    # Get industry config
+    industry_config = INDUSTRIES.get(industry, {})
+    
+    # Calculate firm size and doc staff percentage
+    if staff_count <= 20:
+        firm_size = "Small"
+        doc_staff_percentage = 0.80
+    elif staff_count <= 50:
+        firm_size = "Medium"
+        doc_staff_percentage = 0.75
+    else:
+        firm_size = "Large"
+        doc_staff_percentage = 0.70
+    
+    doc_staff_count = int(staff_count * doc_staff_percentage)
+    
+    # Get hours per week and avg rate from industry config
+    hours_per_week = industry_config.get('hours_per_week', 5.0)
+    avg_rate = industry_config.get('avg_rate', 130.0)
+    
+    # Generate roadmap
+    roadmap = generate_roadmap(industry_config, doc_staff_count, hours_per_week, avg_rate)
+    
+    return render_template('roi_results_improved.html',
+                         industry=industry,
+                         staff_count=staff_count,
+                         doc_staff_count=doc_staff_count,
+                         firm_size=firm_size,
+                         hours_per_week=hours_per_week,
+                         avg_rate=avg_rate,
+                         calculations=calculations,
+                         roadmap=roadmap)
+
+@roi_app.route('/pdf-improved')
+def pdf_improved():
+    """Generate PDF using improved template"""
+    from flask import render_template
+    from datetime import datetime
+    
+    industry = session.get('industry')
+    staff_count = session.get('staff_count', 50)
+    calculations = session.get('calculations')
+    company_name = request.args.get('company', 'Your Company')
+    
+    if not calculations:
+        return "No calculations found. Please complete the assessment first.", 400
+    
+    # Get industry config
+    industry_config = INDUSTRIES.get(industry, {})
+    
+    # Calculate firm size and doc staff percentage
+    if staff_count <= 20:
+        firm_size = "Small"
+        doc_staff_percentage = 0.80
+    elif staff_count <= 50:
+        firm_size = "Medium"
+        doc_staff_percentage = 0.75
+    else:
+        firm_size = "Large"
+        doc_staff_percentage = 0.70
+    
+    doc_staff_count = int(staff_count * doc_staff_percentage)
+    
+    # Get hours per week and avg rate from industry config
+    hours_per_week = industry_config.get('hours_per_week', 5.0)
+    avg_rate = industry_config.get('avg_rate', 130.0)
+    
+    # Generate roadmap
+    roadmap = generate_roadmap(industry_config, doc_staff_count, hours_per_week, avg_rate)
+    
+    # Add additional task metadata for PDF
+    for i, task in enumerate(roadmap):
+        task['success_rate'] = ['90', '85', '88', '75', '80'][min(i, 4)]
+        task['complexity'] = ['High', 'Medium', 'Medium', 'Low', 'Medium'][min(i, 4)]
+        task['score'] = [10, 7, 6, 4, 5][min(i, 4)]
+        task['why_it_works'] = [
+            'Highly repetitive, rule-based task with structured formats.',
+            'Semi-structured task with proven templates.',
+            'Structured data extraction from standardized formats.',
+            'Task requires human judgment - Phase 1 validation needed.',
+            'Various administrative tasks with moderate automation potential.'
+        ][min(i, 4)]
+    
+    return render_template('roi_report_pdf.html',
+                         industry=industry,
+                         staff_count=staff_count,
+                         doc_staff_count=doc_staff_count,
+                         firm_size=firm_size,
+                         hours_per_week=hours_per_week,
+                         avg_rate=avg_rate,
+                         calculations=calculations,
+                         roadmap=roadmap,
+                         company_name=company_name,
+                         report_date=datetime.now().strftime('%B %d, %Y'))
+
+def generate_roadmap(industry_config, doc_staff_count, hours_per_week, avg_rate):
+    """Generate automation roadmap for the improved template"""
+    tasks = industry_config.get('tasks', [])
+    roadmap = []
+    
+    total_weekly_hours = doc_staff_count * hours_per_week
+    
+    for task in tasks:
+        task_name = task['task']
+        time_percentage = task.get('hours_per_week', 5) / 30  # Normalize to 30 hrs baseline
+        task_weekly_hours = total_weekly_hours * time_percentage
+        
+        # Conservative automation estimates
+        automation_potential = 0.45 if task.get('potential') == 'HIGH' else (0.35 if task.get('potential') == 'MEDIUM' else 0.25)
+        success_rate = 0.90 if task.get('potential') == 'HIGH' else (0.85 if task.get('potential') == 'MEDIUM' else 0.75)
+        conservative_estimate = automation_potential * success_rate
+        
+        recoverable_hours_per_week = task_weekly_hours * conservative_estimate
+        recoverable_hours_per_year = recoverable_hours_per_week * 48  # 48 working weeks
+        annual_value = recoverable_hours_per_year * avg_rate
+        
+        roadmap.append({
+            'task': task_name,
+            'description': task.get('description', ''),
+            'hours_per_year': recoverable_hours_per_year,
+            'revenue_reclaimed': annual_value,
+            'weeks': '8 weeks',
+            'name': f"Phase {len(roadmap) + 1}",
+            'automation_potential': automation_potential,
+            'success_rate_decimal': success_rate,
+            'conservative_estimate': conservative_estimate,
+            'potential': task.get('potential', 'MEDIUM')
+        })
+    
+    # Sort by annual value (highest first)
+    roadmap.sort(key=lambda x: x['revenue_reclaimed'], reverse=True)
+    
+    return roadmap[:5]  # Return top 5 tasks
 
 # Note: This blueprint should be registered in main.py
 # Example: app.register_blueprint(roi_app, url_prefix='/roi-calculator')

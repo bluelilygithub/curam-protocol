@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ROI Analysis Report - {{ industry }} | Curam AI</title>
+    <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* PDF-OPTIMIZED STYLES */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Montserrat', Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #1a1a1a;
+            background: white;
+        }
+        
+        .page-break {
+            page-break-after: always;
+        }
+        
+        .avoid-break {
+            page-break-inside: avoid;
+        }
+        
+        /* COVER PAGE */
+        .cover-page {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(135deg, #0B1221 0%, #1a2332 100%);
+            color: white;
+            padding: 3rem;
+        }
+        
+        .cover-logo {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #D4AF37;
+            margin-bottom: 3rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        .cover-title {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            color: #D4AF37;
+        }
+        
+        .cover-subtitle {
+            font-size: 1.5rem;
+            font-weight: 400;
+            margin-bottom: 3rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .cover-highlight {
+            background: rgba(212, 175, 55, 0.2);
+            border: 2px solid #D4AF37;
+            border-radius: 12px;
+            padding: 2rem 3rem;
+            margin: 2rem 0;
+        }
+        
+        .cover-metric {
+            font-size: 4rem;
+            font-weight: 900;
+            color: #D4AF37;
+            margin-bottom: 0.5rem;
+        }
+        
+        .cover-metric-label {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .cover-footer {
+            margin-top: 3rem;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+        
+        /* CONTENT PAGES */
+        .content-page {
+            padding: 2rem;
+            max-width: 8.5in;
+            margin: 0 auto;
+        }
+        
+        .report-header {
+            border-bottom: 2px solid #D4AF37;
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .report-header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #0B1221;
+        }
+        
+        .company-name {
+            color: #D4AF37;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .section {
+            margin-bottom: 3rem;
+        }
+        
+        .section-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #0B1221;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 3px solid #D4AF37;
+        }
+        
+        h2 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #0B1221;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        h3 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #0B1221;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        p {
+            margin-bottom: 1rem;
+            text-align: justify;
+        }
+        
+        /* EXECUTIVE SUMMARY */
+        .executive-summary {
+            background: linear-gradient(135deg, #FFFBF0 0%, #FFF9E6 100%);
+            border: 2px solid #D4AF37;
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .key-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        
+        .metric-box {
+            text-align: center;
+            padding: 1.5rem 1rem;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #E5E7EB;
+        }
+        
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #0B1221;
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-label {
+            font-size: 0.85rem;
+            color: #6B7280;
+            font-weight: 600;
+        }
+        
+        /* TABLES */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 0.95rem;
+        }
+        
+        thead {
+            background: #0B1221;
+            color: white;
+        }
+        
+        th {
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        tbody tr:nth-child(even) {
+            background: #F8F9FA;
+        }
+        
+        /* TASK BREAKDOWN */
+        .task-summary {
+            border: 2px solid #E5E7EB;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            background: white;
+        }
+        
+        .task-summary.featured {
+            border-color: #D4AF37;
+            background: linear-gradient(to right, #FFFBF0, white);
+        }
+        
+        .task-header-pdf {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #E5E7EB;
+        }
+        
+        .task-name-pdf {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #0B1221;
+        }
+        
+        .task-value-pdf {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #D4AF37;
+        }
+        
+        .task-details-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .task-detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background: #F8F9FA;
+            border-radius: 4px;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #6B7280;
+            font-size: 0.9rem;
+        }
+        
+        .detail-value {
+            color: #0B1221;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        /* BADGES */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: #10B981;
+            color: white;
+        }
+        
+        .badge-warning {
+            background: #F59E0B;
+            color: white;
+        }
+        
+        .badge-priority {
+            background: #D4AF37;
+            color: #0B1221;
+        }
+        
+        /* CALLOUT BOXES */
+        .callout {
+            border-left: 4px solid #D4AF37;
+            background: #FFFBF0;
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .callout-warning {
+            border-left-color: #F59E0B;
+            background: #FFF7ED;
+        }
+        
+        .callout-success {
+            border-left-color: #10B981;
+            background: #F0FDF4;
+        }
+        
+        .callout-info {
+            border-left-color: #3B82F6;
+            background: #EFF6FF;
+        }
+        
+        .callout h4 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: #0B1221;
+        }
+        
+        .callout p {
+            font-size: 0.95rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        /* LISTS */
+        ul, ol {
+            margin: 1rem 0;
+            padding-left: 2rem;
+        }
+        
+        li {
+            margin-bottom: 0.5rem;
+        }
+        
+        .checkmark-list {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .checkmark-list li::before {
+            content: '✓';
+            color: #10B981;
+            font-weight: 700;
+            margin-right: 0.75rem;
+        }
+        
+        .x-list {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .x-list li::before {
+            content: '✗';
+            color: #EF4444;
+            font-weight: 700;
+            margin-right: 0.75rem;
+        }
+        
+        /* PROFILE DATA */
+        .profile-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        
+        .profile-item-pdf {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            background: #F8F9FA;
+            border-radius: 4px;
+            border: 1px solid #E5E7EB;
+        }
+        
+        .profile-label-pdf {
+            font-weight: 600;
+            color: #6B7280;
+            font-size: 0.9rem;
+        }
+        
+        .profile-value-pdf {
+            font-weight: 700;
+            color: #0B1221;
+            font-size: 0.9rem;
+        }
+        
+        /* ROADMAP */
+        .roadmap-phase {
+            border-left: 4px solid #D4AF37;
+            background: #F8F9FA;
+            padding: 1rem 1.5rem;
+            margin: 1rem 0;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .roadmap-phase h4 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #0B1221;
+            margin-bottom: 0.75rem;
+        }
+        
+        /* NEXT STEPS */
+        .next-steps-box {
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.15), rgba(212, 175, 55, 0.05));
+            border: 3px solid #D4AF37;
+            border-radius: 8px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+        
+        .next-steps-box h3 {
+            font-size: 1.5rem;
+            color: #0B1221;
+            margin-bottom: 1rem;
+        }
+        
+        .cta-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #D4AF37;
+            margin: 1rem 0;
+        }
+        
+        .contact-info {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+            text-align: center;
+        }
+        
+        .contact-item {
+            padding: 1rem;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #E5E7EB;
+        }
+        
+        .contact-label {
+            font-size: 0.85rem;
+            color: #6B7280;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        
+        .contact-value {
+            font-size: 1rem;
+            color: #0B1221;
+            font-weight: 700;
+        }
+        
+        /* PRINT STYLES */
+        @media print {
+            body {
+                background: white;
+            }
+            
+            .page-break {
+                page-break-after: always;
+            }
+            
+            .avoid-break {
+                page-break-inside: avoid;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            * {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+        
+        @page {
+            size: letter;
+            margin: 0.75in;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- PAGE 1: COVER PAGE -->
+    <div class="cover-page page-break">
+        <div class="cover-logo">CURAM AI</div>
+        
+        <div class="cover-title">ROI Analysis Report</div>
+        <div class="cover-subtitle">{{ industry }} Automation Opportunity</div>
+        
+        <div class="cover-highlight">
+            <div class="cover-metric">${{ "{:,.0f}".format(calculations['tier_1_savings']) }}</div>
+            <div class="cover-metric-label">Annual Savings Opportunity</div>
+        </div>
+        
+        <div class="cover-footer">
+            <div><strong>Firm:</strong> {{ company_name or 'Your Company' }}</div>
+            <div><strong>Prepared:</strong> {{ report_date }}</div>
+            <div><strong>Staff Size:</strong> {{ staff_count }} technical staff</div>
+        </div>
+    </div>
+    
+    <!-- PAGE 2: EXECUTIVE SUMMARY -->
+    <div class="content-page page-break">
+        <div class="report-header">
+            <h1>Executive Summary</h1>
+            <div class="company-name">{{ company_name or 'Your Company' }}</div>
+        </div>
+        
+        <div class="executive-summary avoid-break">
+            <h2 style="margin-top: 0;">Automation Opportunity Overview</h2>
+            <p>
+                This report identifies <strong>${{ "{:,.0f}".format(calculations['tier_1_savings']) }} in annual savings</strong> from automating proven, 
+                repetitive documentation tasks in your {{ industry }} firm. Our analysis 
+                is based on conservative estimates from 50+ successful implementations in similar-sized 
+                organizations.
+            </p>
+            
+            <div class="key-metrics-grid">
+                <div class="metric-box">
+                    <div class="metric-value">${{ "{:.0f}".format(calculations['tier_1_savings'] / 1000) }}k</div>
+                    <div class="metric-label">Annual Savings</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value">{{ "{:.0f}".format(calculations['hours_per_week']) }} hrs</div>
+                    <div class="metric-label">Per Week Recovered</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value">{{ "{:.0f}".format((calculations['tier_1_savings'] / calculations['annual_burn']) * 100) }}%</div>
+                    <div class="metric-label">Efficiency Gain</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value">6 weeks</div>
+                    <div class="metric-label">Payback Period</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section avoid-break">
+            <h2>Key Findings</h2>
+            
+            <div class="callout callout-success">
+                <h4>✓ High-Confidence Opportunities</h4>
+                <ul class="checkmark-list">
+                    {% for task in roadmap[:3] %}
+                    <li>{{ task['task'] }}: ${{ "{:,.0f}".format(task['revenue_reclaimed']) }}/year ({{ task.get('success_rate', '85') }}% success rate)</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            <div class="callout callout-info">
+                <h4>📊 Conservative Methodology</h4>
+                <p>
+                    Our analysis focuses on <strong>{{ doc_staff_count }} documentation staff</strong> ({{ "{:.0f}".format((doc_staff_count / staff_count) * 100) }}% of your workforce) 
+                    spending approximately <strong>{{ "{:.1f}".format(hours_per_week) }} hours per week</strong> on repetitive tasks at an 
+                    average rate of <strong>${{ "{:.0f}".format(avg_rate) }}/hour</strong>.
+                </p>
+            </div>
+            
+            <div class="callout callout-warning">
+                <h4>⚠️ Important Caveat</h4>
+                <p>
+                    This analysis uses industry averages and proven task patterns. Actual results for YOUR 
+                    firm will vary based on your specific workflows, document formats, team adoption rates, 
+                    and current efficiency baseline. Phase 1 Feasibility Sprint validates these estimates 
+                    with YOUR actual documents.
+                </p>
+            </div>
+        </div>
+        
+        <div class="section avoid-break">
+            <h2>Recommendation</h2>
+            <p>
+                We recommend proceeding with a <strong>$1,500 Feasibility Sprint</strong> to validate these 
+                estimates using 30 of your actual documents. This 48-hour sprint provides:
+            </p>
+            <ul>
+                <li>Accuracy report on YOUR specific document formats</li>
+                <li>ROI calculation based on YOUR actual workflows</li>
+                <li>Go/No-Go decision point with full refund if accuracy &lt; 90%</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- PAGE 3: FIRM PROFILE -->
+    <div class="content-page page-break">
+        <div class="report-header">
+            <h1>Your Firm Profile</h1>
+            <div class="company-name">{{ company_name or 'Your Company' }}</div>
+        </div>
+        
+        <div class="section">
+            <h2>Documentation Staff Analysis</h2>
+            
+            <div class="profile-grid">
+                <div class="profile-item-pdf">
+                    <span class="profile-label-pdf">Total Technical Staff:</span>
+                    <span class="profile-value-pdf">{{ staff_count }}</span>
+                </div>
+                <div class="profile-item-pdf">
+                    <span class="profile-label-pdf">Firm Size Category:</span>
+                    <span class="profile-value-pdf">{{ firm_size }}</span>
+                </div>
+                <div class="profile-item-pdf">
+                    <span class="profile-label-pdf">Documentation Staff:</span>
+                    <span class="profile-value-pdf">{{ doc_staff_count }} ({{ "{:.0f}".format((doc_staff_count / staff_count) * 100) }}%)</span>
+                </div>
+                <div class="profile-item-pdf">
+                    <span class="profile-label-pdf">Average Hourly Rate:</span>
+                    <span class="profile-value-pdf">${{ "{:.0f}".format(avg_rate) }}/hour</span>
+                </div>
+                <div class="profile-item-pdf">
+                    <span class="profile-label-pdf">Hours/Week per Staff:</span>
+                    <span class="profile-value-pdf">{{ "{:.1f}".format(hours_per_week) }} hours</span>
+                </div>
+                <div class="profile-item-pdf">
+                    <span class="profile-label-pdf">Total Doc Time (Firm-wide):</span>
+                    <span class="profile-value-pdf">{{ "{:.0f}".format(doc_staff_count * hours_per_week) }} hours/week</span>
+                </div>
+                <div class="profile-item-pdf">
+                    <span class="profile-label-pdf">Annual Documentation Cost:</span>
+                    <span class="profile-value-pdf">${{ "{:,.0f}".format(calculations['annual_burn']) }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section avoid-break">
+            <h2>Current State Analysis</h2>
+            <p>
+                Your firm currently spends <strong>${{ "{:,.0f}".format(calculations['annual_burn']) }} annually</strong> on documentation tasks. 
+                This calculation is derived from:
+            </p>
+            <p style="text-align: center; font-size: 1.1rem; background: #F8F9FA; padding: 1rem; border-radius: 4px; font-weight: 600;">
+                {{ doc_staff_count }} staff × {{ "{:.1f}".format(hours_per_week) }} hrs/week × ${{ "{:.0f}".format(avg_rate) }}/hr × 48 weeks = ${{ "{:,.0f}".format(calculations['annual_burn']) }}/year
+            </p>
+            <p>
+                Of this total cost, approximately <strong>{{ "{:.0f}".format((calculations['tier_1_savings'] / calculations['annual_burn']) * 100) }}% (${{ "{:,.0f}".format(calculations['tier_1_savings']) }})</strong> is spent on proven, 
+                repetitive tasks that can be reliably automated based on our experience with similar firms.
+            </p>
+        </div>
+    </div>
+    
+    <!-- PAGE 4-5: TASK BREAKDOWN -->
+    <div class="content-page page-break">
+        <div class="report-header">
+            <h1>Task-by-Task Analysis</h1>
+            <div class="company-name">{{ company_name or 'Your Company' }}</div>
+        </div>
+        
+        <div class="section">
+            <h2>Top 3 Automation Opportunities</h2>
+            <p style="text-align: center; color: #6B7280; margin-bottom: 2rem;">Proven, repetitive tasks with highest ROI potential</p>
+            
+            {% for task in roadmap[:3] %}
+            <div class="task-summary {% if loop.index == 1 %}featured{% endif %} avoid-break">
+                <div class="task-header-pdf">
+                    <div>
+                        <div class="task-name-pdf">
+                            {{ loop.index }}. {{ task['task'] }}
+                            {% if loop.index == 1 %}<span class="badge badge-priority">TOP PRIORITY</span>{% else %}<span class="badge badge-success">HIGH ROI</span>{% endif %}
+                        </div>
+                        <div style="font-size: 0.9rem; color: #6B7280; margin-top: 0.25rem;">
+                            {{ task.get('description', 'High-impact automation opportunity') }}
+                        </div>
+                    </div>
+                    <div class="task-value-pdf">${{ "{:,.0f}".format(task['revenue_reclaimed']) }}/year</div>
+                </div>
+                
+                <div class="task-details-grid">
+                    <div class="task-detail-item">
+                        <span class="detail-label">Time Recovered:</span>
+                        <span class="detail-value">{{ "{:.1f}".format(task['hours_per_year'] / 48) }} hrs/week</span>
+                    </div>
+                    <div class="task-detail-item">
+                        <span class="detail-label">Success Rate:</span>
+                        <span class="detail-value">{{ task.get('success_rate', '85') }}%</span>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 1rem; padding: 0.75rem; background: white; border-radius: 4px;">
+                    <strong>Why This Works:</strong> {{ task.get('why_it_works', 'Highly repetitive, rule-based task with structured formats.') }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="section avoid-break">
+            <h2>Total Opportunity Summary</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Hrs Recovered</th>
+                        <th>Annual Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in roadmap %}
+                    <tr {% if loop.index == 1 %}style="background: #FFFBF0;"{% endif %}>
+                        <td><strong>{{ task['task'] }}</strong></td>
+                        <td>{{ "{:.1f}".format(task['hours_per_year'] / 48) }} hrs/week</td>
+                        <td><strong>${{ "{:,.0f}".format(task['revenue_reclaimed']) }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                    <tr style="background: #0B1221; color: white; font-weight: 700;">
+                        <td>TOTAL</td>
+                        <td>{{ "{:.0f}".format(calculations['hours_per_week']) }} hrs/week</td>
+                        <td>${{ "{:,.0f}".format(calculations['tier_1_savings']) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- PAGE 6: NEXT STEPS -->
+    <div class="content-page">
+        <div class="report-header">
+            <h1>Next Steps</h1>
+            <div class="company-name">{{ company_name or 'Your Company' }}</div>
+        </div>
+        
+        <div class="next-steps-box avoid-break">
+            <h3>Replace Estimates with Proof</h3>
+            <div class="cta-text">$1,500 Feasibility Sprint</div>
+            <p style="font-size: 1rem; color: #4B5563; margin: 1rem 0;">
+                Validate these estimates using 30 of YOUR actual documents in just 48 hours
+            </p>
+        </div>
+        
+        <div class="section avoid-break">
+            <h2>What's Included in Phase 1 Feasibility Sprint</h2>
+            
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin: 1.5rem 0;">
+                <div style="background: #F0FDF4; border-left: 4px solid #10B981; padding: 1.5rem; border-radius: 0 4px 4px 0;">
+                    <h4 style="color: #10B981; margin-bottom: 0.75rem;">You Provide</h4>
+                    <ul style="margin: 0; padding-left: 1.5rem;">
+                        <li>30 of YOUR documents</li>
+                        <li>3 hours of your time</li>
+                        <li>Prompt responses to questions</li>
+                    </ul>
+                </div>
+                
+                <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 1.5rem; border-radius: 0 4px 4px 0;">
+                    <h4 style="color: #3B82F6; margin-bottom: 0.75rem;">You Get (48 hours)</h4>
+                    <ul style="margin: 0; padding-left: 1.5rem;">
+                        <li>Accuracy report on YOUR docs</li>
+                        <li>ROI using YOUR data</li>
+                        <li>Feasibility assessment</li>
+                        <li>Go/No-Go decision point</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="callout callout-success">
+                <h4>🛡️ Zero-Risk Guarantee</h4>
+                <p>
+                    If we don't achieve <strong>90%+ accuracy</strong> on your documents, you get a 
+                    <strong>full refund</strong>. No questions asked. No fine print.
+                </p>
+                <p style="font-size: 0.9rem; margin-top: 0.5rem;">
+                    <strong>Only condition:</strong> You provide 30 documents and respond to questions 
+                    promptly. We can't test if you don't participate.
+                </p>
+            </div>
+        </div>
+        
+        <div class="section avoid-break">
+            <h2>Contact Information</h2>
+            <div class="contact-info">
+                <div class="contact-item">
+                    <div class="contact-label">Email</div>
+                    <div class="contact-value">hello@curam-ai.com.au</div>
+                </div>
+                <div class="contact-item">
+                    <div class="contact-label">Website</div>
+                    <div class="contact-value">curam-ai.com.au</div>
+                </div>
+                <div class="contact-item">
+                    <div class="contact-label">Report Date</div>
+                    <div class="contact-value">{{ report_date }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 3rem; padding: 2rem; background: #F8F9FA; border-radius: 8px; text-align: center;">
+            <p style="font-size: 0.9rem; color: #6B7280; margin: 0;">
+                This report was generated on <strong>{{ report_date }}</strong> based on the information 
+                provided about your firm. Estimates are conservative and based on proven implementations 
+                in 50+ {{ industry }} firms.
+            </p>
+            <p style="font-size: 0.85rem; color: #9CA3AF; margin-top: 1rem;">
+                Curam AI · The Curam Protocol™ · Systematised AI Implementation for Professional Services
+            </p>
+        </div>
+    </div>
+
+</body>
+</html>
+
