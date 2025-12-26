@@ -23,79 +23,85 @@
     <script src="assets/js/navbar-loader.js"></script>
 
     <!-- 1. STATIC HERO SECTION (NO ROTATION) -->
-    <section class="hero">
-        <div class="hero-video-background">
-            <video autoplay muted loop playsinline>
-                <source src="assets/videos/hero-background.mp4" type="video/mp4">
-                <source src="assets/videos/hero-background.webm" type="video/webm">
-            </video>
-            <div class="hero-video-overlay"></div>
-        </div>
-        <div class="container hero-content">
-            <div class="hero-grid">
-                <!-- Left Content -->
-                <div class="hero-text">
-                    <p class="hero-tagline">The Curam-AI Protocol™</p>
-                    
-                    <!-- SINGLE STATIC MESSAGE -->
-                    <h1 class="hero-headline">
-                        <span class="headline-line">Eliminate Manual Data Entry</span>
-                        <span class="headline-line headline-gradient">in 48 Hours—Guaranteed</span>
-                    </h1>
-                    
-                    <p class="hero-description">
-                        Australia's only phase-by-phase AI implementation framework. 
-                        We validate <strong>90%+ accuracy on YOUR documents</strong> before you commit, 
-                        then deploy with <strong>full IP ownership and zero vendor lock-in</strong>.
-                    </p>
-                    
-                    <div class="hero-cta">
-                        <a href="roi.html" class="btn btn-primary">
-                            Calculate Your ROI <span class="btn-arrow">→</span>
-                        </a>
-                        <a href="contact.html?option=phase-1" class="btn btn-outline">Start Free Pre-Screen</a>
-                    </div>
-                    <div style="margin-top: 20px; text-align: center;">
-                        <a href="#protocol" class="hero-tertiary-link" style="color: rgba(255, 255, 255, 0.9); text-decoration: none; font-size: 14px; display: inline-flex; align-items: center; gap: 8px; transition: opacity 0.3s;">
-                            What is The Curam-Ai Protocol? <span style="display: inline-block; animation: bounce 2s infinite;">↓</span>
-                        </a>
-                    </div>
-                    <style>
-                        @keyframes bounce {
-                            0%, 100% { transform: translateY(0); }
-                            50% { transform: translateY(5px); }
-                        }
-                        .hero-tertiary-link:hover {
-                            opacity: 0.8;
-                        }
-                    </style>
-                </div>
+ <section class="hero homepage-hero section-block">
+    <div class="container-wide">
+        <div class="hero-grid">
+            
+            <div class="hero-text">
+                <p class="hero-tagline">The Curam-Ai Protocol™</p>
                 
-                <!-- Right Stats Grid (STATIC - NO ROTATION) -->
-                <div class="hero-stats">
-                    <div class="hero-stats-grid">
-                        <div class="stat-card">
-                            <div class="stat-number">90<span class="stat-suffix">%</span></div>
-                            <div class="stat-label">Accuracy Guarantee</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number">48<span class="stat-suffix">hr</span></div>
-                            <div class="stat-label">Validation Sprint</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number">100<span class="stat-suffix">%</span></div>
-                            <div class="stat-label">IP Ownership</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-number">$0</div>
-                            <div class="stat-label">Vendor Lock-in</div>
-                        </div>
+                <h1 class="hero-headline">
+                    <span class="headline-line">Eliminate Manual Data Entry</span>
+                    <span class="headline-line headline-gradient">in 48 Hours—Guaranteed</span>
+                </h1>
+                
+                <p class="hero-description">
+                    [cite_start]Australia's only phase-by-phase AI implementation framework[cite: 184]. 
+                    [cite_start]We validate <strong>90%+ accuracy on YOUR documents</strong> before you commit[cite: 36, 112], 
+                    [cite_start]then deploy with <strong>full IP ownership and zero vendor lock-in</strong>[cite: 97, 186].
+                </p>
+                
+                <div class="hero-cta" style="display: flex; gap: var(--spacing-md); flex-wrap: wrap; margin-top: var(--spacing-xl);">
+                    <a href="feasibility-sprint-report.html" class="btn btn-primary">
+                        Start Feasibility Sprint — $1,500 <span class="btn-arrow">→</span>
+                    </a>
+                    
+                    <a href="roi.html" class="btn btn-outline">
+                        Calculate Your ROI
+                    </a>
+                </div>
+
+                <div style="margin-top: var(--spacing-xl); text-align: left;">
+                    <a href="#protocol" class="hero-tertiary-link" style="color: rgba(255, 255, 255, 0.9); text-decoration: none; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 8px; transition: opacity 0.3s;">
+                        New to AI? Explore the 4-Phase Protocol <span style="display: inline-block; animation: bounce 2s infinite;">↓</span>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="hero-stats">
+                <div class="hero-stats-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-md);">
+                    <div class="stat-card">
+                        <div class="stat-number">90<span class="stat-suffix">%</span></div>
+                        [cite_start]<div class="stat-label">Accuracy Guarantee [cite: 36, 213]</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">48<span class="stat-suffix">hr</span></div>
+                        [cite_start]<div class="stat-label">Validation Sprint [cite: 182]</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">100<span class="stat-suffix">%</span></div>
+                        [cite_start]<div class="stat-label">IP Ownership [cite: 97, 280]</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">$0</div>
+                        [cite_start]<div class="stat-label">Vendor Lock-in [cite: 97, 186]</div>
                     </div>
                 </div>
             </div>
-        </div>
-    </section>
 
+        </div> 
+    </div> 
+</section>
+
+<style>
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(5px); }
+    }
+    .hero-tertiary-link:hover {
+        opacity: 0.8;
+    }
+    /* Mobile optimization for buttons */
+    @media (max-width: 768px) {
+        .hero-cta {
+            flex-direction: column;
+        }
+        .hero-cta .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
     <!-- 2. PROTOCOL + PHASE CARDS SECTION (MERGED) -->
     <section id="protocol" class="methodology">
         <div class="container">
