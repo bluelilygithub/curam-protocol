@@ -38,17 +38,32 @@
                         then deploy with <strong>full IP ownership and zero vendor lock-in</strong>.
                     </p>
                     
-                    <div class="hero-cta" style="display: flex; gap: var(--spacing-md); flex-wrap: wrap; margin-top: var(--spacing-xl);">
-                        <a href="feasibility-sprint-report.html" class="btn btn-primary">
-                            Preview Feasibility Report — $1,500 <span class="btn-arrow">→</span>
-                        </a>
+                    <!-- ✅ FIXED: Clear CTA hierarchy with descriptive subtext -->
+                    <div class="hero-cta" style="display: flex; flex-direction: column; gap: var(--spacing-md); margin-top: var(--spacing-xl);">
+                        <!-- PRIMARY CTA -->
+                        <div style="display: flex; gap: var(--spacing-md); flex-wrap: wrap;">
+                            <a href="roi.html" class="btn btn-primary">
+                                Calculate Your Savings <span class="btn-arrow">→</span>
+                            </a>
+                            <a href="automater.html" class="btn btn-outline">
+                                Test Your Documents
+                            </a>
+                        </div>
                         
-                        <a href="roi.html" class="btn btn-outline">
-                            Calculate Your ROI
-                        </a>
+                        <!-- Subtext for CTAs -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); font-size: 0.875rem; color: rgba(255, 255, 255, 0.8); max-width: 600px;">
+                            <p style="margin: 0;">Industry-based ROI calculator • Takes 2 minutes</p>
+                            <p style="margin: 0;">Upload a PDF • See live extraction</p>
+                        </div>
                     </div>
 
-                    <div style="margin-top: var(--spacing-xl); text-align: left;">
+                    <div style="margin-top: var(--spacing-lg); text-align: left;">
+                        <a href="feasibility-sprint-report.html" class="hero-tertiary-link" style="color: rgba(255, 255, 255, 0.9); text-decoration: none; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 8px; transition: opacity 0.3s;">
+                            See a sample report (preview Phase 1 deliverable) →
+                        </a>
+                    </div>
+                    
+                    <div style="margin-top: var(--spacing-md); text-align: left;">
                         <a href="#protocol" class="hero-tertiary-link" style="color: rgba(255, 255, 255, 0.9); text-decoration: none; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 8px; transition: opacity 0.3s;">
                             New to AI? Explore the 4-Phase Protocol <span style="display: inline-block; animation: bounce 2s infinite;">↓</span>
                         </a>
@@ -116,7 +131,8 @@
                     </ul>
                     <div class="phase-exit"><strong>Exit:</strong> 90% accuracy guarantee or full refund.</div>
                     <div class="phase-actions">
-                        <a href="https://curam-protocol.curam-ai.com.au/phase-2-roadmap.html" class="btn btn-protocol">Preview Feasibility Report</a>
+                        <!-- ✅ FIXED: Clear button text -->
+                        <a href="feasibility-sprint-report.html" class="btn btn-protocol">See Sample Report</a>
                     </div>
                 </div>
 
@@ -257,9 +273,10 @@
                     <p class="case-study-footer-label" style="font-weight: 700; color: var(--color-gold); margin-bottom: 20px;">View Validated Results for Your Sector:</p>
                     
                     <div class="sector-button-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-                        <a href="phase-2-roadmap.html?sector=engineering" class="btn btn-outline" style="text-align: center; justify-content: center;">Engineering & Construction →</a>
-                        <a href="phase-2-roadmap.html?sector=accounting" class="btn btn-outline" style="text-align: center; justify-content: center;">Professional Services & Accounting →</a>
-                        <a href="phase-2-roadmap.html?sector=logistics" class="btn btn-outline" style="text-align: center; justify-content: center;">Logistics & Operations →</a>
+                        <!-- ✅ FIXED: Changed to "See Sample Report" -->
+                        <a href="feasibility-sprint-report.html?industrysector=engineering" class="btn btn-outline" style="text-align: center; justify-content: center;">Engineering & Construction →</a>
+                        <a href="feasibility-sprint-report.html?industrysector=accounting" class="btn btn-outline" style="text-align: center; justify-content: center;">Professional Services & Accounting →</a>
+                        <a href="feasibility-sprint-report.html?industrysector=logistics" class="btn btn-outline" style="text-align: center; justify-content: center;">Logistics & Operations →</a>
                     </div>
                 </div>
             </div>
@@ -349,13 +366,14 @@
         <div class="container">
             <div class="cta-content">
                 <h2 class="section-headline">Ready to Validate AI on Your Documents?</h2>
-                <p class="cta-content-text">Don't guess—see the results first. Explore our sector-specific Feasibility Reports.</p>
+                <p class="cta-content-text">Don't guess—see the results first. Start with our calculator or test your documents live.</p>
                 <div class="cta-buttons-group">
-                    <a href="https://curam-protocol.curam-ai.com.au/phase-2-roadmap.html" class="btn btn-primary btn-large">Preview the Feasibility Report</a>
-                    <a href="roi.html" class="btn btn-secondary btn-large">Calculate Your ROI First</a>
+                    <!-- ✅ FIXED: Clear, action-oriented buttons -->
+                    <a href="roi.html" class="btn btn-primary btn-large">Calculate Your Savings</a>
+                    <a href="automater.html" class="btn btn-secondary btn-large">Test Your Documents</a>
                 </div>
                 <div class="cta-subtitle-group" style="margin-top: var(--spacing-lg);">
-                    <p class="cta-subtitle"><strong>The Phase 1 Sprint:</strong> $1,500 • 48 hours • 90%+ Accuracy Guarantee</p>
+                    <p class="cta-subtitle"><a href="feasibility-sprint-report.html" style="color: inherit; text-decoration: underline;">See a sample Phase 1 report</a> • <strong>Phase 1 Sprint:</strong> $1,500 • 48 hours • 90%+ Accuracy Guarantee</p>
                 </div>
             </div>
         </div>
