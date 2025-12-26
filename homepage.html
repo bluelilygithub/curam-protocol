@@ -266,15 +266,89 @@
         </div>
     </section>
 
-    <section id="faq" class="faq section">
+<section id="faq" class="faq section">
         <div class="container">
-            <h2 class="section-headline">Technical & Commercial Due Diligence</h2>
+            <h2 class="section-headline">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 12px;">
+                    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                </svg>
+                Technical & Commercial Due Diligence
+            </h2>
+            <p class="section-subhead">Answers to the critical questions CTOs and Partners ask about security, ownership, and risk.</p>
+            
             <div class="faq-accordion">
                 <div class="faq-accordion-item">
-                    <button class="faq-accordion-header"><span>How do you guarantee accuracy?</span><span class="faq-accordion-icon">+</span></button>
-                    <div class="faq-accordion-content"><p>We use a three-layer validation system (Grounding, Confidence Scoring, and ERP Cross-Checks) targeting 99%+ production accuracy.</p></div>
+                    <button class="faq-accordion-header">
+                        <span>How do you guarantee accuracy and prevent AI hallucinations?</span>
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>We use a three-layer validation system, targeting <strong>99%+ production accuracy</strong>:</p>
+                        <ul>
+                            <li><strong>Grounding:</strong> The AI only extracts data from your documents—it is incapable of "guessing" information from the internet.</li>
+                            <li><strong>Confidence Scoring:</strong> If the AI scores &lt;90% confident, it flags the record for human approval by your staff through a simple queue.</li>
+                            <li><strong>ERP Cross-Checks:</strong> We validate extracted data against your existing project codes and vendor lists for hard-coded correctness.</li>
+                        </ul>
+                    </div>
                 </div>
+
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
+                        <span>What are the full time requirements for our staff?</span>
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>The Protocol is designed for low friction. The total time commitment is <strong>~15 hours</strong> spread over 8–10 weeks:</p>
+                        <ul>
+                            <li><strong>Phase 1:</strong> 2 hours (Document review & kickoff).</li>
+                            <li><strong>Phase 2:</strong> 9 hours (Stakeholder interviews & strategy review).</li>
+                            <li><strong>Phase 3:</strong> 7 hours (IT Admin kickoff & policy approval).</li>
+                            <li><strong>Phase 4:</strong> 40 hours total for User Training/UAT (shared among the team).</li>
+                        </ul>
+                    </div>
                 </div>
+
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
+                        <span>What do we own after deployment, and who handles maintenance?</span>
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p><strong>You own 100% of the system.</strong> We provide full source code and documentation. Maintenance can be handled by any M365 IT admin—no coding required. We also offer an optional Tier 2 support retainer for $500/month if you prefer we handle the technical heavy lifting.</p>
+                    </div>
+                </div>
+
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
+                        <span>What is the security protocol for legacy on-premise servers?</span>
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>We use <strong>Microsoft's Power Platform Data Gateway</strong>. It runs inside your firewall with no inbound ports opened, sending only encrypted data to your M365 tenant for processing. It’s a secure, Microsoft-certified bridge for legacy infrastructure.</p>
+                    </div>
+                </div>
+
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
+                        <span>What are the objective refund criteria for Phase 1?</span>
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>Phase 1 is <strong>$1,500</strong> with a 100% money-back guarantee. If we cannot extract your target data with <strong>&gt;90% accuracy</strong> from your sample set (min. 10 docs), you receive a full refund within 5 business days. No questions asked.</p>
+                    </div>
+                </div>
+
+                <div class="faq-accordion-item">
+                    <button class="faq-accordion-header">
+                        <span>Do you have examples specific to Engineering documents?</span>
+                        <span class="faq-accordion-icon">+</span>
+                    </button>
+                    <div class="faq-accordion-content">
+                        <p>Yes. Our models are pre-trained on Engineering formats like <strong>Concrete Test Reports</strong> (lot numbers, slump), <strong>Beam Schedules</strong> (dimensions, steel grade), and <strong>Drawing Registers</strong> (revision numbers, issue dates).</p>
+                    </div>
+                </div>
+            </div>
+            
             <div style="text-align: center; margin-top: var(--spacing-lg);">
                 <a href="faq.html" class="btn btn-secondary">View All FAQs →</a>
             </div>
