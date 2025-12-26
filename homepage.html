@@ -289,49 +289,62 @@
     </section>
 
     <!-- 4. CASE STUDY SECTION -->
-    <section class="section section-alt trust-section">
-        <div class="container">
+<section class="section section-alt trust-section" style="opacity: 1; transform: translateY(0px); transition: opacity 0.6s, transform 0.6s;">
+    <div class="container">
 
-            <!-- Featured Case Study (Below metrics) -->
-            <div class="featured-case-study">
-                <div class="case-study-badge">Recent Feasibility Sprint</div>
-                <h3 class="case-study-title">70-Person Engineering Firm Achieved 65% Admin Burden Reduction</h3>
-                <p class="case-study-description">
-                    A realistic scenario demonstrating how a typical mid-sized structural engineering firm used The Protocol to automate drawing registers, concrete test reports, and beam schedules—recovering <strong>15 hours per week</strong> of engineering capacity.
-                </p>
-                <div class="case-study-results">
-                    <div class="case-study-stat">
-                        <span class="stat-value">65%</span>
-                        <span class="stat-label">Admin Reduction</span>
-                    </div>
-                    <div class="case-study-stat">
-                        <span class="stat-value">4.8x</span>
-                        <span class="stat-label">ROI Achieved</span>
-                    </div>
-                    <div class="case-study-stat">
-                        <span class="stat-value">3.2 months</span>
-                        <span class="stat-label">Payback Period</span>
-                    </div>
-                    <div class="case-study-stat">
-                        <span class="stat-value">15 hrs/wk</span>
-                        <span class="stat-label">Time Recovered</span>
-                    </div>
+        <div class="featured-case-study">
+            <div class="case-study-badge">Recent Feasibility Sprint Results</div>
+            <h3 class="case-study-title">Mid-Market Firms Achieving 60%+ Admin Burden Reduction</h3>
+            <p class="case-study-description">
+                Using <strong>The Curam-Ai Protocol™</strong>, our clients across Australia are automating document-heavy workflows—recovering an average of 15+ hours per week of senior staff capacity and achieving ROI in under 5 months.
+            </p>
+            
+            <div class="case-study-results">
+                <div class="case-study-stat">
+                    <span class="stat-value">65%</span>
+                    <span class="stat-label">Admin Reduction</span>
                 </div>
-                <div style="text-align: center; margin-top: var(--spacing-xl);">
-                    <a href="case-study.html" class="btn btn-secondary">Read Full Case Study →</a>
+                <div class="case-study-stat">
+                    <span class="stat-value">4.8x</span>
+                    <span class="stat-label">Average ROI</span>
                 </div>
+                <div class="case-study-stat">
+                    <span class="stat-value">3.2mo</span>
+                    <span class="stat-label">Payback Period</span>
+                </div>
+                <div class="case-study-stat">
+                    <span class="stat-value">15 hrs/wk</span>
+                    <span class="stat-label">Time Recovered</span>
+                </div>
+            </div>
 
-                <!-- Sector Navigation -->
-                <div class="case-study-footer">
-                    <p class="case-study-footer-label">Interested in other sectors?</p>
-                    <div class="case-study-footer-links">
-                        <a href="professional-services.html" class="case-study-footer-link">Professional Services →</a>
-                        <a href="logistics-compliance.html" class="case-study-footer-link">Logistics & Compliance →</a>
-                    </div>
+            <div class="case-study-footer" style="margin-top: var(--spacing-xl); border-top: 1px solid rgba(0,0,0,0.1); padding-top: var(--spacing-xl);">
+                <p class="case-study-footer-label" style="font-weight: 700; color: var(--color-navy); margin-bottom: 20px;">View Validated Results for Your Sector:</p>
+                
+                <div class="sector-button-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <a href="phase-2-roadmap.html?sector=engineering" class="btn btn-outline" style="text-align: center; justify-content: center;">
+                        Engineering & Construction →
+                    </a>
+                    <a href="phase-2-roadmap.html?sector=accounting" class="btn btn-outline" style="text-align: center; justify-content: center;">
+                        Professional Services & Accounting →
+                    </a>
+                    <a href="phase-2-roadmap.html?sector=logistics" class="btn btn-outline" style="text-align: center; justify-content: center;">
+                        Logistics & Operations →
+                    </a>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</section>
+
+<style>
+    /* Mobile Responsiveness for Sector Grid */
+    @media (max-width: 768px) {
+        .sector-button-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
+</style>
 
 
     <!-- 5. FAQ / TECHNICAL DUE DILIGENCE SECTION -->
