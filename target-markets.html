@@ -99,7 +99,7 @@
             <h2 class="section-headline">Do These Problems Sound Familiar?</h2>
             <p class="section-subhead">The daily frustrations that bring firms to The Protocol:</p>
             
-            <div class="card-grid-2">
+            <div class="card-grid-2" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem;">
                 <div class="pain-card">
                     <div class="pain-icon">⏰</div>
                     <h3>Wasted Billable Hours</h3>
@@ -121,6 +121,19 @@
                     <p>You've been burned by vendors who couldn't handle messy real-world documents. You are rightfully skeptical.</p>
                 </div>
             </div>
+            
+            <style>
+                @media (max-width: 768px) {
+                    .pain-points-section .card-grid-2 {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
+                @media (min-width: 769px) and (max-width: 1024px) {
+                    .pain-points-section .card-grid-2 {
+                        grid-template-columns: repeat(2, 1fr) !important;
+                    }
+                }
+            </style>
         </div>
     </section>
 
