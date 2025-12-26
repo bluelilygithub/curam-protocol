@@ -274,7 +274,7 @@
                 </svg>
                 Technical & Commercial Due Diligence
             </h2>
-            <p class="section-subhead">Answers to the critical questions CTOs and Partners ask about security, ownership, and risk.</p>
+            <p class="section-subhead">Answers to critical questions regarding engine-agnostic security, ownership, and accuracy.</p>
             
             <div class="faq-accordion">
                 <div class="faq-accordion-item">
@@ -283,48 +283,48 @@
                         <span class="faq-accordion-icon">+</span>
                     </button>
                     <div class="faq-accordion-content">
-                        <p>We use a three-layer validation system, targeting <strong>99%+ production accuracy</strong>:</p>
+                        <p>We eliminate "hallucinations" through <strong>Deterministic Extraction</strong>. Unlike creative AI, our system uses a three-layer validation protocol:</p>
                         <ul>
-                            <li><strong>Grounding:</strong> The AI only extracts data from your documents—it is incapable of "guessing" information from the internet.</li>
-                            <li><strong>Confidence Scoring:</strong> If the AI scores &lt;90% confident, it flags the record for human approval by your staff through a simple queue.</li>
-                            <li><strong>ERP Cross-Checks:</strong> We validate extracted data against your existing project codes and vendor lists for hard-coded correctness.</li>
+                            <li><strong>Grounding & OCR Mapping:</strong> The system maps data to specific coordinates on your document. If a value isn't physically present on the scan, it cannot be "invented."</li>
+                            <li><strong>Confidence Scoring:</strong> Every data point is assigned a probability score. Anything falling below your defined threshold (typically 90%) is automatically routed to a human approval queue.</li>
+                            <li><strong>Master Data Cross-Referencing:</strong> Extracted data is instantly validated against your existing ERP records (Vendor IDs, Project Codes, GL strings) to ensure logical correctness before entry.</li>
                         </ul>
                     </div>
                 </div>
 
                 <div class="faq-accordion-item">
                     <button class="faq-accordion-header">
-                        <span>What are the full time requirements for our staff?</span>
+                        <span>Which cloud ecosystems do you support for deployment?</span>
                         <span class="faq-accordion-icon">+</span>
                     </button>
                     <div class="faq-accordion-content">
-                        <p>The Protocol is designed for low friction. The total time commitment is <strong>~15 hours</strong> spread over 8–10 weeks:</p>
+                        <p>The Curam-Ai Protocol is cloud-agnostic. We deploy into your existing infrastructure to ensure you maintain total data sovereignty. Supported environments include:</p>
                         <ul>
-                            <li><strong>Phase 1:</strong> 2 hours (Document review & kickoff).</li>
-                            <li><strong>Phase 2:</strong> 9 hours (Stakeholder interviews & strategy review).</li>
-                            <li><strong>Phase 3:</strong> 7 hours (IT Admin kickoff & policy approval).</li>
-                            <li><strong>Phase 4:</strong> 40 hours total for User Training/UAT (shared among the team).</li>
+                            <li><strong>Microsoft Azure:</strong> Azure OpenAI & Power Automate integration.</li>
+                            <li><strong>AWS:</strong> Amazon Bedrock and Textract workflows.</li>
+                            <li><strong>Google Cloud:</strong> Vertex AI and Document AI pipelines.</li>
+                            <li><strong>Private/On-Premise:</strong> For high-security legacy environments, we utilize secure Data Gateways that process data within your firewall without opening inbound ports.</li>
                         </ul>
                     </div>
                 </div>
 
                 <div class="faq-accordion-item">
                     <button class="faq-accordion-header">
-                        <span>What do we own after deployment, and who handles maintenance?</span>
+                        <span>What do we own after deployment?</span>
                         <span class="faq-accordion-icon">+</span>
                     </button>
                     <div class="faq-accordion-content">
-                        <p><strong>You own 100% of the system.</strong> We provide full source code and documentation. Maintenance can be handled by any M365 IT admin—no coding required. We also offer an optional Tier 2 support retainer for $500/month if you prefer we handle the technical heavy lifting.</p>
+                        <p><strong>You own 100% of the Intellectual Property.</strong> Unlike SaaS vendors, we do not charge "per-document" fees. We build the solution inside <em>your</em> tenant. When Phase 4 is complete, we hand over all source code, API configurations, and training documentation. You are never locked into Curam-Ai for maintenance.</p>
                     </div>
                 </div>
 
                 <div class="faq-accordion-item">
                     <button class="faq-accordion-header">
-                        <span>What is the security protocol for legacy on-premise servers?</span>
+                        <span>What are the staff time requirements for the project?</span>
                         <span class="faq-accordion-icon">+</span>
                     </button>
                     <div class="faq-accordion-content">
-                        <p>We use <strong>Microsoft's Power Platform Data Gateway</strong>. It runs inside your firewall with no inbound ports opened, sending only encrypted data to your M365 tenant for processing. It’s a secure, Microsoft-certified bridge for legacy infrastructure.</p>
+                        <p>We handle the engineering; your team provides the context. Total commitment is approximately <strong>15 hours</strong> over 8 weeks, primarily consisting of a 2-hour Phase 1 kickoff, SME workflow interviews in Phase 2, and final User Acceptance Testing (UAT) in Phase 4.</p>
                     </div>
                 </div>
 
@@ -334,23 +334,13 @@
                         <span class="faq-accordion-icon">+</span>
                     </button>
                     <div class="faq-accordion-content">
-                        <p>Phase 1 is <strong>$1,500</strong> with a 100% money-back guarantee. If we cannot extract your target data with <strong>&gt;90% accuracy</strong> from your sample set (min. 10 docs), you receive a full refund within 5 business days. No questions asked.</p>
-                    </div>
-                </div>
-
-                <div class="faq-accordion-item">
-                    <button class="faq-accordion-header">
-                        <span>Do you have examples specific to Engineering documents?</span>
-                        <span class="faq-accordion-icon">+</span>
-                    </button>
-                    <div class="faq-accordion-content">
-                        <p>Yes. Our models are pre-trained on Engineering formats like <strong>Concrete Test Reports</strong> (lot numbers, slump), <strong>Beam Schedules</strong> (dimensions, steel grade), and <strong>Drawing Registers</strong> (revision numbers, issue dates).</p>
+                        <p>Phase 1 is a fixed <strong>$1,500 validation sprint</strong>. If we cannot demonstrate <strong>&gt;90% extraction accuracy</strong> on your specific complex document types (minimum 10 samples), we provide a 100% refund within 5 business days. We validate the tech on your data before you commit to the roadmap.</p>
                     </div>
                 </div>
             </div>
             
             <div style="text-align: center; margin-top: var(--spacing-lg);">
-                <a href="faq.html" class="btn btn-secondary">View All FAQs →</a>
+                <a href="faq.html" class="btn btn-secondary">View All Technical FAQs →</a>
             </div>
         </div>
     </section>
