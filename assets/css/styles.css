@@ -10782,6 +10782,7 @@ h1, h2, h3, h4 {
 .section-block.evidence p,
 .section-block.evidence .deliverable p,
 .section-block.who-needs p,  
+.section-block.who-needs .industry-card p,
 .section-block.what-happens p,
 .section-block.pdf-example p{
   color: var(--color-white);
