@@ -26,7 +26,7 @@
         }
         
         @media (max-width: 768px) {
-            .pdf-embed-wrapper embed {
+            .pdf-embed-wrapper iframe {
                 height: 400px !important;
             }
             
@@ -71,7 +71,7 @@
         
         .funnel-step-title {
             font-size: 1.3rem;
-            color: var(--color-white);
+            color: var(--color-navy);
             margin-bottom: 0.5rem;
         }
         
@@ -302,14 +302,20 @@
             
             <!-- PDF Preview -->
             <div class="pdf-preview-container" style="max-width: 900px; margin: 0 auto 40px;">
-                <div class="pdf-embed-wrapper" style="box-shadow: 0 10px 40px rgba(0,0,0,0.15); border-radius: 8px; overflow: hidden;">
-                    <embed 
-                        src="assets/downloads/Curam-Ai_Phase_2_Sample_Report.pdf#toolbar=0&navpanes=0&scrollbar=0" 
-                        type="application/pdf" 
+                <div class="pdf-embed-wrapper" style="box-shadow: 0 10px 40px rgba(0,0,0,0.15); border-radius: 8px; overflow: hidden; background: #f8f9fa;">
+                    <iframe 
+                        src="https://docs.google.com/viewer?url=https://curam-protocol.curam-ai.com.au/assets/downloads/Curam-Ai_Phase_2_Sample_Report.pdf&embedded=true" 
                         width="100%" 
                         height="700px"
-                        style="border: none;"
-                    />
+                        style="border: none; display: block;"
+                        title="Phase 2 Sample Report">
+                        <!-- Fallback for browsers that don't support PDF embedding -->
+                        <p style="padding: 40px; text-align: center;">
+                            Your browser doesn't support PDF viewing. 
+                            <a href="assets/downloads/Curam-Ai_Phase_2_Sample_Report.pdf" target="_blank" style="color: #667eea; text-decoration: underline;">Click here to open the PDF in a new tab</a> 
+                            or <a href="assets/downloads/Curam-Ai_Phase_2_Sample_Report.pdf" download style="color: #667eea; text-decoration: underline;">download it</a>.
+                        </p>
+                    </iframe>
                 </div>
                 
                 <div class="pdf-actions" style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem;">
@@ -329,6 +335,11 @@
                         Open in New Tab →
                     </a>
                 </div>
+                
+                <!-- Browser compatibility note -->
+                <p style="text-align: center; margin-top: 1.5rem; color: #999; font-size: 0.85rem;">
+                    <em>Note: PDF viewer powered by Google Docs. If it doesn't display, please download or open in a new tab.</em>
+                </p>
             </div>
             
             <!-- Report Highlights -->
