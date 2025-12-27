@@ -24,6 +24,15 @@
   /* Light Colors */
   --color-white: #ffffff;
   
+  /* Success and Error Colors */
+  --color-success: #22c55e;
+  --color-success-dark: #16a34a;
+  --color-error: #ef4444;
+  --color-error-dark: #dc2626;
+  
+  /* Border Colors */
+  --border-color: #e5e7eb;
+  
   /* Text Colors */
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.7);
@@ -66,6 +75,7 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
   --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 4px 6px rgba(0, 0, 0, 0.1);
   --shadow-glow: 0 0 30px var(--cyan-glow);
 }
 
@@ -1472,7 +1482,7 @@ h1, h2, h3, h4 {
   font-weight: 600;
 }
 
-* ============================================
+/* ============================================
    FOOTER STYLING - COMPLETE REWRITE
    ============================================ */
 
@@ -12965,5 +12975,527 @@ h1, h2, h3, h4 {
     .breakdown-summary {
         flex-direction: column;
         gap: var(--spacing-md);
+    }
+}
+
+/* ========== PHASE 2 REPORT STYLES ========== */
+
+/* Phase 2 Report Section */
+.phase-2-report-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: var(--spacing-4xl) 0;
+    min-height: 100vh;
+}
+
+/* Phase 2 Report Container */
+.phase-2-report-container {
+    background: var(--color-white);
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: var(--spacing-3xl);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+}
+
+.phase-2-report-container.narrow {
+    max-width: 900px;
+}
+
+/* Phase 2 Report Header */
+.phase-2-report-header {
+    text-align: center;
+    padding-bottom: var(--spacing-2xl);
+    border-bottom: 3px solid var(--color-gold);
+    margin-bottom: var(--spacing-2xl);
+}
+
+.phase-2-report-header.border-thin {
+    border-bottom: 2px solid var(--border-color);
+}
+
+.phase-2-report-header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--color-navy);
+    margin: var(--spacing-md) 0;
+    line-height: 1.2;
+}
+
+.phase-2-report-header h1.weight-normal {
+    font-weight: 600;
+}
+
+.phase-2-report-header p {
+    font-size: 1.125rem;
+    color: var(--text-secondary);
+    margin-top: var(--spacing-sm);
+}
+
+.phase-2-report-header-section {
+    text-align: center;
+    padding-bottom: var(--spacing-xl);
+    margin-bottom: var(--spacing-2xl);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.phase-2-report-header-section h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+    color: var(--color-navy);
+    margin: var(--spacing-sm) 0;
+}
+
+.phase-2-report-header-section p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-top: var(--spacing-sm);
+}
+
+/* Document Label */
+.document-label {
+    display: inline-block;
+    background: var(--color-gold);
+    color: var(--color-white);
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: var(--border-radius);
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.document-label.small {
+    font-size: 0.75rem;
+    padding: 0.375rem var(--spacing-sm);
+}
+
+/* Phase 2 Content Sections */
+.phase-2-report-content-section {
+    margin-bottom: var(--spacing-3xl);
+    padding: var(--spacing-xl) 0;
+}
+
+.phase-2-report-content-section.compact {
+    margin-bottom: var(--spacing-2xl);
+    padding: var(--spacing-lg) 0;
+}
+
+/* Section Titles */
+.phase-2-section-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--color-navy);
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 2px solid var(--color-gold);
+}
+
+.phase-2-section-title.border-left {
+    border-bottom: none;
+    border-left: 4px solid var(--color-gold);
+    padding-left: var(--spacing-md);
+    padding-bottom: 0;
+}
+
+.phase-2-report-section-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-navy);
+    margin-bottom: var(--spacing-md);
+}
+
+.phase-2-report-subsection-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-navy);
+    margin-bottom: var(--spacing-md);
+    border-left: 4px solid var(--cyan-accent);
+    padding-left: var(--spacing-md);
+}
+
+/* Bottom Line Box */
+.phase-2-bottom-line-box {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    border: 2px solid var(--color-gold);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-2xl);
+    text-align: center;
+}
+
+.phase-2-bottom-line-box h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-navy);
+    margin-bottom: var(--spacing-md);
+}
+
+.phase-2-bottom-line-amount {
+    font-size: 4rem;
+    font-weight: 800;
+    color: var(--color-success);
+    line-height: 1;
+    margin: var(--spacing-md) 0;
+}
+
+.phase-2-bottom-line-description {
+    font-size: 1.125rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Financial Table */
+.phase-2-financial-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--spacing-xl) 0;
+    background: var(--color-white);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.phase-2-financial-table thead {
+    background: var(--color-navy);
+    color: var(--color-white);
+}
+
+.phase-2-financial-table th {
+    padding: var(--spacing-md);
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.phase-2-financial-table td {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.phase-2-financial-table tbody tr:hover {
+    background: var(--navy-light);
+}
+
+.phase-2-financial-table tfoot {
+    background: var(--navy-medium);
+    font-weight: 700;
+}
+
+.phase-2-financial-table tfoot td {
+    border-bottom: none;
+    font-weight: 700;
+    font-size: 1.125rem;
+}
+
+/* Metric Grid */
+.phase-2-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--spacing-xl);
+    margin: var(--spacing-xl) 0;
+}
+
+.phase-2-metric-box {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-xl);
+    text-align: center;
+    transition: var(--transition);
+}
+
+.phase-2-metric-box:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.phase-2-metric-box.green {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(16, 185, 129, 0.05) 100%);
+    border-color: var(--color-success);
+}
+
+.phase-2-metric-label {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    margin-bottom: var(--spacing-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.phase-2-metric-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--color-navy);
+    margin: var(--spacing-sm) 0;
+}
+
+.phase-2-metric-box.green .phase-2-metric-value {
+    color: var(--color-success);
+}
+
+.phase-2-metric-description {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+/* Recommendation Box */
+.phase-2-recommendation-box {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%);
+    border: 3px solid var(--color-success);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-2xl);
+}
+
+.phase-2-recommendation-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-success-dark);
+    margin-bottom: var(--spacing-md);
+}
+
+.phase-2-recommendation-text {
+    font-size: 1.125rem;
+    color: var(--text-primary);
+    line-height: 1.7;
+}
+
+/* Report Tables */
+.phase-2-report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--spacing-xl) 0;
+    background: var(--color-white);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.phase-2-report-table thead {
+    background: var(--color-navy);
+    color: var(--color-white);
+}
+
+.phase-2-report-table th {
+    padding: var(--spacing-md);
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.phase-2-report-table td {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: top;
+}
+
+.phase-2-report-table tbody tr:hover {
+    background: var(--navy-light);
+}
+
+/* Highlight */
+.phase-2-highlight {
+    background: rgba(255, 193, 7, 0.2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    color: var(--color-navy);
+}
+
+/* Risk Indicators */
+.phase-2-risk-high {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--color-error-dark);
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+/* Conclusion Box */
+.phase-2-conclusion-box {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    border-left: 4px solid var(--cyan-accent);
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius);
+}
+
+.phase-2-conclusion-box p {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
+}
+
+.phase-2-conclusion-box p:last-child {
+    margin-bottom: 0;
+}
+
+/* Metadata Grid */
+.phase-2-metadata-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--spacing-md);
+    margin: var(--spacing-xl) 0;
+}
+
+.phase-2-metadata-box {
+    background: var(--navy-light);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius);
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+/* Warning Box */
+.phase-2-warning-box {
+    background: rgba(255, 193, 7, 0.1);
+    border: 2px solid var(--color-gold);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-lg);
+    margin: var(--spacing-xl) 0;
+}
+
+.phase-2-warning-box p {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+/* Metric Table */
+.phase-2-metric-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--spacing-xl) 0;
+    background: var(--color-white);
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.phase-2-metric-table thead {
+    background: var(--color-navy);
+    color: var(--color-white);
+}
+
+.phase-2-metric-table th {
+    padding: var(--spacing-md);
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.phase-2-metric-table td {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.phase-2-metric-table tbody tr:hover {
+    background: var(--navy-light);
+}
+
+/* Verification List */
+.phase-2-verification-list {
+    list-style: none;
+    padding: 0;
+    margin: var(--spacing-lg) 0;
+}
+
+.phase-2-verification-list li {
+    padding: var(--spacing-md) 0;
+    padding-left: var(--spacing-lg);
+    border-left: 3px solid var(--cyan-accent);
+    margin-bottom: var(--spacing-md);
+    line-height: 1.7;
+    color: var(--text-primary);
+}
+
+/* Sign-off Section */
+.phase-2-sign-off {
+    background: var(--navy-light);
+    border-radius: var(--border-radius-lg);
+    padding: var(--spacing-2xl);
+    margin-top: var(--spacing-3xl);
+}
+
+.phase-2-sign-off-title {
+    font-size: 1.125rem;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-xl);
+    text-align: center;
+    line-height: 1.7;
+}
+
+.phase-2-sign-off-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--spacing-2xl);
+}
+
+.phase-2-sign-off-box {
+    background: var(--color-white);
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius);
+    text-align: center;
+}
+
+.phase-2-sign-off-box h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--color-navy);
+    margin-bottom: var(--spacing-lg);
+}
+
+.phase-2-sign-off-line {
+    height: 2px;
+    background: var(--border-color);
+    margin: var(--spacing-2xl) 0 var(--spacing-md) 0;
+}
+
+.phase-2-sign-off-label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .phase-2-report-container {
+        padding: var(--spacing-xl);
+    }
+
+    .phase-2-report-header h1 {
+        font-size: 1.75rem;
+    }
+
+    .phase-2-report-header-section h1 {
+        font-size: 1.75rem;
+    }
+
+    .phase-2-bottom-line-amount {
+        font-size: 2.5rem;
+    }
+
+    .phase-2-metric-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .phase-2-financial-table,
+    .phase-2-report-table,
+    .phase-2-metric-table {
+        font-size: 0.85rem;
+    }
+
+    .phase-2-financial-table th,
+    .phase-2-financial-table td,
+    .phase-2-report-table th,
+    .phase-2-report-table td,
+    .phase-2-metric-table th,
+    .phase-2-metric-table td {
+        padding: var(--spacing-sm);
+    }
+
+    .phase-2-sign-off-grid {
+        grid-template-columns: 1fr;
     }
 }
