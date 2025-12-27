@@ -10774,11 +10774,8 @@ h1, h2, h3, h4 {
   margin-bottom: var(--spacing-lg);
 }
 
-.section-block .phase .step-content p {
-  font-size: 1rem;
-  line-height: 1.8;
+.section-block .phase.step-content p {
   color: var(--color-white);
-  margin-bottom: var(--spacing-lg);
 }
 
 /* Deliverables Grid */
