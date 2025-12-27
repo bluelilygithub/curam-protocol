@@ -10754,7 +10754,8 @@ h1, h2, h3, h4 {
   margin-bottom: var(--spacing-lg);
 }
 
-.section-block p {
+.section-block p,
+.section-block.who-needs .industry-card p {
   font-size: 1rem;
   line-height: 1.8;
   color: var(--color-navy);
@@ -10782,7 +10783,6 @@ h1, h2, h3, h4 {
 .section-block.evidence p,
 .section-block.evidence .deliverable p,
 .section-block.who-needs p,  
-.section-block.who-needs .industry-card p,
 .section-block.what-happens p,
 .section-block.pdf-example p{
   color: var(--color-white);
