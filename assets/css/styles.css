@@ -10780,7 +10780,9 @@ h1, h2, h3, h4 {
 .section-block.audit-delay .highlight-box p 
 .section-block.deliverables-grid .deliverable p,
 .section-block.evidence p,
-.section-block.evidence .deliverable p{  
+.section-block.evidence .deliverable p,
+.section-block.who-needs p,  
+.section-block.what-happens p{
   color: var(--color-white);
 }
 
