@@ -14,6 +14,17 @@
     
     <!-- Mobile responsive styles for PDF embed -->
     <style>
+        /* 4-column grid responsive */
+        .report-highlights div[style*="grid-template-columns"] {
+            grid-template-columns: repeat(4, 1fr) !important;
+        }
+        
+        @media (max-width: 1024px) {
+            .report-highlights div[style*="grid-template-columns"] {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+        
         @media (max-width: 768px) {
             .pdf-embed-wrapper embed {
                 height: 400px !important;
@@ -25,6 +36,10 @@
             
             .deliverable-list li {
                 margin-bottom: 1rem;
+            }
+            
+            .report-highlights div[style*="grid-template-columns"] {
+                grid-template-columns: 1fr !important;
             }
         }
         
@@ -159,6 +174,20 @@
                     <h3 class="funnel-step-title">Readiness Roadmap</h3>
                     <p class="funnel-step-desc">
                         Builds board-ready business case. Quantifies ROI, defines scope, locks implementation price. Fixed-price quote for Phase 4—no hourly billing, no scope creep.
+                    </p>
+                </div>
+                
+                <div style="text-align: center; margin: 2rem 0;">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+                
+                <div class="funnel-step" style="border-left-color: #94a3b8; opacity: 0.7;">
+                    <div class="funnel-step-label" style="color: #94a3b8;">Phase 3 • 2 Weeks • $8-12k (Optional)</div>
+                    <h3 class="funnel-step-title" style="color: #64748b;">Compliance Shield</h3>
+                    <p class="funnel-step-desc">
+                        <strong>Only required if:</strong> IT blocks deployment for security reasons OR professional indemnity insurance requires compliance documentation. Includes ISO 27001 gap analysis and governance framework.
                     </p>
                 </div>
                 
@@ -303,27 +332,27 @@
             </div>
             
             <!-- Report Highlights -->
-            <div class="report-highlights" style="background: #f8fafc; padding: 3rem 2rem; border-radius: 8px; max-width: 900px; margin: 0 auto 3rem;">
-                <h3 style="text-align: center; margin-bottom: 2rem; color: #2c3e50;">Key Metrics from This Sample:</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem;">
+            <div class="report-highlights" style="padding: 3rem 2rem; border-radius: 8px; max-width: 900px; margin: 0 auto 3rem;">
+                <h3 style="text-align: center; margin-bottom: 2rem; color: #0F172A;">Key Metrics from This Sample:</h3>
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem;">
                     <div style="text-align: center;">
                         <div style="font-size: 2.5rem; margin-bottom: 8px;">📊</div>
-                        <strong style="display: block; margin-bottom: 5px; color: #2c3e50;">Baseline Analysis</strong>
+                        <strong style="display: block; margin-bottom: 5px; color: #0F172A;">Baseline Analysis</strong>
                         <p style="color: #666; font-size: 0.9rem; margin: 0;">45 hrs/week → 12 hrs/week</p>
                     </div>
                     <div style="text-align: center;">
                         <div style="font-size: 2.5rem; margin-bottom: 8px;">💰</div>
-                        <strong style="display: block; margin-bottom: 5px; color: #2c3e50;">ROI Validation</strong>
+                        <strong style="display: block; margin-bottom: 5px; color: #0F172A;">ROI Validation</strong>
                         <p style="color: #666; font-size: 0.9rem; margin: 0;">$214k annual value calculated</p>
                     </div>
                     <div style="text-align: center;">
                         <div style="font-size: 2.5rem; margin-bottom: 8px;">📈</div>
-                        <strong style="display: block; margin-bottom: 5px; color: #2c3e50;">Performance Target</strong>
+                        <strong style="display: block; margin-bottom: 5px; color: #0F172A;">Performance Target</strong>
                         <p style="color: #666; font-size: 0.9rem; margin: 0;">65% admin reduction validated</p>
                     </div>
                     <div style="text-align: center;">
                         <div style="font-size: 2.5rem; margin-bottom: 8px;">🔒</div>
-                        <strong style="display: block; margin-bottom: 5px; color: #2c3e50;">Technical Proof</strong>
+                        <strong style="display: block; margin-bottom: 5px; color: #0F172A;">Technical Proof</strong>
                         <p style="color: #666; font-size: 0.9rem; margin: 0;">98.5% extraction accuracy on 50 docs</p>
                     </div>
                 </div>
