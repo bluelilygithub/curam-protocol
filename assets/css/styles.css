@@ -10774,7 +10774,7 @@ h1, h2, h3, h4 {
   margin-bottom: var(--spacing-lg);
 }
 
-.section-block.phases.step-content p {
+.section-block.phases .step-content p {
   color: var(--color-white);
 }
 
