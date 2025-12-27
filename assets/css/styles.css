@@ -12982,19 +12982,20 @@ h1, h2, h3, h4 {
 
 /* Phase 2 Report Section */
 .phase-2-report-section {
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    background: var(--navy-deep);
     padding: var(--spacing-4xl) 0;
     min-height: 100vh;
 }
 
 /* Phase 2 Report Container */
 .phase-2-report-container {
-    background: var(--color-white);
+    background: linear-gradient(135deg, rgba(26, 45, 74, 0.6) 0%, rgba(10, 22, 40, 0.6) 100%);
+    border: 1px solid var(--border-subtle);
     max-width: 1100px;
     margin: 0 auto;
     padding: var(--spacing-3xl);
     border-radius: var(--border-radius-lg);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
 }
 
 .phase-2-report-container.narrow {
@@ -13010,13 +13011,13 @@ h1, h2, h3, h4 {
 }
 
 .phase-2-report-header.border-thin {
-    border-bottom: 2px solid var(--border-color);
+    border-bottom: 2px solid var(--border-subtle);
 }
 
 .phase-2-report-header h1 {
     font-size: 2.5rem;
     font-weight: 700;
-    color: var(--color-navy);
+    color: var(--text-primary);
     margin: var(--spacing-md) 0;
     line-height: 1.2;
 }
@@ -13035,13 +13036,13 @@ h1, h2, h3, h4 {
     text-align: center;
     padding-bottom: var(--spacing-xl);
     margin-bottom: var(--spacing-2xl);
-    border-bottom: 2px solid var(--border-color);
+    border-bottom: 2px solid var(--border-subtle);
 }
 
 .phase-2-report-header-section h1 {
     font-size: 2.25rem;
     font-weight: 700;
-    color: var(--color-navy);
+    color: var(--text-primary);
     margin: var(--spacing-sm) 0;
 }
 
@@ -13084,7 +13085,7 @@ h1, h2, h3, h4 {
 .phase-2-section-title {
     font-size: 1.75rem;
     font-weight: 700;
-    color: var(--color-navy);
+    color: var(--text-primary);
     margin-bottom: var(--spacing-lg);
     padding-bottom: var(--spacing-md);
     border-bottom: 2px solid var(--color-gold);
@@ -13100,14 +13101,14 @@ h1, h2, h3, h4 {
 .phase-2-report-section-title {
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--color-navy);
+    color: var(--text-primary);
     margin-bottom: var(--spacing-md);
 }
 
 .phase-2-report-subsection-title {
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--color-navy);
+    color: var(--text-primary);
     margin-bottom: var(--spacing-md);
     border-left: 4px solid var(--cyan-accent);
     padding-left: var(--spacing-md);
@@ -13115,7 +13116,7 @@ h1, h2, h3, h4 {
 
 /* Bottom Line Box */
 .phase-2-bottom-line-box {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(212, 175, 55, 0.1) 100%);
     border: 2px solid var(--color-gold);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-2xl);
@@ -13125,16 +13126,17 @@ h1, h2, h3, h4 {
 .phase-2-bottom-line-box h3 {
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--color-navy);
+    color: var(--text-primary);
     margin-bottom: var(--spacing-md);
 }
 
 .phase-2-bottom-line-amount {
     font-size: 4rem;
     font-weight: 800;
-    color: var(--color-success);
+    color: var(--color-gold);
     line-height: 1;
     margin: var(--spacing-md) 0;
+    text-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
 }
 
 .phase-2-bottom-line-description {
@@ -13148,15 +13150,16 @@ h1, h2, h3, h4 {
     width: 100%;
     border-collapse: collapse;
     margin: var(--spacing-xl) 0;
-    background: var(--color-white);
+    background: rgba(26, 45, 74, 0.4);
     border-radius: var(--border-radius);
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-subtle);
 }
 
 .phase-2-financial-table thead {
-    background: var(--color-navy);
-    color: var(--color-white);
+    background: var(--navy-medium);
+    color: var(--text-primary);
 }
 
 .phase-2-financial-table th {
@@ -13164,26 +13167,34 @@ h1, h2, h3, h4 {
     text-align: left;
     font-weight: 600;
     font-size: 0.95rem;
+    border-bottom: 2px solid var(--color-gold);
 }
 
 .phase-2-financial-table td {
     padding: var(--spacing-md);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+}
+
+.phase-2-financial-table tbody tr {
+    transition: var(--transition);
 }
 
 .phase-2-financial-table tbody tr:hover {
-    background: var(--navy-light);
+    background: rgba(0, 212, 255, 0.05);
 }
 
 .phase-2-financial-table tfoot {
     background: var(--navy-medium);
     font-weight: 700;
+    border-top: 2px solid var(--color-gold);
 }
 
 .phase-2-financial-table tfoot td {
     border-bottom: none;
     font-weight: 700;
     font-size: 1.125rem;
+    color: var(--text-primary);
 }
 
 /* Metric Grid */
@@ -13195,8 +13206,8 @@ h1, h2, h3, h4 {
 }
 
 .phase-2-metric-box {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
-    border: 2px solid var(--border-color);
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(42, 63, 95, 0.6) 100%);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-xl);
     text-align: center;
@@ -13205,12 +13216,17 @@ h1, h2, h3, h4 {
 
 .phase-2-metric-box:hover {
     transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 212, 255, 0.2);
+    border-color: var(--cyan-accent);
 }
 
 .phase-2-metric-box.green {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(16, 185, 129, 0.05) 100%);
-    border-color: var(--color-success);
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(42, 63, 95, 0.6) 100%);
+    border-color: var(--color-gold);
+}
+
+.phase-2-metric-box.green:hover {
+    box-shadow: 0 8px 24px rgba(212, 175, 55, 0.3);
 }
 
 .phase-2-metric-label {
@@ -13225,12 +13241,12 @@ h1, h2, h3, h4 {
 .phase-2-metric-value {
     font-size: 2.5rem;
     font-weight: 800;
-    color: var(--color-navy);
+    color: var(--cyan-accent);
     margin: var(--spacing-sm) 0;
 }
 
 .phase-2-metric-box.green .phase-2-metric-value {
-    color: var(--color-success);
+    color: var(--color-gold);
 }
 
 .phase-2-metric-description {
@@ -13241,8 +13257,8 @@ h1, h2, h3, h4 {
 
 /* Recommendation Box */
 .phase-2-recommendation-box {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.08) 100%);
-    border: 3px solid var(--color-success);
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(0, 212, 255, 0.05) 100%);
+    border: 2px solid var(--color-gold);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-2xl);
 }
@@ -13250,7 +13266,7 @@ h1, h2, h3, h4 {
 .phase-2-recommendation-title {
     font-size: 1.5rem;
     font-weight: 700;
-    color: var(--color-success-dark);
+    color: var(--color-gold);
     margin-bottom: var(--spacing-md);
 }
 
@@ -13265,15 +13281,16 @@ h1, h2, h3, h4 {
     width: 100%;
     border-collapse: collapse;
     margin: var(--spacing-xl) 0;
-    background: var(--color-white);
+    background: rgba(26, 45, 74, 0.4);
     border-radius: var(--border-radius);
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-subtle);
 }
 
 .phase-2-report-table thead {
-    background: var(--color-navy);
-    color: var(--color-white);
+    background: var(--navy-medium);
+    color: var(--text-primary);
 }
 
 .phase-2-report-table th {
@@ -13281,31 +13298,37 @@ h1, h2, h3, h4 {
     text-align: left;
     font-weight: 600;
     font-size: 0.9rem;
+    border-bottom: 2px solid var(--color-gold);
 }
 
 .phase-2-report-table td {
     padding: var(--spacing-md);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-subtle);
     vertical-align: top;
+    color: var(--text-primary);
+}
+
+.phase-2-report-table tbody tr {
+    transition: var(--transition);
 }
 
 .phase-2-report-table tbody tr:hover {
-    background: var(--navy-light);
+    background: rgba(0, 212, 255, 0.05);
 }
 
 /* Highlight */
 .phase-2-highlight {
-    background: rgba(255, 193, 7, 0.2);
+    background: rgba(212, 175, 55, 0.2);
     padding: 2px 8px;
     border-radius: 4px;
     font-weight: 600;
-    color: var(--color-navy);
+    color: var(--color-gold);
 }
 
 /* Risk Indicators */
 .phase-2-risk-high {
-    background: rgba(239, 68, 68, 0.1);
-    color: var(--color-error-dark);
+    background: rgba(239, 68, 68, 0.2);
+    color: #ff6b6b;
     padding: 4px 12px;
     border-radius: 4px;
     font-weight: 600;
@@ -13314,7 +13337,7 @@ h1, h2, h3, h4 {
 
 /* Conclusion Box */
 .phase-2-conclusion-box {
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(212, 175, 55, 0.05) 100%);
     border-left: 4px solid var(--cyan-accent);
     padding: var(--spacing-xl);
     border-radius: var(--border-radius);
@@ -13340,7 +13363,8 @@ h1, h2, h3, h4 {
 }
 
 .phase-2-metadata-box {
-    background: var(--navy-light);
+    background: rgba(0, 212, 255, 0.05);
+    border: 1px solid var(--border-subtle);
     padding: var(--spacing-md);
     border-radius: var(--border-radius);
     font-size: 0.95rem;
@@ -13349,7 +13373,7 @@ h1, h2, h3, h4 {
 
 /* Warning Box */
 .phase-2-warning-box {
-    background: rgba(255, 193, 7, 0.1);
+    background: rgba(212, 175, 55, 0.1);
     border: 2px solid var(--color-gold);
     border-radius: var(--border-radius);
     padding: var(--spacing-lg);
@@ -13367,15 +13391,16 @@ h1, h2, h3, h4 {
     width: 100%;
     border-collapse: collapse;
     margin: var(--spacing-xl) 0;
-    background: var(--color-white);
+    background: rgba(26, 45, 74, 0.4);
     border-radius: var(--border-radius);
     overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-subtle);
 }
 
 .phase-2-metric-table thead {
-    background: var(--color-navy);
-    color: var(--color-white);
+    background: var(--navy-medium);
+    color: var(--text-primary);
 }
 
 .phase-2-metric-table th {
@@ -13383,15 +13408,21 @@ h1, h2, h3, h4 {
     text-align: left;
     font-weight: 600;
     font-size: 0.9rem;
+    border-bottom: 2px solid var(--color-gold);
 }
 
 .phase-2-metric-table td {
     padding: var(--spacing-md);
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+}
+
+.phase-2-metric-table tbody tr {
+    transition: var(--transition);
 }
 
 .phase-2-metric-table tbody tr:hover {
-    background: var(--navy-light);
+    background: rgba(0, 212, 255, 0.05);
 }
 
 /* Verification List */
@@ -13412,7 +13443,8 @@ h1, h2, h3, h4 {
 
 /* Sign-off Section */
 .phase-2-sign-off {
-    background: var(--navy-light);
+    background: rgba(26, 45, 74, 0.5);
+    border: 1px solid var(--border-subtle);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-2xl);
     margin-top: var(--spacing-3xl);
@@ -13433,7 +13465,8 @@ h1, h2, h3, h4 {
 }
 
 .phase-2-sign-off-box {
-    background: var(--color-white);
+    background: rgba(10, 22, 40, 0.6);
+    border: 1px solid var(--border-subtle);
     padding: var(--spacing-xl);
     border-radius: var(--border-radius);
     text-align: center;
@@ -13442,13 +13475,13 @@ h1, h2, h3, h4 {
 .phase-2-sign-off-box h3 {
     font-size: 1.125rem;
     font-weight: 600;
-    color: var(--color-navy);
+    color: var(--text-primary);
     margin-bottom: var(--spacing-lg);
 }
 
 .phase-2-sign-off-line {
     height: 2px;
-    background: var(--border-color);
+    background: var(--border-subtle);
     margin: var(--spacing-2xl) 0 var(--spacing-md) 0;
 }
 
