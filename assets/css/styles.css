@@ -10775,7 +10775,7 @@ h1, h2, h3, h4 {
 }
 
 .section-block.phases .step-content p,
-.section-block .what-not p
+.section-block.what-not p
 {
   color: var(--color-white);
 }
