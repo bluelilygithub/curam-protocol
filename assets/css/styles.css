@@ -10770,7 +10770,15 @@ h1, h2, h3, h4 {
 .section-block .phase p {
   font-size: 1rem;
   line-height: 1.8;
-  color: var(--color-white);
+  color: var(--color-navy);
+  margin-bottom: var(--spacing-lg);
+}
+
+.section-block .phase p,
+.section-block .phase .step-content p {
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--color-navy);
   margin-bottom: var(--spacing-lg);
 }
 
