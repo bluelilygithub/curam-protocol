@@ -10757,7 +10757,7 @@ h1, h2, h3, h4 {
 .section-block p {
   font-size: 1rem;
   line-height: 1.8;
-  color: var(--text-secondary);
+  color: var(--color-navy);
   margin-bottom: var(--spacing-lg);
 }
 
