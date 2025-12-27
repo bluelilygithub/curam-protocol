@@ -10777,7 +10777,8 @@ h1, h2, h3, h4 {
 .section-block.phases .step-content p,
 .section-block.what-not p,
 .section-block.audit-delay p,
-.section-block.audit-delay .highlight-box p {
+.section-block.audit-delay .highlight-box p 
+.section-block.deliverables-grid .deliverable p {  
   color: var(--color-white);
 }
 
