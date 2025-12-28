@@ -1,9 +1,0 @@
-flask
-google-genai>=0.2.0
-pdfplumber
-pandas
-openpyxl
-gunicorn
-plotly>=5.17.0
-reportlab>=4.0.0
-requests

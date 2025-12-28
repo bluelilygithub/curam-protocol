@@ -1,0 +1,49 @@
+# Sensitive documents
+*Proposal*.pdf
+*Assessment*.pdf
+*ROI_Report*.pdf
+
+# Real client data (if any)
+/invoices/real-clients/
+/samples/confidential/
+
+# Secrets
+.env
+*.env
+secrets/
+config.local.py
+
+# Database backups
+*.sql
+*.dump
+
+# Node modules (if using npm/node)
+node_modules/
+
+# Python virtual environments
+venv/
+env/
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+temp/
+tmp/
+
