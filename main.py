@@ -38,6 +38,9 @@ from services.pdf_service import (
     prepare_prompt_text
 )
 
+# Phase 3.3a: Gemini Service - Step 1 (extracted get_available_models only)
+from services.gemini_service import get_available_models
+
 # Try to import specific exception types
 try:
     from google.api_core import exceptions as google_exceptions
@@ -188,50 +191,56 @@ DOC_FIELDS = {
 }
 ERROR_FIELD = {"finance": "Summary", "engineering": "Comments", "transmittal": "Title"}
 
-def get_available_models():
-    """Get list of available Gemini models"""
-    global _available_models
-    if _available_models is not None:
-        return _available_models
+################################################################################
+# MOVED TO services/gemini_service.py - Phase 3.3a (Step 1 of 3)
+# Function: get_available_models
+# Keeping commented for 48h as backup before permanent deletion
+# Original lines: 194-238
+################################################################################
+# def get_available_models():
+#     """Get list of available Gemini models"""
+#     global _available_models
+#     if _available_models is not None:
+#         return _available_models
     
-    if not api_key:
-        return []
+#     if not api_key:
+#         return []
     
-    _available_models = []
-    try:
-        models = genai.list_models()
-        models_list = list(models)  # Convert to list once
-        print(f"Found {len(models_list)} total models")
+#     _available_models = []
+#     try:
+#         models = genai.list_models()
+#         models_list = list(models)  # Convert to list once
+#         print(f"Found {len(models_list)} total models")
         
-        # Extract model names, removing 'models/' prefix
-        for m in models_list:
-            try:
-                model_name = m.name
-                if model_name.startswith('models/'):
-                    model_name = model_name.replace('models/', '')
+#         # Extract model names, removing 'models/' prefix
+#         for m in models_list:
+#             try:
+#                 model_name = m.name
+#                 if model_name.startswith('models/'):
+#                     model_name = model_name.replace('models/', '')
                 
-                # Check if model supports generateContent
-                supported_methods = getattr(m, 'supported_generation_methods', [])
-                if hasattr(supported_methods, '__iter__'):
-                    methods = list(supported_methods)
-                else:
-                    methods = [str(supported_methods)] if supported_methods else []
+#                 # Check if model supports generateContent
+#                 supported_methods = getattr(m, 'supported_generation_methods', [])
+#                 if hasattr(supported_methods, '__iter__'):
+#                     methods = list(supported_methods)
+#                 else:
+#                     methods = [str(supported_methods)] if supported_methods else []
                 
-                if 'generateContent' in methods or len(methods) == 0:
-                    _available_models.append(model_name)
-                    print(f"  - {model_name} (methods: {methods})")
-            except Exception as e:
-                print(f"Error processing model {m}: {e}")
-                continue
+#                 if 'generateContent' in methods or len(methods) == 0:
+#                     _available_models.append(model_name)
+#                     print(f"  - {model_name} (methods: {methods})")
+#             except Exception as e:
+#                 print(f"Error processing model {m}: {e}")
+#                 continue
         
-        print(f"Available models for generateContent: {_available_models}")
-        return _available_models if _available_models else None
-    except Exception as e:
-        print(f"Error listing models: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
-        # Return None to use fallback
-        return None
+#         print(f"Available models for generateContent: {_available_models}")
+#         return _available_models if _available_models else None
+#     except Exception as e:
+#         print(f"Error listing models: {type(e).__name__}: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         # Return None to use fallback
+#         return None
 
 def build_prompt(text, doc_type):
     """Build a prompt tailored to the selected department."""
