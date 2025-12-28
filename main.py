@@ -6019,3 +6019,10 @@ if __name__ == '__main__':
 @app.route('/db-test')
 def db_test():
     return test_connection()
+
+from database import test_connection, get_document_types_by_sector
+
+@app.route('/db-test-sectors')
+def db_test_sectors():
+    built_env = get_document_types_by_sector('built-environment')
+    return f"Built Environment has {len(built_env)} document types: {[d['name'] for d in built_env]}"
