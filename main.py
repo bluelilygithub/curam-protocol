@@ -15,17 +15,6 @@ from werkzeug.utils import secure_filename
 import requests
 from urllib.parse import quote
 
-from database import (
-    test_connection, 
-    get_document_types_by_sector, 
-    engine, 
-    get_sectors, 
-    get_demo_config_by_department,
-    get_samples_for_template
-)
-from sqlalchemy import text
-
-
 # Try to import specific exception types
 try:
     from google.api_core import exceptions as google_exceptions
@@ -43,7 +32,7 @@ if api_key:
 FINANCE_UPLOAD_DIR = os.path.join('uploads', 'finance')
 os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
 
-# --- DEPARTMENT CONFIG.... ---
+# --- DEPARTMENT CONFIG ---
 DEFAULT_DEPARTMENT = "finance"
 DEPARTMENT_SAMPLES = {
     "finance": {
@@ -93,8 +82,8 @@ ROUTINE_DESCRIPTIONS = {
         ("Finance / Admin: \"The Invoice Gatekeeper\"",
          """<p><strong>What it does:</strong> It acts as an <strong>Intelligent Document Processing (IDP)</strong> engine, translating raw incoming PDF bills (from subcontractors, hardware stores, software subscriptions, etc.) into structured data. It ignores layout variations and reliably extracts the core financial fields required to push the bill into your accounting platform (Xero/MYOB).</p>
          <p><strong>The Current Grind:</strong> The workflow involves excessive manual repetition: an admin staff member opens an email, saves the PDF, manually types the Vendor name, Date, Total, and Invoice ID into the accounting platform, and cross-checks for errors.</p>
-         <p><strong>Frequency:</strong> Daily volume for a 70-staff firm is typically <strong>70–100 documents</strong> every week (external vendor invoices alone). We will initially focus the pilot on vendor invoices.</p>
-         <p><strong>The Saving (Vendor Invoices Only):</strong><br>Manual: 3 minutes per document × 70 docs = <strong>3.5 hours/week</strong>.<br>AI: Near-instant. Accuracy is the new focus.<br><strong>Value:</strong> This immediate saving frees the Office Manager to focus on strategic tasks like staff culture, cost centre analysis, and debt recovery rather than transactional data entry.</p>
+         <p><strong>Frequency:</strong> Daily volume for a 70-staff firm is typically <strong>70â€“100 documents</strong> every week (external vendor invoices alone). We will initially focus the pilot on vendor invoices.</p>
+         <p><strong>The Saving (Vendor Invoices Only):</strong><br>Manual: 3 minutes per document Ã— 70 docs = <strong>3.5 hours/week</strong>.<br>AI: Near-instant. Accuracy is the new focus.<br><strong>Value:</strong> This immediate saving frees the Office Manager to focus on strategic tasks like staff culture, cost centre analysis, and debt recovery rather than transactional data entry.</p>
          <hr style="margin: 20px 0;">
          <p><strong>Future Impact: Internal Documents (Phase 2 Upside)</strong><br>The greatest opportunity lies in extending this capability to <strong>internal documents</strong>. By proving the engine on external invoices, the firm gains a validated tool ready to automate staff timesheets, project expense receipts, and internal cost allocations. This dramatically expands efficiency and eliminates manual project coding errors.</p>"""),
     ],
@@ -103,7 +92,7 @@ ROUTINE_DESCRIPTIONS = {
          """<p><strong>What it does:</strong> It converts "dead" data (text inside a PDF drawing) into "live" data (Excel cells). It takes a list of beams or columns from a drawing and prepares it for calculation or ordering.</p>
          <p><strong>The Current Grind:</strong> An engineer needs to check the capacity of 50 columns or prepare a bill of materials. They look at the PDF schedule on the left screen and manually type member details (e.g., "310UC158") into a spreadsheet on the right screen, one by one.</p>
          <p><strong>Frequency:</strong> Project-Based (Bursts). This happens heavily at the start of a project, during major design revisions, and when preparing tender packages.</p>
-         <p><strong>The Saving:</strong><br>Manual: 45–60 minutes per major schedule.<br>AI: 30 seconds.<br><strong>Value:</strong> The AI eliminates <strong>Transcription Error</strong>—a catastrophic risk in capacity checking or steel ordering. It guarantees data integrity for calculation or fabrication takeoff.</p>
+         <p><strong>The Saving:</strong><br>Manual: 45â€“60 minutes per major schedule.<br>AI: 30 seconds.<br><strong>Value:</strong> The AI eliminates <strong>Transcription Error</strong>â€”a catastrophic risk in capacity checking or steel ordering. It guarantees data integrity for calculation or fabrication takeoff.</p>
          <p><strong>Note:</strong> This demo is tuned for the two structural schedules provided (`schedule_cad.pdf` and `schedule_revit.pdf`). Upload files with the same fields (Mark/Size/Qty/Length/Grade/PaintSystem/Comments), even if the layout is slightly different, so the extraction schema still applies.</p>""")
     ],
     "transmittal": [
@@ -111,7 +100,7 @@ ROUTINE_DESCRIPTIONS = {
          """<p><strong>Current Grind:</strong> Drafters spend hours opening drawing PDFs, manually recording drawing numbers, revisions, titles, scales, and approval dates into a transmittal register. For a 50-drawing package, this takes 30-45 minutes of repetitive clicking and typing across inconsistent title block layouts.</p>
          <p><strong>The Demo:</strong> Upload the five drawing PDFs supplied (S-001, S-100, S-101, S-102, S-500). The AI scans the title block and extracts Drawing Number, Revision, Drawing Title, and Scale from each, handling mixed title block layouts automatically.</p>
          <p><strong>Input Constraint:</strong> Files must contain the same metadata fields (Drawing Number, Revision, Title, Scale, Date, Status, Sheet Count, Project) even if the layout differs. The extraction schema normalizes across variations.</p>
-         <p><strong>Outcome:</strong> A "Document Register" that your team can email or drop into Excel as a transmittal—ready for client distribution, RFI tracking, or compliance audits.</p>
+         <p><strong>Outcome:</strong> A "Document Register" that your team can email or drop into Excel as a transmittalâ€”ready for client distribution, RFI tracking, or compliance audits.</p>
          <p><strong>The Saving:</strong><br>Manual: 30-45 min per transmittal.<br>AI: 20 seconds.<br><strong>Value:</strong> Zero transcription errors (no mismatched rev letters, drawing numbers, or dates) + auditable extraction trail for compliance.</p>""")
     ]
 }
@@ -120,17 +109,17 @@ ROUTINE_SUMMARY = {
     "finance": [
         ("Grind", "Admin opens email, saves the PDF, opens Xero, manually types Vendor, Date, Total, and checks for typos."),
         ("Frequency", "Daily; more realistic volume of <strong>70 documents</strong> per week for a 70-person firm (Vendor Invoices only)."),
-        ("Saving", "Manual: 3 min/document × 70 docs = <strong>3.5 hours/week</strong>. AI: Near-instant."),
+        ("Saving", "Manual: 3 min/document Ã— 70 docs = <strong>3.5 hours/week</strong>. AI: Near-instant."),
         ("Value", "Immediate efficiency frees up Office Manager time for strategic tasks (culture, billing), enabling a capacity reallocation upside of up to <strong>$1.44 M</strong> annually (Tier 4).")
     ],
     "engineering": [
         ("Grind", "Engineers read 50 column/beam entries, manually typing 310UC158 into Excel for each."),
-        ("Frequency", "Project bursts—during project start and major revisions."),
-        ("Saving", "Manual: 45–60 min per schedule. AI: 30 seconds."),
+        ("Frequency", "Project burstsâ€”during project start and major revisions."),
+        ("Saving", "Manual: 45â€“60 min per schedule. AI: 30 seconds."),
         ("Value", "Eliminates transcription errors (e.g., 310UB vs 310UC).")
     ],
     "transmittal": [
-        ("Grind", "Drafters open 20–50 drawings, copying Drawing No/Rev/Title/Scale by hand."),
+        ("Grind", "Drafters open 20â€“50 drawings, copying Drawing No/Rev/Title/Scale by hand."),
         ("Frequency", "Weekly to help compile client transmittals."),
         ("Saving", "Manual: hours of typing. AI: builds the register instantly."),
         ("Value", "Avoids Friday-afternoon typos and keeps registers accurate.")
@@ -293,14 +282,14 @@ BEFORE marking anything as [illegible]:
 - Only mark SPECIFIC unclear parts
 
 **STEP 2: FORMAT PARTIAL EXTRACTIONS**
-✓ Good: "Install per specification ABC-123 [remainder obscured by stain]"
-✗ Bad: "[Comment illegible - manual transcription required]"
+âœ“ Good: "Install per specification ABC-123 [remainder obscured by stain]"
+âœ— Bad: "[Comment illegible - manual transcription required]"
 
-✓ Good: "Verify dimensions on site. [handwritten: 'APPROVED - JMc 5/12']"
-✗ Bad: "[Comment illegible - manual review required]"
+âœ“ Good: "Verify dimensions on site. [handwritten: 'APPROVED - JMc 5/12']"
+âœ— Bad: "[Comment illegible - manual review required]"
 
 **STEP 3: USE [illegible] ONLY FOR TRULY UNREADABLE TEXT**
-- If ANY words are readable → extract them
+- If ANY words are readable â†’ extract them
 - Use specific markers:
   - [word illegible]
   - [coffee stain obscures text]
@@ -312,42 +301,42 @@ BEFORE marking anything as [illegible]:
 **EXAMPLES:**
 
 Scenario: "Install with [smudge] gasket material"
-✓ Extract: "Install with [smudged word] gasket material"
-✗ Don't: "[Comment illegible]"
+âœ“ Extract: "Install with [smudged word] gasket material"
+âœ— Don't: "[Comment illegible]"
 
 Scenario: Stain covers last 3 words
-✓ Extract: "Check actual dimensions before fabrication [coffee stain obscures remainder]"
-✗ Don't: "[coffee stain obscures remainder]" as entire comment
+âœ“ Extract: "Check actual dimensions before fabrication [coffee stain obscures remainder]"
+âœ— Don't: "[coffee stain obscures remainder]" as entire comment
 
 Scenario: Handwritten note is clear
-✓ Extract: "Original specification. [handwritten: 'CHANGED TO TYPE B - PMG']"
-✗ Don't: "[Comment illegible - manual review required]"
+âœ“ Extract: "Original specification. [handwritten: 'CHANGED TO TYPE B - PMG']"
+âœ— Don't: "[Comment illegible - manual review required]"
 
 **VALIDATION:**
 If you marked something [illegible], ask yourself:
-- Can I read ANY words? → Then extract them + mark specific gap
-- Is the entire field truly unreadable? → Then use full illegible marker
+- Can I read ANY words? â†’ Then extract them + mark specific gap
+- Is the entire field truly unreadable? â†’ Then use full illegible marker
 
 **Step 2: Read as Phrases, Not Characters**
 
 CHARACTER SOUP DETECTION:
 
 If your extraction looks like: "H o l d 4 O m m g r o u t u n d e r..."
-→ STOP - This is character-level OCR failure
-→ Re-attempt reading as connected words
-→ Try reading at higher magnification
-→ Use context from field type and adjacent data
+â†’ STOP - This is character-level OCR failure
+â†’ Re-attempt reading as connected words
+â†’ Try reading at higher magnification
+â†’ Use context from field type and adjacent data
 
 If still garbled after retry:
-→ Mark: "[Field illegible - OCR failed]"
-→ Do NOT output character soup
+â†’ Mark: "[Field illegible - OCR failed]"
+â†’ Do NOT output character soup
 
 UNACCEPTABLE OUTPUTS:
-❌ "H o l d 4 O m g r o u t"
-❌ "W p e e b r b A e S a 1"
-❌ "o x n i s s t i i t n e g"
+âŒ "H o l d 4 O m g r o u t"
+âŒ "W p e e b r b A e S a 1"
+âŒ "o x n i s s t i i t n e g"
 
-If your output looks like these → You failed. Try again or mark as illegible.
+If your output looks like these â†’ You failed. Try again or mark as illegible.
 
 **Step 3: Extract Complete Multi-Part Content**
 
@@ -394,9 +383,9 @@ Before finalizing each field:
 - Use proper markers: "[coffee stain obscures text]" or "[remainder unclear]"
 
 **VALIDATION:**
-- If field ends mid-word → Mark as incomplete
-- If field seems short for important item → Check for continuation
-- If unclear portion → Use marker: "[coffee stain obscures text]" not "(coffee sta"
+- If field ends mid-word â†’ Mark as incomplete
+- If field seems short for important item â†’ Check for continuation
+- If unclear portion â†’ Use marker: "[coffee stain obscures text]" not "(coffee sta"
 
 EXAMPLES:
 
@@ -410,14 +399,14 @@ Wrong: "(coffee sta"
 Right: "[coffee stain obscures text]" or "Paint System A required [coffee stain obscures remainder]"
 
 Wrong: "Corrosion noted st moore"
-Right: "Corrosion noted at base" ⚠️ Corrected 'st moore' to 'at base' (OCR error)
+Right: "Corrosion noted at base" âš ï¸ Corrected 'st moore' to 'at base' (OCR error)
 
 VALIDATION:
 If field seems short for an important/complex item:
-→ Check for text after periods
-→ Look for references to standards/drawings
-→ Verify you captured complete information
-→ Check for mid-word truncation
+â†’ Check for text after periods
+â†’ Look for references to standards/drawings
+â†’ Verify you captured complete information
+â†’ Check for mid-word truncation
 
 **Step 4: Handle Handwritten Annotations**
 
@@ -455,8 +444,8 @@ For unclear characters:
 **Step 3: EXTRACTION WITH UNCERTAINTY**
 If partially legible after context analysis:
 - Extract best interpretation based on context
-- Flag: ⚠️ Handwritten text partially unclear - interpretation based on context
-- Example: [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Partially unclear, "310UC137" inferred from context
+- Flag: âš ï¸ Handwritten text partially unclear - interpretation based on context
+- Example: [handwritten: 'CHANGED TO 310UC137 - PMG'] âš ï¸ Partially unclear, "310UC137" inferred from context
 
 **Step 4: HANDWRITTEN CONTEXT VALIDATION - CONSERVATIVE APPROACH**
 
@@ -465,19 +454,19 @@ If partially legible after context analysis:
 **COMMON PATTERNS IN ENGINEERING CHANGES:**
 
 Valid patterns (make technical sense):
-- "CHANGED TO [new specification]" ✓ Common
-- "MODIFIED TO [new specification]" ✓ Common
-- "REVISED TO [new specification]" ✓ Common
-- "UPDATED TO [new specification]" ✓ Common
-- "APPROVED - [initials] [date]" ✓ Common
-- "DELETED - NOT REQ'D" ✓ Common
+- "CHANGED TO [new specification]" âœ“ Common
+- "MODIFIED TO [new specification]" âœ“ Common
+- "REVISED TO [new specification]" âœ“ Common
+- "UPDATED TO [new specification]" âœ“ Common
+- "APPROVED - [initials] [date]" âœ“ Common
+- "DELETED - NOT REQ'D" âœ“ Common
 
 Invalid patterns (make no technical sense):
-- "CORRODED TO [specification]" ✗ Makes no sense
-- "DAMAGED TO [specification]" ✗ Makes no sense
-- "BROKEN TO [specification]" ✗ Makes no sense
-- "CHEVROLET YO [specification]" ✗ Makes no sense
-- Any nonsensical phrase ✗
+- "CORRODED TO [specification]" âœ— Makes no sense
+- "DAMAGED TO [specification]" âœ— Makes no sense
+- "BROKEN TO [specification]" âœ— Makes no sense
+- "CHEVROLET YO [specification]" âœ— Makes no sense
+- Any nonsensical phrase âœ—
 
 **CONSERVATIVE VALIDATION PROTOCOL:**
 
@@ -490,23 +479,23 @@ When handwritten text is unclear:
 **STEP 2: Check if it makes technical sense**
 - Does the phrase make sense in engineering context?
 - Do the words form a logical instruction?
-- → YES: Accept it (even if slightly unclear)
-- → NO: Go to Step 3
+- â†’ YES: Accept it (even if slightly unclear)
+- â†’ NO: Go to Step 3
 
 **STEP 3: Try common patterns (only if confident >95%)**
 - Match against known patterns: "CHANGED TO [spec]", "DELETED - NOT REQ'D", etc.
 - Check if verb makes technical sense:
-  - "Changed to", "Modified to", "Revised to" → Yes ✓
-  - "Corroded to", "Damaged to", "Broken to", "Chevrolet" → No ✗
+  - "Changed to", "Modified to", "Revised to" â†’ Yes âœ“
+  - "Corroded to", "Damaged to", "Broken to", "Chevrolet" â†’ No âœ—
 - If pattern matches AND confident (>95%):
   - Apply correction
-  - Flag: ⚠️ Corrected '[original]' to '[corrected]' (handwriting interpretation)
+  - Flag: âš ï¸ Corrected '[original]' to '[corrected]' (handwriting interpretation)
 
 **STEP 4: If still nonsensical or uncertain:**
 - **DO NOT force a correction**
 - **DO NOT "correct" to another nonsensical phrase**
 - Mark: [handwritten annotation unclear - appears to say "[OCR text]"]
-- Flag: 🚫 CRITICAL: Handwritten text unclear - manual verification required
+- Flag: ðŸš« CRITICAL: Handwritten text unclear - manual verification required
 - Better to mark as uncertain than extract wrong information
 
 **EXAMPLES:**
@@ -518,7 +507,7 @@ Analysis:
 - Common pattern: "CHANGED TO [beam size]"
 - Confident: >95% (single character confusion)
 - Correction: "CHANGED TO 310UC137 - PMG"
-- Flag: ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)
+- Flag: âš ï¸ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)
 
 **Example 2: Too unclear - mark as uncertain**
 OCR: "CHEVROLET YO 376UC137 - PMG"
@@ -527,7 +516,7 @@ Analysis:
 - Common pattern match? Likely "CHANGED TO 3?0UC137" but multiple uncertainties
 - Confident: <70% (too many character uncertainties)
 - Action: [handwritten annotation unclear - appears to reference beam size change]
-- Flag: 🚫 CRITICAL: Handwritten annotation illegible - manual verification required
+- Flag: ðŸš« CRITICAL: Handwritten annotation illegible - manual verification required
 - **DO NOT attempt correction - too uncertain**
 
 **Example 3: Partially clear**
@@ -535,8 +524,8 @@ OCR: "CHANGED TO 3?0UC137 - PMG" (one unclear digit)
 Analysis:
 - Pattern matches "CHANGED TO [beam size]"
 - One digit uncertain (could be 310UC137 or 360UC137)
-- Action: [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Digit partially unclear, inferred from context
-- Flag: ⚠️ Handwritten text partially unclear - "310UC137" interpretation based on context
+- Action: [handwritten: 'CHANGED TO 310UC137 - PMG'] âš ï¸ Digit partially unclear, inferred from context
+- Flag: âš ï¸ Handwritten text partially unclear - "310UC137" interpretation based on context
 
 **NEVER:**
 - "Correct" handwriting to another nonsensical phrase
@@ -548,11 +537,11 @@ If truly illegible after analysis:
 - Don't mark entire row as illegible
 
 EXAMPLES:
-✓ "Original size 250mm. [handwritten: 'CHANGED TO 300mm - approval JD 5/12/19']"
-✓ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Handwriting partially unclear, size inferred from context"
-✓ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)"
-✓ "Pending approval [handwritten signature - illegible]"
-✓ "[handwritten in red pen: 'DELETED - NOT REQ'D']"
+âœ“ "Original size 250mm. [handwritten: 'CHANGED TO 300mm - approval JD 5/12/19']"
+âœ“ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] âš ï¸ Handwriting partially unclear, size inferred from context"
+âœ“ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] âš ï¸ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)"
+âœ“ "Pending approval [handwritten signature - illegible]"
+âœ“ "[handwritten in red pen: 'DELETED - NOT REQ'D']"
 
 ## STRIKETHROUGH TEXT HANDLING - CRITICAL
 
@@ -560,7 +549,7 @@ STRIKETHROUGH TEXT EXTRACTION:
 
 Visual strikethrough lines (red or black) can interfere with OCR but text is still readable.
 
-**CRITICAL RULE: Strikethrough ≠ Illegible**
+**CRITICAL RULE: Strikethrough â‰  Illegible**
 
 PROTOCOL FOR STRIKETHROUGH ROWS:
 
@@ -581,7 +570,7 @@ PROTOCOL FOR STRIKETHROUGH ROWS:
 - Cross-reference with deletion notes
 
 **Step 4: NEVER mark as [illegible]**
-- Strikethrough ≠ illegible
+- Strikethrough â‰  illegible
 - Text is readable, just marked for deletion
 - Extract the data + note deletion status
 
@@ -589,9 +578,9 @@ EXAMPLE:
 
 NB-03 row has red strikethrough:
 
-❌ WRONG: Mark all fields [illegible]
+âŒ WRONG: Mark all fields [illegible]
 
-✓ RIGHT:
+âœ“ RIGHT:
   Mark: NB-03
   Size: 310UC97
   Qty: 6
@@ -602,10 +591,10 @@ NB-03 row has red strikethrough:
 VALIDATION CHECK:
 
 If entire row is [illegible] but you can see ANY text:
-→ STOP - re-attempt extraction
-→ Look for strikethrough line interfering
-→ Read text underneath the line
-→ Extract data + note deletion status
+â†’ STOP - re-attempt extraction
+â†’ Look for strikethrough line interfering
+â†’ Read text underneath the line
+â†’ Extract data + note deletion status
 
 ## TEXT QUALITY ASSESSMENT BEFORE MARKING ILLEGIBLE
 
@@ -632,10 +621,10 @@ Before marking [illegible], assess WHY text is unclear:
 DECISION TREE:
 
 Can you see letter shapes?
-→ YES: Attempt extraction (even if uncertain)
-→ NO: Check if strikethrough/markup
-  → YES: Look underneath, extract + note deletion
-  → NO: Mark [illegible]
+â†’ YES: Attempt extraction (even if uncertain)
+â†’ NO: Check if strikethrough/markup
+  â†’ YES: Look underneath, extract + note deletion
+  â†’ NO: Mark [illegible]
 
 ## COLUMN BOUNDARY AWARENESS
 
@@ -644,9 +633,9 @@ CRITICAL RULE - Issues Stay in Their Columns:
 COLUMN ISOLATION PROTOCOL:
 
 When encountering issues (stains, damage, illegibility):
-→ Identify WHICH COLUMN contains the issue
-→ Note the issue ONLY in that column
-→ Don't let issues leak into adjacent columns
+â†’ Identify WHICH COLUMN contains the issue
+â†’ Note the issue ONLY in that column
+â†’ Don't let issues leak into adjacent columns
 
 WRONG BEHAVIOR EXAMPLE:
 Column A (actual): Empty/N/A
@@ -684,7 +673,7 @@ Different cell states have different meanings. Check document conventions first.
 - Check: Does document have a legend defining empty cells?
 
 **Type 3: DASH OR HYPHEN**
-- Cell contains: "—" or "-" or "–"
+- Cell contains: "â€”" or "-" or "â€“"
 - Common meanings:
   - Engineering docs: Usually "not applicable"
   - Financial docs: Often "zero" or "TBD"
@@ -693,19 +682,19 @@ Different cell states have different meanings. Check document conventions first.
 - Default: Convert to N/A unless legend specifies otherwise
 
 **Type 4: SPECIAL SYMBOLS**
-- *, †, ‡, (a), (b): Usually reference notes/footnotes
+- *, â€ , â€¡, (a), (b): Usually reference notes/footnotes
 - Extract: The symbol + look for footnote explanation
 
 VALIDATION:
-If you extract "—" or "-" as a literal value:
-→ STOP and reconsider
-→ Check if document defines what dashes mean
-→ Usually convert to "N/A" unless certain it means something else
+If you extract "â€”" or "-" as a literal value:
+â†’ STOP and reconsider
+â†’ Check if document defines what dashes mean
+â†’ Usually convert to "N/A" unless certain it means something else
 
 CONSISTENCY CHECK:
-If some rows have "N/A" and others have "—" in same column:
-→ Likely they mean the same thing
-→ Normalize to one format (prefer N/A)
+If some rows have "N/A" and others have "â€”" in same column:
+â†’ Likely they mean the same thing
+â†’ Normalize to one format (prefer N/A)
 
 ## ACTIVE ERROR CORRECTION
 
@@ -713,20 +702,20 @@ FIX WHAT YOU CAN CONFIDENTLY IDENTIFY:
 
 When you detect an error, decide your confidence level:
 
-**HIGH CONFIDENCE (90%+) → FIX IT**
+**HIGH CONFIDENCE (90%+) â†’ FIX IT**
 Examples:
-- OCR character confusion you can verify (7→1, 3→8, O→0)
+- OCR character confusion you can verify (7â†’1, 3â†’8, Oâ†’0)
 - Format errors with clear patterns (spaces in numbers)
 - Column misalignment you can verify
-- Dash → N/A conversion
+- Dash â†’ N/A conversion
 - Obvious typos in standard terms
 
 Actions:
 1. Make the correction
-2. Flag it: "⚠️ Corrected from X to Y based on [reason]"
+2. Flag it: "âš ï¸ Corrected from X to Y based on [reason]"
 3. Show original OCR in notes for transparency
 
-**MEDIUM CONFIDENCE (60-89%) → FIX WITH STRONG FLAG**
+**MEDIUM CONFIDENCE (60-89%) â†’ FIX WITH STRONG FLAG**
 Examples:
 - Quantity seems wrong based on item context
 - Format unusual but could be correct
@@ -734,10 +723,10 @@ Examples:
 
 Actions:
 1. Make best-guess correction
-2. Flag: "🔍 Corrected from X to Y - VERIFY THIS"
+2. Flag: "ðŸ” Corrected from X to Y - VERIFY THIS"
 3. Explain reasoning
 
-**LOW CONFIDENCE (<60%) → FLAG, DON'T FIX**
+**LOW CONFIDENCE (<60%) â†’ FLAG, DON'T FIX**
 Examples:
 - True ambiguity in handwriting
 - Completely unclear OCR
@@ -745,21 +734,21 @@ Examples:
 
 Actions:
 1. Extract what you see
-2. Flag: "🚫 CRITICAL: Value uncertain - MANUAL VERIFICATION REQUIRED"
+2. Flag: "ðŸš« CRITICAL: Value uncertain - MANUAL VERIFICATION REQUIRED"
 3. Explain the issue and possible interpretations
 
 WHEN TO CORRECT:
-✓ Number confusion if you can see actual digit
-✓ Format errors with clear correct pattern
-✓ Column misalignment with clear evidence
-✓ Standard term with obvious misspelling
-✓ Missing unit when context is clear
+âœ“ Number confusion if you can see actual digit
+âœ“ Format errors with clear correct pattern
+âœ“ Column misalignment with clear evidence
+âœ“ Standard term with obvious misspelling
+âœ“ Missing unit when context is clear
 
 WHEN NOT TO CORRECT:
-✗ True ambiguity you can't resolve
-✗ Handwriting too unclear to read
-✗ Missing data (never invent)
-✗ Unfamiliar terminology (might be correct)
+âœ— True ambiguity you can't resolve
+âœ— Handwriting too unclear to read
+âœ— Missing data (never invent)
+âœ— Unfamiliar terminology (might be correct)
 
 ## SECTION-AWARE VALIDATION
 
@@ -784,29 +773,29 @@ Visual markers:
 For each section type, certain values are more/less expected:
 
 Example - Construction:
-- "Existing" section → Minimal new specifications
-- "New" section → Complete specifications required
-- "Modified" section → Mix of existing + new details
+- "Existing" section â†’ Minimal new specifications
+- "New" section â†’ Complete specifications required
+- "Modified" section â†’ Mix of existing + new details
 
 **STEP 3: VALIDATE AGAINST SECTION CONTEXT**
 If extraction seems inconsistent with section:
-→ Double-check the value
-→ Verify you're reading correct section
-→ Flag if anomaly confirmed
+â†’ Double-check the value
+â†’ Verify you're reading correct section
+â†’ Flag if anomaly confirmed
 
 EXAMPLES:
 
 Item in "EXISTING" section with extensive new specifications:
-→ Flag: "⚠️ Item in existing section but has new specs - verify correct section"
+â†’ Flag: "âš ï¸ Item in existing section but has new specs - verify correct section"
 
 Item in "NEW" section missing key specifications:
-→ Flag: "🔍 New item missing expected specifications - verify complete"
+â†’ Flag: "ðŸ” New item missing expected specifications - verify complete"
 
 ## ERROR FLAGGING SYSTEM
 
 Use three-tier flagging:
 
-**⚠️ WARNING (Likely correct but verify)**
+**âš ï¸ WARNING (Likely correct but verify)**
 Use when: Minor uncertainty, probably correct but worth double-checking
 
 Examples:
@@ -815,9 +804,9 @@ Examples:
 - "Corrected from X to Y (OCR confusion)"
 
 Format:
-⚠️ [Specific issue]: [Explanation]
+âš ï¸ [Specific issue]: [Explanation]
 
-**🔍 REVIEW REQUIRED (Uncertain extraction)**
+**ðŸ” REVIEW REQUIRED (Uncertain extraction)**
 Use when: Moderate uncertainty, could go either way
 
 Examples:
@@ -826,9 +815,9 @@ Examples:
 - "Value seems inconsistent with context - verify"
 
 Format:
-🔍 [What's uncertain]: [Why uncertain] - [Suggested action]
+ðŸ” [What's uncertain]: [Why uncertain] - [Suggested action]
 
-**🚫 CRITICAL ERROR (Must fix before use)**
+**ðŸš« CRITICAL ERROR (Must fix before use)**
 Use when: High certainty something is wrong, or critical field is unclear
 
 Examples:
@@ -837,7 +826,7 @@ Examples:
 - "Column alignment corrupted - values may be wrong"
 
 Format:
-🚫 CRITICAL: [Issue] - [Impact] - MANUAL VERIFICATION REQUIRED
+ðŸš« CRITICAL: [Issue] - [Impact] - MANUAL VERIFICATION REQUIRED
 
 For Every Flag Provide:
 - What you extracted
@@ -849,37 +838,37 @@ For Every Flag Provide:
 
 BEFORE SUBMITTING EXTRACTION, VERIFY:
 
-**✓ Completeness Checks**
-□ All readable text extracted? (Used partial extraction before marking illegible)
-□ Multi-part fields complete? (Checked for continuation after periods)
-□ Handwritten annotations captured? (In [brackets] with original)
-□ All columns filled? (Empty cells properly marked as N/A or —)
+**âœ“ Completeness Checks**
+â–¡ All readable text extracted? (Used partial extraction before marking illegible)
+â–¡ Multi-part fields complete? (Checked for continuation after periods)
+â–¡ Handwritten annotations captured? (In [brackets] with original)
+â–¡ All columns filled? (Empty cells properly marked as N/A or â€”)
 
-**✓ Accuracy Checks**
-□ Format validation passed? (Data matches expected patterns)
-□ Cross-field validation done? (Values consistent within row)
-□ Section context checked? (Values appropriate for section)
-□ Column boundaries respected? (Issues in correct columns)
+**âœ“ Accuracy Checks**
+â–¡ Format validation passed? (Data matches expected patterns)
+â–¡ Cross-field validation done? (Values consistent within row)
+â–¡ Section context checked? (Values appropriate for section)
+â–¡ Column boundaries respected? (Issues in correct columns)
 
-**✓ Error Handling Checks**
-□ Confident corrections applied? (Fixed obvious OCR errors)
-□ Uncertainties flagged? (All doubts explicitly marked)
-□ No character soup? (No "H o l d 4 O..." output)
-□ No invented data? (Only extracted what exists)
+**âœ“ Error Handling Checks**
+â–¡ Confident corrections applied? (Fixed obvious OCR errors)
+â–¡ Uncertainties flagged? (All doubts explicitly marked)
+â–¡ No character soup? (No "H o l d 4 O..." output)
+â–¡ No invented data? (Only extracted what exists)
 
-**✓ Flag Quality Checks**
-□ Each flag has specific reason? (Not generic "check this")
-□ Critical issues marked 🚫? (Safety/compliance impacts)
-□ Corrections explained? (Showed original + fixed value)
-□ Suggested fixes provided? (When confident about correction)
+**âœ“ Flag Quality Checks**
+â–¡ Each flag has specific reason? (Not generic "check this")
+â–¡ Critical issues marked ðŸš«? (Safety/compliance impacts)
+â–¡ Corrections explained? (Showed original + fixed value)
+â–¡ Suggested fixes provided? (When confident about correction)
 
-**✓ Consistency Checks**
-□ All "Corrected X to Y" flags have corresponding corrected text?
-□ Text matches flags? (No flag/text mismatches)
-□ Handwriting corrections only applied if confident >95%?
-□ Uncertain handwriting marked as unclear (not forced corrections)?
-□ No mid-word truncation? (Fields complete, not cut off)
-□ All corrections actually applied to text (not just flagged)?
+**âœ“ Consistency Checks**
+â–¡ All "Corrected X to Y" flags have corresponding corrected text?
+â–¡ Text matches flags? (No flag/text mismatches)
+â–¡ Handwriting corrections only applied if confident >95%?
+â–¡ Uncertain handwriting marked as unclear (not forced corrections)?
+â–¡ No mid-word truncation? (Fields complete, not cut off)
+â–¡ All corrections actually applied to text (not just flagged)?
 
 ## IMAGE PROCESSING - CRITICAL FOR JPEG/PNG FILES
 
@@ -896,11 +885,11 @@ When processing image files (JPEG, PNG, etc.) instead of PDFs:
 2. **Size Column - HIGHEST PRIORITY**
    - The Size column is THE MOST CRITICAL field
    - NEVER extract Size as "N/A" unless cell is truly empty
-   - Size column typically contains: "310UC158", "250UB37.2", "WB1220×6.0", "250PFC"
+   - Size column typically contains: "310UC158", "250UB37.2", "WB1220Ã—6.0", "250PFC"
    - If you see ANY text in the Size column area, extract it
    - Common patterns to look for:
      - UC/UB sections: Numbers + "UC" or "UB" + numbers
-     - Welded beams: "WB" + numbers + "×" + numbers
+     - Welded beams: "WB" + numbers + "Ã—" + numbers
      - PFC sections: Numbers + "PFC"
 
 3. **Visual Column Mapping**
@@ -922,14 +911,14 @@ When processing image files (JPEG, PNG, etc.) instead of PDFs:
 Before finalizing extraction, verify:
 - [ ] Size column has actual values (not all "N/A")
 - [ ] Length includes units ("mm" or "m")
-- [ ] Mark values match visible text (check for OCR errors like "NB-OI" → "NB-01")
+- [ ] Mark values match visible text (check for OCR errors like "NB-OI" â†’ "NB-01")
 - [ ] Comments column checked (may contain important notes)
 
 **IF SIZE COLUMN IS ALL "N/A":**
-→ This is a CRITICAL ERROR
-→ Re-examine the image for Size column
-→ Look for beam size patterns in the table
-→ Size column is usually 2nd or 3rd column after Mark
+â†’ This is a CRITICAL ERROR
+â†’ Re-examine the image for Size column
+â†’ Look for beam size patterns in the table
+â†’ Size column is usually 2nd or 3rd column after Mark
 
 ## IMAGE PROCESSING - CRITICAL FOR JPEG/PNG FILES
 
@@ -946,11 +935,11 @@ When processing image files (JPEG, PNG, etc.) instead of PDFs:
 2. **Size Column - HIGHEST PRIORITY**
    - The Size column is THE MOST CRITICAL field for engineering use
    - NEVER extract Size as "N/A" unless cell is truly empty (white space)
-   - Size column typically contains: "310UC158", "250UB37.2", "WB1220×6.0", "250PFC"
+   - Size column typically contains: "310UC158", "250UB37.2", "WB1220Ã—6.0", "250PFC"
    - If you see ANY text in the Size column area, extract it
    - Common patterns to look for:
      - UC/UB sections: Numbers + "UC" or "UB" + numbers (e.g., "310UC158", "250UB37.2")
-     - Welded beams: "WB" + numbers + "×" + numbers (e.g., "WB1220×6.0")
+     - Welded beams: "WB" + numbers + "Ã—" + numbers (e.g., "WB1220Ã—6.0")
      - PFC sections: Numbers + "PFC" (e.g., "250PFC")
    - Size column is usually 2nd or 3rd column after Mark
    - If Size appears empty, look more carefully - it may be split across lines or have formatting
@@ -971,7 +960,7 @@ When processing image files (JPEG, PNG, etc.) instead of PDFs:
    - If units are missing in the image, add " mm" based on engineering context
 
 6. **Mark Column OCR Errors**
-   - Watch for: "NB-OI" → should be "NB-01" (0→O, 1→I confusion)
+   - Watch for: "NB-OI" â†’ should be "NB-01" (0â†’O, 1â†’I confusion)
    - Verify mark values match visible text
 
 **VALIDATION FOR IMAGES:**
@@ -983,12 +972,12 @@ Before finalizing extraction, verify:
 - [ ] Comments column checked (may contain important notes)
 
 **IF SIZE COLUMN IS ALL "N/A":**
-→ This is a CRITICAL ERROR
-→ Re-examine the image for Size column
-→ Look for beam size patterns in the table
-→ Size column is usually 2nd or 3rd column after Mark
-→ Check if sizes are split across multiple lines
-→ Verify you're reading the correct column
+â†’ This is a CRITICAL ERROR
+â†’ Re-examine the image for Size column
+â†’ Look for beam size patterns in the table
+â†’ Size column is usually 2nd or 3rd column after Mark
+â†’ Check if sizes are split across multiple lines
+â†’ Verify you're reading the correct column
 
 **IMAGE-SPECIFIC EXTRACTION PROTOCOL:**
 
@@ -1021,12 +1010,12 @@ Before finalizing extraction, verify:
 - UC/UB Universal Sections: [size][type][weight]
   - Format: [number][UC/UB][number or number.number]
   - Examples: "310UC137", "250UB37.2", "460UB82.1", "200UC46.2"
-  - Invalid: "310UC15" (too short), "250UB77.2" (check 7→3 OCR error)
+  - Invalid: "310UC15" (too short), "250UB77.2" (check 7â†’3 OCR error)
   
-- Welded Beams (WB): WB[depth]×[thickness]
-  - Format: WB[number]×[number.number]
-  - Examples: "WB1220×6.0", "WB610×8.0"
-  - Invalid: "WB 610 x 27" (spaces), "WB 612.2" (missing ×), "WB1220x6.0" (lowercase x)
+- Welded Beams (WB): WB[depth]Ã—[thickness]
+  - Format: WB[number]Ã—[number.number]
+  - Examples: "WB1220Ã—6.0", "WB610Ã—8.0"
+  - Invalid: "WB 610 x 27" (spaces), "WB 612.2" (missing Ã—), "WB1220x6.0" (lowercase x)
   
 - PFC Sections: [size]PFC
   - Format: [number]PFC
@@ -1081,13 +1070,13 @@ Before finalizing extraction, verify:
 
 **CONDITIONAL RULES:**
 
-- If Size contains "WB" → Must have format WB[number]×[number.number]
-- If Size contains "UC" or "UB" → Must have format [number][type][number or number.number]
-- If Grade is a decimal number (e.g., "37.2") → Likely misaligned from Size column
-- If Qty = 1 and Size is large beam (e.g., 460UB+) → Flag for verification (large beams rarely solo)
-- If Comments contains "[handwritten:" → Preserve exactly, don't attempt to clean up
-- If section header is "EXISTING" → Comments may reference existing conditions
-- If section header is "NEW" → Complete specifications expected
+- If Size contains "WB" â†’ Must have format WB[number]Ã—[number.number]
+- If Size contains "UC" or "UB" â†’ Must have format [number][type][number or number.number]
+- If Grade is a decimal number (e.g., "37.2") â†’ Likely misaligned from Size column
+- If Qty = 1 and Size is large beam (e.g., 460UB+) â†’ Flag for verification (large beams rarely solo)
+- If Comments contains "[handwritten:" â†’ Preserve exactly, don't attempt to clean up
+- If section header is "EXISTING" â†’ Comments may reference existing conditions
+- If section header is "NEW" â†’ Complete specifications expected
 
 ### Known Value Lists
 
@@ -1122,11 +1111,11 @@ Before finalizing extraction, verify:
 | 3 | 8 | Beam sizes: 310UC not 810UC |
 | 7 | 1 or I | 250UB37.2 not 250UB11.2 |
 | O (letter) | 0 (zero) | "COLOUR" not "C0L0UR" |
-| × (multiply) | x (letter) | WB1220×6.0 not WB1220x6.0 |
+| Ã— (multiply) | x (letter) | WB1220Ã—6.0 not WB1220x6.0 |
 | 1220 | 12 20 or 122 0 | Spaces inserted in numbers |
 | 2 (quantity) | 1 | Major beams rarely solo |
 | HA350 | JSO, JS0, J50 | Grade column context |
-| 37.2 | 77.2 | Size weight - check for 7→3 error |
+| 37.2 | 77.2 | Size weight - check for 7â†’3 error |
 | 0 (zero) | D (letter) | "40mm" not "4Dmm" - measurements context |
 | 0 (zero) | O (letter) | Numbers vs letters in measurements |
 
@@ -1135,39 +1124,39 @@ Before finalizing extraction, verify:
 NUMBER EXTRACTION VALIDATION:
 
 Common OCR errors in numbers and measurements:
-- 0 (zero) ↔ O (letter O) ↔ D (letter D)
-- 1 (one) ↔ I (letter I) ↔ l (lowercase L)
-- 5 (five) ↔ S (letter S)
-- 8 (eight) ↔ B (letter B)
+- 0 (zero) â†” O (letter O) â†” D (letter D)
+- 1 (one) â†” I (letter I) â†” l (lowercase L)
+- 5 (five) â†” S (letter S)
+- 8 (eight) â†” B (letter B)
 
 VALIDATION FOR MEASUREMENTS:
 
 **Pattern Detection:**
-- "4Dmm" → Check context
+- "4Dmm" â†’ Check context
   - Grout dimensions typically: 10mm, 20mm, 30mm, 40mm, 50mm
   - "4Dmm" unlikely (D not a digit)
   - Correct to: "40mm"
-  - Flag: ⚠️ Corrected '4Dmm' to '40mm' (OCR D→0)
+  - Flag: âš ï¸ Corrected '4Dmm' to '40mm' (OCR Dâ†’0)
 
 **Word Context Validation:**
-- "grows" → Check context
+- "grows" â†’ Check context
   - Near "40mm under base plate"
   - Structural term: "grout" (fills gaps)
   - "grows" makes no technical sense
   - Correct to: "grout"
-  - Flag: ⚠️ Corrected 'grows' to 'grout' (OCR error)
+  - Flag: âš ï¸ Corrected 'grows' to 'grout' (OCR error)
 
 **PROTOCOL:**
 1. Extract raw OCR text
 2. Check if makes technical sense in context
-3. If nonsensical → look for OCR character confusion
+3. If nonsensical â†’ look for OCR character confusion
 4. Apply correction based on context and known patterns
 5. Flag the correction with explanation
 
 **EXAMPLES:**
-- "4Dmm grout" → "40mm grout" ⚠️ Corrected D→0
-- "grows under base" → "grout under base" ⚠️ Corrected OCR error
-- "calvanited" → "galvanised" (if context suggests galvanizing)
+- "4Dmm grout" â†’ "40mm grout" âš ï¸ Corrected Dâ†’0
+- "grows under base" â†’ "grout under base" âš ï¸ Corrected OCR error
+- "calvanited" â†’ "galvanised" (if context suggests galvanizing)
 
 ### Domain-Specific Word Validation - CRITICAL
 
@@ -1178,30 +1167,30 @@ Construction/Engineering terms often get OCR errors. Validate against known voca
 **COATING/FINISH TERMS:**
 
 Common OCR errors:
-- "calvanited" → "galvanised" ✓
-- "galvinized" → "galvanised" ✓
-- "galvanized" → "galvanised" (US spelling, but use Australian "galvanised")
-- "stell" → "steel" ✓
-- "concreat" → "concrete" ✓
-- "paint" → common term ✓
+- "calvanited" â†’ "galvanised" âœ“
+- "galvinized" â†’ "galvanised" âœ“
+- "galvanized" â†’ "galvanised" (US spelling, but use Australian "galvanised")
+- "stell" â†’ "steel" âœ“
+- "concreat" â†’ "concrete" âœ“
+- "paint" â†’ common term âœ“
 
 **MATERIAL/SUBSTANCE TERMS:**
 
-- "grows" near "plate/base" → likely "grout" ✓
-- "epoy" → "epoxy" ✓
-- "resin" → common term ✓
-- "mortor" → "mortar" ✓
-- "compund" → "compound" ✓
-- "cement" → common term ✓
+- "grows" near "plate/base" â†’ likely "grout" âœ“
+- "epoy" â†’ "epoxy" âœ“
+- "resin" â†’ common term âœ“
+- "mortor" â†’ "mortar" âœ“
+- "compund" â†’ "compound" âœ“
+- "cement" â†’ common term âœ“
 
 **INSTALLATION TERMS:**
 
-- "torqe" → "torque" ✓
-- "weld" → common term ✓
-- "brase" → "brace" ✓
-- "supplies" → "supplier" (in context of "verify with supplier")
-- "instal" → "install" ✓
-- "ancho" → "anchor" ✓
+- "torqe" â†’ "torque" âœ“
+- "weld" â†’ common term âœ“
+- "brase" â†’ "brace" âœ“
+- "supplies" â†’ "supplier" (in context of "verify with supplier")
+- "instal" â†’ "install" âœ“
+- "ancho" â†’ "anchor" âœ“
 
 **VALIDATION PROTOCOL:**
 
@@ -1210,14 +1199,14 @@ Common OCR errors:
 3. If not found, look for close matches:
    - Edit distance < 3 characters
    - Phonetically similar
-   - Common OCR character substitutions (r→n, i→l, etc.)
+   - Common OCR character substitutions (râ†’n, iâ†’l, etc.)
 4. Check context:
-   - "[number]mm [substance] under base" → expect: grout, mortar, compound, epoxy
-   - "Hot dip [coating]" → expect: galvanised, painted, coated
-   - "verify with [entity]" → expect: supplier, engineer, site
+   - "[number]mm [substance] under base" â†’ expect: grout, mortar, compound, epoxy
+   - "Hot dip [coating]" â†’ expect: galvanised, painted, coated
+   - "verify with [entity]" â†’ expect: supplier, engineer, site
 5. If high-confidence match found (>90% similar + contextually correct):
    - **APPLY THE CORRECTION TO THE EXTRACTED TEXT** (see Correction Application Protocol below)
-   - Flag: ⚠️ Corrected '[original]' to '[corrected]' (OCR error)
+   - Flag: âš ï¸ Corrected '[original]' to '[corrected]' (OCR error)
 
 **CORRECTION APPLICATION PROTOCOL - CRITICAL:**
 
@@ -1237,7 +1226,7 @@ When you identify a correction:
 - The extracted text MUST show the corrected version
 
 **STEP 3: Document in flag (only if correction was applied)**
-- Flag: ⚠️ Corrected '[original OCR]' to '[corrected]' ([reason])
+- Flag: âš ï¸ Corrected '[original OCR]' to '[corrected]' ([reason])
 - This provides transparency, verification path, and confidence indicator
 - **NEVER create a "Corrected X to Y" flag if text still shows X**
 
@@ -1248,29 +1237,29 @@ When you identify a correction:
 **IF YOU CANNOT APPLY THE CORRECTION:**
 - Don't create a flag saying you did
 - Instead: Flag as uncertain
-- Example: "⚠️ Handwritten text unclear - appears to say 'CORRODED TO' but likely means 'CHANGED TO' - verify"
+- Example: "âš ï¸ Handwritten text unclear - appears to say 'CORRODED TO' but likely means 'CHANGED TO' - verify"
 - Text shows: [handwritten annotation unclear - appears to reference beam size change]
 
 **FORMAT:**
 
-✓ CORRECT:
+âœ“ CORRECT:
 Text: "Main support beam. Fly brace @ 1500 centres."
-Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
+Flag: "âš ï¸ Corrected 'brase' to 'brace' (OCR error)"
 
-✗ WRONG (Missing Flag):
+âœ— WRONG (Missing Flag):
 Text: "Main support beam. Fly brace @ 1500 centres."
 Flag: [none]
 [Correction applied but no transparency - engineer can't verify]
 
-✗ WRONG (Flag but No Correction):
+âœ— WRONG (Flag but No Correction):
 Text: "Main support beam. Fly brase @ 1500 centres."
-Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
+Flag: "âš ï¸ Corrected 'brase' to 'brace' (OCR error)"
 [Text still shows error even though flag says corrected]
 
 **CONSISTENCY RULE:**
 
-If flag says "Corrected X to Y" → Text MUST show Y, not X
-If text shows corrected version → Flag MUST explain what was changed
+If flag says "Corrected X to Y" â†’ Text MUST show Y, not X
+If text shows corrected version â†’ Flag MUST explain what was changed
 
 **TRANSPARENCY REQUIREMENT:**
 
@@ -1297,74 +1286,74 @@ Before finalizing each row, check:
 
 **SYNCHRONIZATION RULE:**
 
-If flag says "Corrected X to Y" → Text MUST show Y
-If text shows X but flag says corrected → FIX THE TEXT (mandatory)
-If you can't fix the text → Change flag to "uncertain" instead of "corrected"
+If flag says "Corrected X to Y" â†’ Text MUST show Y
+If text shows X but flag says corrected â†’ FIX THE TEXT (mandatory)
+If you can't fix the text â†’ Change flag to "uncertain" instead of "corrected"
 
 **EXAMPLES:**
 
-✓ CORRECT (Flag/Text Match):
-Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
+âœ“ CORRECT (Flag/Text Match):
+Flag: âš ï¸ Corrected 'supplies' to 'supplier' (OCR error)
 Text: "Verify with supplier"
 [Flag and text match - correction applied]
 
-✗ WRONG (Flag/Text Mismatch):
-Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
+âœ— WRONG (Flag/Text Mismatch):
+Flag: âš ï¸ Corrected 'supplies' to 'supplier' (OCR error)
 Text: "Verify with supplies"
 [Flag says corrected but text still shows original - FIX THIS]
 
 **MANDATORY RULE:**
-If flag says "Corrected X to Y" → Text MUST show Y
-If text shows Y but no flag → Add flag explaining correction
+If flag says "Corrected X to Y" â†’ Text MUST show Y
+If text shows Y but no flag â†’ Add flag explaining correction
 Every correction MUST have a corresponding flag. No exceptions.
 
 **EXAMPLES:**
 
-✓ "Hot dip galvanised per AS/NZS 4680"
-Flag: "⚠️ Corrected 'calvanited' to 'galvanised' (OCR error)"
+âœ“ "Hot dip galvanised per AS/NZS 4680"
+Flag: "âš ï¸ Corrected 'calvanited' to 'galvanised' (OCR error)"
 [Correction applied + flag shown]
 
-✓ "40mm grout under base plate"
-Flag: "⚠️ Corrected 'grows' to 'grout' (OCR error)"
+âœ“ "40mm grout under base plate"
+Flag: "âš ï¸ Corrected 'grows' to 'grout' (OCR error)"
 [Correction applied + flag shown]
 
-✓ "verify with supplier"
-Flag: "⚠️ Corrected 'supplies' to 'supplier' (OCR error)"
+âœ“ "verify with supplier"
+Flag: "âš ï¸ Corrected 'supplies' to 'supplier' (OCR error)"
 [Correction applied + flag shown]
 
-✗ WRONG (Missing Flag):
+âœ— WRONG (Missing Flag):
 "Hot dip galvanised per AS/NZS 4680"
 Flag: [none]
 [Correction applied but no transparency - engineer can't verify what changed]
 
 **SPECIFIC EXAMPLES:**
 
-"Hot dip calvanited" →
+"Hot dip calvanited" â†’
 - "calvanited" not in dictionary
 - Check similar: "galvanised" (edit distance: 3, common term in context)
 - Correction: "Hot dip galvanised"
-- Flag: ⚠️ Corrected 'calvanited' to 'galvanised' (OCR error)
+- Flag: âš ï¸ Corrected 'calvanited' to 'galvanised' (OCR error)
 
-"40mm grows under base plate" →
+"40mm grows under base plate" â†’
 - "grows" is valid word BUT contextually wrong
 - Pattern: "[number]mm [substance] under base"
 - Expected substances: grout, mortar, compound, epoxy
-- "grows" → "grout" (edit distance: 1, contextually correct)
+- "grows" â†’ "grout" (edit distance: 1, contextually correct)
 - Correction: "40mm grout under base plate"
-- Flag: ⚠️ Corrected 'grows' to 'grout' (likely OCR error)
+- Flag: âš ï¸ Corrected 'grows' to 'grout' (likely OCR error)
 
-"verify with supplies" →
+"verify with supplies" â†’
 - Context: "verify with [entity]"
 - Expected: supplier, engineer, site, manufacturer
-- "supplies" → "supplier" (edit distance: 1, contextually correct)
+- "supplies" â†’ "supplier" (edit distance: 1, contextually correct)
 - Correction: "verify with supplier"
-- Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
+- Flag: âš ï¸ Corrected 'supplies' to 'supplier' (OCR error)
 
-"fly brase @ 1500 centres" →
+"fly brase @ 1500 centres" â†’
 - "brase" not in dictionary
 - Check similar: "brace" (edit distance: 1, common structural term)
 - Correction: "fly brace @ 1500 centres"
-- Flag: ⚠️ Corrected 'brase' to 'brace' (OCR error)
+- Flag: âš ï¸ Corrected 'brase' to 'brace' (OCR error)
 
 **KNOWN TECHNICAL TERMS (Reference List):**
 
@@ -1414,38 +1403,38 @@ Common engineering standards follow patterns:
 
 If you see standard reference with unusual numbers:
 1. Check if it's a known standard
-2. Look for OCR character confusion (9→7, 0→O, 1→I, etc.)
-3. If similar to known standard (edit distance ≤ 1):
+2. Look for OCR character confusion (9â†’7, 0â†’O, 1â†’I, etc.)
+3. If similar to known standard (edit distance â‰¤ 1):
    - Apply correction if confident (>90%)
-   - Flag: ⚠️ Corrected '[original]' to '[corrected]' (OCR error - standard reference)
+   - Flag: âš ï¸ Corrected '[original]' to '[corrected]' (OCR error - standard reference)
 4. If uncertain, flag for verification
 
 **COMMON STANDARD OCR ERRORS:**
 
 | Actual | Often Misread As | Context Clue |
 |--------|------------------|--------------|
-| AS1594 | AS1574 | Steel standard (9→7 confusion) |
-| AS/NZS 4680 | AS/NZS 468O | Galvanising standard (0→O) |
-| AS 4100 | AS 4IOO | Steel design (1→I, 0→O) |
+| AS1594 | AS1574 | Steel standard (9â†’7 confusion) |
+| AS/NZS 4680 | AS/NZS 468O | Galvanising standard (0â†’O) |
+| AS 4100 | AS 4IOO | Steel design (1â†’I, 0â†’O) |
 
 **EXAMPLES:**
 
-"AS1574" →
+"AS1574" â†’
 - Not a common standard
 - Similar: "AS1594" (known steel standard, edit distance: 1)
-- Likely: OCR 9→7 confusion
+- Likely: OCR 9â†’7 confusion
 - Correction: "AS1594"
-- Flag: ⚠️ Corrected 'AS1574' to 'AS1594' (OCR error - standard reference)
+- Flag: âš ï¸ Corrected 'AS1574' to 'AS1594' (OCR error - standard reference)
 - **IMPORTANT: Apply correction to extracted text, not just flag it**
 
-"AS/NZS 4680" →
+"AS/NZS 4680" â†’
 - Known standard (galvanising)
 - Action: Accept as-is
 
-"AS/NZS 468O" →
+"AS/NZS 468O" â†’
 - "468O" unusual (O instead of 0)
 - Correction: "AS/NZS 4680"
-- Flag: ⚠️ Corrected '468O' to '4680' (OCR error - standard reference)
+- Flag: âš ï¸ Corrected '468O' to '4680' (OCR error - standard reference)
 - **IMPORTANT: Apply correction to extracted text**
 
 **DETAIL REFERENCES:**
@@ -1464,7 +1453,7 @@ Examples:
   - Size: "WB 610 x 27", "WB 612.2", "WB1220x6.0"
   - Quantity: 1 (should be 2)
 - Correct values:
-  - Size: WB1220×6.0 (1220mm deep, 6mm web)
+  - Size: WB1220Ã—6.0 (1220mm deep, 6mm web)
   - Qty: 2
   - Grade: HA350
   - Comment: Should mention "Web beam", "non-standard section per AS1594", "See Detail D-12/S-500"
@@ -1474,11 +1463,11 @@ Examples:
 - Problem: Size weight gets misread as grade
 - Wrong: Size: 250UB77.2, Grade: 37.2
 - Right: Size: 250UB37.2, Grade: Not marked
-- Detection: If grade is a decimal number matching part of size → column misalignment
+- Detection: If grade is a decimal number matching part of size â†’ column misalignment
 
 **"Not marked" vs "N/A":**
 - "Not marked" = explicitly stated in document (usually Grade column)
-- "N/A" = empty cell or dash (—)
+- "N/A" = empty cell or dash (â€”)
 - Don't convert one to the other. Check actual PDF cell content.
 
 ## OUTPUT FORMAT
@@ -1517,7 +1506,7 @@ IF COLUMN SCHEDULE:
 ## CRITICAL REMINDERS
 
 **NEVER output character soup ("H o l d 4 O m...")**
-If garbled → mark [illegible]
+If garbled â†’ mark [illegible]
 Don't give unusable output
 
 **Extract partial before marking illegible**
@@ -1533,8 +1522,8 @@ Don't stop at first period
 Get full specification
 
 **Fix what you're confident about**
-Obvious OCR errors → correct + flag
-Uncertain → flag, don't fix
+Obvious OCR errors â†’ correct + flag
+Uncertain â†’ flag, don't fix
 
 **Use document structure for validation**
 Section context matters
@@ -1548,14 +1537,14 @@ Don't fill gaps with assumptions
 
 Your extraction is successful when:
 
-✅ All readable content extracted (nothing missed due to premature [illegible] marking)
-✅ All format rules followed for engineering documents
-✅ All uncertainties explicitly flagged with specific reasons
-✅ No character soup in output
-✅ Issues noted in correct columns
-✅ Complete multi-part fields captured
-✅ Corrections explained transparently
-✅ Zero silent errors
+âœ… All readable content extracted (nothing missed due to premature [illegible] marking)
+âœ… All format rules followed for engineering documents
+âœ… All uncertainties explicitly flagged with specific reasons
+âœ… No character soup in output
+âœ… Issues noted in correct columns
+âœ… Complete multi-part fields captured
+âœ… Corrections explained transparently
+âœ… Zero silent errors
 
 Remember: This output will be used for critical decisions. Accuracy and transparency are more important than completeness. When in doubt, FLAG IT.
 
@@ -1698,7 +1687,7 @@ TEXT: {text}
     - "Description": Item description/product name (clean, no formatting artifacts)
     - "Quantity": Quantity (numeric only, extract unit if separate)
     - "UnitPrice": Unit price (decimal format, numeric)
-    - "LineTotal": Line total amount (Qty × Unit Price, numeric)
+    - "LineTotal": Line total amount (Qty Ã— Unit Price, numeric)
     - "Currency": Currency for this line (if different from invoice total)
     
     **Line Item Extraction Protocol:**
@@ -1715,10 +1704,10 @@ TEXT: {text}
     - Don't create duplicate line items from subtotals
     
     STEP 3: Validate extraction
-    - Calculate: Σ(line totals) should equal invoice subtotal
+    - Calculate: Î£(line totals) should equal invoice subtotal
     - Check: All required fields populated
     - Flag: Missing part numbers or quantities
-    - Warn: If calculated total ≠ invoice total (>$0.50 difference)
+    - Warn: If calculated total â‰  invoice total (>$0.50 difference)
     
     STEP 4: Handle pagination
     - Note "CONTINUED ON PAGE X" markers
@@ -1768,19 +1757,19 @@ TEXT: {text}
     **Mandatory Validation:**
     
     FINANCIAL VALIDATION:
-    ✓ Subtotal + Tax = Total (tolerance: ±$0.10)
-    ✓ All line totals sum to subtotal (tolerance: ±$1.00)
-    ✓ Unit price × Quantity = Line total (per line)
-    ✓ Currency consistent throughout
+    âœ“ Subtotal + Tax = Total (tolerance: Â±$0.10)
+    âœ“ All line totals sum to subtotal (tolerance: Â±$1.00)
+    âœ“ Unit price Ã— Quantity = Line total (per line)
+    âœ“ Currency consistent throughout
     
     FLAG IF:
-    ⚠️ Totals don't match → Add to flags: "Calculation mismatch - verify manually"
-    ⚠️ Missing currency → Add to flags: "Currency not specified - assumed [X]"
-    ⚠️ Tax rate unusual → Add to flags: "GST 10% expected for AU, found X%"
+    âš ï¸ Totals don't match â†’ Add to flags: "Calculation mismatch - verify manually"
+    âš ï¸ Missing currency â†’ Add to flags: "Currency not specified - assumed [X]"
+    âš ï¸ Tax rate unusual â†’ Add to flags: "GST 10% expected for AU, found X%"
     
     CRITICAL IF:
-    🚫 Total amount missing → "CRITICAL: Cannot determine payable amount"
-    🚫 Vendor name unclear → "CRITICAL: Vendor identification uncertain"
+    ðŸš« Total amount missing â†’ "CRITICAL: Cannot determine payable amount"
+    ðŸš« Vendor name unclear â†’ "CRITICAL: Vendor identification uncertain"
     
     **Business Rule Validation:**
     
@@ -1811,8 +1800,8 @@ TEXT: {text}
     - Keep under 100 characters if possible
     
     Example:
-    ❌ DON'T: "Construction and forestry parts"
-    ✅ DO: "20 line items: Hydraulic components (filters, cylinders), Engine parts (gaskets, pistons). Major: Hydraulic cylinders ($4,000), Bearings ($2,400)"
+    âŒ DON'T: "Construction and forestry parts"
+    âœ… DO: "20 line items: Hydraulic components (filters, cylinders), Engine parts (gaskets, pistons). Major: Hydraulic cylinders ($4,000), Bearings ($2,400)"
     
     For simple receipts:
     - Brief description of transaction type
@@ -1832,9 +1821,9 @@ TEXT: {text}
     2. Check for shipping/handling fees
     3. Check for discounts/adjustments
     4. If still mismatch > $1.00:
-       → Flag: "⚠️ Calculation discrepancy: Calculated $X vs Invoice $Y"
-       → Use invoice stated total (assume correct)
-       → Note for manual verification
+       â†’ Flag: "âš ï¸ Calculation discrepancy: Calculated $X vs Invoice $Y"
+       â†’ Use invoice stated total (assume correct)
+       â†’ Note for manual verification
     
     **Multi-Currency:**
     If line items in different currency than total:
@@ -2199,7 +2188,7 @@ HTML_TEMPLATE = """
             display: inline-block;
         }
         .low-confidence::before {
-            content: "⚠️ ";
+            content: "âš ï¸ ";
             font-weight: 600;
         }
         .low-confidence-text {
@@ -2211,7 +2200,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .low-confidence-text::before {
-            content: "⚠️ LOW CONFIDENCE - REVIEW REQUIRED";
+            content: "âš ï¸ LOW CONFIDENCE - REVIEW REQUIRED";
             display: block;
             font-size: 10px;
             font-weight: 700;
@@ -2241,7 +2230,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .critical-error-item::before {
-            content: "❌";
+            content: "âŒ";
             position: absolute;
             left: 0;
         }
@@ -2257,7 +2246,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .requires-manual-verification::before {
-            content: "⚠️ MANUAL VERIFICATION REQUIRED - DO NOT USE EXTRACTED VALUES";
+            content: "âš ï¸ MANUAL VERIFICATION REQUIRED - DO NOT USE EXTRACTED VALUES";
             display: block;
             background-color: #dc3545;
             color: white;
@@ -2282,7 +2271,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        <h1>⚡ Consultancy  Takeoff Automator</h1>
+        <h1>âš¡ Consultancy  Takeoff Automator</h1>
         
         {% if error %}
         <p class="error">{{ error }}</p>
@@ -2307,20 +2296,20 @@ HTML_TEMPLATE = """
             <h3>1. Select Sample Files</h3>
             {% for dept_key, group in sample_files.items() %}
             <div class="sample-group" data-department="{{ dept_key }}">
-                <strong>{{ group.label }}</strong> · {{ group.description }}
+                <strong>{{ group.label }}</strong> Â· {{ group.description }}
                 <div style="margin-top: 10px;">
                     {% for sample in group.samples %}
                     {% if dept_key == 'transmittal' %}
                     <div class="transmittal-sample-row">
-                        <span class="transmittal-sample-pill">✅ {{ sample.label }}</span>
-                        <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">🔗</a>
+                        <span class="transmittal-sample-pill">âœ… {{ sample.label }}</span>
+                        <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">ðŸ”—</a>
                         <input type="hidden" name="transmittal_defaults" value="{{ sample.path }}">
                     </div>
                     {% else %}
                     <label>
                         <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or ((dept_key == 'engineering' or dept_key == 'finance') and not selected_samples) %}checked{% endif %}>
                         {{ sample.label }}
-                        <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">🔗</a>
+                        <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">ðŸ”—</a>
                     </label>
                     {% endif %}
                     {% endfor %}
@@ -2328,7 +2317,7 @@ HTML_TEMPLATE = """
                 {% if dept_key == 'finance' %}
                 <div class="upload-wrapper" data-upload="finance">
                     <label class="file-label">
-                        <span>📤 Upload invoice PDFs</span>
+                        <span>ðŸ“¤ Upload invoice PDFs</span>
                         <input type="file" name="finance_uploads" accept=".pdf" multiple>
                     </label>
                     <p class="instruction-text">PDF invoices only. Uploaded files run alongside the finance samples.</p>
@@ -2348,9 +2337,9 @@ HTML_TEMPLATE = """
             {% endfor %}
 
             <div class="button-group">
-                <button type="submit" class="btn">🚀 Generate Output</button>
+                <button type="submit" class="btn">ðŸš€ Generate Output</button>
             </div>
-            <div id="processing-spinner"><span class="spinner-icon"></span>Processing files…</div>
+            <div id="processing-spinner"><span class="spinner-icon"></span>Processing filesâ€¦</div>
         </form>
 
         {% if results %}
@@ -2398,7 +2387,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=DrawingRegister" class="btn btn-export" style="text-decoration: none;">📥 Export Drawing Register to CSV</a>
+                <a href="/export_transmittal_csv?category=DrawingRegister" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Drawing Register to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2433,7 +2422,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Standards" class="btn btn-export" style="text-decoration: none;">📥 Export Standards to CSV</a>
+                <a href="/export_transmittal_csv?category=Standards" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Standards to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2468,7 +2457,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Materials" class="btn btn-export" style="text-decoration: none;">📥 Export Materials to CSV</a>
+                <a href="/export_transmittal_csv?category=Materials" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Materials to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2507,7 +2496,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Connections" class="btn btn-export" style="text-decoration: none;">📥 Export Connections to CSV</a>
+                <a href="/export_transmittal_csv?category=Connections" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Connections to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2555,7 +2544,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Assumptions" class="btn btn-export" style="text-decoration: none;">📥 Export Assumptions to CSV</a>
+                <a href="/export_transmittal_csv?category=Assumptions" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Assumptions to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2594,7 +2583,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=VOSFlags" class="btn btn-export" style="text-decoration: none;">📥 Export V.O.S. Flags to CSV</a>
+                <a href="/export_transmittal_csv?category=VOSFlags" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export V.O.S. Flags to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2626,9 +2615,9 @@ HTML_TEMPLATE = """
                             <td style="padding: 10px 12px;">
                                 {% set found = xref.Found or xref.get('Found', '') %}
                                 {% if 'yes' in found|lower or 'true' in found|lower %}
-                                <span style="color: #27ae60; font-weight: 600;">✓ Found</span>
+                                <span style="color: #27ae60; font-weight: 600;">âœ“ Found</span>
                                 {% elif 'no' in found|lower or 'false' in found|lower %}
-                                <span style="color: #e74c3c; font-weight: 600;">✗ Missing</span>
+                                <span style="color: #e74c3c; font-weight: 600;">âœ— Missing</span>
                                 {% else %}
                                 {{ found or 'N/A' }}
                                 {% endif %}
@@ -2640,7 +2629,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=CrossReferences" class="btn btn-export" style="text-decoration: none;">📥 Export Cross-References to CSV</a>
+                <a href="/export_transmittal_csv?category=CrossReferences" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Cross-References to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2749,7 +2738,7 @@ HTML_TEMPLATE = """
                             {% for correction in row.corrections_applied %}
                                 {% if 'Size' in correction %}
                                 <div style="background-color: #d1f2eb; border-left: 3px solid #27ae60; padding: 4px 8px; margin-top: 4px; border-radius: 3px; font-size: 11px;">
-                                    ✓ {{ correction }}
+                                    âœ“ {{ correction }}
                                 </div>
                                 {% endif %}
                             {% endfor %}
@@ -2758,7 +2747,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Size' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">⚠️ Size Error:</div>
+                                    <div class="critical-error-header">âš ï¸ Size Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -2771,7 +2760,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Quantity' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">⚠️ Quantity Error:</div>
+                                    <div class="critical-error-header">âš ï¸ Quantity Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -2785,7 +2774,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Grade' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">⚠️ Grade Error:</div>
+                                    <div class="critical-error-header">âš ï¸ Grade Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -2796,13 +2785,13 @@ HTML_TEMPLATE = """
                     <td>
                         {% if row.get('rejection_reason') %}
                         <div class="rejection-notice">
-                            🚫 {{ row.rejection_reason }}
+                            ðŸš« {{ row.rejection_reason }}
                         </div>
                         {% endif %}
                         {% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}
                         {% if row.get('critical_errors') and row.get('requires_manual_verification') %}
                         <div class="critical-error" style="margin-top: 8px;">
-                            <div class="critical-error-header">🚫 Critical Errors - Manual Verification Required:</div>
+                            <div class="critical-error-header">ðŸš« Critical Errors - Manual Verification Required:</div>
                             {% for error in row.critical_errors %}
                             <div class="critical-error-item">{{ error }}</div>
                             {% endfor %}
@@ -2868,7 +2857,7 @@ HTML_TEMPLATE = """
                 <td>{{ row.PaymentTerms or 'N/A' }}{% if row.DueDate and row.DueDate != 'N/A' %}<br><small style="color: #666;">Due: {{ row.DueDate }}</small>{% endif %}</td>
                 {% endif %}
                 {% if file_results[0].get('ShippingTerms') and file_results[0].ShippingTerms != 'N/A' %}
-                <td>{{ row.ShippingTerms or 'N/A' }}{% if row.PortOfLoading and row.PortOfLoading != 'N/A' %}<br><small style="color: #666;">{{ row.PortOfLoading }} → {{ row.PortOfDischarge or '' }}</small>{% endif %}</td>
+                <td>{{ row.ShippingTerms or 'N/A' }}{% if row.PortOfLoading and row.PortOfLoading != 'N/A' %}<br><small style="color: #666;">{{ row.PortOfLoading }} â†’ {{ row.PortOfDischarge or '' }}</small>{% endif %}</td>
                 {% endif %}
             </tr>
             {% endfor %}
@@ -2893,7 +2882,7 @@ HTML_TEMPLATE = """
                 </div>
                 {% if row.get('Flags') and row.Flags|length > 0 %}
                 <div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;">
-                    <strong style="color: #856404;">⚠️ Flags:</strong>
+                    <strong style="color: #856404;">âš ï¸ Flags:</strong>
                     <ul style="margin: 5px 0 0 0; padding-left: 20px; color: #856404;">
                         {% for flag in row.Flags %}
                         <li>{{ flag }}</li>
@@ -2935,22 +2924,22 @@ HTML_TEMPLATE = """
                         <tbody>
                             {% for item in row.LineItems %}
                             <tr>
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.ItemNumber or '—' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.ItemNumber or 'â€”' }}</td>
                                 {% if row.LineItems[0].get('PartNumber') and row.LineItems[0].PartNumber != 'N/A' %}
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.PartNumber or '—' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.PartNumber or 'â€”' }}</td>
                                 {% endif %}
                                 <td style="padding: 8px; border: 1px solid #ddd;">{{ item.Description or 'N/A' }}</td>
                                 {% if row.LineItems[0].get('HSCode') and row.LineItems[0].HSCode != 'N/A' %}
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.HSCode or '—' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.HSCode or 'â€”' }}</td>
                                 {% endif %}
                                 <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ item.Quantity or 'N/A' }}</td>
                                 <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ item.UnitPrice or 'N/A' }}</td>
                                 <td style="padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;">{{ item.LineTotal or 'N/A' }}</td>
                                 {% if row.LineItems[0].get('SKU') and row.LineItems[0].SKU != 'N/A' %}
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.SKU or '—' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.SKU or 'â€”' }}</td>
                                 {% endif %}
                                 {% if row.LineItems[0].get('Category') and row.LineItems[0].Category != 'N/A' %}
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.Category or '—' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.Category or 'â€”' }}</td>
                                 {% endif %}
                             </tr>
                             {% endfor %}
@@ -2981,7 +2970,7 @@ HTML_TEMPLATE = """
         </div>
         {% endif %}
             <div class="button-group">
-                <a href="/export_csv" class="btn btn-export">📥 Export to CSV</a>
+                <a href="/export_csv" class="btn btn-export">ðŸ“¥ Export to CSV</a>
                 <a href="/contact.html?option=phase-1" class="btn btn-secondary" target="_parent">Book Your Phase 1 Sprint</a>
             </div>
         </div>
@@ -3040,7 +3029,7 @@ HTML_TEMPLATE = """
             files.forEach(file => {
                 const item = document.createElement('div');
                 item.className = 'upload-item';
-                item.textContent = `📎 ${file.name}`;
+                item.textContent = `ðŸ“Ž ${file.name}`;
                 financeUploadList.appendChild(item);
             });
         }
@@ -3185,9 +3174,9 @@ def correct_ocr_errors(value_str, field_name, context_entries=None):
     corrected = value_str
     confidence = 'high'
     
-    # Common OCR substitutions: 3↔7, 0↔O, 1↔I, 5↔S, 8↔5
+    # Common OCR substitutions: 3â†”7, 0â†”O, 1â†”I, 5â†”S, 8â†”5
     if field_name == 'Size':
-        # Universal Beams (UB) - correct 7→3 errors
+        # Universal Beams (UB) - correct 7â†’3 errors
         if 'UB' in corrected.upper():
             match = re.search(r'(\d+)UB(\d+)\.(\d+)', corrected)
             if match:
@@ -3207,15 +3196,15 @@ def correct_ocr_errors(value_str, field_name, context_entries=None):
                                 corrected = corrected.replace(f'UB{middle}', f'UB3{middle[1:]}', 1)
                                 confidence = 'medium'
         
-        # Universal Columns (UC) - correct 8↔5, 1↔5 errors
+        # Universal Columns (UC) - correct 8â†”5, 1â†”5 errors
         if 'UC' in corrected.upper():
             match = re.search(r'(\d+)UC(\d+)', corrected)
             if match:
                 prefix = match.group(1)
                 suffix = match.group(2)
                 # Common UC sizes: 118, 137, 158, etc.
-                # If we see 118, might be 158 (8→5) or 137 (1→3, 8→7)
-                # If we see 108, might be 158 (0→5, 8→5)
+                # If we see 118, might be 158 (8â†’5) or 137 (1â†’3, 8â†’7)
+                # If we see 108, might be 158 (0â†’5, 8â†’5)
                 if suffix in ['118', '108']:
                     # Check context for common UC sizes
                     if context_entries:
@@ -3225,7 +3214,7 @@ def correct_ocr_errors(value_str, field_name, context_entries=None):
                         # If we see patterns like 158, 137 in context, likely correction
                         if any('158' in s or '137' in s for s in similar_sizes):
                             if suffix == '118':
-                                # Could be 158 (8→5) or 137 (1→3, 8→7)
+                                # Could be 158 (8â†’5) or 137 (1â†’3, 8â†’7)
                                 # Prefer 158 as more common
                                 corrected = corrected.replace('UC118', 'UC158', 1)
                                 confidence = 'medium'
@@ -3235,7 +3224,7 @@ def correct_ocr_errors(value_str, field_name, context_entries=None):
         
         # Welded Beams (WB) - correct format errors
         if 'WB' in corrected.upper():
-            # Pattern: "WB 610 x 27" or "WB 612.200" → should be "WB1220×6.0"
+            # Pattern: "WB 610 x 27" or "WB 612.200" â†’ should be "WB1220Ã—6.0"
             # This is complex - need to understand the actual values
             # For now, flag but don't auto-correct (too risky)
             pass
@@ -3249,10 +3238,10 @@ def detect_ocr_character_errors(value_str, field_name):
     """
     errors = []
     
-    # Common OCR substitutions: 3↔7, 0↔O, 1↔I, 5↔S, 8↔5, 6↔0
+    # Common OCR substitutions: 3â†”7, 0â†”O, 1â†”I, 5â†”S, 8â†”5, 6â†”0
     # Check for suspicious patterns in size fields
     if field_name == 'Size':
-        # Universal Beams (UB) pattern: "250UB77.2" where 77 might be 37 (3→7 error)
+        # Universal Beams (UB) pattern: "250UB77.2" where 77 might be 37 (3â†’7 error)
         if 'UB' in value_str.upper():
             match = re.search(r'(\d+)UB(\d+)\.(\d+)', value_str)
             if match:
@@ -3262,9 +3251,9 @@ def detect_ocr_character_errors(value_str, field_name):
                 # If middle number is 77, 70, 73, etc., might be 37, 30, 33
                 if middle.startswith('7') and len(middle) == 2:
                     potential = middle.replace('7', '3', 1)
-                    errors.append(f"Possible OCR error: '{value_str}' might be '{prefix}UB{potential}.{suffix}' (7→3 substitution)")
+                    errors.append(f"Possible OCR error: '{value_str}' might be '{prefix}UB{potential}.{suffix}' (7â†’3 substitution)")
         
-        # Universal Columns (UC) pattern: "310UC118" where 118 might be 158 (8→5 error, or 1→5)
+        # Universal Columns (UC) pattern: "310UC118" where 118 might be 158 (8â†’5 error, or 1â†’5)
         if 'UC' in value_str.upper():
             match = re.search(r'(\d+)UC(\d+)', value_str)
             if match:
@@ -3273,13 +3262,13 @@ def detect_ocr_character_errors(value_str, field_name):
                 # Check for suspicious patterns: 118 (might be 158), 108 (might be 158)
                 if suffix in ['118', '108', '128']:
                     # Common UC sizes: 158, 137, etc. - flag for review
-                    errors.append(f"Possible OCR error in UC size: '{value_str}' - verify suffix '{suffix}' (common substitutions: 8↔5, 0↔5)")
+                    errors.append(f"Possible OCR error in UC size: '{value_str}' - verify suffix '{suffix}' (common substitutions: 8â†”5, 0â†”5)")
         
         # Welded Beams (WB) - check for wrong format patterns
         if 'WB' in value_str.upper():
             # Pattern like "WB 612.200" or "WB 610 x 27.2" - wrong format
             if re.search(r'WB\s*\d+\.\d+', value_str) or re.search(r'WB\s*\d+\s+x\s+\d+\.\d+', value_str):
-                errors.append(f"Size format appears incorrect: '{value_str}' - welded beam should be format 'WB[depth]×[thickness]' (e.g., 'WB1220×6.0')")
+                errors.append(f"Size format appears incorrect: '{value_str}' - welded beam should be format 'WB[depth]Ã—[thickness]' (e.g., 'WB1220Ã—6.0')")
     
     return errors
 
@@ -3393,44 +3382,44 @@ def validate_engineering_field(field_name, value, entry):
             result['confidence'] = 'low'
         
         # Only flag obvious format issues, not variations in valid formats
-        # Welded beams can have various formats: "WB1220×6.0", "WB 1220 x 6.0", "WB1220 x 6.0", etc.
+        # Welded beams can have various formats: "WB1220Ã—6.0", "WB 1220 x 6.0", "WB1220 x 6.0", etc.
         if 'WB' in value_str.upper():
             # Check for very suspicious patterns (e.g., "WB86 x 122" where first number is tiny)
             numbers = re.findall(r'\d+', value_str)
             
-            # Pattern: "WB 612.200" or "WB 610 x 27.2" - wrong format (should be "WB1220×6.0")
+            # Pattern: "WB 612.200" or "WB 610 x 27.2" - wrong format (should be "WB1220Ã—6.0")
             if re.search(r'WB\s*\d+\.\d+', value_str):
-                result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam should be format 'WB[depth]×[thickness]' (e.g., 'WB1220×6.0'), not 'WB[number].[number]'")
+                result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam should be format 'WB[depth]Ã—[thickness]' (e.g., 'WB1220Ã—6.0'), not 'WB[number].[number]'")
                 result['confidence'] = 'low'
             elif len(numbers) >= 2:
                 first_num = int(numbers[0])
                 second_num = int(numbers[1])
-                # Flag if format looks completely wrong (e.g., "WB 610 x 2 x 27.2" should be "WB1220×6.0")
+                # Flag if format looks completely wrong (e.g., "WB 610 x 2 x 27.2" should be "WB1220Ã—6.0")
                 # Pattern: multiple small numbers suggests wrong format or column misalignment
                 if len(numbers) >= 3:
                     # If we have 3+ numbers and they're all small, this is likely wrong
                     if all(int(n) < 1000 for n in numbers[:3]):
-                        result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam should be format like 'WB1220×6.0' (depth × thickness, typically 2 numbers). This may indicate column misalignment.")
+                        result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam should be format like 'WB1220Ã—6.0' (depth Ã— thickness, typically 2 numbers). This may indicate column misalignment.")
                         result['confidence'] = 'low'
                     # If pattern is "WB [num] x [num] x [num]" with small numbers, definitely wrong
                     elif ' x ' in value_str or ' X ' in value_str:
                         parts = re.split(r'\s+[xX]\s+', value_str)
                         if len(parts) >= 3 and all(any(c.isdigit() for c in p) for p in parts[:3]):
-                            result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam format should be 'WB[depth]×[thickness]' (e.g., 'WB1220×6.0'), not multiple dimensions separated by 'x'")
+                            result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam format should be 'WB[depth]Ã—[thickness]' (e.g., 'WB1220Ã—6.0'), not multiple dimensions separated by 'x'")
                             result['confidence'] = 'low'
                 # Pattern: "WB 610 x 27.2" (2 numbers, but wrong format)
                 elif ' x ' in value_str or ' X ' in value_str:
                     if first_num < 1000 and second_num < 100:
-                        result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam should be 'WB[depth]×[thickness]' where depth is typically 600-2000mm and thickness is 4-20mm (e.g., 'WB1220×6.0')")
+                        result['errors'].append(f"Size format appears incorrect: '{value_str}' - welded beam should be 'WB[depth]Ã—[thickness]' where depth is typically 600-2000mm and thickness is 4-20mm (e.g., 'WB1220Ã—6.0')")
                         result['confidence'] = 'low'
                 # Only flag if first number is suspiciously small AND second is large (likely reversed)
                 elif first_num < 50 and second_num > 1000:
                     result['errors'].append(f"Size format may be incorrect: '{value_str}' (dimensions may be reversed - please verify)")
                     result['confidence'] = 'low'
         
-        # Don't flag missing separators - many valid formats don't use × (e.g., "460UB82.1")
+        # Don't flag missing separators - many valid formats don't use Ã— (e.g., "460UB82.1")
         # Only check if it's clearly malformed (multiple numbers with no separator and no context)
-        if re.search(r'\d+\s+\d+\s+\d+', value_str) and '×' not in value_str and 'x' not in value_str.lower() and 'UB' not in value_str.upper() and 'UC' not in value_str.upper():
+        if re.search(r'\d+\s+\d+\s+\d+', value_str) and 'Ã—' not in value_str and 'x' not in value_str.lower() and 'UB' not in value_str.upper() and 'UC' not in value_str.upper():
             result['errors'].append(f"Size format may need verification: '{value_str}'")
             if result['confidence'] == 'high':
                 result['confidence'] = 'medium'
@@ -3590,7 +3579,7 @@ def analyze_gemini(text, doc_type, image_path=None):
                     if not image_file.exists():
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Image file not found: {image_path}"
-                        action_log.append(f"✗ Image file not found: {image_path}")
+                        action_log.append(f"âœ— Image file not found: {image_path}")
                         continue
                     
                     # Open image and convert to format Gemini expects
@@ -3599,16 +3588,16 @@ def analyze_gemini(text, doc_type, image_path=None):
                         # Create content with image and prompt - Gemini accepts PIL Image objects
                         content_parts = [img, prompt]
                         response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
-                        action_log.append(f"✓ Vision API call succeeded with {model_name}")
+                        action_log.append(f"âœ“ Vision API call succeeded with {model_name}")
                     except Exception as img_error:
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Failed to open image: {img_error}"
-                        action_log.append(f"✗ Failed to open image: {img_error}")
+                        action_log.append(f"âœ— Failed to open image: {img_error}")
                         continue
                 else:
                     # Regular text-based processing
                     response = model.generate_content(prompt, request_options={"timeout": timeout_seconds})
-                    action_log.append(f"✓ API call succeeded with {model_name}")
+                    action_log.append(f"âœ“ API call succeeded with {model_name}")
                 
                 resolved_model = model_name
 
@@ -3747,7 +3736,7 @@ def analyze_gemini(text, doc_type, image_path=None):
             continue
         break
 
-    action_log.append(f"✗ All models failed for this document: {last_error or 'Unknown error'}")
+    action_log.append(f"âœ— All models failed for this document: {last_error or 'Unknown error'}")
     return [error_entry(last_error or "All models failed")], last_error or "All models failed", resolved_model, attempt_log, action_log, None
 
 # --- ROUTES ---
@@ -4240,10 +4229,10 @@ def search_blog_rag():
                 if test_response.status_code == 200:
                     blog_url = test_url
                     wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
-                    print(f"✓ Blog URL accessible: {blog_url}")
+                    print(f"âœ“ Blog URL accessible: {blog_url}")
                     break
             except requests.RequestException as e:
-                print(f"✗ Blog URL failed: {test_url} - {str(e)[:100]}")
+                print(f"âœ— Blog URL failed: {test_url} - {str(e)[:100]}")
                 continue
         
         # If neither URL works, return error
@@ -4416,7 +4405,7 @@ def search_blog_rag():
                 )
                 
                 # Get more content (up to 4000 chars per post since articles are ~1000 words)
-                # 1000 words ≈ 6000 chars, so 4000 gives good coverage
+                # 1000 words â‰ˆ 6000 chars, so 4000 gives good coverage
                 content_snippet = content_clean[:4000] if len(content_clean) > 4000 else content_clean
                 
                 context += f"\n\n---\nBlog Post: {title}\nExcerpt: {excerpt_clean}\nFull Content: {content_snippet}\n---\n"
@@ -4476,7 +4465,7 @@ def search_blog_rag():
         try:
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
             
-            prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
+            prompt = f"""You are a helpful assistant for Curam-Ai Protocolâ„¢, an AI document automation service for engineering firms.
 
 The user asked: "{query}"
 
@@ -4611,7 +4600,7 @@ def contact_assistant():
             return jsonify({'error': 'Gemini API key not configured'}), 500
         
         # Build conversation context
-        system_prompt = """You are a helpful AI assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
+        system_prompt = """You are a helpful AI assistant for Curam-Ai Protocolâ„¢, an AI document automation service for engineering firms.
 
 Your role is to:
 1. Understand the user's needs and challenges
@@ -4620,7 +4609,7 @@ Your role is to:
 4. Provide helpful information about the protocol and pricing
 5. Guide users toward the most appropriate next step
 
-Key information about Curam-Ai Protocol™:
+Key information about Curam-Ai Protocolâ„¢:
 - Phase 1 (Feasibility Sprint): $1,500 - 48-hour proof of concept on their documents
 - Phase 2 (The Roadmap): $7,500 - Detailed implementation plan
 - Phase 3 (Compliance Shield): $8-12k - Production-ready automation
@@ -4747,9 +4736,9 @@ def check_message_relevance():
             })
         
         # System prompt for relevance checking
-        relevance_prompt = """You are analyzing a contact form message to determine if it's related to Curam-Ai Protocol™ services.
+        relevance_prompt = """You are analyzing a contact form message to determine if it's related to Curam-Ai Protocolâ„¢ services.
 
-Curam-Ai Protocol™ provides:
+Curam-Ai Protocolâ„¢ provides:
 - Document automation and extraction (invoices, CAD schedules, drawings)
 - AI implementation for engineering firms
 - Workflow automation for structural engineering
@@ -4956,7 +4945,7 @@ Message:
                 <strong>Your Message:</strong><br>
                 {message_html}
             </div>
-            <p>Best regards,<br>Curam-Ai Protocol™ Team</p>
+            <p>Best regards,<br>Curam-Ai Protocolâ„¢ Team</p>
         </body>
         </html>
         """
@@ -4971,7 +4960,7 @@ We've received your inquiry and will get back to you within 24 hours.
 {message}
 
 Best regards,
-Curam-Ai Protocol™ Team
+Curam-Ai Protocolâ„¢ Team
 """
         
         mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
@@ -4992,7 +4981,7 @@ Curam-Ai Protocol™ Team
             ],
             "from": {
                 "email": from_email,
-                "name": "Curam-Ai Protocol™ Contact Form"
+                "name": "Curam-Ai Protocolâ„¢ Contact Form"
             },
             "reply_to": {
                 "email": email,
@@ -5020,7 +5009,7 @@ Curam-Ai Protocol™ Team
             ],
             "from": {
                 "email": from_email,
-                "name": "Curam-Ai Protocol™"
+                "name": "Curam-Ai Protocolâ„¢"
             },
             "subject": "Thank You for Contacting Curam-Ai",
             "content": [
@@ -5139,7 +5128,7 @@ def email_chat_log():
                     <li>Try our ROI Calculator to see potential savings</li>
                 </ul>
                 <p>Visit us at <a href="https://protocol.curam-ai.com.au">protocol.curam-ai.com.au</a></p>
-                <p>Best regards,<br>Curam-Ai Protocol™ Team</p>
+                <p>Best regards,<br>Curam-Ai Protocolâ„¢ Team</p>
             </div>
         </body>
         </html>
@@ -5163,7 +5152,7 @@ def email_chat_log():
         email_text += "- Book a diagnostic call to discuss your specific needs\n"
         email_text += "- Try our ROI Calculator to see potential savings\n\n"
         email_text += "Visit us at https://protocol.curam-ai.com.au\n\n"
-        email_text += "Best regards,\nCuram-Ai Protocol™ Team"
+        email_text += "Best regards,\nCuram-Ai Protocolâ„¢ Team"
         
         # Send email using Mailchannels API
         mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
@@ -5192,7 +5181,7 @@ def email_chat_log():
             ],
             "from": {
                 "email": from_email,
-                "name": "Curam-Ai Protocol™"
+                "name": "Curam-Ai Protocolâ„¢"
             },
             "subject": email_subject,
             "content": [
@@ -5476,13 +5465,13 @@ def index_automater():
                 filename = secure_filename(file_storage.filename)
                 if not filename.lower().endswith('.pdf'):
                     error_message = "Only PDF files can be uploaded for Finance."
-                    model_actions.append(f"✗ ERROR: {filename} rejected (not a PDF)")
+                    model_actions.append(f"âœ— ERROR: {filename} rejected (not a PDF)")
                     break
                 unique_name = f"{int(time.time() * 1000)}_{filename}"
                 file_path = os.path.join(FINANCE_UPLOAD_DIR, unique_name)
                 file_storage.save(file_path)
                 finance_uploaded_paths.append(file_path)
-                model_actions.append(f"✓ Uploaded invoice saved: {file_path}")
+                model_actions.append(f"âœ“ Uploaded invoice saved: {file_path}")
             selected_samples.extend(finance_uploaded_paths)
 
         # Filter samples to only those matching the current department (skip for auto-select departments)
@@ -5508,10 +5497,10 @@ def index_automater():
         if not samples:
             if selected_samples:
                 error_message = f"No samples matched department '{department}'. Selected: {selected_samples}"
-                model_actions.append(f"✗ ERROR: {error_message}")
+                model_actions.append(f"âœ— ERROR: {error_message}")
             else:
                 error_message = "Please select at least one sample file."
-                model_actions.append(f"✗ ERROR: {error_message}")
+                model_actions.append(f"âœ— ERROR: {error_message}")
 
         if not error_message:
             if samples:
@@ -5519,7 +5508,7 @@ def index_automater():
                 for sample_path in samples:
                     if not os.path.exists(sample_path):
                         error_msg = f"File not found: {sample_path}"
-                        model_actions.append(f"✗ {error_msg}")
+                        model_actions.append(f"âœ— {error_msg}")
                         if not error_message:
                             error_message = error_msg
                         continue
@@ -5540,12 +5529,12 @@ def index_automater():
                         model_actions.append(f"Extracting text from {filename}")
                         text = extract_text(sample_path)
                         if text.startswith("Error:"):
-                            model_actions.append(f"✗ Text extraction failed for {filename}: {text}")
+                            model_actions.append(f"âœ— Text extraction failed for {filename}: {text}")
                             if not error_message:
                                 error_message = f"Text extraction failed for {filename}"
                             continue
                         else:
-                            model_actions.append(f"✓ Text extracted successfully ({len(text)} characters)")
+                            model_actions.append(f"âœ“ Text extracted successfully ({len(text)} characters)")
                     
                     model_actions.append(f"Analyzing {filename} with AI models")
                     entries, api_error, model_used, attempt_log, file_action_log, schedule_type = analyze_gemini(text, department, image_path)
@@ -5553,11 +5542,11 @@ def index_automater():
                         model_actions.extend(file_action_log)
                     if model_used:
                         last_model_used = model_used
-                        model_actions.append(f"✓ Successfully processed {filename} with {model_used}")
+                        model_actions.append(f"âœ“ Successfully processed {filename} with {model_used}")
                     if attempt_log:
                         model_attempts.extend(attempt_log)
                     if api_error:
-                        model_actions.append(f"✗ Failed to process {filename}: {api_error}")
+                        model_actions.append(f"âœ— Failed to process {filename}: {api_error}")
                         if not error_message:
                             error_message = api_error
                     if entries:
@@ -5581,15 +5570,15 @@ def index_automater():
                                             if isinstance(item, dict):
                                                 item['SourceDocument'] = filename
                                 results.append(transmittal_data)
-                                model_actions.append(f"✓ Extracted structured data from {filename}")
+                                model_actions.append(f"âœ“ Extracted structured data from {filename}")
                             else:
                                 # Fallback to old format
                                 for entry in entries if isinstance(entries, list) else [entries]:
                                     entry['Filename'] = filename
                                     results.append(entry)
-                                model_actions.append(f"✓ Extracted {len(entries)} row(s) from {filename}")
+                                model_actions.append(f"âœ“ Extracted {len(entries)} row(s) from {filename}")
                         else:
-                            model_actions.append(f"✓ Extracted {len(entries)} row(s) from {filename}")
+                            model_actions.append(f"âœ“ Extracted {len(entries)} row(s) from {filename}")
                             for entry in entries:
                                 entry['Filename'] = filename
                                 if department == "finance":
@@ -5635,7 +5624,7 @@ def index_automater():
                                                         )
                                                         if corrected_value != entry[field]:
                                                             entry['corrections_applied'].append(
-                                                                f"Size corrected: '{entry[field]}' → '{corrected_value}'"
+                                                                f"Size corrected: '{entry[field]}' â†’ '{corrected_value}'"
                                                             )
                                                             entry[field] = corrected_value
                                                             if correction_confidence == 'medium':
@@ -5709,7 +5698,7 @@ def index_automater():
                             if department == "engineering" and schedule_type and not detected_schedule_type:
                                 detected_schedule_type = schedule_type
                     else:
-                        model_actions.append(f"⚠ No data extracted from {filename}")
+                        model_actions.append(f"âš  No data extracted from {filename}")
 
         # Aggregate transmittal data into structured categories
         transmittal_aggregated = None
@@ -5808,41 +5797,39 @@ def index_automater():
                 grouped_finance_results[filename] = []
             grouped_finance_results[filename].append(row)
     
-# Build sample_files from database
-from database import get_samples_for_template
-db_samples = {}
-for dept in ['finance', 'engineering', 'transmittal']:
-    samples = get_samples_for_template(dept)
-    if samples:
-        # Match the structure of DEPARTMENT_SAMPLES
-        dept_info = DEPARTMENT_SAMPLES.get(dept, {})
-        db_samples[dept] = {
-            "label": dept_info.get("label", "Samples"),
-            "description": dept_info.get("description", ""),
-            "folder": dept_info.get("folder", ""),
-            "samples": samples
-        }
-
-# Merge database samples with hardcoded (database takes priority)
-sample_files_merged = {**DEPARTMENT_SAMPLES, **db_samples}
-
-return render_template_string(
-    HTML_TEMPLATE,
-    results=results if results else [],
-    grouped_engineering_results=grouped_engineering_results if department == 'engineering' else {},
-    grouped_finance_results=grouped_finance_results if department == 'finance' else {},
-    department=department,
-    selected_samples=selected_samples,
-    sample_files=sample_files_merged,  # ← Changed this
-    error=error_message,
-    routine_descriptions=ROUTINE_DESCRIPTIONS,
-    routine_summary=ROUTINE_SUMMARY.get(department, []),
-    model_in_use=last_model_used,
-    model_attempts=model_attempts,
-    model_actions=model_actions,
-    schedule_type=schedule_type,
-    transmittal_data=transmittal_data
-)
+    # Build sample_files from database (INSIDE function, before return)
+    db_samples = {}
+    for dept in ['finance', 'engineering', 'transmittal']:
+        samples = get_samples_for_template(dept)
+        if samples:
+            dept_info = DEPARTMENT_SAMPLES.get(dept, {})
+            db_samples[dept] = {
+                "label": dept_info.get("label", "Samples"),
+                "description": dept_info.get("description", ""),
+                "folder": dept_info.get("folder", ""),
+                "samples": samples
+            }
+    
+    # Merge database samples with hardcoded (database takes priority)
+    sample_files_merged = {**DEPARTMENT_SAMPLES, **db_samples}
+    
+    return render_template_string(
+        HTML_TEMPLATE,
+        results=results if results else [],
+        grouped_engineering_results=grouped_engineering_results if department == 'engineering' else {},
+        grouped_finance_results=grouped_finance_results if department == 'finance' else {},
+        department=department,
+        selected_samples=selected_samples,
+        sample_files=sample_files_merged,
+        error=error_message,
+        routine_descriptions=ROUTINE_DESCRIPTIONS,
+        routine_summary=ROUTINE_SUMMARY.get(department, []),
+        model_in_use=last_model_used,
+        model_attempts=model_attempts,
+        model_actions=model_actions,
+        schedule_type=schedule_type,
+        transmittal_data=transmittal_data
+    )
 
 @app.route('/export_csv')
 def export_csv():
@@ -6028,78 +6015,16 @@ try:
     from roi_calculator_flask import roi_app as roi_calculator_app
     # Mount ROI calculator at /roi-calculator (with trailing slash support)
     app.register_blueprint(roi_calculator_app, url_prefix='/roi-calculator')
-    print("✓ ROI Calculator blueprint registered successfully at /roi-calculator")
+    print("âœ“ ROI Calculator blueprint registered successfully at /roi-calculator")
 except ImportError as e:
-    print(f"✗ Warning: Could not import ROI calculator: {e}")
+    print(f"âœ— Warning: Could not import ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 except Exception as e:
-    print(f"✗ Error registering ROI calculator: {e}")
+    print(f"âœ— Error registering ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 
 if __name__ == '__main__':
     # This allows local testing
     app.run(debug=True, port=5000)
-
-@app.route('/db-test')
-def db_test():
-    return test_connection()
-
-
-@app.route('/db-test-sectors')
-def db_test_sectors():
-    built_env = get_document_types_by_sector('built-environment')
-    return f"Built Environment has {len(built_env)} document types: {[d['name'] for d in built_env]}"
-
-@app.route('/db-test-data')
-def db_test_data():
-    with engine.connect() as conn:
-        sectors = conn.execute(text("SELECT slug, name FROM sectors")).fetchall()
-        docs = conn.execute(text("SELECT slug, name, sector_id FROM document_types")).fetchall()
-        return f"Sectors: {[dict(s._mapping) for s in sectors]}<br><br>Docs: {[dict(d._mapping) for d in docs]}"
-
-@app.route('/api/sectors')
-def api_sectors():
-    """Get all sectors with their document types"""
-    sectors = get_sectors()
-    for sector in sectors:
-        sector['document_types'] = get_document_types_by_sector(sector['slug'])
-    return jsonify(sectors)
-
-@app.route('/db-test-demo/<department>')
-def db_test_demo(department):
-    """Test demo config for a department"""
-    config = get_demo_config_by_department(department)
-    if not config:
-        return f"No config for department: {department}"
-    return jsonify(config)
-
-@app.route('/db-test-samples/<department>')
-def db_test_samples(department):
-    """Test sample file format for templates"""
-    from database import get_samples_for_template
-    samples = get_samples_for_template(department)
-    return jsonify(samples)
-
-
-
-@app.route('/db-debug-samples')
-def db_debug_samples():
-    """Debug what's in the database"""
-    with engine.connect() as conn:
-        result = conn.execute(text("""
-            SELECT slug, sample_file_paths 
-            FROM document_types 
-            WHERE slug = 'vendor-invoice'
-        """))
-        row = result.fetchone()
-        if row:
-            return jsonify({
-                "slug": row[0],
-                "sample_file_paths": row[1],
-                "type": str(type(row[1]))
-            })
-        return "Not found"
-
-
