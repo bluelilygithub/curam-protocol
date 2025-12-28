@@ -4721,6 +4721,9 @@ def format_text_to_html(text):
 def contact_assistant():
     """
     AI Contact Assistant: Helps users understand their needs and guides them through the contact process.
+    
+    Now uses RAG search to access 800+ blog articles and website content for more accurate,
+    detailed responses based on actual published content.
     """
     try:
         data = request.get_json()
@@ -4733,8 +4736,70 @@ def contact_assistant():
         if not api_key:
             return jsonify({'error': 'Gemini API key not configured'}), 500
         
-        # Build conversation context
-        system_prompt = """You are a helpful AI assistant for Curam-Ai Protocolâ„¢, an AI document automation service for engineering firms.
+        # Skip RAG for simple greetings/acknowledgments
+        simple_messages = ['hi', 'hello', 'hey', 'thanks', 'thank you', 'ok', 'okay', 'yes', 'no']
+        message_lower = message.lower().strip()
+        
+        use_rag = True
+        if message_lower in simple_messages or len(message.split()) <= 2:
+            use_rag = False
+            print(f"Skipping RAG for simple message: {message}")
+        
+        # Perform RAG search for substantive questions
+        rag_context = ""
+        sources = []
+        
+        if use_rag:
+            try:
+                print(f"Performing RAG search for: {message}")
+                rag_results = perform_rag_search(message, max_results=3)  # Limit to 3 for faster chat responses
+                
+                if rag_results.get('context'):
+                    rag_context = rag_results['context']
+                    sources = rag_results['sources']
+                    print(f"RAG found {len(sources)} sources")
+                else:
+                    print("No RAG context found")
+            except Exception as e:
+                print(f"RAG search failed, continuing without it: {e}")
+                # Continue without RAG if it fails
+        
+        # Build system prompt with RAG context if available
+        if rag_context:
+            system_prompt = f"""You are a helpful AI assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
+
+The user asked: "{message}"
+
+Here is relevant content from our 800+ blog articles and website to help you answer:
+{rag_context}
+
+Your role is to:
+1. Answer using the content above as your PRIMARY source
+2. Reference specific blog posts or pages when providing information
+3. Understand the user's needs and challenges
+4. Ask clarifying questions to better understand their situation
+5. Suggest relevant services when appropriate
+6. Guide users toward the most appropriate next step
+
+Key information about services:
+- Phase 1 (Feasibility Sprint): $1,500 - 48-hour proof of concept on their documents
+- Phase 2 (The Roadmap): $7,500 - Detailed implementation plan
+- Phase 3 (Compliance Shield): $8-12k - Production-ready automation
+- Phase 4 (Implementation): $20-30k - Full deployment
+
+IMPORTANT: Format your responses using HTML tags for better readability:
+- Use <p> tags for paragraphs
+- Use <strong> or <b> for emphasis
+- Use <ul> and <li> for lists
+- Use <br> for line breaks when needed
+- Keep HTML simple and safe (no scripts or complex tags)
+- DO NOT wrap your response in markdown code blocks (no ```html or ```)
+- Return the HTML directly, not wrapped in code fences
+
+Keep responses conversational and helpful (2-4 sentences per paragraph). If you cite information from the sources above, mention which blog post or page it's from."""
+        else:
+            # Fallback to original hardcoded prompt if no RAG context
+            system_prompt = """You are a helpful AI assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
 
 Your role is to:
 1. Understand the user's needs and challenges
@@ -4743,7 +4808,7 @@ Your role is to:
 4. Provide helpful information about the protocol and pricing
 5. Guide users toward the most appropriate next step
 
-Key information about Curam-Ai Protocolâ„¢:
+Key information about Curam-Ai Protocol™:
 - Phase 1 (Feasibility Sprint): $1,500 - 48-hour proof of concept on their documents
 - Phase 2 (The Roadmap): $7,500 - Detailed implementation plan
 - Phase 3 (Compliance Shield): $8-12k - Production-ready automation
@@ -4802,11 +4867,9 @@ Keep responses concise (2-3 sentences per paragraph), friendly, and focused on u
                 
                 if not has_proper_paragraphs:
                     # Convert plain text to HTML with paragraph breaks
-                    # This handles cases where LLM returns plain text or partial HTML
                     assistant_message = format_text_to_html(assistant_message)
                 else:
                     # LLM returned HTML with paragraphs, but clean it up
-                    import re
                     # Remove extra whitespace between tags
                     assistant_message = re.sub(r'>\s+<', '><', assistant_message)
                     # Normalize whitespace in content
@@ -4833,7 +4896,8 @@ Keep responses concise (2-3 sentences per paragraph), friendly, and focused on u
             
             return jsonify({
                 'message': assistant_message,
-                'suggested_interest': suggested_interest
+                'suggested_interest': suggested_interest,
+                'sources': sources  # Include sources for frontend to display
             })
             
         except Exception as e:
@@ -4848,7 +4912,6 @@ Keep responses concise (2-3 sentences per paragraph), friendly, and focused on u
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 
-@app.route('/api/check-message-relevance', methods=['POST'])
 def check_message_relevance():
     """
     NLP-based check to determine if a contact form message is related to Curam-Ai services.
