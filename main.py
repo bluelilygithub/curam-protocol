@@ -15,7 +15,7 @@ from werkzeug.utils import secure_filename
 import requests
 from urllib.parse import quote
 
-from database import test_connection, get_document_types_by_sector, engine
+from database import test_connection, get_document_types_by_sector, engine, get_sectors
 from sqlalchemy import text
 
 
@@ -6033,3 +6033,11 @@ def db_test_data():
         sectors = conn.execute(text("SELECT slug, name FROM sectors")).fetchall()
         docs = conn.execute(text("SELECT slug, name, sector_id FROM document_types")).fetchall()
         return f"Sectors: {[dict(s._mapping) for s in sectors]}<br><br>Docs: {[dict(d._mapping) for d in docs]}"
+
+@app.route('/api/sectors')
+def api_sectors():
+    """Get all sectors with their document types"""
+    sectors = get_sectors()
+    for sector in sectors:
+        sector['document_types'] = get_document_types_by_sector(sector['slug'])
+    return jsonify(sectors)
