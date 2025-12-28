@@ -39,58 +39,84 @@ def get_document_types_by_sector(sector_slug):
 
 def get_demo_config_by_department(department):
     """Get demo configuration for a department (maps old dept names to new sectors)"""
-    # Map old department names to sector slugs
-    dept_to_sector = {
-        'finance': 'professional-services',
-        'engineering': 'built-environment',
-        'transmittal': 'built-environment'
-    }
-    
-    sector_slug = dept_to_sector.get(department)
-    if not sector_slug:
+    if not engine:
+        print(f"⚠ Database engine not initialized in get_demo_config_by_department")
         return None
     
-    # Get document types for this sector
-    doc_types = get_document_types_by_sector(sector_slug)
-    
-    # Filter based on department-specific logic
-    if department == 'finance':
-        doc_types = [dt for dt in doc_types if dt['slug'] == 'vendor-invoice']
-    elif department == 'engineering':
-        doc_types = [dt for dt in doc_types if dt['slug'] == 'beam-schedule']
-    elif department == 'transmittal':
-        doc_types = [dt for dt in doc_types if dt['slug'] == 'drawing-register']
-    
-    return doc_types
+    try:
+        # Map old department names to sector slugs
+        dept_to_sector = {
+            'finance': 'professional-services',
+            'engineering': 'built-environment',
+            'transmittal': 'built-environment'
+        }
+        
+        sector_slug = dept_to_sector.get(department)
+        if not sector_slug:
+            print(f"⚠ Unknown department: {department}")
+            return None
+        
+        # Get document types for this sector
+        doc_types = get_document_types_by_sector(sector_slug)
+        
+        # Filter based on department-specific logic
+        if department == 'finance':
+            doc_types = [dt for dt in doc_types if dt['slug'] == 'vendor-invoice']
+        elif department == 'engineering':
+            doc_types = [dt for dt in doc_types if dt['slug'] == 'beam-schedule']
+        elif department == 'transmittal':
+            doc_types = [dt for dt in doc_types if dt['slug'] == 'drawing-register']
+        
+        print(f"✓ get_demo_config_by_department({department}) found {len(doc_types)} doc types")
+        return doc_types
+    except Exception as e:
+        print(f"✗ Error in get_demo_config_by_department({department}): {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def get_samples_for_template(department):
     """Get sample file configuration for template rendering"""
-    # Get from database
-    config = get_demo_config_by_department(department)
-    if not config:
+    # Check if database is available
+    if not engine:
+        print(f"⚠ Database engine not initialized for {department}")
         return []
     
-    # Convert to template format
-    samples = []
-    for doc_type in config:
-        file_paths = doc_type.get('sample_file_paths', [])
+    try:
+        # Get from database
+        config = get_demo_config_by_department(department)
+        if not config:
+            print(f"⚠ No config found in database for {department}")
+            return []
         
-        # Handle if it's a JSON string instead of list
-        if isinstance(file_paths, str):
-            import json
-            try:
-                file_paths = json.loads(file_paths)
-            except:
-                file_paths = []
-        
-        # Ensure it's a list
-        if not isinstance(file_paths, list):
-            file_paths = []
+        # Convert to template format
+        samples = []
+        for doc_type in config:
+            file_paths = doc_type.get('sample_file_paths', [])
             
-        for path in file_paths:
-            samples.append({
-                "path": path,
-                "label": os.path.basename(path)
-            })
-    
-    return samples
+            # Handle if it's a JSON string instead of list
+            if isinstance(file_paths, str):
+                import json
+                try:
+                    file_paths = json.loads(file_paths)
+                except Exception as e:
+                    print(f"✗ JSON parse error for {department}: {e}")
+                    file_paths = []
+            
+            # Ensure it's a list
+            if not isinstance(file_paths, list):
+                file_paths = []
+                
+            for path in file_paths:
+                samples.append({
+                    "path": path,
+                    "label": os.path.basename(path)
+                })
+        
+        print(f"✓ get_samples_for_template({department}) returning {len(samples)} samples")
+        return samples
+    except Exception as e:
+        print(f"✗ Error in get_samples_for_template({department}): {e}")
+        import traceback
+        traceback.print_exc()
+        return []
