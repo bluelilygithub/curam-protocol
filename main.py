@@ -4724,6 +4724,8 @@ def contact_assistant():
     
     Now uses RAG search to access 800+ blog articles and website content for more accurate,
     detailed responses based on actual published content.
+    
+    Automatically creates clickable links when blog posts or pages are mentioned in responses.
     """
     try:
         data = request.get_json()
@@ -4748,6 +4750,7 @@ def contact_assistant():
         # Perform RAG search for substantive questions
         rag_context = ""
         sources = []
+        source_map = {}  # Map titles to URLs for auto-linking
         
         if use_rag:
             try:
@@ -4757,6 +4760,14 @@ def contact_assistant():
                 if rag_results.get('context'):
                     rag_context = rag_results['context']
                     sources = rag_results['sources']
+                    
+                    # Build source map for auto-linking
+                    for source in sources:
+                        title = source.get('title', '')
+                        link = source.get('link', '')
+                        if title and link:
+                            source_map[title.lower()] = link
+                    
                     print(f"RAG found {len(sources)} sources")
                 else:
                     print("No RAG context found")
@@ -4775,28 +4786,26 @@ Here is relevant content from our 800+ blog articles and website to help you ans
 
 Your role is to:
 1. Answer using the content above as your PRIMARY source
-2. Reference specific blog posts or pages when providing information
-3. Understand the user's needs and challenges
-4. Ask clarifying questions to better understand their situation
+2. When referencing information from the sources, mention the EXACT title of the blog post or page (e.g., "as explained in our post 'How RAG Works'")
+3. Use natural paragraph breaks (use double newlines \n\n between paragraphs)
+4. Understand the user's needs and ask clarifying questions
 5. Suggest relevant services when appropriate
 6. Guide users toward the most appropriate next step
 
 Key information about services:
-- Phase 1 (Feasibility Sprint): $1,500 - 48-hour proof of concept on their documents
+- Phase 1 (Feasibility Sprint): $1,500 - 48-hour proof of concept
 - Phase 2 (The Roadmap): $7,500 - Detailed implementation plan
 - Phase 3 (Compliance Shield): $8-12k - Production-ready automation
 - Phase 4 (Implementation): $20-30k - Full deployment
 
-IMPORTANT: Format your responses using HTML tags for better readability:
-- Use <p> tags for paragraphs
-- Use <strong> or <b> for emphasis
-- Use <ul> and <li> for lists
-- Use <br> for line breaks when needed
-- Keep HTML simple and safe (no scripts or complex tags)
-- DO NOT wrap your response in markdown code blocks (no ```html or ```)
-- Return the HTML directly, not wrapped in code fences
+FORMATTING RULES:
+1. Use natural paragraph breaks (double newlines \n\n)
+2. When you mention a blog post or page title, put it in quotes (e.g., "How RAG Works")
+3. Use line breaks to separate distinct ideas
+4. Keep responses conversational but well-structured
+5. Use bullet points with hyphens (-) when listing items
 
-Keep responses conversational and helpful (2-4 sentences per paragraph). If you cite information from the sources above, mention which blog post or page it's from."""
+Keep responses conversational and helpful (2-4 sentences per paragraph). ALWAYS mention the source title when citing information."""
         else:
             # Fallback to original hardcoded prompt if no RAG context
             system_prompt = """You are a helpful AI assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
@@ -4804,12 +4813,12 @@ Keep responses conversational and helpful (2-4 sentences per paragraph). If you 
 Your role is to:
 1. Understand the user's needs and challenges
 2. Ask clarifying questions to better understand their situation
-3. Suggest relevant services (Phase 1 Feasibility Sprint, Phase 2 Roadmap, Phase 3 Compliance Shield, Phase 4 Implementation)
+3. Suggest relevant services when appropriate
 4. Provide helpful information about the protocol and pricing
 5. Guide users toward the most appropriate next step
 
-Key information about Curam-Ai Protocol™:
-- Phase 1 (Feasibility Sprint): $1,500 - 48-hour proof of concept on their documents
+Key information:
+- Phase 1 (Feasibility Sprint): $1,500 - 48-hour proof of concept
 - Phase 2 (The Roadmap): $7,500 - Detailed implementation plan
 - Phase 3 (Compliance Shield): $8-12k - Production-ready automation
 - Phase 4 (Implementation): $20-30k - Full deployment
@@ -4819,21 +4828,12 @@ Services:
 - Engineering: Beam schedule digitization from drawings
 - Drafting: Transmittal register automation
 
-IMPORTANT: Format your responses using HTML tags for better readability:
-- Use <p> tags for paragraphs
-- Use <strong> or <b> for emphasis
-- Use <ul> and <li> for lists
-- Use <br> for line breaks when needed
-- Keep HTML simple and safe (no scripts or complex tags)
-- DO NOT wrap your response in markdown code blocks (no ```html or ```)
-- Return the HTML directly, not wrapped in code fences
-
-Keep responses concise (2-3 sentences per paragraph), friendly, and focused on understanding their needs. Ask one clarifying question at a time when needed."""
+FORMATTING: Use natural paragraph breaks (\n\n) and keep responses conversational (2-3 sentences per paragraph)."""
         
         # Build conversation for Gemini
         conversation = [{"role": "user", "parts": [system_prompt]}]
         
-        # Add conversation history (limit to last 10 exchanges to avoid token limits)
+        # Add conversation history (limit to last 10 exchanges)
         recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
         for item in recent_history:
             role = "user" if item.get('role') == 'user' else "model"
@@ -4849,36 +4849,68 @@ Keep responses concise (2-3 sentences per paragraph), friendly, and focused on u
             response = model.generate_content(conversation)
             assistant_message = response.text if response.text else "I'm here to help! Could you tell me more about what you're looking for?"
             
-            # Remove markdown code blocks if present (```html ... ``` or ``` ... ```)
+            # Clean up the response
             import re
             if assistant_message:
                 # Remove markdown code blocks
                 assistant_message = re.sub(r'```html\s*\n?(.*?)\n?```', r'\1', assistant_message, flags=re.DOTALL)
                 assistant_message = re.sub(r'```\s*\n?(.*?)\n?```', r'\1', assistant_message, flags=re.DOTALL)
-                # Remove any remaining backticks
                 assistant_message = assistant_message.strip().strip('`')
-                # Clean up any extra whitespace
-                assistant_message = re.sub(r'\n\s*\n\s*\n+', '\n\n', assistant_message)
             
-            # Always format the response to ensure proper HTML structure
-            if assistant_message:
-                # Check if response already contains proper HTML paragraph tags
-                has_proper_paragraphs = '<p>' in assistant_message and '</p>' in assistant_message
+            # Auto-link blog post titles mentioned in the response
+            if source_map and assistant_message:
+                # Find quoted titles and make them clickable links
+                def replace_with_link(match):
+                    quoted_text = match.group(1)
+                    quoted_lower = quoted_text.lower()
+                    
+                    # Check if this title matches any source
+                    for source_title, source_url in source_map.items():
+                        # Fuzzy match: if quoted text is in source title or vice versa
+                        if quoted_lower in source_title or source_title in quoted_lower:
+                            return f'<a href="{source_url}" target="_blank" style="color: var(--color-navy); text-decoration: underline; font-weight: 600;">"{quoted_text}"</a>'
+                    
+                    # No match found, return original
+                    return f'"{quoted_text}"'
                 
-                if not has_proper_paragraphs:
-                    # Convert plain text to HTML with paragraph breaks
-                    assistant_message = format_text_to_html(assistant_message)
-                else:
-                    # LLM returned HTML with paragraphs, but clean it up
-                    # Remove extra whitespace between tags
-                    assistant_message = re.sub(r'>\s+<', '><', assistant_message)
-                    # Normalize whitespace in content
-                    assistant_message = re.sub(r'\s+', ' ', assistant_message)
-                    # Clean up any unclosed tags or malformed HTML
-                    if assistant_message.count('<p>') != assistant_message.count('</p>'):
-                        # If paragraphs aren't balanced, extract text and reformat
-                        text_only = re.sub(r'<[^>]+>', ' ', assistant_message)
-                        assistant_message = format_text_to_html(text_only)
+                # Replace all quoted text that might be blog titles
+                assistant_message = re.sub(r'"([^"]+)"', replace_with_link, assistant_message)
+            
+            # Format the response with proper HTML structure
+            if assistant_message:
+                # Split by double newlines for paragraphs
+                paragraphs = assistant_message.split('\n\n')
+                
+                html_parts = []
+                for para in paragraphs:
+                    para = para.strip()
+                    if not para:
+                        continue
+                    
+                    # Check if it's a list (starts with - or •)
+                    lines = para.split('\n')
+                    if any(line.strip().startswith(('-', '•', '*')) for line in lines):
+                        # It's a list
+                        list_items = []
+                        for line in lines:
+                            line = line.strip()
+                            if line.startswith(('-', '•', '*')):
+                                line = line.lstrip('-•* ').strip()
+                                if line:
+                                    list_items.append(f'<li>{line}</li>')
+                        if list_items:
+                            html_parts.append(f'<ul>{"".join(list_items)}</ul>')
+                    else:
+                        # It's a paragraph
+                        # Convert single newlines within paragraph to <br>
+                        para_with_breaks = para.replace('\n', '<br>')
+                        html_parts.append(f'<p>{para_with_breaks}</p>')
+                
+                assistant_message = ''.join(html_parts)
+            
+            # Fallback: if no HTML was generated, wrap in paragraph
+            if assistant_message and not ('<p>' in assistant_message or '<ul>' in assistant_message):
+                assistant_message = f'<p>{assistant_message}</p>'
             
             # Try to extract suggested service/interest from the conversation
             suggested_interest = None
@@ -4903,7 +4935,7 @@ Keep responses concise (2-3 sentences per paragraph), friendly, and focused on u
         except Exception as e:
             app.logger.error(f"Gemini generation failed for contact assistant: {e}")
             return jsonify({
-                'message': "I'm here to help! Could you tell me more about your document automation needs?",
+                'message': "<p>I'm here to help! Could you tell me more about your document automation needs?</p>",
                 'error': str(e)
             }), 500
             
@@ -4911,111 +4943,6 @@ Keep responses concise (2-3 sentences per paragraph), friendly, and focused on u
         app.logger.error(f"Contact assistant failed: {e}")
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
-
-def check_message_relevance():
-    """
-    NLP-based check to determine if a contact form message is related to Curam-Ai services.
-    Uses the same Gemini model as the contact assistant.
-    """
-    try:
-        data = request.get_json()
-        message = data.get('message', '').strip()
-        
-        if not message:
-            return jsonify({'error': 'Message is required'}), 400
-        
-        if not api_key:
-            # Fallback to keyword matching if API key not available
-            return jsonify({
-                'is_relevant': True,  # Default to relevant if we can't check
-                'confidence': 0.5,
-                'reason': 'AI service unavailable, defaulting to allow submission'
-            })
-        
-        # System prompt for relevance checking
-        relevance_prompt = """You are analyzing a contact form message to determine if it's related to Curam-Ai Protocolâ„¢ services.
-
-Curam-Ai Protocolâ„¢ provides:
-- Document automation and extraction (invoices, CAD schedules, drawings)
-- AI implementation for engineering firms
-- Workflow automation for structural engineering
-- The Protocol: 4-phase framework (Feasibility Sprint, Roadmap, Compliance Shield, Implementation)
-- ROI calculations and efficiency improvements
-- ISO-27001 compliance and security
-- Data entry automation, PDF processing, OCR
-
-Analyze the message and respond with ONLY a JSON object in this exact format:
-{
-    "is_relevant": true or false,
-    "confidence": 0.0 to 1.0,
-    "reason": "brief explanation"
-}
-
-Consider relevant if the message mentions:
-- Document processing, automation, extraction
-- AI, machine learning, or technology implementation
-- Engineering, structural engineering, or professional services
-- Workflow efficiency, time savings, productivity
-- Invoices, schedules, drawings, PDFs
-- The Protocol, phases, feasibility, compliance
-- General inquiries about services, pricing, or next steps
-
-Consider NOT relevant if the message is clearly about:
-- Completely unrelated services (e.g., selling products, unrelated consulting)
-- Spam or promotional content
-- Personal matters unrelated to business services
-- Topics completely outside document automation/AI
-
-Message to analyze:
-"""
-        
-        try:
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            
-            # Generate relevance analysis
-            full_prompt = relevance_prompt + message
-            response = model.generate_content(full_prompt)
-            response_text = response.text if response.text else ""
-            
-            # Try to parse JSON from response
-            import re
-            json_match = re.search(r'\{[^}]+\}', response_text, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                return jsonify({
-                    'is_relevant': result.get('is_relevant', True),
-                    'confidence': result.get('confidence', 0.5),
-                    'reason': result.get('reason', 'Analyzed by AI')
-                })
-            else:
-                # Fallback: check if response indicates relevance
-                response_lower = response_text.lower()
-                is_relevant = not any(word in response_lower for word in ['not relevant', 'unrelated', 'not related', 'cannot help'])
-                return jsonify({
-                    'is_relevant': is_relevant,
-                    'confidence': 0.6,
-                    'reason': 'AI analysis completed'
-                })
-            
-        except Exception as e:
-            app.logger.error(f"Gemini relevance check failed: {e}")
-            # Fallback to allowing submission
-            return jsonify({
-                'is_relevant': True,
-                'confidence': 0.5,
-                'reason': 'AI check unavailable, defaulting to allow'
-            })
-            
-    except Exception as e:
-        app.logger.error(f"Message relevance check failed: {e}")
-        return jsonify({
-            'is_relevant': True,
-            'confidence': 0.5,
-            'reason': 'Error in analysis, defaulting to allow'
-        }), 500
-
-
-@app.route('/api/contact', methods=['POST'])
 def contact_form():
     """
     Handle contact form submissions and send emails using MailChannel API.
