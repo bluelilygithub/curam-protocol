@@ -17,7 +17,7 @@
       rel="stylesheet"
     />
     <style>
-      /* Loading animation for chatbot */
+      /* Loading spinner */
       .chat-loading {
         text-align: center;
         padding: 20px;
@@ -39,9 +39,8 @@
         color: #666;
         font-size: 0.9rem;
         font-style: italic;
+        margin-top: 10px;
       }
-
-      /* Make links in chat responses highly visible */
       .contact-msg-bubble a {
         color: #0066cc !important;
         text-decoration: underline !important;
@@ -489,11 +488,9 @@
           const loadingId = 'loading-' + Date.now();
           const loadingHtml = `
             <div class="chat-loading" id="${loadingId}">
-              <div class="chat-loading-dots">
-                <div class="chat-loading-dot"></div>
-                <div class="chat-loading-dot"></div>
-                <div class="chat-loading-dot"></div>
-              </div>
+    <div class="spinner"></div>
+    <div class="chat-loading-text">Searching 800+ articles...</div>
+  </div>
               <span style="color: #666; font-size: 0.9rem; font-style: italic;">Searching 800+ articles...</span>
             </div>
           `;
@@ -796,7 +793,7 @@
           formMessage.className = 'form-message ' + (isError ? 'form-message-error' : 'form-message-success');
           formMessage.classList.remove('contact-hidden');
           
-          // Scroll to message
+          // // DISABLED: Scroll to message
           formMessage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           
           // Hide message after 5 seconds for success, keep error visible
