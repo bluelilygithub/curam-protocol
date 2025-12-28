@@ -4719,7 +4719,7 @@ def format_text_to_html(text):
 
 @app.route('/api/contact-assistant', methods=['POST'])
 def contact_assistant():
-    """AI Contact Assistant with RAG - simple quote-to-link conversion"""
+    """AI Contact Assistant with RAG, follow-up questions, visible links"""
     try:
         data = request.get_json()
         message = data.get('message', '').strip()
@@ -4783,7 +4783,6 @@ Use paragraphs (\n\n)."""
         
         # Convert quoted titles to links
         if sources:
-            # Build title->url map
             urls = {}
             for s in sources:
                 t = s.get('title', '').strip()
@@ -4791,13 +4790,11 @@ Use paragraphs (\n\n)."""
                 if t and u:
                     urls[t] = u
             
-            # Replace "Title" with link if Title is in sources
             def link_it(match):
                 q = match.group(1)
                 for title, url in urls.items():
-                    # Fuzzy match
                     if q.lower() in title.lower() or title.lower() in q.lower():
-                        return f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">\"{q}\"</a>'
+                        return f'<a href="{url}" target="_blank">\"{q}\"</a>'
                 return f'\"{q}\"'
             
             text = re.sub(r'\"([^\"]+)\"', link_it, text)
@@ -4820,6 +4817,39 @@ Use paragraphs (\n\n)."""
         
         html = ''.join(parts) if parts else f'<p>{text}</p>'
         
+        # Generate 3 follow-up questions based on the query and sources
+        followup_questions = []
+        if sources and len(sources) > 0:
+            # Use Gemini to generate contextual follow-up questions
+            try:
+                followup_prompt = f"""Based on this user question: "{message}"
+
+And these available sources:
+{chr(10).join([f"- {s.get('title', '')}" for s in sources[:3]])}
+
+Generate exactly 3 short, specific follow-up questions (max 10 words each) that would help the user learn more. Questions should be directly answerable from our content.
+
+Format: One question per line, no numbering, no punctuation at end.
+
+Example:
+How does Phase 1 reduce implementation risk
+What industries benefit most from RAG
+Can this work with handwritten documents"""
+                
+                fq_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                fq_response = fq_model.generate_content(followup_prompt)
+                if fq_response.text:
+                    questions = [q.strip().rstrip('?').strip() for q in fq_response.text.strip().split('\n') if q.strip()]
+                    followup_questions = questions[:3]  # Take first 3
+            except Exception as e:
+                print(f"Follow-up generation failed: {e}")
+                # Fallback questions
+                followup_questions = [
+                    "How does this apply to my industry",
+                    "What's the cost to implement",
+                    "How long does implementation take"
+                ]
+        
         # Suggested interest
         ml = message.lower()
         interest = None
@@ -4841,7 +4871,8 @@ Use paragraphs (\n\n)."""
         return jsonify({
             'message': html,
             'suggested_interest': interest,
-            'sources': {'website': web, 'blog': blog}
+            'sources': {'website': web, 'blog': blog},
+            'followup_questions': followup_questions
         })
         
     except Exception as e:
