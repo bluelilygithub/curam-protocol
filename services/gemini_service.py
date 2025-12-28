@@ -1,13 +1,12 @@
 """
 Gemini AI Service - AI document analysis
 
-Phase 3.3c: Complete Gemini Service - All 3 Functions
-This completes the Gemini service extraction.
+Complete Gemini service with all 3 functions.
 
-Functions in this file:
-- get_available_models(): Get list of available Gemini models (Phase 3.3a)
-- build_prompt(): Build AI prompts for each document type (Phase 3.3b)
-- analyze_gemini(): Call Gemini API with retry logic (Phase 3.3c - NEW!)
+Functions:
+- get_available_models(): Get list of available Gemini models
+- build_prompt(): Build AI prompts for each document type
+- analyze_gemini(): Call Gemini API with retry logic
 
 Usage:
     from services.gemini_service import analyze_gemini
@@ -17,8 +16,7 @@ Usage:
         doc_type="finance"
     )
 
-Created: Phase 3.3c - Gemini Service Complete
-Lines: ~3,300 (all 3 functions)
+Created: Phase 3.3c - Gemini Service Complete (FIXED)
 """
 
 import os
@@ -3262,8 +3260,3 @@ def analyze_gemini(text, doc_type, image_path=None):
 
     action_log.append(f"âœ— All models failed for this document: {last_error or 'Unknown error'}")
     return [error_entry(last_error or "All models failed")], last_error or "All models failed", resolved_model, attempt_log, action_log, None
-
-# --- ROUTES ---
-# Serve static assets (CSS, JS, images) - support both 'assets' and 'static' paths
-@app.route('/assets/<path:filename>')
-@app.route('/static/<path:filename>')
