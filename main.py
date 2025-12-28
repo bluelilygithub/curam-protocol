@@ -4719,10 +4719,7 @@ def format_text_to_html(text):
 
 @app.route('/api/contact-assistant', methods=['POST'])
 def contact_assistant():
-    """
-    AI Contact Assistant with RAG search across blog content (not just titles).
-    Returns search status for frontend loading animation.
-    """
+    """AI Contact Assistant with RAG - simple quote-to-link conversion"""
     try:
         data = request.get_json()
         message = data.get('message', '').strip()
@@ -4734,192 +4731,121 @@ def contact_assistant():
         if not api_key:
             return jsonify({'error': 'Gemini API key not configured'}), 500
         
-        # Skip RAG for simple messages
-        simple_messages = ['hi', 'hello', 'hey', 'thanks', 'thank you', 'ok', 'okay', 'yes', 'no']
-        message_lower = message.lower().strip()
+        # Skip RAG for greetings
+        simple_msgs = ['hi', 'hello', 'hey', 'thanks', 'thank you', 'ok', 'okay', 'yes', 'no']
+        use_rag = message.lower().strip() not in simple_msgs and len(message.split()) > 2
         
-        use_rag = message_lower not in simple_messages and len(message.split()) > 2
-        
-        # Perform RAG search (searches CONTENT not just titles)
         rag_context = ""
         sources = []
         
         if use_rag:
             try:
-                print(f"RAG search started for: {message}")
                 rag_results = perform_rag_search(message, max_results=3)
-                
                 if rag_results.get('context'):
                     rag_context = rag_results['context']
                     sources = rag_results['sources']
-                    print(f"RAG found {len(sources)} sources")
             except Exception as e:
-                print(f"RAG search failed: {e}")
+                print(f"RAG failed: {e}")
         
-        # Build system prompt
+        # System prompt
         if rag_context:
-            system_prompt = f"""You are a helpful AI assistant for Curam-Ai Protocol™.
+            system_prompt = f"""You are an AI assistant for Curam-Ai Protocol™.
 
-The user asked: "{message}"
+User asked: "{message}"
 
-Relevant content from our blog and website:
+Content from our blog/website:
 {rag_context}
 
-CRITICAL INSTRUCTIONS FOR LINKS:
-1. When citing information, mention the source title AND put it in this EXACT format:
-   [LINK:Source Title Here]
-   
-   Example: "As explained in [LINK:How RAG Works], the system..."
-   
-2. Use [LINK:title] for EVERY source you reference
-3. The system will convert [LINK:...] to clickable links automatically
-4. Use paragraphs (\n\n between them)
-5. For lists use: - Item 1\n- Item 2
+Answer using this content. Put source titles in "quotes". Use paragraphs (\n\n).
 
-Services:
-- Phase 1: $1,500 - 48-hour proof of concept
-- Phase 2: $7,500 - Implementation roadmap
-- Phase 3: $8-12k - Production automation
-- Phase 4: $20-30k - Full deployment
-
-Keep conversational, 2-4 sentences per paragraph."""
+Services: Phase 1 ($1,500), Phase 2 ($7,500), Phase 3 ($8-12k), Phase 4 ($20-30k)"""
         else:
-            system_prompt = """You are a helpful AI assistant for Curam-Ai Protocol™.
+            system_prompt = """You are an AI assistant for Curam-Ai Protocol™.
 
-Services:
-- Phase 1: $1,500 - 48-hour proof of concept
-- Phase 2: $7,500 - Implementation roadmap
-- Phase 3: $8-12k - Production automation
-- Phase 4: $20-30k - Full deployment
+Services: Phase 1 ($1,500), Phase 2 ($7,500), Phase 3 ($8-12k), Phase 4 ($20-30k)
 
-Use paragraphs (\n\n) and keep conversational."""
+Use paragraphs (\n\n)."""
         
         # Build conversation
         conversation = [{"role": "user", "parts": [system_prompt]}]
-        
-        recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-        for item in recent_history:
+        recent = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
+        for item in recent:
             role = "user" if item.get('role') == 'user' else "model"
             conversation.append({"role": role, "parts": [item.get('content', '')]})
-        
         conversation.append({"role": "user", "parts": [message]})
         
-        try:
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            response = model.generate_content(conversation)
-            assistant_message = response.text if response.text else "I'm here to help! Could you tell me more?"
+        # Get AI response
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        response = model.generate_content(conversation)
+        text = response.text if response.text else "How can I help?"
+        
+        import re
+        
+        # Convert quoted titles to links
+        if sources:
+            # Build title->url map
+            urls = {}
+            for s in sources:
+                t = s.get('title', '').strip()
+                u = s.get('link', '')
+                if t and u:
+                    urls[t] = u
             
-            import re
+            # Replace "Title" with link if Title is in sources
+            def link_it(match):
+                q = match.group(1)
+                for title, url in urls.items():
+                    # Fuzzy match
+                    if q.lower() in title.lower() or title.lower() in q.lower():
+                        return f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">\"{q}\"</a>'
+                return f'\"{q}\"'
             
-            # Convert [LINK:title] to actual clickable links
-            if sources and assistant_message:
-                # Build map of titles to URLs (case insensitive, flexible matching)
-                title_to_url = {}
-                for source in sources:
-                    title = source.get('title', '').strip()
-                    url = source.get('link', '')
-                    if title and url:
-                        # Store exact title
-                        title_to_url[title.lower()] = (url, title)
-                        # Store cleaned version (no punctuation)
-                        clean = re.sub(r'[^a-z0-9\s]', '', title.lower())
-                        title_to_url[clean] = (url, title)
-                
-                # Replace [LINK:title] with actual links
-                def replace_link(match):
-                    link_text = match.group(1).strip()
-                    link_lower = link_text.lower()
-                    link_clean = re.sub(r'[^a-z0-9\s]', '', link_lower)
-                    
-                    # Try exact match first
-                    if link_lower in title_to_url:
-                        url, original_title = title_to_url[link_lower]
-                        return f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">"{link_text}"</a>'
-                    
-                    # Try cleaned match
-                    if link_clean in title_to_url:
-                        url, original_title = title_to_url[link_clean]
-                        return f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">"{link_text}"</a>'
-                    
-                    # Try partial match (link text contained in any title)
-                    for stored_clean, (url, original_title) in title_to_url.items():
-                        if link_clean in stored_clean or stored_clean in link_clean:
-                            return f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">"{link_text}"</a>'
-                    
-                    # No match - just return quoted text
-                    return f'"{link_text}"'
-                
-                assistant_message = re.sub(r'\[LINK:([^\]]+)\]', replace_link, assistant_message)
-            
-            # Format paragraphs and lists
-            if assistant_message:
-                paragraphs = assistant_message.split('\n\n')
-                html_parts = []
-                
-                for para in paragraphs:
-                    para = para.strip()
-                    if not para:
-                        continue
-                    
-                    lines = para.split('\n')
-                    
-                    # Check for list
-                    if any(line.strip().startswith(('-', '•', '*')) for line in lines):
-                        list_items = []
-                        for line in lines:
-                            line = line.strip()
-                            if line.startswith(('-', '•', '*')):
-                                line = line.lstrip('-•* ').strip()
-                                if line:
-                                    list_items.append(f'<li>{line}</li>')
-                        if list_items:
-                            html_parts.append(f'<ul>{"".join(list_items)}</ul>')
-                    else:
-                        para_with_breaks = para.replace('\n', '<br>')
-                        html_parts.append(f'<p>{para_with_breaks}</p>')
-                
-                assistant_message = ''.join(html_parts)
-            
-            if assistant_message and not ('<p>' in assistant_message or '<ul>' in assistant_message):
-                assistant_message = f'<p>{assistant_message}</p>'
-            
-            # Extract suggested interest
-            suggested_interest = None
-            if 'phase 1' in message_lower or 'feasibility' in message_lower:
-                suggested_interest = 'phase-1'
-            elif 'phase 2' in message_lower or 'roadmap' in message_lower:
-                suggested_interest = 'phase-2'
-            elif 'phase 3' in message_lower or 'compliance' in message_lower:
-                suggested_interest = 'phase-3'
-            elif 'phase 4' in message_lower or 'implementation' in message_lower:
-                suggested_interest = 'phase-4'
-            elif 'roi' in message_lower or 'calculator' in message_lower:
-                suggested_interest = 'roi'
-            
-            # Separate sources
-            website_sources = [s for s in sources if s.get('type') == 'website']
-            blog_sources = [s for s in sources if s.get('type') == 'blog']
-            
-            return jsonify({
-                'message': assistant_message,
-                'suggested_interest': suggested_interest,
-                'sources': {
-                    'website': website_sources,
-                    'blog': blog_sources
-                },
-                'used_rag': use_rag  # Frontend can use this for analytics
-            })
-            
-        except Exception as e:
-            app.logger.error(f"Gemini generation failed: {e}")
-            return jsonify({
-                'message': "<p>I'm here to help! Could you tell me more about your document automation needs?</p>",
-                'error': str(e)
-            }), 500
-            
+            text = re.sub(r'\"([^\"]+)\"', link_it, text)
+        
+        # Format paragraphs
+        parts = []
+        for para in text.split('\n\n'):
+            para = para.strip()
+            if not para:
+                continue
+            if '- ' in para or '• ' in para:
+                items = []
+                for line in para.split('\n'):
+                    if line.strip().startswith(('-', '•')):
+                        items.append(f'<li>{line.lstrip("-• ").strip()}</li>')
+                if items:
+                    parts.append(f'<ul>{"".join(items)}</ul>')
+            else:
+                parts.append(f'<p>{para.replace(chr(10), "<br>")}</p>')
+        
+        html = ''.join(parts) if parts else f'<p>{text}</p>'
+        
+        # Suggested interest
+        ml = message.lower()
+        interest = None
+        if 'phase 1' in ml or 'feasibility' in ml:
+            interest = 'phase-1'
+        elif 'phase 2' in ml:
+            interest = 'phase-2'
+        elif 'phase 3' in ml:
+            interest = 'phase-3'
+        elif 'phase 4' in ml:
+            interest = 'phase-4'
+        elif 'roi' in ml:
+            interest = 'roi'
+        
+        # Separate sources
+        web = [s for s in sources if s.get('type') == 'website']
+        blog = [s for s in sources if s.get('type') == 'blog']
+        
+        return jsonify({
+            'message': html,
+            'suggested_interest': interest,
+            'sources': {'website': web, 'blog': blog}
+        })
+        
     except Exception as e:
-        app.logger.error(f"Contact assistant failed: {e}")
-        return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/email-chat-log', methods=['POST'])
 def email_chat_log():
