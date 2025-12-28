@@ -5812,18 +5812,33 @@ def index_automater():
     # Build sample_files from database (INSIDE function, before return)
     db_samples = {}
     for dept in ['finance', 'engineering', 'transmittal']:
-        samples = get_samples_for_template(dept)
-        if samples:
-            dept_info = DEPARTMENT_SAMPLES.get(dept, {})
-            db_samples[dept] = {
-                "label": dept_info.get("label", "Samples"),
-                "description": dept_info.get("description", ""),
-                "folder": dept_info.get("folder", ""),
-                "samples": samples
-            }
+        try:
+            samples = get_samples_for_template(dept)
+            if samples:
+                print(f"✓ Database returned {len(samples)} samples for {dept}")
+                dept_info = DEPARTMENT_SAMPLES.get(dept, {})
+                db_samples[dept] = {
+                    "label": dept_info.get("label", "Samples"),
+                    "description": dept_info.get("description", ""),
+                    "folder": dept_info.get("folder", ""),
+                    "samples": samples
+                }
+            else:
+                print(f"⚠ Database returned 0 samples for {dept} - using hardcoded")
+        except Exception as e:
+            print(f"✗ Database error for {dept}: {e}")
+            # Continue with hardcoded samples on error
     
     # Merge database samples with hardcoded (database takes priority)
     sample_files_merged = {**DEPARTMENT_SAMPLES, **db_samples}
+    print(f"Final sample count - Finance: {len(sample_files_merged.get('finance', {}).get('samples', []))}")
+    
+    # Debug: Show first sample path for finance
+    finance_samples = sample_files_merged.get('finance', {}).get('samples', [])
+    if finance_samples:
+        print(f"First finance sample path: {finance_samples[0].get('path', 'NO PATH')}")
+    else:
+        print("⚠ No finance samples in merged data!")
     
     return render_template_string(
         HTML_TEMPLATE,
