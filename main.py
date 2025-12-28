@@ -32,6 +32,12 @@ from services.validation_service import (
     validate_engineering_field
 )
 
+# Phase 3.2: PDF Service (extracted from main.py lines 150-158, 3494-3522)
+from services.pdf_service import (
+    extract_text,
+    prepare_prompt_text
+)
+
 # Try to import specific exception types
 try:
     from google.api_core import exceptions as google_exceptions
@@ -147,15 +153,21 @@ ENGINEERING_PROMPT_LIMIT = 6000
 ENGINEERING_PROMPT_LIMIT_SHORT = 3200
 TRANSMITTAL_PROMPT_LIMIT = 3200
 
-def prepare_prompt_text(text, doc_type, limit=None):
-    cleaned = text.replace("\n", " ").strip()
-    if doc_type == "engineering":
-        limit = ENGINEERING_PROMPT_LIMIT_SHORT if limit is None else limit
-        return cleaned[:limit]
-    if doc_type == "transmittal":
-        limit = TRANSMITTAL_PROMPT_LIMIT if limit is None else limit
-        return cleaned[:limit]
-    return cleaned
+################################################################################
+# MOVED TO services/pdf_service.py - Phase 3.2
+# Function: prepare_prompt_text
+# Keeping commented for 48h as backup before permanent deletion
+# Original lines: 150-158
+################################################################################
+# def prepare_prompt_text(text, doc_type, limit=None):
+#     cleaned = text.replace("\n", " ").strip()
+#     if doc_type == "engineering":
+#         limit = ENGINEERING_PROMPT_LIMIT_SHORT if limit is None else limit
+#         return cleaned[:limit]
+#     if doc_type == "transmittal":
+#         limit = TRANSMITTAL_PROMPT_LIMIT if limit is None else limit
+#         return cleaned[:limit]
+#     return cleaned
 
 ALLOWED_SAMPLE_PATHS = {
     sample["path"]
@@ -3491,35 +3503,41 @@ def format_currency(value):
     
 # # #     return result
 
-def extract_text(file_obj):
-    """
-    Extract text from PDF files.
-    For images, returns a special marker that indicates the file should be sent directly to Gemini vision API.
-    """
-    # Check if file_obj is a string path or file object
-    file_path = None
-    if isinstance(file_obj, str):
-        file_path = file_obj
-        # Check file extension
-        file_ext = os.path.splitext(file_path)[1].lower()
-        if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
-            # Return special marker for image files - will be handled by Gemini vision API
-            return f"[IMAGE_FILE:{file_path}]"
-    
-    # PDF processing
-    text = ""
-    try:
-        with pdfplumber.open(file_obj) as pdf:
-            for page in pdf.pages:
-                extracted = page.extract_text()
-                if extracted:
-                    text += extracted + "\n"
-        if not text.strip():
-            return f"Error: No text extracted from PDF"
-    except Exception as e:
-        print(f"PDF Extraction Error: {type(e).__name__}: {str(e)}")
-        return f"Error: {e}"
-    return text
+################################################################################
+# MOVED TO services/pdf_service.py - Phase 3.2
+# Function: extract_text
+# Keeping commented for 48h as backup before permanent deletion
+# Original lines: 3506-3534
+################################################################################
+# def extract_text(file_obj):
+#     """
+#     Extract text from PDF files.
+#     For images, returns a special marker that indicates the file should be sent directly to Gemini vision API.
+#     """
+#     # Check if file_obj is a string path or file object
+#     file_path = None
+#     if isinstance(file_obj, str):
+#         file_path = file_obj
+#         # Check file extension
+#         file_ext = os.path.splitext(file_path)[1].lower()
+#         if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp']:
+#             # Return special marker for image files - will be handled by Gemini vision API
+#             return f"[IMAGE_FILE:{file_path}]"
+#     
+#     # PDF processing
+#     text = ""
+#     try:
+#         with pdfplumber.open(file_obj) as pdf:
+#             for page in pdf.pages:
+#                 extracted = page.extract_text()
+#                 if extracted:
+#                     text += extracted + "\n"
+#         if not text.strip():
+#             return f"Error: No text extracted from PDF"
+#     except Exception as e:
+#         print(f"PDF Extraction Error: {type(e).__name__}: {str(e)}")
+#         return f"Error: {e}"
+#     return text
 
 def analyze_gemini(text, doc_type, image_path=None):
     """Call Gemini with a doc-type-specific prompt and return entries, error, model used, attempt log, action log, and schedule_type.
