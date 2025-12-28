@@ -6049,3 +6049,10 @@ def db_test_demo(department):
     if not config:
         return f"No config for department: {department}"
     return jsonify(config)
+
+@app.route('/db-test-samples/<department>')
+def db_test_samples(department):
+    """Test sample file format for templates"""
+    from database import get_samples_for_template
+    samples = get_samples_for_template(department)
+    return jsonify(samples)

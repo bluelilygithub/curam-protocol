@@ -63,3 +63,22 @@ def get_demo_config_by_department(department):
     
     return doc_types
 
+def get_samples_for_template(department):
+    """Get sample file configuration for template rendering"""
+    # Get from database
+    config = get_demo_config_by_department(department)
+    if not config:
+        return []
+    
+    # Convert to template format
+    samples = []
+    for doc_type in config:
+        file_paths = doc_type.get('sample_file_paths', [])
+        for path in file_paths:
+            samples.append({
+                "path": path,
+                "label": os.path.basename(path)
+            })
+    
+    return samples
+
