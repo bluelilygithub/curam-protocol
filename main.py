@@ -15,7 +15,14 @@ from werkzeug.utils import secure_filename
 import requests
 from urllib.parse import quote
 
-from database import test_connection, get_document_types_by_sector, engine, get_sectors, get_demo_config_by_department, get_samples_for_template
+from database import (
+    test_connection, 
+    get_document_types_by_sector, 
+    engine, 
+    get_sectors, 
+    get_demo_config_by_department,
+    get_samples_for_template
+)
 from sqlalchemy import text
 
 
