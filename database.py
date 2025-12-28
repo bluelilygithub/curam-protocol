@@ -74,6 +74,19 @@ def get_samples_for_template(department):
     samples = []
     for doc_type in config:
         file_paths = doc_type.get('sample_file_paths', [])
+        
+        # Handle if it's a JSON string instead of list
+        if isinstance(file_paths, str):
+            import json
+            try:
+                file_paths = json.loads(file_paths)
+            except:
+                file_paths = []
+        
+        # Ensure it's a list
+        if not isinstance(file_paths, list):
+            file_paths = []
+            
         for path in file_paths:
             samples.append({
                 "path": path,
@@ -81,4 +94,6 @@ def get_samples_for_template(department):
             })
     
     return samples
+
+
 
