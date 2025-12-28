@@ -16,9 +16,7 @@ import requests
 from urllib.parse import quote
 
 from database import test_connection
-@app.route('/db-test')
-def db_test():
-    return test_connection()
+
 
 # Try to import specific exception types
 try:
@@ -6017,3 +6015,7 @@ except Exception as e:
 if __name__ == '__main__':
     # This allows local testing
     app.run(debug=True, port=5000)
+
+@app.route('/db-test')
+def db_test():
+    return test_connection()
