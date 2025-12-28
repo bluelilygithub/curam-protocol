@@ -35,3 +35,31 @@ def get_document_types_by_sector(sector_slug):
             ORDER BY dt.id
         """), {"sector_slug": sector_slug})
         return [dict(row._mapping) for row in result]
+
+
+def get_demo_config_by_department(department):
+    """Get demo configuration for a department (maps old dept names to new sectors)"""
+    # Map old department names to sector slugs
+    dept_to_sector = {
+        'finance': 'professional-services',
+        'engineering': 'built-environment',
+        'transmittal': 'built-environment'
+    }
+    
+    sector_slug = dept_to_sector.get(department)
+    if not sector_slug:
+        return None
+    
+    # Get document types for this sector
+    doc_types = get_document_types_by_sector(sector_slug)
+    
+    # Filter based on department-specific logic
+    if department == 'finance':
+        doc_types = [dt for dt in doc_types if dt['slug'] == 'vendor-invoice']
+    elif department == 'engineering':
+        doc_types = [dt for dt in doc_types if dt['slug'] == 'beam-schedule']
+    elif department == 'transmittal':
+        doc_types = [dt for dt in doc_types if dt['slug'] == 'drawing-register']
+    
+    return doc_types
+
