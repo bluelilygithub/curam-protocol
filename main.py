@@ -15,8 +15,8 @@ from werkzeug.utils import secure_filename
 import requests
 from urllib.parse import quote
 
-from database import test_connection
-from database import test_connection, get_document_types_by_sector
+from database import test_connection, get_document_types_by_sector, engine
+from sqlalchemy import text
 
 
 # Try to import specific exception types
