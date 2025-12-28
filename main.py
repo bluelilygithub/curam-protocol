@@ -15,7 +15,7 @@ from werkzeug.utils import secure_filename
 import requests
 from urllib.parse import quote
 
-from database import test_connection, get_document_types_by_sector, engine, get_sectors
+from database import test_connection, get_document_types_by_sector, engine, get_sectors, get_demo_config_by_department
 from sqlalchemy import text
 
 
@@ -6041,3 +6041,11 @@ def api_sectors():
     for sector in sectors:
         sector['document_types'] = get_document_types_by_sector(sector['slug'])
     return jsonify(sectors)
+
+@app.route('/db-test-demo/<department>')
+def db_test_demo(department):
+    """Test demo config for a department"""
+    config = get_demo_config_by_department(department)
+    if not config:
+        return f"No config for department: {department}"
+    return jsonify(config)
