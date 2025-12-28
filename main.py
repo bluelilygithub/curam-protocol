@@ -4722,15 +4722,16 @@ def contact_assistant():
     """
     AI Contact Assistant: Helps users understand their needs and guides them through the contact process.
     
-    Now uses RAG search to access 800+ blog articles and website content for more accurate,
-    detailed responses based on actual published content.
-    
-    Automatically creates clickable links when blog posts or pages are mentioned in responses.
+    Features:
+    - RAG search across 800+ blog articles and website
+    - Automatic linking of blog posts with VISIBLE styling
+    - Separated source display (Website vs Blog)
+    - Smart formatting with paragraphs and lists
     """
     try:
         data = request.get_json()
         message = data.get('message', '').strip()
-        conversation_history = data.get('history', [])  # Array of {role: 'user'|'assistant', content: '...'}
+        conversation_history = data.get('history', [])
         
         if not message:
             return jsonify({'error': 'Message is required'}), 400
@@ -4747,15 +4748,15 @@ def contact_assistant():
             use_rag = False
             print(f"Skipping RAG for simple message: {message}")
         
-        # Perform RAG search for substantive questions
+        # Perform RAG search
         rag_context = ""
         sources = []
-        source_map = {}  # Map titles to URLs for auto-linking
+        source_map = {}  # Map titles to URLs
         
         if use_rag:
             try:
                 print(f"Performing RAG search for: {message}")
-                rag_results = perform_rag_search(message, max_results=3)  # Limit to 3 for faster chat responses
+                rag_results = perform_rag_search(message, max_results=3)
                 
                 if rag_results.get('context'):
                     rag_context = rag_results['context']
@@ -4766,131 +4767,105 @@ def contact_assistant():
                         title = source.get('title', '')
                         link = source.get('link', '')
                         if title and link:
+                            # Store multiple variations for better matching
                             source_map[title.lower()] = link
+                            # Also store without punctuation
+                            clean_title = title.lower().replace(':', '').replace('?', '').replace('!', '')
+                            source_map[clean_title] = link
                     
                     print(f"RAG found {len(sources)} sources")
-                else:
-                    print("No RAG context found")
             except Exception as e:
-                print(f"RAG search failed, continuing without it: {e}")
-                # Continue without RAG if it fails
+                print(f"RAG search failed: {e}")
         
-        # Build system prompt with RAG context if available
+        # Build system prompt
         if rag_context:
-            system_prompt = f"""You are a helpful AI assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
+            system_prompt = f"""You are a helpful AI assistant for Curam-Ai Protocol™.
 
 The user asked: "{message}"
 
-Here is relevant content from our 800+ blog articles and website to help you answer:
+Relevant content from our 800+ blog articles and website:
 {rag_context}
 
-Your role is to:
-1. Answer using the content above as your PRIMARY source
-2. When referencing information from the sources, mention the EXACT title of the blog post or page (e.g., "as explained in our post 'How RAG Works'")
-3. Use natural paragraph breaks (use double newlines \n\n between paragraphs)
-4. Understand the user's needs and ask clarifying questions
-5. Suggest relevant services when appropriate
-6. Guide users toward the most appropriate next step
+INSTRUCTIONS:
+1. Answer using the content above as PRIMARY source
+2. When citing information, mention the EXACT title in quotes (e.g., "How RAG Works")
+3. Use natural paragraphs - separate with double newlines (\n\n)
+4. For lists, use hyphens: "- Item 1\n- Item 2"
+5. Keep conversational (2-4 sentences per paragraph)
+6. Ask clarifying questions when helpful
 
-Key information about services:
-- Phase 1 (Feasibility Sprint): $1,500 - 48-hour proof of concept
-- Phase 2 (The Roadmap): $7,500 - Detailed implementation plan
-- Phase 3 (Compliance Shield): $8-12k - Production-ready automation
-- Phase 4 (Implementation): $20-30k - Full deployment
+Key services:
+- Phase 1: $1,500 - 48-hour proof of concept
+- Phase 2: $7,500 - Implementation roadmap
+- Phase 3: $8-12k - Production automation
+- Phase 4: $20-30k - Full deployment
 
-FORMATTING RULES:
-1. Use natural paragraph breaks (double newlines \n\n)
-2. When you mention a blog post or page title, put it in quotes (e.g., "How RAG Works")
-3. Use line breaks to separate distinct ideas
-4. Keep responses conversational but well-structured
-5. Use bullet points with hyphens (-) when listing items
-
-Keep responses conversational and helpful (2-4 sentences per paragraph). ALWAYS mention the source title when citing information."""
+ALWAYS cite source titles when using their information."""
         else:
-            # Fallback to original hardcoded prompt if no RAG context
-            system_prompt = """You are a helpful AI assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
+            system_prompt = """You are a helpful AI assistant for Curam-Ai Protocol™.
 
-Your role is to:
-1. Understand the user's needs and challenges
-2. Ask clarifying questions to better understand their situation
-3. Suggest relevant services when appropriate
-4. Provide helpful information about the protocol and pricing
-5. Guide users toward the most appropriate next step
+Guide users through understanding:
+- Phase 1: $1,500 - 48-hour proof of concept
+- Phase 2: $7,500 - Implementation roadmap
+- Phase 3: $8-12k - Production automation
+- Phase 4: $20-30k - Full deployment
 
-Key information:
-- Phase 1 (Feasibility Sprint): $1,500 - 48-hour proof of concept
-- Phase 2 (The Roadmap): $7,500 - Detailed implementation plan
-- Phase 3 (Compliance Shield): $8-12k - Production-ready automation
-- Phase 4 (Implementation): $20-30k - Full deployment
+Key services: Invoice automation, beam schedule digitization, transmittal automation
 
-Services:
-- Finance/Admin: Invoice automation, data entry into Xero
-- Engineering: Beam schedule digitization from drawings
-- Drafting: Transmittal register automation
-
-FORMATTING: Use natural paragraph breaks (\n\n) and keep responses conversational (2-3 sentences per paragraph)."""
+Use paragraphs (\n\n) and keep conversational."""
         
-        # Build conversation for Gemini
+        # Build conversation
         conversation = [{"role": "user", "parts": [system_prompt]}]
         
-        # Add conversation history (limit to last 10 exchanges)
         recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
         for item in recent_history:
             role = "user" if item.get('role') == 'user' else "model"
             conversation.append({"role": role, "parts": [item.get('content', '')]})
         
-        # Add current message
         conversation.append({"role": "user", "parts": [message]})
         
         try:
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            
-            # Generate response
             response = model.generate_content(conversation)
-            assistant_message = response.text if response.text else "I'm here to help! Could you tell me more about what you're looking for?"
+            assistant_message = response.text if response.text else "I'm here to help! Could you tell me more?"
             
-            # Clean up the response
+            # Clean up
             import re
             if assistant_message:
-                # Remove markdown code blocks
                 assistant_message = re.sub(r'```html\s*\n?(.*?)\n?```', r'\1', assistant_message, flags=re.DOTALL)
                 assistant_message = re.sub(r'```\s*\n?(.*?)\n?```', r'\1', assistant_message, flags=re.DOTALL)
                 assistant_message = assistant_message.strip().strip('`')
             
-            # Auto-link blog post titles mentioned in the response
+            # AUTO-LINK blog post titles with VISIBLE STYLING
             if source_map and assistant_message:
-                # Find quoted titles and make them clickable links
                 def replace_with_link(match):
                     quoted_text = match.group(1)
-                    quoted_lower = quoted_text.lower()
+                    quoted_lower = quoted_text.lower().replace(':', '').replace('?', '').replace('!', '')
                     
-                    # Check if this title matches any source
+                    # Check for exact or fuzzy match
                     for source_title, source_url in source_map.items():
-                        # Fuzzy match: if quoted text is in source title or vice versa
                         if quoted_lower in source_title or source_title in quoted_lower:
-                            return f'<a href="{source_url}" target="_blank" style="color: var(--color-navy); text-decoration: underline; font-weight: 600;">"{quoted_text}"</a>'
+                            # VISIBLE LINK STYLING: color, underline, weight
+                            return f'<a href="{source_url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">\"{quoted_text}\"</a>'
                     
-                    # No match found, return original
-                    return f'"{quoted_text}"'
+                    return f'\"{quoted_text}\"'
                 
-                # Replace all quoted text that might be blog titles
-                assistant_message = re.sub(r'"([^"]+)"', replace_with_link, assistant_message)
+                assistant_message = re.sub(r'\"([^\"]+)\"', replace_with_link, assistant_message)
             
-            # Format the response with proper HTML structure
+            # Format with HTML structure
             if assistant_message:
-                # Split by double newlines for paragraphs
                 paragraphs = assistant_message.split('\n\n')
-                
                 html_parts = []
+                
                 for para in paragraphs:
                     para = para.strip()
                     if not para:
                         continue
                     
-                    # Check if it's a list (starts with - or •)
                     lines = para.split('\n')
+                    
+                    # Check if it's a list
                     if any(line.strip().startswith(('-', '•', '*')) for line in lines):
-                        # It's a list
                         list_items = []
                         for line in lines:
                             line = line.strip()
@@ -4901,39 +4876,44 @@ FORMATTING: Use natural paragraph breaks (\n\n) and keep responses conversationa
                         if list_items:
                             html_parts.append(f'<ul>{"".join(list_items)}</ul>')
                     else:
-                        # It's a paragraph
-                        # Convert single newlines within paragraph to <br>
+                        # Regular paragraph
                         para_with_breaks = para.replace('\n', '<br>')
                         html_parts.append(f'<p>{para_with_breaks}</p>')
                 
                 assistant_message = ''.join(html_parts)
             
-            # Fallback: if no HTML was generated, wrap in paragraph
+            # Fallback wrapping
             if assistant_message and not ('<p>' in assistant_message or '<ul>' in assistant_message):
                 assistant_message = f'<p>{assistant_message}</p>'
             
-            # Try to extract suggested service/interest from the conversation
+            # Extract suggested interest
             suggested_interest = None
-            message_lower = message.lower()
-            if any(word in message_lower for word in ['phase 1', 'feasibility', 'proof of concept', 'poc', 'test']):
+            if 'phase 1' in message_lower or 'feasibility' in message_lower:
                 suggested_interest = 'phase-1'
-            elif any(word in message_lower for word in ['phase 2', 'roadmap', 'plan', 'strategy']):
+            elif 'phase 2' in message_lower or 'roadmap' in message_lower:
                 suggested_interest = 'phase-2'
-            elif any(word in message_lower for word in ['phase 3', 'compliance', 'production', 'shield']):
+            elif 'phase 3' in message_lower or 'compliance' in message_lower:
                 suggested_interest = 'phase-3'
-            elif any(word in message_lower for word in ['phase 4', 'implementation', 'deploy', 'rollout']):
+            elif 'phase 4' in message_lower or 'implementation' in message_lower:
                 suggested_interest = 'phase-4'
-            elif any(word in message_lower for word in ['roi', 'calculator', 'return on investment', 'cost']):
+            elif 'roi' in message_lower or 'calculator' in message_lower:
                 suggested_interest = 'roi'
+            
+            # Separate sources by type (website vs blog)
+            website_sources = [s for s in sources if s.get('type') == 'website']
+            blog_sources = [s for s in sources if s.get('type') == 'blog']
             
             return jsonify({
                 'message': assistant_message,
                 'suggested_interest': suggested_interest,
-                'sources': sources  # Include sources for frontend to display
+                'sources': {
+                    'website': website_sources,
+                    'blog': blog_sources
+                }
             })
             
         except Exception as e:
-            app.logger.error(f"Gemini generation failed for contact assistant: {e}")
+            app.logger.error(f"Gemini generation failed: {e}")
             return jsonify({
                 'message': "<p>I'm here to help! Could you tell me more about your document automation needs?</p>",
                 'error': str(e)
@@ -4942,251 +4922,6 @@ FORMATTING: Use natural paragraph breaks (\n\n) and keep responses conversationa
     except Exception as e:
         app.logger.error(f"Contact assistant failed: {e}")
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
-
-def contact_form():
-    """
-    Handle contact form submissions and send emails using MailChannel API.
-    """
-    try:
-        data = request.get_json()
-        name = data.get('name', '').strip()
-        email = data.get('email', '').strip()
-        company = data.get('company', '').strip()
-        interest = data.get('interest', '').strip()
-        message = data.get('message', '').strip()
-        
-        # Validation
-        if not name or not email or not message:
-            return jsonify({'error': 'Name, email, and message are required'}), 400
-        
-        # Get MailChannel API key
-        mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
-        if not mailchannels_api_key:
-            app.logger.error("MAILCHANNELS_API_KEY not configured - email sending disabled")
-            return jsonify({
-                'error': 'Email service is currently unavailable. Please try again later.',
-                'details': 'MAILCHANNELS_API_KEY environment variable is missing'
-            }), 503
-        
-        # Get recipient email (admin/contact email)
-        to_email = 'michaelbarrett@bluelily.com.au'
-        from_email = os.environ.get('FROM_EMAIL', 'noreply@curam-ai.com.au')
-        
-        # Interest labels
-        interest_labels = {
-            'phase-1': 'Phase 1 - Feasibility Sprint',
-            'phase-2': 'Phase 2 - The Roadmap',
-            'phase-3': 'Phase 3 - Compliance Shield',
-            'phase-4': 'Phase 4 - Implementation',
-            'roi': 'ROI Calculator',
-            'general': 'General Inquiry'
-        }
-        interest_display = interest_labels.get(interest, interest or 'Not specified')
-        
-        # Build email content for admin
-        email_subject = f"New Contact Form Submission from {name}"
-        
-        # Prepare message with HTML line breaks (escape newlines for HTML)
-        message_html = message.replace(chr(10), '<br>') if message else ''
-        company_html = f'<div class="field"><div class="label">Company:</div><div class="value">{company}</div></div>' if company else ''
-        
-        email_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
-                h1 {{ color: #0a1628; border-bottom: 2px solid #D4AF37; padding-bottom: 10px; }}
-                .field {{ margin: 15px 0; }}
-                .label {{ font-weight: bold; color: #0a1628; }}
-                .value {{ margin-top: 5px; padding: 10px; background: #F8F9FA; border-radius: 4px; }}
-                .message-box {{ background: #F8F9FA; padding: 15px; border-left: 3px solid #D4AF37; border-radius: 4px; }}
-            </style>
-        </head>
-        <body>
-            <h1>New Contact Form Submission</h1>
-            
-            <div class="field">
-                <div class="label">Name:</div>
-                <div class="value">{name}</div>
-            </div>
-            
-            <div class="field">
-                <div class="label">Email:</div>
-                <div class="value"><a href="mailto:{email}">{email}</a></div>
-            </div>
-            
-            {company_html}
-            
-            <div class="field">
-                <div class="label">Interest:</div>
-                <div class="value">{interest_display}</div>
-            </div>
-            
-            <div class="field">
-                <div class="label">Message:</div>
-                <div class="message-box">{message_html}</div>
-            </div>
-        </body>
-        </html>
-        """
-        
-        # Prepare email text content
-        newline = '\n'
-        company_line = f'Company: {company}{newline}' if company else ''
-        email_text = f"""New Contact Form Submission
-
-Name: {name}
-Email: {email}
-{company_line}Interest: {interest_display}
-
-Message:
-{message}
-"""
-        
-        # Build confirmation email for user
-        interest_line_html = f'<p><strong>Interest:</strong> {interest_display}</p>' if interest else ''
-        interest_line_text = f'Interest: {interest_display}\n\n' if interest else ''
-        
-        confirmation_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }}
-                h1 {{ color: #0a1628; border-bottom: 2px solid #D4AF37; padding-bottom: 10px; }}
-                .info-box {{ margin: 20px 0; padding: 15px; background: #F8F9FA; border-radius: 4px; }}
-                .message {{ margin: 20px 0; padding: 15px; background: #F8F9FA; border-radius: 4px; }}
-                .interest {{ color: #D4AF37; font-weight: bold; }}
-            </style>
-        </head>
-        <body>
-            <h1>Thank You for Contacting Curam-Ai</h1>
-            <p>Hi {name},</p>
-            <p>We've received your inquiry and will get back to you within 24 hours.</p>
-            {interest_line_html}
-            <div class="message">
-                <strong>Your Message:</strong><br>
-                {message_html}
-            </div>
-            <p>Best regards,<br>Curam-Ai Protocolâ„¢ Team</p>
-        </body>
-        </html>
-        """
-        
-        confirmation_text = f"""Thank You for Contacting Curam-Ai
-
-Hi {name},
-
-We've received your inquiry and will get back to you within 24 hours.
-
-{interest_line_text}Your Message:
-{message}
-
-Best regards,
-Curam-Ai Protocolâ„¢ Team
-"""
-        
-        mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
-        
-        # MailChannel API headers - API key is optional if domain lockdown is configured
-        headers = {
-            'Content-Type': 'application/json'
-        }
-        if mailchannels_api_key:
-            headers['X-Api-Key'] = mailchannels_api_key
-        
-        # Send email to admin
-        admin_email_data = {
-            "personalizations": [
-                {
-                    "to": [{"email": to_email}]
-                }
-            ],
-            "from": {
-                "email": from_email,
-                "name": "Curam-Ai Protocolâ„¢ Contact Form"
-            },
-            "reply_to": {
-                "email": email,
-                "name": name
-            },
-            "subject": email_subject,
-            "content": [
-                {
-                    "type": "text/plain",
-                    "value": email_text
-                },
-                {
-                    "type": "text/html",
-                    "value": email_html
-                }
-            ]
-        }
-        
-        # Send confirmation email to user
-        user_email_data = {
-            "personalizations": [
-                {
-                    "to": [{"email": email, "name": name}]
-                }
-            ],
-            "from": {
-                "email": from_email,
-                "name": "Curam-Ai Protocolâ„¢"
-            },
-            "subject": "Thank You for Contacting Curam-Ai",
-            "content": [
-                {
-                    "type": "text/plain",
-                    "value": confirmation_text
-                },
-                {
-                    "type": "text/html",
-                    "value": confirmation_html
-                }
-            ]
-        }
-        
-        try:
-            # Send admin notification
-            admin_response = requests.post(mailchannels_url, json=admin_email_data, headers=headers, timeout=10)
-            if admin_response.status_code != 202:
-                app.logger.error(f"Mailchannels API error (admin email): {admin_response.status_code} - {admin_response.text}")
-            
-            # Send user confirmation
-            user_response = requests.post(mailchannels_url, json=user_email_data, headers=headers, timeout=10)
-            if user_response.status_code != 202:
-                app.logger.error(f"Mailchannels API error (user confirmation): {user_response.status_code} - {user_response.text}")
-            
-            if admin_response.status_code == 202:
-                app.logger.info(f"Contact form email sent successfully from {email}")
-                
-                # SMS functionality removed
-                
-                return jsonify({
-                    'success': True,
-                    'message': 'Thank you for your message! We will get back to you soon.'
-                })
-            else:
-                app.logger.error(f"Failed to send contact form email: {admin_response.text}")
-                return jsonify({
-                    'error': 'Failed to send email. Please try again later.',
-                    'details': admin_response.text if admin_response.text else 'Unknown error'
-                }), 500
-                
-        except requests.RequestException as e:
-            app.logger.error(f"Error sending contact form email via Mailchannels: {e}")
-            return jsonify({
-                'error': 'Failed to send email. Please try again later.'
-            }), 500
-        
-    except Exception as e:
-        app.logger.error(f"Contact form submission failed: {e}")
-        import traceback
-        app.logger.error(traceback.format_exc())
-        return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
-
 
 @app.route('/api/email-chat-log', methods=['POST'])
 def email_chat_log():
