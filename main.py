@@ -16,6 +16,7 @@ import requests
 from urllib.parse import quote
 
 from database import test_connection
+from database import test_connection, get_document_types_by_sector
 
 
 # Try to import specific exception types
@@ -6020,9 +6021,15 @@ if __name__ == '__main__':
 def db_test():
     return test_connection()
 
-from database import test_connection, get_document_types_by_sector
 
 @app.route('/db-test-sectors')
 def db_test_sectors():
     built_env = get_document_types_by_sector('built-environment')
     return f"Built Environment has {len(built_env)} document types: {[d['name'] for d in built_env]}"
+
+@app.route('/db-test-data')
+def db_test_data():
+    with engine.connect() as conn:
+        sectors = conn.execute(text("SELECT slug, name FROM sectors")).fetchall()
+        docs = conn.execute(text("SELECT slug, name, sector_id FROM document_types")).fetchall()
+        return f"Sectors: {[dict(s._mapping) for s in sectors]}<br><br>Docs: {[dict(d._mapping) for d in docs]}"
