@@ -15,7 +15,7 @@ from werkzeug.utils import secure_filename
 import requests
 from urllib.parse import quote
 
-from database import test_connection, get_document_types_by_sector, engine, get_sectors, get_demo_config_by_department
+from database import test_connection, get_document_types_by_sector, engine, get_sectors, get_demo_config_by_department, get_samples_for_template
 from sqlalchemy import text
 
 
@@ -5801,23 +5801,41 @@ def index_automater():
                 grouped_finance_results[filename] = []
             grouped_finance_results[filename].append(row)
     
-    return render_template_string(
-        HTML_TEMPLATE,
-        results=results if results else [],
-        grouped_engineering_results=grouped_engineering_results if department == 'engineering' else {},
-        grouped_finance_results=grouped_finance_results if department == 'finance' else {},
-        department=department,
-        selected_samples=selected_samples,
-        sample_files=DEPARTMENT_SAMPLES,
-        error=error_message,
-        routine_descriptions=ROUTINE_DESCRIPTIONS,
-        routine_summary=ROUTINE_SUMMARY.get(department, []),
-        model_in_use=last_model_used,
-        model_attempts=model_attempts,
-        model_actions=model_actions,
-        schedule_type=schedule_type,
-        transmittal_data=transmittal_data
-    )
+# Build sample_files from database
+from database import get_samples_for_template
+db_samples = {}
+for dept in ['finance', 'engineering', 'transmittal']:
+    samples = get_samples_for_template(dept)
+    if samples:
+        # Match the structure of DEPARTMENT_SAMPLES
+        dept_info = DEPARTMENT_SAMPLES.get(dept, {})
+        db_samples[dept] = {
+            "label": dept_info.get("label", "Samples"),
+            "description": dept_info.get("description", ""),
+            "folder": dept_info.get("folder", ""),
+            "samples": samples
+        }
+
+# Merge database samples with hardcoded (database takes priority)
+sample_files_merged = {**DEPARTMENT_SAMPLES, **db_samples}
+
+return render_template_string(
+    HTML_TEMPLATE,
+    results=results if results else [],
+    grouped_engineering_results=grouped_engineering_results if department == 'engineering' else {},
+    grouped_finance_results=grouped_finance_results if department == 'finance' else {},
+    department=department,
+    selected_samples=selected_samples,
+    sample_files=sample_files_merged,  # ← Changed this
+    error=error_message,
+    routine_descriptions=ROUTINE_DESCRIPTIONS,
+    routine_summary=ROUTINE_SUMMARY.get(department, []),
+    model_in_use=last_model_used,
+    model_attempts=model_attempts,
+    model_actions=model_actions,
+    schedule_type=schedule_type,
+    transmittal_data=transmittal_data
+)
 
 @app.route('/export_csv')
 def export_csv():
