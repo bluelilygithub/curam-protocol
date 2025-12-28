@@ -4290,11 +4290,280 @@ def search_static_html_pages(query):
     
     return relevant_pages
 
+def perform_rag_search(query, max_results=5):
+    """
+    Perform RAG (Retrieval-Augmented Generation) search across blog and website content.
+    
+    This function fetches relevant content from WordPress blog (800+ articles) and 
+    static HTML pages, ranks them by relevance, and returns structured results.
+    
+    Args:
+        query (str): The search query from the user
+        max_results (int): Maximum number of sources to return (default: 5)
+    
+    Returns:
+        dict: {
+            'sources': list of source objects with title, link, excerpt, type, authority
+            'context': str, combined text content from all sources for AI context
+            'query': str, the original query
+            'query_words': set, filtered query keywords
+            'error': str (optional), error message if something failed
+        }
+        
+    Raises:
+        Returns error dict if WordPress API is unreachable
+    """
+    import re
+    import requests
+    
+    # Step 1: Fetch blog content from WordPress REST API
+    blog_urls = [
+        'https://curam-ai.com.au',      # Primary (no www)
+        'https://www.curam-ai.com.au'   # Fallback (with www)
+    ]
+    
+    blog_url = None
+    wp_api_url = None
+    
+    # Test which blog URL is accessible
+    for test_url in blog_urls:
+        try:
+            test_response = requests.get(f'{test_url}/wp-json/wp/v2/posts', 
+                                        params={'per_page': 1}, 
+                                        timeout=5)
+            if test_response.status_code == 200:
+                blog_url = test_url
+                wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
+                print(f"✓ Blog URL accessible: {blog_url}")
+                break
+        except requests.RequestException as e:
+            print(f"✗ Blog URL failed: {test_url} - {str(e)[:100]}")
+            continue
+    
+    # If neither URL works, return error
+    if not blog_url:
+        return {
+            'error': 'Unable to reach blog API',
+            'sources': [],
+            'context': '',
+            'query': query
+        }
+    
+    posts = []
+    try:
+        # Try multiple search strategies to get most relevant posts
+        all_posts = []
+        
+        # Strategy 1: Search in WordPress API (searches title, content, excerpt)
+        try:
+            response = requests.get(wp_api_url, params={
+                'per_page': 50, 
+                'search': query,
+                '_fields': 'id,title,content,excerpt,link,date'
+            }, timeout=10)
+            if response.status_code == 200:
+                search_results = response.json()
+                if search_results:
+                    all_posts.extend(search_results)
+        except Exception as e:
+            print(f"WordPress search API error: {e}")
+            pass
+        
+        # Strategy 2: Fetch recent posts as backup (WordPress search can be unreliable)
+        try:
+            pages_to_fetch = 3  # Fetch 3 pages = 300 posts
+            for page in range(1, pages_to_fetch + 1):
+                response = requests.get(wp_api_url, params={
+                    'per_page': 100,  # Maximum allowed by WordPress
+                    '_fields': 'id,title,content,excerpt,link,date',
+                    'orderby': 'date',
+                    'order': 'desc',
+                    'page': page
+                }, timeout=15)
+                if response.status_code == 200:
+                    page_posts = response.json()
+                    if not page_posts:  # No more posts
+                        break
+                    # Merge with existing, avoiding duplicates
+                    existing_ids = {p.get('id') for p in all_posts}
+                    for post in page_posts:
+                        if post.get('id') not in existing_ids:
+                            all_posts.append(post)
+                else:
+                    print(f"WordPress API returned status {response.status_code} for page {page}")
+                    break
+            print(f"Fetched {len(all_posts)} total posts for query: {query}")
+        except Exception as e:
+            print(f"WordPress recent posts API error: {e}")
+            pass
+        
+        # Rank posts by relevance (simple keyword matching)
+        query_lower = query.lower()
+        # Remove common stop words for better matching
+        stop_words = {'what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can'}
+        query_words = set(word for word in query_lower.split() if word not in stop_words and len(word) > 2)
+        
+        # If all words were stop words, use original query
+        if not query_words:
+            query_words = set(query_lower.split())
+        
+        def calculate_relevance(post):
+            score = 0
+            title = post.get('title', {}).get('rendered', '').lower()
+            excerpt = post.get('excerpt', {}).get('rendered', '').lower()
+            content = post.get('content', {}).get('rendered', '').lower()
+            
+            # Title matches are most important
+            for word in query_words:
+                if word in title:
+                    score += 10
+                if word in excerpt:
+                    score += 5
+                if word in content:
+                    score += 1
+            
+            # Exact phrase match bonus
+            if query_lower in title:
+                score += 20
+            if query_lower in excerpt:
+                score += 10
+            if query_lower in content:
+                score += 5
+            
+            return score
+        
+        # Sort by relevance and take top results
+        posts_with_scores = [(p, calculate_relevance(p)) for p in all_posts]
+        posts_with_scores.sort(key=lambda x: x[1], reverse=True)
+        
+        # Log top results for debugging
+        print(f"Query: {query}")
+        print(f"Query words after filtering: {query_words}")
+        if posts_with_scores[:3]:
+            print("Top 3 results:")
+            for p, score in posts_with_scores[:3]:
+                title = p.get('title', {}).get('rendered', 'No title')
+                print(f"  - Score {score}: {title}")
+        
+        # Take top N posts based on max_results
+        posts = [p for p, score in posts_with_scores[:max_results]]
+        
+        # If top post has score 0, try a more lenient search
+        if posts and posts_with_scores[0][1] == 0 and len(all_posts) > max_results:
+            print("Top post has 0 score, trying lenient search...")
+            for word in query_words:
+                matching_posts = [p for p in all_posts 
+                                if word in p.get('title', {}).get('rendered', '').lower() 
+                                or word in p.get('excerpt', {}).get('rendered', '').lower()
+                                or word in p.get('content', {}).get('rendered', '').lower()]
+                if matching_posts:
+                    posts = matching_posts[:max_results]
+                    print(f"Found {len(matching_posts)} posts matching word: {word}")
+                    break
+        
+    except requests.RequestException as e:
+        print(f"WordPress API request error: {e}")
+        posts = []
+    
+    # Step 2: Search static HTML pages
+    static_pages = []
+    try:
+        static_pages = search_static_html_pages(query)
+    except Exception as e:
+        print(f"Error searching static HTML pages: {e}")
+        static_pages = []
+    
+    # Step 3: Prepare context from blog posts and static HTML pages
+    context = ""
+    sources = []
+    
+    # Add blog posts to context
+    if posts:
+        for post in posts[:max_results]:
+            title = post.get('title', {}).get('rendered', '')
+            content = post.get('content', {}).get('rendered', '')
+            link = post.get('link', '')
+            excerpt = post.get('excerpt', {}).get('rendered', '')
+            date_str = post.get('date', '')
+            
+            # Clean HTML tags more thoroughly
+            import re
+            content_clean = re.sub('<[^<]+?>', '', content)
+            excerpt_clean = re.sub('<[^<]+?>', '', excerpt)
+            
+            # Remove extra whitespace and newlines
+            content_clean = re.sub(r'\s+', ' ', content_clean).strip()
+            excerpt_clean = re.sub(r'\s+', ' ', excerpt_clean).strip()
+            
+            # Calculate authority score
+            authority_score = calculate_authority_score(
+                source_type='blog',
+                title=title,
+                content=content_clean,
+                date_str=date_str,
+                query=query,
+                query_words=query_words
+            )
+            
+            # Get more content (up to 4000 chars per post)
+            content_snippet = content_clean[:4000] if len(content_clean) > 4000 else content_clean
+            
+            context += f"\n\n---\nBlog Post: {title}\nExcerpt: {excerpt_clean}\nFull Content: {content_snippet}\n---\n"
+            sources.append({
+                'title': title,
+                'link': link,
+                'excerpt': excerpt_clean[:200] if excerpt_clean else content_clean[:200],
+                'type': 'blog',
+                'authority': authority_score,
+                'date': date_str
+            })
+    
+    # Add static HTML pages to context
+    if static_pages:
+        for page in static_pages[:max_results]:
+            title = page.get('title', '')
+            content = page.get('content', '')
+            link = page.get('link', '')
+            
+            # Calculate authority score
+            authority_score = calculate_authority_score(
+                source_type='website',
+                title=title,
+                content=content,
+                date_str=None,
+                query=query,
+                query_words=query_words
+            )
+            
+            # Content is already cleaned, just truncate
+            content_snippet = content[:4000] if len(content) > 4000 else content
+            
+            # Extract a snippet for excerpt
+            excerpt = content[:200] + '...' if len(content) > 200 else content
+            
+            context += f"\n\n---\nWebsite Page: {title}\nContent: {content_snippet}\n---\n"
+            sources.append({
+                'title': title,
+                'link': link,
+                'excerpt': excerpt,
+                'type': 'website',
+                'authority': authority_score
+            })
+    
+    return {
+        'sources': sources,
+        'context': context,
+        'query': query,
+        'query_words': query_words
+    }
+
 @app.route('/api/search-blog', methods=['POST'])
 def search_blog_rag():
     """
     RAG Search: Fetches blog content from www.curam-ai.com.au and static HTML pages,
     then uses Gemini to generate answers.
+    
+    Now uses the extracted perform_rag_search() function for cleaner code.
     """
     try:
         data = request.get_json()
@@ -4306,269 +4575,39 @@ def search_blog_rag():
         if not api_key:
             return jsonify({'error': 'Gemini API key not configured'}), 500
         
-        # Step 1: Fetch blog content from WordPress REST API
-        # Try primary URL first, fallback to www subdomain if needed
-        blog_urls = [
-            'https://curam-ai.com.au',      # Primary (no www)
-            'https://www.curam-ai.com.au'   # Fallback (with www)
-        ]
+        # Perform RAG search using extracted function
+        rag_results = perform_rag_search(query, max_results=5)
         
-        blog_url = None
-        wp_api_url = None
-        
-        # Test which blog URL is accessible
-        for test_url in blog_urls:
-            try:
-                test_response = requests.get(f'{test_url}/wp-json/wp/v2/posts', 
-                                            params={'per_page': 1}, 
-                                            timeout=5)
-                if test_response.status_code == 200:
-                    blog_url = test_url
-                    wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
-                    print(f"âœ“ Blog URL accessible: {blog_url}")
-                    break
-            except requests.RequestException as e:
-                print(f"âœ— Blog URL failed: {test_url} - {str(e)[:100]}")
-                continue
-        
-        # If neither URL works, return error
-        if not blog_url:
+        # Check if there was an error reaching the blog
+        if 'error' in rag_results and not rag_results['sources']:
             return jsonify({
-                'error': 'Unable to reach blog API',
+                'error': rag_results.get('error'),
                 'answer': 'The blog is currently unavailable. Please try again later or contact us directly.',
                 'sources': [],
                 'query': query
             }), 503
         
-        posts = []
-        try:
-            # Try multiple search strategies to get most relevant posts
-            all_posts = []
-            
-            # Strategy 1: Search in WordPress API (searches title, content, excerpt)
-            try:
-                response = requests.get(wp_api_url, params={
-                    'per_page': 50, 
-                    'search': query,
-                    '_fields': 'id,title,content,excerpt,link'
-                }, timeout=10)
-                if response.status_code == 200:
-                    search_results = response.json()
-                    if search_results:
-                        all_posts.extend(search_results)
-            except Exception as e:
-                print(f"WordPress search API error: {e}")
-                pass
-            
-            # Strategy 2: Fetch recent posts as backup (WordPress search can be unreliable)
-            # Fetch multiple pages to get more content
-            try:
-                pages_to_fetch = 3  # Fetch 3 pages = 300 posts
-                for page in range(1, pages_to_fetch + 1):
-                    response = requests.get(wp_api_url, params={
-                        'per_page': 100,  # Maximum allowed by WordPress
-                        '_fields': 'id,title,content,excerpt,link',
-                        'orderby': 'date',
-                        'order': 'desc',
-                        'page': page
-                    }, timeout=15)
-                    if response.status_code == 200:
-                        page_posts = response.json()
-                        if not page_posts:  # No more posts
-                            break
-                        # Merge with existing, avoiding duplicates
-                        existing_ids = {p.get('id') for p in all_posts}
-                        for post in page_posts:
-                            if post.get('id') not in existing_ids:
-                                all_posts.append(post)
-                    else:
-                        print(f"WordPress API returned status {response.status_code} for page {page}")
-                        break
-                print(f"Fetched {len(all_posts)} total posts for query: {query}")
-            except Exception as e:
-                print(f"WordPress recent posts API error: {e}")
-                pass
-            
-            # Rank posts by relevance (simple keyword matching)
-            query_lower = query.lower()
-            # Remove common stop words for better matching
-            stop_words = {'what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can'}
-            query_words = set(word for word in query_lower.split() if word not in stop_words and len(word) > 2)
-            
-            # If all words were stop words, use original query
-            if not query_words:
-                query_words = set(query_lower.split())
-            
-            def calculate_relevance(post):
-                score = 0
-                title = post.get('title', {}).get('rendered', '').lower()
-                excerpt = post.get('excerpt', {}).get('rendered', '').lower()
-                content = post.get('content', {}).get('rendered', '').lower()
-                
-                # Title matches are most important
-                for word in query_words:
-                    if word in title:
-                        score += 10
-                    if word in excerpt:
-                        score += 5
-                    if word in content:
-                        score += 1
-                
-                # Exact phrase match bonus
-                if query_lower in title:
-                    score += 20
-                if query_lower in excerpt:
-                    score += 10
-                if query_lower in content:
-                    score += 5
-                
-                return score
-            
-            # Sort by relevance and take top 5
-            # Don't filter by score - even low scores might have relevant content
-            posts_with_scores = [(p, calculate_relevance(p)) for p in all_posts]
-            posts_with_scores.sort(key=lambda x: x[1], reverse=True)
-            
-            # Log top results for debugging
-            print(f"Query: {query}")
-            print(f"Query words after filtering: {query_words}")
-            if posts_with_scores[:3]:
-                print("Top 3 results:")
-                for p, score in posts_with_scores[:3]:
-                    title = p.get('title', {}).get('rendered', 'No title')
-                    print(f"  - Score {score}: {title}")
-            
-            # Take top 5 posts (even with score 0, as they're still most relevant)
-            posts = [p for p, score in posts_with_scores[:5]]
-            
-            # If top post has score 0, try a more lenient search
-            if posts and posts_with_scores[0][1] == 0 and len(all_posts) > 5:
-                print("Top post has 0 score, trying lenient search...")
-                # Try searching for any word in the query (more lenient)
-                for word in query_words:
-                    matching_posts = [p for p in all_posts 
-                                    if word in p.get('title', {}).get('rendered', '').lower() 
-                                    or word in p.get('excerpt', {}).get('rendered', '').lower()
-                                    or word in p.get('content', {}).get('rendered', '').lower()]
-                    if matching_posts:
-                        posts = matching_posts[:5]
-                        print(f"Found {len(matching_posts)} posts matching word: {word}")
-                        break
-            
-        except requests.RequestException as e:
-            print(f"WordPress API request error: {e}")
-            posts = []
-        
-        # Step 1b: Search static HTML pages
-        static_pages = []
-        try:
-            static_pages = search_static_html_pages(query)
-        except Exception as e:
-            print(f"Error searching static HTML pages: {e}")
-            static_pages = []
-        
-        # Step 2: Prepare context from blog posts and static HTML pages
-        import re
-        
-        context = ""
-        sources = []
-        
-        # Add blog posts to context
-        if posts:
-            for post in posts[:5]:  # Use top 5 most relevant posts
-                title = post.get('title', {}).get('rendered', '')
-                content = post.get('content', {}).get('rendered', '')
-                link = post.get('link', '')
-                excerpt = post.get('excerpt', {}).get('rendered', '')
-                date_str = post.get('date', '')
-                
-                # Clean HTML tags more thoroughly
-                content_clean = re.sub('<[^<]+?>', '', content)
-                excerpt_clean = re.sub('<[^<]+?>', '', excerpt)
-                
-                # Remove extra whitespace and newlines
-                content_clean = re.sub(r'\s+', ' ', content_clean).strip()
-                excerpt_clean = re.sub(r'\s+', ' ', excerpt_clean).strip()
-                
-                # Calculate authority score
-                authority_score = calculate_authority_score(
-                    source_type='blog',
-                    title=title,
-                    content=content_clean,
-                    date_str=date_str,
-                    query=query,
-                    query_words=query_words
-                )
-                
-                # Get more content (up to 4000 chars per post since articles are ~1000 words)
-                # 1000 words â‰ˆ 6000 chars, so 4000 gives good coverage
-                content_snippet = content_clean[:4000] if len(content_clean) > 4000 else content_clean
-                
-                context += f"\n\n---\nBlog Post: {title}\nExcerpt: {excerpt_clean}\nFull Content: {content_snippet}\n---\n"
-                sources.append({
-                    'title': title,
-                    'link': link,
-                    'excerpt': excerpt_clean[:200] if excerpt_clean else content_clean[:200],
-                    'type': 'blog',
-                    'authority': authority_score,
-                    'date': date_str
-                })
-        
-        # Add static HTML pages to context
-        if static_pages:
-            for page in static_pages[:5]:  # Use top 5 most relevant pages
-                title = page.get('title', '')
-                content = page.get('content', '')
-                link = page.get('link', '')
-                
-                # Calculate authority score
-                authority_score = calculate_authority_score(
-                    source_type='website',
-                    title=title,
-                    content=content,
-                    date_str=None,
-                    query=query,
-                    query_words=query_words
-                )
-                
-                # Content is already cleaned, just truncate
-                content_snippet = content[:4000] if len(content) > 4000 else content
-                
-                # Extract a snippet for excerpt (first 200 chars of meaningful content)
-                excerpt = content[:200] + '...' if len(content) > 200 else content
-                
-                context += f"\n\n---\nWebsite Page: {title}\nContent: {content_snippet}\n---\n"
-                sources.append({
-                    'title': title,
-                    'link': link,
-                    'excerpt': excerpt,
-                    'type': 'website',
-                    'authority': authority_score
-                })
-        
         # If no content found, provide a helpful message
-        if not context:
+        if not rag_results['context']:
             print(f"No context found for query: {query}")
-            print(f"Posts fetched: {len(posts)}")
-            print(f"Static pages: {len(static_pages)}")
             return jsonify({
                 'answer': f"I couldn't find specific information about '{query}' in our blog or website content. This topic might not be directly related to AI document automation, the Curam-Ai Protocol, or our services. Please visit <a href='https://curam-ai.com.au/?s={query}' target='_blank'>curam-ai.com.au</a> to search our full blog, or <a href='contact.html'>contact us</a> if you have questions about our services.",
                 'sources': [],
                 'query': query
             })
         
-        # Step 3: Use Gemini to generate answer based on retrieved context
+        # Use Gemini to generate answer based on retrieved context
         try:
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
             
-            prompt = f"""You are a helpful assistant for Curam-Ai Protocolâ„¢, an AI document automation service for engineering firms.
+            prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
 
 The user asked: "{query}"
 
 Below is relevant content from our WordPress blog (800+ articles) and our website pages. Use this content to provide a comprehensive, informative answer.
 
 Content from Blog and Website:
-{context}
+{rag_results['context']}
 
 Instructions:
 1. Provide a direct, comprehensive answer to the user's question using the content above
@@ -4588,21 +4627,20 @@ Answer the question comprehensively:"""
             
             return jsonify({
                 'answer': answer,
-                'sources': sources,
+                'sources': rag_results['sources'],
                 'query': query
             })
             
         except Exception as e:
             return jsonify({
                 'answer': f"I encountered an error processing your question. Please visit curam-ai.com.au to search for information about '{query}'.",
-                'sources': sources,
+                'sources': rag_results['sources'],
                 'query': query,
                 'error': str(e)
             }), 500
             
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
-
 
 def format_text_to_html(text):
     """
