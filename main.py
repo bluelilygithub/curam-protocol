@@ -1547,14 +1547,14 @@ Don't fill gaps with assumptions
 
 Your extraction is successful when:
 
-âœ… All readable content extracted (nothing missed due to premature [illegible] marking)
-âœ… All format rules followed for engineering documents
-âœ… All uncertainties explicitly flagged with specific reasons
-âœ… No character soup in output
-âœ… Issues noted in correct columns
-âœ… Complete multi-part fields captured
-âœ… Corrections explained transparently
-âœ… Zero silent errors
+&#9989; All readable content extracted (nothing missed due to premature [illegible] marking)
+&#9989; All format rules followed for engineering documents
+&#9989; All uncertainties explicitly flagged with specific reasons
+&#9989; No character soup in output
+&#9989; Issues noted in correct columns
+&#9989; Complete multi-part fields captured
+&#9989; Corrections explained transparently
+&#9989; Zero silent errors
 
 Remember: This output will be used for critical decisions. Accuracy and transparency are more important than completeness. When in doubt, FLAG IT.
 
@@ -1811,7 +1811,7 @@ TEXT: {text}
     
     Example:
     âŒ DON'T: "Construction and forestry parts"
-    âœ… DO: "20 line items: Hydraulic components (filters, cylinders), Engine parts (gaskets, pistons). Major: Hydraulic cylinders ($4,000), Bearings ($2,400)"
+    &#9989; DO: "20 line items: Hydraulic components (filters, cylinders), Engine parts (gaskets, pistons). Major: Hydraulic cylinders ($4,000), Bearings ($2,400)"
     
     For simple receipts:
     - Brief description of transaction type
@@ -2283,7 +2283,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        <h1>âš¡ Consultancy  Takeoff Automator</h1>
+        <h1>&#9889; Consultancy  Takeoff Automator</h1>
         
         {% if error %}
         <p class="error">{{ error }}</p>
@@ -2313,7 +2313,7 @@ HTML_TEMPLATE = """
                     {% for sample in group.samples %}
                     {% if dept_key == 'transmittal' %}
                     <div class="transmittal-sample-row">
-                        <span class="transmittal-sample-pill">âœ… {{ sample.label }}</span>
+                        <span class="transmittal-sample-pill">&#9989; {{ sample.label }}</span>
                         <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">ðŸ”—</a>
                         <input type="hidden" name="transmittal_defaults" value="{{ sample.path }}">
                     </div>
@@ -2349,7 +2349,7 @@ HTML_TEMPLATE = """
             {% endfor %}
 
             <div class="button-group">
-                <button type="submit" class="btn">ðŸš€ Generate Output</button>
+                <button type="submit" class="btn">&#128640; Generate Output</button>
             </div>
             <div id="processing-spinner"><span class="spinner-icon"></span>Processing filesâ€¦</div>
         </form>
