@@ -6056,3 +6056,25 @@ def db_test_samples(department):
     from database import get_samples_for_template
     samples = get_samples_for_template(department)
     return jsonify(samples)
+
+
+
+@app.route('/db-debug-samples')
+def db_debug_samples():
+    """Debug what's in the database"""
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT slug, sample_file_paths 
+            FROM document_types 
+            WHERE slug = 'vendor-invoice'
+        """))
+        row = result.fetchone()
+        if row:
+            return jsonify({
+                "slug": row[0],
+                "sample_file_paths": row[1],
+                "type": str(type(row[1]))
+            })
+        return "Not found"
+
+
