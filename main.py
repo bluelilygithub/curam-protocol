@@ -4720,13 +4720,8 @@ def format_text_to_html(text):
 @app.route('/api/contact-assistant', methods=['POST'])
 def contact_assistant():
     """
-    AI Contact Assistant: Helps users understand their needs and guides them through the contact process.
-    
-    Features:
-    - RAG search across 800+ blog articles and website
-    - Automatic linking of blog posts with VISIBLE styling
-    - Separated source display (Website vs Blog)
-    - Smart formatting with paragraphs and lists
+    AI Contact Assistant with RAG search across blog content (not just titles).
+    Returns search status for frontend loading animation.
     """
     try:
         data = request.get_json()
@@ -4739,40 +4734,24 @@ def contact_assistant():
         if not api_key:
             return jsonify({'error': 'Gemini API key not configured'}), 500
         
-        # Skip RAG for simple greetings/acknowledgments
+        # Skip RAG for simple messages
         simple_messages = ['hi', 'hello', 'hey', 'thanks', 'thank you', 'ok', 'okay', 'yes', 'no']
         message_lower = message.lower().strip()
         
-        use_rag = True
-        if message_lower in simple_messages or len(message.split()) <= 2:
-            use_rag = False
-            print(f"Skipping RAG for simple message: {message}")
+        use_rag = message_lower not in simple_messages and len(message.split()) > 2
         
-        # Perform RAG search
+        # Perform RAG search (searches CONTENT not just titles)
         rag_context = ""
         sources = []
-        source_map = {}  # Map titles to URLs
         
         if use_rag:
             try:
-                print(f"Performing RAG search for: {message}")
+                print(f"RAG search started for: {message}")
                 rag_results = perform_rag_search(message, max_results=3)
                 
                 if rag_results.get('context'):
                     rag_context = rag_results['context']
                     sources = rag_results['sources']
-                    
-                    # Build source map for auto-linking
-                    for source in sources:
-                        title = source.get('title', '')
-                        link = source.get('link', '')
-                        if title and link:
-                            # Store multiple variations for better matching
-                            source_map[title.lower()] = link
-                            # Also store without punctuation
-                            clean_title = title.lower().replace(':', '').replace('?', '').replace('!', '')
-                            source_map[clean_title] = link
-                    
                     print(f"RAG found {len(sources)} sources")
             except Exception as e:
                 print(f"RAG search failed: {e}")
@@ -4783,34 +4762,35 @@ def contact_assistant():
 
 The user asked: "{message}"
 
-Relevant content from our 800+ blog articles and website:
+Relevant content from our blog and website:
 {rag_context}
 
-INSTRUCTIONS:
-1. Answer using the content above as PRIMARY source
-2. When citing information, mention the EXACT title in quotes (e.g., "How RAG Works")
-3. Use natural paragraphs - separate with double newlines (\n\n)
-4. For lists, use hyphens: "- Item 1\n- Item 2"
-5. Keep conversational (2-4 sentences per paragraph)
-6. Ask clarifying questions when helpful
+CRITICAL INSTRUCTIONS FOR LINKS:
+1. When citing information, mention the source title AND put it in this EXACT format:
+   [LINK:Source Title Here]
+   
+   Example: "As explained in [LINK:How RAG Works], the system..."
+   
+2. Use [LINK:title] for EVERY source you reference
+3. The system will convert [LINK:...] to clickable links automatically
+4. Use paragraphs (\n\n between them)
+5. For lists use: - Item 1\n- Item 2
 
-Key services:
+Services:
 - Phase 1: $1,500 - 48-hour proof of concept
 - Phase 2: $7,500 - Implementation roadmap
 - Phase 3: $8-12k - Production automation
 - Phase 4: $20-30k - Full deployment
 
-ALWAYS cite source titles when using their information."""
+Keep conversational, 2-4 sentences per paragraph."""
         else:
             system_prompt = """You are a helpful AI assistant for Curam-Ai Protocol™.
 
-Guide users through understanding:
+Services:
 - Phase 1: $1,500 - 48-hour proof of concept
 - Phase 2: $7,500 - Implementation roadmap
 - Phase 3: $8-12k - Production automation
 - Phase 4: $20-30k - Full deployment
-
-Key services: Invoice automation, beam schedule digitization, transmittal automation
 
 Use paragraphs (\n\n) and keep conversational."""
         
@@ -4829,30 +4809,49 @@ Use paragraphs (\n\n) and keep conversational."""
             response = model.generate_content(conversation)
             assistant_message = response.text if response.text else "I'm here to help! Could you tell me more?"
             
-            # Clean up
             import re
-            if assistant_message:
-                assistant_message = re.sub(r'```html\s*\n?(.*?)\n?```', r'\1', assistant_message, flags=re.DOTALL)
-                assistant_message = re.sub(r'```\s*\n?(.*?)\n?```', r'\1', assistant_message, flags=re.DOTALL)
-                assistant_message = assistant_message.strip().strip('`')
             
-            # AUTO-LINK blog post titles with VISIBLE STYLING
-            if source_map and assistant_message:
-                def replace_with_link(match):
-                    quoted_text = match.group(1)
-                    quoted_lower = quoted_text.lower().replace(':', '').replace('?', '').replace('!', '')
-                    
-                    # Check for exact or fuzzy match
-                    for source_title, source_url in source_map.items():
-                        if quoted_lower in source_title or source_title in quoted_lower:
-                            # VISIBLE LINK STYLING: color, underline, weight
-                            return f'<a href="{source_url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">\"{quoted_text}\"</a>'
-                    
-                    return f'\"{quoted_text}\"'
+            # Convert [LINK:title] to actual clickable links
+            if sources and assistant_message:
+                # Build map of titles to URLs (case insensitive, flexible matching)
+                title_to_url = {}
+                for source in sources:
+                    title = source.get('title', '').strip()
+                    url = source.get('link', '')
+                    if title and url:
+                        # Store exact title
+                        title_to_url[title.lower()] = (url, title)
+                        # Store cleaned version (no punctuation)
+                        clean = re.sub(r'[^a-z0-9\s]', '', title.lower())
+                        title_to_url[clean] = (url, title)
                 
-                assistant_message = re.sub(r'\"([^\"]+)\"', replace_with_link, assistant_message)
+                # Replace [LINK:title] with actual links
+                def replace_link(match):
+                    link_text = match.group(1).strip()
+                    link_lower = link_text.lower()
+                    link_clean = re.sub(r'[^a-z0-9\s]', '', link_lower)
+                    
+                    # Try exact match first
+                    if link_lower in title_to_url:
+                        url, original_title = title_to_url[link_lower]
+                        return f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">"{link_text}"</a>'
+                    
+                    # Try cleaned match
+                    if link_clean in title_to_url:
+                        url, original_title = title_to_url[link_clean]
+                        return f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">"{link_text}"</a>'
+                    
+                    # Try partial match (link text contained in any title)
+                    for stored_clean, (url, original_title) in title_to_url.items():
+                        if link_clean in stored_clean or stored_clean in link_clean:
+                            return f'<a href="{url}" target="_blank" style="color: #0066cc; text-decoration: underline; font-weight: 600;">"{link_text}"</a>'
+                    
+                    # No match - just return quoted text
+                    return f'"{link_text}"'
+                
+                assistant_message = re.sub(r'\[LINK:([^\]]+)\]', replace_link, assistant_message)
             
-            # Format with HTML structure
+            # Format paragraphs and lists
             if assistant_message:
                 paragraphs = assistant_message.split('\n\n')
                 html_parts = []
@@ -4864,7 +4863,7 @@ Use paragraphs (\n\n) and keep conversational."""
                     
                     lines = para.split('\n')
                     
-                    # Check if it's a list
+                    # Check for list
                     if any(line.strip().startswith(('-', '•', '*')) for line in lines):
                         list_items = []
                         for line in lines:
@@ -4876,13 +4875,11 @@ Use paragraphs (\n\n) and keep conversational."""
                         if list_items:
                             html_parts.append(f'<ul>{"".join(list_items)}</ul>')
                     else:
-                        # Regular paragraph
                         para_with_breaks = para.replace('\n', '<br>')
                         html_parts.append(f'<p>{para_with_breaks}</p>')
                 
                 assistant_message = ''.join(html_parts)
             
-            # Fallback wrapping
             if assistant_message and not ('<p>' in assistant_message or '<ul>' in assistant_message):
                 assistant_message = f'<p>{assistant_message}</p>'
             
@@ -4899,7 +4896,7 @@ Use paragraphs (\n\n) and keep conversational."""
             elif 'roi' in message_lower or 'calculator' in message_lower:
                 suggested_interest = 'roi'
             
-            # Separate sources by type (website vs blog)
+            # Separate sources
             website_sources = [s for s in sources if s.get('type') == 'website']
             blog_sources = [s for s in sources if s.get('type') == 'blog']
             
@@ -4909,7 +4906,8 @@ Use paragraphs (\n\n) and keep conversational."""
                 'sources': {
                     'website': website_sources,
                     'blog': blog_sources
-                }
+                },
+                'used_rag': use_rag  # Frontend can use this for analytics
             })
             
         except Exception as e:
