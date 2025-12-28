@@ -36,7 +36,7 @@ if api_key:
 FINANCE_UPLOAD_DIR = os.path.join('uploads', 'finance')
 os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
 
-# --- DEPARTMENT CONFIG ---
+# --- DEPARTMENT CONFIG.... ---
 DEFAULT_DEPARTMENT = "finance"
 DEPARTMENT_SAMPLES = {
     "finance": {
