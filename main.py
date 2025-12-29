@@ -52,6 +52,9 @@ from services.rag_service import (
     perform_rag_search
 )
 
+# Phase 4.1: Static Pages Blueprint
+from routes.static_pages import static_pages_bp
+
 # Try to import specific exception types
 try:
     from google.api_core import exceptions as google_exceptions
@@ -82,6 +85,9 @@ from config import (
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = SECRET_KEY
 
+# Register blueprints
+app.register_blueprint(static_pages_bp)
+
 # Configure Gemini API
 api_key = os.environ.get("GEMINI_API_KEY")
 if api_key:
@@ -93,230 +99,9 @@ os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
 # Cache for available models
 _available_models = None
 
-@app.route('/invoices/<path:filename>')
-def invoices(filename):
-    return send_from_directory('invoices', filename)
-
-# Serve drawing PDFs
-@app.route('/drawings/<path:filename>')
-def drawings(filename):
-    return send_from_directory('drawings', filename)
-
-# Serve static website files
-@app.route('/homepage')
-@app.route('/homepage.html')
-def homepage():
-    try:
-        return send_file('homepage.html')
-    except:
-        return "Homepage not found.", 404
-
-@app.route('/contact')
-@app.route('/contact.html')
-def contact_page():
-    try:
-        return send_file('contact.html')
-    except:
-        return "Contact page not found.", 404
-
-@app.route('/about')
-@app.route('/about.html')
-def about_page():
-    try:
-        return send_file('about.html')
-    except:
-        return "About page not found.", 404
-
-@app.route('/search')
-@app.route('/search.html')
-def search_page():
-    """Serve the RAG Search Demo page"""
-    try:
-        return send_file('search.html')
-    except:
-        return "Search page not found.", 404
-
-@app.route('/services')
-@app.route('/services.html')
-def services_page():
-    try:
-        return send_file('services.html')
-    except:
-        return "Services page not found.", 404
-
-@app.route('/faq')
-@app.route('/faq.html')
-def faq_page():
-    try:
-        return send_file('faq.html')
-    except:
-        return "FAQ page not found.", 404
-
-@app.route('/target-markets')
-@app.route('/target-markets.html')
-def target_markets():
-    try:
-        return send_file('target-markets.html')
-    except:
-        return "Target Markets page not found.", 404
-
-@app.route('/accounting')
-@app.route('/accounting.html')
-@app.route('/industries/accounting.html')
-def accounting_page():
-    try:
-        return render_template('industries/accounting.html')
-    except:
-        return "Accounting page not found.", 404
-
-@app.route('/professional-services')
-@app.route('/professional-services.html')
-def professional_services_page():
-    try:
-        return send_file('professional-services.html')
-    except:
-        return "Professional Services page not found.", 404
-
-@app.route('/logistics-compliance')
-@app.route('/logistics-compliance.html')
-def logistics_compliance_page():
-    try:
-        return send_file('logistics-compliance.html')
-    except:
-        return "Logistics Compliance page not found.", 404
-
-@app.route('/built-environment')
-@app.route('/built-environment.html')
-def built_environment_page():
-    try:
-        return send_file('built-environment.html')
-    except:
-        return "Built Environment page not found.", 404
-
-@app.route('/legal-services')
-@app.route('/legal-services.html')
-@app.route('/industries/legal-services.html')
-def legal_services_page():
-    try:
-        return render_template('industries/legal-services.html')
-    except:
-        return "Legal Services page not found.", 404
-
-@app.route('/wealth-management')
-@app.route('/wealth-management.html')
-@app.route('/industries/wealth-management.html')
-def wealth_management_page():
-    try:
-        return render_template('industries/wealth-management.html')
-    except:
-        return "Wealth Management page not found.", 404
-
-@app.route('/insurance-underwriting')
-@app.route('/insurance-underwriting.html')
-@app.route('/industries/insurance-underwriting.html')
-def insurance_underwriting_page():
-    try:
-        return render_template('industries/insurance-underwriting.html')
-    except:
-        return "Insurance Underwriting page not found.", 404
-
-@app.route('/logistics-freight')
-@app.route('/logistics-freight.html')
-@app.route('/logistics')
-@app.route('/logistics.html')
-@app.route('/industries/logistics-freight.html')
-def logistics_freight_page():
-    try:
-        return render_template('industries/logistics-freight.html')
-    except:
-        return "Logistics & Freight page not found.", 404
-
-@app.route('/healthcare-admin')
-@app.route('/healthcare-admin.html')
-@app.route('/healthcare')
-@app.route('/healthcare.html')
-@app.route('/industries/healthcare-admin.html')
-def healthcare_admin_page():
-    try:
-        return render_template('industries/healthcare-admin.html')
-    except:
-        return "Healthcare Admin page not found.", 404
-
-@app.route('/government-contractors')
-@app.route('/government-contractors.html')
-@app.route('/government')
-@app.route('/government.html')
-@app.route('/industries/government-contractors.html')
-def government_contractors_page():
-    try:
-        return render_template('industries/government-contractors.html')
-    except:
-        return "Government Contractors page not found.", 404
-
-@app.route('/construction')
-@app.route('/construction.html')
-@app.route('/industries/construction.html')
-def construction_page():
-    try:
-        return render_template('industries/construction.html')
-    except:
-        return "Construction page not found.", 404
-
-@app.route('/architecture')
-@app.route('/architecture.html')
-@app.route('/industries/architecture.html')
-def architecture_page():
-    try:
-        return render_template('industries/architecture.html')
-    except:
-        return "Architecture page not found.", 404
-
-@app.route('/engineering')
-@app.route('/engineering.html')
-@app.route('/industries/engineering.html')
-def engineering_page():
-    try:
-        return render_template('industries/engineering.html')
-    except:
-        return "Engineering page not found.", 404
-
-@app.route('/mining-services')
-@app.route('/mining-services.html')
-@app.route('/mining')
-@app.route('/mining.html')
-@app.route('/industries/mining-services.html')
-def mining_services_page():
-    try:
-        return render_template('industries/mining-services.html')
-    except:
-        return "Mining Services page not found.", 404
-
-@app.route('/property-management')
-@app.route('/property-management.html')
-@app.route('/property')
-@app.route('/property.html')
-@app.route('/industries/property-management.html')
-def property_management_page():
-    try:
-        return render_template('industries/property-management.html')
-    except:
-        return "Property Management page not found.", 404
-
-@app.route('/case-study')
-@app.route('/case-study.html')
-def case_study_page():
-    try:
-        return send_file('case-study.html')
-    except:
-        return "Case study page not found.", 404
-
-@app.route('/search-results')
-@app.route('/search-results.html')
-def search_results_page():
-    try:
-        return send_file('search-results.html')
-    except:
-        return "Search results page not found.", 404
+# =============================================================================
+# API ROUTES
+# =============================================================================
 
 @app.route('/api/search-blog', methods=['POST'])
 def search_blog_rag():
@@ -741,148 +526,9 @@ def email_chat_log():
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 
-@app.route('/how-it-works')
-@app.route('/how-it-works.html')
-def how_it_works():
-    try:
-        return send_file('how-it-works.html')
-    except:
-        return "How it works page not found.", 404
-
-@app.route('/curam-ai-protocol.html')
-def curam_ai_protocol():
-    try:
-        return send_file('curam-ai-protocol.html')
-    except:
-        return "Protocol page not found.", 404
-
-@app.route('/tier2-report.html')
-def tier2_report():
-    """Serve the Tier 2 report HTML file"""
-    try:
-        # Serve the actual Tier 2 report file (tier2-report.html contains the report)
-        # The Curam-Ai-Redacted file appears to be homepage content, so use tier2-report.html
-        html_file = 'tier2-report.html'
-        
-        if not os.path.exists(html_file):
-            return f"Tier 2 report not found. Looking for: {html_file}", 404
-        
-        # Use absolute path to ensure we get the right file
-        file_path = os.path.abspath(html_file)
-        return send_file(file_path, mimetype='text/html')
-    except Exception as e:
-        return f"Error serving report: {str(e)}", 500
-
-@app.route('/tier-one-feasibility-report')
-@app.route('/tier-one-feasibility-report.html')
-def tier_one_feasibility_report():
-    """Serve the Tier One Feasibility Report HTML file"""
-    try:
-        return send_file('tier-one-feasibility-report.html')
-    except:
-        return "Tier One Feasibility Report not found.", 404
-
-@app.route('/phase-1-feasibility')
-@app.route('/phase-1-feasibility.html')
-def phase_1_feasibility():
-    """Serve the Phase 1 Feasibility page"""
-    try:
-        return send_file('phase-1-feasibility.html')
-    except:
-        return "Phase 1 Feasibility page not found.", 404
-
-@app.route('/phase-2-roadmap')
-@app.route('/phase-2-roadmap.html')
-def phase_2_roadmap():
-    """Serve the Phase 2 Roadmap page"""
-    try:
-        return send_file('phase-2-roadmap.html')
-    except:
-        return "Phase 2 Roadmap page not found.", 404
-
-@app.route('/phase-3-compliance')
-@app.route('/phase-3-compliance.html')
-def phase_3_compliance():
-    """Serve the Phase 3 Compliance Shield page"""
-    try:
-        return send_file('phase-3-compliance.html')
-    except:
-        return "Phase 3 Compliance Shield page not found.", 404
-
-@app.route('/phase-4-implementation')
-@app.route('/phase-4-implementation.html')
-def phase_4_implementation():
-    """Serve the Phase 4 Implementation page"""
-    try:
-        return send_file('phase-4-implementation.html')
-    except:
-        return "Phase 4 Implementation page not found.", 404
-
-@app.route('/feasibility-sprint-report')
-@app.route('/feasibility-sprint-report.html')
-@app.route('/gate2-sample-report')
-@app.route('/gate2-sample-report.html')
-def feasibility_sprint_report():
-    """Serve the Phase 1 Feasibility Sprint report slideshow page"""
-    try:
-        return send_file('feasibility-sprint-report.html')
-    except:
-        return "Feasibility Sprint report page not found.", 404
-
-@app.route('/risk-audit-report')
-@app.route('/risk-audit-report.html')
-def risk_audit_report():
-    """Serve the Risk Audit Report page"""
-    try:
-        return send_file('risk-audit-report.html')
-    except:
-        return "Risk Audit Report page not found.", 404
-
-# Phase 2 Report Routes
-@app.route('/phase-2-exec-summary')
-@app.route('/phase-2-exec-summary.html')
-def phase_2_exec_summary():
-    """Serve the Phase 2 Executive Summary report"""
-    try:
-        return send_file('phase-2-exec-summary.html')
-    except:
-        return "Phase 2 Executive Summary not found.", 404
-
-@app.route('/phase-2-discovery-baseline-report')
-@app.route('/phase-2-discovery-baseline-report.html')
-def phase_2_discovery_baseline():
-    """Serve the Phase 2 Discovery Baseline report"""
-    try:
-        return send_file('phase-2-discovery-baseline-report.html')
-    except:
-        return "Phase 2 Discovery Baseline report not found.", 404
-
-@app.route('/phase-2-metric-agreement')
-@app.route('/phase-2-metric-agreement.html')
-def phase_2_metric_agreement():
-    """Serve the Phase 2 Metric Agreement report"""
-    try:
-        return send_file('phase-2-metric-agreement.html')
-    except:
-        return "Phase 2 Metric Agreement not found.", 404
-
-@app.route('/phase-2-reports')
-@app.route('/phase-2-reports.html')
-def phase_2_reports():
-    """Serve the Phase 2 reports index page"""
-    try:
-        return send_file('phase-2-reports.html')
-    except:
-        return "Phase 2 reports page not found.", 404
-
-# Root route - serve the marketing homepage
-@app.route('/')
-def root():
-    try:
-        return send_file('homepage.html')
-    except Exception as e:
-        # Fallback message if homepage doesn't exist
-        return f"Homepage not found. Error: {str(e)}", 404
+# =============================================================================
+# AUTOMATER & DEMO ROUTES
+# =============================================================================
 
 # Feasibility Preview HTML page with iframe (serves feasibility-preview.html)
 @app.route('/feasibility-preview.html')
@@ -1495,45 +1141,9 @@ def view_sample():
 
     return send_file(requested)
 
-# ROI calculator HTML page with iframe (serves roi.html)
-@app.route('/roi.html')
-def roi_html():
-    """Serve roi.html page with iframe to ROI calculator"""
-    return send_file('roi.html')
-
-# ROI calculator redirect route (for /roi without .html)
-@app.route('/roi')
-def roi_redirect():
-    """Redirect /roi to /roi.html"""
-    return redirect('/roi.html', code=301)
-
-# Blog HTML page with iframe (serves blog.html)
-@app.route('/blog.html')
-def blog_html():
-    """Serve blog.html page with iframe to curam-ai.com.au"""
-    return send_file('blog.html')
-
-# Blog redirect route (for /blog without .html)
-@app.route('/blog')
-def blog_redirect():
-    """Redirect /blog to /blog.html"""
-    return redirect('/blog.html', code=301)
-
-@app.route('/sitemap.html')
-def sitemap_html():
-    """Serve sitemap.html page"""
-    try:
-        return send_file('sitemap.html')
-    except:
-        return "Sitemap not found.", 404
-
-@app.route('/sitemap.xml')
-def sitemap_xml():
-    """Serve sitemap.xml for search engines"""
-    try:
-        return send_file('sitemap.xml', mimetype='application/xml')
-    except:
-        return "Sitemap XML not found.", 404
+# =============================================================================
+# ROI CALCULATOR BLUEPRINT REGISTRATION
+# =============================================================================
 
 # Import ROI calculator routes BEFORE running the app
 try:
