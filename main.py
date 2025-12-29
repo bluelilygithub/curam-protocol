@@ -21,7 +21,8 @@ from database import (
     engine, 
     get_sectors, 
     get_demo_config_by_department,
-    get_samples_for_template
+    get_samples_for_template,
+    get_sector_demo_config
 )
 from sqlalchemy import text
 
@@ -82,180 +83,11 @@ from config import (
     ERROR_FIELD
 )
 
-# Sector configuration for feasibility preview page
-@app.route('/feasibility-preview.html')
-def feasibility_preview_html():
-    """
-    Serve sector-specific feasibility preview page.
-    Customizes content based on ?sector= URL parameter.
-    Loads configuration from database sectors table.
-    
-    NO HARDCODED CONFIG - All data comes from database!
-    """
-    # Get sector from URL parameter (default to professional-services)
-    sector_slug = request.args.get('sector', 'professional-services')
-    
-    # Map common variations to correct sector slugs
-    sector_mapping = {
-        'professional': 'professional-services',
-        'finance': 'professional-services',
-        'accounting': 'professional-services',
-        'logistics': 'logistics-compliance',
-        'freight': 'logistics-compliance',
-        'compliance': 'logistics-compliance',
-        'built': 'built-environment',
-        'engineering': 'built-environment',
-        'construction': 'built-environment',
-        'architecture': 'built-environment'
-    }
-    
-    # Apply mapping if needed
-    if sector_slug in sector_mapping:
-        sector_slug = sector_mapping[sector_slug]
-    
-    # Validate sector slug (only allow known sectors)
-    valid_sectors = ['professional-services', 'logistics-compliance', 'built-environment']
-    if sector_slug not in valid_sectors:
-        sector_slug = 'professional-services'  # Default fallback
-    
-    # Load sector configuration from database
-    sector_config = get_sector_demo_config(sector_slug)
-    
-    if not sector_config:
-        # Fallback if database query fails
-        print(f"Failed to load sector config for {sector_slug}, using defaults")
-        sector_config = {
-            'name': 'Professional Services',
-            'demo_headline': 'P1 Feasibility Demo',
-            'demo_subheadline': 'Test our AI-powered document processing',
-            'demo_title': 'Document Processing Demo',
-            'demo_description': 'Upload documents to test extraction',
-            'default_department': 'finance',
-            'icon_svg': None,
-            'document_types': []
-        }
-    
-    # Determine which department to pre-select in automater iframe
-    department = sector_config.get('default_department', 'finance')
-    
-    # Render template with sector-specific data
-    try:
-        return render_template(
-            'feasibility-preview.html',
-            sector_slug=sector_slug,
-            sector_name=sector_config.get('name', 'Demo'),
-            demo_headline=sector_config.get('demo_headline', 'P1 Feasibility Demo'),
-            demo_subheadline=sector_config.get('demo_subheadline', 'Test AI document processing'),
-            demo_title=sector_config.get('demo_title', 'Demo'),
-            demo_description=sector_config.get('demo_description', 'Upload documents to test'),
-            department=department,
-            icon_svg=sector_config.get('icon_svg'),
-            document_types=sector_config.get('document_types', []),
-            all_sectors=valid_sectors  # For sector switcher
-        )
-    except Exception as e:
-        print(f"Error rendering feasibility-preview template: {e}")
-        import traceback
-        traceback.print_exc()
-        # Return a simple error page
-        return f"""
-        <html>
-        <head><title>Error</title></head>
-        <body>
-            <h1>Error Loading Feasibility Preview</h1>
-            <p>There was an error loading the sector-specific demo page.</p>
-            <p>Sector: {sector_slug}</p>
-            <p>Error: {str(e)}</p>
-            <p><a href="/feasibility-preview.html">Try default page</a></p>
-        </body>
-        </html>
-        """, 500
-
-@app.route('/feasibility-preview', methods=['GET', 'POST'])
-def feasibility_preview_redirect():
-    """Redirect /feasibility-preview to /feasibility-preview.html preserving query params"""
-    sector = request.args.get('sector', 'professional-services')
-    return redirect(f'/feasibility-preview.html?sector={sector}', code=301)
-    
-
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = SECRET_KEY
 
 # Register blueprints
 app.register_blueprint(static_pages_bp)
-
-# =============================================================================
-# RAG ANALYTICS HELPER FUNCTION
-# =============================================================================
-
-def log_rag_query(query, response, sources, page_source, session_id=None, user_email=None, user_name=None, user_company=None):
-    """Log RAG query to database for analytics"""
-    try:
-        sources_count = len(sources) if sources else 0
-        has_blog = any(s.get('type') == 'blog' for s in sources) if sources else False
-        has_website = any(s.get('type') == 'website' for s in sources) if sources else False
-        
-        query_words_list = query.lower().split()
-        
-        with engine.connect() as conn:
-            result = conn.execute(text("""
-                INSERT INTO rag_queries (
-                    query_text,
-                    response_text,
-                    sources_cited,
-                    page_source,
-                    session_id,
-                    user_email,
-                    user_name,
-                    user_company,
-                    character_count_query,
-                    character_count_response,
-                    sources_count,
-                    query_words,
-                    has_blog_sources,
-                    has_website_sources
-                ) VALUES (
-                    :query_text,
-                    :response_text,
-                    :sources_cited,
-                    :page_source,
-                    :session_id,
-                    :user_email,
-                    :user_name,
-                    :user_company,
-                    :character_count_query,
-                    :character_count_response,
-                    :sources_count,
-                    :query_words,
-                    :has_blog_sources,
-                    :has_website_sources
-                ) RETURNING id
-            """), {
-                'query_text': query,
-                'response_text': response,
-                'sources_cited': json.dumps(sources) if sources else None,
-                'page_source': page_source,
-                'session_id': session_id,
-                'user_email': user_email,
-                'user_name': user_name,
-                'user_company': user_company,
-                'character_count_query': len(query),
-                'character_count_response': len(response),
-                'sources_count': sources_count,
-                'query_words': json.dumps(query_words_list),
-                'has_blog_sources': has_blog,
-                'has_website_sources': has_website
-            })
-            conn.commit()
-            query_id = result.fetchone()[0]
-            print(f"✓ Logged RAG query ID: {query_id}")
-            return query_id
-    except Exception as e:
-        print(f"✗ Error logging RAG query: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
 
 # Error handler for debugging
 @app.errorhandler(500)
@@ -350,15 +182,6 @@ Answer the question comprehensively:"""
             
             response = model.generate_content(prompt)
             answer = response.text if response.text else "I couldn't generate an answer. Please visit curam-ai.com.au for more information."
-            
-            # Log the query to database
-            log_rag_query(
-                query=query,
-                response=answer,
-                sources=rag_results['sources'],
-                page_source='header_search',
-                session_id=session.get('session_id')
-            )
             
             return jsonify({
                 'answer': answer,
@@ -479,15 +302,6 @@ Use paragraphs (\n\n)."""
                 parts.append(f'<p>{para.replace(chr(10), "<br>")}</p>')
         
         html = ''.join(parts) if parts else f'<p>{text}</p>'
-        
-        # Log the query to database
-        log_rag_query(
-            query=message,
-            response=html,
-            sources=sources,
-            page_source='contact_chatbot',
-            session_id=session.get('session_id')
-        )
         
         # Generate 3 follow-up questions based on the query and sources
         followup_questions = []
@@ -702,30 +516,6 @@ def email_chat_log():
             
             if response.status_code == 202:
                 app.logger.info(f"Chat log email sent successfully to {email}")
-                
-                # Update database - mark transcripts as requested
-                try:
-                    with engine.connect() as conn:
-                        conn.execute(text("""
-                            UPDATE rag_queries
-                            SET transcript_requested = TRUE,
-                                transcript_sent_at = NOW(),
-                                user_email = :email,
-                                user_name = :name,
-                                user_company = :company
-                            WHERE session_id = :session_id
-                                AND user_email IS NULL
-                        """), {
-                            'email': email,
-                            'name': user_name,
-                            'company': company,
-                            'session_id': session.get('session_id')
-                        })
-                        conn.commit()
-                        print(f"✓ Updated transcript status for session {session.get('session_id')}")
-                except Exception as e:
-                    print(f"✗ Error updating transcript status: {e}")
-                
                 return jsonify({
                     'success': True,
                     'message': 'Chat log email sent successfully'
@@ -752,49 +542,107 @@ def email_chat_log():
 # AUTOMATER & DEMO ROUTES
 # =============================================================================
 
-# Feasibility Preview HTML page with iframe (serves feasibility-preview.html)
-
-
+# Feasibility Preview - Sector-aware HTML page with iframe (database-driven)
 @app.route('/feasibility-preview.html')
-@app.route('/feasibility-preview')
 def feasibility_preview_html():
     """
-    Serve sector-aware feasibility-preview page with iframe to automater.
-    Accepts optional ?sector= parameter to customize content.
-    
-    Usage:
-    - /feasibility-preview.html?sector=professional-services
-    - /feasibility-preview.html?sector=logistics-compliance
-    - /feasibility-preview.html?sector=built-environment
-    - /feasibility-preview.html (defaults to built-environment)
+    Serve sector-specific feasibility preview page.
+    Customizes content based on ?sector= URL parameter.
+    Loads configuration from database sectors table.
     """
-    # Get sector from query parameter
-    sector_slug = request.args.get('sector', 'built-environment')
+    # Get sector from URL parameter (default to professional-services)
+    sector_slug = request.args.get('sector', 'professional-services')
     
-    # Get sector configuration
-    sector_config = SECTOR_CONFIG.get(sector_slug, SECTOR_CONFIG['built-environment'])
+    # Map common variations to correct sector slugs
+    sector_mapping = {
+        'professional': 'professional-services',
+        'finance': 'professional-services',
+        'accounting': 'professional-services',
+        'logistics': 'logistics-compliance',
+        'freight': 'logistics-compliance',
+        'compliance': 'logistics-compliance',
+        'built': 'built-environment',
+        'engineering': 'built-environment',
+        'construction': 'built-environment',
+        'architecture': 'built-environment'
+    }
     
-    # Get department to pre-select in automater
-    department = request.args.get('department', sector_config['default_department'])
+    # Apply mapping if needed
+    if sector_slug in sector_mapping:
+        sector_slug = sector_mapping[sector_slug]
     
-    # Render template with sector-specific content
-    return render_template('feasibility-preview.html', 
-                         sector=sector_config,
-                         sector_slug=sector_slug,
-                         department=department)
+    # Validate sector slug (only allow known sectors)
+    valid_sectors = ['professional-services', 'logistics-compliance', 'built-environment']
+    if sector_slug not in valid_sectors:
+        sector_slug = 'professional-services'  # Default fallback
+    
+    # Load sector configuration from database
+    sector_config = get_sector_demo_config(sector_slug)
+    
+    if not sector_config:
+        # Fallback if database query fails
+        print(f"âš  Failed to load sector config for {sector_slug}, using defaults")
+        sector_config = {
+            'name': 'Professional Services',
+            'demo_headline': 'P1 Feasibility Demo',
+            'demo_subheadline': 'Test our AI-powered document processing',
+            'demo_title': 'Document Processing Demo',
+            'demo_description': 'Upload documents to test extraction',
+            'default_department': 'finance',
+            'icon_svg': None
+        }
+    
+    # Determine which department to pre-select in automater iframe
+    department = sector_config.get('default_department', 'finance')
+    
+    # Render template with sector-specific data
+    try:
+        return render_template(
+            'feasibility-preview.html',
+            sector_slug=sector_slug,
+            sector_name=sector_config.get('name', 'Demo'),
+            demo_headline=sector_config.get('demo_headline', 'P1 Feasibility Demo'),
+            demo_subheadline=sector_config.get('demo_subheadline', 'Test AI document processing'),
+            demo_title=sector_config.get('demo_title', 'Demo'),
+            demo_description=sector_config.get('demo_description', 'Upload documents to test'),
+            department=department,
+            icon_svg=sector_config.get('icon_svg'),
+            all_sectors=valid_sectors  # For sector switcher
+        )
+    except Exception as e:
+        print(f"Error rendering feasibility-preview template: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return a simple error page
+        return f"""
+        <html>
+        <head><title>Error</title></head>
+        <body>
+            <h1>Error Loading Feasibility Preview</h1>
+            <p>There was an error loading the sector-specific demo page.</p>
+            <p>Sector: {sector_slug}</p>
+            <p>Error: {str(e)}</p>
+            <p><a href="/feasibility-preview.html">Try default page</a></p>
+        </body>
+        </html>
+        """, 500
+
+@app.route('/feasibility-preview', methods=['GET', 'POST'])
+def feasibility_preview_redirect():
+    """Redirect /feasibility-preview to /feasibility-preview.html preserving query params"""
+    sector = request.args.get('sector', 'professional-services')
+    return redirect(f'/feasibility-preview.html?sector={sector}', code=301)
 
 # Legacy demo routes (301 redirects to new name)
 @app.route('/demo.html')
-@app.route('/demo')
+def demo_html_legacy():
+    """Legacy route - redirect to feasibility-preview.html"""
+    return redirect('/feasibility-preview.html', code=301)
+
+@app.route('/demo', methods=['GET', 'POST'])
 def demo_legacy():
     """Legacy route - redirect to feasibility-preview.html"""
-    # Preserve sector parameter if present
-    sector = request.args.get('sector', 'built-environment')
-    return redirect(f'/feasibility-preview.html?sector={sector}', code=301)
-
-
-
-
+    return redirect('/feasibility-preview.html', code=301)
 
 # Automater route (document extraction tool) - moved from root
 @app.route('/automater', methods=['GET', 'POST'])
@@ -865,13 +713,13 @@ def index_automater():
                 filename = secure_filename(file_storage.filename)
                 if not filename.lower().endswith('.pdf'):
                     error_message = "Only PDF files can be uploaded for Finance."
-                    model_actions.append(f"ERROR: {filename} rejected (not a PDF)")
+                    model_actions.append(f"Ã¢Å“â€” ERROR: {filename} rejected (not a PDF)")
                     break
                 unique_name = f"{int(time.time() * 1000)}_{filename}"
                 file_path = os.path.join(FINANCE_UPLOAD_DIR, unique_name)
                 file_storage.save(file_path)
                 finance_uploaded_paths.append(file_path)
-                model_actions.append(f"Uploaded invoice saved: {file_path}")
+                model_actions.append(f"Ã¢Å“â€œ Uploaded invoice saved: {file_path}")
             selected_samples.extend(finance_uploaded_paths)
 
         # Filter samples to only those matching the current department (skip for auto-select departments)
@@ -897,10 +745,10 @@ def index_automater():
         if not samples:
             if selected_samples:
                 error_message = f"No samples matched department '{department}'. Selected: {selected_samples}"
-                model_actions.append(f"ERROR: {error_message}")
+                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
             else:
                 error_message = "Please select at least one sample file."
-                model_actions.append(f"ERROR: {error_message}")
+                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
 
         if not error_message:
             if samples:
@@ -908,7 +756,7 @@ def index_automater():
                 for sample_path in samples:
                     if not os.path.exists(sample_path):
                         error_msg = f"File not found: {sample_path}"
-                        model_actions.append(f"{error_msg}")
+                        model_actions.append(f"Ã¢Å“â€” {error_msg}")
                         if not error_message:
                             error_message = error_msg
                         continue
@@ -929,12 +777,12 @@ def index_automater():
                         model_actions.append(f"Extracting text from {filename}")
                         text = extract_text(sample_path)
                         if text.startswith("Error:"):
-                            model_actions.append(f"Text extraction failed for {filename}: {text}")
+                            model_actions.append(f"Ã¢Å“â€” Text extraction failed for {filename}: {text}")
                             if not error_message:
                                 error_message = f"Text extraction failed for {filename}"
                             continue
                         else:
-                            model_actions.append(f"Text extracted successfully ({len(text)} characters)")
+                            model_actions.append(f"Ã¢Å“â€œ Text extracted successfully ({len(text)} characters)")
                     
                     model_actions.append(f"Analyzing {filename} with AI models")
                     entries, api_error, model_used, attempt_log, file_action_log, schedule_type = analyze_gemini(text, department, image_path)
@@ -942,11 +790,11 @@ def index_automater():
                         model_actions.extend(file_action_log)
                     if model_used:
                         last_model_used = model_used
-                        model_actions.append(f"Successfully processed {filename} with {model_used}")
+                        model_actions.append(f"Ã¢Å“â€œ Successfully processed {filename} with {model_used}")
                     if attempt_log:
                         model_attempts.extend(attempt_log)
                     if api_error:
-                        model_actions.append(f"Failed to process {filename}: {api_error}")
+                        model_actions.append(f"Ã¢Å“â€” Failed to process {filename}: {api_error}")
                         if not error_message:
                             error_message = api_error
                     if entries:
@@ -970,15 +818,15 @@ def index_automater():
                                             if isinstance(item, dict):
                                                 item['SourceDocument'] = filename
                                 results.append(transmittal_data)
-                                model_actions.append(f"Extracted structured data from {filename}")
+                                model_actions.append(f"Ã¢Å“â€œ Extracted structured data from {filename}")
                             else:
                                 # Fallback to old format
                                 for entry in entries if isinstance(entries, list) else [entries]:
                                     entry['Filename'] = filename
                                     results.append(entry)
-                                model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
+                                model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
                         else:
-                            model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
+                            model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
                             for entry in entries:
                                 entry['Filename'] = filename
                                 if department == "finance":
@@ -1394,13 +1242,13 @@ try:
     from roi_calculator_flask import roi_app as roi_calculator_app
     # Mount ROI calculator at /roi-calculator (with trailing slash support)
     app.register_blueprint(roi_calculator_app, url_prefix='/roi-calculator')
-    print("ROI Calculator blueprint registered successfully at /roi-calculator")
+    print("Ã¢Å“â€œ ROI Calculator blueprint registered successfully at /roi-calculator")
 except ImportError as e:
-    print(f"Warning: Could not import ROI calculator: {e}")
+    print(f"Ã¢Å“â€” Warning: Could not import ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 except Exception as e:
-    print(f"Error registering ROI calculator: {e}")
+    print(f"Ã¢Å“â€” Error registering ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 
