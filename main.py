@@ -32,6 +32,9 @@ from services.validation_service import (
     validate_engineering_field
 )
 
+# Formatting utilities
+from utils.formatting import format_currency
+
 # Phase 3.2: PDF Service (extracted from main.py lines 150-158, 3494-3522)
 from services.pdf_service import (
     extract_text,
@@ -39,7 +42,7 @@ from services.pdf_service import (
 )
 
 # Phase 3.3c: Gemini Service - COMPLETE (all 3 functions extracted)
-from services.gemini_service import get_available_models, build_prompt, analyze_gemini
+from services.gemini_service import get_available_models, build_prompt, analyze_gemini, HTML_TEMPLATE
 
 # Try to import specific exception types
 try:
