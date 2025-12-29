@@ -410,7 +410,7 @@
           
           messageDiv.innerHTML = `<div class="contact-msg-bubble">${formattedContent}</div>`;
           chatContainer.appendChild(messageDiv);
-          chatContainer.scrollTop = chatContainer.scrollHeight;
+          // REMOVED - no auto-scroll: chatContainer.scrollTop = chatContainer.scrollHeight;
 
           // Add to conversation history (store original content)
           conversationHistory.push({ role, content });
