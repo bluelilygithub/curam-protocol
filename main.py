@@ -88,41 +88,17 @@ app.secret_key = SECRET_KEY
 # Register blueprints
 app.register_blueprint(static_pages_bp)
 
-# Error handler for debugging
-@app.errorhandler(500)
-def internal_error(error):
-    """Show detailed error message for debugging"""
-    import traceback
-    trace = traceback.format_exc()
-    app.logger.error(f"500 Internal Server Error:\n{trace}")
-    if app.debug:
-        return f"<pre>Internal Server Error:\n\n{trace}</pre>", 500
-    return "Internal Server Error. Please check the logs.", 500
-
-# Configure Gemini API
-api_key = os.environ.get("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
-
-# Create upload directories
-os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
-
-# Cache for available models
-_available_models = None
-
-
+# =============================================================================
+# RAG ANALYTICS HELPER FUNCTION
+# =============================================================================
 
 def log_rag_query(query, response, sources, page_source, session_id=None, user_email=None, user_name=None, user_company=None):
     """Log RAG query to database for analytics"""
     try:
-        from sqlalchemy import text
-        
-        # Calculate metrics
         sources_count = len(sources) if sources else 0
         has_blog = any(s.get('type') == 'blog' for s in sources) if sources else False
         has_website = any(s.get('type') == 'website' for s in sources) if sources else False
         
-        # Extract query words (for analytics)
         query_words_list = query.lower().split()
         
         with engine.connect() as conn:
@@ -180,7 +156,32 @@ def log_rag_query(query, response, sources, page_source, session_id=None, user_e
             return query_id
     except Exception as e:
         print(f"✗ Error logging RAG query: {e}")
+        import traceback
+        traceback.print_exc()
         return None
+
+
+# Error handler for debugging
+@app.errorhandler(500)
+def internal_error(error):
+    """Show detailed error message for debugging"""
+    import traceback
+    trace = traceback.format_exc()
+    app.logger.error(f"500 Internal Server Error:\n{trace}")
+    if app.debug:
+        return f"<pre>Internal Server Error:\n\n{trace}</pre>", 500
+    return "Internal Server Error. Please check the logs.", 500
+
+# Configure Gemini API
+api_key = os.environ.get("GEMINI_API_KEY")
+if api_key:
+    genai.configure(api_key=api_key)
+
+# Create upload directories
+os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
+
+# Cache for available models
+_available_models = None
 
 # =============================================================================
 # API ROUTES
@@ -229,7 +230,7 @@ def search_blog_rag():
         try:
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
             
-            prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
+            prompt = f"""You are a helpful assistant for Curam-Ai Protocolâ„¢, an AI document automation service for engineering firms.
 
 The user asked: "{query}"
 
@@ -253,6 +254,15 @@ Answer the question comprehensively:"""
             
             response = model.generate_content(prompt)
             answer = response.text if response.text else "I couldn't generate an answer. Please visit curam-ai.com.au for more information."
+            
+            # Log the query to database
+            log_rag_query(
+                query=query,
+                response=answer,
+                sources=rag_results['sources'],
+                page_source='header_search',
+                session_id=session.get('session_id')
+            )
             
             return jsonify({
                 'answer': answer,
@@ -303,7 +313,7 @@ def contact_assistant():
         
         # System prompt
         if rag_context:
-            system_prompt = f"""You are an AI assistant for Curam-Ai Protocol™.
+            system_prompt = f"""You are an AI assistant for Curam-Ai Protocolâ„¢.
 
 User asked: "{message}"
 
@@ -314,7 +324,7 @@ Answer using this content. Put source titles in "quotes". Use paragraphs (\n\n).
 
 Services: Phase 1 ($1,500), Phase 2 ($7,500), Phase 3 ($8-12k), Phase 4 ($20-30k)"""
         else:
-            system_prompt = """You are an AI assistant for Curam-Ai Protocol™.
+            system_prompt = """You are an AI assistant for Curam-Ai Protocolâ„¢.
 
 Services: Phase 1 ($1,500), Phase 2 ($7,500), Phase 3 ($8-12k), Phase 4 ($20-30k)
 
@@ -362,17 +372,26 @@ Use paragraphs (\n\n)."""
             # Skip meaningless short content (single punctuation, stray characters)
             if len(para) <= 2 and not para.isalnum():
                 continue
-            if '- ' in para or '• ' in para:
+            if '- ' in para or 'â€¢ ' in para:
                 items = []
                 for line in para.split('\n'):
-                    if line.strip().startswith(('-', '•')):
-                        items.append(f'<li>{line.lstrip("-• ").strip()}</li>')
+                    if line.strip().startswith(('-', 'â€¢')):
+                        items.append(f'<li>{line.lstrip("-â€¢ ").strip()}</li>')
                 if items:
                     parts.append(f'<ul>{"".join(items)}</ul>')
             else:
                 parts.append(f'<p>{para.replace(chr(10), "<br>")}</p>')
         
         html = ''.join(parts) if parts else f'<p>{text}</p>'
+        
+        # Log the query to database
+        log_rag_query(
+            query=message,
+            response=html,
+            sources=sources,
+            page_source='contact_chatbot',
+            session_id=session.get('session_id')
+        )
         
         # Generate 3 follow-up questions based on the query and sources
         followup_questions = []
@@ -506,7 +525,7 @@ def email_chat_log():
                     <li>Try our ROI Calculator to see potential savings</li>
                 </ul>
                 <p>Visit us at <a href="https://protocol.curam-ai.com.au">protocol.curam-ai.com.au</a></p>
-                <p>Best regards,<br>Curam-Ai Protocolâ„¢ Team</p>
+                <p>Best regards,<br>Curam-Ai ProtocolÃ¢â€žÂ¢ Team</p>
             </div>
         </body>
         </html>
@@ -530,7 +549,7 @@ def email_chat_log():
         email_text += "- Book a diagnostic call to discuss your specific needs\n"
         email_text += "- Try our ROI Calculator to see potential savings\n\n"
         email_text += "Visit us at https://protocol.curam-ai.com.au\n\n"
-        email_text += "Best regards,\nCuram-Ai Protocolâ„¢ Team"
+        email_text += "Best regards,\nCuram-Ai ProtocolÃ¢â€žÂ¢ Team"
         
         # Send email using Mailchannels API
         mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
@@ -559,7 +578,7 @@ def email_chat_log():
             ],
             "from": {
                 "email": from_email,
-                "name": "Curam-Ai Protocolâ„¢"
+                "name": "Curam-Ai ProtocolÃ¢â€žÂ¢"
             },
             "subject": email_subject,
             "content": [
@@ -587,6 +606,30 @@ def email_chat_log():
             
             if response.status_code == 202:
                 app.logger.info(f"Chat log email sent successfully to {email}")
+                
+                # Update database - mark transcripts as requested
+                try:
+                    with engine.connect() as conn:
+                        conn.execute(text("""
+                            UPDATE rag_queries
+                            SET transcript_requested = TRUE,
+                                transcript_sent_at = NOW(),
+                                user_email = :email,
+                                user_name = :name,
+                                user_company = :company
+                            WHERE session_id = :session_id
+                                AND user_email IS NULL
+                        """), {
+                            'email': email,
+                            'name': user_name,
+                            'company': company,
+                            'session_id': session.get('session_id')
+                        })
+                        conn.commit()
+                        print(f"✓ Updated transcript status for session {session.get('session_id')}")
+                except Exception as e:
+                    print(f"✗ Error updating transcript status: {e}")
+                
                 return jsonify({
                     'success': True,
                     'message': 'Chat log email sent successfully'
@@ -704,13 +747,13 @@ def index_automater():
                 filename = secure_filename(file_storage.filename)
                 if not filename.lower().endswith('.pdf'):
                     error_message = "Only PDF files can be uploaded for Finance."
-                    model_actions.append(f"âœ— ERROR: {filename} rejected (not a PDF)")
+                    model_actions.append(f"Ã¢Å“â€” ERROR: {filename} rejected (not a PDF)")
                     break
                 unique_name = f"{int(time.time() * 1000)}_{filename}"
                 file_path = os.path.join(FINANCE_UPLOAD_DIR, unique_name)
                 file_storage.save(file_path)
                 finance_uploaded_paths.append(file_path)
-                model_actions.append(f"âœ“ Uploaded invoice saved: {file_path}")
+                model_actions.append(f"Ã¢Å“â€œ Uploaded invoice saved: {file_path}")
             selected_samples.extend(finance_uploaded_paths)
 
         # Filter samples to only those matching the current department (skip for auto-select departments)
@@ -736,10 +779,10 @@ def index_automater():
         if not samples:
             if selected_samples:
                 error_message = f"No samples matched department '{department}'. Selected: {selected_samples}"
-                model_actions.append(f"âœ— ERROR: {error_message}")
+                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
             else:
                 error_message = "Please select at least one sample file."
-                model_actions.append(f"âœ— ERROR: {error_message}")
+                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
 
         if not error_message:
             if samples:
@@ -747,7 +790,7 @@ def index_automater():
                 for sample_path in samples:
                     if not os.path.exists(sample_path):
                         error_msg = f"File not found: {sample_path}"
-                        model_actions.append(f"âœ— {error_msg}")
+                        model_actions.append(f"Ã¢Å“â€” {error_msg}")
                         if not error_message:
                             error_message = error_msg
                         continue
@@ -768,12 +811,12 @@ def index_automater():
                         model_actions.append(f"Extracting text from {filename}")
                         text = extract_text(sample_path)
                         if text.startswith("Error:"):
-                            model_actions.append(f"âœ— Text extraction failed for {filename}: {text}")
+                            model_actions.append(f"Ã¢Å“â€” Text extraction failed for {filename}: {text}")
                             if not error_message:
                                 error_message = f"Text extraction failed for {filename}"
                             continue
                         else:
-                            model_actions.append(f"âœ“ Text extracted successfully ({len(text)} characters)")
+                            model_actions.append(f"Ã¢Å“â€œ Text extracted successfully ({len(text)} characters)")
                     
                     model_actions.append(f"Analyzing {filename} with AI models")
                     entries, api_error, model_used, attempt_log, file_action_log, schedule_type = analyze_gemini(text, department, image_path)
@@ -781,11 +824,11 @@ def index_automater():
                         model_actions.extend(file_action_log)
                     if model_used:
                         last_model_used = model_used
-                        model_actions.append(f"âœ“ Successfully processed {filename} with {model_used}")
+                        model_actions.append(f"Ã¢Å“â€œ Successfully processed {filename} with {model_used}")
                     if attempt_log:
                         model_attempts.extend(attempt_log)
                     if api_error:
-                        model_actions.append(f"âœ— Failed to process {filename}: {api_error}")
+                        model_actions.append(f"Ã¢Å“â€” Failed to process {filename}: {api_error}")
                         if not error_message:
                             error_message = api_error
                     if entries:
@@ -809,15 +852,15 @@ def index_automater():
                                             if isinstance(item, dict):
                                                 item['SourceDocument'] = filename
                                 results.append(transmittal_data)
-                                model_actions.append(f"âœ“ Extracted structured data from {filename}")
+                                model_actions.append(f"Ã¢Å“â€œ Extracted structured data from {filename}")
                             else:
                                 # Fallback to old format
                                 for entry in entries if isinstance(entries, list) else [entries]:
                                     entry['Filename'] = filename
                                     results.append(entry)
-                                model_actions.append(f"âœ“ Extracted {len(entries)} row(s) from {filename}")
+                                model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
                         else:
-                            model_actions.append(f"âœ“ Extracted {len(entries)} row(s) from {filename}")
+                            model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
                             for entry in entries:
                                 entry['Filename'] = filename
                                 if department == "finance":
@@ -863,7 +906,7 @@ def index_automater():
                                                         )
                                                         if corrected_value != entry[field]:
                                                             entry['corrections_applied'].append(
-                                                                f"Size corrected: '{entry[field]}' â†’ '{corrected_value}'"
+                                                                f"Size corrected: '{entry[field]}' Ã¢â€ â€™ '{corrected_value}'"
                                                             )
                                                             entry[field] = corrected_value
                                                             if correction_confidence == 'medium':
@@ -937,7 +980,7 @@ def index_automater():
                             if department == "engineering" and schedule_type and not detected_schedule_type:
                                 detected_schedule_type = schedule_type
                     else:
-                        model_actions.append(f"âš  No data extracted from {filename}")
+                        model_actions.append(f"Ã¢Å¡Â  No data extracted from {filename}")
 
         # Aggregate transmittal data into structured categories
         transmittal_aggregated = None
@@ -1042,7 +1085,7 @@ def index_automater():
         try:
             samples = get_samples_for_template(dept)
             if samples:
-                print(f"✓ Database returned {len(samples)} samples for {dept}")
+                print(f"âœ“ Database returned {len(samples)} samples for {dept}")
                 dept_info = DEPARTMENT_SAMPLES.get(dept, {})
                 db_samples[dept] = {
                     "label": dept_info.get("label", "Samples"),
@@ -1051,9 +1094,9 @@ def index_automater():
                     "samples": samples
                 }
             else:
-                print(f"⚠ Database returned 0 samples for {dept} - using hardcoded")
+                print(f"âš  Database returned 0 samples for {dept} - using hardcoded")
         except Exception as e:
-            print(f"✗ Database error for {dept}: {e}")
+            print(f"âœ— Database error for {dept}: {e}")
             # Continue with hardcoded samples on error
     
     # Merge database samples with hardcoded (database takes priority)
@@ -1065,7 +1108,7 @@ def index_automater():
     if finance_samples:
         print(f"First finance sample path: {finance_samples[0].get('path', 'NO PATH')}")
     else:
-        print("⚠ No finance samples in merged data!")
+        print("âš  No finance samples in merged data!")
     
     return render_template_string(
         HTML_TEMPLATE,
@@ -1233,13 +1276,13 @@ try:
     from roi_calculator_flask import roi_app as roi_calculator_app
     # Mount ROI calculator at /roi-calculator (with trailing slash support)
     app.register_blueprint(roi_calculator_app, url_prefix='/roi-calculator')
-    print("âœ“ ROI Calculator blueprint registered successfully at /roi-calculator")
+    print("Ã¢Å“â€œ ROI Calculator blueprint registered successfully at /roi-calculator")
 except ImportError as e:
-    print(f"âœ— Warning: Could not import ROI calculator: {e}")
+    print(f"Ã¢Å“â€” Warning: Could not import ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 except Exception as e:
-    print(f"âœ— Error registering ROI calculator: {e}")
+    print(f"Ã¢Å“â€” Error registering ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 
