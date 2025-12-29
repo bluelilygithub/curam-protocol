@@ -4819,13 +4819,15 @@ Use paragraphs (\n\n)."""
         
         # Generate 3 follow-up questions based on the query and sources
         followup_questions = []
-        if sources and len(sources) > 0:
+        if use_rag:  # Generate for all substantive queries, not just when sources exist
             # Use Gemini to generate contextual follow-up questions
             try:
-                followup_prompt = f"""Based on this user question: "{message}"
-
-And these available sources:
-{chr(10).join([f"- {s.get('title', '')}" for s in sources[:3]])}
+                # Build prompt with sources if available
+                sources_text = ""
+                if sources and len(sources) > 0:
+                    sources_text = f"\n\nAnd these available sources:\n{chr(10).join([f'- {s.get('title', '')}' for s in sources[:3]])}"
+                
+                followup_prompt = f"""Based on this user question: "{message}"{sources_text}
 
 Generate exactly 3 short, specific follow-up questions (max 10 words each) that would help the user learn more. Questions should be directly answerable from our content.
 
@@ -4843,12 +4845,7 @@ Can this work with handwritten documents"""
                     followup_questions = questions[:3]  # Take first 3
             except Exception as e:
                 print(f"Follow-up generation failed: {e}")
-                # Fallback questions
-                followup_questions = [
-                    "How does this apply to my industry",
-                    "What's the cost to implement",
-                    "How long does implementation take"
-                ]
+                # Don't show fallback questions - hide section if generation fails
         
         # Suggested interest
         ml = message.lower()
