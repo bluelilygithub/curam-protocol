@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Assessment Demo | Curam-Ai Protocol™</title>
+    <title>{{ sector.name }} Demo | Curam-Ai Protocol™</title>
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -37,12 +37,10 @@
         </div>
         <div class="container">
             <div class="hero-content">
-                <p class="hero-eyebrow">Interactive Demo</p>
-                <h1 class="hero-headline">Sample Industry P1 Feasibilty Demo</h1>
+                <p class="hero-eyebrow">{{ sector.icon }} Interactive Demo · {{ sector.name }}</p>
+                <h1 class="hero-headline">{{ sector.headline }}</h1>
                 <p class="hero-subheadline">
-                    Test our AI-powered document classification and extraction engine live. 
-                    Upload your engineering documents and watch as our system automatically 
-                    identifies document types and extracts structured data.
+                    {{ sector.subheadline }}
                 </p>
                 <div class="hero-stats-row">
                     <div class="hero-stat-item">
@@ -77,13 +75,13 @@
                         </svg>
                     </div>
                     <div class="demo-header-text">
-                        <h2>P1 Feasibility Sprint</h2>
-                        <p>Upload PDFs, images, or scanned documents to test extraction</p>
+                        <h2>{{ sector.demo_title }}</h2>
+                        <p>{{ sector.demo_description }}</p>
                     </div>
                 </div>
                 <div class="demo-iframe-wrapper">
                     <iframe 
-                        src="/automater" 
+                        src="/automater?department={{ department }}" 
                         width="100%" 
                         height="100%" 
                         frameborder="0"
@@ -123,8 +121,8 @@
                             <line x1="12" y1="3" x2="12" y2="15"/>
                         </svg>
                     </div>
-                    <h3>Uploaded Document</h3>
-                    <p>User drops any engineering document—beam schedules, invoices, transmittals, or test reports—into the demo interface.</p>
+                    <h3>Upload Document</h3>
+                    <p>Drop your {{ sector.name|lower }} documents into the demo interface—PDFs, scans, or images.</p>
                 </div>
                 
                 <div class="demo-step-card">
@@ -151,7 +149,7 @@
                         </svg>
                     </div>
                     <h3>Structured Output</h3>
-                    <p>Receive clean, structured data ready for import into Excel, Xero, or any accounting system—no manual data entry.</p>
+                    <p>Receive clean, structured data ready for import into your systems—no manual data entry.</p>
                 </div>
             </div>
         </div>
@@ -160,56 +158,41 @@
     <!-- Supported Documents Section -->
     <section class="demo-supported-docs">
         <div class="container">
-            <h2 class="section-headline">Supported Document Types</h2>
-            <p class="section-subhead">The demo can process a wide variety of engineering and professional documents</p>
+            <h2 class="section-headline">Document Types for {{ sector.name }}</h2>
+            <p class="section-subhead">The demo processes {{ sector.name|lower }} documents automatically</p>
             
             <div class="demo-docs-grid">
-                <div class="demo-doc-category">
+                <div class="demo-doc-category" style="grid-column: 1 / -1; max-width: 600px; margin: 0 auto;">
                     <h3>
-                        📊 Engineering Schedules
+                        {{ sector.icon }} {{ sector.name }} Documents
                     </h3>
                     <ul>
-                        <li>Beam schedules</li>
-                        <li>Reinforcement schedules</li>
-                        <li>Drawing registers</li>
-                        <li>Material take-offs</li>
+                        {% for doc_type in sector.document_types %}
+                        <li>{{ doc_type }}</li>
+                        {% endfor %}
                     </ul>
                 </div>
-                
-                <div class="demo-doc-category">
-                    <h3>
-                        💰 Financial Documents
-                    </h3>
-                    <ul>
-                        <li>Supplier invoices</li>
-                        <li>Purchase orders</li>
-                        <li>Expense receipts</li>
-                        <li>Bank statements</li>
-                    </ul>
-                </div>
-                
-                <div class="demo-doc-category">
-                    <h3>
-                        ✅ Test & Compliance
-                    </h3>
-                    <ul>
-                        <li>Concrete test reports</li>
-                        <li>Inspection certificates</li>
-                        <li>Quality assurance forms</li>
-                        <li>Safety checklists</li>
-                    </ul>
-                </div>
-                
-                <div class="demo-doc-category">
-                    <h3>
-                        📦 Project Coordination
-                    </h3>
-                    <ul>
-                        <li>Transmittals</li>
-                        <li>RFIs (Request for Information)</li>
-                        <li>Site instructions</li>
-                        <li>Variation orders</li>
-                    </ul>
+            </div>
+            
+            <!-- Sector Selector -->
+            <div style="margin-top: 40px; text-align: center; padding: 30px; background: #f8f9fa; border-radius: 8px;">
+                <h3 style="margin-bottom: 15px; font-size: 18px;">Try Other Sectors:</h3>
+                <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap;">
+                    <a href="/feasibility-preview.html?sector=professional-services" 
+                       class="btn {% if sector_slug == 'professional-services' %}btn-primary{% else %}btn-secondary{% endif %}"
+                       style="text-decoration: none;">
+                        💼 Professional Services
+                    </a>
+                    <a href="/feasibility-preview.html?sector=logistics-compliance" 
+                       class="btn {% if sector_slug == 'logistics-compliance' %}btn-primary{% else %}btn-secondary{% endif %}"
+                       style="text-decoration: none;">
+                        📦 Logistics & Compliance
+                    </a>
+                    <a href="/feasibility-preview.html?sector=built-environment" 
+                       class="btn {% if sector_slug == 'built-environment' %}btn-primary{% else %}btn-secondary{% endif %}"
+                       style="text-decoration: none;">
+                        🏗️ Built Environment
+                    </a>
                 </div>
             </div>
         </div>
@@ -223,7 +206,7 @@
                     <h2>Impressed by the Demo?</h2>
                     <p>We can deploy this exact pipeline into your Azure, AWS, or GCP tenant in 48 hours. Start with a Feasibility Sprint to prove it works on YOUR documents.</p>
                     <div class="demo-cta-buttons">
-                        <a href="/contact.html?option=phase-1" class="btn btn-primary">Book Feasibility Sprint – $1,500</a>
+                        <a href="/contact.html?option=phase-1" class="btn btn-primary">Book Feasibility Sprint — $1,500</a>
                         <a href="/curam-ai-protocol.html" class="btn btn-secondary">View Full Protocol</a>
                     </div>
                 </div>
@@ -257,7 +240,6 @@
         </div>
     </section>
 
-    <!-- Footer -->
     <!-- Footer -->
     <div id="footer-placeholder"></div>
     <script src="assets/js/footer-loader.js"></script>

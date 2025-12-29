@@ -82,6 +82,40 @@ from config import (
     ERROR_FIELD
 )
 
+# Sector configuration for feasibility preview page
+SECTOR_CONFIG = {
+    'professional-services': {
+        'name': 'Professional Services',
+        'icon': '💼',
+        'headline': 'Professional Services P1 Feasibility Demo',
+        'subheadline': 'Test our AI-powered invoice processing for accounting firms, legal practices, and wealth management.',
+        'demo_title': 'Invoice Processing Demo',
+        'demo_description': 'Upload vendor invoices to see automatic data extraction',
+        'document_types': ['Vendor Invoices', 'Purchase Orders', 'Expense Receipts', 'Tax Documents'],
+        'default_department': 'finance'
+    },
+    'logistics-compliance': {
+        'name': 'Logistics & Compliance',
+        'icon': '📦',
+        'headline': 'Logistics & Freight P1 Feasibility Demo',
+        'subheadline': 'Test our AI-powered customs documentation processing for freight forwarders and importers.',
+        'demo_title': 'Customs Compliance Demo',
+        'demo_description': 'Upload commercial invoices and shipping documents to test HS code extraction',
+        'document_types': ['Commercial Invoices', 'Bills of Lading', 'Packing Lists', 'Customs Declarations'],
+        'default_department': 'logistics'
+    },
+    'built-environment': {
+        'name': 'Built Environment',
+        'icon': '🏗️',
+        'headline': 'Built Environment P1 Feasibility Demo',
+        'subheadline': 'Test our AI-powered document extraction for engineering firms, architects, and construction companies.',
+        'demo_title': 'Engineering Schedule Extraction',
+        'demo_description': 'Upload beam schedules, drawing registers, or transmittals to test extraction',
+        'document_types': ['Beam Schedules', 'Drawing Registers', 'Material Take-offs', 'Site Reports'],
+        'default_department': 'engineering'
+    }
+}
+
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = SECRET_KEY
 
@@ -657,26 +691,48 @@ def email_chat_log():
 # =============================================================================
 
 # Feasibility Preview HTML page with iframe (serves feasibility-preview.html)
-@app.route('/feasibility-preview.html')
-def feasibility_preview_html():
-    """Serve feasibility-preview.html page with iframe to automater"""
-    return send_file('feasibility-preview.html')
 
-@app.route('/feasibility-preview', methods=['GET', 'POST'])
-def feasibility_preview_redirect():
-    """Redirect /feasibility-preview to /feasibility-preview.html"""
-    return redirect('/feasibility-preview.html', code=301)
+
+@app.route('/feasibility-preview.html')
+@app.route('/feasibility-preview')
+def feasibility_preview_html():
+    """
+    Serve sector-aware feasibility-preview page with iframe to automater.
+    Accepts optional ?sector= parameter to customize content.
+    
+    Usage:
+    - /feasibility-preview.html?sector=professional-services
+    - /feasibility-preview.html?sector=logistics-compliance
+    - /feasibility-preview.html?sector=built-environment
+    - /feasibility-preview.html (defaults to built-environment)
+    """
+    # Get sector from query parameter
+    sector_slug = request.args.get('sector', 'built-environment')
+    
+    # Get sector configuration
+    sector_config = SECTOR_CONFIG.get(sector_slug, SECTOR_CONFIG['built-environment'])
+    
+    # Get department to pre-select in automater
+    department = request.args.get('department', sector_config['default_department'])
+    
+    # Render template with sector-specific content
+    return render_template('feasibility-preview.html', 
+                         sector=sector_config,
+                         sector_slug=sector_slug,
+                         department=department)
 
 # Legacy demo routes (301 redirects to new name)
 @app.route('/demo.html')
-def demo_html_legacy():
-    """Legacy route - redirect to feasibility-preview.html"""
-    return redirect('/feasibility-preview.html', code=301)
-
-@app.route('/demo', methods=['GET', 'POST'])
+@app.route('/demo')
 def demo_legacy():
     """Legacy route - redirect to feasibility-preview.html"""
-    return redirect('/feasibility-preview.html', code=301)
+    # Preserve sector parameter if present
+    sector = request.args.get('sector', 'built-environment')
+    return redirect(f'/feasibility-preview.html?sector={sector}', code=301)
+
+
+
+
 
 # Automater route (document extraction tool) - moved from root
 @app.route('/automater', methods=['GET', 'POST'])
