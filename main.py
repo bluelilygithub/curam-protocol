@@ -21,8 +21,7 @@ from database import (
     engine, 
     get_sectors, 
     get_demo_config_by_department,
-    get_samples_for_template,
-    get_sector_demo_config
+    get_samples_for_template
 )
 from sqlalchemy import text
 
@@ -158,7 +157,7 @@ def search_blog_rag():
         try:
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
             
-            prompt = f"""You are a helpful assistant for Curam-Ai Protocolâ„¢, an AI document automation service for engineering firms.
+            prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
 
 The user asked: "{query}"
 
@@ -232,7 +231,7 @@ def contact_assistant():
         
         # System prompt
         if rag_context:
-            system_prompt = f"""You are an AI assistant for Curam-Ai Protocolâ„¢.
+            system_prompt = f"""You are an AI assistant for Curam-Ai Protocol™.
 
 User asked: "{message}"
 
@@ -243,7 +242,7 @@ Answer using this content. Put source titles in "quotes". Use paragraphs (\n\n).
 
 Services: Phase 1 ($1,500), Phase 2 ($7,500), Phase 3 ($8-12k), Phase 4 ($20-30k)"""
         else:
-            system_prompt = """You are an AI assistant for Curam-Ai Protocolâ„¢.
+            system_prompt = """You are an AI assistant for Curam-Ai Protocol™.
 
 Services: Phase 1 ($1,500), Phase 2 ($7,500), Phase 3 ($8-12k), Phase 4 ($20-30k)
 
@@ -277,10 +276,10 @@ Use paragraphs (\n\n)."""
                 q = match.group(1)
                 for title, url in urls.items():
                     if q.lower() in title.lower() or title.lower() in q.lower():
-                        return f'<a href="{url}" target="_blank">\"{q}\"</a>'
-                return f'\"{q}\"'
+                        return f'<a href="{url}" target="_blank">"{q}"</a>'
+                return f'"{q}"'
             
-            text = re.sub(r'\"([^\"]+)\"', link_it, text)
+            text = re.sub(r'"([^"]+)"', link_it, text)
         
         # Format paragraphs
         parts = []
@@ -291,11 +290,11 @@ Use paragraphs (\n\n)."""
             # Skip meaningless short content (single punctuation, stray characters)
             if len(para) <= 2 and not para.isalnum():
                 continue
-            if '- ' in para or 'â€¢ ' in para:
+            if '- ' in para or '• ' in para:
                 items = []
                 for line in para.split('\n'):
-                    if line.strip().startswith(('-', 'â€¢')):
-                        items.append(f'<li>{line.lstrip("-â€¢ ").strip()}</li>')
+                    if line.strip().startswith(('-', '•')):
+                        items.append(f'<li>{line.lstrip("-• ").strip()}</li>')
                 if items:
                     parts.append(f'<ul>{"".join(items)}</ul>')
             else:
@@ -435,7 +434,7 @@ def email_chat_log():
                     <li>Try our ROI Calculator to see potential savings</li>
                 </ul>
                 <p>Visit us at <a href="https://protocol.curam-ai.com.au">protocol.curam-ai.com.au</a></p>
-                <p>Best regards,<br>Curam-Ai ProtocolÃ¢â€žÂ¢ Team</p>
+                <p>Best regards,<br>Curam-Ai Protocol™ Team</p>
             </div>
         </body>
         </html>
@@ -459,7 +458,7 @@ def email_chat_log():
         email_text += "- Book a diagnostic call to discuss your specific needs\n"
         email_text += "- Try our ROI Calculator to see potential savings\n\n"
         email_text += "Visit us at https://protocol.curam-ai.com.au\n\n"
-        email_text += "Best regards,\nCuram-Ai ProtocolÃ¢â€žÂ¢ Team"
+        email_text += "Best regards,\nCuram-Ai Protocol™ Team"
         
         # Send email using Mailchannels API
         mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
@@ -488,7 +487,7 @@ def email_chat_log():
             ],
             "from": {
                 "email": from_email,
-                "name": "Curam-Ai ProtocolÃ¢â€žÂ¢"
+                "name": "Curam-Ai Protocol™"
             },
             "subject": email_subject,
             "content": [
@@ -542,96 +541,16 @@ def email_chat_log():
 # AUTOMATER & DEMO ROUTES
 # =============================================================================
 
-# Feasibility Preview - Sector-aware HTML page with iframe (database-driven)
+# Feasibility Preview HTML page with iframe (serves feasibility-preview.html)
 @app.route('/feasibility-preview.html')
 def feasibility_preview_html():
-    """
-    Serve sector-specific feasibility preview page.
-    Customizes content based on ?sector= URL parameter.
-    Loads configuration from database sectors table.
-    """
-    # Get sector from URL parameter (default to professional-services)
-    sector_slug = request.args.get('sector', 'professional-services')
-    
-    # Map common variations to correct sector slugs
-    sector_mapping = {
-        'professional': 'professional-services',
-        'finance': 'professional-services',
-        'accounting': 'professional-services',
-        'logistics': 'logistics-compliance',
-        'freight': 'logistics-compliance',
-        'compliance': 'logistics-compliance',
-        'built': 'built-environment',
-        'engineering': 'built-environment',
-        'construction': 'built-environment',
-        'architecture': 'built-environment'
-    }
-    
-    # Apply mapping if needed
-    if sector_slug in sector_mapping:
-        sector_slug = sector_mapping[sector_slug]
-    
-    # Validate sector slug (only allow known sectors)
-    valid_sectors = ['professional-services', 'logistics-compliance', 'built-environment']
-    if sector_slug not in valid_sectors:
-        sector_slug = 'professional-services'  # Default fallback
-    
-    # Load sector configuration from database
-    sector_config = get_sector_demo_config(sector_slug)
-    
-    if not sector_config:
-        # Fallback if database query fails
-        print(f"âš  Failed to load sector config for {sector_slug}, using defaults")
-        sector_config = {
-            'name': 'Professional Services',
-            'demo_headline': 'P1 Feasibility Demo',
-            'demo_subheadline': 'Test our AI-powered document processing',
-            'demo_title': 'Document Processing Demo',
-            'demo_description': 'Upload documents to test extraction',
-            'default_department': 'finance',
-            'icon_svg': None
-        }
-    
-    # Determine which department to pre-select in automater iframe
-    department = sector_config.get('default_department', 'finance')
-    
-    # Render template with sector-specific data
-    try:
-        return render_template(
-            'feasibility-preview.html',
-            sector_slug=sector_slug,
-            sector_name=sector_config.get('name', 'Demo'),
-            demo_headline=sector_config.get('demo_headline', 'P1 Feasibility Demo'),
-            demo_subheadline=sector_config.get('demo_subheadline', 'Test AI document processing'),
-            demo_title=sector_config.get('demo_title', 'Demo'),
-            demo_description=sector_config.get('demo_description', 'Upload documents to test'),
-            department=department,
-            icon_svg=sector_config.get('icon_svg'),
-            all_sectors=valid_sectors  # For sector switcher
-        )
-    except Exception as e:
-        print(f"Error rendering feasibility-preview template: {e}")
-        import traceback
-        traceback.print_exc()
-        # Return a simple error page
-        return f"""
-        <html>
-        <head><title>Error</title></head>
-        <body>
-            <h1>Error Loading Feasibility Preview</h1>
-            <p>There was an error loading the sector-specific demo page.</p>
-            <p>Sector: {sector_slug}</p>
-            <p>Error: {str(e)}</p>
-            <p><a href="/feasibility-preview.html">Try default page</a></p>
-        </body>
-        </html>
-        """, 500
+    """Serve feasibility-preview.html page with iframe to automater"""
+    return send_file('feasibility-preview.html')
 
 @app.route('/feasibility-preview', methods=['GET', 'POST'])
 def feasibility_preview_redirect():
-    """Redirect /feasibility-preview to /feasibility-preview.html preserving query params"""
-    sector = request.args.get('sector', 'professional-services')
-    return redirect(f'/feasibility-preview.html?sector={sector}', code=301)
+    """Redirect /feasibility-preview to /feasibility-preview.html"""
+    return redirect('/feasibility-preview.html', code=301)
 
 # Legacy demo routes (301 redirects to new name)
 @app.route('/demo.html')
@@ -713,13 +632,13 @@ def index_automater():
                 filename = secure_filename(file_storage.filename)
                 if not filename.lower().endswith('.pdf'):
                     error_message = "Only PDF files can be uploaded for Finance."
-                    model_actions.append(f"Ã¢Å“â€” ERROR: {filename} rejected (not a PDF)")
+                    model_actions.append(f"✗ ERROR: {filename} rejected (not a PDF)")
                     break
                 unique_name = f"{int(time.time() * 1000)}_{filename}"
                 file_path = os.path.join(FINANCE_UPLOAD_DIR, unique_name)
                 file_storage.save(file_path)
                 finance_uploaded_paths.append(file_path)
-                model_actions.append(f"Ã¢Å“â€œ Uploaded invoice saved: {file_path}")
+                model_actions.append(f"✓ Uploaded invoice saved: {file_path}")
             selected_samples.extend(finance_uploaded_paths)
 
         # Filter samples to only those matching the current department (skip for auto-select departments)
@@ -745,10 +664,10 @@ def index_automater():
         if not samples:
             if selected_samples:
                 error_message = f"No samples matched department '{department}'. Selected: {selected_samples}"
-                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
+                model_actions.append(f"✗ ERROR: {error_message}")
             else:
                 error_message = "Please select at least one sample file."
-                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
+                model_actions.append(f"✗ ERROR: {error_message}")
 
         if not error_message:
             if samples:
@@ -756,7 +675,7 @@ def index_automater():
                 for sample_path in samples:
                     if not os.path.exists(sample_path):
                         error_msg = f"File not found: {sample_path}"
-                        model_actions.append(f"Ã¢Å“â€” {error_msg}")
+                        model_actions.append(f"✗ {error_msg}")
                         if not error_message:
                             error_message = error_msg
                         continue
@@ -777,12 +696,12 @@ def index_automater():
                         model_actions.append(f"Extracting text from {filename}")
                         text = extract_text(sample_path)
                         if text.startswith("Error:"):
-                            model_actions.append(f"Ã¢Å“â€” Text extraction failed for {filename}: {text}")
+                            model_actions.append(f"✗ Text extraction failed for {filename}: {text}")
                             if not error_message:
                                 error_message = f"Text extraction failed for {filename}"
                             continue
                         else:
-                            model_actions.append(f"Ã¢Å“â€œ Text extracted successfully ({len(text)} characters)")
+                            model_actions.append(f"✓ Text extracted successfully ({len(text)} characters)")
                     
                     model_actions.append(f"Analyzing {filename} with AI models")
                     entries, api_error, model_used, attempt_log, file_action_log, schedule_type = analyze_gemini(text, department, image_path)
@@ -790,11 +709,11 @@ def index_automater():
                         model_actions.extend(file_action_log)
                     if model_used:
                         last_model_used = model_used
-                        model_actions.append(f"Ã¢Å“â€œ Successfully processed {filename} with {model_used}")
+                        model_actions.append(f"✓ Successfully processed {filename} with {model_used}")
                     if attempt_log:
                         model_attempts.extend(attempt_log)
                     if api_error:
-                        model_actions.append(f"Ã¢Å“â€” Failed to process {filename}: {api_error}")
+                        model_actions.append(f"✗ Failed to process {filename}: {api_error}")
                         if not error_message:
                             error_message = api_error
                     if entries:
@@ -818,15 +737,15 @@ def index_automater():
                                             if isinstance(item, dict):
                                                 item['SourceDocument'] = filename
                                 results.append(transmittal_data)
-                                model_actions.append(f"Ã¢Å“â€œ Extracted structured data from {filename}")
+                                model_actions.append(f"✓ Extracted structured data from {filename}")
                             else:
                                 # Fallback to old format
                                 for entry in entries if isinstance(entries, list) else [entries]:
                                     entry['Filename'] = filename
                                     results.append(entry)
-                                model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
+                                model_actions.append(f"✓ Extracted {len(entries)} row(s) from {filename}")
                         else:
-                            model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
+                            model_actions.append(f"✓ Extracted {len(entries)} row(s) from {filename}")
                             for entry in entries:
                                 entry['Filename'] = filename
                                 if department == "finance":
@@ -872,7 +791,7 @@ def index_automater():
                                                         )
                                                         if corrected_value != entry[field]:
                                                             entry['corrections_applied'].append(
-                                                                f"Size corrected: '{entry[field]}' Ã¢â€ â€™ '{corrected_value}'"
+                                                                f"Size corrected: '{entry[field]}' → '{corrected_value}'"
                                                             )
                                                             entry[field] = corrected_value
                                                             if correction_confidence == 'medium':
@@ -946,7 +865,7 @@ def index_automater():
                             if department == "engineering" and schedule_type and not detected_schedule_type:
                                 detected_schedule_type = schedule_type
                     else:
-                        model_actions.append(f"Ã¢Å¡Â  No data extracted from {filename}")
+                        model_actions.append(f"ℹ️  No data extracted from {filename}")
 
         # Aggregate transmittal data into structured categories
         transmittal_aggregated = None
@@ -1051,7 +970,7 @@ def index_automater():
         try:
             samples = get_samples_for_template(dept)
             if samples:
-                print(f"âœ“ Database returned {len(samples)} samples for {dept}")
+                print(f"✓ Database returned {len(samples)} samples for {dept}")
                 dept_info = DEPARTMENT_SAMPLES.get(dept, {})
                 db_samples[dept] = {
                     "label": dept_info.get("label", "Samples"),
@@ -1060,9 +979,9 @@ def index_automater():
                     "samples": samples
                 }
             else:
-                print(f"âš  Database returned 0 samples for {dept} - using hardcoded")
+                print(f"⚠ Database returned 0 samples for {dept} - using hardcoded")
         except Exception as e:
-            print(f"âœ— Database error for {dept}: {e}")
+            print(f"✗ Database error for {dept}: {e}")
             # Continue with hardcoded samples on error
     
     # Merge database samples with hardcoded (database takes priority)
@@ -1074,7 +993,7 @@ def index_automater():
     if finance_samples:
         print(f"First finance sample path: {finance_samples[0].get('path', 'NO PATH')}")
     else:
-        print("âš  No finance samples in merged data!")
+        print("⚠ No finance samples in merged data!")
     
     return render_template_string(
         HTML_TEMPLATE,
@@ -1242,13 +1161,13 @@ try:
     from roi_calculator_flask import roi_app as roi_calculator_app
     # Mount ROI calculator at /roi-calculator (with trailing slash support)
     app.register_blueprint(roi_calculator_app, url_prefix='/roi-calculator')
-    print("Ã¢Å“â€œ ROI Calculator blueprint registered successfully at /roi-calculator")
+    print("✓ ROI Calculator blueprint registered successfully at /roi-calculator")
 except ImportError as e:
-    print(f"Ã¢Å“â€” Warning: Could not import ROI calculator: {e}")
+    print(f"✗ Warning: Could not import ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 except Exception as e:
-    print(f"Ã¢Å“â€” Error registering ROI calculator: {e}")
+    print(f"✗ Error registering ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 
