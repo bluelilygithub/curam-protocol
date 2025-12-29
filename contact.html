@@ -18,16 +18,16 @@
     />
     <style>
       /* Loading spinner - matching search-results.html exactly */
-      .chat-loading {
+      .loading-state {
         text-align: center;
         padding: var(--spacing-xl);
         color: #4b5563 !important;
       }
-      .chat-loading p {
+      .loading-state p {
         color: #4b5563 !important;
         margin: 0;
       }
-      .chat-loading .spinner {
+      .spinner {
         border: 4px solid #E5E7EB;
         border-top: 4px solid var(--color-gold);
         border-radius: 50%;
@@ -486,7 +486,7 @@
           // Show loading animation
           const loadingId = 'loading-' + Date.now();
           const loadingHtml = `
-            <div class="chat-loading" id="${loadingId}">
+            <div class="loading-state" id="${loadingId}">
               <div class="spinner"></div>
               <p>Searching 800+ articles...</p>
             </div>
