@@ -543,57 +543,10 @@ def email_chat_log():
 # =============================================================================
 
 # Feasibility Preview - Sector-aware HTML page with iframe (database-driven)
+# Feasibility Preview HTML page with iframe (serves feasibility-preview.html)
 @app.route('/feasibility-preview.html')
 def feasibility_preview_html():
-    """
-    Serve sector-specific feasibility preview page.
-    Customizes content based on ?sector= URL parameter.
-    Loads configuration from database sectors table.
-    """
-    # Get sector from URL parameter (default to professional-services)
-    sector_slug = request.args.get('sector', 'professional-services')
-    
-    # Map common variations to correct sector slugs
-    sector_mapping = {
-        'professional': 'professional-services',
-        'finance': 'professional-services',
-        'accounting': 'professional-services',
-        'logistics': 'logistics-compliance',
-        'freight': 'logistics-compliance',
-        'compliance': 'logistics-compliance',
-        'built': 'built-environment',
-        'engineering': 'built-environment',
-        'construction': 'built-environment',
-        'architecture': 'built-environment'
-    }
-    
-    # Apply mapping if needed
-    if sector_slug in sector_mapping:
-        sector_slug = sector_mapping[sector_slug]
-    
-    # Validate sector slug (only allow known sectors)
-    valid_sectors = ['professional-services', 'logistics-compliance', 'built-environment']
-    if sector_slug not in valid_sectors:
-        sector_slug = 'professional-services'  # Default fallback
-    
-    # Load sector configuration from database
-    sector_config = get_sector_demo_config(sector_slug)
-    
-    if not sector_config:
-        # Fallback if database query fails
-        print(f"âš  Failed to load sector config for {sector_slug}, using defaults")
-        sector_config = {
-            'name': 'Professional Services',
-            'demo_headline': 'P1 Feasibility Demo',
-            'demo_subheadline': 'Test our AI-powered document processing',
-            'demo_title': 'Document Processing Demo',
-            'demo_description': 'Upload documents to test extraction',
-            'default_department': 'finance',
-            'icon_svg': None
-        }
-    
-    
-    # Return the feasibility preview HTML file
+    """Serve feasibility-preview.html page with iframe to automater"""
     return send_file('feasibility-preview.html')
 
 @app.route('/feasibility-preview', methods=['GET', 'POST'])
