@@ -592,16 +592,9 @@ def feasibility_preview_html():
             'icon_svg': None
         }
     
-d>
-        <body>
-            <h1>Error Loading Feasibility Preview</h1>
-            <p>There was an error loading the sector-specific demo page.</p>
-            <p>Sector: {sector_slug}</p>
-            <p>Error: {str(e)}</p>
-            <p><a href="/feasibility-preview.html">Try default page</a></p>
-        </body>
-        </html>
-        """, 500
+    
+    # Return the feasibility preview HTML file
+    return send_file('feasibility-preview.html')
 
 @app.route('/feasibility-preview', methods=['GET', 'POST'])
 def feasibility_preview_redirect():
