@@ -545,7 +545,70 @@ def email_chat_log():
 @app.route('/feasibility-preview.html')
 def feasibility_preview_html():
     """Serve feasibility-preview.html page with iframe to automater"""
-    return render_template('feasibility-preview.html')
+    # Get sector from URL parameter (e.g., ?sector=logistics)
+    sector_param = request.args.get('sector', 'professional-services')
+    
+    # Map common variations to correct sector slugs
+    sector_mapping = {
+        'professional': 'professional-services',
+        'finance': 'professional-services',
+        'accounting': 'professional-services',
+        'logistics': 'logistics-compliance',
+        'freight': 'logistics-compliance',
+        'compliance': 'logistics-compliance',
+        'built': 'built-environment',
+        'engineering': 'built-environment',
+        'construction': 'built-environment',
+        'architecture': 'built-environment'
+    }
+    
+    # Apply mapping if needed
+    sector_slug = sector_mapping.get(sector_param, sector_param)
+    
+    # Validate sector slug (only allow known sectors)
+    valid_sectors = ['professional-services', 'logistics-compliance', 'built-environment']
+    if sector_slug not in valid_sectors:
+        sector_slug = 'professional-services'  # Default fallback
+    
+    # Try to load from database
+    try:
+        from database import get_sector_demo_config
+        sector_config = get_sector_demo_config(sector_slug)
+        
+        if sector_config:
+            # Database returned data - use it
+            sector = {
+                'name': sector_config.get('name', 'Demo'),
+                'slug': sector_slug,
+                'demo_headline': sector_config.get('demo_headline', 'P1 Feasibility Demo'),
+                'demo_subheadline': sector_config.get('demo_subheadline', 'Test AI document processing'),
+                'demo_title': sector_config.get('demo_title', 'Demo'),
+                'demo_description': sector_config.get('demo_description', 'Upload documents to test'),
+                'default_department': sector_config.get('default_department', 'finance'),
+                'icon_svg': sector_config.get('icon_svg')
+            }
+        else:
+            raise Exception("No config from database")
+    except Exception as e:
+        # Fallback if database fails
+        print(f"⚠ Database failed for sector {sector_slug}: {e}")
+        sector_names = {
+            'professional-services': 'Professional Services',
+            'logistics-compliance': 'Logistics & Compliance',
+            'built-environment': 'Built Environment'
+        }
+        sector = {
+            'name': sector_names.get(sector_slug, 'Professional Services'),
+            'slug': sector_slug,
+            'demo_headline': 'P1 Feasibility Demo',
+            'demo_subheadline': 'Test our AI-powered document processing',
+            'demo_title': 'Document Processing Demo',
+            'demo_description': 'Upload documents to test extraction',
+            'default_department': 'finance',
+            'icon_svg': None
+        }
+    
+    return render_template('feasibility-preview.html', sector=sector)
 
 @app.route('/feasibility-preview', methods=['GET', 'POST'])
 def feasibility_preview_redirect():
