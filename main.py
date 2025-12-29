@@ -82,39 +82,6 @@ from config import (
     ERROR_FIELD
 )
 
-# Sector configuration for feasibility preview page
-SECTOR_CONFIG = {
-    'professional-services': {
-        'name': 'Professional Services',
-        'icon': '💼',
-        'headline': 'Professional Services P1 Feasibility Demo',
-        'subheadline': 'Test our AI-powered invoice processing for accounting firms, legal practices, and wealth management.',
-        'demo_title': 'Invoice Processing Demo',
-        'demo_description': 'Upload vendor invoices to see automatic data extraction',
-        'document_types': ['Vendor Invoices', 'Purchase Orders', 'Expense Receipts', 'Tax Documents'],
-        'default_department': 'finance'
-    },
-    'logistics-compliance': {
-        'name': 'Logistics & Compliance',
-        'icon': '📦',
-        'headline': 'Logistics & Freight P1 Feasibility Demo',
-        'subheadline': 'Test our AI-powered customs documentation processing for freight forwarders and importers.',
-        'demo_title': 'Customs Compliance Demo',
-        'demo_description': 'Upload commercial invoices and shipping documents to test HS code extraction',
-        'document_types': ['Commercial Invoices', 'Bills of Lading', 'Packing Lists', 'Customs Declarations'],
-        'default_department': 'logistics'
-    },
-    'built-environment': {
-        'name': 'Built Environment',
-        'icon': '🏗️',
-        'headline': 'Built Environment P1 Feasibility Demo',
-        'subheadline': 'Test our AI-powered document extraction for engineering firms, architects, and construction companies.',
-        'demo_title': 'Engineering Schedule Extraction',
-        'demo_description': 'Upload beam schedules, drawing registers, or transmittals to test extraction',
-        'document_types': ['Beam Schedules', 'Drawing Registers', 'Material Take-offs', 'Site Reports'],
-        'default_department': 'engineering'
-    }
-}
 
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = SECRET_KEY
@@ -803,13 +770,13 @@ def index_automater():
                 filename = secure_filename(file_storage.filename)
                 if not filename.lower().endswith('.pdf'):
                     error_message = "Only PDF files can be uploaded for Finance."
-                    model_actions.append(f"Ã¢Å“â€” ERROR: {filename} rejected (not a PDF)")
+                    model_actions.append(f"ERROR: {filename} rejected (not a PDF)")
                     break
                 unique_name = f"{int(time.time() * 1000)}_{filename}"
                 file_path = os.path.join(FINANCE_UPLOAD_DIR, unique_name)
                 file_storage.save(file_path)
                 finance_uploaded_paths.append(file_path)
-                model_actions.append(f"Ã¢Å“â€œ Uploaded invoice saved: {file_path}")
+                model_actions.append(f"Uploaded invoice saved: {file_path}")
             selected_samples.extend(finance_uploaded_paths)
 
         # Filter samples to only those matching the current department (skip for auto-select departments)
@@ -835,10 +802,10 @@ def index_automater():
         if not samples:
             if selected_samples:
                 error_message = f"No samples matched department '{department}'. Selected: {selected_samples}"
-                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
+                model_actions.append(f"ERROR: {error_message}")
             else:
                 error_message = "Please select at least one sample file."
-                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
+                model_actions.append(f"ERROR: {error_message}")
 
         if not error_message:
             if samples:
@@ -846,7 +813,7 @@ def index_automater():
                 for sample_path in samples:
                     if not os.path.exists(sample_path):
                         error_msg = f"File not found: {sample_path}"
-                        model_actions.append(f"Ã¢Å“â€” {error_msg}")
+                        model_actions.append(f"{error_msg}")
                         if not error_message:
                             error_message = error_msg
                         continue
@@ -867,12 +834,12 @@ def index_automater():
                         model_actions.append(f"Extracting text from {filename}")
                         text = extract_text(sample_path)
                         if text.startswith("Error:"):
-                            model_actions.append(f"Ã¢Å“â€” Text extraction failed for {filename}: {text}")
+                            model_actions.append(f"Text extraction failed for {filename}: {text}")
                             if not error_message:
                                 error_message = f"Text extraction failed for {filename}"
                             continue
                         else:
-                            model_actions.append(f"Ã¢Å“â€œ Text extracted successfully ({len(text)} characters)")
+                            model_actions.append(f"Text extracted successfully ({len(text)} characters)")
                     
                     model_actions.append(f"Analyzing {filename} with AI models")
                     entries, api_error, model_used, attempt_log, file_action_log, schedule_type = analyze_gemini(text, department, image_path)
@@ -880,11 +847,11 @@ def index_automater():
                         model_actions.extend(file_action_log)
                     if model_used:
                         last_model_used = model_used
-                        model_actions.append(f"Ã¢Å“â€œ Successfully processed {filename} with {model_used}")
+                        model_actions.append(f"Successfully processed {filename} with {model_used}")
                     if attempt_log:
                         model_attempts.extend(attempt_log)
                     if api_error:
-                        model_actions.append(f"Ã¢Å“â€” Failed to process {filename}: {api_error}")
+                        model_actions.append(f"Failed to process {filename}: {api_error}")
                         if not error_message:
                             error_message = api_error
                     if entries:
@@ -908,15 +875,15 @@ def index_automater():
                                             if isinstance(item, dict):
                                                 item['SourceDocument'] = filename
                                 results.append(transmittal_data)
-                                model_actions.append(f"Ã¢Å“â€œ Extracted structured data from {filename}")
+                                model_actions.append(f"Extracted structured data from {filename}")
                             else:
                                 # Fallback to old format
                                 for entry in entries if isinstance(entries, list) else [entries]:
                                     entry['Filename'] = filename
                                     results.append(entry)
-                                model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
+                                model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
                         else:
-                            model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
+                            model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
                             for entry in entries:
                                 entry['Filename'] = filename
                                 if department == "finance":
@@ -1332,13 +1299,13 @@ try:
     from roi_calculator_flask import roi_app as roi_calculator_app
     # Mount ROI calculator at /roi-calculator (with trailing slash support)
     app.register_blueprint(roi_calculator_app, url_prefix='/roi-calculator')
-    print("Ã¢Å“â€œ ROI Calculator blueprint registered successfully at /roi-calculator")
+    print("ROI Calculator blueprint registered successfully at /roi-calculator")
 except ImportError as e:
-    print(f"Ã¢Å“â€” Warning: Could not import ROI calculator: {e}")
+    print(f"Warning: Could not import ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 except Exception as e:
-    print(f"Ã¢Å“â€” Error registering ROI calculator: {e}")
+    print(f"Error registering ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 
