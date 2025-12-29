@@ -39,6 +39,19 @@ except ImportError:
 # Import from other services
 from services.pdf_service import prepare_prompt_text
 
+# Import configuration constants
+from config import (
+    ENGINEERING_PROMPT_LIMIT,
+    ENGINEERING_PROMPT_LIMIT_SHORT,
+    TRANSMITTAL_PROMPT_LIMIT,
+    FINANCE_FIELDS,
+    ENGINEERING_BEAM_FIELDS,
+    ENGINEERING_COLUMN_FIELDS,
+    TRANSMITTAL_FIELDS,
+    DOC_FIELDS,
+    ERROR_FIELD
+)
+
 # Configure Gemini API
 api_key = os.environ.get("GEMINI_API_KEY")
 if api_key:
