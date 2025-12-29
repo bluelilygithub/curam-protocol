@@ -82,6 +82,101 @@ from config import (
     ERROR_FIELD
 )
 
+# Sector configuration for feasibility preview page
+@app.route('/feasibility-preview.html')
+def feasibility_preview_html():
+    """
+    Serve sector-specific feasibility preview page.
+    Customizes content based on ?sector= URL parameter.
+    Loads configuration from database sectors table.
+    
+    NO HARDCODED CONFIG - All data comes from database!
+    """
+    # Get sector from URL parameter (default to professional-services)
+    sector_slug = request.args.get('sector', 'professional-services')
+    
+    # Map common variations to correct sector slugs
+    sector_mapping = {
+        'professional': 'professional-services',
+        'finance': 'professional-services',
+        'accounting': 'professional-services',
+        'logistics': 'logistics-compliance',
+        'freight': 'logistics-compliance',
+        'compliance': 'logistics-compliance',
+        'built': 'built-environment',
+        'engineering': 'built-environment',
+        'construction': 'built-environment',
+        'architecture': 'built-environment'
+    }
+    
+    # Apply mapping if needed
+    if sector_slug in sector_mapping:
+        sector_slug = sector_mapping[sector_slug]
+    
+    # Validate sector slug (only allow known sectors)
+    valid_sectors = ['professional-services', 'logistics-compliance', 'built-environment']
+    if sector_slug not in valid_sectors:
+        sector_slug = 'professional-services'  # Default fallback
+    
+    # Load sector configuration from database
+    sector_config = get_sector_demo_config(sector_slug)
+    
+    if not sector_config:
+        # Fallback if database query fails
+        print(f"Failed to load sector config for {sector_slug}, using defaults")
+        sector_config = {
+            'name': 'Professional Services',
+            'demo_headline': 'P1 Feasibility Demo',
+            'demo_subheadline': 'Test our AI-powered document processing',
+            'demo_title': 'Document Processing Demo',
+            'demo_description': 'Upload documents to test extraction',
+            'default_department': 'finance',
+            'icon_svg': None,
+            'document_types': []
+        }
+    
+    # Determine which department to pre-select in automater iframe
+    department = sector_config.get('default_department', 'finance')
+    
+    # Render template with sector-specific data
+    try:
+        return render_template(
+            'feasibility-preview.html',
+            sector_slug=sector_slug,
+            sector_name=sector_config.get('name', 'Demo'),
+            demo_headline=sector_config.get('demo_headline', 'P1 Feasibility Demo'),
+            demo_subheadline=sector_config.get('demo_subheadline', 'Test AI document processing'),
+            demo_title=sector_config.get('demo_title', 'Demo'),
+            demo_description=sector_config.get('demo_description', 'Upload documents to test'),
+            department=department,
+            icon_svg=sector_config.get('icon_svg'),
+            document_types=sector_config.get('document_types', []),
+            all_sectors=valid_sectors  # For sector switcher
+        )
+    except Exception as e:
+        print(f"Error rendering feasibility-preview template: {e}")
+        import traceback
+        traceback.print_exc()
+        # Return a simple error page
+        return f"""
+        <html>
+        <head><title>Error</title></head>
+        <body>
+            <h1>Error Loading Feasibility Preview</h1>
+            <p>There was an error loading the sector-specific demo page.</p>
+            <p>Sector: {sector_slug}</p>
+            <p>Error: {str(e)}</p>
+            <p><a href="/feasibility-preview.html">Try default page</a></p>
+        </body>
+        </html>
+        """, 500
+
+@app.route('/feasibility-preview', methods=['GET', 'POST'])
+def feasibility_preview_redirect():
+    """Redirect /feasibility-preview to /feasibility-preview.html preserving query params"""
+    sector = request.args.get('sector', 'professional-services')
+    return redirect(f'/feasibility-preview.html?sector={sector}', code=301)
+    
 
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = SECRET_KEY
