@@ -547,7 +547,24 @@ def email_chat_log():
 @app.route('/feasibility-preview.html')
 def feasibility_preview_html():
     """Serve feasibility-preview.html page with iframe to automater"""
-    return send_file('templates/feasibility-preview.html')
+    # Try to render as template with default sector data
+    sector_slug = request.args.get('sector', 'professional-services')
+    
+    # Default sector configuration
+    sector_config = {
+        'name': 'Professional Services',
+        'headline': 'Sample Industry P1 Feasibility Demo',
+        'subheadline': 'Test our AI-powered document classification and extraction engine live.',
+        'demo_title': 'P1 Feasibility Sprint',
+        'demo_description': 'Upload PDFs, images, or scanned documents to test extraction',
+        'icon': None
+    }
+    
+    try:
+        return render_template('feasibility-preview.html', sector=sector_config)
+    except:
+        # Fallback: try to send as static file
+        return send_file('feasibility-preview.html')
 
 @app.route('/feasibility-preview', methods=['GET', 'POST'])
 def feasibility_preview_redirect():
