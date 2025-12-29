@@ -545,7 +545,7 @@ def email_chat_log():
 @app.route('/feasibility-preview.html')
 def feasibility_preview_html():
     """Serve feasibility-preview.html page with iframe to automater"""
-    return send_file('feasibility-preview.html')
+    return render_template('feasibility-preview.html')
 
 @app.route('/feasibility-preview', methods=['GET', 'POST'])
 def feasibility_preview_redirect():
