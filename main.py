@@ -4825,7 +4825,8 @@ Use paragraphs (\n\n)."""
                 # Build prompt with sources if available
                 sources_text = ""
                 if sources and len(sources) > 0:
-                    sources_text = f"\n\nAnd these available sources:\n{chr(10).join([f'- {s.get('title', '')}' for s in sources[:3]])}"
+                    source_titles = [f"- {s.get('title', '')}" for s in sources[:3]]
+                    sources_text = f"\n\nAnd these available sources:\n" + "\n".join(source_titles)
                 
                 followup_prompt = f"""Based on this user question: "{message}"{sources_text}
 
