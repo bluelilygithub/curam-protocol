@@ -88,6 +88,17 @@ app.secret_key = SECRET_KEY
 # Register blueprints
 app.register_blueprint(static_pages_bp)
 
+# Error handler for debugging
+@app.errorhandler(500)
+def internal_error(error):
+    """Show detailed error message for debugging"""
+    import traceback
+    trace = traceback.format_exc()
+    app.logger.error(f"500 Internal Server Error:\n{trace}")
+    if app.debug:
+        return f"<pre>Internal Server Error:\n\n{trace}</pre>", 500
+    return "Internal Server Error. Please check the logs.", 500
+
 # Configure Gemini API
 api_key = os.environ.get("GEMINI_API_KEY")
 if api_key:
