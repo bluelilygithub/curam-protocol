@@ -110,6 +110,78 @@ os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
 # Cache for available models
 _available_models = None
 
+
+
+def log_rag_query(query, response, sources, page_source, session_id=None, user_email=None, user_name=None, user_company=None):
+    """Log RAG query to database for analytics"""
+    try:
+        from sqlalchemy import text
+        
+        # Calculate metrics
+        sources_count = len(sources) if sources else 0
+        has_blog = any(s.get('type') == 'blog' for s in sources) if sources else False
+        has_website = any(s.get('type') == 'website' for s in sources) if sources else False
+        
+        # Extract query words (for analytics)
+        query_words_list = query.lower().split()
+        
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                INSERT INTO rag_queries (
+                    query_text,
+                    response_text,
+                    sources_cited,
+                    page_source,
+                    session_id,
+                    user_email,
+                    user_name,
+                    user_company,
+                    character_count_query,
+                    character_count_response,
+                    sources_count,
+                    query_words,
+                    has_blog_sources,
+                    has_website_sources
+                ) VALUES (
+                    :query_text,
+                    :response_text,
+                    :sources_cited,
+                    :page_source,
+                    :session_id,
+                    :user_email,
+                    :user_name,
+                    :user_company,
+                    :character_count_query,
+                    :character_count_response,
+                    :sources_count,
+                    :query_words,
+                    :has_blog_sources,
+                    :has_website_sources
+                ) RETURNING id
+            """), {
+                'query_text': query,
+                'response_text': response,
+                'sources_cited': json.dumps(sources) if sources else None,
+                'page_source': page_source,
+                'session_id': session_id,
+                'user_email': user_email,
+                'user_name': user_name,
+                'user_company': user_company,
+                'character_count_query': len(query),
+                'character_count_response': len(response),
+                'sources_count': sources_count,
+                'query_words': json.dumps(query_words_list),
+                'has_blog_sources': has_blog,
+                'has_website_sources': has_website
+            })
+            conn.commit()
+            query_id = result.fetchone()[0]
+            print(f"✓ Logged RAG query ID: {query_id}")
+            return query_id
+    except Exception as e:
+        print(f"✗ Error logging RAG query: {e}")
+        return None
+
 # =============================================================================
 # API ROUTES
 # =============================================================================
