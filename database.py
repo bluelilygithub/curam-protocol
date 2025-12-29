@@ -178,3 +178,62 @@ def get_samples_for_template(department):
         import traceback
         traceback.print_exc()
         return []
+
+# ============================================================================
+# DATABASE-DRIVEN PROMPTS
+# ============================================================================
+
+def get_active_prompts(doc_type, sector_slug=None):
+    """Get active prompts for a document type, ordered by priority"""
+    if not engine:
+        return []
+    
+    try:
+        with engine.connect() as conn:
+            universal_query = text("""
+                SELECT prompt_text, priority, name
+                FROM prompt_templates
+                WHERE scope = 'universal' AND is_active = true
+                ORDER BY priority ASC
+            """)
+            universal = conn.execute(universal_query).fetchall()
+            
+            doctype_query = text("""
+                SELECT prompt_text, priority, name
+                FROM prompt_templates
+                WHERE scope = 'document_type' AND doc_type = :doc_type AND is_active = true
+                ORDER BY priority ASC
+            """)
+            doctype = conn.execute(doctype_query, {"doc_type": doc_type}).fetchall()
+            
+            sector = []
+            if sector_slug:
+                sector_query = text("""
+                    SELECT prompt_text, priority, name
+                    FROM prompt_templates
+                    WHERE scope = 'sector' AND sector_slug = :sector_slug
+                    AND (doc_type = :doc_type OR doc_type IS NULL) AND is_active = true
+                    ORDER BY priority ASC
+                """)
+                sector = conn.execute(sector_query, {"sector_slug": sector_slug, "doc_type": doc_type}).fetchall()
+            
+            all_prompts = list(universal) + list(sector) + list(doctype)
+            all_prompts.sort(key=lambda x: x[1])
+            
+            return [{"text": p[0], "priority": p[1], "name": p[2]} for p in all_prompts]
+    except Exception as e:
+        print(f"Error loading prompts: {e}")
+        return []
+
+
+def build_combined_prompt(doc_type, sector_slug, text):
+    """Build a combined prompt from database prompts"""
+    prompts = get_active_prompts(doc_type, sector_slug)
+    
+    if not prompts:
+        return None
+    
+    combined = "\n\n---\n\n".join([p["text"] for p in prompts])
+    combined += f"\n\n---\n\nTEXT: {text}\n\nReturn ONLY valid JSON."
+    
+    return combined
