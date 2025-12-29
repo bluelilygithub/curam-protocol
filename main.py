@@ -4805,6 +4805,9 @@ Use paragraphs (\n\n)."""
             para = para.strip()
             if not para:
                 continue
+            # Skip meaningless short content (single punctuation, stray characters)
+            if len(para) <= 2 and not para.isalnum():
+                continue
             if '- ' in para or '• ' in para:
                 items = []
                 for line in para.split('\n'):
@@ -4819,6 +4822,7 @@ Use paragraphs (\n\n)."""
         
         # Generate 3 follow-up questions based on the query and sources
         followup_questions = []
+        print(f"DEBUG: use_rag={use_rag}, message='{message}'")
         if use_rag:  # Generate for all substantive queries, not just when sources exist
             # Use Gemini to generate contextual follow-up questions
             try:
@@ -4839,14 +4843,22 @@ How does Phase 1 reduce implementation risk
 What industries benefit most from RAG
 Can this work with handwritten documents"""
                 
+                print(f"DEBUG: Generating follow-up questions...")
                 fq_model = genai.GenerativeModel('gemini-2.0-flash-exp')
                 fq_response = fq_model.generate_content(followup_prompt)
                 if fq_response.text:
                     questions = [q.strip().rstrip('?').strip() for q in fq_response.text.strip().split('\n') if q.strip()]
                     followup_questions = questions[:3]  # Take first 3
+                    print(f"DEBUG: Generated {len(followup_questions)} follow-up questions: {followup_questions}")
+                else:
+                    print("DEBUG: fq_response.text is empty")
             except Exception as e:
                 print(f"Follow-up generation failed: {e}")
+                import traceback
+                traceback.print_exc()
                 # Don't show fallback questions - hide section if generation fails
+        else:
+            print(f"DEBUG: Skipping follow-up generation (use_rag=False)")
         
         # Suggested interest
         ml = message.lower()
