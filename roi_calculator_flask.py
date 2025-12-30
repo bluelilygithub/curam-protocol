@@ -2952,9 +2952,9 @@ HTML_TEMPLATE = """
             
             <div class="cta-grid" style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; max-width: 900px; margin: 0 auto;">
                 <!-- Email me the report Button -->
-                <a href="/assets/downloads/Phase-1-feasibility-sprint.pdf" class="btn" style="background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; padding: 1rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 8px; text-decoration: none; transition: all 0.2s ease; border: 1px solid #D4AF37;" download>
+                <button onclick="emailPhase1Report()" class="btn" style="background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; padding: 1rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 8px; text-decoration: none; transition: all 0.2s ease; border: 1px solid #D4AF37; cursor: pointer;">
                     Email me the report
-                </a>
+                </button>
                 
                 <!-- See It In Action Button -->
                 <a href="/contact.html?option=phase-1" class="btn" style="background: transparent; color: rgba(255, 255, 255, 0.9); padding: 1rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 8px; text-decoration: none; transition: all 0.2s ease; border: 2px solid rgba(255, 255, 255, 0.3);">
@@ -2966,6 +2966,142 @@ HTML_TEMPLATE = """
                     Request Information
                 </a>
             </div>
+            
+            <!-- Email Modal for Phase-1 Report -->
+            <div id="phase1EmailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+                    <h3 style="color: #0B1221; margin-top: 0; margin-bottom: 0.5rem;">Email Phase-1 Report</h3>
+                    <p style="color: #4B5563; margin-bottom: 1.5rem;">Enter your email address to receive the Phase-1 Feasibility Sprint PDF report.</p>
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label for="phase1EmailInput" style="display: block; color: #0B1221; font-weight: 600; margin-bottom: 0.5rem;">Email Address</label>
+                        <input type="email" id="phase1EmailInput" placeholder="your.email@company.com" style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem; box-sizing: border-box;" required>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                        <button onclick="closePhase1EmailModal()" style="background: #E5E7EB; color: #4B5563; border: none; border-radius: 6px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                            Cancel
+                        </button>
+                        <button onclick="sendPhase1Email()" style="background: #D4AF37; color: #0B1221; border: none; border-radius: 6px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                            📧 Send Report
+                        </button>
+                    </div>
+                    <div id="phase1EmailError" style="display: none; color: #DC2626; background: #FEE2E2; padding: 0.75rem; border-radius: 6px; margin-top: 1rem; font-size: 0.9rem;"></div>
+                </div>
+            </div>
+            
+            <!-- Success Modal for Phase-1 Report -->
+            <div id="phase1SuccessModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 450px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2); text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                    <h3 style="color: #0B1221; margin-top: 0; margin-bottom: 0.5rem;">Report Sent Successfully!</h3>
+                    <p id="phase1SuccessMessage" style="color: #4B5563; margin-bottom: 1.5rem;">Check your inbox for the Phase-1 Feasibility Sprint PDF.</p>
+                    <button onclick="closePhase1SuccessModal()" style="background: #D4AF37; color: #0B1221; border: none; border-radius: 6px; padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                        Got it!
+                    </button>
+                </div>
+            </div>
+            
+            <script>
+            function emailPhase1Report() {
+                document.getElementById('phase1EmailModal').style.display = 'flex';
+                document.getElementById('phase1EmailInput').focus();
+            }
+            
+            function closePhase1EmailModal() {
+                document.getElementById('phase1EmailModal').style.display = 'none';
+                document.getElementById('phase1EmailInput').value = '';
+                document.getElementById('phase1EmailError').style.display = 'none';
+            }
+            
+            function closePhase1SuccessModal() {
+                document.getElementById('phase1SuccessModal').style.display = 'none';
+            }
+            
+            function sendPhase1Email() {
+                const emailInput = document.getElementById('phase1EmailInput');
+                const email = emailInput.value.trim();
+                const errorDiv = document.getElementById('phase1EmailError');
+                const sendBtn = document.querySelector('#phase1EmailModal button[onclick="sendPhase1Email()"]');
+                
+                // Basic validation
+                if (!email) {
+                    errorDiv.textContent = 'Please enter an email address.';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                if (!email.includes('@') || !email.includes('.')) {
+                    errorDiv.textContent = 'Please enter a valid email address.';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                // Hide error and disable button
+                errorDiv.style.display = 'none';
+                const originalText = sendBtn.textContent;
+                sendBtn.textContent = 'Sending...';
+                sendBtn.disabled = true;
+                
+                // Send email
+                fetch('{{ url_for("roi_calculator.email_phase1_report") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        email: email
+                    })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        closePhase1EmailModal();
+                        document.getElementById('phase1SuccessMessage').textContent = 'The Phase-1 Feasibility Sprint report has been sent to ' + email;
+                        document.getElementById('phase1SuccessModal').style.display = 'flex';
+                    } else {
+                        errorDiv.textContent = data.error || 'Failed to send email. Please try again.';
+                        errorDiv.style.display = 'block';
+                        sendBtn.textContent = originalText;
+                        sendBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    errorDiv.textContent = 'Network error. Please check your connection and try again.';
+                    errorDiv.style.display = 'block';
+                    sendBtn.textContent = originalText;
+                    sendBtn.disabled = false;
+                });
+            }
+            
+            // Allow Enter key to submit
+            document.addEventListener('DOMContentLoaded', function() {
+                const emailInput = document.getElementById('phase1EmailInput');
+                if (emailInput) {
+                    emailInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            sendPhase1Email();
+                        }
+                    });
+                }
+            });
+            
+            // Close modal on outside click
+            const phase1Modal = document.getElementById('phase1EmailModal');
+            if (phase1Modal) {
+                phase1Modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closePhase1EmailModal();
+                    }
+                });
+            }
+            
+            const phase1SuccessModal = document.getElementById('phase1SuccessModal');
+            if (phase1SuccessModal) {
+                phase1SuccessModal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closePhase1SuccessModal();
+                    }
+                });
+            }
+            </script>
             
             <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.9rem; margin-top: 2rem;">
                 90%+ accuracy guarantee • Full refund if we miss the target • 48-hour turnaround
@@ -3579,6 +3715,142 @@ def email_report():
         
     except Exception as e:
         current_app.logger.error(f"Error sending email report: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@roi_app.route('/email-phase1-report', methods=['POST'])
+def email_phase1_report():
+    """Email Phase-1 Feasibility Sprint PDF to user using MailChannels API"""
+    from flask import jsonify, current_app
+    
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"success": False, "error": "Email is required"}), 400
+        
+        # Read the Phase-1 PDF file
+        pdf_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'downloads', 'Phase-1-feasibility-sprint.pdf')
+        
+        if not os.path.exists(pdf_path):
+            current_app.logger.error(f"Phase-1 PDF not found at {pdf_path}")
+            return jsonify({"success": False, "error": "PDF file not found. Please contact support."}), 500
+        
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+        
+        # Encode PDF as base64 for MailChannels
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        
+        # Get MailChannels API key
+        mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
+        
+        # Get from email address
+        from_email = os.environ.get('FROM_EMAIL', 'noreply@curam-ai.com.au')
+        
+        # Prepare email data for MailChannels
+        email_data = {
+            "personalizations": [
+                {
+                    "to": [{"email": email}],
+                    "cc": [{"email": "michaelbarrett@bluelily.com.au"}]
+                }
+            ],
+            "from": {
+                "email": from_email,
+                "name": "Curam AI"
+            },
+            "subject": "Phase 1 Feasibility Sprint Report",
+            "content": [
+                {
+                    "type": "text/plain",
+                    "value": """Thank you for your interest in the Curam-Ai Protocol™.
+
+Please find attached the Phase 1 Feasibility Sprint report, which outlines our proven methodology for validating AI automation on your documents.
+
+This report demonstrates:
+• How we achieve 90%+ accuracy on YOUR documents
+• The $1,500 Phase 1 Sprint process
+• Real results from similar organizations
+• Next steps to get started
+
+Next Steps:
+1. Review the report to understand the Phase 1 process
+2. Book a consultation call to discuss your specific needs
+3. Start your Phase 1 Sprint to validate AI on your documents
+
+Best regards,
+The Curam AI Team"""
+                },
+                {
+                    "type": "text/html",
+                    "value": """
+                    <html>
+                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #4B5563;">
+                        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <h2 style="color: #0B1221;">Phase 1 Feasibility Sprint Report</h2>
+                            <p>Thank you for your interest in the Curam-Ai Protocol™.</p>
+                            <p>Please find attached the Phase 1 Feasibility Sprint report, which outlines our proven methodology for validating AI automation on your documents.</p>
+                            
+                            <div style="background: #F8F9FA; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                                <h3 style="color: #0B1221; margin-top: 0;">This report demonstrates:</h3>
+                                <ul style="list-style: none; padding: 0;">
+                                    <li>• How we achieve <strong>90%+ accuracy</strong> on YOUR documents</li>
+                                    <li>• The <strong>$1,500 Phase 1 Sprint</strong> process</li>
+                                    <li>• Real results from similar organizations</li>
+                                    <li>• Next steps to get started</li>
+                                </ul>
+                            </div>
+                            
+                            <h3 style="color: #0B1221;">Next Steps:</h3>
+                            <ol>
+                                <li>Review the report to understand the Phase 1 process</li>
+                                <li>Book a consultation call to discuss your specific needs</li>
+                                <li>Start your Phase 1 Sprint to validate AI on your documents</li>
+                            </ol>
+                            
+                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+                                <p style="color: #6B7280; font-size: 0.9em;">
+                                    Best regards,<br>
+                                    <strong>The Curam AI Team</strong>
+                                </p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                }
+            ],
+            "attachments": [
+                {
+                    "content": pdf_base64,
+                    "filename": "Phase-1-feasibility-sprint.pdf",
+                    "type": "application/pdf",
+                    "disposition": "attachment"
+                }
+            ]
+        }
+        
+        # Set headers
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        if mailchannels_api_key:
+            headers['X-Api-Key'] = mailchannels_api_key
+        
+        # Send email via MailChannels API
+        mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
+        response = requests.post(mailchannels_url, json=email_data, headers=headers, timeout=30)
+        
+        if response.status_code == 202:
+            current_app.logger.info(f"Phase-1 report sent successfully to {email} (CC: michaelbarrett@bluelily.com.au)")
+            return jsonify({"success": True, "message": "Report sent successfully! Check your email."})
+        else:
+            current_app.logger.error(f"MailChannels API error: {response.status_code} - {response.text}")
+            return jsonify({"success": False, "error": "Failed to send email. Please try again later."}), 500
+        
+    except Exception as e:
+        current_app.logger.error(f"Error sending Phase-1 email report: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 @roi_app.route('/send-roadmap-email', methods=['POST'])
