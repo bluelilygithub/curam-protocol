@@ -538,6 +538,187 @@ def email_chat_log():
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 
+@app.route('/api/contact', methods=['POST'])
+def contact_form_submission():
+    """Handle contact form submissions with email tracking"""
+    from flask import jsonify, request
+    import requests
+    from database import capture_email_request, mark_email_sent
+    
+    capture_id = None
+    
+    try:
+        # Get form data (could be JSON or form data)
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form.to_dict()
+        
+        # Extract form fields
+        name = data.get('name', '')
+        email = data.get('email', '')
+        company = data.get('company', '')
+        phone = data.get('phone', '')
+        message = data.get('message', '')
+        inquiry_type = data.get('inquiry_type', '') or data.get('type', '') or data.get('option', '')
+        
+        # Validation
+        if not email:
+            return jsonify({"success": False, "error": "Email is required"}), 400
+        
+        if not name:
+            return jsonify({"success": False, "error": "Name is required"}), 400
+        
+        if not message:
+            return jsonify({"success": False, "error": "Message is required"}), 400
+        
+        # Capture form submission for tracking
+        capture_id = capture_email_request(
+            email_address=email,
+            report_type='contact_form',
+            source_page=request.referrer or '/contact.html',
+            request_data={
+                'name': name,
+                'company': company,
+                'phone': phone,
+                'inquiry_type': inquiry_type,
+                'message': message[:500],  # First 500 chars of message
+                'form_source': 'contact_page'
+            },
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            session_id=session.get('_id')
+        )
+        
+        # Prepare email content
+        mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
+        from_email = os.environ.get('FROM_EMAIL', 'noreply@curam-ai.com.au')
+        
+        # Email to internal team
+        email_data = {
+            "personalizations": [
+                {
+                    "to": [{"email": "michaelbarrett@bluelily.com.au"}]
+                }
+            ],
+            "from": {
+                "email": from_email,
+                "name": "Curam AI Contact Form"
+            },
+            "reply_to": {
+                "email": email,
+                "name": name
+            },
+            "subject": f"New Contact Form Submission{' - ' + inquiry_type if inquiry_type else ''} from {name}",
+            "content": [
+                {
+                    "type": "text/plain",
+                    "value": f"""New Contact Form Submission
+
+Name: {name}
+Email: {email}
+Company: {company or 'Not provided'}
+Phone: {phone or 'Not provided'}
+Inquiry Type: {inquiry_type or 'General inquiry'}
+
+Message:
+{message}
+
+---
+Submitted from: {request.referrer or 'Direct URL'}
+IP Address: {request.remote_addr}
+User Agent: {request.headers.get('User-Agent', 'Unknown')}
+"""
+                },
+                {
+                    "type": "text/html",
+                    "value": f"""
+                    <html>
+                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #4B5563;">
+                        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <h2 style="color: #0B1221; border-bottom: 3px solid #D4AF37; padding-bottom: 10px;">
+                                New Contact Form Submission
+                            </h2>
+                            
+                            <div style="background: #F8F9FA; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                                <p style="margin: 5px 0;"><strong>Name:</strong> {name}</p>
+                                <p style="margin: 5px 0;"><strong>Email:</strong> <a href="mailto:{email}">{email}</a></p>
+                                <p style="margin: 5px 0;"><strong>Company:</strong> {company or 'Not provided'}</p>
+                                <p style="margin: 5px 0;"><strong>Phone:</strong> {phone or 'Not provided'}</p>
+                                <p style="margin: 5px 0;"><strong>Inquiry Type:</strong> {inquiry_type or 'General inquiry'}</p>
+                            </div>
+                            
+                            <div style="background: white; border-left: 4px solid #D4AF37; padding: 15px; margin: 20px 0;">
+                                <h3 style="margin-top: 0; color: #0B1221;">Message:</h3>
+                                <p style="white-space: pre-wrap;">{message}</p>
+                            </div>
+                            
+                            <div style="background: #EEF2FF; padding: 15px; border-radius: 8px; margin-top: 20px; font-size: 0.9em;">
+                                <p style="margin: 5px 0;"><strong>Source:</strong> {request.referrer or 'Direct URL'}</p>
+                                <p style="margin: 5px 0;"><strong>IP:</strong> {request.remote_addr}</p>
+                            </div>
+                            
+                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB; text-align: center;">
+                                <a href="mailto:{email}?subject=Re: Your inquiry about Curam-AI Protocol" 
+                                   style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; text-decoration: none; border-radius: 8px; font-weight: 600;">
+                                    Reply to {name}
+                                </a>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                }
+            ]
+        }
+        
+        # Set headers
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        if mailchannels_api_key:
+            headers['X-Api-Key'] = mailchannels_api_key
+        
+        # Send notification email
+        mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
+        response = requests.post(mailchannels_url, json=email_data, headers=headers, timeout=30)
+        
+        if response.status_code == 202:
+            # Mark email as sent successfully
+            if capture_id:
+                mark_email_sent(capture_id, success=True)
+            
+            app.logger.info(f"Contact form submission from {email} ({name}) sent successfully")
+            
+            # Return success
+            return jsonify({
+                "success": True,
+                "message": "Thank you for your inquiry! We'll get back to you within 24 hours."
+            })
+        else:
+            # Mark email as failed
+            if capture_id:
+                mark_email_sent(capture_id, success=False, error_message=f"MailChannels error: {response.status_code}")
+            
+            app.logger.error(f"MailChannels API error: {response.status_code} - {response.text}")
+            return jsonify({
+                "success": False,
+                "error": "Failed to send message. Please try again or email us directly at michaelbarrett@bluelily.com.au"
+            }), 500
+        
+    except Exception as e:
+        # Mark email as failed with error
+        if capture_id:
+            mark_email_sent(capture_id, success=False, error_message=str(e))
+        
+        app.logger.error(f"Error processing contact form: {e}")
+        return jsonify({
+            "success": False,
+            "error": "An error occurred. Please try again or email us directly."
+        }), 500
+
+
+
 # ============================================================================
 # ADD THIS ROUTE TO main.py
 # Phase 3 Sample Email Route
@@ -737,7 +918,7 @@ The Curam AI Team"""
         
         app.logger.error(f"Error sending Phase 3 sample email: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
-        
+
 
 # =============================================================================
 # AUTOMATER & DEMO ROUTES
