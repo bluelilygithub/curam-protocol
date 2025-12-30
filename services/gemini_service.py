@@ -2331,22 +2331,40 @@ HTML_TEMPLATE = """
 
         <form method="post" enctype="multipart/form-data" novalidate>
             <div class="toggle-group">
+                {% if 'finance' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="finance" {% if department == 'finance' %}checked{% endif %}>
                     Finance Dept
                 </label>
+                {% endif %}
+                
+                {% if 'engineering' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="engineering" {% if department == 'engineering' %}checked{% endif %}>
                     Engineering Dept
                 </label>
+                {% endif %}
+                
+                {% if 'transmittal' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="transmittal" {% if department == 'transmittal' %}checked{% endif %}>
                     Drafter Transmittal
                 </label>
+                {% endif %}
+                
+                {% if 'logistics' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="logistics" {% if department == 'logistics' %}checked{% endif %}>
                     Logistics Dept
                 </label>
+                {% endif %}
+                
+                {% if 'legal' in allowed_departments %}
+                <label>
+                    <input type="radio" name="department" value="legal" {% if department == 'legal' %}checked{% endif %}>
+                    Legal Dept
+                </label>
+                {% endif %}
             </div>
 
             <h3>1. Select Sample Files</h3>

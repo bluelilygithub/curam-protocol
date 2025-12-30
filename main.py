@@ -21,8 +21,7 @@ from database import (
     engine, 
     get_sectors, 
     get_demo_config_by_department,
-    get_samples_for_template,
-    get_sector_demo_config
+    get_samples_for_template
 )
 from sqlalchemy import text
 
@@ -538,421 +537,20 @@ def email_chat_log():
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 
-@app.route('/api/contact', methods=['POST'])
-def contact_form_submission():
-    """Handle contact form submissions with email tracking"""
-    from flask import jsonify, request
-    import requests
-    from database import capture_email_request, mark_email_sent
-    
-    capture_id = None
-    
-    try:
-        # Get form data (could be JSON or form data)
-        if request.is_json:
-            data = request.get_json()
-        else:
-            data = request.form.to_dict()
-        
-        # Extract form fields
-        name = data.get('name', '')
-        email = data.get('email', '')
-        company = data.get('company', '')
-        phone = data.get('phone', '')
-        message = data.get('message', '')
-        inquiry_type = data.get('inquiry_type', '') or data.get('type', '') or data.get('option', '')
-        
-        # Validation
-        if not email:
-            return jsonify({"success": False, "error": "Email is required"}), 400
-        
-        if not name:
-            return jsonify({"success": False, "error": "Name is required"}), 400
-        
-        if not message:
-            return jsonify({"success": False, "error": "Message is required"}), 400
-        
-        # Capture form submission for tracking
-        capture_id = capture_email_request(
-            email_address=email,
-            report_type='contact_form',
-            source_page=request.referrer or '/contact.html',
-            request_data={
-                'name': name,
-                'company': company,
-                'phone': phone,
-                'inquiry_type': inquiry_type,
-                'message': message[:500],  # First 500 chars of message
-                'form_source': 'contact_page'
-            },
-            ip_address=request.remote_addr,
-            user_agent=request.headers.get('User-Agent'),
-            session_id=session.get('_id')
-        )
-        
-        # Prepare email content
-        mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
-        from_email = os.environ.get('FROM_EMAIL', 'noreply@curam-ai.com.au')
-        
-        # Email to internal team
-        email_data = {
-            "personalizations": [
-                {
-                    "to": [{"email": "michaelbarrett@bluelily.com.au"}]
-                }
-            ],
-            "from": {
-                "email": from_email,
-                "name": "Curam AI Contact Form"
-            },
-            "reply_to": {
-                "email": email,
-                "name": name
-            },
-            "subject": f"New Contact Form Submission{' - ' + inquiry_type if inquiry_type else ''} from {name}",
-            "content": [
-                {
-                    "type": "text/plain",
-                    "value": f"""New Contact Form Submission
-
-Name: {name}
-Email: {email}
-Company: {company or 'Not provided'}
-Phone: {phone or 'Not provided'}
-Inquiry Type: {inquiry_type or 'General inquiry'}
-
-Message:
-{message}
-
----
-Submitted from: {request.referrer or 'Direct URL'}
-IP Address: {request.remote_addr}
-User Agent: {request.headers.get('User-Agent', 'Unknown')}
-"""
-                },
-                {
-                    "type": "text/html",
-                    "value": f"""
-                    <html>
-                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #4B5563;">
-                        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                            <h2 style="color: #0B1221; border-bottom: 3px solid #D4AF37; padding-bottom: 10px;">
-                                New Contact Form Submission
-                            </h2>
-                            
-                            <div style="background: #F8F9FA; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                                <p style="margin: 5px 0;"><strong>Name:</strong> {name}</p>
-                                <p style="margin: 5px 0;"><strong>Email:</strong> <a href="mailto:{email}">{email}</a></p>
-                                <p style="margin: 5px 0;"><strong>Company:</strong> {company or 'Not provided'}</p>
-                                <p style="margin: 5px 0;"><strong>Phone:</strong> {phone or 'Not provided'}</p>
-                                <p style="margin: 5px 0;"><strong>Inquiry Type:</strong> {inquiry_type or 'General inquiry'}</p>
-                            </div>
-                            
-                            <div style="background: white; border-left: 4px solid #D4AF37; padding: 15px; margin: 20px 0;">
-                                <h3 style="margin-top: 0; color: #0B1221;">Message:</h3>
-                                <p style="white-space: pre-wrap;">{message}</p>
-                            </div>
-                            
-                            <div style="background: #EEF2FF; padding: 15px; border-radius: 8px; margin-top: 20px; font-size: 0.9em;">
-                                <p style="margin: 5px 0;"><strong>Source:</strong> {request.referrer or 'Direct URL'}</p>
-                                <p style="margin: 5px 0;"><strong>IP:</strong> {request.remote_addr}</p>
-                            </div>
-                            
-                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB; text-align: center;">
-                                <a href="mailto:{email}?subject=Re: Your inquiry about Curam-AI Protocol" 
-                                   style="display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; text-decoration: none; border-radius: 8px; font-weight: 600;">
-                                    Reply to {name}
-                                </a>
-                            </div>
-                        </div>
-                    </body>
-                    </html>
-                    """
-                }
-            ]
-        }
-        
-        # Set headers
-        headers = {
-            'Content-Type': 'application/json'
-        }
-        if mailchannels_api_key:
-            headers['X-Api-Key'] = mailchannels_api_key
-        
-        # Send notification email
-        mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
-        response = requests.post(mailchannels_url, json=email_data, headers=headers, timeout=30)
-        
-        if response.status_code == 202:
-            # Mark email as sent successfully
-            if capture_id:
-                mark_email_sent(capture_id, success=True)
-            
-            app.logger.info(f"Contact form submission from {email} ({name}) sent successfully")
-            
-            # Return success
-            return jsonify({
-                "success": True,
-                "message": "Thank you for your inquiry! We'll get back to you within 24 hours."
-            })
-        else:
-            # Mark email as failed
-            if capture_id:
-                mark_email_sent(capture_id, success=False, error_message=f"MailChannels error: {response.status_code}")
-            
-            app.logger.error(f"MailChannels API error: {response.status_code} - {response.text}")
-            return jsonify({
-                "success": False,
-                "error": "Failed to send message. Please try again or email us directly at michaelbarrett@bluelily.com.au"
-            }), 500
-        
-    except Exception as e:
-        # Mark email as failed with error
-        if capture_id:
-            mark_email_sent(capture_id, success=False, error_message=str(e))
-        
-        app.logger.error(f"Error processing contact form: {e}")
-        return jsonify({
-            "success": False,
-            "error": "An error occurred. Please try again or email us directly."
-        }), 500
-
-
-
-# ============================================================================
-# ADD THIS ROUTE TO main.py
-# Phase 3 Sample Email Route
-# ============================================================================
-
-@app.route('/email-phase3-sample', methods=['POST'])
-def email_phase3_sample():
-    """Email Phase 3 Compliance Shield sample PDF to user"""
-    from flask import jsonify, request
-    import requests
-    import base64
-    import os
-    from database import capture_email_request, mark_email_sent
-    
-    capture_id = None
-    
-    try:
-        data = request.get_json()
-        email = data.get('email')
-        
-        if not email:
-            return jsonify({"success": False, "error": "Email is required"}), 400
-        
-        # Capture email request for tracking
-        capture_id = capture_email_request(
-            email_address=email,
-            report_type='phase3_sample',
-            source_page='/phase-3-compliance.html',
-            request_data={
-                'sample_type': 'compliance_shield',
-                'source': 'phase3_page'
-            },
-            ip_address=request.remote_addr,
-            user_agent=request.headers.get('User-Agent'),
-            session_id=session.get('_id')
-        )
-        
-        # Read the Phase 3 PDF file
-        pdf_path = os.path.join('assets', 'downloads', 'Phase-3-Compliance-Shield.pdf')
-        
-        if not os.path.exists(pdf_path):
-            if capture_id:
-                mark_email_sent(capture_id, success=False, error_message="PDF file not found")
-            return jsonify({"success": False, "error": "PDF file not found"}), 500
-        
-        with open(pdf_path, 'rb') as f:
-            pdf_bytes = f.read()
-        
-        # Encode PDF as base64
-        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
-        
-        # Get MailChannels API key
-        mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
-        from_email = os.environ.get('FROM_EMAIL', 'noreply@curam-ai.com.au')
-        
-        # Prepare email
-        email_data = {
-            "personalizations": [
-                {
-                    "to": [{"email": email}],
-                    "cc": [{"email": "michaelbarrett@bluelily.com.au"}]
-                }
-            ],
-            "from": {
-                "email": from_email,
-                "name": "Curam AI"
-            },
-            "subject": "Phase 3 Compliance Shield - Sample Report",
-            "content": [
-                {
-                    "type": "text/plain",
-                    "value": """Thank you for your interest in the Curam-Ai Protocol™ Phase 3 Compliance Shield.
-
-Please find attached the sample compliance documentation report showing our ISO 27001 control mappings, risk matrices, and pre-audit documentation package.
-
-This sample demonstrates:
-• ISO 27001 control mapping and evidence
-• Risk assessment matrices
-• Pre-filled compliance questionnaires
-• Architecture and data flow documentation
-• Shadow IT inventory and governance controls
-
-Phase 3 Deliverables ($8-12k, 2 weeks):
-• Complete audit-ready evidence package
-• Risk control matrices aligned to ISO 27001
-• Pre-filled insurance compliance questionnaires
-• Technical architecture documentation
-• 40-50% faster audit completion
-
-Next Steps:
-1. Review the sample to understand Phase 3 deliverables
-2. Book a consultation to discuss your compliance requirements
-3. Start Phase 3 to accelerate your audit process
-
-Best regards,
-The Curam AI Team"""
-                },
-                {
-                    "type": "text/html",
-                    "value": """
-                    <html>
-                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #4B5563;">
-                        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                            <h2 style="color: #0B1221;">Phase 3 Compliance Shield - Sample Report</h2>
-                            <p>Thank you for your interest in the Curam-Ai Protocol™ Phase 3 Compliance Shield.</p>
-                            <p>Please find attached the sample compliance documentation report showing our ISO 27001 control mappings, risk matrices, and pre-audit documentation package.</p>
-                            
-                            <div style="background: #F8F9FA; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                                <h3 style="color: #0B1221; margin-top: 0;">This sample demonstrates:</h3>
-                                <ul style="padding-left: 20px;">
-                                    <li>ISO 27001 control mapping and evidence</li>
-                                    <li>Risk assessment matrices</li>
-                                    <li>Pre-filled compliance questionnaires</li>
-                                    <li>Architecture and data flow documentation</li>
-                                    <li>Shadow IT inventory and governance controls</li>
-                                </ul>
-                            </div>
-                            
-                            <div style="background: #EEF2FF; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                                <h3 style="color: #0B1221; margin-top: 0;">Phase 3 Deliverables</h3>
-                                <p style="margin: 0;"><strong>Investment:</strong> $8-12k | <strong>Timeline:</strong> 2 weeks</p>
-                                <ul style="padding-left: 20px; margin-top: 10px;">
-                                    <li>Complete audit-ready evidence package</li>
-                                    <li>Risk control matrices aligned to ISO 27001</li>
-                                    <li>Pre-filled insurance compliance questionnaires</li>
-                                    <li>Technical architecture documentation</li>
-                                    <li><strong>Result:</strong> 40-50% faster audit completion</li>
-                                </ul>
-                            </div>
-                            
-                            <h3 style="color: #0B1221;">Next Steps:</h3>
-                            <ol>
-                                <li>Review the sample to understand Phase 3 deliverables</li>
-                                <li>Book a consultation to discuss your compliance requirements</li>
-                                <li>Start Phase 3 to accelerate your audit process</li>
-                            </ol>
-                            
-                            <div style="text-align: center; margin: 30px 0;">
-                                <a href="https://curam-protocol.curam-ai.com.au/contact.html?option=phase-3-consultation" 
-                                   style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; text-decoration: none; border-radius: 8px; font-weight: 600;">
-                                    Book Consultation
-                                </a>
-                            </div>
-                            
-                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
-                                <p style="color: #6B7280; font-size: 0.9em;">
-                                    Best regards,<br>
-                                    <strong>The Curam AI Team</strong>
-                                </p>
-                            </div>
-                        </div>
-                    </body>
-                    </html>
-                    """
-                }
-            ],
-            "attachments": [
-                {
-                    "content": pdf_base64,
-                    "filename": "Phase-3-Compliance-Shield-Sample.pdf",
-                    "type": "application/pdf",
-                    "disposition": "attachment"
-                }
-            ]
-        }
-        
-        # Set headers
-        headers = {
-            'Content-Type': 'application/json'
-        }
-        if mailchannels_api_key:
-            headers['X-Api-Key'] = mailchannels_api_key
-        
-        # Send email
-        mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
-        response = requests.post(mailchannels_url, json=email_data, headers=headers, timeout=30)
-        
-        if response.status_code == 202:
-            # Mark email as sent successfully
-            if capture_id:
-                mark_email_sent(capture_id, success=True)
-            
-            app.logger.info(f"Phase 3 sample sent successfully to {email}")
-            return jsonify({"success": True, "message": "Sample report sent successfully!"})
-        else:
-            # Mark email as failed
-            if capture_id:
-                mark_email_sent(capture_id, success=False, error_message=f"MailChannels error: {response.status_code}")
-            
-            app.logger.error(f"MailChannels API error: {response.status_code} - {response.text}")
-            return jsonify({"success": False, "error": "Failed to send email. Please try again later."}), 500
-        
-    except Exception as e:
-        # Mark email as failed with error
-        if capture_id:
-            mark_email_sent(capture_id, success=False, error_message=str(e))
-        
-        app.logger.error(f"Error sending Phase 3 sample email: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
 # =============================================================================
 # AUTOMATER & DEMO ROUTES
 # =============================================================================
 
-# Feasibility Preview - Sector-aware HTML page with iframe (database-driven)
 # Feasibility Preview HTML page with iframe (serves feasibility-preview.html)
 @app.route('/feasibility-preview.html')
 def feasibility_preview_html():
     """Serve feasibility-preview.html page with iframe to automater"""
-    # Try to render as template with default sector data
-    sector_slug = request.args.get('sector', 'professional-services')
-    
-    # Default sector configuration
-    sector_config = {
-        'name': 'Professional Services',
-        'headline': 'Sample Industry P1 Feasibility Demo',
-        'subheadline': 'Test our AI-powered document classification and extraction engine live.',
-        'demo_title': 'P1 Feasibility Sprint',
-        'demo_description': 'Upload PDFs, images, or scanned documents to test extraction',
-        'icon': None
-    }
-    
-    try:
-        return render_template('feasibility-preview.html', sector=sector_config)
-    except:
-        # Fallback: try to send as static file
-        return send_file('feasibility-preview.html')
+    return send_file('feasibility-preview.html')
 
 @app.route('/feasibility-preview', methods=['GET', 'POST'])
 def feasibility_preview_redirect():
-    """Redirect /feasibility-preview to /feasibility-preview.html preserving query params"""
-    sector = request.args.get('sector', 'professional-services')
-    return redirect(f'/feasibility-preview.html?sector={sector}', code=301)
+    """Redirect /feasibility-preview to /feasibility-preview.html"""
+    return redirect('/feasibility-preview.html', code=301)
 
 # Legacy demo routes (301 redirects to new name)
 @app.route('/demo.html')
@@ -974,6 +572,17 @@ def automater():
 
 # Original index function (document extraction) - renamed
 def index_automater():
+    # Get sector from URL parameter for department filtering
+    sector_slug = request.args.get('sector', None)
+    
+    # Get allowed departments for this sector
+    if sector_slug:
+        from database import get_departments_by_sector
+        allowed_departments = get_departments_by_sector(sector_slug)
+    else:
+        # No sector specified - show all departments
+        allowed_departments = ['finance', 'engineering', 'transmittal', 'logistics', 'legal']
+    
     department = request.form.get('department') or request.args.get('department')
     results = []
     error_message = None
@@ -1106,10 +715,7 @@ def index_automater():
                             model_actions.append(f"Ã¢Å“â€œ Text extracted successfully ({len(text)} characters)")
                     
                     model_actions.append(f"Analyzing {filename} with AI models")
-                    sector_slug = request.args.get("sector", "professional-services")
-                    entries, api_error, model_used, attempt_log, file_action_log, schedule_type = analyze_gemini(
-                        text, department, image_path, sector_slug=sector_slug
-                    )
+                    entries, api_error, model_used, attempt_log, file_action_log, schedule_type = analyze_gemini(text, department, image_path)
                     if file_action_log:
                         model_actions.extend(file_action_log)
                     if model_used:
@@ -1415,7 +1021,9 @@ def index_automater():
         model_attempts=model_attempts,
         model_actions=model_actions,
         schedule_type=schedule_type,
-        transmittal_data=transmittal_data
+        transmittal_data=transmittal_data,
+        allowed_departments=allowed_departments,
+        sector=sector_slug
     )
 
 @app.route('/export_csv')

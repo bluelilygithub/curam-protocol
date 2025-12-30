@@ -168,3 +168,10 @@ ERROR_FIELD = {
     "transmittal": "Title",
     "logistics": "CargoDescription"
 }
+
+# --- SECTOR TO DEPARTMENT MAPPING ---
+SECTOR_DEPARTMENTS = {
+    'built-environment': ['finance', 'engineering', 'transmittal'],
+    'logistics-compliance': ['finance', 'logistics'],
+    'professional-services': ['finance', 'legal']
+}
