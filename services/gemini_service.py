@@ -3037,6 +3037,13 @@ HTML_TEMPLATE = """
                     {% if row.DocumentType %}{{ row.DocumentType }}{% else %}Logistics Document{% endif %}
                 </div>
             </div>
+            
+            {# DEBUG: Show all fields in row #}
+            <div style="padding: 15px; background: #f0f0f0; border-bottom: 2px solid #ddd;">
+                <strong>DEBUG - All Fields in Row:</strong><br>
+                <pre style="font-size: 11px; overflow-x: auto;">{{ row }}</pre>
+            </div>
+            
             <div style="overflow-x: auto;">
         <table>
             <thead>
