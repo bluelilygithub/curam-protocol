@@ -508,3 +508,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+
+// Wait for navbar to load, then initialize search
+setTimeout(function() {
+    const searchForms = document.querySelectorAll('form[role="search"], .search-form');
+    searchForms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const input = this.querySelector('input[name="query"], input[name="s"]');
+            const query = input ? input.value.trim() : '';
+            if (query) {
+                window.location.href = `/search-results?q=${encodeURIComponent(query)}`;
+            }
+        });
+    });
+}, 500);
