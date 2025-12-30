@@ -2184,18 +2184,36 @@ HTML_TEMPLATE = """
 
         <form method="post" enctype="multipart/form-data" novalidate>
             <div class="toggle-group">
+                {% if 'finance' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="finance" {% if department == 'finance' %}checked{% endif %}>
                     Finance Dept
                 </label>
+                {% endif %}
+                {% if 'engineering' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="engineering" {% if department == 'engineering' %}checked{% endif %}>
                     Engineering Dept
                 </label>
+                {% endif %}
+                {% if 'transmittal' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="transmittal" {% if department == 'transmittal' %}checked{% endif %}>
                     Drafter Transmittal
                 </label>
+                {% endif %}
+                {% if 'logistics' in allowed_departments %}
+                <label>
+                    <input type="radio" name="department" value="logistics" {% if department == 'logistics' %}checked{% endif %}>
+                    Logistics Dept
+                </label>
+                {% endif %}
+                {% if 'legal' in allowed_departments %}
+                <label>
+                    <input type="radio" name="department" value="legal" {% if department == 'legal' %}checked{% endif %}>
+                    Legal Dept
+                </label>
+                {% endif %}
             </div>
 
             <h3>1. Select Sample Files</h3>
@@ -3084,17 +3102,10 @@ HTML_TEMPLATE = """
             }
 
             function handleDepartmentChange() {
-                const checkedRadio = document.querySelector('input[name="department"]:checked');
-                console.log('🔍 Department changed to:', checkedRadio ? checkedRadio.value : 'none');
-                
-                // Log checked samples
-                const checkedSamples = document.querySelectorAll('input[name="samples"]:checked');
-                console.log('📋 Checked samples count:', checkedSamples.length);
-                checkedSamples.forEach(cb => console.log('  ✓', cb.value));
-                
                 updateSampleVisibility();
                 hideResultsSection();
                 updateRoutineVisibility();
+            const checkedRadio = document.querySelector('input[name="department"]:checked');
             clearOtherSelections(checkedRadio ? checkedRadio.value : null);
             if (checkedRadio && checkedRadio.value === 'finance') {
                 updateFinanceUploadList();
@@ -3104,14 +3115,6 @@ HTML_TEMPLATE = """
             deptRadios.forEach(radio => radio.addEventListener('change', handleDepartmentChange));
             updateSampleVisibility();
             updateRoutineVisibility();
-            
-            // Log initial state
-            const initialDept = document.querySelector('input[name="department"]:checked');
-            console.log('🚀 Page loaded - Initial department:', initialDept ? initialDept.value : 'none');
-            const initialChecked = document.querySelectorAll('input[name="samples"]:checked');
-            console.log('📋 Initial checked samples:', initialChecked.length);
-            initialChecked.forEach(cb => console.log('  ✓', cb.value));
-            
         if (financeUploadInput) {
             financeUploadInput.addEventListener('change', () => updateFinanceUploadList());
             const activeDeptRadio = document.querySelector('input[name="department"]:checked');
