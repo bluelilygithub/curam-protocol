@@ -49,17 +49,6 @@ DEPARTMENT_SAMPLES = {
             {"path": "drawings/s102_framing_plan.pdf", "label": "S-102 Framing Plan"},
             {"path": "drawings/s500_standard_details.pdf", "label": "S-500 Details"}
         ]
-    },
-    "logistics": {
-        "label": "Shipping documents",
-        "description": "Logistics department samples",
-        "folder": "logistics",
-        "samples": [
-            {"path": "logistics/bill-of-lading-clean.pdf", "label": "Bill of Lading - Clean (PDF)"},
-            {"path": "logistics/bill-of-lading-messy.jpg", "label": "Bill of Lading - Messy (JPG)"},
-            {"path": "logistics/sea-waybill-clean.pdf", "label": "Sea Waybill - Clean (PDF)"},
-            {"path": "logistics/sea-waybill-messy.jpg", "label": "Sea Waybill - Messy (JPG)"}
-        ]
     }
 }
 
@@ -82,8 +71,8 @@ ROUTINE_DESCRIPTIONS = {
         ("Finance / Admin: \"The Invoice Gatekeeper\"",
          """<p><strong>What it does:</strong> It acts as an <strong>Intelligent Document Processing (IDP)</strong> engine, translating raw incoming PDF bills (from subcontractors, hardware stores, software subscriptions, etc.) into structured data. It ignores layout variations and reliably extracts the core financial fields required to push the bill into your accounting platform (Xero/MYOB).</p>
          <p><strong>The Current Grind:</strong> The workflow involves excessive manual repetition: an admin staff member opens an email, saves the PDF, manually types the Vendor name, Date, Total, and Invoice ID into the accounting platform, and cross-checks for errors.</p>
-         <p><strong>Frequency:</strong> Daily volume for a 70-staff firm is typically <strong>70–100 documents</strong> every week (external vendor invoices alone). We will initially focus the pilot on vendor invoices.</p>
-         <p><strong>The Saving (Vendor Invoices Only):</strong><br>Manual: 3 minutes per document × 70 docs = <strong>3.5 hours/week</strong>.<br>AI: Near-instant. Accuracy is the new focus.<br><strong>Value:</strong> This immediate saving frees the Office Manager to focus on strategic tasks like staff culture, cost centre analysis, and debt recovery rather than transactional data entry.</p>
+         <p><strong>Frequency:</strong> Daily volume for a 70-staff firm is typically <strong>70â€“100 documents</strong> every week (external vendor invoices alone). We will initially focus the pilot on vendor invoices.</p>
+         <p><strong>The Saving (Vendor Invoices Only):</strong><br>Manual: 3 minutes per document Ã— 70 docs = <strong>3.5 hours/week</strong>.<br>AI: Near-instant. Accuracy is the new focus.<br><strong>Value:</strong> This immediate saving frees the Office Manager to focus on strategic tasks like staff culture, cost centre analysis, and debt recovery rather than transactional data entry.</p>
          <hr style="margin: 20px 0;">
          <p><strong>Future Impact: Internal Documents (Phase 2 Upside)</strong><br>The greatest opportunity lies in extending this capability to <strong>internal documents</strong>. By proving the engine on external invoices, the firm gains a validated tool ready to automate staff timesheets, project expense receipts, and internal cost allocations. This dramatically expands efficiency and eliminates manual project coding errors.</p>"""),
     ],
@@ -92,7 +81,7 @@ ROUTINE_DESCRIPTIONS = {
          """<p><strong>What it does:</strong> It converts "dead" data (text inside a PDF drawing) into "live" data (Excel cells). It takes a list of beams or columns from a drawing and prepares it for calculation or ordering.</p>
          <p><strong>The Current Grind:</strong> An engineer needs to check the capacity of 50 columns or prepare a bill of materials. They look at the PDF schedule on the left screen and manually type member details (e.g., "310UC158") into a spreadsheet on the right screen, one by one.</p>
          <p><strong>Frequency:</strong> Project-Based (Bursts). This happens heavily at the start of a project, during major design revisions, and when preparing tender packages.</p>
-         <p><strong>The Saving:</strong><br>Manual: 45–60 minutes per major schedule.<br>AI: 30 seconds.<br><strong>Value:</strong> The AI eliminates <strong>Transcription Error</strong>—a catastrophic risk in capacity checking or steel ordering. It guarantees data integrity for calculation or fabrication takeoff.</p>
+         <p><strong>The Saving:</strong><br>Manual: 45â€“60 minutes per major schedule.<br>AI: 30 seconds.<br><strong>Value:</strong> The AI eliminates <strong>Transcription Error</strong>â€”a catastrophic risk in capacity checking or steel ordering. It guarantees data integrity for calculation or fabrication takeoff.</p>
          <p><strong>Note:</strong> This demo is tuned for the two structural schedules provided (`schedule_cad.pdf` and `schedule_revit.pdf`). Upload files with the same fields (Mark/Size/Qty/Length/Grade/PaintSystem/Comments), even if the layout is slightly different, so the extraction schema still applies.</p>""")
     ],
     "transmittal": [
@@ -100,19 +89,8 @@ ROUTINE_DESCRIPTIONS = {
          """<p><strong>Current Grind:</strong> Drafters spend hours opening drawing PDFs, manually recording drawing numbers, revisions, titles, scales, and approval dates into a transmittal register. For a 50-drawing package, this takes 30-45 minutes of repetitive clicking and typing across inconsistent title block layouts.</p>
          <p><strong>The Demo:</strong> Upload the five drawing PDFs supplied (S-001, S-100, S-101, S-102, S-500). The AI scans the title block and extracts Drawing Number, Revision, Drawing Title, and Scale from each, handling mixed title block layouts automatically.</p>
          <p><strong>Input Constraint:</strong> Files must contain the same metadata fields (Drawing Number, Revision, Title, Scale, Date, Status, Sheet Count, Project) even if the layout differs. The extraction schema normalizes across variations.</p>
-         <p><strong>Outcome:</strong> A "Document Register" that your team can email or drop into Excel as a transmittal—ready for client distribution, RFI tracking, or compliance audits.</p>
+         <p><strong>Outcome:</strong> A "Document Register" that your team can email or drop into Excel as a transmittalâ€”ready for client distribution, RFI tracking, or compliance audits.</p>
          <p><strong>The Saving:</strong><br>Manual: 30-45 min per transmittal.<br>AI: 20 seconds.<br><strong>Value:</strong> Zero transcription errors (no mismatched rev letters, drawing numbers, or dates) + auditable extraction trail for compliance.</p>""")
-    ],
-    "logistics": [
-        ("Logistics Coordinator: \"The Customs Compliance Validator\"",
-         """<p><strong>What it does:</strong> Automates the extraction and cross-referencing of shipping documents (Bill of Lading, Sea Waybill, Commercial Invoices) for customs clearance and compliance.</p>
-         <p><strong>The Current Grind:</strong> A logistics coordinator receives 3 documents per shipment: Bill of Lading, Sea Waybill, and Commercial Invoice. They must manually extract container numbers, HS codes (8-10 digit customs classification), ports, shipper/consignee details, and cross-reference all three documents to ensure they match before customs submission.</p>
-         <p><strong>Error Risks:</strong> One wrong HS code = customs fine ($5K-$50K). Mismatched documents between BOL and invoice = container detention charges ($150-500/day). Missing port information = shipment delays.</p>
-         <p><strong>Frequency:</strong> For a mid-size freight forwarder: <strong>100-200 shipments per week</strong>. Each shipment requires processing 2-3 documents.</p>
-         <p><strong>The Saving:</strong><br>Manual: 12 minutes per shipment × 150 shipments = <strong>30 hours/week</strong>.<br>AI: 2 minutes per shipment (extraction + review).<br><strong>Time Saved:</strong> 25+ hours/week = <strong>$110K annually</strong> in labor costs.</p>
-         <p><strong>Additional Value:</strong> Avoid 2-3 HS code classification errors per year = <strong>$15K-$30K</strong> in fines avoided. Avoid 1-2 container detentions per month = <strong>$10K-$15K</strong> in demurrage charges avoided.</p>
-         <p><strong>Total Annual Value: $135K-$155K</strong></p>
-         <p><strong>Note:</strong> This demo handles both clean (digital) and messy (scanned/photographed) versions of shipping documents to demonstrate OCR capabilities.</p>""")
     ]
 }
 
@@ -120,26 +98,20 @@ ROUTINE_SUMMARY = {
     "finance": [
         ("Grind", "Admin opens email, saves the PDF, opens Xero, manually types Vendor, Date, Total, and checks for typos."),
         ("Frequency", "Daily; more realistic volume of <strong>70 documents</strong> per week for a 70-person firm (Vendor Invoices only)."),
-        ("Saving", "Manual: 3 min/document × 70 docs = <strong>3.5 hours/week</strong>. AI: Near-instant."),
+        ("Saving", "Manual: 3 min/document Ã— 70 docs = <strong>3.5 hours/week</strong>. AI: Near-instant."),
         ("Value", "Immediate efficiency frees up Office Manager time for strategic tasks (culture, billing), enabling a capacity reallocation upside of up to <strong>$1.44 M</strong> annually (Tier 4).")
     ],
     "engineering": [
         ("Grind", "Engineers read 50 column/beam entries, manually typing 310UC158 into Excel for each."),
-        ("Frequency", "Project bursts—during project start and major revisions."),
-        ("Saving", "Manual: 45–60 min per schedule. AI: 30 seconds."),
+        ("Frequency", "Project burstsâ€”during project start and major revisions."),
+        ("Saving", "Manual: 45â€“60 min per schedule. AI: 30 seconds."),
         ("Value", "Eliminates transcription errors (e.g., 310UB vs 310UC).")
     ],
     "transmittal": [
-        ("Grind", "Drafters open 20–50 drawings, copying Drawing No/Rev/Title/Scale by hand."),
+        ("Grind", "Drafters open 20â€“50 drawings, copying Drawing No/Rev/Title/Scale by hand."),
         ("Frequency", "Weekly to help compile client transmittals."),
         ("Saving", "Manual: hours of typing. AI: builds the register instantly."),
         ("Value", "Avoids Friday-afternoon typos and keeps registers accurate.")
-    ],
-    "logistics": [
-        ("Grind", "Coordinator opens 3 documents per shipment (BOL, Waybill, Invoice), manually extracts container numbers, HS codes, ports, and cross-references for consistency."),
-        ("Frequency", "Daily; realistic volume of <strong>150 shipments</strong> per week for mid-size freight forwarder."),
-        ("Saving", "Manual: 12 min/shipment × 150 = <strong>30 hours/week</strong>. AI: 2 min/shipment."),
-        ("Value", "<strong>$110K/year</strong> labor savings + <strong>$25K-45K/year</strong> in avoided fines and detention charges = <strong>$135K-$155K total annual value</strong>.")
     ]
 }
 
@@ -153,7 +125,6 @@ FINANCE_FIELDS = ["Vendor", "Date", "InvoiceNum", "Cost", "GST", "FinalAmount", 
 ENGINEERING_BEAM_FIELDS = ["Mark", "Size", "Qty", "Length", "Grade", "PaintSystem", "Comments"]
 ENGINEERING_COLUMN_FIELDS = ["Mark", "SectionType", "Size", "Length", "Grade", "BasePlate", "CapPlate", "Finish", "Comments"]
 TRANSMITTAL_FIELDS = ["DwgNo", "Rev", "Title", "Scale"]
-LOGISTICS_FIELDS = ["BLNumber", "WaybillNumber", "Shipper", "Consignee", "NotifyParty", "VesselVoyage", "Carrier", "PortOfLoading", "PortOfDischarge", "ContainerNumbers", "CargoDescription", "GrossWeight", "Measurement", "NumberOfPackages", "FreightTerms", "IncoTerms"]
 
 DOC_FIELDS = {
     "finance": FINANCE_FIELDS,
@@ -167,11 +138,4 @@ ERROR_FIELD = {
     "engineering": "Comments",
     "transmittal": "Title",
     "logistics": "CargoDescription"
-}
-
-# --- SECTOR TO DEPARTMENT MAPPING ---
-SECTOR_DEPARTMENTS = {
-    'built-environment': ['finance', 'engineering', 'transmittal'],
-    'logistics-compliance': ['finance', 'logistics'],
-    'professional-services': ['finance', 'legal']
 }
