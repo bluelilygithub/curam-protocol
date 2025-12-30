@@ -513,133 +513,81 @@ document.addEventListener('DOMContentLoaded', function() {
 // GLOBAL SEARCH BAR - DEBUG VERSION with extensive logging
 // ============================================================================
 
-(function initGlobalSearch() {
-    console.log('🚀 SEARCH INIT: Script loaded and executing');
-    
-    let searchInitialized = false;
-    let attemptCount = 0;
+(function initSearchWhenReady() {
+    console.log('🎯 Search: Watching for navbar to load...');
     
     function attachSearchListener() {
-        attemptCount++;
-        console.log(`🔍 SEARCH INIT: Attempt #${attemptCount}`);
-        
-        // Skip if already initialized
-        if (searchInitialized) {
-            console.log('✅ SEARCH INIT: Already initialized, skipping');
-            return;
-        }
-        
-        // Try to find the search input
-        console.log('🔎 SEARCH INIT: Looking for .nav-search-input...');
         const searchInput = document.querySelector('.nav-search-input');
         
         if (!searchInput) {
-            console.warn('❌ SEARCH INIT: Input not found yet');
-            console.log('📋 SEARCH INIT: Available inputs:', document.querySelectorAll('input').length);
-            console.log('📋 SEARCH INIT: Navbar placeholder exists:', !!document.getElementById('navbar-placeholder'));
-            console.log('📋 SEARCH INIT: Navbar content loaded:', document.getElementById('navbar-placeholder')?.innerHTML.length > 0);
-            return;
+            console.log('⏳ Search input not found');
+            return false;
         }
         
-        console.log('✅ SEARCH INIT: Input found!', searchInput);
-        
-        // Check if already has listener
         if (searchInput.hasAttribute('data-search-ready')) {
-            console.log('ℹ️ SEARCH INIT: Input already has data-search-ready attribute');
-            searchInitialized = true;
-            return;
+            console.log('ℹ️ Search already initialized');
+            return true;
         }
         
-        console.log('🔧 SEARCH INIT: Attaching Enter key listener...');
+        console.log('✅ Search input found, attaching listener');
         
-        // Attach the Enter key listener
         searchInput.addEventListener('keypress', function(e) {
-            console.log('⌨️ SEARCH: Key pressed:', e.key, 'in search input');
-            
             if (e.key === 'Enter') {
-                console.log('✅ SEARCH: Enter key detected!');
                 e.preventDefault();
-                
                 const query = this.value.trim();
-                console.log('🔍 SEARCH: Query value:', query);
-                
                 if (query) {
-                    const url = `/search-results?q=${encodeURIComponent(query)}`;
-                    console.log('🚀 SEARCH: Redirecting to:', url);
-                    window.location.href = url;
+                    console.log('🔍 Searching for:', query);
+                    window.location.href = `/search-results?q=${encodeURIComponent(query)}`;
                 } else {
-                    console.warn('⚠️ SEARCH: Empty query, showing alert');
                     alert('Please enter a search term');
                 }
             }
         });
         
-        // Mark as initialized
         searchInput.setAttribute('data-search-ready', 'true');
-        searchInitialized = true;
-        console.log('✅ SEARCH INIT: Successfully initialized! Listener attached.');
-        console.log('📊 SEARCH INIT: Total attempts:', attemptCount);
+        console.log('✅ Search initialized successfully');
+        return true;
     }
     
-    console.log('⏰ SEARCH INIT: Scheduling initialization attempts...');
+    // Try immediately
+    if (attachSearchListener()) {
+        return;
+    }
     
-    // Try multiple times with different delays
-    attachSearchListener(); // Try immediately
-    console.log('⏰ SEARCH INIT: Attempt 1 scheduled (0ms)');
-    
-    setTimeout(function() {
-        console.log('⏰ SEARCH INIT: Running 300ms attempt...');
-        attachSearchListener();
-    }, 300);
-    
-    setTimeout(function() {
-        console.log('⏰ SEARCH INIT: Running 600ms attempt...');
-        attachSearchListener();
-    }, 600);
-    
-    setTimeout(function() {
-        console.log('⏰ SEARCH INIT: Running 1000ms attempt (final)...');
-        attachSearchListener();
-    }, 1000);
-    
-    // Final diagnostic after 1.5 seconds
-    setTimeout(function() {
-        console.log('📊 SEARCH DIAGNOSTIC: Final status check');
-        console.log('  - Search initialized:', searchInitialized);
-        console.log('  - Total attempts:', attemptCount);
+    // Watch for navbar to be added to DOM
+    const observer = new MutationObserver(function(mutations) {
+        console.log('🔄 DOM changed, checking for navbar...');
         
-        const input = document.querySelector('.nav-search-input');
-        if (input) {
-            console.log('  - Input exists: YES');
-            console.log('  - Has data-search-ready:', input.hasAttribute('data-search-ready'));
-            console.log('  - Input details:', {
-                type: input.type,
-                placeholder: input.placeholder,
-                className: input.className,
-                name: input.name
-            });
-        } else {
-            console.error('  - Input exists: NO - THIS IS THE PROBLEM!');
-            console.log('  - Navbar HTML:', document.querySelector('.navbar')?.outerHTML.substring(0, 200));
+        if (attachSearchListener()) {
+            observer.disconnect();
+            console.log('✅ Observer disconnected, search ready');
         }
-    }, 1500);
+    });
+    
+    // Observe the navbar placeholder
+    const navbarPlaceholder = document.getElementById('navbar-placeholder');
+    
+    if (navbarPlaceholder) {
+        observer.observe(navbarPlaceholder, {
+            childList: true,
+            subtree: true
+        });
+        console.log('👀 Watching navbar-placeholder for changes');
+    } else {
+        console.error('❌ navbar-placeholder not found!');
+        
+        // Fallback: watch entire document
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        console.log('👀 Watching entire document as fallback');
+    }
+    
+    // Safety timeout: disconnect after 5 seconds
+    setTimeout(function() {
+        observer.disconnect();
+        console.log('⏱️ Observer timeout, disconnected');
+    }, 5000);
     
 })();
-
-// Add a manual test function
-window.testSearch = function() {
-    console.log('🧪 MANUAL TEST: Testing search functionality...');
-    const input = document.querySelector('.nav-search-input');
-    if (input) {
-        console.log('✅ Input found:', input);
-        console.log('Has listener:', input.hasAttribute('data-search-ready'));
-        input.value = 'test';
-        console.log('Set test value, now press Enter or call: window.testSearchRedirect()');
-    } else {
-        console.error('❌ Input NOT found!');
-    }
-};
-
-window.testSearchRedirect = function() {
-    window.location.href = '/search-results?q=manual-test';
-};
