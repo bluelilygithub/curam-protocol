@@ -1525,153 +1525,6 @@ TEXT: {text}
 
         TEXT: {text}
         """
-    if doc_type == "logistics":
-        return f"""
-        You are extracting data from LOGISTICS/SHIPPING DOCUMENTS (Bill of Lading, Sea Waybill, or Commercial Invoice).
-        
-        ## DOCUMENT TYPE DETECTION
-        
-        First, identify the document type:
-        
-        **BILL OF LADING (BOL/B/L):**
-        - Contains: BL Number, Vessel/Voyage, Container Numbers, Shipper/Consignee
-        - Purpose: Title document, proof of shipment
-        - Extract: All shipping and cargo details
-        
-        **SEA WAYBILL:**
-        - Contains: Waybill Number, Carrier, Non-negotiable transport document
-        - Purpose: Proof of contract of carriage (non-negotiable)
-        - Extract: Shipping details, freight terms
-        
-        **COMMERCIAL INVOICE (International):**
-        - Contains: HS Codes, Incoterms, Port details, Customs value
-        - Purpose: Customs clearance, payment
-        - Extract: Detailed line items with HS codes
-        
-        ## CORE FIELDS TO EXTRACT
-        
-        Return as JSON array with one object per document. Extract ALL applicable fields:
-        
-        ### For Bill of Lading:
-        - "DocumentType": "Bill of Lading"
-        - "BLNumber": Bill of Lading number (e.g., "MAEU123456789")
-        - "Shipper": Full shipper company name and address
-        - "Consignee": Full consignee company name and address
-        - "NotifyParty": Notify party details (if present)
-        - "VesselVoyage": Vessel name and voyage number (e.g., "MAERSK ESSEX / 425N")
-        - "PortOfLoading": Port of loading with code if available (e.g., "CNSHK (Shekou, China)")
-        - "PortOfDischarge": Port of discharge with code (e.g., "AUSYD (Sydney, Australia)")
-        - "ContainerNumbers": Array of container numbers (e.g., ["MAEU1234567", "MAEU2345678"])
-        - "CargoDescription": Description of goods
-        - "GrossWeight": Total gross weight with unit (e.g., "12,500 KG")
-        - "Measurement": Total measurement/volume with unit (e.g., "85 CBM")
-        - "NumberOfPackages": Total packages/units (e.g., "500 CTN")
-        - "FreightTerms": Prepaid or Collect (if visible)
-        
-        ### For Sea Waybill:
-        - "DocumentType": "Sea Waybill"
-        - "WaybillNumber": Waybill reference number
-        - "Shipper": Shipper details
-        - "Consignee": Consignee details
-        - "Carrier": Shipping line/carrier name
-        - "VesselVoyage": Vessel and voyage
-        - "PortOfLoading": Origin port
-        - "PortOfDischarge": Destination port
-        - "ContainerNumbers": Container references
-        - "CargoDescription": Goods description
-        - "GrossWeight": Total weight with unit
-        - "FreightTerms": Prepaid/Collect
-        
-        ### For Commercial Invoice (with shipping info):
-        - "DocumentType": "Commercial Invoice"
-        - "InvoiceNumber": Invoice number
-        - "InvoiceDate": Invoice date
-        - "Seller": Seller/exporter details
-        - "Buyer": Buyer/importer details
-        - "IncoTerms": Trade terms (FOB, CIF, CFR, EXW, etc.)
-        - "PortOfLoading": Shipping origin
-        - "PortOfDischarge": Shipping destination
-        - "TotalValue": Total invoice value with currency
-        - "BLNumber": Bill of Lading reference (if present)
-        - "VesselVoyage": Vessel details (if present)
-        - "ContainerNumbers": Container numbers (if present)
-        - "Items": Array of line items with:
-          - "Description": Product description
-          - "HSCode": Harmonized System code (CRITICAL - 8-10 digits, e.g., "8471.30.01")
-          - "Quantity": Quantity with unit
-          - "UnitPrice": Price per unit
-          - "TotalPrice": Line total
-          - "CountryOfOrigin": Manufacturing origin
-        
-        ## CRITICAL EXTRACTION RULES
-        
-        **HS CODES (CRITICAL FOR CUSTOMS):**
-        - Extract FULL HS code (8-10 digits)
-        - Examples: "8471.30.01", "8517.62.00", "3926.90.99"
-        - NOT acceptable: "8471" (too short), "Chapter 84" (not specific)
-        - If HS code is missing: Mark as "HS_CODE_MISSING - MANUAL VERIFICATION REQUIRED"
-        
-        **PORTS:**
-        - Use standard port codes if visible (e.g., "CNSHK", "AUSYD", "USLAX")
-        - Include full port name (e.g., "Shekou, China" not just "CNSHK")
-        - Extract both loading and discharge ports
-        
-        **CONTAINER NUMBERS:**
-        - Standard format: 4 letters + 7 digits (e.g., "MAEU1234567")
-        - Extract ALL containers mentioned (may be multiple)
-        - Return as array: ["MAEU1234567", "TCLU2345678"]
-        
-        **WEIGHTS & MEASUREMENTS:**
-        - ALWAYS include units (KG, LBS, MT, CBM, CFT)
-        - Examples: "12,500 KG" not "12500", "85 CBM" not "85"
-        
-        **CURRENCY:**
-        - ALWAYS include currency code (USD, EUR, CNY, AUD)
-        - Example: "USD 125,450.00" not "$125,450"
-        
-        **INCOTERMS:**
-        - Standard 3-letter codes: FOB, CIF, CFR, EXW, FCA, CPT, CIP, DAP, DDP
-        - Include the location: "FOB Shekou" not just "FOB"
-        
-        ## HANDLING MESSY/SCANNED DOCUMENTS
-        
-        For low-quality images or scans:
-        - Extract what IS readable
-        - Mark unclear parts specifically: "[smudged]", "[faded]", "[obscured by stamp]"
-        - Use "VERIFY: [extracted text]" if confidence is low
-        - DO NOT invent data - mark as missing if truly illegible
-        
-        ## CROSS-REFERENCE VALIDATION
-        
-        If multiple documents are provided:
-        - Check if BL number matches across docs
-        - Verify container numbers are consistent
-        - Flag any discrepancies: "DISCREPANCY: BOL shows container MAEU123 but Invoice shows TCLU456"
-        
-        ## OUTPUT FORMAT
-        
-        Return ONLY valid JSON array. No markdown, no code blocks, no explanation.
-        
-        Example output structure:
-        [
-          {{
-            "DocumentType": "Bill of Lading",
-            "BLNumber": "MAEU123456789",
-            "Shipper": "Acme Manufacturing Ltd, 123 Industrial Road, Shenzhen, China",
-            "Consignee": "Tech Imports Pty Ltd, 456 Warehouse St, Sydney, Australia",
-            "VesselVoyage": "MAERSK ESSEX / 425N",
-            "PortOfLoading": "CNSHK (Shekou, China)",
-            "PortOfDischarge": "AUSYD (Sydney, Australia)",
-            "ContainerNumbers": ["MAEU1234567", "MAEU2345678"],
-            "CargoDescription": "Electronic Components - 500 CTN",
-            "GrossWeight": "12,500 KG",
-            "Measurement": "85 CBM",
-            "FreightTerms": "Prepaid"
-          }}
-        ]
-        
-        TEXT: {text}
-        """
     return f"""
     Extract comprehensive invoice data from this document as JSON.
     
@@ -2331,40 +2184,18 @@ HTML_TEMPLATE = """
 
         <form method="post" enctype="multipart/form-data" novalidate>
             <div class="toggle-group">
-                {% if 'finance' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="finance" {% if department == 'finance' %}checked{% endif %}>
                     Finance Dept
                 </label>
-                {% endif %}
-                
-                {% if 'engineering' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="engineering" {% if department == 'engineering' %}checked{% endif %}>
                     Engineering Dept
                 </label>
-                {% endif %}
-                
-                {% if 'transmittal' in allowed_departments %}
                 <label>
                     <input type="radio" name="department" value="transmittal" {% if department == 'transmittal' %}checked{% endif %}>
                     Drafter Transmittal
                 </label>
-                {% endif %}
-                
-                {% if 'logistics' in allowed_departments %}
-                <label>
-                    <input type="radio" name="department" value="logistics" {% if department == 'logistics' %}checked{% endif %}>
-                    Logistics Dept
-                </label>
-                {% endif %}
-                
-                {% if 'legal' in allowed_departments %}
-                <label>
-                    <input type="radio" name="department" value="legal" {% if department == 'legal' %}checked{% endif %}>
-                    Legal Dept
-                </label>
-                {% endif %}
             </div>
 
             <h3>1. Select Sample Files</h3>
@@ -2381,7 +2212,7 @@ HTML_TEMPLATE = """
                     </div>
                     {% else %}
                     <label>
-                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or ((dept_key == 'engineering' or dept_key == 'finance') and not selected_samples) %}checked{% endif %}>
+                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or ((dept_key == 'engineering' or dept_key == 'finance' or dept_key == 'logistics') and not selected_samples) %}checked{% endif %}>
                         {{ sample.label }}
                         <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">&#128279;</a>
                     </label>
@@ -3037,13 +2868,6 @@ HTML_TEMPLATE = """
                     {% if row.DocumentType %}{{ row.DocumentType }}{% else %}Logistics Document{% endif %}
                 </div>
             </div>
-            
-            {# DEBUG: Show all fields in row #}
-            <div style="padding: 15px; background: #f0f0f0; border-bottom: 2px solid #ddd;">
-                <strong>DEBUG - All Fields in Row:</strong><br>
-                <pre style="font-size: 11px; overflow-x: auto;">{{ row }}</pre>
-            </div>
-            
             <div style="overflow-x: auto;">
         <table>
             <thead>
@@ -3260,10 +3084,17 @@ HTML_TEMPLATE = """
             }
 
             function handleDepartmentChange() {
+                const checkedRadio = document.querySelector('input[name="department"]:checked');
+                console.log('🔍 Department changed to:', checkedRadio ? checkedRadio.value : 'none');
+                
+                // Log checked samples
+                const checkedSamples = document.querySelectorAll('input[name="samples"]:checked');
+                console.log('📋 Checked samples count:', checkedSamples.length);
+                checkedSamples.forEach(cb => console.log('  ✓', cb.value));
+                
                 updateSampleVisibility();
                 hideResultsSection();
                 updateRoutineVisibility();
-            const checkedRadio = document.querySelector('input[name="department"]:checked');
             clearOtherSelections(checkedRadio ? checkedRadio.value : null);
             if (checkedRadio && checkedRadio.value === 'finance') {
                 updateFinanceUploadList();
@@ -3273,6 +3104,14 @@ HTML_TEMPLATE = """
             deptRadios.forEach(radio => radio.addEventListener('change', handleDepartmentChange));
             updateSampleVisibility();
             updateRoutineVisibility();
+            
+            // Log initial state
+            const initialDept = document.querySelector('input[name="department"]:checked');
+            console.log('🚀 Page loaded - Initial department:', initialDept ? initialDept.value : 'none');
+            const initialChecked = document.querySelectorAll('input[name="samples"]:checked');
+            console.log('📋 Initial checked samples:', initialChecked.length);
+            initialChecked.forEach(cb => console.log('  ✓', cb.value));
+            
         if (financeUploadInput) {
             financeUploadInput.addEventListener('change', () => updateFinanceUploadList());
             const activeDeptRadio = document.querySelector('input[name="department"]:checked');
