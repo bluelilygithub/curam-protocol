@@ -49,6 +49,17 @@ DEPARTMENT_SAMPLES = {
             {"path": "drawings/s102_framing_plan.pdf", "label": "S-102 Framing Plan"},
             {"path": "drawings/s500_standard_details.pdf", "label": "S-500 Details"}
         ]
+    },
+    "logistics": {
+        "label": "Shipping documents",
+        "description": "Logistics department samples",
+        "folder": "logistics",
+        "samples": [
+            {"path": "logistics/bill-of-lading-clean.pdf", "label": "Bill of Lading - Clean (PDF)"},
+            {"path": "logistics/bill-of-lading-messy.jpg", "label": "Bill of Lading - Messy (JPG)"},
+            {"path": "logistics/sea-waybill-clean.pdf", "label": "Sea Waybill - Clean (PDF)"},
+            {"path": "logistics/sea-waybill-messy.jpg", "label": "Sea Waybill - Messy (JPG)"}
+        ]
     }
 }
 
@@ -91,6 +102,17 @@ ROUTINE_DESCRIPTIONS = {
          <p><strong>Input Constraint:</strong> Files must contain the same metadata fields (Drawing Number, Revision, Title, Scale, Date, Status, Sheet Count, Project) even if the layout differs. The extraction schema normalizes across variations.</p>
          <p><strong>Outcome:</strong> A "Document Register" that your team can email or drop into Excel as a transmittal—ready for client distribution, RFI tracking, or compliance audits.</p>
          <p><strong>The Saving:</strong><br>Manual: 30-45 min per transmittal.<br>AI: 20 seconds.<br><strong>Value:</strong> Zero transcription errors (no mismatched rev letters, drawing numbers, or dates) + auditable extraction trail for compliance.</p>""")
+    ],
+    "logistics": [
+        ("Logistics Coordinator: \"The Customs Compliance Validator\"",
+         """<p><strong>What it does:</strong> Automates the extraction and cross-referencing of shipping documents (Bill of Lading, Sea Waybill, Commercial Invoices) for customs clearance and compliance.</p>
+         <p><strong>The Current Grind:</strong> A logistics coordinator receives 3 documents per shipment: Bill of Lading, Sea Waybill, and Commercial Invoice. They must manually extract container numbers, HS codes (8-10 digit customs classification), ports, shipper/consignee details, and cross-reference all three documents to ensure they match before customs submission.</p>
+         <p><strong>Error Risks:</strong> One wrong HS code = customs fine ($5K-$50K). Mismatched documents between BOL and invoice = container detention charges ($150-500/day). Missing port information = shipment delays.</p>
+         <p><strong>Frequency:</strong> For a mid-size freight forwarder: <strong>100-200 shipments per week</strong>. Each shipment requires processing 2-3 documents.</p>
+         <p><strong>The Saving:</strong><br>Manual: 12 minutes per shipment × 150 shipments = <strong>30 hours/week</strong>.<br>AI: 2 minutes per shipment (extraction + review).<br><strong>Time Saved:</strong> 25+ hours/week = <strong>$110K annually</strong> in labor costs.</p>
+         <p><strong>Additional Value:</strong> Avoid 2-3 HS code classification errors per year = <strong>$15K-$30K</strong> in fines avoided. Avoid 1-2 container detentions per month = <strong>$10K-$15K</strong> in demurrage charges avoided.</p>
+         <p><strong>Total Annual Value: $135K-$155K</strong></p>
+         <p><strong>Note:</strong> This demo handles both clean (digital) and messy (scanned/photographed) versions of shipping documents to demonstrate OCR capabilities.</p>""")
     ]
 }
 
@@ -112,6 +134,12 @@ ROUTINE_SUMMARY = {
         ("Frequency", "Weekly to help compile client transmittals."),
         ("Saving", "Manual: hours of typing. AI: builds the register instantly."),
         ("Value", "Avoids Friday-afternoon typos and keeps registers accurate.")
+    ],
+    "logistics": [
+        ("Grind", "Coordinator opens 3 documents per shipment (BOL, Waybill, Invoice), manually extracts container numbers, HS codes, ports, and cross-references for consistency."),
+        ("Frequency", "Daily; realistic volume of <strong>150 shipments</strong> per week for mid-size freight forwarder."),
+        ("Saving", "Manual: 12 min/shipment × 150 = <strong>30 hours/week</strong>. AI: 2 min/shipment."),
+        ("Value", "<strong>$110K/year</strong> labor savings + <strong>$25K-45K/year</strong> in avoided fines and detention charges = <strong>$135K-$155K total annual value</strong>.")
     ]
 }
 
@@ -125,15 +153,18 @@ FINANCE_FIELDS = ["Vendor", "Date", "InvoiceNum", "Cost", "GST", "FinalAmount", 
 ENGINEERING_BEAM_FIELDS = ["Mark", "Size", "Qty", "Length", "Grade", "PaintSystem", "Comments"]
 ENGINEERING_COLUMN_FIELDS = ["Mark", "SectionType", "Size", "Length", "Grade", "BasePlate", "CapPlate", "Finish", "Comments"]
 TRANSMITTAL_FIELDS = ["DwgNo", "Rev", "Title", "Scale"]
+LOGISTICS_FIELDS = ["BLNumber", "WaybillNumber", "Shipper", "Consignee", "NotifyParty", "VesselVoyage", "Carrier", "PortOfLoading", "PortOfDischarge", "ContainerNumbers", "CargoDescription", "GrossWeight", "Measurement", "NumberOfPackages", "FreightTerms", "IncoTerms"]
 
 DOC_FIELDS = {
     "finance": FINANCE_FIELDS,
     "engineering": ENGINEERING_BEAM_FIELDS,  # Default, will be overridden based on detected type
-    "transmittal": TRANSMITTAL_FIELDS
+    "transmittal": TRANSMITTAL_FIELDS,
+    "logistics": LOGISTICS_FIELDS
 }
 
 ERROR_FIELD = {
     "finance": "Summary",
     "engineering": "Comments",
-    "transmittal": "Title"
+    "transmittal": "Title",
+    "logistics": "CargoDescription"
 }
