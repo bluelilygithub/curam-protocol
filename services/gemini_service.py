@@ -2877,6 +2877,19 @@ HTML_TEMPLATE = """
         {% endif %}
         
         {% if department == 'logistics' %}
+        {# DEBUG: Show what we received #}
+        <div style="background: yellow; padding: 10px; margin: 10px; border: 2px solid red;">
+            <strong>DEBUG - Logistics Results:</strong><br>
+            Department: {{ department }}<br>
+            Results count: {{ results|length }}<br>
+            Results type: {{ results|string }}<br>
+            {% if results and results|length > 0 %}
+                First result keys: {{ results[0].keys()|list }}<br>
+                First result: {{ results[0] }}<br>
+            {% else %}
+                <strong style="color: red;">NO RESULTS!</strong>
+            {% endif %}
+        </div>
         {# Render logistics results table #}
         {% for row in results %}
         <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">

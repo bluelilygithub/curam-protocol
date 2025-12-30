@@ -904,6 +904,15 @@ def index_automater():
                         if key in result and isinstance(result[key], list):
                             transmittal_aggregated[key].extend(result[key])
 
+        # DEBUG LOGGING FOR LOGISTICS
+        if department == 'logistics':
+            print(f"🔍 LOGISTICS DEBUG - Results count: {len(results)}")
+            if results:
+                print(f"🔍 First result keys: {results[0].keys()}")
+                print(f"🔍 First result sample: {results[0]}")
+            else:
+                print(f"❌ LOGISTICS DEBUG - NO RESULTS!")
+        
         if results:
             session_data = {"department": department, "rows": results}
             if department == "engineering" and 'detected_schedule_type' in locals():
