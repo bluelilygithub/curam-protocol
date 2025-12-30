@@ -3730,10 +3730,27 @@ def email_phase1_report():
             return jsonify({"success": False, "error": "Email is required"}), 400
         
         # Read the Phase-1 PDF file
-        pdf_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'downloads', 'Phase-1-feasibility-sprint.pdf')
+        # The assets folder is in the root directory (same as main.py and roi_calculator_flask.py)
+        # Try multiple possible paths
+        possible_paths = [
+            os.path.join(current_app.root_path, 'assets', 'downloads', 'Phase-1-feasibility-sprint.pdf'),
+            os.path.join(os.path.dirname(__file__), 'assets', 'downloads', 'Phase-1-feasibility-sprint.pdf'),
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'downloads', 'Phase-1-feasibility-sprint.pdf'),
+            'assets/downloads/Phase-1-feasibility-sprint.pdf'
+        ]
         
-        if not os.path.exists(pdf_path):
-            current_app.logger.error(f"Phase-1 PDF not found at {pdf_path}")
+        pdf_path = None
+        for path in possible_paths:
+            abs_path = os.path.abspath(path)
+            if os.path.exists(abs_path):
+                pdf_path = abs_path
+                break
+        
+        if not pdf_path:
+            current_app.logger.error(f"Phase-1 PDF not found. Tried paths: {possible_paths}")
+            current_app.logger.error(f"Current working directory: {os.getcwd()}")
+            current_app.logger.error(f"App root path: {current_app.root_path}")
+            current_app.logger.error(f"File location: {__file__}")
             return jsonify({"success": False, "error": "PDF file not found. Please contact support."}), 500
         
         with open(pdf_path, 'rb') as f:
