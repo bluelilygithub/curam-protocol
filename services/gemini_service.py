@@ -1525,6 +1525,155 @@ TEXT: {text}
 
         TEXT: {text}
         """
+    
+    if doc_type == "logistics":
+        return f"""
+        You are extracting data from LOGISTICS/SHIPPING DOCUMENTS (Bill of Lading, Sea Waybill, or Commercial Invoice).
+        
+        ## DOCUMENT TYPE DETECTION
+        
+        First, identify the document type:
+        
+        **BILL OF LADING (BOL/B/L):**
+        - Contains: BL Number, Vessel/Voyage, Container Numbers, Shipper/Consignee
+        - Purpose: Title document, proof of shipment
+        - Extract: All shipping and cargo details
+        
+        **SEA WAYBILL:**
+        - Contains: Waybill Number, Carrier, Non-negotiable transport document
+        - Purpose: Proof of contract of carriage (non-negotiable)
+        - Extract: Shipping details, freight terms
+        
+        **COMMERCIAL INVOICE (International):**
+        - Contains: HS Codes, Incoterms, Port details, Customs value
+        - Purpose: Customs clearance, payment
+        - Extract: Detailed line items with HS codes
+        
+        ## FIELDS TO EXTRACT
+        
+        Extract these fields based on document type:
+        
+        **For Bill of Lading:**
+        - BLNumber: The B/L reference number
+        - Shipper: Company sending goods (with full address if available)
+        - Consignee: Company receiving goods (with full address if available)
+        - NotifyParty: Party to notify upon arrival (if different from consignee)
+        - VesselVoyage: Vessel name and voyage number (e.g., "MAERSK MONTANA / 234W")
+        - PortOfLoading: Origin port (use standard port codes when possible, e.g., "CNSHK")
+        - PortOfDischarge: Destination port (use standard port codes when possible)
+        - ContainerNumbers: Array of container numbers (standard format: 4 letters + 7 digits)
+        - CargoDescription: Description of goods being shipped
+        - GrossWeight: Total weight (ALWAYS include units: KG, LBS, MT)
+        - Measurement: Volume (ALWAYS include units: CBM, CFT)
+        - NumberOfPackages: Number of packages/cartons/pallets
+        - FreightTerms: Prepaid, Collect, or other terms
+        
+        **For Sea Waybill:**
+        - WaybillNumber: The waybill reference number
+        - Carrier: Shipping line/carrier name
+        - Shipper: Company sending goods
+        - Consignee: Company receiving goods
+        - VesselVoyage: Vessel name and voyage number
+        - PortOfLoading: Origin port
+        - PortOfDischarge: Destination port
+        - ContainerNumbers: Array of container numbers
+        - CargoDescription: Description of goods
+        - GrossWeight: Total weight with units
+        - FreightTerms: Prepaid, Collect, or other terms
+        
+        **For Commercial Invoice:**
+        - Shipper/Exporter details
+        - Consignee/Importer details
+        - IncoTerms: Standard 3-letter codes (FOB, CIF, EXW, etc.) with location
+        - PortOfLoading: Origin port
+        - PortOfDischarge: Destination port
+        - HSCodes: Harmonized System codes (CRITICAL: Extract FULL 8-10 digit codes, e.g., "8471.30.01" not just "8471")
+        - CargoDescription: Detailed goods description
+        - GrossWeight: Total weight with units
+        - NumberOfPackages: Package count
+        
+        ## CRITICAL EXTRACTION RULES
+        
+        1. **HS Codes (for Commercial Invoices):**
+           - Extract FULL 8-10 digit codes (e.g., "8471.30.01", "8517.62.00")
+           - Do NOT truncate to 4 or 6 digits
+           - If code appears in line items, extract for each item
+        
+        2. **Port Codes:**
+           - Use standard UN/LOCODE format when possible (e.g., "CNSHK" for Shekou, China)
+           - Include full port name + country: "CNSHK (Shekou, China)"
+           - If only city name given, still include country
+        
+        3. **Container Numbers:**
+           - Standard format: 4 letters + 7 digits (e.g., "TCLU1234567")
+           - Return as array even if only one container
+           - Extract ALL containers if multiple listed
+        
+        4. **Weights and Measurements:**
+           - ALWAYS include units (KG, LBS, MT for weight; CBM, CFT for volume)
+           - Example: "24,500 KG" not just "24,500"
+           - Example: "48.5 CBM" not just "48.5"
+        
+        5. **Currency:**
+           - ALWAYS include currency code (USD, EUR, CNY, AUD, etc.)
+           - Example: "USD 15,000" not just "15,000"
+        
+        6. **Vessel/Voyage:**
+           - Extract vessel name AND voyage number together
+           - Example: "MAERSK MONTANA / V.240W"
+        
+        7. **Incoterms:**
+           - Standard 3-letter codes: FOB, CIF, EXW, FCA, DDP, etc.
+           - Include location if specified: "FOB Shekou"
+        
+        ## HANDLING MESSY/SCANNED DOCUMENTS
+        
+        For scanned or photographed documents:
+        - Extract what is clearly readable
+        - Mark unclear portions as: "[smudged]", "[faded]", "[obscured by stamp]"
+        - Use "VERIFY: [text]" for low-confidence extractions
+        - Do NOT invent data if unclear
+        
+        ## CROSS-REFERENCE VALIDATION
+        
+        If processing multiple documents:
+        - Check BL number consistency
+        - Verify container numbers match
+        - Flag discrepancies: "DISCREPANCY: Container TCLU1234567 on BOL not found on invoice"
+        
+        ## OUTPUT FORMAT
+        
+        Return a JSON array with one object per document. Each object should have:
+        
+        ```json
+        [
+          {{
+            "DocumentType": "Bill of Lading" | "Sea Waybill" | "Commercial Invoice",
+            "BLNumber": "string or N/A",
+            "WaybillNumber": "string or N/A",
+            "Shipper": "string",
+            "Consignee": "string",
+            "NotifyParty": "string or N/A",
+            "VesselVoyage": "string",
+            "Carrier": "string or N/A",
+            "PortOfLoading": "string with code and location",
+            "PortOfDischarge": "string with code and location",
+            "ContainerNumbers": ["array", "of", "containers"],
+            "CargoDescription": "string",
+            "GrossWeight": "string with units",
+            "Measurement": "string with units or N/A",
+            "NumberOfPackages": "string or N/A",
+            "FreightTerms": "string or N/A",
+            "IncoTerms": "string or N/A"
+          }}
+        ]
+        ```
+        
+        Return ONLY valid JSON (no markdown, no explanation, no code blocks).
+        
+        TEXT: {text}
+        """
+    
     return f"""
     Extract comprehensive invoice data from this document as JSON.
     
