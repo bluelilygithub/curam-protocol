@@ -538,6 +538,207 @@ def email_chat_log():
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 
+# ============================================================================
+# ADD THIS ROUTE TO main.py
+# Phase 3 Sample Email Route
+# ============================================================================
+
+@app.route('/email-phase3-sample', methods=['POST'])
+def email_phase3_sample():
+    """Email Phase 3 Compliance Shield sample PDF to user"""
+    from flask import jsonify, request
+    import requests
+    import base64
+    import os
+    from database import capture_email_request, mark_email_sent
+    
+    capture_id = None
+    
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        
+        if not email:
+            return jsonify({"success": False, "error": "Email is required"}), 400
+        
+        # Capture email request for tracking
+        capture_id = capture_email_request(
+            email_address=email,
+            report_type='phase3_sample',
+            source_page='/phase-3-compliance.html',
+            request_data={
+                'sample_type': 'compliance_shield',
+                'source': 'phase3_page'
+            },
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            session_id=session.get('_id')
+        )
+        
+        # Read the Phase 3 PDF file
+        pdf_path = os.path.join('assets', 'downloads', 'Phase-3-Compliance-Shield.pdf')
+        
+        if not os.path.exists(pdf_path):
+            if capture_id:
+                mark_email_sent(capture_id, success=False, error_message="PDF file not found")
+            return jsonify({"success": False, "error": "PDF file not found"}), 500
+        
+        with open(pdf_path, 'rb') as f:
+            pdf_bytes = f.read()
+        
+        # Encode PDF as base64
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        
+        # Get MailChannels API key
+        mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
+        from_email = os.environ.get('FROM_EMAIL', 'noreply@curam-ai.com.au')
+        
+        # Prepare email
+        email_data = {
+            "personalizations": [
+                {
+                    "to": [{"email": email}],
+                    "cc": [{"email": "michaelbarrett@bluelily.com.au"}]
+                }
+            ],
+            "from": {
+                "email": from_email,
+                "name": "Curam AI"
+            },
+            "subject": "Phase 3 Compliance Shield - Sample Report",
+            "content": [
+                {
+                    "type": "text/plain",
+                    "value": """Thank you for your interest in the Curam-Ai Protocol™ Phase 3 Compliance Shield.
+
+Please find attached the sample compliance documentation report showing our ISO 27001 control mappings, risk matrices, and pre-audit documentation package.
+
+This sample demonstrates:
+• ISO 27001 control mapping and evidence
+• Risk assessment matrices
+• Pre-filled compliance questionnaires
+• Architecture and data flow documentation
+• Shadow IT inventory and governance controls
+
+Phase 3 Deliverables ($8-12k, 2 weeks):
+• Complete audit-ready evidence package
+• Risk control matrices aligned to ISO 27001
+• Pre-filled insurance compliance questionnaires
+• Technical architecture documentation
+• 40-50% faster audit completion
+
+Next Steps:
+1. Review the sample to understand Phase 3 deliverables
+2. Book a consultation to discuss your compliance requirements
+3. Start Phase 3 to accelerate your audit process
+
+Best regards,
+The Curam AI Team"""
+                },
+                {
+                    "type": "text/html",
+                    "value": """
+                    <html>
+                    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #4B5563;">
+                        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                            <h2 style="color: #0B1221;">Phase 3 Compliance Shield - Sample Report</h2>
+                            <p>Thank you for your interest in the Curam-Ai Protocol™ Phase 3 Compliance Shield.</p>
+                            <p>Please find attached the sample compliance documentation report showing our ISO 27001 control mappings, risk matrices, and pre-audit documentation package.</p>
+                            
+                            <div style="background: #F8F9FA; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                                <h3 style="color: #0B1221; margin-top: 0;">This sample demonstrates:</h3>
+                                <ul style="padding-left: 20px;">
+                                    <li>ISO 27001 control mapping and evidence</li>
+                                    <li>Risk assessment matrices</li>
+                                    <li>Pre-filled compliance questionnaires</li>
+                                    <li>Architecture and data flow documentation</li>
+                                    <li>Shadow IT inventory and governance controls</li>
+                                </ul>
+                            </div>
+                            
+                            <div style="background: #EEF2FF; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                                <h3 style="color: #0B1221; margin-top: 0;">Phase 3 Deliverables</h3>
+                                <p style="margin: 0;"><strong>Investment:</strong> $8-12k | <strong>Timeline:</strong> 2 weeks</p>
+                                <ul style="padding-left: 20px; margin-top: 10px;">
+                                    <li>Complete audit-ready evidence package</li>
+                                    <li>Risk control matrices aligned to ISO 27001</li>
+                                    <li>Pre-filled insurance compliance questionnaires</li>
+                                    <li>Technical architecture documentation</li>
+                                    <li><strong>Result:</strong> 40-50% faster audit completion</li>
+                                </ul>
+                            </div>
+                            
+                            <h3 style="color: #0B1221;">Next Steps:</h3>
+                            <ol>
+                                <li>Review the sample to understand Phase 3 deliverables</li>
+                                <li>Book a consultation to discuss your compliance requirements</li>
+                                <li>Start Phase 3 to accelerate your audit process</li>
+                            </ol>
+                            
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="https://curam-protocol.curam-ai.com.au/contact.html?option=phase-3-consultation" 
+                                   style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; text-decoration: none; border-radius: 8px; font-weight: 600;">
+                                    Book Consultation
+                                </a>
+                            </div>
+                            
+                            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #E5E7EB;">
+                                <p style="color: #6B7280; font-size: 0.9em;">
+                                    Best regards,<br>
+                                    <strong>The Curam AI Team</strong>
+                                </p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                }
+            ],
+            "attachments": [
+                {
+                    "content": pdf_base64,
+                    "filename": "Phase-3-Compliance-Shield-Sample.pdf",
+                    "type": "application/pdf",
+                    "disposition": "attachment"
+                }
+            ]
+        }
+        
+        # Set headers
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        if mailchannels_api_key:
+            headers['X-Api-Key'] = mailchannels_api_key
+        
+        # Send email
+        mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
+        response = requests.post(mailchannels_url, json=email_data, headers=headers, timeout=30)
+        
+        if response.status_code == 202:
+            # Mark email as sent successfully
+            if capture_id:
+                mark_email_sent(capture_id, success=True)
+            
+            app.logger.info(f"Phase 3 sample sent successfully to {email}")
+            return jsonify({"success": True, "message": "Sample report sent successfully!"})
+        else:
+            # Mark email as failed
+            if capture_id:
+                mark_email_sent(capture_id, success=False, error_message=f"MailChannels error: {response.status_code}")
+            
+            app.logger.error(f"MailChannels API error: {response.status_code} - {response.text}")
+            return jsonify({"success": False, "error": "Failed to send email. Please try again later."}), 500
+        
+    except Exception as e:
+        # Mark email as failed with error
+        if capture_id:
+            mark_email_sent(capture_id, success=False, error_message=str(e))
+        
+        app.logger.error(f"Error sending Phase 3 sample email: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+        
+
 # =============================================================================
 # AUTOMATER & DEMO ROUTES
 # =============================================================================
