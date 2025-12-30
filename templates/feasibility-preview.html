@@ -156,23 +156,9 @@
     </section>
 
     <!-- Supported Documents Section -->
-    <section class="demo-supported-docs">
+    <section class="section-alt demo-supported-docs">
         <div class="container">
-            <h2 class="section-headline">Document Types for {{ sector.name }}</h2>
-            <p class="section-subhead">The demo processes {{ sector.name|lower }} documents automatically</p>
-            
-            <div class="demo-docs-grid">
-                <div class="demo-doc-category" style="grid-column: 1 / -1; max-width: 600px; margin: 0 auto;">
-                    <h3>
-                        {{ sector.icon }} {{ sector.name }} Documents
-                    </h3>
-                    <ul>
-                        {% for doc_type in sector.document_types %}
-                        <li>{{ doc_type }}</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
+v>
             
             <!-- Sector Selector -->
             <div style="margin-top: 40px; text-align: center; padding: 30px; background: #f8f9fa; border-radius: 8px;">
@@ -199,7 +185,7 @@
     </section>
 
     <!-- CTA Section -->
-    <section class="demo-cta-section">
+    <section class="section demo-cta-section">
         <div class="container">
             <div class="demo-cta-box">
                 <div class="demo-cta-content">
