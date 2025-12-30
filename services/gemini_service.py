@@ -3025,6 +3025,15 @@ HTML_TEMPLATE = """
         {% endfor %}
         {% endif %}
         
+        <!-- UNCONDITIONAL DEBUG - ALWAYS SHOWS -->
+        <div style="background: orange; padding: 20px; margin: 20px; border: 3px solid black; font-size: 16px;">
+            <strong>🔍 ALWAYS VISIBLE DEBUG:</strong><br>
+            Department variable: "{{ department }}"<br>
+            Department type: {{ department|string }}<br>
+            Is it 'logistics'?: {{ department == 'logistics' }}<br>
+            Results exist?: {{ results|length > 0 }}<br>
+        </div>
+        
         {% if department == 'logistics' %}
         {# DEBUG: Show what we received #}
         <div style="background: yellow; padding: 10px; margin: 10px; border: 2px solid red;">
