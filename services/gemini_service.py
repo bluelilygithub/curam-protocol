@@ -3027,6 +3027,134 @@ HTML_TEMPLATE = """
         {% endfor %}
         {% endif %}
         
+        {% if department == 'logistics' %}
+        {# Render logistics results table #}
+        {% for row in results %}
+        <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #16697a 0%, #489fb5 100%); color: white; padding: 16px 20px;">
+                <div style="font-size: 18px; font-weight: 600;">{{ row.Filename or 'Shipping Document' }}</div>
+                <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">
+                    {% if row.DocumentType %}{{ row.DocumentType }}{% else %}Logistics Document{% endif %}
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if row.get('BLNumber') and row.BLNumber != 'N/A' %}
+                <tr>
+                    <td><strong>BL Number</strong></td>
+                    <td>{{ row.BLNumber }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('WaybillNumber') and row.WaybillNumber != 'N/A' %}
+                <tr>
+                    <td><strong>Waybill Number</strong></td>
+                    <td>{{ row.WaybillNumber }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('Shipper') and row.Shipper != 'N/A' %}
+                <tr>
+                    <td><strong>Shipper</strong></td>
+                    <td>{{ row.Shipper }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('Consignee') and row.Consignee != 'N/A' %}
+                <tr>
+                    <td><strong>Consignee</strong></td>
+                    <td>{{ row.Consignee }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('NotifyParty') and row.NotifyParty != 'N/A' %}
+                <tr>
+                    <td><strong>Notify Party</strong></td>
+                    <td>{{ row.NotifyParty }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('VesselVoyage') and row.VesselVoyage != 'N/A' %}
+                <tr>
+                    <td><strong>Vessel / Voyage</strong></td>
+                    <td>{{ row.VesselVoyage }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('Carrier') and row.Carrier != 'N/A' %}
+                <tr>
+                    <td><strong>Carrier</strong></td>
+                    <td>{{ row.Carrier }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('PortOfLoading') and row.PortOfLoading != 'N/A' %}
+                <tr>
+                    <td><strong>Port of Loading</strong></td>
+                    <td>{{ row.PortOfLoading }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('PortOfDischarge') and row.PortOfDischarge != 'N/A' %}
+                <tr>
+                    <td><strong>Port of Discharge</strong></td>
+                    <td>{{ row.PortOfDischarge }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('ContainerNumbers') %}
+                <tr>
+                    <td><strong>Container Numbers</strong></td>
+                    <td>
+                        {% if row.ContainerNumbers is string %}
+                            {{ row.ContainerNumbers }}
+                        {% else %}
+                            {{ row.ContainerNumbers|join(', ') }}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+                {% if row.get('CargoDescription') and row.CargoDescription != 'N/A' %}
+                <tr>
+                    <td><strong>Cargo Description</strong></td>
+                    <td>{{ row.CargoDescription }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('GrossWeight') and row.GrossWeight != 'N/A' %}
+                <tr>
+                    <td><strong>Gross Weight</strong></td>
+                    <td>{{ row.GrossWeight }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('Measurement') and row.Measurement != 'N/A' %}
+                <tr>
+                    <td><strong>Measurement</strong></td>
+                    <td>{{ row.Measurement }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('NumberOfPackages') and row.NumberOfPackages != 'N/A' %}
+                <tr>
+                    <td><strong>Number of Packages</strong></td>
+                    <td>{{ row.NumberOfPackages }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('FreightTerms') and row.FreightTerms != 'N/A' %}
+                <tr>
+                    <td><strong>Freight Terms</strong></td>
+                    <td>{{ row.FreightTerms }}</td>
+                </tr>
+                {% endif %}
+                {% if row.get('IncoTerms') and row.IncoTerms != 'N/A' %}
+                <tr>
+                    <td><strong>Incoterms</strong></td>
+                    <td>{{ row.IncoTerms }}</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        
         <div class="summary-card">
             <div><strong>Run Summary</strong></div>
             {% for label, text in routine_summary %}
