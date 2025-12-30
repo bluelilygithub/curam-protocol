@@ -186,10 +186,10 @@ BEFORE marking anything as [illegible]:
 
 **STEP 2: FORMAT PARTIAL EXTRACTIONS**
 ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Good: "Install per specification ABC-123 [remainder obscured by stain]"
-Bad: "[Comment illegible - manual transcription required]"
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Bad: "[Comment illegible - manual transcription required]"
 
 ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Good: "Verify dimensions on site. [handwritten: 'APPROVED - JMc 5/12']"
-Bad: "[Comment illegible - manual review required]"
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Bad: "[Comment illegible - manual review required]"
 
 **STEP 3: USE [illegible] ONLY FOR TRULY UNREADABLE TEXT**
 - If ANY words are readable ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ extract them
@@ -205,15 +205,15 @@ Bad: "[Comment illegible - manual review required]"
 
 Scenario: "Install with [smudge] gasket material"
 ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Extract: "Install with [smudged word] gasket material"
-Don't: "[Comment illegible]"
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Don't: "[Comment illegible]"
 
 Scenario: Stain covers last 3 words
 ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Extract: "Check actual dimensions before fabrication [coffee stain obscures remainder]"
-Don't: "[coffee stain obscures remainder]" as entire comment
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Don't: "[coffee stain obscures remainder]" as entire comment
 
 Scenario: Handwritten note is clear
 ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Extract: "Original specification. [handwritten: 'CHANGED TO TYPE B - PMG']"
-Don't: "[Comment illegible - manual review required]"
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Don't: "[Comment illegible - manual review required]"
 
 **VALIDATION:**
 If you marked something [illegible], ask yourself:
@@ -365,10 +365,10 @@ Valid patterns (make technical sense):
 - "DELETED - NOT REQ'D" ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Common
 
 Invalid patterns (make no technical sense):
-- "CORRODED TO [specification]" Makes no sense
-- "DAMAGED TO [specification]" Makes no sense
-- "BROKEN TO [specification]" Makes no sense
-- "CHEVROLET YO [specification]" Makes no sense
+- "CORRODED TO [specification]" ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Makes no sense
+- "DAMAGED TO [specification]" ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Makes no sense
+- "BROKEN TO [specification]" ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Makes no sense
+- "CHEVROLET YO [specification]" ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Makes no sense
 - Any nonsensical phrase ÃƒÂ¢Ã…â€œÃ¢â‚¬â€
 
 **CONSERVATIVE VALIDATION PROTOCOL:**
@@ -648,10 +648,10 @@ WHEN TO CORRECT:
 ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Missing unit when context is clear
 
 WHEN NOT TO CORRECT:
-True ambiguity you can't resolve
-Handwriting too unclear to read
-Missing data (never invent)
-Unfamiliar terminology (might be correct)
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ True ambiguity you can't resolve
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Handwriting too unclear to read
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Missing data (never invent)
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Unfamiliar terminology (might be correct)
 
 ## SECTION-AWARE VALIDATION
 
@@ -1149,12 +1149,12 @@ When you identify a correction:
 Text: "Main support beam. Fly brace @ 1500 centres."
 Flag: "ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Corrected 'brase' to 'brace' (OCR error)"
 
-WRONG (Missing Flag):
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ WRONG (Missing Flag):
 Text: "Main support beam. Fly brace @ 1500 centres."
 Flag: [none]
 [Correction applied but no transparency - engineer can't verify]
 
-WRONG (Flag but No Correction):
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ WRONG (Flag but No Correction):
 Text: "Main support beam. Fly brase @ 1500 centres."
 Flag: "ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Corrected 'brase' to 'brace' (OCR error)"
 [Text still shows error even though flag says corrected]
@@ -1200,7 +1200,7 @@ Flag: ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Corrected 'supplies' 
 Text: "Verify with supplier"
 [Flag and text match - correction applied]
 
-WRONG (Flag/Text Mismatch):
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ WRONG (Flag/Text Mismatch):
 Flag: ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Corrected 'supplies' to 'supplier' (OCR error)
 Text: "Verify with supplies"
 [Flag says corrected but text still shows original - FIX THIS]
@@ -1224,7 +1224,7 @@ Flag: "ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Corrected 'grows' to
 Flag: "ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â Corrected 'supplies' to 'supplier' (OCR error)"
 [Correction applied + flag shown]
 
-WRONG (Missing Flag):
+ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ WRONG (Missing Flag):
 "Hot dip galvanised per AS/NZS 4680"
 Flag: [none]
 [Correction applied but no transparency - engineer can't verify what changed]
@@ -2689,7 +2689,7 @@ HTML_TEMPLATE = """
                                 {% if 'yes' in found|lower or 'true' in found|lower %}
                                 <span style="color: #27ae60; font-weight: 600;">ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Found</span>
                                 {% elif 'no' in found|lower or 'false' in found|lower %}
-                                <span style="color: #e74c3c; font-weight: 600;">Missing</span>
+                                <span style="color: #e74c3c; font-weight: 600;">ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Missing</span>
                                 {% else %}
                                 {{ found or 'N/A' }}
                                 {% endif %}
@@ -3431,7 +3431,7 @@ def analyze_gemini(text, doc_type, image_path=None):
                     if not image_file.exists():
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Image file not found: {image_path}"
-                        action_log.append(f"Image file not found: {image_path}")
+                        action_log.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Image file not found: {image_path}")
                         continue
                     
                     # Open image and convert to format Gemini expects
@@ -3444,7 +3444,7 @@ def analyze_gemini(text, doc_type, image_path=None):
                     except Exception as img_error:
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Failed to open image: {img_error}"
-                        action_log.append(f"Failed to open image: {img_error}")
+                        action_log.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Failed to open image: {img_error}")
                         continue
                 else:
                     # Regular text-based processing
@@ -3588,5 +3588,5 @@ def analyze_gemini(text, doc_type, image_path=None):
             continue
         break
 
-    action_log.append(f"All models failed for this document: {last_error or 'Unknown error'}")
+    action_log.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ All models failed for this document: {last_error or 'Unknown error'}")
     return [error_entry(last_error or "All models failed")], last_error or "All models failed", resolved_model, attempt_log, action_log, None
