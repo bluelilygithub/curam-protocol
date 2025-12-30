@@ -13,6 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 import io
+from database import capture_email_request, mark_email_sent
 
 # Configuration
 BOOKING_URL = "/booking.html"
@@ -3600,6 +3601,8 @@ def email_report():
     import requests
     import base64
     
+    capture_id = None  # Initialize for email tracking
+    
     try:
         data = request.get_json()
         email = data.get('email')
@@ -3618,6 +3621,23 @@ def email_report():
         
         if not calculations:
             return jsonify({"success": False, "error": "No calculations found. Please complete the calculator first."}), 400
+        
+        # Capture email request for tracking
+        capture_id = capture_email_request(
+            email_address=email,
+            report_type='roi_calculator',
+            source_page='/roi-calculator/results',
+            request_data={
+                'industry': industry,
+                'staff_count': staff_count,
+                'avg_rate': avg_rate,
+                'platform': platform,
+                'calculations': calculations
+            },
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            session_id=session.get('_id')
+        )
         
         # Generate PDF
         pdf_buffer = generate_pdf_report(industry, staff_count, avg_rate, platform, calculations)
@@ -3707,13 +3727,25 @@ def email_report():
         response = requests.post(mailchannels_url, json=email_data, headers=headers, timeout=30)
         
         if response.status_code == 202:
+            # Mark email as sent successfully
+            if capture_id:
+                mark_email_sent(capture_id, success=True)
+            
             current_app.logger.info(f"ROI report sent successfully to {email} (CC: michaelbarrett@bluelily.com.au)")
             return jsonify({"success": True, "message": "Report sent successfully! Check your email."})
         else:
+            # Mark email as failed
+            if capture_id:
+                mark_email_sent(capture_id, success=False, error_message=f"MailChannels error: {response.status_code}")
+            
             current_app.logger.error(f"MailChannels API error: {response.status_code} - {response.text}")
             return jsonify({"success": False, "error": "Failed to send email. Please try again later."}), 500
         
     except Exception as e:
+        # Mark email as failed with error
+        if capture_id:
+            mark_email_sent(capture_id, success=False, error_message=str(e))
+        
         current_app.logger.error(f"Error sending email report: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -3722,12 +3754,28 @@ def email_phase1_report():
     """Email Phase-1 Feasibility Sprint PDF to user using MailChannels API"""
     from flask import jsonify, current_app
     
+    capture_id = None  # Initialize for email tracking
+    
     try:
         data = request.get_json()
         email = data.get('email')
         
         if not email:
             return jsonify({"success": False, "error": "Email is required"}), 400
+        
+        # Capture email request for tracking
+        capture_id = capture_email_request(
+            email_address=email,
+            report_type='phase1_sample',
+            source_page=request.referrer or '/roi-calculator/results',
+            request_data={
+                'industry': session.get('industry'),
+                'source': 'roi_calculator_results_page'
+            },
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            session_id=session.get('_id')
+        )
         
         # Read the Phase-1 PDF file
         # The assets folder is in the root directory (same as main.py and roi_calculator_flask.py)
@@ -3747,6 +3795,10 @@ def email_phase1_report():
                 break
         
         if not pdf_path:
+            # Mark email as failed - PDF not found
+            if capture_id:
+                mark_email_sent(capture_id, success=False, error_message="PDF file not found")
+            
             current_app.logger.error(f"Phase-1 PDF not found. Tried paths: {possible_paths}")
             current_app.logger.error(f"Current working directory: {os.getcwd()}")
             current_app.logger.error(f"App root path: {current_app.root_path}")
@@ -3860,13 +3912,25 @@ The Curam AI Team"""
         response = requests.post(mailchannels_url, json=email_data, headers=headers, timeout=30)
         
         if response.status_code == 202:
+            # Mark email as sent successfully
+            if capture_id:
+                mark_email_sent(capture_id, success=True)
+            
             current_app.logger.info(f"Phase-1 report sent successfully to {email} (CC: michaelbarrett@bluelily.com.au)")
             return jsonify({"success": True, "message": "Report sent successfully! Check your email."})
         else:
+            # Mark email as failed
+            if capture_id:
+                mark_email_sent(capture_id, success=False, error_message=f"MailChannels error: {response.status_code}")
+            
             current_app.logger.error(f"MailChannels API error: {response.status_code} - {response.text}")
             return jsonify({"success": False, "error": "Failed to send email. Please try again later."}), 500
         
     except Exception as e:
+        # Mark email as failed with error
+        if capture_id:
+            mark_email_sent(capture_id, success=False, error_message=str(e))
+        
         current_app.logger.error(f"Error sending Phase-1 email report: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 

@@ -237,3 +237,157 @@ def build_combined_prompt(doc_type, sector_slug, text):
     combined += f"\n\n---\n\nTEXT: {text}\n\nReturn ONLY valid JSON."
     
     return combined
+
+
+# ============================================================================
+# EMAIL CAPTURES - Track email report requests
+# ============================================================================
+
+def capture_email_request(email_address, report_type, source_page=None, request_data=None, 
+                         ip_address=None, user_agent=None, session_id=None):
+    """
+    Record an email report request
+    
+    Args:
+        email_address (str): User's email address
+        report_type (str): Type of report - 'roi_calculator', 'demo_extraction', 'phase1_sample'
+        source_page (str): URL path where request originated
+        request_data (dict): Context data (industry, calculations, etc.)
+        ip_address (str): User's IP address
+        user_agent (str): User's browser user agent
+        session_id (str): Flask session ID
+    
+    Returns:
+        int: ID of created record, or None if failed
+    """
+    if not engine:
+        print("❌ Database engine not initialized")
+        return None
+    
+    try:
+        import json
+        # Convert request_data dict to JSON string for JSONB
+        request_json = json.dumps(request_data) if request_data else None
+        
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                INSERT INTO email_captures (
+                    email_address,
+                    report_type,
+                    source_page,
+                    request_data,
+                    ip_address,
+                    user_agent,
+                    session_id
+                ) VALUES (
+                    :email,
+                    :report_type,
+                    :source_page,
+                    :request_data,
+                    :ip_address,
+                    :user_agent,
+                    :session_id
+                )
+                RETURNING id
+            """), {
+                "email": email_address,
+                "report_type": report_type,
+                "source_page": source_page,
+                "request_data": request_json,
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+                "session_id": session_id
+            })
+            conn.commit()
+            
+            record_id = result.scalar()
+            print(f"✅ Email capture recorded: {email_address} ({report_type}) - ID: {record_id}")
+            return record_id
+            
+    except Exception as e:
+        print(f"❌ Error capturing email request: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def mark_email_sent(record_id, success=True, error_message=None):
+    """
+    Update email delivery status
+    
+    Args:
+        record_id (int): ID of the email_captures record
+        success (bool): Whether email was sent successfully
+        error_message (str): Error message if send failed
+    
+    Returns:
+        bool: True if update successful, False otherwise
+    """
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE email_captures 
+                SET 
+                    email_sent = :success,
+                    email_sent_at = CASE WHEN :success THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    email_error = :error
+                WHERE id = :record_id
+            """), {
+                "record_id": record_id,
+                "success": success,
+                "error": error_message
+            })
+            conn.commit()
+            
+        print(f"✅ Email status updated: ID {record_id} - {'Sent' if success else 'Failed'}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error updating email status: {e}")
+        return False
+
+
+def get_email_history(email_address, limit=10):
+    """
+    Get recent email requests for a specific address
+    
+    Args:
+        email_address (str): Email to look up
+        limit (int): Max number of records to return
+    
+    Returns:
+        list: List of email capture records
+    """
+    if not engine:
+        return []
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT 
+                    id,
+                    email_address,
+                    report_type,
+                    source_page,
+                    request_data,
+                    email_sent,
+                    email_sent_at,
+                    created_at
+                FROM email_captures
+                WHERE email_address = :email
+                  AND deleted_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """), {
+                "email": email_address,
+                "limit": limit
+            })
+            
+            return [dict(row._mapping) for row in result]
+            
+    except Exception as e:
+        print(f"❌ Error fetching email history: {e}")
+        return []
