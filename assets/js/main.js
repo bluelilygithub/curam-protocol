@@ -509,17 +509,57 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
-// Wait for navbar to load, then initialize search
-setTimeout(function() {
-    const searchForms = document.querySelectorAll('form[role="search"], .search-form');
-    searchForms.forEach(form => {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const input = this.querySelector('input[name="query"], input[name="s"]');
-            const query = input ? input.value.trim() : '';
-            if (query) {
-                window.location.href = `/search-results?q=${encodeURIComponent(query)}`;
+// ============================================================================
+// GLOBAL SEARCH BAR - Robust initialization with multiple attempts
+// ============================================================================
+
+(function initGlobalSearch() {
+    let searchInitialized = false;
+    
+    function attachSearchListener() {
+        // Skip if already initialized
+        if (searchInitialized) {
+            return;
+        }
+        
+        const searchInput = document.querySelector('.nav-search-input');
+        
+        if (!searchInput) {
+            console.log('⏳ Search input not found yet...');
+            return;
+        }
+        
+        // Check if already has listener
+        if (searchInput.hasAttribute('data-search-ready')) {
+            console.log('ℹ️ Search already initialized');
+            searchInitialized = true;
+            return;
+        }
+        
+        // Attach the Enter key listener
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const query = this.value.trim();
+                if (query) {
+                    console.log('🔍 Searching for:', query);
+                    window.location.href = `/search-results?q=${encodeURIComponent(query)}`;
+                } else {
+                    alert('Please enter a search term');
+                }
             }
         });
-    });
-}, 500);
+        
+        // Mark as initialized
+        searchInput.setAttribute('data-search-ready', 'true');
+        searchInitialized = true;
+        console.log('✅ Search initialized successfully');
+    }
+    
+    // Try multiple times with different delays (navbar loads asynchronously)
+    attachSearchListener(); // Try immediately
+    setTimeout(attachSearchListener, 300);  // Try at 300ms
+    setTimeout(attachSearchListener, 600);  // Try at 600ms
+    setTimeout(attachSearchListener, 1000); // Final attempt at 1s
+    
+})();
