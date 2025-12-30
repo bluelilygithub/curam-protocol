@@ -223,23 +223,17 @@
                 </iframe>
             </div>
             
-            <<div class="cta-buttons">
-    <!-- Primary CTA -->
-    <button onclick="emailPhase3Sample()" class="btn btn-primary">
-        📧 Email Me This Sample
-    </button>
-    
-    <!-- Secondary options (smaller) -->
-    <div class="secondary-options">
-        <a href="assets/downloads/Phase-3-Compliance-Shield.pdf" download>
-            or download PDF
-        </a>
-        <span>•</span>
-        <a href="assets/downloads/Phase-3-Compliance-Shield.pdf" target="_blank">
-            open in new tab
-        </a>
-    </div>
-</div>
+            <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 2rem; flex-wrap: wrap;">
+
+                <button onclick="emailPhase3Sample()" class="btn btn-secondary" style="border: 2px solid var(--color-gold); background: transparent; color: var(--color-gold);">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                        <polyline points="22,6 12,13 2,6"></polyline>
+                    </svg>
+                    Email Me This Sample
+                </button>
+                
+            </div>
         </div>
         
         <!-- Report Highlights -->
