@@ -2249,6 +2249,18 @@ HTML_TEMPLATE = """
         .btn-secondary:hover {
             opacity: 1 !important;
         }
+        
+        /* CTA Section Button Hover Effects */
+        .cta-section-end .cta-grid a.btn:hover {
+            opacity: 0.9;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+        }
+        
+        .cta-section-end .cta-grid a.btn[style*="transparent"]:hover {
+            background: rgba(255, 255, 255, 0.08) !important;
+            border-color: #D4AF37 !important;
+            color: #D4AF37 !important;
+        }
     </style>
 </head>
 <body>
@@ -2938,19 +2950,20 @@ HTML_TEMPLATE = """
                 Want to test this on YOUR actual documents?
             </p>
             
-            <div class="cta-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; max-width: 700px; margin: 0 auto;">
-                <!-- Email PDF Button -->
-                <a href="{{ url_for('roi_calculator.roi_calculator', step=4) }}" class="btn" style="background: white; color: #0B1221; padding: 1.25rem 2rem; font-size: 1.1rem; border: 2px solid #D4AF37; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-decoration: none;">
-                    <span style="font-size: 1.5rem;">📧</span>
-                    <span style="font-weight: 700;">Email This Report</span>
-                    <span style="font-size: 0.85rem; opacity: 0.7;">Get PDF sent to your inbox</span>
+            <div class="cta-grid" style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; max-width: 900px; margin: 0 auto;">
+                <!-- Email me the report Button -->
+                <a href="/assets/downloads/Phase-1-feasibility-sprint.pdf" class="btn" style="background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; padding: 1rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 8px; text-decoration: none; transition: all 0.2s ease; border: 1px solid #D4AF37;" download>
+                    Email me the report
                 </a>
                 
-                <!-- Book Phase 1 Button -->
-                <a href="/contact.html?option=phase-1" class="btn-primary-huge" style="background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; padding: 1.25rem 2rem; font-size: 1.1rem; display: flex; flex-direction: column; align-items: center; gap: 0.5rem; text-decoration: none; border: 2px solid #FFD700;">
-                    <span style="font-size: 1.5rem;">🚀</span>
-                    <span style="font-weight: 700;">Book $1,500 Feasibility Sprint</span>
-                    <span style="font-size: 0.85rem;">Test YOUR documents in 48 hours</span>
+                <!-- See It In Action Button -->
+                <a href="/contact.html?option=phase-1" class="btn" style="background: transparent; color: rgba(255, 255, 255, 0.9); padding: 1rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 8px; text-decoration: none; transition: all 0.2s ease; border: 2px solid rgba(255, 255, 255, 0.3);">
+                    See It In Action
+                </a>
+                
+                <!-- Request Information Button -->
+                <a href="/feasibility-preview.html" class="btn" style="background: transparent; color: rgba(255, 255, 255, 0.9); padding: 1rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 8px; text-decoration: none; transition: all 0.2s ease; border: 2px solid rgba(255, 255, 255, 0.3);">
+                    Request Information
                 </a>
             </div>
             
