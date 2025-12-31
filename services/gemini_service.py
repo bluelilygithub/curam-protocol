@@ -754,36 +754,36 @@ For Every Flag Provide:
 BEFORE SUBMITTING EXTRACTION, VERIFY:
 
 **Ã¢Å“â€œ Completeness Checks**
-Ã¢â€“Â¡ All readable text extracted? (Used partial extraction before marking illegible)
-Ã¢â€“Â¡ Multi-part fields complete? (Checked for continuation after periods)
-Ã¢â€“Â¡ Handwritten annotations captured? (In [brackets] with original)
-Ã¢â€“Â¡ All columns filled? (Empty cells properly marked as N/A or Ã¢â‚¬â€)
+Ã¢-Â¡ All readable text extracted? (Used partial extraction before marking illegible)
+Ã¢-Â¡ Multi-part fields complete? (Checked for continuation after periods)
+Ã¢-Â¡ Handwritten annotations captured? (In [brackets] with original)
+Ã¢-Â¡ All columns filled? (Empty cells properly marked as N/A or Ã¢â‚¬â€)
 
 **Ã¢Å“â€œ Accuracy Checks**
-Ã¢â€“Â¡ Format validation passed? (Data matches expected patterns)
-Ã¢â€“Â¡ Cross-field validation done? (Values consistent within row)
-Ã¢â€“Â¡ Section context checked? (Values appropriate for section)
-Ã¢â€“Â¡ Column boundaries respected? (Issues in correct columns)
+Ã¢-Â¡ Format validation passed? (Data matches expected patterns)
+Ã¢-Â¡ Cross-field validation done? (Values consistent within row)
+Ã¢-Â¡ Section context checked? (Values appropriate for section)
+Ã¢-Â¡ Column boundaries respected? (Issues in correct columns)
 
 **Ã¢Å“â€œ Error Handling Checks**
-Ã¢â€“Â¡ Confident corrections applied? (Fixed obvious OCR errors)
-Ã¢â€“Â¡ Uncertainties flagged? (All doubts explicitly marked)
-Ã¢â€“Â¡ No character soup? (No "H o l d 4 O..." output)
-Ã¢â€“Â¡ No invented data? (Only extracted what exists)
+Ã¢-Â¡ Confident corrections applied? (Fixed obvious OCR errors)
+Ã¢-Â¡ Uncertainties flagged? (All doubts explicitly marked)
+Ã¢-Â¡ No character soup? (No "H o l d 4 O..." output)
+Ã¢-Â¡ No invented data? (Only extracted what exists)
 
 **Ã¢Å“â€œ Flag Quality Checks**
-Ã¢â€“Â¡ Each flag has specific reason? (Not generic "check this")
-Ã¢â€“Â¡ Critical issues marked ⚠? (Safety/compliance impacts)
-Ã¢â€“Â¡ Corrections explained? (Showed original + fixed value)
-Ã¢â€“Â¡ Suggested fixes provided? (When confident about correction)
+Ã¢-Â¡ Each flag has specific reason? (Not generic "check this")
+Ã¢-Â¡ Critical issues marked ⚠? (Safety/compliance impacts)
+Ã¢-Â¡ Corrections explained? (Showed original + fixed value)
+Ã¢-Â¡ Suggested fixes provided? (When confident about correction)
 
 **Ã¢Å“â€œ Consistency Checks**
-Ã¢â€“Â¡ All "Corrected X to Y" flags have corresponding corrected text?
-Ã¢â€“Â¡ Text matches flags? (No flag/text mismatches)
-Ã¢â€“Â¡ Handwriting corrections only applied if confident >95%?
-Ã¢â€“Â¡ Uncertain handwriting marked as unclear (not forced corrections)?
-Ã¢â€“Â¡ No mid-word truncation? (Fields complete, not cut off)
-Ã¢â€“Â¡ All corrections actually applied to text (not just flagged)?
+Ã¢-Â¡ All "Corrected X to Y" flags have corresponding corrected text?
+Ã¢-Â¡ Text matches flags? (No flag/text mismatches)
+Ã¢-Â¡ Handwriting corrections only applied if confident >95%?
+Ã¢-Â¡ Uncertain handwriting marked as unclear (not forced corrections)?
+Ã¢-Â¡ No mid-word truncation? (Fields complete, not cut off)
+Ã¢-Â¡ All corrections actually applied to text (not just flagged)?
 
 ## IMAGE PROCESSING - CRITICAL FOR JPEG/PNG FILES
 
@@ -2213,7 +2213,7 @@ HTML_TEMPLATE = """
             <h3>1. Select Sample Files</h3>
             {% for dept_key, group in sample_files.items() %}
             <div class="sample-group" data-department="{{ dept_key }}">
-                <strong>{{ group.label }}</strong> Ã‚Â· {{ group.description }}
+                <strong>{{ group.label }}</strong> · {{ group.description }}
                 <div style="margin-top: 10px;">
                     {% for sample in group.samples %}
                     {% if dept_key == 'transmittal' %}
