@@ -35,7 +35,7 @@ DEPARTMENT_SAMPLES = {
             {"path": "drawings/schedule_cad.pdf", "label": "beam_schedule_CLEAN_cad.pdf"},
             {"path": "drawings/schedule_revit.pdf", "label": "column_schedule_CLEAN_revit.pdf"},
             {"path": "drawings/beam_messy_scan.pdf", "label": "beam_schedule_MESSY_scan.pdf"},
-            {"path": "drawings/column_complex_vector.jpeg", "label": "column_schedule_MESSY_scan.jpeg"}
+            {"path": "drawings/column_complex_messy.pdf", "label": "column_schedule_MESSY_scan.pdf"}
         ]
     },
     "transmittal": {
