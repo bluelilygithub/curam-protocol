@@ -121,9 +121,37 @@ os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
 # Cache for available models
 _available_models = None
 
+from services.image_preprocessing import TESSERACT_AVAILABLE, CV2_AVAILABLE
+
+
 # =============================================================================
 # API ROUTES
 # =============================================================================
+
+@app.route('/test/dependencies', methods=['GET'])
+def test_dependencies():
+    """Check Tesseract status - visit this URL in browser"""
+    status = {
+        "tesseract_ocr": {
+            "installed": TESSERACT_AVAILABLE,
+            "status": "✅ Available" if TESSERACT_AVAILABLE else "❌ Not installed"
+        },
+        "opencv": {
+            "installed": CV2_AVAILABLE,
+            "status": "✅ Available" if CV2_AVAILABLE else "❌ Not installed"
+        }
+    }
+    
+    if TESSERACT_AVAILABLE:
+        try:
+            import pytesseract
+            version = pytesseract.get_tesseract_version()
+            status["tesseract_ocr"]["version"] = str(version)
+            status["tesseract_ocr"]["test"] = "✅ Working"
+        except Exception as e:
+            status["tesseract_ocr"]["test"] = f"❌ Error: {str(e)}"
+    
+    return status, 200
 
 @app.route('/api/search-blog', methods=['POST'])
 def search_blog_rag():

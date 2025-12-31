@@ -19,7 +19,7 @@ VALID_RHS_PATTERN = r'^\d{2,3}[×x]\d{2,3}[×x]\d{1,2}\.?\d*\s*RHS$'  # e.g., 10
 VALID_GRADES = ['250', '300', '300PLUS', '350', '350L0', '400', '450', 'HA350', 'C300', 'G300', 'Not marked']
 
 
-def validate_size(size_value: str) -> Tuple[bool, Optional[str], Optional[str]]:
+def validate_size(size_value: Any) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Validate beam/column size against AS 4100 patterns
     
@@ -29,7 +29,8 @@ def validate_size(size_value: str) -> Tuple[bool, Optional[str], Optional[str]]:
     if not size_value or size_value in ['N/A', '-', '']:
         return False, None, "Size is empty"
     
-    size = size_value.strip()
+    # Convert to string if needed (handles int, float, etc.)
+    size = str(size_value).strip()
     
     # Check against all valid patterns
     patterns = [
@@ -107,7 +108,7 @@ def attempt_size_correction(size: str) -> Tuple[Optional[str], Optional[str]]:
     return None, None
 
 
-def validate_grade(grade_value: str) -> Tuple[bool, Optional[str], Optional[str]]:
+def validate_grade(grade_value: Any) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Validate steel grade
     
@@ -115,9 +116,10 @@ def validate_grade(grade_value: str) -> Tuple[bool, Optional[str], Optional[str]
         (is_valid, corrected_value, error_message)
     """
     if not grade_value or grade_value in ['N/A', '-', '']:
-        return True, grade_value, None  # Grade can be empty
+        return True, str(grade_value) if grade_value else grade_value, None  # Grade can be empty
     
-    grade = grade_value.strip().upper()
+    # Convert to string if needed (handles int, float, etc.)
+    grade = str(grade_value).strip().upper()
     
     # Check if it matches known grades
     if grade in VALID_GRADES:
