@@ -1266,7 +1266,7 @@ def index_automater():
                                             ]
                                             if similar_entries:
                                                 # Check if any similar entries have quantity > 1
-                                                higher_qty_entries = [e for e in similar_entries if int(e.get('Qty', 0)) > 1]
+                                                higher_qty_entries = [e for e in similar_entries if int(e.get('Qty') or 0) > 1]
                                                 if higher_qty_entries:
                                                     # Flag quantity issues - especially if entry has other problems
                                                     if entry.get('has_critical_errors'):
