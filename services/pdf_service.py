@@ -106,11 +106,14 @@ def extract_text(file_obj):
     # PDF processing
     text = ""
     try:
+        from utils.encoding_fix import sanitize_text
+        
         with pdfplumber.open(file_obj) as pdf:
             for page in pdf.pages:
                 extracted = page.extract_text()
                 if extracted:
-                    text += extracted + "\n"
+                    # Sanitize text immediately after extraction to fix corrupt UTF-8 characters
+                    text += sanitize_text(extracted) + "\n"
         if not text.strip():
             return f"Error: No text extracted from PDF"
     except Exception as e:

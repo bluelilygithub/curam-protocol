@@ -89,6 +89,16 @@ app.secret_key = SECRET_KEY
 # Register blueprints
 app.register_blueprint(static_pages_bp)
 
+# Configure UTF-8 encoding sanitization for corrupt characters
+from utils.encoding_fix import create_safe_template_filter, sanitize_response_middleware
+
+# Add Jinja2 filter for automatic sanitization in templates
+app.jinja_env.filters['sanitize'] = create_safe_template_filter()
+
+# Add middleware to sanitize all HTML responses (optional - uncomment to enable)
+# This will clean ALL HTML responses automatically
+# app.after_request(sanitize_response_middleware)
+
 # Error handler for debugging
 @app.errorhandler(500)
 def internal_error(error):
@@ -1464,6 +1474,10 @@ def export_csv():
         columns = ['Filename', 'Mark', 'Size', 'Qty', 'Length', 'Grade', 'PaintSystem', 'Comments']
         df_export = df_export[[col for col in columns if col in df_export.columns]]
 
+    # Sanitize all string columns to fix corrupt UTF-8 characters before CSV export
+    from utils.encoding_fix import sanitize_csv_export
+    df_export = sanitize_csv_export(df_export)
+
     output = io.StringIO()
     df_export.to_csv(output, index=False)
     csv_string = output.getvalue()
@@ -1533,6 +1547,10 @@ def export_transmittal_csv():
     }
     
     filename = filename_map.get(category, category.lower())
+    
+    # Sanitize all string columns to fix corrupt UTF-8 characters before CSV export
+    from utils.encoding_fix import sanitize_csv_export
+    df = sanitize_csv_export(df)
     
     output = io.StringIO()
     df.to_csv(output, index=False)

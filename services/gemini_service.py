@@ -3156,8 +3156,15 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                     action_log.append(f"Empty response from {model_name}")
                     continue
 
-                clean_json = response.text.replace("```json", "").replace("```", "").strip()
+                # Import sanitization utilities
+                from utils.encoding_fix import sanitize_json_response, sanitize_dict
+                
+                # Clean the JSON string before parsing (fixes corrupt UTF-8 characters)
+                clean_json = sanitize_json_response(response.text)
                 parsed = json.loads(clean_json)
+                
+                # Sanitize all string values in the parsed data
+                parsed = sanitize_dict(parsed)
                 
                 # Handle different return structures
                 if doc_type == "transmittal":
