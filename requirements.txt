@@ -9,3 +9,9 @@ reportlab>=4.0.0
 requests
 psycopg2-binary
 SQLAlchemy
+
+# Image preprocessing dependencies (Phase 1)
+pillow>=10.0.0
+opencv-python-headless>=4.8.0
+pytesseract>=0.3.10
+numpy>=1.24.0

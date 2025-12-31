@@ -152,6 +152,71 @@ Don't paraphrase specifications, standards, or technical terms. Extract exactly 
 **Principle 4: Extract What Exists, Flag What Doesn't**
 Never invent data to fill gaps. Mark missing/unclear data explicitly.
 
+## PRE-EXTRACTION IMAGE ANALYSIS (FOR IMAGE FILES ONLY)
+
+**IMPORTANT**: If processing an image/photo file (not a text-based PDF), perform this analysis FIRST:
+
+### STEP 1: TABLE STRUCTURE IDENTIFICATION
+1. Locate the table headers row (usually bold or in a box)
+2. Count total number of columns
+3. Identify which column is which:
+   - Column 1: Usually "Mark" or "Item"
+   - Column 2 or 3: Usually "Size" or "Section" ← CRITICAL
+   - Find "Qty", "Length", "Grade", "Comments"
+4. Note column positions for accurate extraction
+
+### STEP 2: SIZE COLUMN LOCATION VERIFICATION
+The "Size" column is THE MOST IMPORTANT:
+- Scan headers for "Size", "Section", "Member Size"
+- Note which column number it is (e.g., "Column 2")
+- Verify by checking first data row - should contain patterns like:
+  - "310UC158" (column sections)
+  - "250UB37.2" (beam sections)
+  - "WB1220×6.0" (welded beams)
+  - "250PFC" (parallel flange channels)
+
+### STEP 3: ROW BOUNDARY DETECTION
+- Look for horizontal lines separating rows
+- If no lines, use vertical alignment of text
+- Note any merged cells or multi-line entries
+
+### CRITICAL PRE-FLIGHT CHECK:
+Before starting extraction, verify:
+□ I can see the table headers
+□ I've identified which column is "Size"
+□ I can see at least one size value (e.g., "310UC158")
+□ I understand the row boundaries
+
+If you CANNOT see size values:
+→ Look more carefully in column 2 or 3
+→ Check if image is rotated
+→ Check if size is split across lines (e.g., "310 / UC / 158")
+
+### STEP 4: MULTI-PASS EXTRACTION FOR IMAGES
+
+For image files, use a three-pass approach:
+
+**PASS 1: Full Table Scan**
+- Extract all rows you can see clearly
+- Mark uncertain cells as [unclear] but attempt extraction
+- Flag any rows where Size = "N/A" for re-examination
+
+**PASS 2: Size Column Deep Dive**
+If ANY Size cells show "N/A" after Pass 1:
+- Re-examine those specific rows
+- Look for size information that might be:
+  - Split across multiple lines
+  - In a different font/size
+  - Partially obscured but partially visible
+  - In adjacent cells (column misalignment)
+- Only mark "N/A" if genuinely no text visible
+
+**PASS 3: Final Validation**
+- Check: Does every row have at least Mark + Size?
+- Check: Are all Size values in valid format?
+- Check: Do quantities/lengths make sense?
+- Flag any anomalies for human review
+
 ## UNIVERSAL EXTRACTION STRATEGY
 
 ### PASS 1: Structure Analysis
@@ -197,14 +262,14 @@ BEFORE marking anything as [illegible]:
 - Only mark SPECIFIC unclear parts
 
 **STEP 2: FORMAT PARTIAL EXTRACTIONS**
-Ã¢Å“â€œ Good: "Install per specification ABC-123 [remainder obscured by stain]"
+Good: "Install per specification ABC-123 [remainder obscured by stain]"
 Ã¢Å“â€” Bad: "[Comment illegible - manual transcription required]"
 
-Ã¢Å“â€œ Good: "Verify dimensions on site. [handwritten: 'APPROVED - JMc 5/12']"
+Good: "Verify dimensions on site. [handwritten: 'APPROVED - JMc 5/12']"
 Ã¢Å“â€” Bad: "[Comment illegible - manual review required]"
 
 **STEP 3: USE [illegible] ONLY FOR TRULY UNREADABLE TEXT**
-- If ANY words are readable Ã¢â€ â€™ extract them
+- If ANY words are readable extract them
 - Use specific markers:
   - [word illegible]
   - [coffee stain obscures text]
@@ -216,42 +281,42 @@ BEFORE marking anything as [illegible]:
 **EXAMPLES:**
 
 Scenario: "Install with [smudge] gasket material"
-Ã¢Å“â€œ Extract: "Install with [smudged word] gasket material"
+Extract: "Install with [smudged word] gasket material"
 Ã¢Å“â€” Don't: "[Comment illegible]"
 
 Scenario: Stain covers last 3 words
-Ã¢Å“â€œ Extract: "Check actual dimensions before fabrication [coffee stain obscures remainder]"
+Extract: "Check actual dimensions before fabrication [coffee stain obscures remainder]"
 Ã¢Å“â€” Don't: "[coffee stain obscures remainder]" as entire comment
 
 Scenario: Handwritten note is clear
-Ã¢Å“â€œ Extract: "Original specification. [handwritten: 'CHANGED TO TYPE B - PMG']"
+Extract: "Original specification. [handwritten: 'CHANGED TO TYPE B - PMG']"
 Ã¢Å“â€” Don't: "[Comment illegible - manual review required]"
 
 **VALIDATION:**
 If you marked something [illegible], ask yourself:
-- Can I read ANY words? Ã¢â€ â€™ Then extract them + mark specific gap
-- Is the entire field truly unreadable? Ã¢â€ â€™ Then use full illegible marker
+- Can I read ANY words? Then extract them + mark specific gap
+- Is the entire field truly unreadable? Then use full illegible marker
 
 **Step 2: Read as Phrases, Not Characters**
 
 CHARACTER SOUP DETECTION:
 
 If your extraction looks like: "H o l d 4 O m m g r o u t u n d e r..."
-Ã¢â€ â€™ STOP - This is character-level OCR failure
-Ã¢â€ â€™ Re-attempt reading as connected words
-Ã¢â€ â€™ Try reading at higher magnification
-Ã¢â€ â€™ Use context from field type and adjacent data
+STOP - This is character-level OCR failure
+Re-attempt reading as connected words
+Try reading at higher magnification
+Use context from field type and adjacent data
 
 If still garbled after retry:
-Ã¢â€ â€™ Mark: "[Field illegible - OCR failed]"
-Ã¢â€ â€™ Do NOT output character soup
+Mark: "[Field illegible - OCR failed]"
+Do NOT output character soup
 
 UNACCEPTABLE OUTPUTS:
 Ã¢ÂÅ’ "H o l d 4 O m g r o u t"
 Ã¢ÂÅ’ "W p e e b r b A e S a 1"
 Ã¢ÂÅ’ "o x n i s s t i i t n e g"
 
-If your output looks like these Ã¢â€ â€™ You failed. Try again or mark as illegible.
+If your output looks like these You failed. Try again or mark as illegible.
 
 **Step 3: Extract Complete Multi-Part Content**
 
@@ -298,9 +363,9 @@ Before finalizing each field:
 - Use proper markers: "[coffee stain obscures text]" or "[remainder unclear]"
 
 **VALIDATION:**
-- If field ends mid-word Ã¢â€ â€™ Mark as incomplete
-- If field seems short for important item Ã¢â€ â€™ Check for continuation
-- If unclear portion Ã¢â€ â€™ Use marker: "[coffee stain obscures text]" not "(coffee sta"
+- If field ends mid-word Mark as incomplete
+- If field seems short for important item Check for continuation
+- If unclear portion Use marker: "[coffee stain obscures text]" not "(coffee sta"
 
 EXAMPLES:
 
@@ -318,10 +383,68 @@ Right: "Corrosion noted at base" ⚠️ Corrected 'st moore' to 'at base' (OCR e
 
 VALIDATION:
 If field seems short for an important/complex item:
-Ã¢â€ â€™ Check for text after periods
-Ã¢â€ â€™ Look for references to standards/drawings
-Ã¢â€ â€™ Verify you captured complete information
-Ã¢â€ â€™ Check for mid-word truncation
+→ Check for text after periods
+→ Look for references to standards/drawings
+→ Verify you captured complete information
+→ Check for mid-word truncation
+
+## ENHANCED OCR ERROR CORRECTION (FOR IMAGES AND POOR SCANS)
+
+When processing images or poor-quality scans, apply these OCR error corrections:
+
+### Common Number/Letter Confusions:
+
+**In numeric contexts** (sizes, quantities, lengths):
+- "I" or "l" (lowercase L) → "1" (one)
+- "O" (letter O) → "0" (zero)
+- "S" → "5" (five) when surrounded by numbers
+- "B" → "8" (eight) in numbers
+- "Z" → "2" (two) in numbers
+
+**Pattern-Based Auto-Correction Examples:**
+
+If you see "WB I22O× 6 . O":
+1. Recognize pattern: WB[depth]×[thickness]
+2. Apply corrections: I→1, O→0, remove spaces
+3. Result: "WB1220×6.0"
+4. Flag: ⚠️ Corrected from OCR: 'WB I22O× 6 . O' → 'WB1220×6.0'
+
+If you see "3IOUCIS8":
+1. Recognize pattern: [depth]UC[weight]
+2. Apply corrections: I→1, S→5
+3. Result: "310UC158"
+4. Flag: ⚠️ Corrected from OCR: '3IOUCIS8' → '310UC158'
+
+If you see "2SOPFC" or "25OPFC":
+1. Recognize pattern: [depth]PFC
+2. Apply corrections: S→5, O→0
+3. Result: "250PFC"
+4. Flag: ⚠️ Corrected from OCR: '2SOPFC' → '250PFC'
+
+If you see "25O UB 37 . 2":
+1. Recognize pattern: [depth]UB[weight]
+2. Apply corrections: O→0, remove spaces
+3. Result: "250UB37.2"
+4. Flag: ⚠️ Corrected from OCR: '25O UB 37 . 2' → '250UB37.2'
+
+**Spacing Errors - Auto-Remove:**
+- "250 UB 37 . 2" → "250UB37.2"
+- "4 5 0 0" → "4500" (in length column)
+- "3 0 0 PLUS" → "300PLUS" (in grade column)
+- "WB 1220 × 6 . 0" → "WB1220×6.0"
+
+### Correction Protocol:
+
+1. **Identify the pattern** - What type of value is this (beam size, quantity, etc.)?
+2. **Apply known corrections** - Fix obvious OCR errors
+3. **Validate result** - Does it match expected format?
+4. **Flag the correction** - Always note what was corrected for transparency
+
+### Confidence Scoring After Correction:
+
+- **HIGH confidence**: Pattern clear, single correction applied, result valid
+- **MEDIUM confidence**: Multiple corrections needed, result plausible
+- **LOW confidence**: Heavy corrections or result uncertain → Flag for review
 
 **Step 4: Handle Handwritten Annotations**
 
@@ -369,12 +492,12 @@ If partially legible after context analysis:
 **COMMON PATTERNS IN ENGINEERING CHANGES:**
 
 Valid patterns (make technical sense):
-- "CHANGED TO [new specification]" Ã¢Å“â€œ Common
-- "MODIFIED TO [new specification]" Ã¢Å“â€œ Common
-- "REVISED TO [new specification]" Ã¢Å“â€œ Common
-- "UPDATED TO [new specification]" Ã¢Å“â€œ Common
-- "APPROVED - [initials] [date]" Ã¢Å“â€œ Common
-- "DELETED - NOT REQ'D" Ã¢Å“â€œ Common
+- "CHANGED TO [new specification]" Common
+- "MODIFIED TO [new specification]" Common
+- "REVISED TO [new specification]" Common
+- "UPDATED TO [new specification]" Common
+- "APPROVED - [initials] [date]" Common
+- "DELETED - NOT REQ'D" Common
 
 Invalid patterns (make no technical sense):
 - "CORRODED TO [specification]" Ã¢Å“â€” Makes no sense
@@ -394,14 +517,14 @@ When handwritten text is unclear:
 **STEP 2: Check if it makes technical sense**
 - Does the phrase make sense in engineering context?
 - Do the words form a logical instruction?
-- Ã¢â€ â€™ YES: Accept it (even if slightly unclear)
-- Ã¢â€ â€™ NO: Go to Step 3
+- YES: Accept it (even if slightly unclear)
+- NO: Go to Step 3
 
 **STEP 3: Try common patterns (only if confident >95%)**
 - Match against known patterns: "CHANGED TO [spec]", "DELETED - NOT REQ'D", etc.
 - Check if verb makes technical sense:
-  - "Changed to", "Modified to", "Revised to" Ã¢â€ â€™ Yes Ã¢Å“â€œ
-  - "Corroded to", "Damaged to", "Broken to", "Chevrolet" Ã¢â€ â€™ No Ã¢Å“â€”
+  - "Changed to", "Modified to", "Revised to" Yes Ã¢Å“â€œ
+  - "Corroded to", "Damaged to", "Broken to", "Chevrolet" No Ã¢Å“â€”
 - If pattern matches AND confident (>95%):
   - Apply correction
   - Flag: ⚠️ Corrected '[original]' to '[corrected]' (handwriting interpretation)
@@ -452,11 +575,11 @@ If truly illegible after analysis:
 - Don't mark entire row as illegible
 
 EXAMPLES:
-Ã¢Å“â€œ "Original size 250mm. [handwritten: 'CHANGED TO 300mm - approval JD 5/12/19']"
-Ã¢Å“â€œ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Handwriting partially unclear, size inferred from context"
-Ã¢Å“â€œ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)"
-Ã¢Å“â€œ "Pending approval [handwritten signature - illegible]"
-Ã¢Å“â€œ "[handwritten in red pen: 'DELETED - NOT REQ'D']"
+"Original size 250mm. [handwritten: 'CHANGED TO 300mm - approval JD 5/12/19']"
+"310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Handwriting partially unclear, size inferred from context"
+"310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)"
+"Pending approval [handwritten signature - illegible]"
+"[handwritten in red pen: 'DELETED - NOT REQ'D']"
 
 ## STRIKETHROUGH TEXT HANDLING - CRITICAL
 
@@ -464,7 +587,7 @@ STRIKETHROUGH TEXT EXTRACTION:
 
 Visual strikethrough lines (red or black) can interfere with OCR but text is still readable.
 
-**CRITICAL RULE: Strikethrough Ã¢â€°Â  Illegible**
+**CRITICAL RULE: Strikethrough  Illegible**
 
 PROTOCOL FOR STRIKETHROUGH ROWS:
 
@@ -485,7 +608,7 @@ PROTOCOL FOR STRIKETHROUGH ROWS:
 - Cross-reference with deletion notes
 
 **Step 4: NEVER mark as [illegible]**
-- Strikethrough Ã¢â€°Â  illegible
+- Strikethrough  illegible
 - Text is readable, just marked for deletion
 - Extract the data + note deletion status
 
@@ -493,9 +616,9 @@ EXAMPLE:
 
 NB-03 row has red strikethrough:
 
-Ã¢ÂÅ’ WRONG: Mark all fields [illegible]
+WRONG: Mark all fields [illegible]
 
-Ã¢Å“â€œ RIGHT:
+RIGHT:
   Mark: NB-03
   Size: 310UC97
   Qty: 6
@@ -506,10 +629,10 @@ NB-03 row has red strikethrough:
 VALIDATION CHECK:
 
 If entire row is [illegible] but you can see ANY text:
-Ã¢â€ â€™ STOP - re-attempt extraction
-Ã¢â€ â€™ Look for strikethrough line interfering
-Ã¢â€ â€™ Read text underneath the line
-Ã¢â€ â€™ Extract data + note deletion status
+STOP - re-attempt extraction
+Look for strikethrough line interfering
+Read text underneath the line
+Extract data + note deletion status
 
 ## TEXT QUALITY ASSESSMENT BEFORE MARKING ILLEGIBLE
 
@@ -536,10 +659,10 @@ Before marking [illegible], assess WHY text is unclear:
 DECISION TREE:
 
 Can you see letter shapes?
-Ã¢â€ â€™ YES: Attempt extraction (even if uncertain)
-Ã¢â€ â€™ NO: Check if strikethrough/markup
-  Ã¢â€ â€™ YES: Look underneath, extract + note deletion
-  Ã¢â€ â€™ NO: Mark [illegible]
+YES: Attempt extraction (even if uncertain)
+NO: Check if strikethrough/markup
+  YES: Look underneath, extract + note deletion
+  NO: Mark [illegible]
 
 ## COLUMN BOUNDARY AWARENESS
 
@@ -548,9 +671,9 @@ CRITICAL RULE - Issues Stay in Their Columns:
 COLUMN ISOLATION PROTOCOL:
 
 When encountering issues (stains, damage, illegibility):
-Ã¢â€ â€™ Identify WHICH COLUMN contains the issue
-Ã¢â€ â€™ Note the issue ONLY in that column
-Ã¢â€ â€™ Don't let issues leak into adjacent columns
+Identify WHICH COLUMN contains the issue
+Note the issue ONLY in that column
+Don't let issues leak into adjacent columns
 
 WRONG BEHAVIOR EXAMPLE:
 Column A (actual): Empty/N/A
@@ -602,14 +725,14 @@ Different cell states have different meanings. Check document conventions first.
 
 VALIDATION:
 If you extract "Ã¢â‚¬â€" or "-" as a literal value:
-Ã¢â€ â€™ STOP and reconsider
-Ã¢â€ â€™ Check if document defines what dashes mean
-Ã¢â€ â€™ Usually convert to "N/A" unless certain it means something else
+STOP and reconsider
+Check if document defines what dashes mean
+Usually convert to "N/A" unless certain it means something else
 
 CONSISTENCY CHECK:
 If some rows have "N/A" and others have "Ã¢â‚¬â€" in same column:
-Ã¢â€ â€™ Likely they mean the same thing
-Ã¢â€ â€™ Normalize to one format (prefer N/A)
+Likely they mean the same thing
+Normalize to one format (prefer N/A)
 
 ## ACTIVE ERROR CORRECTION
 
@@ -617,12 +740,12 @@ FIX WHAT YOU CAN CONFIDENTLY IDENTIFY:
 
 When you detect an error, decide your confidence level:
 
-**HIGH CONFIDENCE (90%+) Ã¢â€ â€™ FIX IT**
+**HIGH CONFIDENCE (90%+) FIX IT**
 Examples:
 - OCR character confusion you can verify (7Ã¢â€ â€™1, 3Ã¢â€ â€™8, OÃ¢â€ â€™0)
 - Format errors with clear patterns (spaces in numbers)
 - Column misalignment you can verify
-- Dash Ã¢â€ â€™ N/A conversion
+- Dash N/A conversion
 - Obvious typos in standard terms
 
 Actions:
@@ -630,7 +753,7 @@ Actions:
 2. Flag it: "⚠️ Corrected from X to Y based on [reason]"
 3. Show original OCR in notes for transparency
 
-**MEDIUM CONFIDENCE (60-89%) Ã¢â€ â€™ FIX WITH STRONG FLAG**
+**MEDIUM CONFIDENCE (60-89%) FIX WITH STRONG FLAG**
 Examples:
 - Quantity seems wrong based on item context
 - Format unusual but could be correct
@@ -688,23 +811,23 @@ Visual markers:
 For each section type, certain values are more/less expected:
 
 Example - Construction:
-- "Existing" section Ã¢â€ â€™ Minimal new specifications
-- "New" section Ã¢â€ â€™ Complete specifications required
-- "Modified" section Ã¢â€ â€™ Mix of existing + new details
+- "Existing" section Minimal new specifications
+- "New" section Complete specifications required
+- "Modified" section Mix of existing + new details
 
 **STEP 3: VALIDATE AGAINST SECTION CONTEXT**
 If extraction seems inconsistent with section:
-Ã¢â€ â€™ Double-check the value
-Ã¢â€ â€™ Verify you're reading correct section
-Ã¢â€ â€™ Flag if anomaly confirmed
+Double-check the value
+Verify you're reading correct section
+Flag if anomaly confirmed
 
 EXAMPLES:
 
 Item in "EXISTING" section with extensive new specifications:
-Ã¢â€ â€™ Flag: "⚠️ Item in existing section but has new specs - verify correct section"
+Flag: "⚠️ Item in existing section but has new specs - verify correct section"
 
 Item in "NEW" section missing key specifications:
-Ã¢â€ â€™ Flag: "Ã°Å¸â€Â New item missing expected specifications - verify complete"
+Flag: "Ã°Å¸â€Â New item missing expected specifications - verify complete"
 
 ## ERROR FLAGGING SYSTEM
 
@@ -753,31 +876,31 @@ For Every Flag Provide:
 
 BEFORE SUBMITTING EXTRACTION, VERIFY:
 
-**Ã¢Å“â€œ Completeness Checks**
+**Completeness Checks**
 Ã¢-Â¡ All readable text extracted? (Used partial extraction before marking illegible)
 Ã¢-Â¡ Multi-part fields complete? (Checked for continuation after periods)
 Ã¢-Â¡ Handwritten annotations captured? (In [brackets] with original)
 Ã¢-Â¡ All columns filled? (Empty cells properly marked as N/A or Ã¢â‚¬â€)
 
-**Ã¢Å“â€œ Accuracy Checks**
+**Accuracy Checks**
 Ã¢-Â¡ Format validation passed? (Data matches expected patterns)
 Ã¢-Â¡ Cross-field validation done? (Values consistent within row)
 Ã¢-Â¡ Section context checked? (Values appropriate for section)
 Ã¢-Â¡ Column boundaries respected? (Issues in correct columns)
 
-**Ã¢Å“â€œ Error Handling Checks**
+**Error Handling Checks**
 Ã¢-Â¡ Confident corrections applied? (Fixed obvious OCR errors)
 Ã¢-Â¡ Uncertainties flagged? (All doubts explicitly marked)
 Ã¢-Â¡ No character soup? (No "H o l d 4 O..." output)
 Ã¢-Â¡ No invented data? (Only extracted what exists)
 
-**Ã¢Å“â€œ Flag Quality Checks**
+**Flag Quality Checks**
 Ã¢-Â¡ Each flag has specific reason? (Not generic "check this")
 Ã¢-Â¡ Critical issues marked ⚠? (Safety/compliance impacts)
 Ã¢-Â¡ Corrections explained? (Showed original + fixed value)
 Ã¢-Â¡ Suggested fixes provided? (When confident about correction)
 
-**Ã¢Å“â€œ Consistency Checks**
+**Consistency Checks**
 Ã¢-Â¡ All "Corrected X to Y" flags have corresponding corrected text?
 Ã¢-Â¡ Text matches flags? (No flag/text mismatches)
 Ã¢-Â¡ Handwriting corrections only applied if confident >95%?
@@ -826,14 +949,14 @@ When processing image files (JPEG, PNG, etc.) instead of PDFs:
 Before finalizing extraction, verify:
 - [ ] Size column has actual values (not all "N/A")
 - [ ] Length includes units ("mm" or "m")
-- [ ] Mark values match visible text (check for OCR errors like "NB-OI" Ã¢â€ â€™ "NB-01")
+- [ ] Mark values match visible text (check for OCR errors like "NB-OI" "NB-01")
 - [ ] Comments column checked (may contain important notes)
 
 **IF SIZE COLUMN IS ALL "N/A":**
-Ã¢â€ â€™ This is a CRITICAL ERROR
-Ã¢â€ â€™ Re-examine the image for Size column
-Ã¢â€ â€™ Look for beam size patterns in the table
-Ã¢â€ â€™ Size column is usually 2nd or 3rd column after Mark
+This is a CRITICAL ERROR
+Re-examine the image for Size column
+Look for beam size patterns in the table
+Size column is usually 2nd or 3rd column after Mark
 
 ## IMAGE PROCESSING - CRITICAL FOR JPEG/PNG FILES
 
@@ -875,7 +998,7 @@ When processing image files (JPEG, PNG, etc.) instead of PDFs:
    - If units are missing in the image, add " mm" based on engineering context
 
 6. **Mark Column OCR Errors**
-   - Watch for: "NB-OI" Ã¢â€ â€™ should be "NB-01" (0Ã¢â€ â€™O, 1Ã¢â€ â€™I confusion)
+   - Watch for: "NB-OI" should be "NB-01" (0Ã¢â€ â€™O, 1Ã¢â€ â€™I confusion)
    - Verify mark values match visible text
 
 **VALIDATION FOR IMAGES:**
@@ -887,12 +1010,12 @@ Before finalizing extraction, verify:
 - [ ] Comments column checked (may contain important notes)
 
 **IF SIZE COLUMN IS ALL "N/A":**
-Ã¢â€ â€™ This is a CRITICAL ERROR
-Ã¢â€ â€™ Re-examine the image for Size column
-Ã¢â€ â€™ Look for beam size patterns in the table
-Ã¢â€ â€™ Size column is usually 2nd or 3rd column after Mark
-Ã¢â€ â€™ Check if sizes are split across multiple lines
-Ã¢â€ â€™ Verify you're reading the correct column
+This is a CRITICAL ERROR
+Re-examine the image for Size column
+Look for beam size patterns in the table
+Size column is usually 2nd or 3rd column after Mark
+Check if sizes are split across multiple lines
+Verify you're reading the correct column
 
 **IMAGE-SPECIFIC EXTRACTION PROTOCOL:**
 
@@ -985,13 +1108,13 @@ Before finalizing extraction, verify:
 
 **CONDITIONAL RULES:**
 
-- If Size contains "WB" Ã¢â€ â€™ Must have format WB[number]Ãƒâ€”[number.number]
-- If Size contains "UC" or "UB" Ã¢â€ â€™ Must have format [number][type][number or number.number]
-- If Grade is a decimal number (e.g., "37.2") Ã¢â€ â€™ Likely misaligned from Size column
-- If Qty = 1 and Size is large beam (e.g., 460UB+) Ã¢â€ â€™ Flag for verification (large beams rarely solo)
-- If Comments contains "[handwritten:" Ã¢â€ â€™ Preserve exactly, don't attempt to clean up
-- If section header is "EXISTING" Ã¢â€ â€™ Comments may reference existing conditions
-- If section header is "NEW" Ã¢â€ â€™ Complete specifications expected
+- If Size contains "WB" Must have format WB[number]Ãƒâ€”[number.number]
+- If Size contains "UC" or "UB" Must have format [number][type][number or number.number]
+- If Grade is a decimal number (e.g., "37.2") Likely misaligned from Size column
+- If Qty = 1 and Size is large beam (e.g., 460UB+) Flag for verification (large beams rarely solo)
+- If Comments contains "[handwritten:" Preserve exactly, don't attempt to clean up
+- If section header is "EXISTING" Comments may reference existing conditions
+- If section header is "NEW" Complete specifications expected
 
 ### Known Value Lists
 
@@ -1047,14 +1170,14 @@ Common OCR errors in numbers and measurements:
 VALIDATION FOR MEASUREMENTS:
 
 **Pattern Detection:**
-- "4Dmm" Ã¢â€ â€™ Check context
+- "4Dmm" Check context
   - Grout dimensions typically: 10mm, 20mm, 30mm, 40mm, 50mm
   - "4Dmm" unlikely (D not a digit)
   - Correct to: "40mm"
   - Flag: ⚠️ Corrected '4Dmm' to '40mm' (OCR DÃ¢â€ â€™0)
 
 **Word Context Validation:**
-- "grows" Ã¢â€ â€™ Check context
+- "grows" Check context
   - Near "40mm under base plate"
   - Structural term: "grout" (fills gaps)
   - "grows" makes no technical sense
@@ -1064,14 +1187,14 @@ VALIDATION FOR MEASUREMENTS:
 **PROTOCOL:**
 1. Extract raw OCR text
 2. Check if makes technical sense in context
-3. If nonsensical Ã¢â€ â€™ look for OCR character confusion
+3. If nonsensical look for OCR character confusion
 4. Apply correction based on context and known patterns
 5. Flag the correction with explanation
 
 **EXAMPLES:**
-- "4Dmm grout" Ã¢â€ â€™ "40mm grout" ⚠️ Corrected DÃ¢â€ â€™0
-- "grows under base" Ã¢â€ â€™ "grout under base" ⚠️ Corrected OCR error
-- "calvanited" Ã¢â€ â€™ "galvanised" (if context suggests galvanizing)
+- "4Dmm grout" "40mm grout" ⚠️ Corrected DÃ¢â€ â€™0
+- "grows under base" "grout under base" ⚠️ Corrected OCR error
+- "calvanited" "galvanised" (if context suggests galvanizing)
 
 ### Domain-Specific Word Validation - CRITICAL
 
@@ -1082,30 +1205,30 @@ Construction/Engineering terms often get OCR errors. Validate against known voca
 **COATING/FINISH TERMS:**
 
 Common OCR errors:
-- "calvanited" Ã¢â€ â€™ "galvanised" Ã¢Å“â€œ
-- "galvinized" Ã¢â€ â€™ "galvanised" Ã¢Å“â€œ
-- "galvanized" Ã¢â€ â€™ "galvanised" (US spelling, but use Australian "galvanised")
-- "stell" Ã¢â€ â€™ "steel" Ã¢Å“â€œ
-- "concreat" Ã¢â€ â€™ "concrete" Ã¢Å“â€œ
-- "paint" Ã¢â€ â€™ common term Ã¢Å“â€œ
+- "calvanited" "galvanised" Ã¢Å“â€œ
+- "galvinized" "galvanised" Ã¢Å“â€œ
+- "galvanized" "galvanised" (US spelling, but use Australian "galvanised")
+- "stell" "steel" Ã¢Å“â€œ
+- "concreat" "concrete" Ã¢Å“â€œ
+- "paint" common term Ã¢Å“â€œ
 
 **MATERIAL/SUBSTANCE TERMS:**
 
-- "grows" near "plate/base" Ã¢â€ â€™ likely "grout" Ã¢Å“â€œ
-- "epoy" Ã¢â€ â€™ "epoxy" Ã¢Å“â€œ
-- "resin" Ã¢â€ â€™ common term Ã¢Å“â€œ
-- "mortor" Ã¢â€ â€™ "mortar" Ã¢Å“â€œ
-- "compund" Ã¢â€ â€™ "compound" Ã¢Å“â€œ
-- "cement" Ã¢â€ â€™ common term Ã¢Å“â€œ
+- "grows" near "plate/base" likely "grout" Ã¢Å“â€œ
+- "epoy" "epoxy" Ã¢Å“â€œ
+- "resin" common term Ã¢Å“â€œ
+- "mortor" "mortar" Ã¢Å“â€œ
+- "compund" "compound" Ã¢Å“â€œ
+- "cement" common term Ã¢Å“â€œ
 
 **INSTALLATION TERMS:**
 
-- "torqe" Ã¢â€ â€™ "torque" Ã¢Å“â€œ
-- "weld" Ã¢â€ â€™ common term Ã¢Å“â€œ
-- "brase" Ã¢â€ â€™ "brace" Ã¢Å“â€œ
-- "supplies" Ã¢â€ â€™ "supplier" (in context of "verify with supplier")
-- "instal" Ã¢â€ â€™ "install" Ã¢Å“â€œ
-- "ancho" Ã¢â€ â€™ "anchor" Ã¢Å“â€œ
+- "torqe" "torque" Ã¢Å“â€œ
+- "weld" common term Ã¢Å“â€œ
+- "brase" "brace" Ã¢Å“â€œ
+- "supplies" "supplier" (in context of "verify with supplier")
+- "instal" "install" Ã¢Å“â€œ
+- "ancho" "anchor" Ã¢Å“â€œ
 
 **VALIDATION PROTOCOL:**
 
@@ -1116,9 +1239,9 @@ Common OCR errors:
    - Phonetically similar
    - Common OCR character substitutions (rÃ¢â€ â€™n, iÃ¢â€ â€™l, etc.)
 4. Check context:
-   - "[number]mm [substance] under base" Ã¢â€ â€™ expect: grout, mortar, compound, epoxy
-   - "Hot dip [coating]" Ã¢â€ â€™ expect: galvanised, painted, coated
-   - "verify with [entity]" Ã¢â€ â€™ expect: supplier, engineer, site
+   - "[number]mm [substance] under base" expect: grout, mortar, compound, epoxy
+   - "Hot dip [coating]" expect: galvanised, painted, coated
+   - "verify with [entity]" expect: supplier, engineer, site
 5. If high-confidence match found (>90% similar + contextually correct):
    - **APPLY THE CORRECTION TO THE EXTRACTED TEXT** (see Correction Application Protocol below)
    - Flag: ⚠️ Corrected '[original]' to '[corrected]' (OCR error)
@@ -1157,7 +1280,7 @@ When you identify a correction:
 
 **FORMAT:**
 
-Ã¢Å“â€œ CORRECT:
+CORRECT:
 Text: "Main support beam. Fly brace @ 1500 centres."
 Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
 
@@ -1173,8 +1296,8 @@ Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
 
 **CONSISTENCY RULE:**
 
-If flag says "Corrected X to Y" Ã¢â€ â€™ Text MUST show Y, not X
-If text shows corrected version Ã¢â€ â€™ Flag MUST explain what was changed
+If flag says "Corrected X to Y" Text MUST show Y, not X
+If text shows corrected version Flag MUST explain what was changed
 
 **TRANSPARENCY REQUIREMENT:**
 
@@ -1201,13 +1324,13 @@ Before finalizing each row, check:
 
 **SYNCHRONIZATION RULE:**
 
-If flag says "Corrected X to Y" Ã¢â€ â€™ Text MUST show Y
-If text shows X but flag says corrected Ã¢â€ â€™ FIX THE TEXT (mandatory)
-If you can't fix the text Ã¢â€ â€™ Change flag to "uncertain" instead of "corrected"
+If flag says "Corrected X to Y" Text MUST show Y
+If text shows X but flag says corrected FIX THE TEXT (mandatory)
+If you can't fix the text Change flag to "uncertain" instead of "corrected"
 
 **EXAMPLES:**
 
-Ã¢Å“â€œ CORRECT (Flag/Text Match):
+CORRECT (Flag/Text Match):
 Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
 Text: "Verify with supplier"
 [Flag and text match - correction applied]
@@ -1218,21 +1341,21 @@ Text: "Verify with supplies"
 [Flag says corrected but text still shows original - FIX THIS]
 
 **MANDATORY RULE:**
-If flag says "Corrected X to Y" Ã¢â€ â€™ Text MUST show Y
-If text shows Y but no flag Ã¢â€ â€™ Add flag explaining correction
+If flag says "Corrected X to Y" Text MUST show Y
+If text shows Y but no flag Add flag explaining correction
 Every correction MUST have a corresponding flag. No exceptions.
 
 **EXAMPLES:**
 
-Ã¢Å“â€œ "Hot dip galvanised per AS/NZS 4680"
+"Hot dip galvanised per AS/NZS 4680"
 Flag: "⚠️ Corrected 'calvanited' to 'galvanised' (OCR error)"
 [Correction applied + flag shown]
 
-Ã¢Å“â€œ "40mm grout under base plate"
+"40mm grout under base plate"
 Flag: "⚠️ Corrected 'grows' to 'grout' (OCR error)"
 [Correction applied + flag shown]
 
-Ã¢Å“â€œ "verify with supplier"
+"verify with supplier"
 Flag: "⚠️ Corrected 'supplies' to 'supplier' (OCR error)"
 [Correction applied + flag shown]
 
@@ -1253,14 +1376,14 @@ Flag: [none]
 - "grows" is valid word BUT contextually wrong
 - Pattern: "[number]mm [substance] under base"
 - Expected substances: grout, mortar, compound, epoxy
-- "grows" Ã¢â€ â€™ "grout" (edit distance: 1, contextually correct)
+- "grows" "grout" (edit distance: 1, contextually correct)
 - Correction: "40mm grout under base plate"
 - Flag: ⚠️ Corrected 'grows' to 'grout' (likely OCR error)
 
 "verify with supplies" Ã¢â€ â€™
 - Context: "verify with [entity]"
 - Expected: supplier, engineer, site, manufacturer
-- "supplies" Ã¢â€ â€™ "supplier" (edit distance: 1, contextually correct)
+- "supplies" "supplier" (edit distance: 1, contextually correct)
 - Correction: "verify with supplier"
 - Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
 
@@ -1378,7 +1501,7 @@ Examples:
 - Problem: Size weight gets misread as grade
 - Wrong: Size: 250UB77.2, Grade: 37.2
 - Right: Size: 250UB37.2, Grade: Not marked
-- Detection: If grade is a decimal number matching part of size Ã¢â€ â€™ column misalignment
+- Detection: If grade is a decimal number matching part of size column misalignment
 
 **"Not marked" vs "N/A":**
 - "Not marked" = explicitly stated in document (usually Grade column)
@@ -1421,7 +1544,7 @@ IF COLUMN SCHEDULE:
 ## CRITICAL REMINDERS
 
 **NEVER output character soup ("H o l d 4 O m...")**
-If garbled Ã¢â€ â€™ mark [illegible]
+If garbled mark [illegible]
 Don't give unusable output
 
 **Extract partial before marking illegible**
@@ -1437,8 +1560,8 @@ Don't stop at first period
 Get full specification
 
 **Fix what you're confident about**
-Obvious OCR errors Ã¢â€ â€™ correct + flag
-Uncertain Ã¢â€ â€™ flag, don't fix
+Obvious OCR errors correct + flag
+Uncertain flag, don't fix
 
 **Use document structure for validation**
 Section context matters
@@ -1622,7 +1745,7 @@ TEXT: {text}
     - Calculate: ÃŽÂ£(line totals) should equal invoice subtotal
     - Check: All required fields populated
     - Flag: Missing part numbers or quantities
-    - Warn: If calculated total Ã¢â€°Â  invoice total (>$0.50 difference)
+    - Warn: If calculated total  invoice total (>$0.50 difference)
     
     STEP 4: Handle pagination
     - Note "CONTINUED ON PAGE X" markers
@@ -1672,19 +1795,19 @@ TEXT: {text}
     **Mandatory Validation:**
     
     FINANCIAL VALIDATION:
-    Ã¢Å“â€œ Subtotal + Tax = Total (tolerance: Ã‚Â±$0.10)
-    Ã¢Å“â€œ All line totals sum to subtotal (tolerance: Ã‚Â±$1.00)
-    Ã¢Å“â€œ Unit price Ãƒâ€” Quantity = Line total (per line)
-    Ã¢Å“â€œ Currency consistent throughout
+    Subtotal + Tax = Total (tolerance: Ã‚Â±$0.10)
+    All line totals sum to subtotal (tolerance: Ã‚Â±$1.00)
+    Unit price Ãƒâ€” Quantity = Line total (per line)
+    Currency consistent throughout
     
     FLAG IF:
-    ⚠️ Totals don't match Ã¢â€ â€™ Add to flags: "Calculation mismatch - verify manually"
-    ⚠️ Missing currency Ã¢â€ â€™ Add to flags: "Currency not specified - assumed [X]"
-    ⚠️ Tax rate unusual Ã¢â€ â€™ Add to flags: "GST 10% expected for AU, found X%"
+    ⚠️ Totals don't match Add to flags: "Calculation mismatch - verify manually"
+    ⚠️ Missing currency Add to flags: "Currency not specified - assumed [X]"
+    ⚠️ Tax rate unusual Add to flags: "GST 10% expected for AU, found X%"
     
     CRITICAL IF:
-    ⚠ Total amount missing Ã¢â€ â€™ "CRITICAL: Cannot determine payable amount"
-    ⚠ Vendor name unclear Ã¢â€ â€™ "CRITICAL: Vendor identification uncertain"
+    ⚠ Total amount missing "CRITICAL: Cannot determine payable amount"
+    ⚠ Vendor name unclear "CRITICAL: Vendor identification uncertain"
     
     **Business Rule Validation:**
     
@@ -1736,9 +1859,9 @@ TEXT: {text}
     2. Check for shipping/handling fees
     3. Check for discounts/adjustments
     4. If still mismatch > $1.00:
-       Ã¢â€ â€™ Flag: "⚠️ Calculation discrepancy: Calculated $X vs Invoice $Y"
-       Ã¢â€ â€™ Use invoice stated total (assume correct)
-       Ã¢â€ â€™ Note for manual verification
+       Flag: "⚠️ Calculation discrepancy: Calculated $X vs Invoice $Y"
+       Use invoice stated total (assume correct)
+       Note for manual verification
     
     **Multi-Currency:**
     If line items in different currency than total:
@@ -2532,7 +2655,7 @@ HTML_TEMPLATE = """
                             <td style="padding: 10px 12px;">
                                 {% set found = xref.Found or xref.get('Found', '') %}
                                 {% if 'yes' in found|lower or 'true' in found|lower %}
-                                <span style="color: #27ae60; font-weight: 600;">Ã¢Å“â€œ Found</span>
+                                <span style="color: #27ae60; font-weight: 600;">Found</span>
                                 {% elif 'no' in found|lower or 'false' in found|lower %}
                                 <span style="color: #e74c3c; font-weight: 600;">Ã¢Å“â€” Missing</span>
                                 {% else %}
@@ -2655,7 +2778,7 @@ HTML_TEMPLATE = """
                             {% for correction in row.corrections_applied %}
                                 {% if 'Size' in correction %}
                                 <div style="background-color: #d1f2eb; border-left: 3px solid #27ae60; padding: 4px 8px; margin-top: 4px; border-radius: 3px; font-size: 11px;">
-                                    Ã¢Å“â€œ {{ correction }}
+                                    {{ correction }}
                                 </div>
                                 {% endif %}
                             {% endfor %}
@@ -2774,7 +2897,7 @@ HTML_TEMPLATE = """
                 <td>{{ row.PaymentTerms or 'N/A' }}{% if row.DueDate and row.DueDate != 'N/A' %}<br><small style="color: #666;">Due: {{ row.DueDate }}</small>{% endif %}</td>
                 {% endif %}
                 {% if file_results[0].get('ShippingTerms') and file_results[0].ShippingTerms != 'N/A' %}
-                <td>{{ row.ShippingTerms or 'N/A' }}{% if row.PortOfLoading and row.PortOfLoading != 'N/A' %}<br><small style="color: #666;">{{ row.PortOfLoading }} Ã¢â€ â€™ {{ row.PortOfDischarge or '' }}</small>{% endif %}</td>
+                <td>{{ row.ShippingTerms or 'N/A' }}{% if row.PortOfLoading and row.PortOfLoading != 'N/A' %}<br><small style="color: #666;">{{ row.PortOfLoading }} {{ row.PortOfDischarge or '' }}</small>{% endif %}</td>
                 {% endif %}
             </tr>
             {% endfor %}
@@ -3126,25 +3249,47 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                     if not image_file.exists():
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Image file not found: {image_path}"
-                        action_log.append(f"Ã¢Å“â€” Image file not found: {image_path}")
+                        action_log.append(f"✗ Image file not found: {image_path}")
                         continue
                     
-                    # Open image and convert to format Gemini expects
+                    # PHASE 1: Image preprocessing for better extraction
                     try:
+                        from services.image_preprocessing import process_image_for_extraction
+                        
+                        # Process image: assess quality, enhance if needed, extract OCR text
+                        enhanced_path, ocr_text, quality = process_image_for_extraction(image_path)
+                        action_log.append(f"📊 Image quality: {quality['quality_level']} (sharpness: {quality['sharpness']:.1f})")
+                        
+                        # Use enhanced image for better Vision API results
+                        img = Image.open(enhanced_path)
+                        
+                        # If quality is POOR, inject OCR text into prompt for cross-validation
+                        enhanced_prompt = prompt
+                        if quality["quality_level"] == "POOR" and ocr_text:
+                            enhanced_prompt = f"{prompt}\n\n## OCR BACKUP TEXT (use for validation):\n{ocr_text[:2000]}"
+                            action_log.append(f"📝 Added OCR backup text ({len(ocr_text)} chars) due to poor image quality")
+                        
+                        # Create content with enhanced image and prompt
+                        content_parts = [img, enhanced_prompt]
+                        response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
+                        action_log.append(f"✓ Vision API call succeeded with {model_name}")
+                        
+                    except ImportError:
+                        # Fallback if preprocessing not available
+                        action_log.append("⚠ Image preprocessing unavailable - using original image")
                         img = Image.open(image_path)
-                        # Create content with image and prompt - Gemini accepts PIL Image objects
                         content_parts = [img, prompt]
                         response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
-                        action_log.append(f"Ã¢Å“â€œ Vision API call succeeded with {model_name}")
+                        action_log.append(f"✓ Vision API call succeeded with {model_name}")
                     except Exception as img_error:
                         attempt_detail["status"] = "error"
-                        attempt_detail["message"] = f"Failed to open image: {img_error}"
-                        action_log.append(f"Ã¢Å“â€” Failed to open image: {img_error}")
+                        attempt_detail["message"] = f"Failed to process image: {img_error}"
+                        action_log.append(f"✗ Failed to process image: {img_error}")
                         continue
                 else:
                     # Regular text-based processing
                     response = model.generate_content(prompt, request_options={"timeout": timeout_seconds})
-                    action_log.append(f"Ã¢Å“â€œ API call succeeded with {model_name}")
+                    action_log.append(f"API call succeeded with {model_name}")
                 
                 resolved_model = model_name
 
@@ -3206,6 +3351,41 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                     attempt_log.append(attempt_detail)
                     print(f"Successfully extracted {len(entries)} rows with {model_name} for {doc_type}")
                     action_log.append(f"Success with {model_name}: extracted {len(entries)} row(s)")
+                    
+                    # PHASE 3: Validate and auto-correct engineering extractions
+                    if doc_type == "engineering" and entries:
+                        try:
+                            from services.engineering_validator import validate_schedule
+                            
+                            # Run validation
+                            validation_report = validate_schedule(entries, schedule_type)
+                            
+                            # Log validation results
+                            action_log.append(f"📋 Validation: {validation_report['valid_rows']}/{validation_report['total_rows']} rows valid")
+                            
+                            if validation_report['rows_with_corrections'] > 0:
+                                action_log.append(f"✓ Applied {validation_report['rows_with_corrections']} auto-correction(s)")
+                                # Use corrected entries
+                                entries = validation_report['corrected_entries']
+                                
+                                # Log specific corrections
+                                for row_val in validation_report['row_validations']:
+                                    if row_val['corrections']:
+                                        mark = row_val['corrected_row'].get('Mark', f"Row {row_val['row_index']}")
+                                        for correction in row_val['corrections']:
+                                            action_log.append(f"  • {mark}: {correction}")
+                            
+                            if validation_report['rows_with_errors'] > 0:
+                                action_log.append(f"⚠ {validation_report['rows_with_errors']} row(s) have errors requiring manual review")
+                            
+                            if validation_report['rows_with_warnings'] > 0:
+                                action_log.append(f"⚠ {validation_report['rows_with_warnings']} row(s) have warnings")
+                                
+                        except ImportError:
+                            action_log.append("⚠ Engineering validator unavailable - skipping validation")
+                        except Exception as val_error:
+                            action_log.append(f"⚠ Validation error: {val_error}")
+                    
                     return entries, None, resolved_model, attempt_log, action_log, schedule_type
 
                 attempt_detail["status"] = "no_data"
