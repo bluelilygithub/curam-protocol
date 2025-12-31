@@ -3240,9 +3240,9 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                 # Use longer timeout for engineering (large PDFs), shorter for others
                 timeout_seconds = 60 if doc_type == "engineering" else 30
                 
-                # Prepare content for Gemini
+# Prepare content for Gemini
                 if image_path:
-                    # Use Gemini vision API for images
+                    # Use Gemini vision API for images with table-optimized preprocessing
                     import pathlib
                     from PIL import Image
                     image_file = pathlib.Path(image_path)
@@ -3252,31 +3252,50 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                         action_log.append(f"✗ Image file not found: {image_path}")
                         continue
                     
-                    # PHASE 1: Image preprocessing for better extraction
+                    # ENHANCED: Table-optimized image preprocessing
                     try:
                         from services.image_preprocessing import process_image_for_extraction
                         
-                        # Process image: assess quality, enhance if needed, extract OCR text
+                        # Process image: enhance for tables, assess quality
                         enhanced_path, ocr_text, quality = process_image_for_extraction(image_path)
                         action_log.append(f"📊 Image quality: {quality['quality_level']} (sharpness: {quality['sharpness']:.1f})")
                         
-                        # Use enhanced image for better Vision API results
+                        # Use enhanced image
                         img = Image.open(enhanced_path)
                         
-                        # If quality is POOR, inject OCR text into prompt for cross-validation
-                        enhanced_prompt = prompt
-                        if quality["quality_level"] == "POOR" and ocr_text:
-                            enhanced_prompt = f"{prompt}\n\n## OCR BACKUP TEXT (use for validation):\n{ocr_text[:2000]}"
-                            action_log.append(f"📝 Added OCR backup text ({len(ocr_text)} chars) due to poor image quality")
+                        # For engineering docs, use focused vision prompt
+                        if doc_type == "engineering":
+                            vision_prompt = """Extract data from this structural schedule table into JSON.
+
+CRITICAL - COLUMN MAPPING:
+Look at the table carefully. Identify these columns by their headers:
+1. Mark (member ID like "B1", "NB-01", "C1")
+2. Size/Section (CRITICAL - formats like "310UC158", "250UB37.2", "WB1220×6.0")
+3. Qty (quantity - numbers)
+4. Length (in mm)
+5. Grade (steel grade like "300", "300PLUS", "350L0")
+6. Paint System (coating type)
+7. Comments/Remarks
+
+THE SIZE COLUMN IS CRITICAL:
+- Never mark Size as "N/A" unless the cell is truly empty
+- Common patterns: "310UC158", "250UB37.2", "200PFC", "WB1220×6.0"
+- Extract EXACTLY what you see in each Size cell
+- The Size column is usually the 2nd column after Mark
+
+Extract ALL visible rows. Return JSON array only, no markdown.
+"""
+                            content_parts = [img, vision_prompt]
+                        else:
+                            # Use regular prompt for other document types
+                            content_parts = [img, prompt]
                         
-                        # Create content with enhanced image and prompt
-                        content_parts = [img, enhanced_prompt]
                         response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
-                        action_log.append(f"✓ Vision API call succeeded with {model_name}")
+                        action_log.append(f"✓ Vision API (table-optimized) succeeded with {model_name}")
                         
                     except ImportError:
-                        # Fallback if preprocessing not available
-                        action_log.append("⚠ Image preprocessing unavailable - using original image")
+                        # Fallback: use original image without preprocessing
+                        action_log.append("⚠ Image preprocessing unavailable - using original")
                         img = Image.open(image_path)
                         content_parts = [img, prompt]
                         response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
