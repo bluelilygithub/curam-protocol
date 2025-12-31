@@ -1,2 +1,2 @@
 [build]
-aptPkgs = ["tesseract-ocr", "tesseract-ocr-eng"
+aptPkgs = ["tesseract-ocr", "tesseract-ocr-eng"]
