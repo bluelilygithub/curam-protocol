@@ -101,19 +101,19 @@ def sanitize_text(text: str) -> str:
             text = text.replace(corrupt, correct)
     
     # Aggressive cleanup: Remove common corruption prefixes that slip through
-    # These are patterns that indicate garbled encoding but don't have clear replacements
-    corruption_patterns = [
-        r'Ã¢â‚¬â€œÃ‚',  # Common dash corruption
-        r'Ã¢Ã¯â€šÂ¿Ã‚Å'',  # Garbled check/bullet
-        r'Ã¢Â',  # Partial corruption
-        r'Ã‚Â',  # Partial corruption
-        r'Ãƒâ€',  # Partial corruption
-        r'â€[šž]',  # Smart quote corruptions
-        r'Â\s',  # Non-breaking space corruption with trailing space
-    ]
-    
-    for pattern in corruption_patterns:
-        text = re.sub(pattern, '', text)
+    # Using byte-based patterns to avoid encoding issues in the source file
+    try:
+        # Remove common corruption byte sequences
+        text = text.replace('\xc3\xa2\xe2\x82\xac\xe2\x80\x9c\xc3\x82', '')  # Dash corruption
+        text = text.replace('\xc3\xa2\xc3\xaf\xe2\x80\x9a\xc2\xbf\xc3\x82\xc5\x93', '')  # Garbled check/bullet
+        text = text.replace('\xc3\xa2\xc2', '')  # Partial corruption prefix
+        text = text.replace('\xc3\x82\xc2', '')  # Partial corruption prefix
+        text = text.replace('\xc3\x83\xe2\x80', '')  # Partial corruption prefix
+        
+        # Remove orphaned high-bytes that indicate corruption
+        text = re.sub(r'[\xc2-\xc3][\x80-\xbf]*(?=\s|$)', '', text)
+    except Exception:
+        pass  # If cleanup fails, continue with basic sanitization
     
     # Remove any remaining control characters (except newlines, tabs)
     text = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]', '', text)
