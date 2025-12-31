@@ -40,6 +40,7 @@ def get_encoding_fixes():
     # Check marks and bullets
     fixes['\xc3\x83\xc2\xa2\xc3\x85\xe2\x80\x9c\xc3\xa2\xe2\x82\xac\xc5\x93'] = '\u2713'  # Check mark
     fixes['\xc3\xa2\xc5\x93\xe2\x80\x9c'] = '\u2713'  # Check mark
+    fixes['\xc3\xa2\xc3\xaf\xe2\x80\x9a\xc2\xbf\xc3\x82\xc5\x93\xc3\xa2\xc5\x93\xe2\x80\x9c'] = '\u2713'  # Check mark (another variant)
     fixes['\xc3\x83\xc2\xa2\xc3\xa2\xe2\x82\xac\xc2\xa0\xc3\xa2\xe2\x82\xac\xe2\x84\xa2'] = '\u2022'  # Bullet
     fixes['\xc3\xa2\xe2\x80\xa2'] = '\u2022'  # Bullet
     fixes['\xc2\xa2'] = '\u2022'  # Bullet
@@ -53,6 +54,7 @@ def get_encoding_fixes():
     # Dashes
     fixes['\xc3\xa2\xe2\x82\xac\xe2\x80\x9c'] = '\u2013'  # En dash
     fixes['\xc3\xa2\xe2\x82\xac\xe2\x80\x9d'] = '\u2014'  # Em dash
+    fixes['\xc3\xa2\xe2\x82\xac\xe2\x80\x9c\xc3\x82'] = '-'  # Dash corruption variant
     fixes['\xe2\x80\x93'] = '\u2013'  # En dash
     fixes['\xe2\x80\x94'] = '\u2014'  # Em dash
     
@@ -97,6 +99,21 @@ def sanitize_text(text: str) -> str:
     for corrupt, correct in ENCODING_FIXES.items():
         if corrupt in text:
             text = text.replace(corrupt, correct)
+    
+    # Aggressive cleanup: Remove common corruption prefixes that slip through
+    # These are patterns that indicate garbled encoding but don't have clear replacements
+    corruption_patterns = [
+        r'Ã¢â‚¬â€œÃ‚',  # Common dash corruption
+        r'Ã¢Ã¯â€šÂ¿Ã‚Å'',  # Garbled check/bullet
+        r'Ã¢Â',  # Partial corruption
+        r'Ã‚Â',  # Partial corruption
+        r'Ãƒâ€',  # Partial corruption
+        r'â€[šž]',  # Smart quote corruptions
+        r'Â\s',  # Non-breaking space corruption with trailing space
+    ]
+    
+    for pattern in corruption_patterns:
+        text = re.sub(pattern, '', text)
     
     # Remove any remaining control characters (except newlines, tabs)
     text = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]', '', text)
