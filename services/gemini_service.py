@@ -314,7 +314,7 @@ Wrong: "(coffee sta"
 Right: "[coffee stain obscures text]" or "Paint System A required [coffee stain obscures remainder]"
 
 Wrong: "Corrosion noted st moore"
-Right: "Corrosion noted at base" Ã¢Å¡Â Ã¯Â¸Â Corrected 'st moore' to 'at base' (OCR error)
+Right: "Corrosion noted at base" ⚠️ Corrected 'st moore' to 'at base' (OCR error)
 
 VALIDATION:
 If field seems short for an important/complex item:
@@ -359,8 +359,8 @@ For unclear characters:
 **Step 3: EXTRACTION WITH UNCERTAINTY**
 If partially legible after context analysis:
 - Extract best interpretation based on context
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Handwritten text partially unclear - interpretation based on context
-- Example: [handwritten: 'CHANGED TO 310UC137 - PMG'] Ã¢Å¡Â Ã¯Â¸Â Partially unclear, "310UC137" inferred from context
+- Flag: ⚠️ Handwritten text partially unclear - interpretation based on context
+- Example: [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Partially unclear, "310UC137" inferred from context
 
 **Step 4: HANDWRITTEN CONTEXT VALIDATION - CONSERVATIVE APPROACH**
 
@@ -404,13 +404,13 @@ When handwritten text is unclear:
   - "Corroded to", "Damaged to", "Broken to", "Chevrolet" Ã¢â€ â€™ No Ã¢Å“â€”
 - If pattern matches AND confident (>95%):
   - Apply correction
-  - Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected '[original]' to '[corrected]' (handwriting interpretation)
+  - Flag: ⚠️ Corrected '[original]' to '[corrected]' (handwriting interpretation)
 
 **STEP 4: If still nonsensical or uncertain:**
 - **DO NOT force a correction**
 - **DO NOT "correct" to another nonsensical phrase**
 - Mark: [handwritten annotation unclear - appears to say "[OCR text]"]
-- Flag: Ã°Å¸Å¡Â« CRITICAL: Handwritten text unclear - manual verification required
+- Flag: ⚠ CRITICAL: Handwritten text unclear - manual verification required
 - Better to mark as uncertain than extract wrong information
 
 **EXAMPLES:**
@@ -422,7 +422,7 @@ Analysis:
 - Common pattern: "CHANGED TO [beam size]"
 - Confident: >95% (single character confusion)
 - Correction: "CHANGED TO 310UC137 - PMG"
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)
+- Flag: ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)
 
 **Example 2: Too unclear - mark as uncertain**
 OCR: "CHEVROLET YO 376UC137 - PMG"
@@ -431,7 +431,7 @@ Analysis:
 - Common pattern match? Likely "CHANGED TO 3?0UC137" but multiple uncertainties
 - Confident: <70% (too many character uncertainties)
 - Action: [handwritten annotation unclear - appears to reference beam size change]
-- Flag: Ã°Å¸Å¡Â« CRITICAL: Handwritten annotation illegible - manual verification required
+- Flag: ⚠ CRITICAL: Handwritten annotation illegible - manual verification required
 - **DO NOT attempt correction - too uncertain**
 
 **Example 3: Partially clear**
@@ -439,8 +439,8 @@ OCR: "CHANGED TO 3?0UC137 - PMG" (one unclear digit)
 Analysis:
 - Pattern matches "CHANGED TO [beam size]"
 - One digit uncertain (could be 310UC137 or 360UC137)
-- Action: [handwritten: 'CHANGED TO 310UC137 - PMG'] Ã¢Å¡Â Ã¯Â¸Â Digit partially unclear, inferred from context
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Handwritten text partially unclear - "310UC137" interpretation based on context
+- Action: [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Digit partially unclear, inferred from context
+- Flag: ⚠️ Handwritten text partially unclear - "310UC137" interpretation based on context
 
 **NEVER:**
 - "Correct" handwriting to another nonsensical phrase
@@ -453,8 +453,8 @@ If truly illegible after analysis:
 
 EXAMPLES:
 Ã¢Å“â€œ "Original size 250mm. [handwritten: 'CHANGED TO 300mm - approval JD 5/12/19']"
-Ã¢Å“â€œ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] Ã¢Å¡Â Ã¯Â¸Â Handwriting partially unclear, size inferred from context"
-Ã¢Å“â€œ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] Ã¢Å¡Â Ã¯Â¸Â Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)"
+Ã¢Å“â€œ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Handwriting partially unclear, size inferred from context"
+Ã¢Å“â€œ "310UC158 [handwritten: 'CHANGED TO 310UC137 - PMG'] ⚠️ Corrected 'CORRODED TO' to 'CHANGED TO' (handwriting interpretation)"
 Ã¢Å“â€œ "Pending approval [handwritten signature - illegible]"
 Ã¢Å“â€œ "[handwritten in red pen: 'DELETED - NOT REQ'D']"
 
@@ -627,7 +627,7 @@ Examples:
 
 Actions:
 1. Make the correction
-2. Flag it: "Ã¢Å¡Â Ã¯Â¸Â Corrected from X to Y based on [reason]"
+2. Flag it: "⚠️ Corrected from X to Y based on [reason]"
 3. Show original OCR in notes for transparency
 
 **MEDIUM CONFIDENCE (60-89%) Ã¢â€ â€™ FIX WITH STRONG FLAG**
@@ -641,7 +641,7 @@ Actions:
 2. Flag: "Ã°Å¸â€Â Corrected from X to Y - VERIFY THIS"
 3. Explain reasoning
 
-**LOW CONFIDENCE (<60%) Ã¢â€ â€™ FLAG, DON'T FIX**
+**LOW CONFIDENCE (<60%) \u2192 FLAG, DON'T FIX**
 Examples:
 - True ambiguity in handwriting
 - Completely unclear OCR
@@ -649,21 +649,21 @@ Examples:
 
 Actions:
 1. Extract what you see
-2. Flag: "Ã°Å¸Å¡Â« CRITICAL: Value uncertain - MANUAL VERIFICATION REQUIRED"
+2. Flag: "\u26a0\ufe0f CRITICAL: Value uncertain - MANUAL VERIFICATION REQUIRED"
 3. Explain the issue and possible interpretations
 
 WHEN TO CORRECT:
-Ã¢Å“â€œ Number confusion if you can see actual digit
-Ã¢Å“â€œ Format errors with clear correct pattern
-Ã¢Å“â€œ Column misalignment with clear evidence
-Ã¢Å“â€œ Standard term with obvious misspelling
-Ã¢Å“â€œ Missing unit when context is clear
+\u2713 Number confusion if you can see actual digit
+\u2713 Format errors with clear correct pattern
+\u2713 Column misalignment with clear evidence
+\u2713 Standard term with obvious misspelling
+\u2713 Missing unit when context is clear
 
 WHEN NOT TO CORRECT:
-Ã¢Å“â€” True ambiguity you can't resolve
-Ã¢Å“â€” Handwriting too unclear to read
-Ã¢Å“â€” Missing data (never invent)
-Ã¢Å“â€” Unfamiliar terminology (might be correct)
+\u2717 True ambiguity you can't resolve
+\u2717 Handwriting too unclear to read
+\u2717 Missing data (never invent)
+\u2717 Unfamiliar terminology (might be correct)
 
 ## SECTION-AWARE VALIDATION
 
@@ -701,7 +701,7 @@ If extraction seems inconsistent with section:
 EXAMPLES:
 
 Item in "EXISTING" section with extensive new specifications:
-Ã¢â€ â€™ Flag: "Ã¢Å¡Â Ã¯Â¸Â Item in existing section but has new specs - verify correct section"
+Ã¢â€ â€™ Flag: "⚠️ Item in existing section but has new specs - verify correct section"
 
 Item in "NEW" section missing key specifications:
 Ã¢â€ â€™ Flag: "Ã°Å¸â€Â New item missing expected specifications - verify complete"
@@ -710,7 +710,7 @@ Item in "NEW" section missing key specifications:
 
 Use three-tier flagging:
 
-**Ã¢Å¡Â Ã¯Â¸Â WARNING (Likely correct but verify)**
+**⚠️ WARNING (Likely correct but verify)**
 Use when: Minor uncertainty, probably correct but worth double-checking
 
 Examples:
@@ -719,7 +719,7 @@ Examples:
 - "Corrected from X to Y (OCR confusion)"
 
 Format:
-Ã¢Å¡Â Ã¯Â¸Â [Specific issue]: [Explanation]
+⚠️ [Specific issue]: [Explanation]
 
 **Ã°Å¸â€Â REVIEW REQUIRED (Uncertain extraction)**
 Use when: Moderate uncertainty, could go either way
@@ -732,7 +732,7 @@ Examples:
 Format:
 Ã°Å¸â€Â [What's uncertain]: [Why uncertain] - [Suggested action]
 
-**Ã°Å¸Å¡Â« CRITICAL ERROR (Must fix before use)**
+**⚠ CRITICAL ERROR (Must fix before use)**
 Use when: High certainty something is wrong, or critical field is unclear
 
 Examples:
@@ -741,7 +741,7 @@ Examples:
 - "Column alignment corrupted - values may be wrong"
 
 Format:
-Ã°Å¸Å¡Â« CRITICAL: [Issue] - [Impact] - MANUAL VERIFICATION REQUIRED
+⚠ CRITICAL: [Issue] - [Impact] - MANUAL VERIFICATION REQUIRED
 
 For Every Flag Provide:
 - What you extracted
@@ -773,7 +773,7 @@ BEFORE SUBMITTING EXTRACTION, VERIFY:
 
 **Ã¢Å“â€œ Flag Quality Checks**
 Ã¢â€“Â¡ Each flag has specific reason? (Not generic "check this")
-Ã¢â€“Â¡ Critical issues marked Ã°Å¸Å¡Â«? (Safety/compliance impacts)
+Ã¢â€“Â¡ Critical issues marked ⚠? (Safety/compliance impacts)
 Ã¢â€“Â¡ Corrections explained? (Showed original + fixed value)
 Ã¢â€“Â¡ Suggested fixes provided? (When confident about correction)
 
@@ -1051,7 +1051,7 @@ VALIDATION FOR MEASUREMENTS:
   - Grout dimensions typically: 10mm, 20mm, 30mm, 40mm, 50mm
   - "4Dmm" unlikely (D not a digit)
   - Correct to: "40mm"
-  - Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected '4Dmm' to '40mm' (OCR DÃ¢â€ â€™0)
+  - Flag: ⚠️ Corrected '4Dmm' to '40mm' (OCR DÃ¢â€ â€™0)
 
 **Word Context Validation:**
 - "grows" Ã¢â€ â€™ Check context
@@ -1059,7 +1059,7 @@ VALIDATION FOR MEASUREMENTS:
   - Structural term: "grout" (fills gaps)
   - "grows" makes no technical sense
   - Correct to: "grout"
-  - Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected 'grows' to 'grout' (OCR error)
+  - Flag: ⚠️ Corrected 'grows' to 'grout' (OCR error)
 
 **PROTOCOL:**
 1. Extract raw OCR text
@@ -1069,8 +1069,8 @@ VALIDATION FOR MEASUREMENTS:
 5. Flag the correction with explanation
 
 **EXAMPLES:**
-- "4Dmm grout" Ã¢â€ â€™ "40mm grout" Ã¢Å¡Â Ã¯Â¸Â Corrected DÃ¢â€ â€™0
-- "grows under base" Ã¢â€ â€™ "grout under base" Ã¢Å¡Â Ã¯Â¸Â Corrected OCR error
+- "4Dmm grout" Ã¢â€ â€™ "40mm grout" ⚠️ Corrected DÃ¢â€ â€™0
+- "grows under base" Ã¢â€ â€™ "grout under base" ⚠️ Corrected OCR error
 - "calvanited" Ã¢â€ â€™ "galvanised" (if context suggests galvanizing)
 
 ### Domain-Specific Word Validation - CRITICAL
@@ -1121,7 +1121,7 @@ Common OCR errors:
    - "verify with [entity]" Ã¢â€ â€™ expect: supplier, engineer, site
 5. If high-confidence match found (>90% similar + contextually correct):
    - **APPLY THE CORRECTION TO THE EXTRACTED TEXT** (see Correction Application Protocol below)
-   - Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected '[original]' to '[corrected]' (OCR error)
+   - Flag: ⚠️ Corrected '[original]' to '[corrected]' (OCR error)
 
 **CORRECTION APPLICATION PROTOCOL - CRITICAL:**
 
@@ -1141,7 +1141,7 @@ When you identify a correction:
 - The extracted text MUST show the corrected version
 
 **STEP 3: Document in flag (only if correction was applied)**
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected '[original OCR]' to '[corrected]' ([reason])
+- Flag: ⚠️ Corrected '[original OCR]' to '[corrected]' ([reason])
 - This provides transparency, verification path, and confidence indicator
 - **NEVER create a "Corrected X to Y" flag if text still shows X**
 
@@ -1152,14 +1152,14 @@ When you identify a correction:
 **IF YOU CANNOT APPLY THE CORRECTION:**
 - Don't create a flag saying you did
 - Instead: Flag as uncertain
-- Example: "Ã¢Å¡Â Ã¯Â¸Â Handwritten text unclear - appears to say 'CORRODED TO' but likely means 'CHANGED TO' - verify"
+- Example: "⚠️ Handwritten text unclear - appears to say 'CORRODED TO' but likely means 'CHANGED TO' - verify"
 - Text shows: [handwritten annotation unclear - appears to reference beam size change]
 
 **FORMAT:**
 
 Ã¢Å“â€œ CORRECT:
 Text: "Main support beam. Fly brace @ 1500 centres."
-Flag: "Ã¢Å¡Â Ã¯Â¸Â Corrected 'brase' to 'brace' (OCR error)"
+Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
 
 Ã¢Å“â€” WRONG (Missing Flag):
 Text: "Main support beam. Fly brace @ 1500 centres."
@@ -1168,7 +1168,7 @@ Flag: [none]
 
 Ã¢Å“â€” WRONG (Flag but No Correction):
 Text: "Main support beam. Fly brase @ 1500 centres."
-Flag: "Ã¢Å¡Â Ã¯Â¸Â Corrected 'brase' to 'brace' (OCR error)"
+Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
 [Text still shows error even though flag says corrected]
 
 **CONSISTENCY RULE:**
@@ -1208,12 +1208,12 @@ If you can't fix the text Ã¢â€ â€™ Change flag to "uncertain" instead
 **EXAMPLES:**
 
 Ã¢Å“â€œ CORRECT (Flag/Text Match):
-Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected 'supplies' to 'supplier' (OCR error)
+Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
 Text: "Verify with supplier"
 [Flag and text match - correction applied]
 
 Ã¢Å“â€” WRONG (Flag/Text Mismatch):
-Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected 'supplies' to 'supplier' (OCR error)
+Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
 Text: "Verify with supplies"
 [Flag says corrected but text still shows original - FIX THIS]
 
@@ -1225,15 +1225,15 @@ Every correction MUST have a corresponding flag. No exceptions.
 **EXAMPLES:**
 
 Ã¢Å“â€œ "Hot dip galvanised per AS/NZS 4680"
-Flag: "Ã¢Å¡Â Ã¯Â¸Â Corrected 'calvanited' to 'galvanised' (OCR error)"
+Flag: "⚠️ Corrected 'calvanited' to 'galvanised' (OCR error)"
 [Correction applied + flag shown]
 
 Ã¢Å“â€œ "40mm grout under base plate"
-Flag: "Ã¢Å¡Â Ã¯Â¸Â Corrected 'grows' to 'grout' (OCR error)"
+Flag: "⚠️ Corrected 'grows' to 'grout' (OCR error)"
 [Correction applied + flag shown]
 
 Ã¢Å“â€œ "verify with supplier"
-Flag: "Ã¢Å¡Â Ã¯Â¸Â Corrected 'supplies' to 'supplier' (OCR error)"
+Flag: "⚠️ Corrected 'supplies' to 'supplier' (OCR error)"
 [Correction applied + flag shown]
 
 Ã¢Å“â€” WRONG (Missing Flag):
@@ -1247,7 +1247,7 @@ Flag: [none]
 - "calvanited" not in dictionary
 - Check similar: "galvanised" (edit distance: 3, common term in context)
 - Correction: "Hot dip galvanised"
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected 'calvanited' to 'galvanised' (OCR error)
+- Flag: ⚠️ Corrected 'calvanited' to 'galvanised' (OCR error)
 
 "40mm grows under base plate" Ã¢â€ â€™
 - "grows" is valid word BUT contextually wrong
@@ -1255,20 +1255,20 @@ Flag: [none]
 - Expected substances: grout, mortar, compound, epoxy
 - "grows" Ã¢â€ â€™ "grout" (edit distance: 1, contextually correct)
 - Correction: "40mm grout under base plate"
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected 'grows' to 'grout' (likely OCR error)
+- Flag: ⚠️ Corrected 'grows' to 'grout' (likely OCR error)
 
 "verify with supplies" Ã¢â€ â€™
 - Context: "verify with [entity]"
 - Expected: supplier, engineer, site, manufacturer
 - "supplies" Ã¢â€ â€™ "supplier" (edit distance: 1, contextually correct)
 - Correction: "verify with supplier"
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected 'supplies' to 'supplier' (OCR error)
+- Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
 
 "fly brase @ 1500 centres" Ã¢â€ â€™
 - "brase" not in dictionary
 - Check similar: "brace" (edit distance: 1, common structural term)
 - Correction: "fly brace @ 1500 centres"
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected 'brase' to 'brace' (OCR error)
+- Flag: ⚠️ Corrected 'brase' to 'brace' (OCR error)
 
 **KNOWN TECHNICAL TERMS (Reference List):**
 
@@ -1321,7 +1321,7 @@ If you see standard reference with unusual numbers:
 2. Look for OCR character confusion (9Ã¢â€ â€™7, 0Ã¢â€ â€™O, 1Ã¢â€ â€™I, etc.)
 3. If similar to known standard (edit distance Ã¢â€°Â¤ 1):
    - Apply correction if confident (>90%)
-   - Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected '[original]' to '[corrected]' (OCR error - standard reference)
+   - Flag: ⚠️ Corrected '[original]' to '[corrected]' (OCR error - standard reference)
 4. If uncertain, flag for verification
 
 **COMMON STANDARD OCR ERRORS:**
@@ -1339,7 +1339,7 @@ If you see standard reference with unusual numbers:
 - Similar: "AS1594" (known steel standard, edit distance: 1)
 - Likely: OCR 9Ã¢â€ â€™7 confusion
 - Correction: "AS1594"
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected 'AS1574' to 'AS1594' (OCR error - standard reference)
+- Flag: ⚠️ Corrected 'AS1574' to 'AS1594' (OCR error - standard reference)
 - **IMPORTANT: Apply correction to extracted text, not just flag it**
 
 "AS/NZS 4680" Ã¢â€ â€™
@@ -1349,7 +1349,7 @@ If you see standard reference with unusual numbers:
 "AS/NZS 468O" Ã¢â€ â€™
 - "468O" unusual (O instead of 0)
 - Correction: "AS/NZS 4680"
-- Flag: Ã¢Å¡Â Ã¯Â¸Â Corrected '468O' to '4680' (OCR error - standard reference)
+- Flag: ⚠️ Corrected '468O' to '4680' (OCR error - standard reference)
 - **IMPORTANT: Apply correction to extracted text**
 
 **DETAIL REFERENCES:**
@@ -1678,13 +1678,13 @@ TEXT: {text}
     Ã¢Å“â€œ Currency consistent throughout
     
     FLAG IF:
-    Ã¢Å¡Â Ã¯Â¸Â Totals don't match Ã¢â€ â€™ Add to flags: "Calculation mismatch - verify manually"
-    Ã¢Å¡Â Ã¯Â¸Â Missing currency Ã¢â€ â€™ Add to flags: "Currency not specified - assumed [X]"
-    Ã¢Å¡Â Ã¯Â¸Â Tax rate unusual Ã¢â€ â€™ Add to flags: "GST 10% expected for AU, found X%"
+    ⚠️ Totals don't match Ã¢â€ â€™ Add to flags: "Calculation mismatch - verify manually"
+    ⚠️ Missing currency Ã¢â€ â€™ Add to flags: "Currency not specified - assumed [X]"
+    ⚠️ Tax rate unusual Ã¢â€ â€™ Add to flags: "GST 10% expected for AU, found X%"
     
     CRITICAL IF:
-    Ã°Å¸Å¡Â« Total amount missing Ã¢â€ â€™ "CRITICAL: Cannot determine payable amount"
-    Ã°Å¸Å¡Â« Vendor name unclear Ã¢â€ â€™ "CRITICAL: Vendor identification uncertain"
+    ⚠ Total amount missing Ã¢â€ â€™ "CRITICAL: Cannot determine payable amount"
+    ⚠ Vendor name unclear Ã¢â€ â€™ "CRITICAL: Vendor identification uncertain"
     
     **Business Rule Validation:**
     
@@ -1736,7 +1736,7 @@ TEXT: {text}
     2. Check for shipping/handling fees
     3. Check for discounts/adjustments
     4. If still mismatch > $1.00:
-       Ã¢â€ â€™ Flag: "Ã¢Å¡Â Ã¯Â¸Â Calculation discrepancy: Calculated $X vs Invoice $Y"
+       Ã¢â€ â€™ Flag: "⚠️ Calculation discrepancy: Calculated $X vs Invoice $Y"
        Ã¢â€ â€™ Use invoice stated total (assume correct)
        Ã¢â€ â€™ Note for manual verification
     
@@ -2105,7 +2105,7 @@ HTML_TEMPLATE = """
             display: inline-block;
         }
         .low-confidence::before {
-            content: "Ã¢Å¡Â Ã¯Â¸Â ";
+            content: "⚠️ ";
             font-weight: 600;
         }
         .low-confidence-text {
@@ -2117,7 +2117,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .low-confidence-text::before {
-            content: "Ã¢Å¡Â Ã¯Â¸Â LOW CONFIDENCE - REVIEW REQUIRED";
+            content: "⚠️ LOW CONFIDENCE - REVIEW REQUIRED";
             display: block;
             font-size: 10px;
             font-weight: 700;
@@ -2163,7 +2163,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .requires-manual-verification::before {
-            content: "Ã¢Å¡Â Ã¯Â¸Â MANUAL VERIFICATION REQUIRED - DO NOT USE EXTRACTED VALUES";
+            content: "⚠️ MANUAL VERIFICATION REQUIRED - DO NOT USE EXTRACTED VALUES";
             display: block;
             background-color: #dc3545;
             color: white;
@@ -2304,7 +2304,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=DrawingRegister" class="btn btn-export" style="text-decoration: none;">Ã°Å¸â€œÂ¥ Export Drawing Register to CSV</a>
+                <a href="/export_transmittal_csv?category=DrawingRegister" class="btn btn-export" style="text-decoration: none;">📥 Export Drawing Register to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2339,7 +2339,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Standards" class="btn btn-export" style="text-decoration: none;">Ã°Å¸â€œÂ¥ Export Standards to CSV</a>
+                <a href="/export_transmittal_csv?category=Standards" class="btn btn-export" style="text-decoration: none;">📥 Export Standards to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2374,7 +2374,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Materials" class="btn btn-export" style="text-decoration: none;">Ã°Å¸â€œÂ¥ Export Materials to CSV</a>
+                <a href="/export_transmittal_csv?category=Materials" class="btn btn-export" style="text-decoration: none;">📥 Export Materials to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2413,7 +2413,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Connections" class="btn btn-export" style="text-decoration: none;">Ã°Å¸â€œÂ¥ Export Connections to CSV</a>
+                <a href="/export_transmittal_csv?category=Connections" class="btn btn-export" style="text-decoration: none;">📥 Export Connections to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2461,7 +2461,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Assumptions" class="btn btn-export" style="text-decoration: none;">Ã°Å¸â€œÂ¥ Export Assumptions to CSV</a>
+                <a href="/export_transmittal_csv?category=Assumptions" class="btn btn-export" style="text-decoration: none;">📥 Export Assumptions to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2500,7 +2500,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=VOSFlags" class="btn btn-export" style="text-decoration: none;">Ã°Å¸â€œÂ¥ Export V.O.S. Flags to CSV</a>
+                <a href="/export_transmittal_csv?category=VOSFlags" class="btn btn-export" style="text-decoration: none;">📥 Export V.O.S. Flags to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2546,7 +2546,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=CrossReferences" class="btn btn-export" style="text-decoration: none;">Ã°Å¸â€œÂ¥ Export Cross-References to CSV</a>
+                <a href="/export_transmittal_csv?category=CrossReferences" class="btn btn-export" style="text-decoration: none;">📥 Export Cross-References to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -2664,7 +2664,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Size' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">Ã¢Å¡Â Ã¯Â¸Â Size Error:</div>
+                                    <div class="critical-error-header">⚠️ Size Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -2677,7 +2677,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Quantity' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">Ã¢Å¡Â Ã¯Â¸Â Quantity Error:</div>
+                                    <div class="critical-error-header">⚠️ Quantity Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -2691,7 +2691,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Grade' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">Ã¢Å¡Â Ã¯Â¸Â Grade Error:</div>
+                                    <div class="critical-error-header">⚠️ Grade Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -2702,13 +2702,13 @@ HTML_TEMPLATE = """
                     <td>
                         {% if row.get('rejection_reason') %}
                         <div class="rejection-notice">
-                            Ã°Å¸Å¡Â« {{ row.rejection_reason }}
+                            ⚠ {{ row.rejection_reason }}
                         </div>
                         {% endif %}
                         {% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}
                         {% if row.get('critical_errors') and row.get('requires_manual_verification') %}
                         <div class="critical-error" style="margin-top: 8px;">
-                            <div class="critical-error-header">Ã°Å¸Å¡Â« Critical Errors - Manual Verification Required:</div>
+                            <div class="critical-error-header">⚠ Critical Errors - Manual Verification Required:</div>
                             {% for error in row.critical_errors %}
                             <div class="critical-error-item">{{ error }}</div>
                             {% endfor %}
@@ -2799,7 +2799,7 @@ HTML_TEMPLATE = """
                 </div>
                 {% if row.get('Flags') and row.Flags|length > 0 %}
                 <div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;">
-                    <strong style="color: #856404;">Ã¢Å¡Â Ã¯Â¸Â Flags:</strong>
+                    <strong style="color: #856404;">⚠️ Flags:</strong>
                     <ul style="margin: 5px 0 0 0; padding-left: 20px; color: #856404;">
                         {% for flag in row.Flags %}
                         <li>{{ flag }}</li>
@@ -2887,7 +2887,7 @@ HTML_TEMPLATE = """
         </div>
         {% endif %}
             <div class="button-group">
-                <a href="/export_csv" class="btn btn-export">Ã°Å¸â€œÂ¥ Export to CSV</a>
+                <a href="/export_csv" class="btn btn-export">📥 Export to CSV</a>
                 <a href="/contact.html?option=phase-1" class="btn btn-secondary" target="_parent">Book Your Phase 1 Sprint</a>
             </div>
         </div>
