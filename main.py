@@ -1078,7 +1078,7 @@ def index_automater():
                 file_path = os.path.join(FINANCE_UPLOAD_DIR, unique_name)
                 file_storage.save(file_path)
                 finance_uploaded_paths.append(file_path)
-                model_actions.append(f"Ã¢Å“â€œ Uploaded invoice saved: {file_path}")
+                model_actions.append(f"Uploaded invoice saved: {file_path}")
             selected_samples.extend(finance_uploaded_paths)
 
         # Filter samples to only those matching the current department (skip for auto-select departments)
@@ -1141,7 +1141,7 @@ def index_automater():
                                 error_message = f"Text extraction failed for {filename}"
                             continue
                         else:
-                            model_actions.append(f"Ã¢Å“â€œ Text extracted successfully ({len(text)} characters)")
+                            model_actions.append(f"Text extracted successfully ({len(text)} characters)")
                     
                     model_actions.append(f"Analyzing {filename} with AI models")
                     sector_slug = request.args.get("sector", "professional-services")
@@ -1152,7 +1152,7 @@ def index_automater():
                         model_actions.extend(file_action_log)
                     if model_used:
                         last_model_used = model_used
-                        model_actions.append(f"Ã¢Å“â€œ Successfully processed {filename} with {model_used}")
+                        model_actions.append(f"Successfully processed {filename} with {model_used}")
                     if attempt_log:
                         model_attempts.extend(attempt_log)
                     if api_error:
@@ -1180,15 +1180,15 @@ def index_automater():
                                             if isinstance(item, dict):
                                                 item['SourceDocument'] = filename
                                 results.append(transmittal_data)
-                                model_actions.append(f"Ã¢Å“â€œ Extracted structured data from {filename}")
+                                model_actions.append(f"Extracted structured data from {filename}")
                             else:
                                 # Fallback to old format
                                 for entry in entries if isinstance(entries, list) else [entries]:
                                     entry['Filename'] = filename
                                     results.append(entry)
-                                model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
+                                model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
                         else:
-                            model_actions.append(f"Ã¢Å“â€œ Extracted {len(entries)} row(s) from {filename}")
+                            model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
                             for entry in entries:
                                 entry['Filename'] = filename
                                 if department == "finance":
@@ -1612,7 +1612,7 @@ try:
     from roi_calculator_flask import roi_app as roi_calculator_app
     # Mount ROI calculator at /roi-calculator (with trailing slash support)
     app.register_blueprint(roi_calculator_app, url_prefix='/roi-calculator')
-    print("Ã¢Å“â€œ ROI Calculator blueprint registered successfully at /roi-calculator")
+    print("ROI Calculator blueprint registered successfully at /roi-calculator")
 except ImportError as e:
     print(f"Ã¢Å“â€” Warning: Could not import ROI calculator: {e}")
     import traceback

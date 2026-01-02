@@ -128,7 +128,7 @@ def test_config_values():
     from config import Config
     
     # Test prompt limits
-    assert Config.ENGINEERING_PROMPT_LIMIT == 6000, "Failed: engineering limit"
+    assert Config.ENGINEERING_PROMPT_LIMIT == 10000, "Failed: engineering limit"
     assert Config.ENGINEERING_PROMPT_LIMIT_SHORT == 3200, "Failed: engineering short limit"
     assert Config.TRANSMITTAL_PROMPT_LIMIT == 3200, "Failed: transmittal limit"
     

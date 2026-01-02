@@ -263,10 +263,10 @@ BEFORE marking anything as [illegible]:
 
 **STEP 2: FORMAT PARTIAL EXTRACTIONS**
 Good: "Install per specification ABC-123 [remainder obscured by stain]"
-Ã¢Å“â€” Bad: "[Comment illegible - manual transcription required]"
+Bad: "[Comment illegible - manual transcription required]"
 
 Good: "Verify dimensions on site. [handwritten: 'APPROVED - JMc 5/12']"
-Ã¢Å“â€” Bad: "[Comment illegible - manual review required]"
+Bad: "[Comment illegible - manual review required]"
 
 **STEP 3: USE [illegible] ONLY FOR TRULY UNREADABLE TEXT**
 - If ANY words are readable extract them
@@ -282,15 +282,15 @@ Good: "Verify dimensions on site. [handwritten: 'APPROVED - JMc 5/12']"
 
 Scenario: "Install with [smudge] gasket material"
 Extract: "Install with [smudged word] gasket material"
-Ã¢Å“â€” Don't: "[Comment illegible]"
+Don't: "[Comment illegible]"
 
 Scenario: Stain covers last 3 words
 Extract: "Check actual dimensions before fabrication [coffee stain obscures remainder]"
-Ã¢Å“â€” Don't: "[coffee stain obscures remainder]" as entire comment
+Don't: "[coffee stain obscures remainder]" as entire comment
 
 Scenario: Handwritten note is clear
 Extract: "Original specification. [handwritten: 'CHANGED TO TYPE B - PMG']"
-Ã¢Å“â€” Don't: "[Comment illegible - manual review required]"
+Don't: "[Comment illegible - manual review required]"
 
 **VALIDATION:**
 If you marked something [illegible], ask yourself:
@@ -500,10 +500,10 @@ Valid patterns (make technical sense):
 - "DELETED - NOT REQ'D" Common
 
 Invalid patterns (make no technical sense):
-- "CORRODED TO [specification]" Ã¢Å“â€” Makes no sense
-- "DAMAGED TO [specification]" Ã¢Å“â€” Makes no sense
-- "BROKEN TO [specification]" Ã¢Å“â€” Makes no sense
-- "CHEVROLET YO [specification]" Ã¢Å“â€” Makes no sense
+- "CORRODED TO [specification]" Makes no sense
+- "DAMAGED TO [specification]" Makes no sense
+- "BROKEN TO [specification]" Makes no sense
+- "CHEVROLET YO [specification]" Makes no sense
 - Any nonsensical phrase Ã¢Å“â€”
 
 **CONSERVATIVE VALIDATION PROTOCOL:**
@@ -711,7 +711,7 @@ Different cell states have different meanings. Check document conventions first.
 - Check: Does document have a legend defining empty cells?
 
 **Type 3: DASH OR HYPHEN**
-- Cell contains: "Ã¢â‚¬â€" or "-" or "Ã¢â‚¬â€œ"
+- Cell contains: "" or "-" or "Ã¢â‚¬â€œ"
 - Common meanings:
   - Engineering docs: Usually "not applicable"
   - Financial docs: Often "zero" or "TBD"
@@ -724,13 +724,13 @@ Different cell states have different meanings. Check document conventions first.
 - Extract: The symbol + look for footnote explanation
 
 VALIDATION:
-If you extract "Ã¢â‚¬â€" or "-" as a literal value:
+If you extract "" or "-" as a literal value:
 STOP and reconsider
 Check if document defines what dashes mean
 Usually convert to "N/A" unless certain it means something else
 
 CONSISTENCY CHECK:
-If some rows have "N/A" and others have "Ã¢â‚¬â€" in same column:
+If some rows have "N/A" and others have "" in same column:
 Likely they mean the same thing
 Normalize to one format (prefer N/A)
 
@@ -880,7 +880,7 @@ BEFORE SUBMITTING EXTRACTION, VERIFY:
 Ã¢-Â¡ All readable text extracted? (Used partial extraction before marking illegible)
 Ã¢-Â¡ Multi-part fields complete? (Checked for continuation after periods)
 Ã¢-Â¡ Handwritten annotations captured? (In [brackets] with original)
-Ã¢-Â¡ All columns filled? (Empty cells properly marked as N/A or Ã¢â‚¬â€)
+Ã¢-Â¡ All columns filled? (Empty cells properly marked as N/A or )
 
 **Accuracy Checks**
 Ã¢-Â¡ Format validation passed? (Data matches expected patterns)
@@ -1284,12 +1284,12 @@ CORRECT:
 Text: "Main support beam. Fly brace @ 1500 centres."
 Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
 
-Ã¢Å“â€” WRONG (Missing Flag):
+WRONG (Missing Flag):
 Text: "Main support beam. Fly brace @ 1500 centres."
 Flag: [none]
 [Correction applied but no transparency - engineer can't verify]
 
-Ã¢Å“â€” WRONG (Flag but No Correction):
+WRONG (Flag but No Correction):
 Text: "Main support beam. Fly brase @ 1500 centres."
 Flag: "⚠️ Corrected 'brase' to 'brace' (OCR error)"
 [Text still shows error even though flag says corrected]
@@ -1335,7 +1335,7 @@ Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
 Text: "Verify with supplier"
 [Flag and text match - correction applied]
 
-Ã¢Å“â€” WRONG (Flag/Text Mismatch):
+WRONG (Flag/Text Mismatch):
 Flag: ⚠️ Corrected 'supplies' to 'supplier' (OCR error)
 Text: "Verify with supplies"
 [Flag says corrected but text still shows original - FIX THIS]
@@ -1359,7 +1359,7 @@ Flag: "⚠️ Corrected 'grows' to 'grout' (OCR error)"
 Flag: "⚠️ Corrected 'supplies' to 'supplier' (OCR error)"
 [Correction applied + flag shown]
 
-Ã¢Å“â€” WRONG (Missing Flag):
+WRONG (Missing Flag):
 "Hot dip galvanised per AS/NZS 4680"
 Flag: [none]
 [Correction applied but no transparency - engineer can't verify what changed]
@@ -1505,7 +1505,7 @@ Examples:
 
 **"Not marked" vs "N/A":**
 - "Not marked" = explicitly stated in document (usually Grade column)
-- "N/A" = empty cell or dash (Ã¢â‚¬â€)
+- "N/A" = empty cell or dash ()
 - Don't convert one to the other. Check actual PDF cell content.
 
 ## OUTPUT FORMAT
@@ -2354,16 +2354,6 @@ HTML_TEMPLATE = """
                     {% endif %}
                     {% endfor %}
                 </div>
-                {% if dept_key == 'finance' %}
-                <div class="upload-wrapper" data-upload="finance">
-                    <label class="file-label">
-                        <span>&#128228; Upload invoice PDFs</span>
-                        <input type="file" name="finance_uploads" accept=".pdf" multiple>
-                    </label>
-                    <p class="instruction-text">PDF invoices only. Uploaded files run alongside the finance samples.</p>
-                    <div class="upload-list" id="finance-upload-list" style="display: none;"></div>
-                </div>
-                {% endif %}
             </div>
             {% endfor %}
 
@@ -2657,7 +2647,7 @@ HTML_TEMPLATE = """
                                 {% if 'yes' in found|lower or 'true' in found|lower %}
                                 <span style="color: #27ae60; font-weight: 600;">Found</span>
                                 {% elif 'no' in found|lower or 'false' in found|lower %}
-                                <span style="color: #e74c3c; font-weight: 600;">Ã¢Å“â€” Missing</span>
+                                <span style="color: #e74c3c; font-weight: 600;">Missing</span>
                                 {% else %}
                                 {{ found or 'N/A' }}
                                 {% endif %}
@@ -2964,22 +2954,22 @@ HTML_TEMPLATE = """
                         <tbody>
                             {% for item in row.LineItems %}
                             <tr>
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.ItemNumber or 'Ã¢â‚¬â€' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.ItemNumber or '' }}</td>
                                 {% if row.LineItems[0].get('PartNumber') and row.LineItems[0].PartNumber != 'N/A' %}
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.PartNumber or 'Ã¢â‚¬â€' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.PartNumber or '' }}</td>
                                 {% endif %}
                                 <td style="padding: 8px; border: 1px solid #ddd;">{{ item.Description or 'N/A' }}</td>
                                 {% if row.LineItems[0].get('HSCode') and row.LineItems[0].HSCode != 'N/A' %}
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.HSCode or 'Ã¢â‚¬â€' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.HSCode or '' }}</td>
                                 {% endif %}
                                 <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ item.Quantity or 'N/A' }}</td>
                                 <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">{{ item.UnitPrice or 'N/A' }}</td>
                                 <td style="padding: 8px; text-align: right; border: 1px solid #ddd; font-weight: bold;">{{ item.LineTotal or 'N/A' }}</td>
                                 {% if row.LineItems[0].get('SKU') and row.LineItems[0].SKU != 'N/A' %}
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.SKU or 'Ã¢â‚¬â€' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.SKU or '' }}</td>
                                 {% endif %}
                                 {% if row.LineItems[0].get('Category') and row.LineItems[0].Category != 'N/A' %}
-                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.Category or 'Ã¢â‚¬â€' }}</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">{{ item.Category or '' }}</td>
                                 {% endif %}
                             </tr>
                             {% endfor %}
@@ -3489,5 +3479,5 @@ Extract ALL visible rows. Return JSON array only, no markdown.
             continue
         break
 
-    action_log.append(f"Ã¢Å“â€” All models failed for this document: {last_error or 'Unknown error'}")
+    action_log.append(f"All models failed for this document: {last_error or 'Unknown error'}")
     return [error_entry(last_error or "All models failed")], last_error or "All models failed", resolved_model, attempt_log, action_log, None

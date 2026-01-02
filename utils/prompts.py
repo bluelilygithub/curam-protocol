@@ -4,7 +4,7 @@ Contains prompt templates and builders for Gemini AI extraction.
 """
 
 # Prompt length limits
-ENGINEERING_PROMPT_LIMIT = 6000
+ENGINEERING_PROMPT_LIMIT = 10000
 ENGINEERING_PROMPT_LIMIT_SHORT = 3200
 TRANSMITTAL_PROMPT_LIMIT = 3200
 
