@@ -43,7 +43,7 @@ from services.pdf_service import (
 )
 
 # Phase 3.3c: Gemini Service - COMPLETE (all 3 functions extracted)
-from services.gemini_service import get_available_models, build_prompt, analyze_gemini, HTML_TEMPLATE
+from services.gemini_service import get_available_models, build_prompt, analyze_gemini
 
 # Phase 3.4: RAG Search Service (extracted from main.py lines 313-797)
 from services.rag_service import (
