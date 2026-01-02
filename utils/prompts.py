@@ -1,30 +1,30 @@
 """
 Prompt building utilities for different document types.
-Contains elite prompt templates and builders for Gemini AI extraction.
+Contains prompt templates and builders for Gemini AI extraction.
 """
 
-# Import configuration constants
-from config import (
-    ENGINEERING_PROMPT_LIMIT,
-    ENGINEERING_PROMPT_LIMIT_SHORT,
-    TRANSMITTAL_PROMPT_LIMIT,
-    FINANCE_FIELDS,
-    ENGINEERING_BEAM_FIELDS,
-    ENGINEERING_COLUMN_FIELDS,
-    TRANSMITTAL_FIELDS,
-    DOC_FIELDS,
-    ERROR_FIELD
-)
+# Prompt length limits
+ENGINEERING_PROMPT_LIMIT = 6000
+ENGINEERING_PROMPT_LIMIT_SHORT = 3200
+TRANSMITTAL_PROMPT_LIMIT = 3200
+
 
 def prepare_prompt_text(text, doc_type, limit=None):
     """
     Prepare text for inclusion in a prompt by cleaning and limiting length.
+    
+    Args:
+        text: Raw text to prepare
+        doc_type: Type of document ('engineering', 'transmittal', 'finance')
+        limit: Optional custom character limit
+        
+    Returns:
+        Cleaned and limited text string
     """
     cleaned = text.replace("\n", " ").strip()
     
     if doc_type == "engineering":
-        # Use the high 100k limit from config.py to prevent truncation
-        limit = ENGINEERING_PROMPT_LIMIT if limit is None else limit
+        limit = ENGINEERING_PROMPT_LIMIT_SHORT if limit is None else limit
         return cleaned[:limit]
     if doc_type == "transmittal":
         limit = TRANSMITTAL_PROMPT_LIMIT if limit is None else limit
@@ -32,112 +32,123 @@ def prepare_prompt_text(text, doc_type, limit=None):
     
     return cleaned
 
+
 def build_finance_prompt(text):
     """
-    Elite builder for invoice/financial document extraction.
+    Build prompt for invoice/financial document extraction.
+    
+    Args:
+        text: Extracted text from the document
+        
+    Returns:
+        Formatted prompt string for Gemini AI
     """
     return f"""
-Extract comprehensive invoice data from this document. 
-Identify type: Tax Invoice (AU), Commercial Invoice, or Receipt.
-
-REQUIRED FIELDS:
-{', '.join(FINANCE_FIELDS)}
-
-## VALIDATION RULES
-1. FINANCIAL TOTALS: Verify Subtotal + Tax = Total (±$0.10).
-2. AUSTRALIAN COMPLIANCE: Extract 11-digit ABN; GST should be 10%.
-3. LINE ITEMS: Extract each row with ItemNumber, Description, Quantity, UnitPrice, LineTotal.
+Extract invoice data from this document. Return JSON with these fields:
+- Vendor (company name)
+- Date (invoice date in YYYY-MM-DD format)
+- InvoiceNum (invoice number)
+- Cost (pre-tax amount as number)
+- GST (tax amount as number)
+- FinalAmount (total including tax as number)
+- Currency (3-letter code like AUD, USD)
+- ABN (Australian Business Number if present)
+- Summary (brief description of items/services)
 
 Document text:
 {text}
 
-Return ONLY valid JSON array.
+Return ONLY valid JSON, no other text.
 """
+
 
 def build_engineering_prompt(text):
     """
-    Elite builder for structural engineering schedules.
-    Provides 93% accuracy via deep OCR correction rules and safety protocols.
+    Build prompt for engineering schedule extraction (beams, columns).
+    This is a simplified version - the full prompt in main.py contains
+    extensive validation rules and examples.
+    
+    Args:
+        text: Extracted text from the engineering drawing
+        
+    Returns:
+        Formatted prompt string for Gemini AI
     """
+    # NOTE: This is simplified. The full prompt is ~400 lines in main.py
+    # For production, copy the complete ENGINEERING PROMPT from main.py
     return f"""
-# UNIVERSAL EXTRACTION PROMPT - ENGINEERING DOCUMENTS
-Goal: Accurate extraction with explicit uncertainty flagging.
+Extract structural engineering schedule data from this document.
 
-## DOCUMENT CHARACTERISTICS
-Mixed Typed/Handwritten, Table Structure, Fold marks, Stains.
+Expected columns (beam schedule):
+- Mark (member identification)
+- Size (section size like "310UC137")
+- Qty (quantity)
+- Length (length in mm)
+- Grade (steel grade like "300PLUS")
+- PaintSystem (paint specification)
+- Comments (installation notes, handwritten changes)
 
-## REQUIRED FIELDS
-Beams: {', '.join(ENGINEERING_BEAM_FIELDS)}
-Columns: {', '.join(ENGINEERING_COLUMN_FIELDS)}
+Expected columns (column schedule):
+- Mark (member identification)
+- SectionType (section type like "UC", "UB")
+- Size (section size)
+- Length (length in mm)
+- Grade (steel grade)
+- BasePlate (base plate details)
+- CapPlate (cap plate details)
+- Finish (paint/finish specification)
+- Comments (notes)
 
-## CRITICAL EXTRACTION RULES
-1. PRINCIPLE: Accuracy Over Speed. Silent errors are unacceptable.
-2. SIZE COLUMN: HIGHEST PRIORITY. Formats like 310UC158, 250UB37.2, WB1220×6.0.
-3. OCR CORRECTION: I -> 1, O -> 0, S -> 5, B -> 8 in numeric contexts.
-4. COMMENTS: Preserve exactly. Capture handwritten notes in [handwritten: "text"].
-5. STRIKETHROUGH: Read text UNDER the line; mark as [row deleted - strikethrough].
-
-## OUTPUT FORMAT
-IF BEAM: {{"Mark": "B1", "Size": "310UC158", "Qty": 2, "Length": "5400 mm", ...}}
-IF COLUMN: {{"Mark": "C1", "SectionType": "UC", "Size": "310 UC 158", ...}}
+Return JSON array of objects with these fields.
+Mark missing data as "N/A".
+Flag uncertain extractions with warning emoji.
 
 Document text:
 {text}
 
-Return ONLY valid JSON array.
+Return ONLY valid JSON array, no other text.
 """
+
 
 def build_transmittal_prompt(text):
     """
-    Elite builder for drawing register/transmittal extraction.
+    Build prompt for drawing register/transmittal extraction.
+    
+    Args:
+        text: Extracted text from the drawing title block
+        
+    Returns:
+        Formatted prompt string for Gemini AI
     """
     return f"""
-Extract structured data into 7 categories:
-1. DrawingRegister (Metadata)
-2. Standards (AS 4100, etc.)
-3. Materials (Concrete, Steel)
-4. Connections (Bolt/Plate specs)
-5. Assumptions (Bearing capacity)
-6. VOSFlags (Verify on Site)
-7. CrossReferences (See Detail X)
+Extract drawing register information from this document title block.
 
-Fields: {', '.join(TRANSMITTAL_FIELDS)}
+Expected fields:
+- DwgNo (drawing number like "S-001", "S-100")
+- Rev (revision letter/number)
+- Title (drawing title)
+- Scale (drawing scale like "1:100")
 
 Document text:
 {text}
 
-Return JSON object with all 7 keys. Use [] for empty categories.
+Return JSON with these fields.
+Mark missing data as "N/A".
+
+Return ONLY valid JSON, no other text.
 """
 
-def build_logistics_prompt(text):
-    """
-    Specialized prompt for Shipping and Logistics documentation.
-    """
-    return f"""
-Extract shipping and logistics document data as a JSON array.
-
-## DOCUMENT TYPE DETECTION
-Identify if this is: Bill of Lading, FTA Certificate, Packing List, or Commercial Invoice.
-
-## REQUIRED FIELDS
-DocumentType, DocumentNumber, Shipper, Consignee, CargoDescription, GrossWeight, 
-NetWeight, Container, Seal, Origin, Destination, HSCode, Vessel, NotifyParty
-
-## EXTRACTION RULES
-1. Document Number Priority: Look for B/L NO, HBL, MBL, Invoice #.
-2. Container Format: Typically 4 letters + 7 digits (e.g., MSKU9922334).
-3. Handwritten Notes: Capture in [square brackets].
-
-## OUTPUT FORMAT
-Return ONLY a valid JSON array.
-
-TEXT:
-{text}
-"""
 
 def build_prompt(text, doc_type):
     """
-    Central dispatcher for all extraction types.
+    Build a prompt tailored to the selected department/document type.
+    
+    Args:
+        text: Document text
+        doc_type: Type of document ('finance', 'engineering', 'transmittal')
+        
+    Returns:
+        Formatted prompt string for Gemini AI
     """
     if doc_type == "engineering":
         return build_engineering_prompt(text)
@@ -145,7 +156,6 @@ def build_prompt(text, doc_type):
         return build_transmittal_prompt(text)
     elif doc_type == "finance":
         return build_finance_prompt(text)
-    elif doc_type == "logistics":
-        return build_logistics_prompt(text)
     else:
-        return build_finance_prompt(text)
+        return build_finance_prompt(text)  # Default to finance
+
