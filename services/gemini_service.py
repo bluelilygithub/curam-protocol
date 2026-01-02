@@ -22,7 +22,7 @@ except ImportError:
     google_exceptions = None
 
 # Import Elite Prompt logic from centralized file
-from prompts import build_prompt
+from utils.prompts import build_prompt
 
 # Import from other services
 from services.pdf_service import prepare_prompt_text
