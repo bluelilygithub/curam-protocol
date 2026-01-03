@@ -1137,10 +1137,14 @@ def index_automater():
             transmittal_defaults = request.form.getlist('transmittal_defaults')
             selected_samples = transmittal_defaults.copy()
             model_actions.append(f"Transmittal mode: auto-selecting {len(transmittal_defaults)} sample drawing(s)")
+        elif department == 'logistics':
+            selected_samples = request.form.getlist('samples')
+            model_actions.append(f"Logistics mode: selected_samples from form = {selected_samples}")
+            # Set error message for logistics - extraction not yet implemented
+            error_message = "Logistics extraction is not yet implemented. This feature will extract data from Bills of Lading, FTA lists, and tally sheets in a future release."
         else:
             selected_samples = request.form.getlist('samples')
             model_actions.append(f"Non-engineering mode: selected_samples from form = {selected_samples}")
-        allowed_folder = DEPARTMENT_SAMPLES.get(department, {}).get("folder", "")
         
         # Handle finance uploads
         if department == 'finance':
