@@ -13,7 +13,7 @@
     <style>
         /* Override global white text for search results page */
         #search-results-container {
-            color: #1f2937; /* Dark gray text */
+            color: #1f2937;
         }
         
         .search-query-display {
@@ -47,6 +47,41 @@
             color: #1f2937 !important;
             line-height: 1.8;
         }
+        .ai-answer-content p {
+            margin-bottom: var(--spacing-md);
+            color: #1f2937 !important;
+        }
+        .ai-answer-content strong {
+            color: var(--color-navy) !important;
+            font-weight: 600;
+        }
+        .ai-answer-content em {
+            color: #374151 !important;
+        }
+        .ai-answer-content ul,
+        .ai-answer-content ol {
+            margin: var(--spacing-md) 0;
+            padding-left: var(--spacing-lg);
+            color: #1f2937 !important;
+        }
+        .ai-answer-content li {
+            margin-bottom: var(--spacing-sm);
+            color: #1f2937 !important;
+        }
+        .ai-answer-content h3,
+        .ai-answer-content h4 {
+            color: var(--color-navy) !important;
+            margin-top: var(--spacing-lg);
+            margin-bottom: var(--spacing-sm);
+            font-weight: 600;
+        }
+        .ai-answer-content a {
+            color: var(--color-navy) !important;
+            text-decoration: underline;
+        }
+        .ai-answer-content a:hover {
+            color: var(--color-gold) !important;
+        }
         
         .sources-section {
             margin-top: var(--spacing-xl);
@@ -58,6 +93,9 @@
             font-size: 1.25rem;
             margin-top: var(--spacing-lg);
         }
+        .sources-section h3:first-child {
+            margin-top: 0;
+        }
         
         .source-item {
             padding: var(--spacing-md);
@@ -65,25 +103,13 @@
             border: 1px solid #E5E7EB;
             border-radius: var(--border-radius);
             background: var(--color-white);
-            transition: all 0.3s ease;
+            transition: var(--transition);
             color: #1f2937;
         }
         .source-item:hover {
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             border-color: var(--color-gold);
         }
-        
-        /* New source highlight animation */
-        .source-item.source-new {
-            animation: highlight 2s ease-out;
-            border-color: var(--color-gold);
-        }
-        
-        @keyframes highlight {
-            0% { background: #FFF9E6; }
-            100% { background: white; }
-        }
-        
         .source-title {
             color: var(--color-navy) !important;
             text-decoration: none;
@@ -92,77 +118,75 @@
             margin-bottom: var(--spacing-xs);
             font-size: 1.125rem;
         }
-        
-        .source-badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            display: inline-block;
-            margin-left: 8px;
+        .source-title:hover {
+            color: var(--color-gold) !important;
+        }
+        .source-excerpt {
+            color: #4b5563 !important;
+            font-size: 0.9375rem;
+            line-height: 1.6;
+            margin: 0;
         }
         
-        .source-badge-website {
-            background: #EEF2FF;
-            color: #0F172A;
-        }
-        
-        .source-badge-blog {
-            background: #FFF9E6;
-            color: #B8941F;
-        }
-        
-        /* Blog searching indicator */
-        .blog-searching {
-            background: #EEF2FF;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 4px solid var(--color-gold);
-            display: none;
-        }
-        
-        .searching-content {
-            display: flex;
+        .source-authority {
+            display: inline-flex;
             align-items: center;
-            gap: 10px;
-        }
-        
-        .searching-spinner {
-            width: 16px;
-            height: 16px;
-            border: 2px solid var(--color-gold);
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
-        /* Update notification */
-        .update-notification {
-            background: var(--color-gold);
-            color: var(--color-navy);
-            padding: 12px 20px;
-            border-radius: 8px;
-            text-align: center;
+            gap: 0.5rem;
+            margin-top: var(--spacing-sm);
+            font-size: 0.875rem;
             font-weight: 600;
-            margin-bottom: 20px;
-            animation: slideDown 0.3s ease-out;
-            display: none;
         }
         
-        @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .authority-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.025em;
+        }
+        
+        .authority-high {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+        
+        .authority-medium {
+            background: linear-gradient(135deg, var(--color-gold) 0%, #d4a520 100%);
+            color: var(--color-navy);
+        }
+        
+        .authority-low {
+            background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+            color: white;
+        }
+        
+        .authority-protocol {
+            background: linear-gradient(135deg, var(--color-navy) 0%, #1e3a5f 100%);
+            color: white;
+        }
+        
+        .source-date {
+            color: #9ca3af;
+            font-size: 0.8125rem;
+            margin-left: 0.5rem;
+        }
+        
+        .blog-link-section {
+            margin-top: var(--spacing-xl);
+            padding-top: var(--spacing-lg);
+            border-top: 1px solid #E5E7EB;
+            text-align: center;
         }
         
         .loading-state {
             text-align: center;
             padding: var(--spacing-xl);
+            color: #4b5563 !important;
+        }
+        .loading-state p {
             color: #4b5563 !important;
         }
         
@@ -175,6 +199,10 @@
             animation: spin 1s linear infinite;
             margin: 0 auto var(--spacing-md);
         }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
         
         .error-state {
             background: #FEF2F2;
@@ -184,72 +212,85 @@
             color: #991B1B !important;
             margin-bottom: var(--spacing-lg);
         }
+        .error-state p {
+            color: #991B1B !important;
+        }
+        .error-state a {
+            color: #991B1B !important;
+            text-decoration: underline;
+        }
+        
+        section.faq {
+            background: var(--color-white) !important;
+            color: #1f2937;
+        }
+        
+        #search-results-container .container {
+            background: var(--color-white);
+            padding: var(--spacing-lg);
+            border-radius: var(--border-radius);
+        }
+        
+        .hero h1 {
+            color: var(--color-white) !important;
+        }
+        .hero p {
+            color: rgba(255, 255, 255, 0.9) !important;
+        }
     </style>
 </head>
 <body>
-    <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M19 12l-7 7-7-7"/>
         </svg>
     </button>
 
-    <!-- Navigation -->
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
-    <!-- Hero Section -->
     <section class="hero services-hero">
         <div class="hero-background">
             <div class="hero-gradient"></div>
             <div class="hero-pattern"></div>
+            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+            </svg>
+            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+            </svg>
         </div>
         <div class="container">
             <div class="hero-content">
                 <p class="hero-eyebrow">Search Results</p>
                 <h1 class="hero-headline">AI-Powered Search Results</h1>
-                <p class="hero-subheadline">
-                    Intelligent search of our blog content with source citations
-                </p>
+                <p class="hero-subheadline">Intelligent search of our blog content with source citations</p>
             </div>
         </div>
     </section>
 
-    <!-- Search Results Content -->
-    <section class="faq" style="padding: var(--spacing-xl) 0; background: var(--color-white);">
+    <section class="faq" style="padding: var(--spacing-xl) 0;">
         <div class="container" style="max-width: 900px;">
-            <!-- Update notification (hidden by default) -->
             <div id="update-notification" class="update-notification"></div>
-            
-            <!-- Blog searching indicator (hidden by default) -->
             <div id="blog-searching" class="blog-searching"></div>
-            
             <div id="search-results-container">
-                <div class="loading-state">
-                    <div class="spinner"></div>
-                    <p>Searching...</p>
-                </div>
+                <div class="loading-state"><p>Searching...</p></div>
             </div>
         </div>
     </section>
 
-    <!-- Footer -->
     <div id="footer-placeholder"></div>
     <script src="assets/js/footer-loader.js"></script>
-
     <script src="assets/js/main.js"></script>
     <script>
-        // TWO-PHASE PROGRESSIVE SEARCH
         document.addEventListener('DOMContentLoaded', function() {
             const urlParams = new URLSearchParams(window.location.search);
             const query = urlParams.get('q');
             
             if (!query) {
-                document.getElementById('search-results-container').innerHTML = `
-                    <div class="error-state">
-                        <p>No search query provided. Please use the search bar.</p>
-                    </div>
-                `;
+                document.getElementById('search-results-container').innerHTML = '<div class="error-state"><p>No search query provided.</p></div>';
                 return;
             }
             
@@ -257,138 +298,121 @@
             const blogSearching = document.getElementById('blog-searching');
             const updateNotification = document.getElementById('update-notification');
             
-            // Show initial loading
             container.innerHTML = `
-                <div class="search-query-display">
-                    <h2>Search Results: "${query}"</h2>
-                </div>
-                <div class="loading-state">
-                    <div class="spinner"></div>
-                    <p>Searching website pages...</p>
-                </div>
+                <div class="search-query-display"><h2>Search Results: "${query}"</h2></div>
+                <div class="loading-state"><div class="spinner"></div><p>Searching website pages...</p></div>
             `;
             
-            // PHASE 1: Fast search (static pages only)
+            // PHASE 1: Fast search
             fetch('/api/search-blog', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query: query })
             })
-            .then(response => response.json())
+            .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
             .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
+                if (data.error) throw new Error(data.error);
                 
-                // Display initial results
-                displayResults(data.answer, data.sources, false);
+                displayResults(data.answer, data.sources, false, query);
                 
-                // Show blog searching indicator
                 if (data.searching_blog) {
-                    blogSearching.innerHTML = `
-                        <div class="searching-content">
-                            <span class="searching-spinner"></span>
-                            <span class="searching-text">${data.message || '🔍 Searching 800+ blog articles...'}</span>
-                        </div>
-                    `;
+                    blogSearching.innerHTML = '<div class="searching-content"><span class="searching-spinner"></span><span>' + (data.message || '🔍 Searching blog...') + '</span></div>';
                     blogSearching.style.display = 'block';
                     
-                    // PHASE 2: Complete search (with blog posts)
+                    // PHASE 2: Complete search
                     fetch('/api/search-blog-complete', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ query: query })
                     })
-                    .then(response => response.json())
-                    .then(completeData => {
+                    .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
+                    .then(d => {
                         blogSearching.style.display = 'none';
-                        
-                        if (!completeData.error) {
-                            displayResults(completeData.answer, completeData.sources, true);
-                            
-                            // Show update notification
+                        if (!d.error) {
+                            displayResults(d.answer, d.sources, true, query);
                             updateNotification.textContent = '✨ Enhanced with blog insights';
                             updateNotification.style.display = 'block';
-                            setTimeout(() => {
-                                updateNotification.style.display = 'none';
-                            }, 3000);
+                            setTimeout(() => updateNotification.style.display = 'none', 3000);
                         }
                     })
-                    .catch(err => {
-                        console.warn('Blog search failed, showing static results only');
-                        blogSearching.style.display = 'none';
-                    });
+                    .catch(e => { console.warn('Blog search failed:', e); blogSearching.style.display = 'none'; });
                 }
             })
-            .catch(error => {
-                console.error('Search error:', error);
-                container.innerHTML = `
-                    <div class="search-query-display">
-                        <h2>Search Results: "${query}"</h2>
-                    </div>
-                    <div class="error-state">
-                        <p><strong>Error: ${error.message}</strong></p>
-                        <p>Please try <a href="search.html">searching again</a> or <a href="contact.html">contact us</a>.</p>
-                    </div>
-                `;
+            .catch(e => {
+                console.error('Search error:', e);
+                container.innerHTML = `<div class="search-query-display"><h2>Search Results: "${query}"</h2></div><div class="error-state"><p><strong>Error: ${e.message || e}</strong></p><p>Please try <a href="search.html">searching again</a>.</p></div>`;
             });
             
-            function displayResults(answer, sources, isUpdate = false) {
-                let html = `
-                    <div class="search-query-display">
-                        <h2>Search Results: "${query}"</h2>
-                    </div>
-                    <div class="ai-answer-box">
-                        <h3>AI-Generated Answer</h3>
-                        <div class="ai-answer-content">${answer}</div>
-                    </div>
-                `;
+            function displayResults(answer, sources, isUpdate, query) {
+                function getAuthorityLabel(s, t) { return t === 'website' ? (s >= 70 ? '⭐ Protocol' : s >= 55 ? 'High' : 'Medium') : (s >= 60 ? 'High' : s >= 40 ? 'Medium' : 'Low'); }
+                function getAuthorityClass(s, t) { return t === 'website' ? (s >= 70 ? 'authority-protocol' : s >= 55 ? 'authority-high' : 'authority-medium') : (s >= 60 ? 'authority-high' : s >= 40 ? 'authority-medium' : 'authority-low'); }
+                function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+                function formatInline(t) { return escapeHtml(t).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>'); }
                 
-                if (sources && sources.length > 0) {
-                    const websiteSources = sources.filter(s => s.type === 'website');
-                    const blogSources = sources.filter(s => s.type === 'blog');
+                let formatted = answer || 'No answer.';
+                const lines = formatted.split('\n');
+                const processed = [];
+                let inList = false, listType = null;
+                
+                for (let line of lines) {
+                    line = line.trim();
+                    if (!line) {
+                        if (inList) { processed.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+                        processed.push('');
+                    } else if (line.startsWith('### ')) {
+                        if (inList) { processed.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+                        processed.push('<h4>' + escapeHtml(line.substring(4)) + '</h4>');
+                    } else if (line.startsWith('## ')) {
+                        if (inList) { processed.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+                        processed.push('<h3>' + escapeHtml(line.substring(3)) + '</h3>');
+                    } else if (line.startsWith('# ')) {
+                        if (inList) { processed.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+                        processed.push('<h3>' + escapeHtml(line.substring(2)) + '</h3>');
+                    } else if (line.match(/^[\*\-]\s+/)) {
+                        if (!inList || listType !== 'ul') { if (inList) processed.push(listType === 'ul' ? '</ul>' : '</ol>'); processed.push('<ul>'); inList = true; listType = 'ul'; }
+                        processed.push('<li>' + formatInline(line.replace(/^[\*\-]\s+/, '')) + '</li>');
+                    } else if (line.match(/^\d+\.\s+/)) {
+                        if (!inList || listType !== 'ol') { if (inList) processed.push(listType === 'ul' ? '</ul>' : '</ol>'); processed.push('<ol>'); inList = true; listType = 'ol'; }
+                        processed.push('<li>' + formatInline(line.replace(/^\d+\.\s+/, '')) + '</li>');
+                    } else {
+                        if (inList) { processed.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+                        processed.push('<p>' + formatInline(line) + '</p>');
+                    }
+                }
+                if (inList) processed.push(listType === 'ul' ? '</ul>' : '</ol>');
+                
+                let html = `<div class="search-query-display"><h2>Search Results: "${query}"</h2></div>
+                    <div class="ai-answer-box"><h3>AI-Generated Answer</h3><div class="ai-answer-content">${processed.join('\n')}</div></div>`;
+                
+                if (sources && sources.length) {
+                    const sorted = [...sources].sort((a, b) => (b.authority || 0) - (a.authority || 0));
+                    const web = sorted.filter(s => s.type === 'website');
+                    const blog = sorted.filter(s => s.type === 'blog');
                     
-                    html += `<div class="sources-section">`;
+                    html += '<div class="sources-section">';
                     
-                    if (websiteSources.length > 0) {
-                        html += `<h3>Sources from Website</h3>`;
-                        websiteSources.forEach(source => {
-                            html += `
-                                <div class="source-item">
-                                    <a href="${source.link}" target="_blank" class="source-title">
-                                        ${source.title}
-                                        <span class="source-badge source-badge-website">WEBSITE</span>
-                                    </a>
-                                    <p class="source-excerpt">${source.excerpt || ''}</p>
-                                </div>
-                            `;
+                    if (web.length) {
+                        html += '<h3>Sources from Website (sorted by authority)</h3>';
+                        web.forEach(s => {
+                            const sc = s.authority || 50, lbl = getAuthorityLabel(sc, 'website'), cls = getAuthorityClass(sc, 'website');
+                            html += `<div class="source-item"><a href="${s.link}" target="_blank" class="source-title">${s.title}</a><p class="source-excerpt">${s.excerpt || ''}</p><div class="source-authority"><span class="authority-badge ${cls}">${lbl} Authority (${sc}/100)</span></div></div>`;
                         });
                     }
                     
-                    if (blogSources.length > 0) {
-                        html += `<h3>Sources from Blog</h3>`;
-                        blogSources.forEach(source => {
-                            const newClass = isUpdate ? 'source-new' : '';
-                            html += `
-                                <div class="source-item ${newClass}">
-                                    <a href="${source.link}" target="_blank" class="source-title">
-                                        ${source.title}
-                                        <span class="source-badge source-badge-blog">BLOG</span>
-                                    </a>
-                                    <p class="source-excerpt">${source.excerpt || ''}</p>
-                                </div>
-                            `;
+                    if (blog.length) {
+                        html += '<h3>Sources from Blog (sorted by authority)</h3>';
+                        blog.forEach(s => {
+                            const sc = s.authority || 30, lbl = getAuthorityLabel(sc, 'blog'), cls = getAuthorityClass(sc, 'blog'), newCls = isUpdate ? 'source-new' : '';
+                            let dt = '';
+                            if (s.date) try { const d = new Date(s.date); dt = '<span class="source-date">' + d.toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}) + '</span>'; } catch(e){}
+                            html += `<div class="source-item ${newCls}"><a href="${s.link}" target="_blank" class="source-title">${s.title}</a><p class="source-excerpt">${s.excerpt || ''}</p><div class="source-authority"><span class="authority-badge ${cls}">${lbl} Authority (${sc}/100)</span>${dt}</div></div>`;
                         });
                     }
-                    
-                    html += `</div>`;
+                    html += '</div>';
                 }
                 
-                html += `
-                    <div style="text-align: center; margin-top: 30px;">
-                        <a href="contact.html" class="btn btn-primary">See How This Works for Your Documents</a>
-                    </div>
-                `;
+                html += `<div class="blog-link-section"><a href="https://blog.curam-ai.com.au/?s=${encodeURIComponent(query)}" target="_blank" class="btn btn-secondary" style="margin-right:8px">View all on blog →</a><a href="contact.html" class="btn btn-primary">See How This Works</a></div>
+                <div style="background:linear-gradient(135deg,var(--color-navy),#1e3a5f);color:#fff;padding:20px;border-radius:8px;margin-top:30px;text-align:center"><h3 style="color:#fff;margin-bottom:10px">Same AI for Your Documents</h3><p style="color:rgba(255,255,255,0.9);margin-bottom:15px">RAG search + document extraction at ≥90% accuracy.</p><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a href="contact.html" class="btn btn-primary" style="background:var(--color-gold);color:var(--color-navy);border:none">Book Diagnostic</a><a href="/feasibility-preview.html" class="btn btn-secondary" style="background:transparent;border:2px solid var(--color-gold);color:var(--color-gold)">Try Demo</a></div></div>`;
                 
                 container.innerHTML = html;
             }
