@@ -134,11 +134,11 @@ def test_dependencies():
     status = {
         "tesseract_ocr": {
             "installed": TESSERACT_AVAILABLE,
-            "status": "✅ Available" if TESSERACT_AVAILABLE else "❌ Not installed"
+            "status": "âœ… Available" if TESSERACT_AVAILABLE else "âŒ Not installed"
         },
         "opencv": {
             "installed": CV2_AVAILABLE,
-            "status": "✅ Available" if CV2_AVAILABLE else "❌ Not installed"
+            "status": "âœ… Available" if CV2_AVAILABLE else "âŒ Not installed"
         }
     }
     
@@ -147,19 +147,22 @@ def test_dependencies():
             import pytesseract
             version = pytesseract.get_tesseract_version()
             status["tesseract_ocr"]["version"] = str(version)
-            status["tesseract_ocr"]["test"] = "✅ Working"
+            status["tesseract_ocr"]["test"] = "âœ… Working"
         except Exception as e:
-            status["tesseract_ocr"]["test"] = f"❌ Error: {str(e)}"
+            status["tesseract_ocr"]["test"] = f"âŒ Error: {str(e)}"
     
     return status, 200
 
 @app.route('/api/search-blog', methods=['POST'])
 def search_blog_rag():
     """
-    RAG Search: Fetches blog content from www.curam-ai.com.au and static HTML pages,
-    then uses Gemini to generate answers.
+    TWO-PHASE RAG Search - Fast initial results with static pages.
+    Returns immediately with website results, then continues searching blog.
     
-    Now uses the extracted perform_rag_search() function for cleaner code.
+    Client should:
+    1. Display initial results from this endpoint
+    2. Show "Searching 800+ blog articles..." message
+    3. Call /api/search-blog-complete for full results with blog posts
     """
     try:
         data = request.get_json()
@@ -171,7 +174,81 @@ def search_blog_rag():
         if not api_key:
             return jsonify({'error': 'Gemini API key not configured'}), 500
         
-        # Perform RAG search using extracted function
+        # Import the fast search function
+        from services.rag_service import perform_rag_search_fast
+        
+        # Phase 1: Quick search of static pages only (returns in <500ms)
+        fast_results = perform_rag_search_fast(query, max_results=5)
+        
+        # Generate quick answer from static pages only
+        initial_answer = ""
+        if fast_results['context']:
+            try:
+                model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                
+                prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service.
+
+The user asked: "{query}"
+
+Below is relevant content from our website pages. Provide a helpful answer based on this content.
+
+Content from Website:
+{fast_results['context']}
+
+Instructions:
+1. Provide a direct answer using the content above
+2. Be thorough but concise
+3. Reference source titles when citing information
+4. Note: This is initial information from our website. We're also searching our 800+ blog articles for more detailed insights.
+
+Answer:"""
+                
+                response = model.generate_content(prompt)
+                initial_answer = response.text if response.text else "Searching for information..."
+                
+            except Exception as e:
+                print(f"Error generating initial answer: {e}")
+                initial_answer = "Found relevant pages. Searching our 800+ blog articles for more detailed information..."
+        else:
+            initial_answer = "Searching our website and 800+ blog articles for information about your query..."
+        
+        # Return initial results immediately
+        return jsonify({
+            'answer': initial_answer,
+            'sources': fast_results['sources'],
+            'query': query,
+            'searching_blog': True,
+            'message': '🔍 Searching 800+ blog articles for additional information...'
+        })
+            
+    except Exception as e:
+        return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+
+@app.route('/api/search-blog-complete', methods=['POST'])
+def search_blog_complete():
+    """
+    COMPLETE RAG Search - Full results including both static pages and blog posts.
+    This is slower (3-10 seconds) but includes comprehensive blog search results.
+    
+    Use this endpoint for:
+    - Synchronous full search (simpler implementation)
+    - Second call after /api/search-blog to get blog results
+    """
+    try:
+        data = request.get_json()
+        query = data.get('query', '').strip()
+        
+        if not query:
+            return jsonify({'error': 'Query is required'}), 400
+        
+        if not api_key:
+            return jsonify({'error': 'Gemini API key not configured'}), 500
+        
+        # Import the full search function
+        from services.rag_service import perform_rag_search
+        
+        # Perform complete search (both static pages AND blog posts)
         rag_results = perform_rag_search(query, max_results=5)
         
         # Check if there was an error reaching the blog
@@ -187,16 +264,17 @@ def search_blog_rag():
         if not rag_results['context']:
             print(f"No context found for query: {query}")
             return jsonify({
-                'answer': f"I couldn't find specific information about '{query}' in our blog or website content. This topic might not be directly related to AI document automation, the Curam-Ai Protocol, or our services. Please visit <a href='https://curam-ai.com.au/?s={query}' target='_blank'>curam-ai.com.au</a> to search our full blog, or <a href='contact.html'>contact us</a> if you have questions about our services.",
+                'answer': f"I couldn't find specific information about '{query}' in our blog or website content. This topic might not be directly related to AI document automation, the Curam-Ai Protocol, or our services. Please visit <a href='https://blog.curam-ai.com.au/?s={query}' target='_blank'>blog.curam-ai.com.au</a> to search our full blog, or <a href='contact.html'>contact us</a> if you have questions about our services.",
                 'sources': [],
-                'query': query
+                'query': query,
+                'complete': True
             })
         
-        # Use Gemini to generate answer based on retrieved context
+        # Use Gemini to generate comprehensive answer
         try:
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
             
-            prompt = f"""You are a helpful assistant for Curam-Ai Protocolâ„¢, an AI document automation service for engineering firms.
+            prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
 
 The user asked: "{query}"
 
@@ -219,24 +297,27 @@ Instructions:
 Answer the question comprehensively:"""
             
             response = model.generate_content(prompt)
-            answer = response.text if response.text else "I couldn't generate an answer. Please visit curam-ai.com.au for more information."
+            answer = response.text if response.text else "I couldn't generate an answer. Please visit blog.curam-ai.com.au for more information."
             
             return jsonify({
                 'answer': answer,
                 'sources': rag_results['sources'],
-                'query': query
+                'query': query,
+                'complete': True
             })
             
         except Exception as e:
             return jsonify({
-                'answer': f"I encountered an error processing your question. Please visit curam-ai.com.au to search for information about '{query}'.",
+                'answer': f"I encountered an error processing your question. Please visit blog.curam-ai.com.au to search for information about '{query}'.",
                 'sources': rag_results['sources'],
                 'query': query,
-                'error': str(e)
+                'error': str(e),
+                'complete': True
             }), 500
             
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
+
 
 @app.route('/api/contact-assistant', methods=['POST'])
 def contact_assistant():
@@ -270,7 +351,7 @@ def contact_assistant():
         
         # System prompt
         if rag_context:
-            system_prompt = f"""You are an AI assistant for Curam-Ai Protocolâ„¢.
+            system_prompt = f"""You are an AI assistant for Curam-Ai ProtocolÃ¢â€žÂ¢.
 
 User asked: "{message}"
 
@@ -281,7 +362,7 @@ Answer using this content. Put source titles in "quotes". Use paragraphs (\n\n).
 
 Services: Phase 1 ($1,500), Phase 2 ($7,500), Phase 3 ($8-12k), Phase 4 ($20-30k)"""
         else:
-            system_prompt = """You are an AI assistant for Curam-Ai Protocolâ„¢.
+            system_prompt = """You are an AI assistant for Curam-Ai ProtocolÃ¢â€žÂ¢.
 
 Services: Phase 1 ($1,500), Phase 2 ($7,500), Phase 3 ($8-12k), Phase 4 ($20-30k)
 
@@ -329,11 +410,11 @@ Use paragraphs (\n\n)."""
             # Skip meaningless short content (single punctuation, stray characters)
             if len(para) <= 2 and not para.isalnum():
                 continue
-            if '- ' in para or 'â€¢ ' in para:
+            if '- ' in para or 'Ã¢â‚¬Â¢ ' in para:
                 items = []
                 for line in para.split('\n'):
-                    if line.strip().startswith(('-', 'â€¢')):
-                        items.append(f'<li>{line.lstrip("-â€¢ ").strip()}</li>')
+                    if line.strip().startswith(('-', 'Ã¢â‚¬Â¢')):
+                        items.append(f'<li>{line.lstrip("-Ã¢â‚¬Â¢ ").strip()}</li>')
                 if items:
                     parts.append(f'<ul>{"".join(items)}</ul>')
             else:
@@ -473,7 +554,7 @@ def email_chat_log():
                     <li>Try our ROI Calculator to see potential savings</li>
                 </ul>
                 <p>Visit us at <a href="https://protocol.curam-ai.com.au">protocol.curam-ai.com.au</a></p>
-                <p>Best regards,<br>Curam-Ai ProtocolÃ¢â€žÂ¢ Team</p>
+                <p>Best regards,<br>Curam-Ai ProtocolÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Team</p>
             </div>
         </body>
         </html>
@@ -497,7 +578,7 @@ def email_chat_log():
         email_text += "- Book a diagnostic call to discuss your specific needs\n"
         email_text += "- Try our ROI Calculator to see potential savings\n\n"
         email_text += "Visit us at https://protocol.curam-ai.com.au\n\n"
-        email_text += "Best regards,\nCuram-Ai ProtocolÃ¢â€žÂ¢ Team"
+        email_text += "Best regards,\nCuram-Ai ProtocolÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ Team"
         
         # Send email using Mailchannels API
         mailchannels_api_key = os.environ.get('MAILCHANNELS_API_KEY')
@@ -526,7 +607,7 @@ def email_chat_log():
             ],
             "from": {
                 "email": from_email,
-                "name": "Curam-Ai ProtocolÃ¢â€žÂ¢"
+                "name": "Curam-Ai ProtocolÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢"
             },
             "subject": email_subject,
             "content": [
@@ -828,23 +909,23 @@ def email_phase3_sample():
             "content": [
                 {
                     "type": "text/plain",
-                    "value": """Thank you for your interest in the Curam-Ai Protocol™ Phase 3 Compliance Shield.
+                    "value": """Thank you for your interest in the Curam-Ai Protocolâ„¢ Phase 3 Compliance Shield.
 
 Please find attached the sample compliance documentation report showing our ISO 27001 control mappings, risk matrices, and pre-audit documentation package.
 
 This sample demonstrates:
-• ISO 27001 control mapping and evidence
-• Risk assessment matrices
-• Pre-filled compliance questionnaires
-• Architecture and data flow documentation
-• Shadow IT inventory and governance controls
+â€¢ ISO 27001 control mapping and evidence
+â€¢ Risk assessment matrices
+â€¢ Pre-filled compliance questionnaires
+â€¢ Architecture and data flow documentation
+â€¢ Shadow IT inventory and governance controls
 
 Phase 3 Deliverables ($8-12k, 2 weeks):
-• Complete audit-ready evidence package
-• Risk control matrices aligned to ISO 27001
-• Pre-filled insurance compliance questionnaires
-• Technical architecture documentation
-• 40-50% faster audit completion
+â€¢ Complete audit-ready evidence package
+â€¢ Risk control matrices aligned to ISO 27001
+â€¢ Pre-filled insurance compliance questionnaires
+â€¢ Technical architecture documentation
+â€¢ 40-50% faster audit completion
 
 Next Steps:
 1. Review the sample to understand Phase 3 deliverables
@@ -861,7 +942,7 @@ The Curam AI Team"""
                     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #4B5563;">
                         <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                             <h2 style="color: #0B1221;">Phase 3 Compliance Shield - Sample Report</h2>
-                            <p>Thank you for your interest in the Curam-Ai Protocol™ Phase 3 Compliance Shield.</p>
+                            <p>Thank you for your interest in the Curam-Ai Protocolâ„¢ Phase 3 Compliance Shield.</p>
                             <p>Please find attached the sample compliance documentation report showing our ISO 27001 control mappings, risk matrices, and pre-audit documentation package.</p>
                             
                             <div style="background: #F8F9FA; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -1072,7 +1153,7 @@ def index_automater():
                 filename = secure_filename(file_storage.filename)
                 if not filename.lower().endswith('.pdf'):
                     error_message = "Only PDF files can be uploaded for Finance."
-                    model_actions.append(f"Ã¢Å“â€” ERROR: {filename} rejected (not a PDF)")
+                    model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ ERROR: {filename} rejected (not a PDF)")
                     break
                 unique_name = f"{int(time.time() * 1000)}_{filename}"
                 file_path = os.path.join(FINANCE_UPLOAD_DIR, unique_name)
@@ -1104,10 +1185,10 @@ def index_automater():
         if not samples:
             if selected_samples:
                 error_message = f"No samples matched department '{department}'. Selected: {selected_samples}"
-                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
+                model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ ERROR: {error_message}")
             else:
                 error_message = "Please select at least one sample file."
-                model_actions.append(f"Ã¢Å“â€” ERROR: {error_message}")
+                model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ ERROR: {error_message}")
 
         if not error_message:
             if samples:
@@ -1115,7 +1196,7 @@ def index_automater():
                 for sample_path in samples:
                     if not os.path.exists(sample_path):
                         error_msg = f"File not found: {sample_path}"
-                        model_actions.append(f"Ã¢Å“â€” {error_msg}")
+                        model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ {error_msg}")
                         if not error_message:
                             error_message = error_msg
                         continue
@@ -1136,7 +1217,7 @@ def index_automater():
                         model_actions.append(f"Extracting text from {filename}")
                         text = extract_text(sample_path)
                         if text.startswith("Error:"):
-                            model_actions.append(f"Ã¢Å“â€” Text extraction failed for {filename}: {text}")
+                            model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Text extraction failed for {filename}: {text}")
                             if not error_message:
                                 error_message = f"Text extraction failed for {filename}"
                             continue
@@ -1156,7 +1237,7 @@ def index_automater():
                     if attempt_log:
                         model_attempts.extend(attempt_log)
                     if api_error:
-                        model_actions.append(f"Ã¢Å“â€” Failed to process {filename}: {api_error}")
+                        model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Failed to process {filename}: {api_error}")
                         if not error_message:
                             error_message = api_error
                     if entries:
@@ -1234,7 +1315,7 @@ def index_automater():
                                                         )
                                                         if corrected_value != entry[field]:
                                                             entry['corrections_applied'].append(
-                                                                f"Size corrected: '{entry[field]}' Ã¢â€ â€™ '{corrected_value}'"
+                                                                f"Size corrected: '{entry[field]}' ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ '{corrected_value}'"
                                                             )
                                                             entry[field] = corrected_value
                                                             if correction_confidence == 'medium':
@@ -1308,7 +1389,7 @@ def index_automater():
                             if department == "engineering" and schedule_type and not detected_schedule_type:
                                 detected_schedule_type = schedule_type
                     else:
-                        model_actions.append(f"Ã¢Å¡Â  No data extracted from {filename}")
+                        model_actions.append(f"ÃƒÂ¢Ã…Â¡Ã‚Â  No data extracted from {filename}")
 
         # Aggregate transmittal data into structured categories
         transmittal_aggregated = None
@@ -1413,7 +1494,7 @@ def index_automater():
         try:
             samples = get_samples_for_template(dept)
             if samples:
-                print(f"âœ“ Database returned {len(samples)} samples for {dept}")
+                print(f"Ã¢Å“â€œ Database returned {len(samples)} samples for {dept}")
                 dept_info = DEPARTMENT_SAMPLES.get(dept, {})
                 db_samples[dept] = {
                     "label": dept_info.get("label", "Samples"),
@@ -1422,9 +1503,9 @@ def index_automater():
                     "samples": samples
                 }
             else:
-                print(f"âš  Database returned 0 samples for {dept} - using hardcoded")
+                print(f"Ã¢Å¡Â  Database returned 0 samples for {dept} - using hardcoded")
         except Exception as e:
-            print(f"âœ— Database error for {dept}: {e}")
+            print(f"Ã¢Å“â€” Database error for {dept}: {e}")
             # Continue with hardcoded samples on error
     
     # Merge database samples with hardcoded (database takes priority)
@@ -1436,7 +1517,7 @@ def index_automater():
     if finance_samples:
         print(f"First finance sample path: {finance_samples[0].get('path', 'NO PATH')}")
     else:
-        print("âš  No finance samples in merged data!")
+        print("Ã¢Å¡Â  No finance samples in merged data!")
     
     return render_template_string(
         HTML_TEMPLATE,
@@ -1614,11 +1695,11 @@ try:
     app.register_blueprint(roi_calculator_app, url_prefix='/roi-calculator')
     print("ROI Calculator blueprint registered successfully at /roi-calculator")
 except ImportError as e:
-    print(f"Ã¢Å“â€” Warning: Could not import ROI calculator: {e}")
+    print(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Warning: Could not import ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 except Exception as e:
-    print(f"Ã¢Å“â€” Error registering ROI calculator: {e}")
+    print(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Error registering ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 

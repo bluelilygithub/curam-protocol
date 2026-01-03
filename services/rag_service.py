@@ -1,14 +1,19 @@
 """
-RAG (Retrieval-Augmented Generation) Search Service
+RAG (Retrieval-Augmented Generation) Search Service - TWO-PHASE VERSION
 
 This module handles searching across blog posts and static HTML pages
-to provide context for AI-powered responses.
+with a two-phase approach for better UX:
+
+Phase 1: Fast search of static HTML pages (instant results)
+Phase 2: Slower search of 800+ blog posts (appended when ready)
 
 Functions:
 - extract_text_from_html(): Extract text content from HTML files
 - calculate_authority_score(): Score sources by relevance and authority
 - search_static_html_pages(): Search local HTML files
-- perform_rag_search(): Main RAG search function
+- search_blog_posts(): Search WordPress blog (can be run async)
+- perform_rag_search_fast(): Quick search (static pages only)
+- perform_rag_search(): Full search (both phases)
 """
 
 import os
@@ -155,22 +160,19 @@ def search_static_html_pages(query):
     """
     Search static HTML pages in the current directory.
     Returns list of relevant pages with extracted content.
+    
+    FAST: Typically completes in <100ms
     """
     # Pages to exclude from search (navigation, includes, generic pages, etc.)
     excluded_pages = {
-        'navbar.html', 'embed_snippet.html', 'index.html',  # index.html typically redirects
-        'sitemap.html',  # Sitemap is not content
-        'search-results.html',  # Search results page itself
-        'search.html',  # Search demo page
-        'about.html',  # Generic about page (rarely relevant to specific queries)
-        'contact.html',  # Contact form
-        'homepage.html',  # Homepage (too generic)
-        'services.html'  # Services overview (too generic)
+        'navbar.html', 'embed_snippet.html', 'index.html',
+        'sitemap.html', 'search-results.html', 'search.html',
+        'about.html', 'contact.html', 'homepage.html', 'services.html'
     }
     
     # Get all HTML files in the root directory
     html_files = []
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Go up one level from services/
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     
     for filename in os.listdir(root_dir):
         if filename.endswith('.html') and filename not in excluded_pages:
@@ -220,45 +222,27 @@ def search_static_html_pages(query):
     # Sort by relevance
     ranked_pages = sorted(pages, key=calculate_page_relevance, reverse=True)
     
-    # Filter out pages with low relevance (require minimum score of 10)
-    # This ensures we only return pages that have meaningful matches
-    MINIMUM_SCORE = 10  # Require at least one title/filename match, or phrase match in content
+    # Filter and return top results
+    MINIMUM_SCORE = 10
     relevant_pages = [p for p in ranked_pages if calculate_page_relevance(p) >= MINIMUM_SCORE][:5]
-    
-    # Log results for debugging
-    if relevant_pages:
-        print(f"Static HTML search for '{query}' found {len(relevant_pages)} pages:")
-        for p in relevant_pages[:3]:
-            score = calculate_page_relevance(p)
-            print(f"  - {p.get('filename', 'unknown')} (score: {score})")
     
     return relevant_pages
 
 
-def perform_rag_search(query, max_results=5):
+def search_blog_posts(query, max_results=5):
     """
-    Perform RAG (Retrieval-Augmented Generation) search across blog and website content.
+    Search WordPress blog posts (800+ articles).
     
-    This function fetches relevant content from WordPress blog (800+ articles) and 
-    static HTML pages, ranks them by relevance, and returns structured results.
-    
-    Args:
-        query (str): The search query from the user
-        max_results (int): Maximum number of sources to return (default: 5)
+    SLOW: Can take 3-10 seconds due to API calls and processing.
+    Should be called asynchronously or after returning static page results.
     
     Returns:
         dict: {
-            'sources': list of source objects with title, link, excerpt, type, authority
-            'context': str, combined text content from all sources for AI context
-            'query': str, the original query
-            'query_words': set, filtered query keywords
-            'error': str (optional), error message if something failed
+            'posts': list of blog post objects,
+            'query_words': set of filtered query keywords,
+            'error': str (optional)
         }
-        
-    Raises:
-        Returns error dict if WordPress API is unreachable
     """
-    # Step 1: Fetch blog content from WordPress REST API
     # Get blog URL from environment variable or use new subdomain as default
     env_blog_url = os.getenv('WORDPRESS_BLOG_URL', 'https://blog.curam-ai.com.au')
     
@@ -281,27 +265,25 @@ def perform_rag_search(query, max_results=5):
             if test_response.status_code == 200:
                 blog_url = test_url
                 wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
-                print(f"âœ“ Blog URL accessible: {blog_url}")
+                print(f"✓ Blog URL accessible: {blog_url}")
                 break
         except requests.RequestException as e:
-            print(f"âœ— Blog URL failed: {test_url} - {str(e)[:100]}")
+            print(f"✗ Blog URL failed: {test_url} - {str(e)[:100]}")
             continue
     
     # If neither URL works, return error
     if not blog_url:
         return {
-            'error': 'Unable to reach blog API',
-            'sources': [],
-            'context': '',
-            'query': query
+            'posts': [],
+            'query_words': set(),
+            'error': 'Unable to reach blog API'
         }
     
     posts = []
     try:
-        # Try multiple search strategies to get most relevant posts
         all_posts = []
         
-        # Strategy 1: Search in WordPress API (searches title, content, excerpt)
+        # Strategy 1: Search in WordPress API
         try:
             response = requests.get(wp_api_url, params={
                 'per_page': 50, 
@@ -314,14 +296,13 @@ def perform_rag_search(query, max_results=5):
                     all_posts.extend(search_results)
         except Exception as e:
             print(f"WordPress search API error: {e}")
-            pass
         
-        # Strategy 2: Fetch recent posts as backup (WordPress search can be unreliable)
+        # Strategy 2: Fetch recent posts as backup
         try:
-            pages_to_fetch = 3  # Fetch 3 pages = 300 posts
+            pages_to_fetch = 3  # 300 posts max
             for page in range(1, pages_to_fetch + 1):
                 response = requests.get(wp_api_url, params={
-                    'per_page': 100,  # Maximum allowed by WordPress
+                    'per_page': 100,
                     '_fields': 'id,title,content,excerpt,link,date',
                     'orderby': 'date',
                     'order': 'desc',
@@ -329,28 +310,23 @@ def perform_rag_search(query, max_results=5):
                 }, timeout=15)
                 if response.status_code == 200:
                     page_posts = response.json()
-                    if not page_posts:  # No more posts
+                    if not page_posts:
                         break
-                    # Merge with existing, avoiding duplicates
                     existing_ids = {p.get('id') for p in all_posts}
                     for post in page_posts:
                         if post.get('id') not in existing_ids:
                             all_posts.append(post)
                 else:
-                    print(f"WordPress API returned status {response.status_code} for page {page}")
                     break
             print(f"Fetched {len(all_posts)} total posts for query: {query}")
         except Exception as e:
             print(f"WordPress recent posts API error: {e}")
-            pass
         
-        # Rank posts by relevance (simple keyword matching)
+        # Rank posts by relevance
         query_lower = query.lower()
-        # Remove common stop words for better matching
         stop_words = {'what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can'}
         query_words = set(word for word in query_lower.split() if word not in stop_words and len(word) > 2)
         
-        # If all words were stop words, use original query
         if not query_words:
             query_words = set(query_lower.split())
         
@@ -360,7 +336,6 @@ def perform_rag_search(query, max_results=5):
             excerpt = post.get('excerpt', {}).get('rendered', '').lower()
             content = post.get('content', {}).get('rendered', '').lower()
             
-            # Title matches are most important
             for word in query_words:
                 if word in title:
                     score += 10
@@ -369,7 +344,6 @@ def perform_rag_search(query, max_results=5):
                 if word in content:
                     score += 1
             
-            # Exact phrase match bonus
             if query_lower in title:
                 score += 20
             if query_lower in excerpt:
@@ -379,69 +353,133 @@ def perform_rag_search(query, max_results=5):
             
             return score
         
-        # Sort by relevance and take top results
+        # Sort and take top results
         posts_with_scores = [(p, calculate_relevance(p)) for p in all_posts]
         posts_with_scores.sort(key=lambda x: x[1], reverse=True)
-        
-        # Log top results for debugging
-        print(f"Query: {query}")
-        print(f"Query words after filtering: {query_words}")
-        if posts_with_scores[:3]:
-            print("Top 3 results:")
-            for p, score in posts_with_scores[:3]:
-                title = p.get('title', {}).get('rendered', 'No title')
-                print(f"  - Score {score}: {title}")
-        
-        # Take top N posts based on max_results
         posts = [p for p, score in posts_with_scores[:max_results]]
         
-        # If top post has score 0, try a more lenient search
-        if posts and posts_with_scores[0][1] == 0 and len(all_posts) > max_results:
-            print("Top post has 0 score, trying lenient search...")
-            for word in query_words:
-                matching_posts = [p for p in all_posts 
-                                if word in p.get('title', {}).get('rendered', '').lower() 
-                                or word in p.get('excerpt', {}).get('rendered', '').lower()
-                                or word in p.get('content', {}).get('rendered', '').lower()]
-                if matching_posts:
-                    posts = matching_posts[:max_results]
-                    print(f"Found {len(matching_posts)} posts matching word: {word}")
-                    break
+        return {
+            'posts': posts,
+            'query_words': query_words,
+            'error': None
+        }
         
     except requests.RequestException as e:
         print(f"WordPress API request error: {e}")
-        posts = []
+        return {
+            'posts': [],
+            'query_words': set(),
+            'error': str(e)
+        }
+
+
+def perform_rag_search_fast(query, max_results=5):
+    """
+    FAST two-phase RAG search - returns static pages immediately.
     
-    # Step 2: Search static HTML pages
-    static_pages = []
-    try:
-        static_pages = search_static_html_pages(query)
-    except Exception as e:
-        print(f"Error searching static HTML pages: {e}")
-        static_pages = []
+    This is Phase 1 only - searches static HTML pages and returns quickly.
+    Call search_blog_posts() separately for Phase 2.
     
-    # Step 3: Prepare context from blog posts and static HTML pages
+    Returns:
+        dict: {
+            'sources': list (static pages only),
+            'context': str (static pages only),
+            'query': str,
+            'query_words': set,
+            'searching_blog': bool (always True - blog search needed)
+        }
+    """
+    # Phase 1: Search static HTML pages (FAST)
+    static_pages = search_static_html_pages(query)
+    
+    query_lower = query.lower()
+    stop_words = {'what', 'is', 'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can'}
+    query_words = set(word for word in query_lower.split() if word not in stop_words and len(word) > 2)
+    
+    if not query_words:
+        query_words = set(query_lower.split())
+    
     context = ""
     sources = []
     
+    # Add static HTML pages to context
+    if static_pages:
+        for page in static_pages[:max_results]:
+            title = page.get('title', '')
+            content = page.get('content', '')
+            link = page.get('link', '')
+            
+            authority_score = calculate_authority_score(
+                source_type='website',
+                title=title,
+                content=content,
+                date_str=None,
+                query=query,
+                query_words=query_words
+            )
+            
+            content_snippet = content[:4000] if len(content) > 4000 else content
+            excerpt = content[:200] + '...' if len(content) > 200 else content
+            
+            context += f"\n\n---\nWebsite Page: {title}\nContent: {content_snippet}\n---\n"
+            sources.append({
+                'title': title,
+                'link': link,
+                'excerpt': excerpt,
+                'type': 'website',
+                'authority': authority_score
+            })
+    
+    return {
+        'sources': sources,
+        'context': context,
+        'query': query,
+        'query_words': query_words,
+        'searching_blog': True  # Indicates blog search is still needed
+    }
+
+
+def perform_rag_search(query, max_results=5):
+    """
+    FULL two-phase RAG search - returns both static pages and blog posts.
+    
+    This combines Phase 1 (static pages) and Phase 2 (blog posts).
+    Use this for synchronous full search, or call perform_rag_search_fast()
+    followed by search_blog_posts() for async approach.
+    
+    Returns:
+        dict: {
+            'sources': list (both static pages and blog posts),
+            'context': str (combined content),
+            'query': str,
+            'query_words': set
+        }
+    """
+    # Phase 1: Static pages (fast)
+    fast_results = perform_rag_search_fast(query, max_results)
+    
+    # Phase 2: Blog posts (slow)
+    blog_results = search_blog_posts(query, max_results)
+    
+    context = fast_results['context']
+    sources = fast_results['sources'].copy()
+    query_words = fast_results['query_words']
+    
     # Add blog posts to context
-    if posts:
-        for post in posts[:max_results]:
+    if blog_results['posts']:
+        for post in blog_results['posts'][:max_results]:
             title = post.get('title', {}).get('rendered', '')
             content = post.get('content', {}).get('rendered', '')
             link = post.get('link', '')
             excerpt = post.get('excerpt', {}).get('rendered', '')
             date_str = post.get('date', '')
             
-            # Clean HTML tags more thoroughly
+            # Clean HTML tags
             content_clean = re.sub('<[^<]+?>', '', content)
             excerpt_clean = re.sub('<[^<]+?>', '', excerpt)
-            
-            # Remove extra whitespace and newlines
             content_clean = re.sub(r'\s+', ' ', content_clean).strip()
             excerpt_clean = re.sub(r'\s+', ' ', excerpt_clean).strip()
             
-            # Calculate authority score
             authority_score = calculate_authority_score(
                 source_type='blog',
                 title=title,
@@ -451,7 +489,6 @@ def perform_rag_search(query, max_results=5):
                 query_words=query_words
             )
             
-            # Get more content (up to 4000 chars per post)
             content_snippet = content_clean[:4000] if len(content_clean) > 4000 else content_clean
             
             context += f"\n\n---\nBlog Post: {title}\nExcerpt: {excerpt_clean}\nFull Content: {content_snippet}\n---\n"
@@ -462,38 +499,6 @@ def perform_rag_search(query, max_results=5):
                 'type': 'blog',
                 'authority': authority_score,
                 'date': date_str
-            })
-    
-    # Add static HTML pages to context
-    if static_pages:
-        for page in static_pages[:max_results]:
-            title = page.get('title', '')
-            content = page.get('content', '')
-            link = page.get('link', '')
-            
-            # Calculate authority score
-            authority_score = calculate_authority_score(
-                source_type='website',
-                title=title,
-                content=content,
-                date_str=None,
-                query=query,
-                query_words=query_words
-            )
-            
-            # Content is already cleaned, just truncate
-            content_snippet = content[:4000] if len(content) > 4000 else content
-            
-            # Extract a snippet for excerpt
-            excerpt = content[:200] + '...' if len(content) > 200 else content
-            
-            context += f"\n\n---\nWebsite Page: {title}\nContent: {content_snippet}\n---\n"
-            sources.append({
-                'title': title,
-                'link': link,
-                'excerpt': excerpt,
-                'type': 'website',
-                'authority': authority_score
             })
     
     return {
