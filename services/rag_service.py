@@ -259,9 +259,14 @@ def perform_rag_search(query, max_results=5):
         Returns error dict if WordPress API is unreachable
     """
     # Step 1: Fetch blog content from WordPress REST API
+    # Get blog URL from environment variable or use new subdomain as default
+    env_blog_url = os.getenv('WORDPRESS_BLOG_URL', 'https://blog.curam-ai.com.au')
+    
     blog_urls = [
-        'https://curam-ai.com.au',      # Primary (no www)
-        'https://www.curam-ai.com.au'   # Fallback (with www)
+        env_blog_url,                    # From environment variable or new subdomain
+        'https://blog.curam-ai.com.au',  # Primary (new subdomain)
+        'https://www.curam-ai.com.au',   # Fallback (old www subdomain)
+        'https://curam-ai.com.au'        # Fallback (old no-www)
     ]
     
     blog_url = None
@@ -276,10 +281,10 @@ def perform_rag_search(query, max_results=5):
             if test_response.status_code == 200:
                 blog_url = test_url
                 wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
-                print(f"✓ Blog URL accessible: {blog_url}")
+                print(f"âœ“ Blog URL accessible: {blog_url}")
                 break
         except requests.RequestException as e:
-            print(f"✗ Blog URL failed: {test_url} - {str(e)[:100]}")
+            print(f"âœ— Blog URL failed: {test_url} - {str(e)[:100]}")
             continue
     
     # If neither URL works, return error
@@ -497,4 +502,3 @@ def perform_rag_search(query, max_results=5):
         'query': query,
         'query_words': query_words
     }
-
