@@ -1917,11 +1917,63 @@ TEXT: {text}
     
     Return ONLY valid JSON (no markdown, no explanation, no code blocks).
 
+# LOGISTICS PROMPT - ADD THIS TO gemini_service.py
+
+## LOCATION: After line 1921, before line 1924 (before "# --- HTML TEMPLATE ---")
+
+## FIND THIS (around line 1918-1922):
+    Return ONLY valid JSON (no markdown, no explanation, no code blocks).
+
     TEXT: {text}
     """
 
 
 # --- HTML TEMPLATE ---
+
+## REPLACE WITH THIS:
+    Return ONLY valid JSON (no markdown, no explanation, no code blocks).
+
+    TEXT: {text}
+    """
+    elif doc_type == "logistics":
+        return f"""
+Extract data from this Bill of Lading / shipping document and return structured data.
+
+Extract multiple rows if the document contains multiple containers or shipment lines.
+
+Return ONLY valid JSON in this exact format:
+{{
+  "rows": [
+    {{
+      "Shipper": "Shipper company name",
+      "Consignee": "Consignee company name",
+      "BLNumber": "Bill of Lading number",
+      "Vessel": "Vessel name and voyage number",
+      "ContainerNumber": "Container number (e.g., MSKU9922334)",
+      "SealNumber": "Seal number",
+      "Description": "Cargo description",
+      "Quantity": "Number of packages/units",
+      "Weight": "Gross weight with unit (e.g., 24,500 KG)"
+    }}
+  ]
+}}
+
+EXTRACTION RULES:
+- Extract one row per container or shipment line
+- If document has multiple containers, create multiple rows
+- Use "N/A" for any missing fields
+- Preserve exact formatting of B/L numbers, container numbers, and seal numbers
+- Include units with weight (KG, LBS, MT, etc.)
+
+Return ONLY the JSON, no markdown, no explanation, no code blocks.
+
+DOCUMENT TEXT:
+{text}
+"""
+
+
+# --- HTML TEMPLATE ---
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
