@@ -2331,6 +2331,10 @@ HTML_TEMPLATE = """
                     <input type="radio" name="department" value="transmittal" {% if department == 'transmittal' %}checked{% endif %}>
                     Drafter Transmittal
                 </label>
+                <label>
+                <input type="radio" name="department" value="logistics" {% if department == 'logistics' %}checked{% endif %}>
+                    Logistics
+                </label>
             </div>
 
             <h3>1. Select Sample Files</h3>
