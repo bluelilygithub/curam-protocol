@@ -151,15 +151,18 @@ FINANCE_FIELDS = ["Vendor", "Date", "InvoiceNum", "Cost", "GST", "FinalAmount", 
 ENGINEERING_BEAM_FIELDS = ["Mark", "Size", "Qty", "Length", "Grade", "PaintSystem", "Comments"]
 ENGINEERING_COLUMN_FIELDS = ["Mark", "SectionType", "Size", "Length", "Grade", "BasePlate", "CapPlate", "Finish", "Comments"]
 TRANSMITTAL_FIELDS = ["DwgNo", "Rev", "Title", "Scale"]
+LOGISTICS_FIELDS = ["Shipper", "Consignee", "BLNumber", "Vessel", "ContainerNumber", "SealNumber", "Description", "Quantity", "Weight"]
 
 DOC_FIELDS = {
     "finance": FINANCE_FIELDS,
-    "engineering": ENGINEERING_BEAM_FIELDS,  # Default, will be overridden based on detected type
-    "transmittal": TRANSMITTAL_FIELDS
+    "engineering": ENGINEERING_BEAM_FIELDS,
+    "transmittal": TRANSMITTAL_FIELDS,
+    "logistics": LOGISTICS_FIELDS
 }
 
 ERROR_FIELD = {
     "finance": "Summary",
     "engineering": "Comments",
-    "transmittal": "Title"
+    "transmittal": "Title",
+    "logistics": "Description"
 }
