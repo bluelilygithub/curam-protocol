@@ -49,6 +49,18 @@ DEPARTMENT_SAMPLES = {
             {"path": "drawings/s102_framing_plan.pdf", "label": "S-102 Framing Plan"},
             {"path": "drawings/s500_standard_details.pdf", "label": "S-500 Details"}
         ]
+    },
+    "logistics": {
+        "label": "Logistics samples",
+        "description": "Logistics/freight forwarding samples",
+        "folder": "logistics",
+        "samples": [
+            {"path": "logistics/Apparel FTA List.pdf", "label": "Apparel FTA List"},
+            {"path": "logistics/Carrier Master Bill Of Lading.pdf", "label": "Carrier Master Bill of Lading"},
+            {"path": "logistics/Maersk Line - Sea Waybill Bill Of Lading.pdf", "label": "Maersk Sea Waybill"},
+            {"path": "logistics/Scribbled House Bill of Lading.pdf", "label": "Scribbled House Bill of Lading"},
+            {"path": "logistics/Timber Tally Sheet.pdf", "label": "Timber Tally Sheet"}
+        ]
     }
 }
 
@@ -91,6 +103,14 @@ ROUTINE_DESCRIPTIONS = {
          <p><strong>Input Constraint:</strong> Files must contain the same metadata fields (Drawing Number, Revision, Title, Scale, Date, Status, Sheet Count, Project) even if the layout differs. The extraction schema normalizes across variations.</p>
          <p><strong>Outcome:</strong> A "Document Register" that your team can email or drop into Excel as a transmittal—ready for client distribution, RFI tracking, or compliance audits.</p>
          <p><strong>The Saving:</strong><br>Manual: 30-45 min per transmittal.<br>AI: 20 seconds.<br><strong>Value:</strong> Zero transcription errors (no mismatched rev letters, drawing numbers, or dates) + auditable extraction trail for compliance.</p>""")
+    ],
+    "logistics": [
+        ("Freight Forwarder / Customs: \"The Compliance Validator\"",
+         """<p><strong>What it does:</strong> Automatically extracts critical data from Bills of Lading, FTA lists, and shipping documents to validate compliance, cross-check container details, and prepare customs declarations.</p>
+         <p><strong>The Current Grind:</strong> Freight coordinators manually open each shipping document, type shipper/consignee details, container numbers, vessel information, and weights into tracking systems. For FTA claims, they cross-reference HS codes across multiple documents.</p>
+         <p><strong>Frequency:</strong> Daily. A mid-size forwarder processes <strong>200-400 shipping documents</strong> weekly (BOLs, packing lists, FTA declarations).</p>
+         <p><strong>The Saving:</strong><br>Manual: 4-6 minutes per document.<br>AI: 20-30 seconds.<br><strong>Value:</strong> Eliminates container number/weight errors that cause customs holds.</p>
+         <p><strong>The Demo:</strong> Upload the five logistics samples. The AI extracts shipper, consignee, container details, and cargo descriptions—handling handwritten annotations and varying layouts automatically.</p>""")
     ]
 }
 
@@ -112,6 +132,12 @@ ROUTINE_SUMMARY = {
         ("Frequency", "Weekly to help compile client transmittals."),
         ("Saving", "Manual: hours of typing. AI: builds the register instantly."),
         ("Value", "Avoids Friday-afternoon typos and keeps registers accurate.")
+    ],
+    "logistics": [
+        ("Grind", "Freight coordinator opens BOL scans, manually types container numbers, weights, shipper/consignee details, cross-checks HS codes."),
+        ("Frequency", "Daily; realistic volume of <strong>200-400 documents</strong> per week (BOLs, packing lists, FTA declarations)."),
+        ("Saving", "Manual: 4-6 min/document × 200 docs = <strong>13-20 hours/week</strong>. AI: 20-30 seconds."),
+        ("Value", "Eliminates errors that cause customs holds. Ensures FTA duty concessions aren't missed.")
     ]
 }
 
