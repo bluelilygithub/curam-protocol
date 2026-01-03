@@ -1917,22 +1917,6 @@ TEXT: {text}
     
     Return ONLY valid JSON (no markdown, no explanation, no code blocks).
 
-# LOGISTICS PROMPT - ADD THIS TO gemini_service.py
-
-## LOCATION: After line 1921, before line 1924 (before "# --- HTML TEMPLATE ---")
-
-## FIND THIS (around line 1918-1922):
-    Return ONLY valid JSON (no markdown, no explanation, no code blocks).
-
-    TEXT: {text}
-    """
-
-
-# --- HTML TEMPLATE ---
-
-## REPLACE WITH THIS:
-    Return ONLY valid JSON (no markdown, no explanation, no code blocks).
-
     TEXT: {text}
     """
     elif doc_type == "logistics":

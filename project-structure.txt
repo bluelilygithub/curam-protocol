@@ -1,0 +1,251 @@
+Folder PATH listing
+Volume serial number is 326A-324C
+C:.
+|   .gitignore
+|   1_CURRENT_SYSTEM_OVERVIEW.md
+|   1_PROJECT_OVERVIEW.md
+|   2_ARCHITECTURE_REFERENCE.md
+|   2_TECHNICAL_DEEP_DIVE.md
+|   3_DEPLOYMENT_GUIDE.md
+|   3_DEPLOYMENT_REFERENCE.md
+|   about.html
+|   ALL_CORRUPTION_FIXED.md
+|   blog.html
+|   built-environment.html
+|   case-study.html
+|   cleanup_phases.py
+|   commercial-guarantee.html
+|   config.py
+|   contact.html
+|   CORRUPT_CHARACTERS_FIXED.md
+|   CRASH_FIXED.md
+|   curam-ai-protocol.html
+|   Curam-Ai-Redacted-Tier-2-Strategic-Assessment.html
+|   curam-handover.md
+|   database.py
+|   DATABASE_CONNECTION_STATUS.md
+|   dump-railway-202512301711.sql
+|   embed_snippet.html
+|   ENCODING_INTEGRATION_SUMMARY.md
+|   ENCODING_SANITIZER_INTEGRATION.md
+|   ENHANCED_SANITIZATION.md
+|   faq.html
+|   feasibility-sprint-report.html
+|   git
+|   homepage.html
+|   how-it-works.html
+|   index.html
+|   logistics-compliance.html
+|   main.py
+|   phase-1-feasibility.html
+|   phase-2-discovery-baseline-report.html
+|   phase-2-exec-summary.html
+|   phase-2-metric-agreement.html
+|   phase-3-compliance.html
+|   phase-4-implementation.html
+|   PHASES_COMPLETE_SUMMARY.md
+|   PHASE_1_2_3_IMPLEMENTATION.md
+|   Procfile
+|   professional-services.html
+|   PROGRESS.txt
+|   project-structure.txt
+|   PROMPT_SYSTEM_DOCS.md
+|   QUICK_START_PHASES_1_2_3.md
+|   railway.toml
+|   requirements.txt
+|   requirements_roi.txt
+|   risk-audit-report.html
+|   roi.html
+|   roi_calculator.py
+|   roi_calculator_flask.py
+|   roi_calculator_improved.html
+|   roi_report_pdf_template.html
+|   runtime.txt
+|   search-results.html
+|   search.html
+|   services.html
+|   sitemap.html
+|   sitemap.xml
+|   target-markets.html
+|   tier-one-feasibility-report.html
+|   tier2-report.html
+|   
++---assets
+|   +---css
+|   |       progress_search_styles.css
+|   |       styles.css
+|   |       
+|   +---downloads
+|   |       AI-Assessment-Proposal.pdf
+|   |       Curam-Ai - Redacted Tier 2 Strategic Assessment.pdf
+|   |       Curam-Ai_Phase_2_Sample_Report.pdf
+|   |       Curam_AI_ROI_Report_20251127.pdf
+|   |       Phase-1-feasibility-sprint.pdf
+|   |       Phase-3-Compliance-Shield.pdf
+|   |       
+|   +---images
+|   |       curam-ai-logo.png
+|   |       curam-protocol.jpeg
+|   |       hero-roadmap.jpg
+|   |       logistics-compliance-sector.jpeg
+|   |       logistics-sector.jfif
+|   |       phase-1-feasiblity.jpeg
+|   |       phase-2-roadmap.jpeg
+|   |       phase-3-compliance.jfif
+|   |       phase-4-implementation.jpg
+|   |       prof-services-sector.jpeg
+|   |       services-table.jpeg
+|   |       services_infographic.jpeg
+|   |       target-markets.jpeg
+|   |       
+|   +---includes
+|   |       footer.html
+|   |       navbar.html
+|   |       
+|   +---js
+|   |       footer-loader.js
+|   |       hero-text-rotation.js
+|   |       hero_rotation.js
+|   |       main.js
+|   |       navbar-loader.js
+|   |       rag-search-demo.js
+|   |       scripts.js
+|   |       search_progressive_ux.js
+|   |       
+|   +---samples
+|   |       Phase-3-Compliance-Shield.pdf
+|   |       
+|   \---videos
+|           hero-background.mp4
+|           hero-background_v1.mp4
+|           README.md
+|           
++---drawings
+|       Apparel FTA List.pdf
+|       beam_messy_scan.pdf
+|       Carrier Master Bill Of Lading.pdf
+|       column_complex_messy.pdf
+|       column_complex_vector.jpeg
+|       Maersk Line - Sea Waybill Bill Of Lading.pdf
+|       PDF_breakdown_technical.txt
+|       s001_general_notes.pdf
+|       s100_foundation_plan.pdf
+|       s101_ground_floor_plan.pdf
+|       s102_framing_plan.pdf
+|       s500_standard_details.pdf
+|       schedule_cad.pdf
+|       schedule_revit.pdf
+|       Scribbled House Bill of Lading.pdf
+|       Timber Tally Sheet.pdf
+|       
++---improveExtraction
+|       extraction_accuracy_report.md
+|       IMPROVEMENTS_FOR_MESSY_FILES.md
+|       
++---industries
+|       architecture.html
+|       construction.html
+|       engineering.html
+|       government-contractors.html
+|       healthcare-admin.html
+|       insurance-underwriting.html
+|       legal-services.html
+|       logistics-freight.html
+|       mining-services.html
+|       property-management.html
+|       wealth-management.html
+|       
++---invoices
+|       Bne.pdf
+|       CloudRender.pdf
+|       John Deere Construction & Forestry Commercial Invoice.pdf
+|       Lenovo Global Logistics Commercial Invoice.pdf
+|       Shenzhen Fast-Circuit Co Commercial Invoice.pdf
+|       Tingalpa.pdf
+|       
++---logistics
+|       Apparel FTA List.pdf
+|       Carrier Master Bill Of Lading.pdf
+|       Maersk Line - Sea Waybill Bill Of Lading.pdf
+|       Scribbled House Bill of Lading.pdf
+|       Timber Tally Sheet.pdf
+|       
++---models
+|       department_config.py
+|       __init__.py
+|       
++---roi_calculator
+|   |   calculations.py
+|   |   README.md
+|   |   
+|   +---config
+|   |       industries.py
+|   |       opportunities.py
+|   |       __init__.py
+|   |       
+|   \---templates
++---routes
+|   |   static_pages.py
+|   |   __init__.py
+|   |   
+|   \---__pycache__
+|           static_pages.cpython-313.pyc
+|           
++---services
+|   |   engineering_validator.py
+|   |   gemini_service.py
+|   |   image_preprocessing.py
+|   |   pdf_service.py
+|   |   rag_service.py
+|   |   validation_service.py
+|   |   __init__.py
+|   |   
+|   \---__pycache__
+|           gemini_service.cpython-313.pyc
+|           pdf_service.cpython-313.pyc
+|           validation_service.cpython-313.pyc
+|           __init__.cpython-313.pyc
+|           
++---templates
+|   |   base.html
+|   |   feasibility-preview.html
+|   |   roi_report_pdf.html
+|   |   roi_results_improved.html
+|   |   
+|   \---industries
+|           accounting.html
+|           architecture.html
+|           construction.html
+|           engineering.html
+|           government-contractors.html
+|           healthcare-admin.html
+|           insurance-underwriting.html
+|           legal-services.html
+|           logistics-freight.html
+|           mining-services.html
+|           property-management.html
+|           wealth-management.html
+|           
++---tests
+|       test_phase1_utils.py
+|       test_phase2_models.py
+|       __init__.py
+|       
++---utils
+|   |   encoding_fix.py
+|   |   formatting.py
+|   |   prompts.py
+|   |   __init__.py
+|   |   
+|   \---__pycache__
+|           encoding_fix.cpython-313.pyc
+|           formatting.cpython-313.pyc
+|           prompts.cpython-313.pyc
+|           __init__.cpython-313.pyc
+|           
+\---__pycache__
+        config.cpython-313.pyc
+        main.cpython-311.pyc
+        main.cpython-313.pyc
+        roi_calculator_flask.cpython-313.pyc
+        
