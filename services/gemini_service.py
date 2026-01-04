@@ -3361,7 +3361,7 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                 parsed = sanitize_dict(parsed)
                 
                 # Handle different return structures
-                if doc_type == "transmittal":
+                elif doc_type == "transmittal":
                     # Transmittal returns a single object with multiple arrays
                     entries = [parsed] if isinstance(parsed, dict) else parsed if isinstance(parsed, list) else []
                 else:
