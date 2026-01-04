@@ -2420,6 +2420,15 @@ HTML_TEMPLATE = """
             <span class="info">{{ results|length }} row(s) processed</span>
         </div>
         
+        <div style="background: #e3f2fd; border: 2px solid #2196f3; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: monospace; font-size: 14px;">
+            <strong>🔍 UNIVERSAL DEBUG:</strong><br>
+            <strong>department:</strong> "{{ department }}"<br>
+            <strong>results length:</strong> {{ results|length }}<br>
+            {% if results and results|length > 0 %}
+            <strong>first result:</strong> {{ results[0] }}<br>
+            {% endif %}
+        </div>
+        
         {% if department == 'transmittal' and transmittal_data %}
         <!-- Enhanced Transmittal Report with Multiple Categories -->
         <div style="background: #e8f4f8; border-left: 4px solid #3498db; padding: 12px; margin: 20px 0; border-radius: 4px; font-size: 13px; color: #2c3e50;">
