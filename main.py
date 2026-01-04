@@ -1270,6 +1270,12 @@ def index_automater():
                                     entry['Filename'] = filename
                                     results.append(entry)
                                 model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
+                        elif department == "logistics":
+                            # Logistics returns multiple rows like finance/engineering
+                            model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
+                            for entry in entries:
+                                entry['Filename'] = filename
+                                results.append(entry)
                         else:
                             model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
                             for entry in entries:
