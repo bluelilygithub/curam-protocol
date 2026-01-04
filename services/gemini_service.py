@@ -3024,6 +3024,62 @@ HTML_TEMPLATE = """
         {% endfor %}
         {% endif %}
         
+        {% if department == 'logistics' %}
+        {# Render logistics results - one table for all documents #}
+        {# DEBUG INFO #}
+        <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 8px;">
+            <strong>🔍 DEBUG - Logistics Data:</strong><br>
+            <strong>results exists:</strong> {{ 'Yes' if results else 'No' }}<br>
+            <strong>results type:</strong> {{ results.__class__.__name__ if results else 'None' }}<br>
+            <strong>results length:</strong> {{ results|length if results else 0 }}<br>
+            <strong>department value:</strong> "{{ department }}"<br>
+            {% if results and results|length > 0 %}
+            <strong>First result keys:</strong> {{ results[0].keys()|list if results[0] is mapping else 'Not a dict' }}<br>
+            <strong>First result:</strong> {{ results[0] }}<br>
+            {% endif %}
+        </div>
+        {% if results %}
+        <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 16px 20px;">
+                <div style="font-size: 18px; font-weight: 600;">📦 Logistics Documents Extracted</div>
+                <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">{{ results|length }} shipment(s) extracted</div>
+            </div>
+            <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Shipper</th>
+                    <th>Consignee</th>
+                    <th>B/L Number</th>
+                    <th>Vessel</th>
+                    <th>Container #</th>
+                    <th>Seal #</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Weight</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in results %}
+            <tr>
+                <td>{{ row.Shipper or 'N/A' }}</td>
+                <td>{{ row.Consignee or 'N/A' }}</td>
+                <td>{{ row.BLNumber or 'N/A' }}</td>
+                <td>{{ row.Vessel or 'N/A' }}</td>
+                <td>{{ row.ContainerNumber or 'N/A' }}</td>
+                <td>{{ row.SealNumber or 'N/A' }}</td>
+                <td>{{ row.Description or 'N/A' }}</td>
+                <td>{{ row.Quantity or 'N/A' }}</td>
+                <td>{{ row.Weight or 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+        
         <div class="summary-card">
             <div><strong>Run Summary</strong></div>
             {% for label, text in routine_summary %}
