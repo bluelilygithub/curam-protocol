@@ -1592,7 +1592,7 @@ Return ONLY a valid JSON array (no markdown, no explanation, no code blocks).
 
 TEXT: {text}
         """
-    if doc_type == "transmittal":
+    elif doc_type == "transmittal":
         return f"""
         You are an advanced structural engineering document analyzer extracting comprehensive structured data from drawing PDFs.
         
@@ -1660,7 +1660,43 @@ TEXT: {text}
 
         TEXT: {text}
         """
-    return f"""
+    elif doc_type == "logistics":
+        return f"""
+Extract data from this Bill of Lading / shipping document and return structured data.
+
+Extract multiple rows if the document contains multiple containers or shipment lines.
+
+Return ONLY valid JSON in this exact format:
+{{
+  "rows": [
+    {{
+      "Shipper": "Shipper company name",
+      "Consignee": "Consignee company name",
+      "BLNumber": "Bill of Lading number",
+      "Vessel": "Vessel name and voyage number",
+      "ContainerNumber": "Container number (e.g., MSKU9922334)",
+      "SealNumber": "Seal number",
+      "Description": "Cargo description",
+      "Quantity": "Number of packages/units",
+      "Weight": "Gross weight with unit (e.g., 24,500 KG)"
+    }}
+  ]
+}}
+
+EXTRACTION RULES:
+- Extract one row per container or shipment line
+- If document has multiple containers, create multiple rows
+- Use "N/A" for any missing fields
+- Preserve exact formatting of B/L numbers, container numbers, and seal numbers
+- Include units with weight (KG, LBS, MT, etc.)
+
+Return ONLY the JSON, no markdown, no explanation, no code blocks.
+
+DOCUMENT TEXT:
+{text}
+"""
+    else:
+        return f"""
     Extract comprehensive invoice data from this document as JSON.
     
     ## DOCUMENT TYPE DETECTION
@@ -1922,6 +1958,7 @@ TEXT: {text}
 
 
 # --- HTML TEMPLATE ---
+
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -3328,6 +3365,11 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                 if doc_type == "transmittal":
                     # Transmittal returns a single object with multiple arrays
                     entries = [parsed] if isinstance(parsed, dict) else parsed if isinstance(parsed, list) else []
+                elif doc_type == "logistics":
+                    # Logistics returns multiple rows like finance
+                    entries = [parsed] if isinstance(parsed, dict) else [{}]
+                    if isinstance(parsed, dict) and "rows" in parsed:
+                        entries = parsed["rows"]
                 else:
                     entries = parsed if isinstance(parsed, list) else [parsed] if isinstance(parsed, dict) else []
 
