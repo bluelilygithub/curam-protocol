@@ -1662,33 +1662,85 @@ TEXT: {text}
         """
     elif doc_type == "logistics":
         return f"""
-Extract data from this Bill of Lading / shipping document and return structured data.
+You are extracting data from logistics/freight forwarding documents. First, identify the document type, then extract accordingly.
 
-Extract multiple rows if the document contains multiple containers or shipment lines.
+## DOCUMENT TYPES
+
+**BILL OF LADING (B/L):**
+- Contains: Shipper, Consignee, B/L number, vessel, container details, cargo
+- Purpose: Receipt and contract of carriage
+- Extract: All shipment and container details
+
+**FTA LIST (Free Trade Agreement):**
+- Contains: Item descriptions, origin countries, FTA status, HS codes
+- Purpose: Customs duty concessions
+- Extract: All items with origin and FTA eligibility
+
+**TALLY SHEET:**
+- Contains: Item/bundle descriptions, quantities, dimensions, weights
+- Purpose: Physical count verification
+- Extract: All items with measurements
+
+## OUTPUT FORMAT
 
 Return ONLY valid JSON in this exact format:
+
 {{
+  "DocumentType": "BOL" or "FTA" or "TALLY",
   "rows": [
     {{
-      "Shipper": "Shipper company name",
-      "Consignee": "Consignee company name",
-      "BLNumber": "Bill of Lading number",
-      "Vessel": "Vessel name and voyage number",
-      "ContainerNumber": "Container number (e.g., MSKU9922334)",
-      "SealNumber": "Seal number",
-      "Description": "Cargo description",
-      "Quantity": "Number of packages/units",
-      "Weight": "Gross weight with unit (e.g., 24,500 KG)"
+      # For BILL OF LADING (all fields):
+      "Shipper": "Shipper company name or N/A",
+      "Consignee": "Consignee company name or N/A",
+      "BLNumber": "Bill of Lading number or N/A",
+      "Vessel": "Vessel name and voyage or N/A",
+      "ContainerNumber": "Container number or N/A",
+      "SealNumber": "Seal number or N/A",
+      "Description": "Cargo description or N/A",
+      "Quantity": "Number of packages/units or N/A",
+      "Weight": "Gross weight with unit or N/A",
+      
+      # For FTA LIST (add these fields):
+      "ItemDescription": "Item description or N/A",
+      "OriginCountry": "Country of origin or N/A",
+      "FTAAgreement": "FTA name (e.g., CPTPP, ChAFTA) or N/A",
+      "HSCode": "Harmonized System code or N/A",
+      "FTAStatus": "Eligible/Not Eligible/Pending or N/A",
+      
+      # For TALLY SHEET (add these fields):
+      "BundleID": "Bundle/package identifier or N/A",
+      "Dimensions": "Length x Width x Height or N/A",
+      "PieceCount": "Number of pieces or N/A"
     }}
   ]
 }}
 
-EXTRACTION RULES:
-- Extract one row per container or shipment line
-- If document has multiple containers, create multiple rows
-- Use "N/A" for any missing fields
-- Preserve exact formatting of B/L numbers, container numbers, and seal numbers
-- Include units with weight (KG, LBS, MT, etc.)
+## EXTRACTION RULES
+
+**General:**
+- Extract one row per distinct item/container/shipment line
+- Use "N/A" for fields that don't apply to the document type
+- Preserve exact formatting of codes and numbers
+- Include units with measurements
+
+**For BILL OF LADING:**
+- One row per container OR per cargo line if containers aren't specified
+- Preserve container number format (e.g., MSKU9922334)
+- Include vessel voyage number if present
+- Extract all seal numbers
+
+**For FTA LIST:**
+- One row per item/product
+- Extract full FTA agreement name (not abbreviations if possible)
+- Capture origin country exactly as stated
+- Extract HS codes with all digits
+- Note if FTA status is verified/pending/rejected
+
+**For TALLY SHEET:**
+- One row per bundle/item/package
+- Extract all measurement dimensions
+- Preserve bundle/package identifiers exactly
+- Include piece counts and totals
 
 Return ONLY the JSON, no markdown, no explanation, no code blocks.
 
@@ -3033,6 +3085,162 @@ HTML_TEMPLATE = """
         {% endfor %}
         {% endif %}
         
+        {% if department == 'logistics' %}
+        {# DEBUG INFO - Remove after testing #}
+        <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 8px;">
+            <strong>🔍 DEBUG - Logistics Data:</strong><br>
+            <strong>results length:</strong> {{ results|length if results else 0 }}<br>
+            {% if results and results|length > 0 %}
+            <strong>First result keys:</strong> {{ results[0].keys()|list if results[0] is mapping else 'Not a dict' }}<br>
+            {% endif %}
+        </div>
+        
+        {% if results %}
+        <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 16px 20px;">
+                <div style="font-size: 18px; font-weight: 600;">📦 Logistics Documents Extracted</div>
+                <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">{{ results|length }} document(s) processed</div>
+            </div>
+            <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Filename</th>
+                    {# Dynamically show columns based on what fields exist #}
+                    {% if results[0].get('Shipper') and results[0].Shipper != 'N/A' %}
+                    <th>Shipper</th>
+                    <th>Consignee</th>
+                    <th>B/L Number</th>
+                    <th>Vessel</th>
+                    <th>Container #</th>
+                    <th>Seal #</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Weight</th>
+                    {% elif results[0].get('ItemDescription') or results[0].get('OriginCountry') %}
+                    <th>Item</th>
+                    <th>Origin Country</th>
+                    <th>FTA Agreement</th>
+                    <th>HS Code</th>
+                    <th>FTA Status</th>
+                    <th>Quantity</th>
+                    {% elif results[0].get('BundleID') %}
+                    <th>Bundle ID</th>
+                    <th>Description</th>
+                    <th>Dimensions</th>
+                    <th>Piece Count</th>
+                    <th>Quantity</th>
+                    <th>Weight</th>
+                    {% else %}
+                    {# Fallback: show all available fields #}
+                    {% for key in results[0].keys() if key != 'Filename' and key != 'TotalFormatted' %}
+                    <th>{{ key }}</th>
+                    {% endfor %}
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in results %}
+            <tr>
+                <td>{{ row.Filename or 'N/A' }}</td>
+                {# Show data based on document type #}
+                {% if row.get('Shipper') and row.Shipper != 'N/A' %}
+                {# Bill of Lading #}
+                <td>{{ row.Shipper or 'N/A' }}</td>
+                <td>{{ row.Consignee or 'N/A' }}</td>
+                <td>{{ row.BLNumber or 'N/A' }}</td>
+                <td>{{ row.Vessel or 'N/A' }}</td>
+                <td>{{ row.ContainerNumber or 'N/A' }}</td>
+                <td>{{ row.SealNumber or 'N/A' }}</td>
+                <td>{{ row.Description or 'N/A' }}</td>
+                <td>{{ row.Quantity or 'N/A' }}</td>
+                <td>{{ row.Weight or 'N/A' }}</td>
+                {% elif row.get('ItemDescription') or row.get('OriginCountry') %}
+                {# FTA List #}
+                <td>{{ row.ItemDescription or row.Description or 'N/A' }}</td>
+                <td>{{ row.OriginCountry or 'N/A' }}</td>
+                <td>{{ row.FTAAgreement or 'N/A' }}</td>
+                <td>{{ row.HSCode or 'N/A' }}</td>
+                <td>{{ row.FTAStatus or 'N/A' }}</td>
+                <td>{{ row.Quantity or 'N/A' }}</td>
+                {% elif row.get('BundleID') %}
+                {# Tally Sheet #}
+                <td>{{ row.BundleID or 'N/A' }}</td>
+                <td>{{ row.Description or 'N/A' }}</td>
+                <td>{{ row.Dimensions or 'N/A' }}</td>
+                <td>{{ row.PieceCount or 'N/A' }}</td>
+                <td>{{ row.Quantity or 'N/A' }}</td>
+                <td>{{ row.Weight or 'N/A' }}</td>
+                {% else %}
+                {# Fallback: show all available fields #}
+                {% for key, value in row.items() if key != 'Filename' and key != 'TotalFormatted' %}
+                <td>{{ value }}</td>
+                {% endfor %}
+                {% endif %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+            </div>
+        </div>
+        {% else %}
+        <div style="background: #fee; border: 2px solid #f00; padding: 15px; margin: 20px 0; border-radius: 8px;">
+            <strong>⚠️ No results to display</strong>
+        </div>
+        {% endif %}
+        {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in results %}
+            <tr>
+                <td>{{ row.Filename or 'N/A' }}</td>
+                {# Show data based on document type #}
+                {% if row.get('Shipper') and row.Shipper != 'N/A' %}
+                {# Bill of Lading #}
+                <td>{{ row.Shipper or 'N/A' }}</td>
+                <td>{{ row.Consignee or 'N/A' }}</td>
+                <td>{{ row.BLNumber or 'N/A' }}</td>
+                <td>{{ row.Vessel or 'N/A' }}</td>
+                <td>{{ row.ContainerNumber or 'N/A' }}</td>
+                <td>{{ row.SealNumber or 'N/A' }}</td>
+                <td>{{ row.Description or 'N/A' }}</td>
+                <td>{{ row.Quantity or 'N/A' }}</td>
+                <td>{{ row.Weight or 'N/A' }}</td>
+                {% elif row.get('ItemDescription') or row.get('OriginCountry') %}
+                {# FTA List #}
+                <td>{{ row.ItemDescription or row.Description or 'N/A' }}</td>
+                <td>{{ row.OriginCountry or 'N/A' }}</td>
+                <td>{{ row.FTAAgreement or 'N/A' }}</td>
+                <td>{{ row.HSCode or 'N/A' }}</td>
+                <td>{{ row.FTAStatus or 'N/A' }}</td>
+                <td>{{ row.Quantity or 'N/A' }}</td>
+                {% elif row.get('BundleID') %}
+                {# Tally Sheet #}
+                <td>{{ row.BundleID or 'N/A' }}</td>
+                <td>{{ row.Description or 'N/A' }}</td>
+                <td>{{ row.Dimensions or 'N/A' }}</td>
+                <td>{{ row.PieceCount or 'N/A' }}</td>
+                <td>{{ row.Quantity or 'N/A' }}</td>
+                <td>{{ row.Weight or 'N/A' }}</td>
+                {% else %}
+                {# Fallback: show all available fields #}
+                {% for key, value in row.items() if key != 'Filename' and key != 'TotalFormatted' %}
+                <td>{{ value }}</td>
+                {% endfor %}
+                {% endif %}
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+            </div>
+        </div>
+        {% else %}
+        <div style="background: #fee; border: 2px solid #f00; padding: 15px; margin: 20px 0; border-radius: 8px;">
+            <strong>⚠️ No results to display</strong>
+        </div>
+        {% endif %}
+        {% endif %}
         {% if department == 'logistics' %}
         {# Render logistics results - one table for all documents #}
         {# DEBUG INFO #}
