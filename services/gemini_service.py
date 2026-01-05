@@ -1236,7 +1236,7 @@ HTML_TEMPLATE = """
             {% endfor %}
         </div>
         {% endfor %}
-        {% endif %}
+        
         
         {% if department == 'logistics' %}
         <!-- ============================================================ -->
