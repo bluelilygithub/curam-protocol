@@ -607,7 +607,7 @@ def email_chat_log():
             ],
             "from": {
                 "email": from_email,
-                "name": "Curam-Ai ProtocolÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢"
+                "name": "Curam-Ai Protocol"
             },
             "subject": email_subject,
             "content": [
@@ -1155,7 +1155,7 @@ def index_automater():
                 filename = secure_filename(file_storage.filename)
                 if not filename.lower().endswith('.pdf'):
                     error_message = "Only PDF files can be uploaded for Finance."
-                    model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ ERROR: {filename} rejected (not a PDF)")
+                    model_actions.append(f"ERROR: {filename} rejected (not a PDF)")
                     break
                 unique_name = f"{int(time.time() * 1000)}_{filename}"
                 file_path = os.path.join(FINANCE_UPLOAD_DIR, unique_name)
@@ -1187,10 +1187,10 @@ def index_automater():
         if not samples:
             if selected_samples:
                 error_message = f"No samples matched department '{department}'. Selected: {selected_samples}"
-                model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ ERROR: {error_message}")
+                model_actions.append(f"ERROR: {error_message}")
             else:
                 error_message = "Please select at least one sample file."
-                model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ ERROR: {error_message}")
+                model_actions.append(f"ERROR: {error_message}")
 
         if not error_message:
             if samples:
@@ -1198,7 +1198,7 @@ def index_automater():
                 for sample_path in samples:
                     if not os.path.exists(sample_path):
                         error_msg = f"File not found: {sample_path}"
-                        model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ {error_msg}")
+                        model_actions.append(f"{error_msg}")
                         if not error_message:
                             error_message = error_msg
                         continue
@@ -1219,7 +1219,7 @@ def index_automater():
                         model_actions.append(f"Extracting text from {filename}")
                         text = extract_text(sample_path)
                         if text.startswith("Error:"):
-                            model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Text extraction failed for {filename}: {text}")
+                            model_actions.append(f"Text extraction failed for {filename}: {text}")
                             if not error_message:
                                 error_message = f"Text extraction failed for {filename}"
                             continue
@@ -1239,7 +1239,7 @@ def index_automater():
                     if attempt_log:
                         model_attempts.extend(attempt_log)
                     if api_error:
-                        model_actions.append(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Failed to process {filename}: {api_error}")
+                        model_actions.append(f"Failed to process {filename}: {api_error}")
                         if not error_message:
                             error_message = api_error
                     if entries:
@@ -1502,7 +1502,7 @@ def index_automater():
         try:
             samples = get_samples_for_template(dept)
             if samples:
-                print(f"Ã¢Å“â€œ Database returned {len(samples)} samples for {dept}")
+                print(f"Database returned {len(samples)} samples for {dept}")
                 dept_info = DEPARTMENT_SAMPLES.get(dept, {})
                 db_samples[dept] = {
                     "label": dept_info.get("label", "Samples"),
@@ -1511,9 +1511,9 @@ def index_automater():
                     "samples": samples
                 }
             else:
-                print(f"Ã¢Å¡Â  Database returned 0 samples for {dept} - using hardcoded")
+                print(f"Database returned 0 samples for {dept} - using hardcoded")
         except Exception as e:
-            print(f"Ã¢Å“â€” Database error for {dept}: {e}")
+            print(f"Database error for {dept}: {e}")
             # Continue with hardcoded samples on error
     
     # Merge database samples with hardcoded (database takes priority)
@@ -1525,8 +1525,9 @@ def index_automater():
     if finance_samples:
         print(f"First finance sample path: {finance_samples[0].get('path', 'NO PATH')}")
     else:
-        print("Ã¢Å¡Â  No finance samples in merged data!")
+        print("No finance samples in merged data!")
     
+    print(f"🔍 RENDERING: department={repr(department)}, results_count={len(results) if results else 0}")
     return render_template_string(
         HTML_TEMPLATE,
         results=results if results else [],
@@ -1703,11 +1704,11 @@ try:
     app.register_blueprint(roi_calculator_app, url_prefix='/roi-calculator')
     print("ROI Calculator blueprint registered successfully at /roi-calculator")
 except ImportError as e:
-    print(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Warning: Could not import ROI calculator: {e}")
+    print(f"Warning: Could not import ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 except Exception as e:
-    print(f"ÃƒÂ¢Ã…â€œÃ¢â‚¬â€ Error registering ROI calculator: {e}")
+    print(f"Error registering ROI calculator: {e}")
     import traceback
     traceback.print_exc()
 
