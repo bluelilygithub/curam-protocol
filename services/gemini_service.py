@@ -1551,49 +1551,81 @@ def replace_template_section(template, section_name, section_template):
     if not section_template:
         return template
     
-    # Find where section starts
-    start_marker = f"        {{% if department == '{section_name}' %}}"
-    start_pos = template.find(start_marker)
+    # Find where section starts - try multiple patterns
+    start_markers = [
+        f"        {{% if department == '{section_name}' %}}",
+        f"        {{% if department == '{section_name}' and transmittal_data %}}",  # For transmittal
+    ]
+    
+    start_pos = -1
+    start_marker = None
+    
+    for marker in start_markers:
+        pos = template.find(marker)
+        if pos != -1:
+            start_pos = pos
+            start_marker = marker
+            break
     
     if start_pos == -1:
-        # Try alternative patterns
-        if section_name == 'transmittal':
-            start_marker = "        {% if department == 'transmittal' and transmittal_data %}"
-            start_pos = template.find(start_marker)
-        if start_pos == -1:
-            return template
+        return template  # Section not found, skip replacement
     
-    # Find where summary-card starts (this is after all department sections)
-    summary_card_marker = "        <div class=\"summary-card\">"
-    summary_card_start = template.find(summary_card_marker, start_pos)
+    # Find the matching {% endif %} by counting nested if/endif blocks
+    # Start from the position after the opening {% if %}
+    search_start = start_pos + len(start_marker)
+    depth = 1  # We start inside one {% if %} block
+    pos = search_start
     
-    if summary_card_start != -1:
-        # Find the matching {% endif %} that closes the section
-        section_before_summary = template[start_pos:summary_card_start]
+    while pos < len(template) and depth > 0:
+        # Look for {% if %} or {% endif %} patterns
+        if_match = template.find("{% if", pos)
+        endif_match = template.find("{% endif %}", pos)
         
-        # Find all {% endif %} positions in this section
-        endif_pattern = r'        {%\s*endif\s*%}'
-        endif_matches = list(re.finditer(endif_pattern, section_before_summary))
+        # Also check for {% elif %} which doesn't change depth
+        elif_match = template.find("{% elif", pos)
         
-        if endif_matches:
-            # The last {% endif %} should close the section
-            last_endif_match = endif_matches[-1]
-            end_pos = start_pos + last_endif_match.end()
-            
-            # Replace the section (keep the same indentation)
-            template = (
-                template[:start_pos] + 
-                section_template.rstrip() + "\n        " + 
-                template[end_pos:]
-            )
+        # Find the earliest match
+        matches = []
+        if if_match != -1:
+            matches.append(('if', if_match))
+        if endif_match != -1:
+            matches.append(('endif', endif_match))
+        if elif_match != -1:
+            matches.append(('elif', elif_match))
+        
+        if not matches:
+            break  # No more matches found
+        
+        # Get the earliest match
+        matches.sort(key=lambda x: x[1])
+        match_type, match_pos = matches[0]
+        
+        if match_type == 'if':
+            depth += 1
+            pos = match_pos + 5
+        elif match_type == 'endif':
+            depth -= 1
+            if depth == 0:
+                # Found the matching {% endif %}
+                end_pos = match_pos + len("{% endif %}")
+                # Replace the section (keep the same indentation)
+                template = (
+                    template[:start_pos] + 
+                    section_template.rstrip() + "\n        " + 
+                    template[end_pos:]
+                )
+                return template
+            pos = match_pos + 11
+        else:  # elif
+            pos = match_pos + 6
     
+    # If we didn't find a matching endif, don't replace (safety)
     return template
 
 # Replace all department sections (order matters - do transmittal first as it's largest)
-# TEMPORARILY DISABLED - Debugging missing tables issue
-# for dept in ['transmittal', 'engineering', 'finance', 'logistics']:
-#     if dept in _template_sections:
-#         HTML_TEMPLATE = replace_template_section(HTML_TEMPLATE, dept, _template_sections[dept])
+for dept in ['transmittal', 'engineering', 'finance', 'logistics']:
+    if dept in _template_sections:
+        HTML_TEMPLATE = replace_template_section(HTML_TEMPLATE, dept, _template_sections[dept])
 
 # --- HELPER FUNCTIONS ---
 def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
