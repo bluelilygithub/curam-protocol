@@ -1266,9 +1266,30 @@ HTML_TEMPLATE = """
         
         {# Detect document type from first row #}
         {% set first_row = results[0] if results else {} %}
-        {% set has_fta = 'FTAAgreement' in first_row or 'CountryOfOrigin' in first_row or 'ItemDescription' in first_row %}
-        {% set has_bol = 'BLNumber' in first_row or 'Shipper' in first_row or 'Vessel' in first_row %}
-        {% set has_packing = 'CartonNumber' in first_row or 'Dimensions' in first_row %}
+        {# Debug: Check field detection #}
+        {% set has_fta_field1 = first_row.get('FTAAgreement') is not none %}
+        {% set has_fta_field2 = first_row.get('CountryOfOrigin') is not none %}
+        {% set has_fta_field3 = first_row.get('ItemDescription') is not none %}
+        {% set has_fta = has_fta_field1 or has_fta_field2 or has_fta_field3 %}
+        {% set has_bol_field1 = first_row.get('BLNumber') is not none %}
+        {% set has_bol_field2 = first_row.get('Shipper') is not none %}
+        {% set has_bol_field3 = first_row.get('Vessel') is not none %}
+        {% set has_bol = has_bol_field1 or has_bol_field2 or has_bol_field3 %}
+        {% set has_packing_field1 = first_row.get('CartonNumber') is not none %}
+        {% set has_packing_field2 = first_row.get('Dimensions') is not none %}
+        {% set has_packing = has_packing_field1 or has_packing_field2 %}
+        
+        {# Debug output for detection #}
+        <div style="background: #e7f3ff; border: 2px solid #2196F3; padding: 15px; margin: 20px 0; border-radius: 8px; font-size: 12px;">
+            <strong>🔍 Template Detection Debug:</strong><br>
+            has_fta_field1 (FTAAgreement): {{ has_fta_field1 }}<br>
+            has_fta_field2 (CountryOfOrigin): {{ has_fta_field2 }}<br>
+            has_fta_field3 (ItemDescription): {{ has_fta_field3 }}<br>
+            <strong>has_fta: {{ has_fta }}</strong><br>
+            has_bol: {{ has_bol }}<br>
+            has_packing: {{ has_packing }}<br>
+            First row keys: {{ first_row.keys()|list if first_row else 'No first_row' }}
+        </div>
         
         {# FTA DOCUMENT TABLE #}
         {% if has_fta %}

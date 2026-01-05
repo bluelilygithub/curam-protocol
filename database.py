@@ -13,9 +13,9 @@ def test_connection():
         with engine.connect() as conn:
             result = conn.execute(text("SELECT COUNT(*) FROM sectors"))
             count = result.scalar()
-            return f"âœ… Connected! Sectors: {count}"
+            return f"Connected! Sectors: {count}"
     except Exception as e:
-        return f"âŒ Error: {str(e)}"
+        return f"Error: {str(e)}"
 
 def get_sectors():
     """Get all sectors"""
@@ -40,7 +40,7 @@ def get_document_types_by_sector(sector_slug):
 def get_demo_config_by_department(department):
     """Get demo configuration for a department (maps old dept names to new sectors)"""
     if not engine:
-        print(f"âš  Database engine not initialized in get_demo_config_by_department")
+        print(f" Database engine not initialized in get_demo_config_by_department")
         return None
     
     try:
@@ -53,7 +53,7 @@ def get_demo_config_by_department(department):
         
         sector_slug = dept_to_sector.get(department)
         if not sector_slug:
-            print(f"âš  Unknown department: {department}")
+            print(f" Unknown department: {department}")
             return None
         
         # Get document types for this sector
@@ -67,10 +67,10 @@ def get_demo_config_by_department(department):
         elif department == 'transmittal':
             doc_types = [dt for dt in doc_types if dt['slug'] == 'drawing-register']
         
-        print(f"âœ“ get_demo_config_by_department({department}) found {len(doc_types)} doc types")
+        print(f"get_demo_config_by_department({department}) found {len(doc_types)} doc types")
         return doc_types
     except Exception as e:
-        print(f"âœ— Error in get_demo_config_by_department({department}): {e}")
+        print(f"Error in get_demo_config_by_department({department}): {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -137,14 +137,14 @@ def get_samples_for_template(department):
     """Get sample file configuration for template rendering"""
     # Check if database is available
     if not engine:
-        print(f"âš  Database engine not initialized for {department}")
+        print(f"Database engine not initialized for {department}")
         return []
     
     try:
         # Get from database
         config = get_demo_config_by_department(department)
         if not config:
-            print(f"âš  No config found in database for {department}")
+            print(f" No config found in database for {department}")
             return []
         
         # Convert to template format
@@ -158,7 +158,7 @@ def get_samples_for_template(department):
                 try:
                     file_paths = json.loads(file_paths)
                 except Exception as e:
-                    print(f"âœ— JSON parse error for {department}: {e}")
+                    print(f"JSON parse error for {department}: {e}")
                     file_paths = []
             
             # Ensure it's a list
@@ -171,10 +171,10 @@ def get_samples_for_template(department):
                     "label": os.path.basename(path)
                 })
         
-        print(f"âœ“ get_samples_for_template({department}) returning {len(samples)} samples")
+        print(f"get_samples_for_template({department}) returning {len(samples)} samples")
         return samples
     except Exception as e:
-        print(f"âœ— Error in get_samples_for_template({department}): {e}")
+        print(f"Error in get_samples_for_template({department}): {e}")
         import traceback
         traceback.print_exc()
         return []
