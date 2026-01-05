@@ -1088,9 +1088,10 @@ HTML_TEMPLATE = """
             </div>
         </div>
         {% endfor %}
+        {% endif %}
         
         {# Finance tables - grouped by filename #}
-        {% elif department == 'finance' %}
+        {% if department == 'finance' %}
         {# Render separate table for each document #}
         {% for filename, file_results in grouped_finance_results.items() %}
         <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
@@ -1458,7 +1459,6 @@ HTML_TEMPLATE = """
                 <a href="/contact.html?option=phase-1" class="btn btn-secondary" target="_parent">Book Your Phase 1 Sprint</a>
             </div>
         </div>
-        {% endif %}
         {% endif %}
     </div>
 
