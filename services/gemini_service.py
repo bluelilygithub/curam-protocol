@@ -19,6 +19,8 @@ Usage:
 Created: Phase 3.3c - Gemini Service Complete (FIXED)
 """
 
+print("🔥🔥🔥 GEMINI_SERVICE.PY LOADED - VERSION 2026-01-05-FINAL 🔥🔥🔥")
+
 # Import prompts from separate modules
 try:
     from services.prompts.finance_prompt import get_finance_prompt
