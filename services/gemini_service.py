@@ -1293,34 +1293,40 @@ HTML_TEMPLATE = """
         
         {# FTA DOCUMENT TABLE #}
         {% if has_fta %}
-        <table>
+        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
+            ✅ FTA Table Section Reached - has_fta is TRUE
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
             <thead>
-                <tr>
-                    <th>Item Description</th>
-                    <th>Country of Origin</th>
-                    <th>FTA Agreement</th>
-                    <th>Shipment Ref</th>
-                    <th>Invoice #</th>
-                    <th>Tariff Code</th>
-                    <th>Notes</th>
-                    <th>File</th>
+                <tr style="background-color: #0B1221; color: white;">
+                    <th style="padding: 10px; border: 1px solid #ddd;">Item Description</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Country of Origin</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">FTA Agreement</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Shipment Ref</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Invoice #</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Tariff Code</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">Notes</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">File</th>
                 </tr>
             </thead>
             <tbody>
             {% for row in results %}
-            <tr>
-                <td>{{ row.ItemDescription or row.Description or 'N/A' }}</td>
-                <td>{{ row.CountryOfOrigin or 'N/A' }}</td>
-                <td>{{ row.FTAAgreement or 'N/A' }}</td>
-                <td>{{ row.ShipmentRef or 'N/A' }}</td>
-                <td>{{ row.InvoiceNumber or 'N/A' }}</td>
-                <td>{{ row.TariffCode or 'N/A' }}</td>
-                <td>{{ row.Notes or 'N/A' }}</td>
-                <td style="font-size: 11px;">{{ row.Filename or 'N/A' }}</td>
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('ItemDescription', row.get('Description', 'N/A')) }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('CountryOfOrigin', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('FTAAgreement', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('ShipmentRef', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('InvoiceNumber', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('TariffCode', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('Notes', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-size: 11px;">{{ row.get('Filename', 'N/A') }}</td>
             </tr>
             {% endfor %}
             </tbody>
         </table>
+        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
+            ✅ FTA Table Rendered - {{ results|length }} rows displayed
+        </div>
         
         {# BILL OF LADING TABLE #}
         {% elif has_bol %}
@@ -1392,22 +1398,25 @@ HTML_TEMPLATE = """
         
         {# FALLBACK - GENERIC TABLE #}
         {% else %}
-        <table>
+        <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 10px; margin: 10px 0;">
+            ⚠️ Using FALLBACK Generic Table - has_fta={{ has_fta }}, has_bol={{ has_bol }}, has_packing={{ has_packing }}
+        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
             <thead>
-                <tr>
-                    {% for key in first_row.keys() if key != 'Filename' %}
-                    <th>{{ key }}</th>
+                <tr style="background-color: #0B1221; color: white;">
+                    {% for key in first_row.keys() if key != 'Filename' and key != '_document_type' %}
+                    <th style="padding: 10px; border: 1px solid #ddd;">{{ key }}</th>
                     {% endfor %}
-                    <th>File</th>
+                    <th style="padding: 10px; border: 1px solid #ddd;">File</th>
                 </tr>
             </thead>
             <tbody>
             {% for row in results %}
-            <tr>
-                {% for key in first_row.keys() if key != 'Filename' %}
-                <td>{{ row[key] or 'N/A' }}</td>
+            <tr style="border-bottom: 1px solid #ddd;">
+                {% for key in first_row.keys() if key != 'Filename' and key != '_document_type' %}
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get(key, 'N/A') }}</td>
                 {% endfor %}
-                <td style="font-size: 11px;">{{ row.Filename or 'N/A' }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-size: 11px;">{{ row.get('Filename', 'N/A') }}</td>
             </tr>
             {% endfor %}
             </tbody>
