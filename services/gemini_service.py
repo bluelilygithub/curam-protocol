@@ -1270,17 +1270,15 @@ HTML_TEMPLATE = """
             </div>
             <div style="overflow-x: auto;">
         
-        {# Count rows by document type for display #}
-        {% set fta_count = 0 %}
-        {% set bol_count = 0 %}
-        {% set packing_count = 0 %}
+        {# Use namespace to track document types (Jinja2 workaround for loop variables) #}
+        {% set ns = namespace(has_fta=false, has_bol=false, has_packing=false) %}
         {% for row in results %}
             {% if row.get('_document_type') == 'fta_list' %}
-                {% set fta_count = fta_count + 1 %}
+                {% set ns.has_fta = true %}
             {% elif row.get('_document_type') == 'bill_of_lading' %}
-                {% set bol_count = bol_count + 1 %}
+                {% set ns.has_bol = true %}
             {% elif row.get('_document_type') == 'packing_list' %}
-                {% set packing_count = packing_count + 1 %}
+                {% set ns.has_packing = true %}
             {% endif %}
         {% endfor %}
         
@@ -1288,9 +1286,9 @@ HTML_TEMPLATE = """
         <div style="background: #e7f3ff; border: 2px solid #2196F3; padding: 15px; margin: 20px 0; border-radius: 8px; font-size: 12px;">
             <strong>🔍 Template Detection Debug:</strong><br>
             Total results: {{ results|length }}<br>
-            FTA rows: {{ fta_count }}<br>
-            BOL rows: {{ bol_count }}<br>
-            Packing rows: {{ packing_count }}<br>
+            Has FTA: {{ 'Yes' if ns.has_fta else 'No' }}<br>
+            Has BOL: {{ 'Yes' if ns.has_bol else 'No' }}<br>
+            Has Packing: {{ 'Yes' if ns.has_packing else 'No' }}<br>
             First row keys: {{ results[0].keys()|list if results else 'No results' }}<br>
             First row _document_type: {{ results[0].get('_document_type', 'NOT FOUND') if results else 'N/A' }}<br>
             First row FTAAgreement: {{ results[0].get('FTAAgreement', 'NOT FOUND') if results else 'N/A' }}<br>
@@ -1298,9 +1296,9 @@ HTML_TEMPLATE = """
         </div>
         
         {# FTA DOCUMENT TABLE #}
-        {% if fta_count > 0 %}
+        {% if ns.has_fta %}
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ FTA Table Section Reached - {{ fta_count }} FTA row(s) found
+            ✅ FTA Table Section Reached
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
             <thead>
@@ -1333,14 +1331,14 @@ HTML_TEMPLATE = """
             </tbody>
         </table>
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ FTA Table Rendered - {{ fta_count }} rows displayed
+            ✅ FTA Table Rendered
         </div>
         {% endif %}
         
         {# BILL OF LADING TABLE #}
-        {% if bol_count > 0 %}
+        {% if ns.has_bol %}
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ BOL Table Section Reached - {{ bol_count }} BOL row(s) found
+            ✅ BOL Table Section Reached
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
             <thead>
@@ -1377,14 +1375,14 @@ HTML_TEMPLATE = """
             </tbody>
         </table>
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ BOL Table Rendered - {{ bol_count }} rows displayed
+            ✅ BOL Table Rendered
         </div>
         {% endif %}
         
         {# PACKING LIST TABLE #}
-        {% if packing_count > 0 %}
+        {% if ns.has_packing %}
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ Packing List Table Section Reached - {{ packing_count }} Packing row(s) found
+            ✅ Packing List Table Section Reached
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
             <thead>
@@ -1419,12 +1417,12 @@ HTML_TEMPLATE = """
             </tbody>
         </table>
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ Packing List Table Rendered - {{ packing_count }} rows displayed
+            ✅ Packing List Table Rendered
         </div>
         {% endif %}
         
         {# Show message if no tables were rendered #}
-        {% if fta_count == 0 and bol_count == 0 and packing_count == 0 %}
+        {% if not ns.has_fta and not ns.has_bol and not ns.has_packing %}
         <div style="background: #f8d7da; border: 2px solid #dc3545; padding: 15px; margin: 20px 0; border-radius: 8px;">
             ⚠️ WARNING: No recognized document types found in results!<br>
             Total rows: {{ results|length }}<br>
