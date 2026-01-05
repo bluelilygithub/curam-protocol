@@ -151,18 +151,37 @@ FINANCE_FIELDS = ["Vendor", "Date", "InvoiceNum", "Cost", "GST", "FinalAmount", 
 ENGINEERING_BEAM_FIELDS = ["Mark", "Size", "Qty", "Length", "Grade", "PaintSystem", "Comments"]
 ENGINEERING_COLUMN_FIELDS = ["Mark", "SectionType", "Size", "Length", "Grade", "BasePlate", "CapPlate", "Finish", "Comments"]
 TRANSMITTAL_FIELDS = ["DwgNo", "Rev", "Title", "Scale"]
-LOGISTICS_FIELDS = ["Shipper", "Consignee", "BLNumber", "Vessel", "ContainerNumber", "SealNumber", "Description", "Quantity", "Weight"]
+
+# FIXED: Logistics now supports multiple document types
+# These are the universal fields that work across FTA, BOL, Packing Lists
+LOGISTICS_FIELDS = [
+    "ShipmentRef", 
+    "InvoiceNumber", 
+    "ItemDescription", 
+    "CountryOfOrigin", 
+    "FTAAgreement", 
+    "TariffCode", 
+    "Notes",
+    # BOL fields (when applicable)
+    "BLNumber",
+    "Shipper", 
+    "Consignee", 
+    "Vessel", 
+    "ContainerNumber",
+    "PortOfLoading",
+    "PortOfDischarge"
+]
 
 DOC_FIELDS = {
     "finance": FINANCE_FIELDS,
     "engineering": ENGINEERING_BEAM_FIELDS,
     "transmittal": TRANSMITTAL_FIELDS,
-    "logistics": LOGISTICS_FIELDS
+    "logistics": LOGISTICS_FIELDS  # Now includes FTA fields!
 }
 
 ERROR_FIELD = {
     "finance": "Summary",
     "engineering": "Comments",
     "transmittal": "Title",
-    "logistics": "Description"
+    "logistics": "Notes"  # Changed from "Description" to "Notes" to match new fields
 }
