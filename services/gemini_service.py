@@ -1236,11 +1236,16 @@ HTML_TEMPLATE = """
         {% endfor %}
         {% endif %}
         
+        {# CRITICAL TEST - This should ALWAYS show if department is logistics #}
+        <div style="background: #000000; color: #00ff00; border: 5px solid #ff0000; padding: 30px; margin: 30px 0; font-size: 24px; font-weight: bold; text-align: center; z-index: 9999; position: relative;">
+            TEST: department="{{ department }}" | type={{ department.__class__.__name__ }} | == 'logistics'? {{ 'YES' if department == 'logistics' else 'NO' }}
+        </div>
+        
         {% if department == 'logistics' %}
         <!-- ============================================================ -->
         <!-- PROOF: NEW TEMPLATE DEPLOYED - VERSION 2026-01-05-FINAL -->
         <!-- ============================================================ -->
-        <div style="background: #ff0000; color: white; border: 4px solid #000; padding: 20px; margin: 20px 0; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: center;">
+        <div style="background: #ff0000; color: white; border: 4px solid #000; padding: 20px; margin: 20px 0; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: center; z-index: 9999; position: relative;">
             🚨 LOGISTICS SECTION REACHED - Template is active 🚨
         </div>
         {# Render logistics results - one table for all documents #}
