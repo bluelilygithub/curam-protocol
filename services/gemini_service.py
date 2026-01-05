@@ -1634,10 +1634,18 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                     # Transmittal returns a single object with multiple arrays
                     entries = [parsed] if isinstance(parsed, dict) else parsed if isinstance(parsed, list) else []
                 elif doc_type == "logistics":
-                    # Logistics returns multiple rows like finance
-                    entries = [parsed] if isinstance(parsed, dict) else [{}]
+                    # Logistics returns {document_type: "...", rows: [...]}
                     if isinstance(parsed, dict) and "rows" in parsed:
                         entries = parsed["rows"]
+                        # Add document_type to each row for display purposes
+                        document_type = parsed.get('document_type', 'unknown')
+                        for entry in entries:
+                            if isinstance(entry, dict):
+                                entry['_document_type'] = document_type
+                        action_log.append(f"Detected logistics document type: {document_type}")
+                    else:
+                        # Fallback: treat as regular array
+                        entries = parsed if isinstance(parsed, list) else [parsed] if isinstance(parsed, dict) else []
                 else:
                     entries = parsed if isinstance(parsed, list) else [parsed] if isinstance(parsed, dict) else []
 
