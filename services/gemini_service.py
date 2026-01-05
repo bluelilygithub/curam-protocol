@@ -127,12 +127,12 @@ def build_prompt(text, doc_type, sector_slug=None):
         from database import build_combined_prompt
         db_prompt = build_combined_prompt(doc_type, sector_slug, text)
         if db_prompt:
-            print(f"✓ Using database prompt for {doc_type}")
+            print(f"âœ“ Using database prompt for {doc_type}")
             return db_prompt
     except Exception as e:
-        print(f"⚠ Database failed: {e}")
+        print(f"âš  Database failed: {e}")
     
-    print(f"⚠ Using hardcoded fallback for {doc_type}")
+    print(f"âš  Using hardcoded fallback for {doc_type}")
     
     if doc_type == "engineering":
         # Use modular engineering prompt
@@ -468,7 +468,7 @@ HTML_TEMPLATE = """
             display: inline-block;
         }
         .low-confidence::before {
-            content: "⚠️ ";
+            content: "âš ï¸ ";
             font-weight: 600;
         }
         .low-confidence-text {
@@ -480,7 +480,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .low-confidence-text::before {
-            content: "⚠️ LOW CONFIDENCE - REVIEW REQUIRED";
+            content: "âš ï¸ LOW CONFIDENCE - REVIEW REQUIRED";
             display: block;
             font-size: 10px;
             font-weight: 700;
@@ -510,7 +510,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .critical-error-item::before {
-            content: "Ã¢ÂÅ’";
+            content: "ÃƒÂ¢Ã‚ÂÃ…â€™";
             position: absolute;
             left: 0;
         }
@@ -526,7 +526,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .requires-manual-verification::before {
-            content: "⚠️ MANUAL VERIFICATION REQUIRED - DO NOT USE EXTRACTED VALUES";
+            content: "âš ï¸ MANUAL VERIFICATION REQUIRED - DO NOT USE EXTRACTED VALUES";
             display: block;
             background-color: #dc3545;
             color: white;
@@ -580,7 +580,7 @@ HTML_TEMPLATE = """
             <h3>1. Select Sample Files</h3>
             {% for dept_key, group in sample_files.items() %}
             <div class="sample-group" data-department="{{ dept_key }}">
-                <strong>{{ group.label }}</strong> · {{ group.description }}
+                <strong>{{ group.label }}</strong> Â· {{ group.description }}
                 <div style="margin-top: 10px;">
                     {% for sample in group.samples %}
                     {% if dept_key == 'transmittal' %}
@@ -624,7 +624,7 @@ HTML_TEMPLATE = """
         </div>
         
         <div style="background: #e3f2fd; border: 2px solid #2196f3; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: monospace; font-size: 14px;">
-            <strong>🔍 UNIVERSAL DEBUG:</strong><br>
+            <strong>ðŸ” UNIVERSAL DEBUG:</strong><br>
             <strong>department:</strong> "{{ department }}"<br>
             <strong>results length:</strong> {{ results|length }}<br>
             {% if results and results|length > 0 %}
@@ -670,7 +670,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=DrawingRegister" class="btn btn-export" style="text-decoration: none;">📥 Export Drawing Register to CSV</a>
+                <a href="/export_transmittal_csv?category=DrawingRegister" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Drawing Register to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -705,7 +705,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Standards" class="btn btn-export" style="text-decoration: none;">📥 Export Standards to CSV</a>
+                <a href="/export_transmittal_csv?category=Standards" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Standards to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -740,7 +740,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Materials" class="btn btn-export" style="text-decoration: none;">📥 Export Materials to CSV</a>
+                <a href="/export_transmittal_csv?category=Materials" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Materials to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -779,7 +779,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Connections" class="btn btn-export" style="text-decoration: none;">📥 Export Connections to CSV</a>
+                <a href="/export_transmittal_csv?category=Connections" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Connections to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -827,7 +827,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Assumptions" class="btn btn-export" style="text-decoration: none;">📥 Export Assumptions to CSV</a>
+                <a href="/export_transmittal_csv?category=Assumptions" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Assumptions to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -866,7 +866,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=VOSFlags" class="btn btn-export" style="text-decoration: none;">📥 Export V.O.S. Flags to CSV</a>
+                <a href="/export_transmittal_csv?category=VOSFlags" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export V.O.S. Flags to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -912,7 +912,7 @@ HTML_TEMPLATE = """
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=CrossReferences" class="btn btn-export" style="text-decoration: none;">📥 Export Cross-References to CSV</a>
+                <a href="/export_transmittal_csv?category=CrossReferences" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Cross-References to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -1030,7 +1030,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Size' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">⚠️ Size Error:</div>
+                                    <div class="critical-error-header">âš ï¸ Size Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -1043,7 +1043,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Quantity' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">⚠️ Quantity Error:</div>
+                                    <div class="critical-error-header">âš ï¸ Quantity Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -1057,7 +1057,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Grade' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">⚠️ Grade Error:</div>
+                                    <div class="critical-error-header">âš ï¸ Grade Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -1068,13 +1068,13 @@ HTML_TEMPLATE = """
                     <td>
                         {% if row.get('rejection_reason') %}
                         <div class="rejection-notice">
-                            ⚠ {{ row.rejection_reason }}
+                            âš  {{ row.rejection_reason }}
                         </div>
                         {% endif %}
                         {% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}
                         {% if row.get('critical_errors') and row.get('requires_manual_verification') %}
                         <div class="critical-error" style="margin-top: 8px;">
-                            <div class="critical-error-header">⚠ Critical Errors - Manual Verification Required:</div>
+                            <div class="critical-error-header">âš  Critical Errors - Manual Verification Required:</div>
                             {% for error in row.critical_errors %}
                             <div class="critical-error-item">{{ error }}</div>
                             {% endfor %}
@@ -1165,7 +1165,7 @@ HTML_TEMPLATE = """
                 </div>
                 {% if row.get('Flags') and row.Flags|length > 0 %}
                 <div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;">
-                    <strong style="color: #856404;">⚠️ Flags:</strong>
+                    <strong style="color: #856404;">âš ï¸ Flags:</strong>
                     <ul style="margin: 5px 0 0 0; padding-left: 20px; color: #856404;">
                         {% for flag in row.Flags %}
                         <li>{{ flag }}</li>
@@ -1237,10 +1237,16 @@ HTML_TEMPLATE = """
         {% endif %}
         
         {% if department == 'logistics' %}
+        <!-- ============================================================ -->
+        <!-- PROOF: NEW TEMPLATE DEPLOYED - VERSION 2026-01-05-FINAL -->
+        <!-- ============================================================ -->
+        <div style="background: #ff0000; color: white; border: 4px solid #000; padding: 20px; margin: 20px 0; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: center;">
+            🚨 PROOF: NEW TEMPLATE DEPLOYED - 2026-01-05-FINAL 🚨
+        </div>
         {# Render logistics results - one table for all documents #}
         {# DEBUG INFO #}
         <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 8px;">
-            <strong>🔍 DEBUG - Logistics Data:</strong><br>
+            <strong>ðŸ” DEBUG - Logistics Data:</strong><br>
             <strong>results exists:</strong> {{ 'Yes' if results else 'No' }}<br>
             <strong>results type:</strong> {{ results.__class__.__name__ if results else 'None' }}<br>
             <strong>results length:</strong> {{ results|length if results else 0 }}<br>
@@ -1254,41 +1260,142 @@ HTML_TEMPLATE = """
         <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
             <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 16px 20px;">
                 <div style="font-size: 18px; font-weight: 600;">📦 Logistics Documents Extracted</div>
-                <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">{{ results|length }} shipment(s) extracted</div>
+                <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">{{ results|length }} row(s) extracted</div>
             </div>
             <div style="overflow-x: auto;">
+        
+        {# Detect document type from first row #}
+        {% set first_row = results[0] if results else {} %}
+        {% set has_fta = 'FTAAgreement' in first_row or 'CountryOfOrigin' in first_row or 'ItemDescription' in first_row %}
+        {% set has_bol = 'BLNumber' in first_row or 'Shipper' in first_row or 'Vessel' in first_row %}
+        {% set has_packing = 'CartonNumber' in first_row or 'Dimensions' in first_row %}
+        
+        {# FTA DOCUMENT TABLE #}
+        {% if has_fta %}
         <table>
             <thead>
                 <tr>
-                    <th>Shipper</th>
-                    <th>Consignee</th>
-                    <th>B/L Number</th>
-                    <th>Vessel</th>
-                    <th>Container #</th>
-                    <th>Seal #</th>
-                    <th>Description</th>
-                    <th>Quantity</th>
-                    <th>Weight</th>
+                    <th>Item Description</th>
+                    <th>Country of Origin</th>
+                    <th>FTA Agreement</th>
+                    <th>Shipment Ref</th>
+                    <th>Invoice #</th>
+                    <th>Tariff Code</th>
+                    <th>Notes</th>
+                    <th>File</th>
                 </tr>
             </thead>
             <tbody>
             {% for row in results %}
             <tr>
-                <td>{{ row.Shipper or 'N/A' }}</td>
-                <td>{{ row.Consignee or 'N/A' }}</td>
-                <td>{{ row.BLNumber or 'N/A' }}</td>
-                <td>{{ row.Vessel or 'N/A' }}</td>
-                <td>{{ row.ContainerNumber or 'N/A' }}</td>
-                <td>{{ row.SealNumber or 'N/A' }}</td>
-                <td>{{ row.Description or 'N/A' }}</td>
-                <td>{{ row.Quantity or 'N/A' }}</td>
-                <td>{{ row.Weight or 'N/A' }}</td>
+                <td>{{ row.ItemDescription or row.Description or 'N/A' }}</td>
+                <td>{{ row.CountryOfOrigin or 'N/A' }}</td>
+                <td>{{ row.FTAAgreement or 'N/A' }}</td>
+                <td>{{ row.ShipmentRef or 'N/A' }}</td>
+                <td>{{ row.InvoiceNumber or 'N/A' }}</td>
+                <td>{{ row.TariffCode or 'N/A' }}</td>
+                <td>{{ row.Notes or 'N/A' }}</td>
+                <td style="font-size: 11px;">{{ row.Filename or 'N/A' }}</td>
             </tr>
             {% endfor %}
             </tbody>
         </table>
+        
+        {# BILL OF LADING TABLE #}
+        {% elif has_bol %}
+        <table>
+            <thead>
+                <tr>
+                    <th>B/L Number</th>
+                    <th>Shipper</th>
+                    <th>Consignee</th>
+                    <th>Vessel</th>
+                    <th>Container #</th>
+                    <th>Port of Loading</th>
+                    <th>Port of Discharge</th>
+                    <th>Description</th>
+                    <th>Weight</th>
+                    <th>File</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in results %}
+            <tr>
+                <td>{{ row.BLNumber or 'N/A' }}</td>
+                <td>{{ row.Shipper or 'N/A' }}</td>
+                <td>{{ row.Consignee or 'N/A' }}</td>
+                <td>{{ row.Vessel or 'N/A' }}</td>
+                <td>{{ row.ContainerNumber or 'N/A' }}</td>
+                <td>{{ row.PortOfLoading or 'N/A' }}</td>
+                <td>{{ row.PortOfDischarge or 'N/A' }}</td>
+                <td>{{ row.CargoDescription or row.Description or 'N/A' }}</td>
+                <td>{{ row.GrossWeight or row.Weight or 'N/A' }}</td>
+                <td style="font-size: 11px;">{{ row.Filename or 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        
+        {# PACKING LIST TABLE #}
+        {% elif has_packing %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Carton #</th>
+                    <th>PO Number</th>
+                    <th>Item Description</th>
+                    <th>Quantity</th>
+                    <th>Dimensions</th>
+                    <th>Gross Weight</th>
+                    <th>Net Weight</th>
+                    <th>Volume</th>
+                    <th>File</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in results %}
+            <tr>
+                <td>{{ row.CartonNumber or 'N/A' }}</td>
+                <td>{{ row.PONumber or 'N/A' }}</td>
+                <td>{{ row.ItemDescription or 'N/A' }}</td>
+                <td>{{ row.Quantity or 'N/A' }}</td>
+                <td>{{ row.Dimensions or 'N/A' }}</td>
+                <td>{{ row.GrossWeight or 'N/A' }}</td>
+                <td>{{ row.NetWeight or 'N/A' }}</td>
+                <td>{{ row.Volume or 'N/A' }}</td>
+                <td style="font-size: 11px;">{{ row.Filename or 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        
+        {# FALLBACK - GENERIC TABLE #}
+        {% else %}
+        <table>
+            <thead>
+                <tr>
+                    {% for key in first_row.keys() if key != 'Filename' %}
+                    <th>{{ key }}</th>
+                    {% endfor %}
+                    <th>File</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in results %}
+            <tr>
+                {% for key in first_row.keys() if key != 'Filename' %}
+                <td>{{ row[key] or 'N/A' }}</td>
+                {% endfor %}
+                <td style="font-size: 11px;">{{ row.Filename or 'N/A' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+        
             </div>
         </div>
+
         {% endif %}
         {% endif %}
         
@@ -1309,7 +1416,7 @@ HTML_TEMPLATE = """
         </div>
         {% endif %}
             <div class="button-group">
-                <a href="/export_csv" class="btn btn-export">📥 Export to CSV</a>
+                <a href="/export_csv" class="btn btn-export">ðŸ“¥ Export to CSV</a>
                 <a href="/contact.html?option=phase-1" class="btn btn-secondary" target="_parent">Book Your Phase 1 Sprint</a>
             </div>
         </div>
@@ -1548,7 +1655,7 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                     if not image_file.exists():
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Image file not found: {image_path}"
-                        action_log.append(f"✗ Image file not found: {image_path}")
+                        action_log.append(f"âœ— Image file not found: {image_path}")
                         continue
                     
                     # ENHANCED: Table-optimized image preprocessing
@@ -1557,7 +1664,7 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                         
                         # Process image: enhance for tables, assess quality
                         enhanced_path, ocr_text, quality = process_image_for_extraction(image_path)
-                        action_log.append(f"📊 Image quality: {quality['quality_level']} (sharpness: {quality['sharpness']:.1f})")
+                        action_log.append(f"ðŸ“Š Image quality: {quality['quality_level']} (sharpness: {quality['sharpness']:.1f})")
                         
                         # Use enhanced image
                         img = Image.open(enhanced_path)
@@ -1569,7 +1676,7 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
 CRITICAL - COLUMN MAPPING:
 Look at the table carefully. Identify these columns by their headers:
 1. Mark (member ID like "B1", "NB-01", "C1")
-2. Size/Section (CRITICAL - formats like "310UC158", "250UB37.2", "WB1220×6.0")
+2. Size/Section (CRITICAL - formats like "310UC158", "250UB37.2", "WB1220Ã—6.0")
 3. Qty (quantity - numbers)
 4. Length (in mm)
 5. Grade (steel grade like "300", "300PLUS", "350L0")
@@ -1578,7 +1685,7 @@ Look at the table carefully. Identify these columns by their headers:
 
 THE SIZE COLUMN IS CRITICAL:
 - Never mark Size as "N/A" unless the cell is truly empty
-- Common patterns: "310UC158", "250UB37.2", "200PFC", "WB1220×6.0"
+- Common patterns: "310UC158", "250UB37.2", "200PFC", "WB1220Ã—6.0"
 - Extract EXACTLY what you see in each Size cell
 - The Size column is usually the 2nd column after Mark
 
@@ -1590,19 +1697,19 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                             content_parts = [img, prompt]
                         
                         response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
-                        action_log.append(f"✓ Vision API (table-optimized) succeeded with {model_name}")
+                        action_log.append(f"âœ“ Vision API (table-optimized) succeeded with {model_name}")
                         
                     except ImportError:
                         # Fallback: use original image without preprocessing
-                        action_log.append("⚠ Image preprocessing unavailable - using original")
+                        action_log.append("âš  Image preprocessing unavailable - using original")
                         img = Image.open(image_path)
                         content_parts = [img, prompt]
                         response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
-                        action_log.append(f"✓ Vision API call succeeded with {model_name}")
+                        action_log.append(f"âœ“ Vision API call succeeded with {model_name}")
                     except Exception as img_error:
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Failed to process image: {img_error}"
-                        action_log.append(f"✗ Failed to process image: {img_error}")
+                        action_log.append(f"âœ— Failed to process image: {img_error}")
                         continue
                 else:
                     # Regular text-based processing
@@ -1692,10 +1799,10 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                             validation_report = validate_schedule(entries, schedule_type)
                             
                             # Log validation results
-                            action_log.append(f"📋 Validation: {validation_report['valid_rows']}/{validation_report['total_rows']} rows valid")
+                            action_log.append(f"ðŸ“‹ Validation: {validation_report['valid_rows']}/{validation_report['total_rows']} rows valid")
                             
                             if validation_report['rows_with_corrections'] > 0:
-                                action_log.append(f"✓ Applied {validation_report['rows_with_corrections']} auto-correction(s)")
+                                action_log.append(f"âœ“ Applied {validation_report['rows_with_corrections']} auto-correction(s)")
                                 # Use corrected entries
                                 entries = validation_report['corrected_entries']
                                 
@@ -1704,18 +1811,18 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                                     if row_val['corrections']:
                                         mark = row_val['corrected_row'].get('Mark', f"Row {row_val['row_index']}")
                                         for correction in row_val['corrections']:
-                                            action_log.append(f"  • {mark}: {correction}")
+                                            action_log.append(f"  â€¢ {mark}: {correction}")
                             
                             if validation_report['rows_with_errors'] > 0:
-                                action_log.append(f"⚠ {validation_report['rows_with_errors']} row(s) have errors requiring manual review")
+                                action_log.append(f"âš  {validation_report['rows_with_errors']} row(s) have errors requiring manual review")
                             
                             if validation_report['rows_with_warnings'] > 0:
-                                action_log.append(f"⚠ {validation_report['rows_with_warnings']} row(s) have warnings")
+                                action_log.append(f"âš  {validation_report['rows_with_warnings']} row(s) have warnings")
                                 
                         except ImportError:
-                            action_log.append("⚠ Engineering validator unavailable - skipping validation")
+                            action_log.append("âš  Engineering validator unavailable - skipping validation")
                         except Exception as val_error:
-                            action_log.append(f"⚠ Validation error: {val_error}")
+                            action_log.append(f"âš  Validation error: {val_error}")
                     
                     return entries, None, resolved_model, attempt_log, action_log, schedule_type
 
