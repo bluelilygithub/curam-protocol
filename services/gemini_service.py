@@ -1228,32 +1228,8 @@ HTML_TEMPLATE = """
         {% endif %}
         
         {% if department == 'logistics' %}
-        <!-- ============================================================ -->
-        <!-- PROOF: NEW TEMPLATE DEPLOYED - VERSION 2026-01-05-FINAL -->
-        <!-- ============================================================ -->
-        <div style="background: #ff0000; color: white; border: 4px solid #000; padding: 20px; margin: 20px 0; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: center; z-index: 9999; position: relative;">
-            [LOGISTICS] Section Reached - Template is Active
-        </div>
         {# Render logistics results - one table for all documents #}
-        {# DEBUG INFO #}
-        <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 8px;">
-            <strong> DEBUG - Logistics Data:</strong><br>
-            <strong>results exists:</strong> {{ 'Yes' if results else 'No' }}<br>
-            <strong>results type:</strong> {{ results.__class__.__name__ if results else 'None' }}<br>
-            <strong>results length:</strong> {{ results|length if results else 0 }}<br>
-            <strong>department value:</strong> "{{ department }}"<br>
-            {% if results and results|length > 0 %}
-            <strong>First result keys:</strong> {{ results[0].keys()|list if results[0] is mapping else 'Not a dict' }}<br>
-            <strong>First result:</strong> {{ results[0] }}<br>
-            {% endif %}
-        </div>
-        <div style="background: #f0f0f0; border: 2px solid #666; padding: 10px; margin: 10px 0;">
-            <strong>BEFORE results check:</strong> results={{ 'EXISTS' if results else 'EMPTY/NONE' }}, length={{ results|length if results else 0 }}
-        </div>
         {% if results %}
-        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            [OK] Results Check Passed - results is truthy, length={{ results|length }}
-        </div>
         <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
             <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 16px 20px;">
                 <div style="font-size: 18px; font-weight: 600;">Logistics Documents Extracted</div>
@@ -1273,24 +1249,9 @@ HTML_TEMPLATE = """
             {% endif %}
         {% endfor %}
         
-        {# Debug output for detection #}
-        <div style="background: #e7f3ff; border: 2px solid #2196F3; padding: 15px; margin: 20px 0; border-radius: 8px; font-size: 12px;">
-            <strong>Template Detection Debug:</strong><br>
-            Total results: {{ results|length }}<br>
-            Has FTA: {{ 'Yes' if ns.has_fta else 'No' }}<br>
-            Has BOL: {{ 'Yes' if ns.has_bol else 'No' }}<br>
-            Has Packing: {{ 'Yes' if ns.has_packing else 'No' }}<br>
-            First row keys: {{ results[0].keys()|list if results else 'No results' }}<br>
-            First row _document_type: {{ results[0].get('_document_type', 'NOT FOUND') if results else 'N/A' }}<br>
-            First row FTAAgreement: {{ results[0].get('FTAAgreement', 'NOT FOUND') if results else 'N/A' }}<br>
-            First row BLNumber: {{ results[0].get('BLNumber', 'NOT FOUND') if results else 'N/A' }}
-        </div>
         
         {# FTA DOCUMENT TABLE #}
         {% if ns.has_fta %}
-        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            [OK] FTA Table Section Reached
-        </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
             <thead>
                 <tr style="background-color: #0B1221; color: white;">
@@ -1321,16 +1282,10 @@ HTML_TEMPLATE = """
             {% endfor %}
             </tbody>
         </table>
-        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            [OK] FTA Table Rendered
-        </div>
         {% endif %}
         
         {# BILL OF LADING TABLE #}
         {% if ns.has_bol %}
-        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            [OK] BOL Table Section Reached
-        </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
             <thead>
                 <tr style="background-color: #0B1221; color: white;">
@@ -1365,16 +1320,10 @@ HTML_TEMPLATE = """
             {% endfor %}
             </tbody>
         </table>
-        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            [OK] BOL Table Rendered
-        </div>
         {% endif %}
         
         {# PACKING LIST TABLE #}
         {% if ns.has_packing %}
-        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            [OK] Packing List Table Section Reached
-        </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
             <thead>
                 <tr style="background-color: #0B1221; color: white;">
@@ -1407,9 +1356,6 @@ HTML_TEMPLATE = """
             {% endfor %}
             </tbody>
         </table>
-        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            [OK] Packing List Table Rendered
-        </div>
         {% endif %}
         
         {# Show message if no tables were rendered #}
