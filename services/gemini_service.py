@@ -1270,17 +1270,16 @@ HTML_TEMPLATE = """
             </div>
             <div style="overflow-x: auto;">
         
-        {# Group results by document type - Jinja2 compatible approach #}
-        {# Count each type first #}
+        {# Count rows by document type for display #}
         {% set fta_count = 0 %}
         {% set bol_count = 0 %}
         {% set packing_count = 0 %}
         {% for row in results %}
-            {% if row.get('FTAAgreement') is not none or (row.get('CountryOfOrigin') is not none and row.get('ItemDescription') is not none) %}
+            {% if row.get('_document_type') == 'fta_list' %}
                 {% set fta_count = fta_count + 1 %}
-            {% elif row.get('BLNumber') is not none or row.get('Shipper') is not none or row.get('Vessel') is not none %}
+            {% elif row.get('_document_type') == 'bill_of_lading' %}
                 {% set bol_count = bol_count + 1 %}
-            {% elif row.get('CartonNumber') is not none or row.get('Dimensions') is not none %}
+            {% elif row.get('_document_type') == 'packing_list' %}
                 {% set packing_count = packing_count + 1 %}
             {% endif %}
         {% endfor %}
@@ -1289,10 +1288,11 @@ HTML_TEMPLATE = """
         <div style="background: #e7f3ff; border: 2px solid #2196F3; padding: 15px; margin: 20px 0; border-radius: 8px; font-size: 12px;">
             <strong>🔍 Template Detection Debug:</strong><br>
             Total results: {{ results|length }}<br>
-            FTA count: {{ fta_count }}<br>
-            BOL count: {{ bol_count }}<br>
-            Packing count: {{ packing_count }}<br>
+            FTA rows: {{ fta_count }}<br>
+            BOL rows: {{ bol_count }}<br>
+            Packing rows: {{ packing_count }}<br>
             First row keys: {{ results[0].keys()|list if results else 'No results' }}<br>
+            First row _document_type: {{ results[0].get('_document_type', 'NOT FOUND') if results else 'N/A' }}<br>
             First row FTAAgreement: {{ results[0].get('FTAAgreement', 'NOT FOUND') if results else 'N/A' }}<br>
             First row BLNumber: {{ results[0].get('BLNumber', 'NOT FOUND') if results else 'N/A' }}
         </div>
@@ -1317,7 +1317,7 @@ HTML_TEMPLATE = """
             </thead>
             <tbody>
             {% for row in results %}
-                {% if row.get('FTAAgreement') is not none or (row.get('CountryOfOrigin') is not none and row.get('ItemDescription') is not none) %}
+                {% if row.get('_document_type') == 'fta_list' %}
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('ItemDescription', row.get('Description', 'N/A')) }}</td>
                 <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('CountryOfOrigin', 'N/A') }}</td>
@@ -1359,7 +1359,7 @@ HTML_TEMPLATE = """
             </thead>
             <tbody>
             {% for row in results %}
-                {% if row.get('BLNumber') is not none or row.get('Shipper') is not none or row.get('Vessel') is not none %}
+                {% if row.get('_document_type') == 'bill_of_lading' %}
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('BLNumber', 'N/A') }}</td>
                 <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('Shipper', 'N/A') }}</td>
@@ -1402,7 +1402,7 @@ HTML_TEMPLATE = """
             </thead>
             <tbody>
             {% for row in results %}
-                {% if row.get('CartonNumber') is not none or row.get('Dimensions') is not none %}
+                {% if row.get('_document_type') == 'packing_list' %}
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('CartonNumber', 'N/A') }}</td>
                 <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('PONumber', 'N/A') }}</td>
