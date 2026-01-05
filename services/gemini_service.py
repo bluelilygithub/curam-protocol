@@ -158,7 +158,6 @@ def build_prompt(text, doc_type, sector_slug=None):
             return get_finance_prompt(text)
         # Fallback to basic prompt if module not available
         return f"Extract invoice data from: {text}"
-    """
 
 
 # --- HTML TEMPLATE ---
