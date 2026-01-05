@@ -24,11 +24,13 @@ try:
     from services.prompts.finance_prompt import get_finance_prompt
     from services.prompts.engineering_prompt import get_engineering_prompt
     from services.prompts.transmittal_prompt import get_transmittal_prompt
+    from services.prompts.logistics_prompt import get_logistics_prompt
 except ImportError:
     # Fallback if prompts module not available
     get_finance_prompt = None
     get_engineering_prompt = None
     get_transmittal_prompt = None
+    get_logistics_prompt = None
 
 import os
 import json
@@ -145,39 +147,11 @@ def build_prompt(text, doc_type, sector_slug=None):
         # Fallback to basic prompt if module not available
         return f"Extract drawing register data from: {text}"
     elif doc_type == "logistics":
-        return f"""
-Extract data from this Bill of Lading / shipping document and return structured data.
-
-Extract multiple rows if the document contains multiple containers or shipment lines.
-
-Return ONLY valid JSON in this exact format:
-{{
-  "rows": [
-    {{
-      "Shipper": "Shipper company name",
-      "Consignee": "Consignee company name",
-      "BLNumber": "Bill of Lading number",
-      "Vessel": "Vessel name and voyage number",
-      "ContainerNumber": "Container number (e.g., MSKU9922334)",
-      "SealNumber": "Seal number",
-      "Description": "Cargo description",
-      "Quantity": "Number of packages/units",
-      "Weight": "Gross weight with unit (e.g., 24,500 KG)"
-    }}
-  ]
-}}
-
-EXTRACTION RULES:
-- Extract one row per container or shipment line
-- If document has multiple containers, create multiple rows
-- Use "N/A" for any missing fields
-- Preserve exact formatting of B/L numbers, container numbers, and seal numbers
-- Include units with weight (KG, LBS, MT, etc.)
-
-Return ONLY the JSON, no markdown, no explanation, no code blocks.
-
-DOCUMENT TEXT:
-{text}
+        # Use modular logistics prompt
+        if get_logistics_prompt:
+            return get_logistics_prompt(text)
+        # Fallback to basic prompt if module not available
+        return f"Extract Bill of Lading data from: {text}"
     else:
         # Use modular finance prompt
         if get_finance_prompt:
