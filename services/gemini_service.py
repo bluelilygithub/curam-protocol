@@ -624,7 +624,7 @@ HTML_TEMPLATE = """
         </div>
         
         <div style="background: #e3f2fd; border: 2px solid #2196f3; padding: 10px; margin: 10px 0; border-radius: 4px; font-family: monospace; font-size: 14px;">
-            <strong>ðŸ” UNIVERSAL DEBUG:</strong><br>
+            <strong> UNIVERSAL DEBUG:</strong><br>
             <strong>department:</strong> "{{ department }}"<br>
             <strong>results length:</strong> {{ results|length }}<br>
             {% if results and results|length > 0 %}
@@ -1241,12 +1241,12 @@ HTML_TEMPLATE = """
         <!-- PROOF: NEW TEMPLATE DEPLOYED - VERSION 2026-01-05-FINAL -->
         <!-- ============================================================ -->
         <div style="background: #ff0000; color: white; border: 4px solid #000; padding: 20px; margin: 20px 0; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: center;">
-            🚨 PROOF: NEW TEMPLATE DEPLOYED - 2026-01-05-FINAL 🚨
+            🚨 LOGISTICS SECTION REACHED - Template is active 🚨
         </div>
         {# Render logistics results - one table for all documents #}
         {# DEBUG INFO #}
         <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 8px;">
-            <strong>ðŸ” DEBUG - Logistics Data:</strong><br>
+            <strong> DEBUG - Logistics Data:</strong><br>
             <strong>results exists:</strong> {{ 'Yes' if results else 'No' }}<br>
             <strong>results type:</strong> {{ results.__class__.__name__ if results else 'None' }}<br>
             <strong>results length:</strong> {{ results|length if results else 0 }}<br>
@@ -1256,7 +1256,13 @@ HTML_TEMPLATE = """
             <strong>First result:</strong> {{ results[0] }}<br>
             {% endif %}
         </div>
+        <div style="background: #f0f0f0; border: 2px solid #666; padding: 10px; margin: 10px 0;">
+            <strong>BEFORE results check:</strong> results={{ 'EXISTS' if results else 'EMPTY/NONE' }}, length={{ results|length if results else 0 }}
+        </div>
         {% if results %}
+        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
+            ✅ RESULTS CHECK PASSED - results is truthy, length={{ results|length }}
+        </div>
         <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
             <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 16px 20px;">
                 <div style="font-size: 18px; font-weight: 600;">📦 Logistics Documents Extracted</div>
