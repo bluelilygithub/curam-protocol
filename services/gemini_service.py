@@ -35,9 +35,15 @@ except ImportError:
 # Import template sections from separate modules
 try:
     from services.templates.logistics_template import get_logistics_template
+    from services.templates.transmittal_template import get_transmittal_template
+    from services.templates.engineering_template import get_engineering_template
+    from services.templates.finance_template import get_finance_template
 except ImportError:
     # Fallback if templates module not available
     get_logistics_template = None
+    get_transmittal_template = None
+    get_engineering_template = None
+    get_finance_template = None
 
 import os
 import json
@@ -169,14 +175,21 @@ def build_prompt(text, doc_type, sector_slug=None):
 
 # --- HTML TEMPLATE ---
 
-# Get logistics template section
-_logistics_template_section = ""
+# Get template sections
+_template_sections = {}
 try:
     from services.templates.logistics_template import get_logistics_template
-    _logistics_template_section = get_logistics_template()
+    from services.templates.transmittal_template import get_transmittal_template
+    from services.templates.engineering_template import get_engineering_template
+    from services.templates.finance_template import get_finance_template
+    
+    _template_sections['logistics'] = get_logistics_template()
+    _template_sections['transmittal'] = get_transmittal_template()
+    _template_sections['engineering'] = get_engineering_template()
+    _template_sections['finance'] = get_finance_template()
 except ImportError:
-    # Fallback: will use inline template
-    _logistics_template_section = None
+    # Fallback: will use inline templates
+    pass
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -1531,38 +1544,55 @@ HTML_TEMPLATE = """
 """
 
 # Inject modular template sections into HTML_TEMPLATE
-if _logistics_template_section:
-    # Replace the logistics section with the modular template
-    # Find where logistics section starts
-    logistics_start_marker = "        {% if department == 'logistics' %}"
-    logistics_start = HTML_TEMPLATE.find(logistics_start_marker)
+import re
+
+def replace_template_section(template, section_name, section_template):
+    """Replace a department section in the template with modular version"""
+    if not section_template:
+        return template
     
-    if logistics_start != -1:
-        # Find where summary-card starts (this is after the logistics section)
-        summary_card_marker = "        <div class=\"summary-card\">"
-        summary_card_start = HTML_TEMPLATE.find(summary_card_marker, logistics_start)
+    # Find where section starts
+    start_marker = f"        {{% if department == '{section_name}' %}}"
+    start_pos = template.find(start_marker)
+    
+    if start_pos == -1:
+        # Try alternative patterns
+        if section_name == 'transmittal':
+            start_marker = "        {% if department == 'transmittal' and transmittal_data %}"
+            start_pos = template.find(start_marker)
+        if start_pos == -1:
+            return template
+    
+    # Find where summary-card starts (this is after all department sections)
+    summary_card_marker = "        <div class=\"summary-card\">"
+    summary_card_start = template.find(summary_card_marker, start_pos)
+    
+    if summary_card_start != -1:
+        # Find the matching {% endif %} that closes the section
+        section_before_summary = template[start_pos:summary_card_start]
         
-        if summary_card_start != -1:
-            # Find the matching {% endif %} that closes the logistics section
-            # Look backwards from summary-card to find the last {% endif %} before it
-            section_before_summary = HTML_TEMPLATE[logistics_start:summary_card_start]
+        # Find all {% endif %} positions in this section
+        endif_pattern = r'        {%\s*endif\s*%}'
+        endif_matches = list(re.finditer(endif_pattern, section_before_summary))
+        
+        if endif_matches:
+            # The last {% endif %} should close the section
+            last_endif_match = endif_matches[-1]
+            end_pos = start_pos + last_endif_match.end()
             
-            # Find all {% endif %} positions in this section
-            import re
-            endif_pattern = r'        {%\s*endif\s*%}'
-            endif_matches = list(re.finditer(endif_pattern, section_before_summary))
-            
-            if endif_matches:
-                # The last {% endif %} should close the logistics section
-                last_endif_match = endif_matches[-1]
-                logistics_end = logistics_start + last_endif_match.end()
-                
-                # Replace the section (keep the same indentation)
-                HTML_TEMPLATE = (
-                    HTML_TEMPLATE[:logistics_start] + 
-                    _logistics_template_section.rstrip() + "\n        " + 
-                    HTML_TEMPLATE[logistics_end:]
-                )
+            # Replace the section (keep the same indentation)
+            template = (
+                template[:start_pos] + 
+                section_template.rstrip() + "\n        " + 
+                template[end_pos:]
+            )
+    
+    return template
+
+# Replace all department sections (order matters - do transmittal first as it's largest)
+for dept in ['transmittal', 'engineering', 'finance', 'logistics']:
+    if dept in _template_sections:
+        HTML_TEMPLATE = replace_template_section(HTML_TEMPLATE, dept, _template_sections[dept])
 
 # --- HELPER FUNCTIONS ---
 def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
