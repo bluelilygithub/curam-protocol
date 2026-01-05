@@ -1270,35 +1270,36 @@ HTML_TEMPLATE = """
             </div>
             <div style="overflow-x: auto;">
         
-        {# Detect document type from first row #}
-        {% set first_row = results[0] if results else {} %}
-        {# Debug: Check field detection #}
-        {% set has_fta_field1 = first_row.get('FTAAgreement') is not none %}
-        {% set has_fta_field2 = first_row.get('CountryOfOrigin') is not none %}
-        {% set has_fta_field3 = first_row.get('ItemDescription') is not none %}
-        {% set has_fta = has_fta_field1 or has_fta_field2 or has_fta_field3 %}
-        {% set has_bol_field1 = first_row.get('BLNumber') is not none %}
-        {% set has_bol_field2 = first_row.get('Shipper') is not none %}
-        {% set has_bol_field3 = first_row.get('Vessel') is not none %}
-        {% set has_bol = has_bol_field1 or has_bol_field2 or has_bol_field3 %}
-        {% set has_packing_field1 = first_row.get('CartonNumber') is not none %}
-        {% set has_packing_field2 = first_row.get('Dimensions') is not none %}
-        {% set has_packing = has_packing_field1 or has_packing_field2 %}
+        {# Group results by document type since we can have mixed types #}
+        {% set fta_rows = [] %}
+        {% set bol_rows = [] %}
+        {% set packing_rows = [] %}
+        {% set other_rows = [] %}
+        {% for row in results %}
+            {% if row.get('FTAAgreement') is not none or row.get('CountryOfOrigin') is not none or (row.get('ItemDescription') is not none and row.get('FTAAgreement') is not none) %}
+                {% set _ = fta_rows.append(row) %}
+            {% elif row.get('BLNumber') is not none or row.get('Shipper') is not none or row.get('Vessel') is not none %}
+                {% set _ = bol_rows.append(row) %}
+            {% elif row.get('CartonNumber') is not none or row.get('Dimensions') is not none %}
+                {% set _ = packing_rows.append(row) %}
+            {% else %}
+                {% set _ = other_rows.append(row) %}
+            {% endif %}
+        {% endfor %}
         
         {# Debug output for detection #}
         <div style="background: #e7f3ff; border: 2px solid #2196F3; padding: 15px; margin: 20px 0; border-radius: 8px; font-size: 12px;">
             <strong>🔍 Template Detection Debug:</strong><br>
-            has_fta_field1 (FTAAgreement): {{ has_fta_field1 }}<br>
-            has_fta_field2 (CountryOfOrigin): {{ has_fta_field2 }}<br>
-            has_fta_field3 (ItemDescription): {{ has_fta_field3 }}<br>
-            <strong>has_fta: {{ has_fta }}</strong><br>
-            has_bol: {{ has_bol }}<br>
-            has_packing: {{ has_packing }}<br>
-            First row keys: {{ first_row.keys()|list if first_row else 'No first_row' }}
+            Total results: {{ results|length }}<br>
+            FTA rows: {{ fta_rows|length }}<br>
+            BOL rows: {{ bol_rows|length }}<br>
+            Packing rows: {{ packing_rows|length }}<br>
+            Other rows: {{ other_rows|length }}<br>
+            First row keys: {{ results[0].keys()|list if results else 'No results' }}
         </div>
         
         {# FTA DOCUMENT TABLE #}
-        {% if has_fta %}
+        {% if fta_rows|length > 0 %}
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
             ✅ FTA Table Section Reached - has_fta is TRUE
         </div>
@@ -1316,7 +1317,7 @@ HTML_TEMPLATE = """
                 </tr>
             </thead>
             <tbody>
-            {% for row in results %}
+            {% for row in fta_rows %}
             <tr style="border-bottom: 1px solid #ddd;">
                 <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('ItemDescription', row.get('Description', 'N/A')) }}</td>
                 <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('CountryOfOrigin', 'N/A') }}</td>
@@ -1334,8 +1335,13 @@ HTML_TEMPLATE = """
             ✅ FTA Table Rendered - {{ results|length }} rows displayed
         </div>
         
+        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
+            ✅ FTA Table Rendered - {{ fta_rows|length }} rows displayed
+        </div>
+        {% endif %}
+        
         {# BILL OF LADING TABLE #}
-        {% elif has_bol %}
+        {% if bol_rows|length > 0 %}
         <table>
             <thead>
                 <tr>
@@ -1352,25 +1358,29 @@ HTML_TEMPLATE = """
                 </tr>
             </thead>
             <tbody>
-            {% for row in results %}
-            <tr>
-                <td>{{ row.BLNumber or 'N/A' }}</td>
-                <td>{{ row.Shipper or 'N/A' }}</td>
-                <td>{{ row.Consignee or 'N/A' }}</td>
-                <td>{{ row.Vessel or 'N/A' }}</td>
-                <td>{{ row.ContainerNumber or 'N/A' }}</td>
-                <td>{{ row.PortOfLoading or 'N/A' }}</td>
-                <td>{{ row.PortOfDischarge or 'N/A' }}</td>
-                <td>{{ row.CargoDescription or row.Description or 'N/A' }}</td>
-                <td>{{ row.GrossWeight or row.Weight or 'N/A' }}</td>
-                <td style="font-size: 11px;">{{ row.Filename or 'N/A' }}</td>
+            {% for row in bol_rows %}
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('BLNumber', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('Shipper', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('Consignee', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('Vessel', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('ContainerNumber', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('PortOfLoading', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('PortOfDischarge', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('CargoDescription', row.get('Description', 'N/A')) }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('GrossWeight', row.get('Weight', 'N/A')) }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-size: 11px;">{{ row.get('Filename', 'N/A') }}</td>
             </tr>
             {% endfor %}
             </tbody>
         </table>
+        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
+            ✅ BOL Table Rendered - {{ bol_rows|length }} rows displayed
+        </div>
+        {% endif %}
         
         {# PACKING LIST TABLE #}
-        {% elif has_packing %}
+        {% if packing_rows|length > 0 %}
         <table>
             <thead>
                 <tr>
@@ -1386,40 +1396,46 @@ HTML_TEMPLATE = """
                 </tr>
             </thead>
             <tbody>
-            {% for row in results %}
-            <tr>
-                <td>{{ row.CartonNumber or 'N/A' }}</td>
-                <td>{{ row.PONumber or 'N/A' }}</td>
-                <td>{{ row.ItemDescription or 'N/A' }}</td>
-                <td>{{ row.Quantity or 'N/A' }}</td>
-                <td>{{ row.Dimensions or 'N/A' }}</td>
-                <td>{{ row.GrossWeight or 'N/A' }}</td>
-                <td>{{ row.NetWeight or 'N/A' }}</td>
-                <td>{{ row.Volume or 'N/A' }}</td>
-                <td style="font-size: 11px;">{{ row.Filename or 'N/A' }}</td>
+            {% for row in packing_rows %}
+            <tr style="border-bottom: 1px solid #ddd;">
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('CartonNumber', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('PONumber', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('ItemDescription', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('Quantity', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('Dimensions', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('GrossWeight', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('NetWeight', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get('Volume', 'N/A') }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-size: 11px;">{{ row.get('Filename', 'N/A') }}</td>
             </tr>
             {% endfor %}
             </tbody>
         </table>
+        <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
+            ✅ Packing List Table Rendered - {{ packing_rows|length }} rows displayed
+        </div>
+        {% endif %}
         
         {# FALLBACK - GENERIC TABLE #}
-        {% else %}
+        {% if other_rows|length > 0 %}
         <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 10px; margin: 10px 0;">
-            ⚠️ Using FALLBACK Generic Table - has_fta={{ has_fta }}, has_bol={{ has_bol }}, has_packing={{ has_packing }}
+            ⚠️ Using FALLBACK Generic Table for {{ other_rows|length }} unrecognized row(s)
         </div>
+        {% if other_rows|length > 0 %}
+        {% set first_other = other_rows[0] %}
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
             <thead>
                 <tr style="background-color: #0B1221; color: white;">
-                    {% for key in first_row.keys() if key != 'Filename' and key != '_document_type' %}
+                    {% for key in first_other.keys() if key != 'Filename' and key != '_document_type' %}
                     <th style="padding: 10px; border: 1px solid #ddd;">{{ key }}</th>
                     {% endfor %}
                     <th style="padding: 10px; border: 1px solid #ddd;">File</th>
                 </tr>
             </thead>
             <tbody>
-            {% for row in results %}
+            {% for row in other_rows %}
             <tr style="border-bottom: 1px solid #ddd;">
-                {% for key in first_row.keys() if key != 'Filename' and key != '_document_type' %}
+                {% for key in first_other.keys() if key != 'Filename' and key != '_document_type' %}
                 <td style="padding: 10px; border: 1px solid #ddd;">{{ row.get(key, 'N/A') }}</td>
                 {% endfor %}
                 <td style="padding: 10px; border: 1px solid #ddd; font-size: 11px;">{{ row.get('Filename', 'N/A') }}</td>
@@ -1427,6 +1443,7 @@ HTML_TEMPLATE = """
             {% endfor %}
             </tbody>
         </table>
+        {% endif %}
         {% endif %}
         
             </div>
