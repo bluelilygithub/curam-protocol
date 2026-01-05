@@ -956,7 +956,6 @@ HTML_TEMPLATE = """
         </table>
         {% endif %}
         
-        {% if department == 'finance' or department == 'engineering' %}
         {% if department == 'engineering' %}
         {# Render separate table for each document #}
         {% for filename, file_results in grouped_engineering_results.items() %}
@@ -1235,11 +1234,6 @@ HTML_TEMPLATE = """
         </div>
         {% endfor %}
         {% endif %}
-        
-        {# CRITICAL TEST - This should ALWAYS show if department is logistics #}
-        <div style="background: #000000; color: #00ff00; border: 5px solid #ff0000; padding: 30px; margin: 30px 0; font-size: 24px; font-weight: bold; text-align: center; z-index: 9999; position: relative;">
-            TEST: department="{{ department }}" | type={{ department.__class__.__name__ }} | == 'logistics'? {{ 'YES' if department == 'logistics' else 'NO' }}
-        </div>
         
         {% if department == 'logistics' %}
         <!-- ============================================================ -->
