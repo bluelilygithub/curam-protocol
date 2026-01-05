@@ -1590,9 +1590,10 @@ def replace_template_section(template, section_name, section_template):
     return template
 
 # Replace all department sections (order matters - do transmittal first as it's largest)
-for dept in ['transmittal', 'engineering', 'finance', 'logistics']:
-    if dept in _template_sections:
-        HTML_TEMPLATE = replace_template_section(HTML_TEMPLATE, dept, _template_sections[dept])
+# TEMPORARILY DISABLED - Debugging missing tables issue
+# for dept in ['transmittal', 'engineering', 'finance', 'logistics']:
+#     if dept in _template_sections:
+#         HTML_TEMPLATE = replace_template_section(HTML_TEMPLATE, dept, _template_sections[dept])
 
 # --- HELPER FUNCTIONS ---
 def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
