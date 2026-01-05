@@ -1242,6 +1242,18 @@ def index_automater():
                         model_actions.append(f"Failed to process {filename}: {api_error}")
                         if not error_message:
                             error_message = api_error
+                    
+                    # Debug logging for logistics before processing entries
+                    if department == "logistics":
+                        print(f"🔍 LOGISTICS DEBUG: analyze_gemini returned:")
+                        print(f"  - entries type: {type(entries)}")
+                        print(f"  - entries length: {len(entries) if entries else 0}")
+                        print(f"  - api_error: {api_error}")
+                        if entries and len(entries) > 0:
+                            print(f"  - first entry type: {type(entries[0])}")
+                            if isinstance(entries[0], dict):
+                                print(f"  - first entry keys: {list(entries[0].keys())}")
+                    
                     if entries:
                         if department == "transmittal":
                             # Transmittal returns a single object with multiple arrays
@@ -1273,9 +1285,16 @@ def index_automater():
                         elif department == "logistics":
                             # Logistics returns multiple rows like finance/engineering
                             model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
+                            print(f"🔍 LOGISTICS DEBUG: Processing {len(entries)} entries from {filename}")
+                            if entries:
+                                print(f"🔍 LOGISTICS DEBUG: First entry type: {type(entries[0])}, keys: {list(entries[0].keys()) if isinstance(entries[0], dict) else 'Not a dict'}")
                             for entry in entries:
+                                if not isinstance(entry, dict):
+                                    print(f"⚠️ LOGISTICS WARNING: Entry is not a dict: {type(entry)}")
+                                    continue
                                 entry['Filename'] = filename
                                 results.append(entry)
+                            print(f"🔍 LOGISTICS DEBUG: Total results after processing {filename}: {len(results)}")
                         else:
                             model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
                             for entry in entries:
@@ -1431,8 +1450,17 @@ def index_automater():
                 session_data["schedule_type"] = detected_schedule_type
             if transmittal_aggregated:
                 session_data["transmittal_aggregated"] = transmittal_aggregated
+            
+            # Debug logging for logistics session storage
+            if department == "logistics":
+                print(f"🔍 LOGISTICS DEBUG: Storing in session:")
+                print(f"  - rows count: {len(results)}")
+                print(f"  - department: {department}")
+            
             session['last_results'] = session_data
         else:
+            if department == "logistics":
+                print(f"⚠️ LOGISTICS WARNING: No results to store in session!")
             session.pop('last_results', None)
 
     # Get schedule type from session or detected value
@@ -1528,6 +1556,24 @@ def index_automater():
         print("No finance samples in merged data!")
     
     print(f"🔍 RENDERING: department={repr(department)}, results_count={len(results) if results else 0}")
+    
+    # Debug logging for logistics department
+    if department == "logistics":
+        print(f"🔍 LOGISTICS RENDER DEBUG:")
+        print(f"  - department: {repr(department)}")
+        print(f"  - results type: {type(results)}")
+        print(f"  - results length: {len(results) if results else 0}")
+        print(f"  - results is truthy: {bool(results)}")
+        if results and len(results) > 0:
+            print(f"  - first result type: {type(results[0])}")
+            if isinstance(results[0], dict):
+                print(f"  - first result keys: {list(results[0].keys())}")
+                print(f"  - first result sample: {dict(list(results[0].items())[:5])}")  # First 5 items
+            else:
+                print(f"  - first result value: {results[0]}")
+        else:
+            print(f"  - ⚠️ WARNING: results is empty or None!")
+    
     return render_template_string(
         HTML_TEMPLATE,
         results=results if results else [],

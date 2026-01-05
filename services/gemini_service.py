@@ -19,8 +19,6 @@ Usage:
 Created: Phase 3.3c - Gemini Service Complete (FIXED)
 """
 
-print("🔥🔥🔥 GEMINI_SERVICE.PY LOADED - VERSION 2026-01-05-FINAL 🔥🔥🔥")
-
 # Import prompts from separate modules
 try:
     from services.prompts.finance_prompt import get_finance_prompt
@@ -129,12 +127,12 @@ def build_prompt(text, doc_type, sector_slug=None):
         from database import build_combined_prompt
         db_prompt = build_combined_prompt(doc_type, sector_slug, text)
         if db_prompt:
-            print(f"âœ“ Using database prompt for {doc_type}")
+            print(f"Using database prompt for {doc_type}")
             return db_prompt
     except Exception as e:
-        print(f"âš  Database failed: {e}")
+        print(f"Database failed: {e}")
     
-    print(f"âš  Using hardcoded fallback for {doc_type}")
+    print(f"Using hardcoded fallback for {doc_type}")
     
     if doc_type == "engineering":
         # Use modular engineering prompt
@@ -1070,13 +1068,13 @@ HTML_TEMPLATE = """
                     <td>
                         {% if row.get('rejection_reason') %}
                         <div class="rejection-notice">
-                            âš  {{ row.rejection_reason }}
+                            {{ row.rejection_reason }}
                         </div>
                         {% endif %}
                         {% if row.get('Comments_confidence') == 'low' %}<span class="low-confidence-text">{{ row.Comments }}</span>{% else %}{{ row.Comments }}{% endif %}
                         {% if row.get('critical_errors') and row.get('requires_manual_verification') %}
                         <div class="critical-error" style="margin-top: 8px;">
-                            <div class="critical-error-header">âš  Critical Errors - Manual Verification Required:</div>
+                            <div class="critical-error-header">Critical Errors - Manual Verification Required:</div>
                             {% for error in row.critical_errors %}
                             <div class="critical-error-item">{{ error }}</div>
                             {% endfor %}
@@ -1236,7 +1234,7 @@ HTML_TEMPLATE = """
             {% endfor %}
         </div>
         {% endfor %}
-        
+        {% endif %}
         
         {% if department == 'logistics' %}
         <!-- ============================================================ -->
@@ -1699,15 +1697,15 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                             content_parts = [img, prompt]
                         
                         response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
-                        action_log.append(f"âœ“ Vision API (table-optimized) succeeded with {model_name}")
+                        action_log.append(f"Vision API (table-optimized) succeeded with {model_name}")
                         
                     except ImportError:
                         # Fallback: use original image without preprocessing
-                        action_log.append("âš  Image preprocessing unavailable - using original")
+                        action_log.append("Image preprocessing unavailable - using original")
                         img = Image.open(image_path)
                         content_parts = [img, prompt]
                         response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
-                        action_log.append(f"âœ“ Vision API call succeeded with {model_name}")
+                        action_log.append(f"Vision API call succeeded with {model_name}")
                     except Exception as img_error:
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Failed to process image: {img_error}"
@@ -1804,7 +1802,7 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                             action_log.append(f"ðŸ“‹ Validation: {validation_report['valid_rows']}/{validation_report['total_rows']} rows valid")
                             
                             if validation_report['rows_with_corrections'] > 0:
-                                action_log.append(f"âœ“ Applied {validation_report['rows_with_corrections']} auto-correction(s)")
+                                action_log.append(f"Applied {validation_report['rows_with_corrections']} auto-correction(s)")
                                 # Use corrected entries
                                 entries = validation_report['corrected_entries']
                                 
@@ -1816,15 +1814,15 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                                             action_log.append(f"  â€¢ {mark}: {correction}")
                             
                             if validation_report['rows_with_errors'] > 0:
-                                action_log.append(f"âš  {validation_report['rows_with_errors']} row(s) have errors requiring manual review")
+                                action_log.append(f"{validation_report['rows_with_errors']} row(s) have errors requiring manual review")
                             
                             if validation_report['rows_with_warnings'] > 0:
-                                action_log.append(f"âš  {validation_report['rows_with_warnings']} row(s) have warnings")
+                                action_log.append(f"{validation_report['rows_with_warnings']} row(s) have warnings")
                                 
                         except ImportError:
-                            action_log.append("âš  Engineering validator unavailable - skipping validation")
+                            action_log.append("Engineering validator unavailable - skipping validation")
                         except Exception as val_error:
-                            action_log.append(f"âš  Validation error: {val_error}")
+                            action_log.append(f"Validation error: {val_error}")
                     
                     return entries, None, resolved_model, attempt_log, action_log, schedule_type
 
