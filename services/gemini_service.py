@@ -468,7 +468,7 @@ HTML_TEMPLATE = """
             display: inline-block;
         }
         .low-confidence::before {
-            content: "âš ï¸ ";
+            content: "[!] ";
             font-weight: 600;
         }
         .low-confidence-text {
@@ -480,7 +480,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .low-confidence-text::before {
-            content: "âš ï¸ LOW CONFIDENCE - REVIEW REQUIRED";
+            content: "[!] LOW CONFIDENCE - REVIEW REQUIRED";
             display: block;
             font-size: 10px;
             font-weight: 700;
@@ -526,7 +526,7 @@ HTML_TEMPLATE = """
             position: relative;
         }
         .requires-manual-verification::before {
-            content: "âš ï¸ MANUAL VERIFICATION REQUIRED - DO NOT USE EXTRACTED VALUES";
+            content: "[!] MANUAL VERIFICATION REQUIRED - DO NOT USE EXTRACTED VALUES";
             display: block;
             background-color: #dc3545;
             color: white;
@@ -1029,7 +1029,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Size' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">âš ï¸ Size Error:</div>
+                                    <div class="critical-error-header">[!] Size Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -1042,7 +1042,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Quantity' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">âš ï¸ Quantity Error:</div>
+                                    <div class="critical-error-header">[!] Quantity Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -1056,7 +1056,7 @@ HTML_TEMPLATE = """
                             {% for error in row.critical_errors %}
                                 {% if 'Grade' in error %}
                                 <div class="critical-error" style="margin-top: 4px;">
-                                    <div class="critical-error-header">âš ï¸ Grade Error:</div>
+                                    <div class="critical-error-header">[!] Grade Error:</div>
                                     <div class="critical-error-item">{{ error }}</div>
                                 </div>
                                 {% endif %}
@@ -1165,7 +1165,7 @@ HTML_TEMPLATE = """
                 </div>
                 {% if row.get('Flags') and row.Flags|length > 0 %}
                 <div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;">
-                    <strong style="color: #856404;">âš ï¸ Flags:</strong>
+                    <strong style="color: #856404;">[!] Flags:</strong>
                     <ul style="margin: 5px 0 0 0; padding-left: 20px; color: #856404;">
                         {% for flag in row.Flags %}
                         <li>{{ flag }}</li>
@@ -1241,7 +1241,7 @@ HTML_TEMPLATE = """
         <!-- PROOF: NEW TEMPLATE DEPLOYED - VERSION 2026-01-05-FINAL -->
         <!-- ============================================================ -->
         <div style="background: #ff0000; color: white; border: 4px solid #000; padding: 20px; margin: 20px 0; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: center; z-index: 9999; position: relative;">
-            🚨 LOGISTICS SECTION REACHED - Template is active 🚨
+            [LOGISTICS] Section Reached - Template is Active
         </div>
         {# Render logistics results - one table for all documents #}
         {# DEBUG INFO #}
@@ -1261,11 +1261,11 @@ HTML_TEMPLATE = """
         </div>
         {% if results %}
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ RESULTS CHECK PASSED - results is truthy, length={{ results|length }}
+            [OK] Results Check Passed - results is truthy, length={{ results|length }}
         </div>
         <div style="background: white; border-radius: 8px; margin-bottom: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
             <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: white; padding: 16px 20px;">
-                <div style="font-size: 18px; font-weight: 600;">📦 Logistics Documents Extracted</div>
+                <div style="font-size: 18px; font-weight: 600;">Logistics Documents Extracted</div>
                 <div style="font-size: 12px; opacity: 0.85; margin-top: 4px;">{{ results|length }} row(s) extracted</div>
             </div>
             <div style="overflow-x: auto;">
@@ -1284,7 +1284,7 @@ HTML_TEMPLATE = """
         
         {# Debug output for detection #}
         <div style="background: #e7f3ff; border: 2px solid #2196F3; padding: 15px; margin: 20px 0; border-radius: 8px; font-size: 12px;">
-            <strong>🔍 Template Detection Debug:</strong><br>
+            <strong>Template Detection Debug:</strong><br>
             Total results: {{ results|length }}<br>
             Has FTA: {{ 'Yes' if ns.has_fta else 'No' }}<br>
             Has BOL: {{ 'Yes' if ns.has_bol else 'No' }}<br>
@@ -1298,7 +1298,7 @@ HTML_TEMPLATE = """
         {# FTA DOCUMENT TABLE #}
         {% if ns.has_fta %}
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ FTA Table Section Reached
+            [OK] FTA Table Section Reached
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
             <thead>
@@ -1331,14 +1331,14 @@ HTML_TEMPLATE = """
             </tbody>
         </table>
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ FTA Table Rendered
+            [OK] FTA Table Rendered
         </div>
         {% endif %}
         
         {# BILL OF LADING TABLE #}
         {% if ns.has_bol %}
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ BOL Table Section Reached
+            [OK] BOL Table Section Reached
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
             <thead>
@@ -1375,14 +1375,14 @@ HTML_TEMPLATE = """
             </tbody>
         </table>
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ BOL Table Rendered
+            [OK] BOL Table Rendered
         </div>
         {% endif %}
         
         {# PACKING LIST TABLE #}
         {% if ns.has_packing %}
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ Packing List Table Section Reached
+            [OK] Packing List Table Section Reached
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-top: 20px; background: white;">
             <thead>
@@ -1417,14 +1417,14 @@ HTML_TEMPLATE = """
             </tbody>
         </table>
         <div style="background: #d4edda; border: 2px solid #28a745; padding: 10px; margin: 10px 0;">
-            ✅ Packing List Table Rendered
+            [OK] Packing List Table Rendered
         </div>
         {% endif %}
         
         {# Show message if no tables were rendered #}
         {% if not ns.has_fta and not ns.has_bol and not ns.has_packing %}
         <div style="background: #f8d7da; border: 2px solid #dc3545; padding: 15px; margin: 20px 0; border-radius: 8px;">
-            ⚠️ WARNING: No recognized document types found in results!<br>
+            [WARNING] No recognized document types found in results!<br>
             Total rows: {{ results|length }}<br>
             First row keys: {{ results[0].keys()|list if results else 'No results' }}
         </div>
