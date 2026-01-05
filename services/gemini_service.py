@@ -32,6 +32,13 @@ except ImportError:
     get_transmittal_prompt = None
     get_logistics_prompt = None
 
+# Import template sections from separate modules
+try:
+    from services.templates.logistics_template import get_logistics_template
+except ImportError:
+    # Fallback if templates module not available
+    get_logistics_template = None
+
 import os
 import json
 import time
@@ -161,6 +168,15 @@ def build_prompt(text, doc_type, sector_slug=None):
 
 
 # --- HTML TEMPLATE ---
+
+# Get logistics template section
+_logistics_template_section = ""
+try:
+    from services.templates.logistics_template import get_logistics_template
+    _logistics_template_section = get_logistics_template()
+except ImportError:
+    # Fallback: will use inline template
+    _logistics_template_section = None
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -1513,6 +1529,40 @@ HTML_TEMPLATE = """
 </body>
 </html>
 """
+
+# Inject modular template sections into HTML_TEMPLATE
+if _logistics_template_section:
+    # Replace the logistics section with the modular template
+    # Find where logistics section starts
+    logistics_start_marker = "        {% if department == 'logistics' %}"
+    logistics_start = HTML_TEMPLATE.find(logistics_start_marker)
+    
+    if logistics_start != -1:
+        # Find where summary-card starts (this is after the logistics section)
+        summary_card_marker = "        <div class=\"summary-card\">"
+        summary_card_start = HTML_TEMPLATE.find(summary_card_marker, logistics_start)
+        
+        if summary_card_start != -1:
+            # Find the matching {% endif %} that closes the logistics section
+            # Look backwards from summary-card to find the last {% endif %} before it
+            section_before_summary = HTML_TEMPLATE[logistics_start:summary_card_start]
+            
+            # Find all {% endif %} positions in this section
+            import re
+            endif_pattern = r'        {%\s*endif\s*%}'
+            endif_matches = list(re.finditer(endif_pattern, section_before_summary))
+            
+            if endif_matches:
+                # The last {% endif %} should close the logistics section
+                last_endif_match = endif_matches[-1]
+                logistics_end = logistics_start + last_endif_match.end()
+                
+                # Replace the section (keep the same indentation)
+                HTML_TEMPLATE = (
+                    HTML_TEMPLATE[:logistics_start] + 
+                    _logistics_template_section.rstrip() + "\n        " + 
+                    HTML_TEMPLATE[logistics_end:]
+                )
 
 # --- HELPER FUNCTIONS ---
 def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
