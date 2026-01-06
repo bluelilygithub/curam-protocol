@@ -44,11 +44,14 @@
             flex: 1;
             min-width: 250px;
             max-width: 400px;
+            position: relative;
+            display: flex;
+            align-items: center;
         }
 
         .blog-search input {
             width: 100%;
-            padding: 0.75rem 1rem;
+            padding: 0.75rem 3rem 0.75rem 1rem;
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid var(--border-subtle);
             border-radius: var(--border-radius);
@@ -64,6 +67,68 @@
             outline: none;
             border-color: var(--color-gold);
             background: rgba(255, 255, 255, 0.15);
+        }
+
+        .blog-search-mic-btn {
+            position: absolute;
+            right: 0.5rem;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 0.5rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            z-index: 1;
+        }
+
+        .blog-search-mic-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--cyan-accent);
+            color: var(--cyan-accent);
+        }
+
+        .blog-search-mic-btn.recording {
+            background: #dc2626;
+            border-color: #dc2626;
+            color: white;
+            animation: pulse-recording-blog 1.5s ease-in-out infinite;
+        }
+
+        .blog-search-mic-btn.recording svg {
+            animation: pulse-icon-blog 0.8s ease-in-out infinite;
+        }
+
+        @keyframes pulse-recording-blog {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+            }
+            50% {
+                box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+            }
+        }
+
+        @keyframes pulse-icon-blog {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+        }
+
+        .blog-search-mic-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .blog-search-mic-btn.error {
+            background: #f59e0b;
+            border-color: #f59e0b;
+            color: white;
         }
 
         .blog-grid {
@@ -94,6 +159,18 @@
             height: 200px;
             object-fit: cover;
             background: var(--navy-medium);
+            display: block;
+        }
+
+        .blog-card-image-placeholder {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, var(--navy-medium) 0%, var(--navy-light) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 0.875rem;
         }
 
         .blog-card-content {
@@ -252,9 +329,17 @@
                     <input 
                         type="text" 
                         id="blog-search-input" 
-                        placeholder="Search articles..." 
+                        placeholder="Search articles with RAG..." 
                         autocomplete="off"
                     >
+                    <button class="blog-search-mic-btn" id="blogSearchMicBtn" title="Click to speak" aria-label="Voice input">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
 
@@ -322,7 +407,7 @@
                 };
             }
 
-            // Fetch blog posts
+            // Fetch blog posts using RAG search or direct API
             async function fetchBlogPosts(page = 1, search = '') {
                 if (isLoading) return;
                 
@@ -334,27 +419,80 @@
                 blogPagination.style.display = 'none';
 
                 try {
-                    const params = new URLSearchParams({
-                        page: page.toString(),
-                        per_page: '12'
-                    });
-                    
-                    if (search) {
-                        params.append('search', search);
-                    }
+                    let posts = [];
+                    let pagination = {};
 
-                    const response = await fetch(`/api/blog-posts?${params.toString()}`);
-                    const data = await response.json();
+                    if (search && search.trim()) {
+                        // Use RAG search for semantic search
+                        blogLoading.querySelector('p').textContent = 'Searching 800+ articles with AI...';
+                        
+                        const ragResponse = await fetch('/api/search-blog-complete', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ query: search })
+                        });
+
+                        const ragData = await ragResponse.json();
+
+                        if (ragData.error) {
+                            blogLoading.style.display = 'none';
+                            blogError.style.display = 'block';
+                            blogErrorMessage.textContent = ragData.error || 'Search failed. Please try again.';
+                            return;
+                        }
+
+                        // Extract blog posts from RAG sources
+                        if (ragData.sources && Array.isArray(ragData.sources)) {
+                            posts = ragData.sources
+                                .filter(source => source.type === 'blog')
+                                .map(source => ({
+                                    id: source.link || Math.random(),
+                                    title: source.title || 'Untitled',
+                                    excerpt: source.excerpt || '',
+                                    link: source.link || '',
+                                    date: source.date ? new Date(source.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null,
+                                    date_raw: source.date || '',
+                                    featured_image: null, // RAG doesn't return images, will use placeholder
+                                    categories: []
+                                }));
+                        }
+
+                        // If no blog results from RAG, show empty
+                        if (posts.length === 0) {
+                            blogLoading.style.display = 'none';
+                            blogEmpty.style.display = 'block';
+                            blogEmpty.querySelector('p').textContent = `No articles found for "${search}". Try a different search term.`;
+                            return;
+                        }
+
+                        // RAG search doesn't have pagination, so hide it
+                        pagination = { total_pages: 1, page: 1, total: posts.length };
+                    } else {
+                        // No search query - fetch recent posts normally
+                        blogLoading.querySelector('p').textContent = 'Loading articles...';
+                        
+                        const params = new URLSearchParams({
+                            page: page.toString(),
+                            per_page: '12'
+                        });
+
+                        const response = await fetch(`/api/blog-posts?${params.toString()}`);
+                        const data = await response.json();
+
+                        if (!data.success) {
+                            blogLoading.style.display = 'none';
+                            blogError.style.display = 'block';
+                            blogErrorMessage.textContent = data.error || 'Failed to load articles. Please try again later.';
+                            return;
+                        }
+
+                        posts = data.posts;
+                        pagination = data.pagination;
+                    }
 
                     blogLoading.style.display = 'none';
-
-                    if (!data.success) {
-                        blogError.style.display = 'block';
-                        blogErrorMessage.textContent = data.error || 'Failed to load articles. Please try again later.';
-                        return;
-                    }
-
-                    const { posts, pagination } = data;
 
                     if (posts.length === 0) {
                         blogEmpty.style.display = 'block';
@@ -362,30 +500,56 @@
                     }
 
                     // Render posts
-                    blogGrid.innerHTML = posts.map(post => `
-                        <article class="blog-card">
-                            ${post.featured_image ? `
-                                <img src="${post.featured_image}" alt="${post.title}" class="blog-card-image" loading="lazy">
-                            ` : ''}
-                            <div class="blog-card-content">
-                                ${post.date ? `<div class="blog-card-date">${post.date}</div>` : ''}
-                                <h2 class="blog-card-title">
-                                    <a href="${post.link}" target="_blank" rel="noopener">${post.title}</a>
-                                </h2>
-                                ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''}
-                                <a href="${post.link}" target="_blank" rel="noopener" class="blog-card-link">
-                                    Read Article →
-                                </a>
+                    blogGrid.innerHTML = posts.map((post, index) => {
+                        const imageHtml = post.featured_image ? `
+                            <img src="${post.featured_image}" alt="${post.title}" class="blog-card-image" loading="lazy" 
+                                 onerror="this.onerror=null; this.style.display='none'; const placeholder = this.nextElementSibling; if(placeholder) placeholder.style.display='flex';">
+                            <div class="blog-card-image-placeholder" style="display: none;">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                </svg>
                             </div>
-                        </article>
-                    `).join('');
+                        ` : `
+                            <div class="blog-card-image-placeholder">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                </svg>
+                            </div>
+                        `;
+                        
+                        return `
+                            <article class="blog-card">
+                                ${imageHtml}
+                                <div class="blog-card-content">
+                                    ${post.date ? `<div class="blog-card-date">${post.date}</div>` : ''}
+                                    <h2 class="blog-card-title">
+                                        <a href="${post.link}" target="_blank" rel="noopener">${post.title}</a>
+                                    </h2>
+                                    ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''}
+                                    <a href="${post.link}" target="_blank" rel="noopener" class="blog-card-link">
+                                        Read Article →
+                                    </a>
+                                </div>
+                            </article>
+                        `;
+                    }).join('');
 
-                    // Update pagination
-                    if (pagination.total_pages > 1) {
+                    // Update pagination (only show if not using RAG search and has multiple pages)
+                    if (pagination.total_pages > 1 && !(search && search.trim())) {
                         blogPagination.style.display = 'flex';
                         blogPrev.disabled = !pagination.has_prev;
                         blogNext.disabled = !pagination.has_next;
                         blogPageInfo.textContent = `Page ${pagination.page} of ${pagination.total_pages} (${pagination.total} articles)`;
+                    } else if (search && search.trim() && posts.length > 0) {
+                        // Show result count for RAG search
+                        blogPagination.style.display = 'flex';
+                        blogPrev.disabled = true;
+                        blogNext.disabled = true;
+                        blogPageInfo.textContent = `Found ${posts.length} article${posts.length !== 1 ? 's' : ''} for "${search}"`;
                     }
 
                 } catch (error) {
@@ -398,6 +562,118 @@
                 }
             }
 
+            // Speech Recognition for search
+            let blogRecognition = null;
+            const micBtn = document.getElementById('blogSearchMicBtn');
+
+            function initBlogSpeechRecognition() {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                
+                if (!micBtn || !searchInput) {
+                    return;
+                }
+
+                if (!SpeechRecognition) {
+                    console.warn('Speech recognition not supported in this browser');
+                    if (micBtn) {
+                        micBtn.disabled = true;
+                        micBtn.title = 'Voice input not supported in this browser';
+                        micBtn.classList.add('error');
+                    }
+                    return;
+                }
+
+                try {
+                    blogRecognition = new SpeechRecognition();
+                    blogRecognition.continuous = false;
+                    blogRecognition.interimResults = false;
+                    blogRecognition.lang = 'en-US';
+
+                    blogRecognition.onstart = function() {
+                        console.log('Blog search: Speech recognition started');
+                        micBtn.classList.add('recording');
+                        micBtn.title = 'Listening... Click to stop';
+                    };
+
+                    blogRecognition.onresult = function(event) {
+                        const transcript = event.results[0][0].transcript;
+                        console.log('Blog search: Speech recognized:', transcript);
+                        searchInput.value = transcript;
+                        currentSearch = transcript.trim();
+                        currentPage = 1;
+                        fetchBlogPosts(currentPage, currentSearch);
+                    };
+
+                    blogRecognition.onerror = function(event) {
+                        console.error('Blog search: Speech recognition error:', event.error);
+                        micBtn.classList.remove('recording');
+                        
+                        let errorMsg = 'Speech recognition error: ';
+                        switch(event.error) {
+                            case 'no-speech':
+                                errorMsg += 'No speech detected.';
+                                break;
+                            case 'audio-capture':
+                                errorMsg += 'No microphone found.';
+                                break;
+                            case 'not-allowed':
+                                errorMsg += 'Microphone permission denied.';
+                                break;
+                            default:
+                                errorMsg += event.error;
+                        }
+                        micBtn.title = errorMsg;
+                        micBtn.classList.add('error');
+                        setTimeout(() => {
+                            micBtn.classList.remove('error');
+                            micBtn.title = 'Click to speak';
+                        }, 3000);
+                    };
+
+                    blogRecognition.onend = function() {
+                        console.log('Blog search: Speech recognition ended');
+                        micBtn.classList.remove('recording');
+                        micBtn.title = 'Click to speak';
+                    };
+
+                    micBtn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        if (micBtn.classList.contains('recording')) {
+                            blogRecognition.stop();
+                        } else {
+                            try {
+                                blogRecognition.start();
+                            } catch (err) {
+                                console.error('Blog search: Failed to start recognition:', err);
+                                micBtn.classList.add('error');
+                                micBtn.title = 'Failed to start. Please try again.';
+                                setTimeout(() => {
+                                    micBtn.classList.remove('error');
+                                    micBtn.title = 'Click to speak';
+                                }, 3000);
+                            }
+                        }
+                    });
+
+                } catch (err) {
+                    console.error('Blog search: Error initializing speech recognition:', err);
+                    if (micBtn) {
+                        micBtn.disabled = true;
+                        micBtn.title = 'Voice input unavailable';
+                        micBtn.classList.add('error');
+                    }
+                }
+            }
+
+            // Initialize speech recognition when page loads
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initBlogSpeechRecognition);
+            } else {
+                initBlogSpeechRecognition();
+            }
+
             // Search handler
             const handleSearch = debounce((value) => {
                 currentSearch = value.trim();
@@ -407,6 +683,16 @@
 
             searchInput.addEventListener('input', (e) => {
                 handleSearch(e.target.value);
+            });
+
+            // Allow Enter key to trigger search immediately
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    currentSearch = searchInput.value.trim();
+                    currentPage = 1;
+                    fetchBlogPosts(currentPage, currentSearch);
+                }
             });
 
             // Pagination handlers
