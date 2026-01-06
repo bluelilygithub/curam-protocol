@@ -1015,15 +1015,15 @@ def get_blog_posts():
             }), 503
         
         # Build API request parameters
-        # Note: We use _embed for featured media, but won't fetch individual media endpoints
-        # to avoid blocking. Images will load lazily in the browser.
+        # Note: We can't use _fields with _embed - WordPress requires full post data for embedded media
+        # We'll fetch full posts but only extract what we need
         api_params = {
             'per_page': per_page,
             'page': page,
             'orderby': 'date',
             'order': 'desc',
-            '_fields': 'id,title,excerpt,link,date,featured_media,categories',
             '_embed': 'wp:featuredmedia'
+            # Removed _fields because it prevents _embedded data from being included
         }
         
         if search_query:
