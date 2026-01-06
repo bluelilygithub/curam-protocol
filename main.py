@@ -1,57 +1,6 @@
 import os
-import json
-import re
-from flask import Flask, request, render_template, render_template_string, session, Response, send_file, abort, url_for, send_from_directory, redirect, jsonify
+from flask import Flask, request, render_template, send_file, abort, redirect
 import google.generativeai as genai
-import pdfplumber
-import pandas as pd
-import io
-try:
-    import grpc
-except ImportError:
-    grpc = None
-import time
-from werkzeug.utils import secure_filename
-import requests
-from urllib.parse import quote
-
-from database import (
-    test_connection, 
-    get_document_types_by_sector, 
-    engine, 
-    get_sectors, 
-    get_demo_config_by_department,
-    get_samples_for_template,
-    get_sector_demo_config
-)
-from sqlalchemy import text
-
-# Phase 3.1: Validation Service (extracted from main.py lines 3124-3449)
-from services.validation_service import (
-    detect_low_confidence,
-    correct_ocr_errors,
-    validate_engineering_field
-)
-
-# Formatting utilities
-from utils.formatting import format_currency, format_text_to_html
-
-# Phase 3.2: PDF Service (extracted from main.py lines 150-158, 3494-3522)
-from services.pdf_service import (
-    extract_text,
-    prepare_prompt_text
-)
-
-# Phase 3.3c: Gemini Service - COMPLETE (all 3 functions extracted)
-from services.gemini_service import get_available_models, build_prompt, analyze_gemini, HTML_TEMPLATE
-
-# Phase 3.4: RAG Search Service (extracted from main.py lines 313-797)
-from services.rag_service import (
-    extract_text_from_html,
-    calculate_authority_score,
-    search_static_html_pages,
-    perform_rag_search
-)
 
 # Phase 4.1: Static Pages Blueprint
 from routes.static_pages import static_pages_bp
@@ -64,12 +13,6 @@ from routes.export_routes import export_bp
 
 # Phase 4.4: API Routes Blueprint
 from routes.api_routes import api_bp
-
-# Try to import specific exception types
-try:
-    from google.api_core import exceptions as google_exceptions
-except ImportError:
-    google_exceptions = None
 
 # Import configuration
 from config import (
@@ -130,20 +73,11 @@ if api_key:
 # Create upload directories
 os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
 
-# Cache for available models
-_available_models = None
-
-from services.image_preprocessing import TESSERACT_AVAILABLE, CV2_AVAILABLE
-
 
 # =============================================================================
 # API ROUTES
 # =============================================================================
 # API routes moved to routes/api_routes.py
-
-# =============================================================================
-# AUTOMATER & DEMO ROUTES
-# =============================================================================
 
 # =============================================================================
 # AUTOMATER & DEMO ROUTES
