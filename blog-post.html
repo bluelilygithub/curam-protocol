@@ -10,18 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* Blog post specific styles */
-        .blog-post-hero {
-            background: linear-gradient(180deg, var(--navy-deep) 0%, var(--navy-medium) 100%);
-            padding: var(--spacing-3xl) 0 var(--spacing-2xl);
-        }
-
-        .blog-post-header {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 0 var(--spacing-lg);
-        }
-
+        /* Blog post specific overrides */
         .blog-post-back {
             display: inline-flex;
             align-items: center;
@@ -36,24 +25,6 @@
         .blog-post-back:hover {
             gap: var(--spacing-sm);
             color: var(--text-primary);
-        }
-
-        .blog-post-title {
-            font-size: clamp(2rem, 5vw, 3rem);
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: var(--spacing-md);
-            line-height: 1.2;
-        }
-
-        .blog-post-meta {
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-lg);
-            color: var(--text-secondary);
-            font-size: 0.9375rem;
-            margin-bottom: var(--spacing-xl);
-            flex-wrap: wrap;
         }
 
         .blog-post-featured-image {
@@ -72,19 +43,10 @@
             object-fit: cover;
         }
 
-        .blog-post-content {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 0 var(--spacing-lg) var(--spacing-4xl);
-        }
-
         .blog-post-content-wrapper {
-            background: linear-gradient(135deg, rgba(26, 45, 74, 0.3), rgba(26, 45, 74, 0.1));
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--border-radius-lg);
-            padding: var(--spacing-3xl);
             color: var(--text-primary);
             line-height: 1.8;
+            font-size: 1.125rem;
         }
 
         .blog-post-content-wrapper h1,
@@ -95,6 +57,7 @@
             margin-top: var(--spacing-2xl);
             margin-bottom: var(--spacing-md);
             font-weight: 600;
+            font-family: var(--font-sans);
         }
 
         .blog-post-content-wrapper h1 {
@@ -149,6 +112,16 @@
             color: var(--text-secondary);
         }
 
+        .blog-post-meta {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-lg);
+            color: var(--text-secondary);
+            font-size: 0.9375rem;
+            margin-bottom: var(--spacing-xl);
+            flex-wrap: wrap;
+        }
+
         .blog-post-loading {
             text-align: center;
             padding: var(--spacing-4xl);
@@ -166,10 +139,6 @@
         }
 
         @media (max-width: 768px) {
-            .blog-post-content-wrapper {
-                padding: var(--spacing-xl);
-            }
-
             .blog-post-meta {
                 flex-direction: column;
                 align-items: flex-start;
@@ -201,15 +170,15 @@
     <!-- Blog Post Content -->
     <div id="blog-post-content" style="display: none;">
         <!-- Hero Section -->
-        <section class="blog-post-hero">
-            <div class="blog-post-header">
+        <section class="section">
+            <div class="container">
                 <a href="/blog.html" class="blog-post-back">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M19 12H5M12 19l-7-7 7-7"/>
                     </svg>
                     Back to Articles
                 </a>
-                <h1 id="blog-post-title" class="blog-post-title"></h1>
+                <h1 id="blog-post-title" class="section-headline" style="text-align: left; margin-bottom: var(--spacing-md);"></h1>
                 <div class="blog-post-meta">
                     <span id="blog-post-date"></span>
                     <span id="blog-post-author"></span>
@@ -218,13 +187,17 @@
         </section>
 
         <!-- Featured Image -->
-        <div id="blog-post-featured-image" class="blog-post-featured-image" style="display: none;">
-            <img id="blog-post-featured-img" src="" alt="" loading="eager">
-        </div>
+        <section class="section" style="padding-top: 0;">
+            <div class="container">
+                <div id="blog-post-featured-image" class="blog-post-featured-image" style="display: none;">
+                    <img id="blog-post-featured-img" src="" alt="" loading="eager">
+                </div>
+            </div>
+        </section>
 
         <!-- Post Content -->
-        <section class="section">
-            <div class="blog-post-content">
+        <section class="section section-alt">
+            <div class="container">
                 <div class="blog-post-content-wrapper" id="blog-post-body">
                     <!-- Content will be inserted here -->
                 </div>
