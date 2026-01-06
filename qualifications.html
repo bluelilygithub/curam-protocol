@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Qualifications & Certifications | The Curam-Ai Protocol™</title>
+    <meta name="description" content="30+ industry-recognised certifications from Stanford, Duke, IBM, Google, Microsoft, AWS, and more. Certified expertise in AI, data analytics, cybersecurity, and digital transformation.">
+    <link rel="icon" type="image/png" href="/assets/images/curam-ai-logo.png">
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .qualification-card {
+            background: white;
+            padding: var(--spacing-xl);
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .qualification-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }
+
+        .qualification-card h3 {
+            color: var(--color-navy);
+            margin-bottom: var(--spacing-md);
+            font-size: 1.375rem;
+            font-weight: 600;
+        }
+
+        .qualification-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .qualification-list li {
+            padding: var(--spacing-sm) 0;
+            padding-left: var(--spacing-lg);
+            position: relative;
+            color: #4B5563;
+            line-height: 1.6;
+        }
+
+        .qualification-list li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--color-gold);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .institution-badge {
+            display: inline-block;
+            background: var(--color-gold);
+            color: var(--color-navy);
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-left: var(--spacing-xs);
+        }
+
+        .qualification-stats {
+            background: linear-gradient(135deg, var(--color-navy) 0%, var(--navy-medium) 100%);
+            color: white;
+            padding: var(--spacing-3xl);
+            border-radius: var(--border-radius-lg);
+            text-align: center;
+            margin: var(--spacing-3xl) 0;
+        }
+
+        .qualification-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-2xl);
+            margin-top: var(--spacing-2xl);
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--color-gold);
+            display: block;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.9);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .use-case-highlight {
+            background: #f9fafb;
+            border-left: 4px solid var(--color-gold);
+            padding: var(--spacing-lg);
+            margin-top: var(--spacing-md);
+            border-radius: 0 var(--border-radius) var(--border-radius) 0;
+        }
+
+        .use-case-highlight strong {
+            color: var(--color-navy);
+            display: block;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .use-case-highlight p {
+            margin: 0;
+            color: #6B7280;
+            font-size: 0.9375rem;
+        }
+    </style>
+</head>
+<body>
+    <button class="scroll-down-btn" aria-label="Scroll down">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M19 12l-7 7-7-7"/>
+        </svg>
+    </button>
+        
+    <div id="navbar-placeholder"></div>
+    <script src="/assets/js/navbar-loader.js"></script>
+
+    <!-- SECTION 1: Hero - Qualifications Overview -->
+    <section class="section">
+        <div class="container">
+            <div class="hero-content">
+                <p class="hero-eyebrow">Certified Expertise</p>
+                <h1 class="hero-headline">30+ Industry-Recognised Certifications</h1>
+                <p class="hero-subheadline">
+                    We don't just talk about AI, data analytics, and cybersecurity—we're certified by the world's leading institutions. From Stanford and Duke to Google, Microsoft, and AWS, our qualifications demonstrate proven expertise across every area we serve.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 2: Qualification Statistics -->
+    <section class="section section-alt">
+        <div class="container">
+            <div class="qualification-stats">
+                <h2 class="section-headline" style="color: white; margin-bottom: var(--spacing-lg);">Our Certification Portfolio</h2>
+                <p style="color: rgba(255, 255, 255, 0.9); max-width: 800px; margin: 0 auto;">
+                    Over 30 certifications from top-tier universities and technology leaders, covering AI, data analytics, cybersecurity, cloud architecture, and business strategy.
+                </p>
+                <div class="qualification-stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-number">30+</span>
+                        <span class="stat-label">Certifications</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">8</span>
+                        <span class="stat-label">Top Institutions</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">5</span>
+                        <span class="stat-label">Core Domains</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number">24</span>
+                        <span class="stat-label">Live AI Systems</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 3: AI, Data & Machine Learning -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">🧠 AI, Data & Machine Learning</h2>
+            <p class="section-subhead" style="max-width: 900px; margin: 0 auto var(--spacing-2xl);">
+                Certified expertise in artificial intelligence, machine learning, and data science from leading universities and technology companies.
+            </p>
+
+            <div class="grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-2xl); margin-bottom: var(--spacing-2xl);">
+                <div class="qualification-card">
+                    <h3>AI & Machine Learning</h3>
+                    <ul class="qualification-list">
+                        <li>AI Product Management <span class="institution-badge">Duke University</span></li>
+                        <li>Applied AI Specialisation <span class="institution-badge">IBM</span></li>
+                        <li>AI in Healthcare <span class="institution-badge">Stanford University</span></li>
+                        <li>AI for Good <span class="institution-badge">DeepLearning.AI</span></li>
+                        <li>Intel® AI Fundamentals <span class="institution-badge">Intel</span></li>
+                        <li>AI for Business <span class="institution-badge">Penn State University</span></li>
+                        <li>AI Ladder Framework <span class="institution-badge">IBM</span></li>
+                    </ul>
+                    <div class="use-case-highlight">
+                        <strong>Real-World Application:</strong>
+                        <p>These certifications underpin our work building NLP-powered search engines, developing Gemini-based reporting tools, and guiding clients through AI readiness assessments.</p>
+                    </div>
+                </div>
+
+                <div class="qualification-card">
+                    <h3>Data Analytics & Cloud</h3>
+                    <ul class="qualification-list">
+                        <li>Google Advanced Data Analytics <span class="institution-badge">Google</span></li>
+                        <li>IBM Data Analyst <span class="institution-badge">IBM</span></li>
+                        <li>Google Business Intelligence <span class="institution-badge">Google</span></li>
+                        <li>AWS Cloud Solutions Architect <span class="institution-badge">AWS</span></li>
+                        <li>Google Data Analytics <span class="institution-badge">Google</span></li>
+                    </ul>
+                    <div class="use-case-highlight">
+                        <strong>Real-World Application:</strong>
+                        <p>These skills power our custom dashboards, WooCommerce analytics plugins, and LLM-generated business insights—bridging AI and data for decision-makers.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 4: Cybersecurity & Ethics -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">🔐 Cybersecurity & Ethics</h2>
+            <p class="section-subhead" style="max-width: 900px; margin: 0 auto var(--spacing-2xl);">
+                Security and ethical considerations are built into every solution from the ground up, not added as an afterthought.
+            </p>
+
+            <div style="max-width: 800px; margin: 0 auto;">
+                <div class="qualification-card">
+                    <h3>Security & Ethical AI</h3>
+                    <ul class="qualification-list">
+                        <li>Google Cybersecurity Specialisation <span class="institution-badge">Google</span></li>
+                        <li>Cybersecurity with Azure AD <span class="institution-badge">Microsoft</span></li>
+                        <li>Ethical Emerging Technologist <span class="institution-badge">CertNexus</span></li>
+                        <li>IT Fundamentals for Cybersecurity <span class="institution-badge">IBM</span></li>
+                    </ul>
+                    <div class="use-case-highlight">
+                        <strong>Why It Matters:</strong>
+                        <p>Whether advising on Microsoft Copilot usage, managing API tokens, or deploying LLMs to handle client data, our approach builds in ethical and secure design from the start.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 5: Prompt Engineering & LLM Integration -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">🧩 Prompt Engineering & LLM Integration</h2>
+            <p class="section-subhead" style="max-width: 900px; margin: 0 auto var(--spacing-2xl);">
+                Specialised training in getting the most from large language models and building AI interfaces that understand human intent.
+            </p>
+
+            <div style="max-width: 800px; margin: 0 auto;">
+                <div class="qualification-card">
+                    <h3>Advanced AI Interfaces</h3>
+                    <ul class="qualification-list">
+                        <li>Prompt Engineering for ChatGPT <span class="institution-badge">Vanderbilt University</span></li>
+                        <li>Autonomous AI Fundamentals <span class="institution-badge">University of Washington</span></li>
+                        <li>Artificial Creativity <span class="institution-badge">Parsons School of Design</span></li>
+                    </ul>
+                    <div class="use-case-highlight">
+                        <strong>What We Build:</strong>
+                        <p>From AI chatbots in WordPress to Gemini-powered WooCommerce queries, these credentials form the foundation for tools that understand—and act on—human intent.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 6: Project Delivery & Business Strategy -->
+    <section class="section section-alt">
+        <div class="container">
+            <h2 class="section-headline">📦 Project Delivery & Business Strategy</h2>
+            <p class="section-subhead" style="max-width: 900px; margin: 0 auto var(--spacing-2xl);">
+                Certified in agile methodologies, project management, and strategic business alignment to ensure successful AI implementations.
+            </p>
+
+            <div style="max-width: 800px; margin: 0 auto;">
+                <div class="qualification-card">
+                    <h3>Strategic Implementation</h3>
+                    <ul class="qualification-list">
+                        <li>Google Project Management Specialisation <span class="institution-badge">Google</span></li>
+                        <li>Agile Development & Scrum <span class="institution-badge">IBM</span></li>
+                        <li>AI for Business Strategy <span class="institution-badge">Penn State University</span></li>
+                        <li>Blockchain & Web3 <span class="institution-badge">INSEAD</span></li>
+                    </ul>
+                    <div class="use-case-highlight">
+                        <strong>Delivery Focus:</strong>
+                        <p>Whether managing AI integrations or aligning digital tools to business outcomes, we work with clients across industries to implement secure, agile, and ROI-focused tech solutions.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 7: Summary Table -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-headline">✅ Certification Summary</h2>
+            <p class="section-subhead" style="max-width: 900px; margin: 0 auto var(--spacing-2xl);">
+                A comprehensive overview of our certified expertise across all domains.
+            </p>
+
+            <div style="overflow-x: auto; margin-top: var(--spacing-2xl);">
+                <table style="width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: var(--border-radius); overflow: hidden;">
+                    <thead>
+                        <tr style="background: var(--color-navy); color: white;">
+                            <th style="padding: var(--spacing-md); text-align: left; font-weight: 600;">Domain</th>
+                            <th style="padding: var(--spacing-md); text-align: left; font-weight: 600;">Certifications</th>
+                            <th style="padding: var(--spacing-md); text-align: left; font-weight: 600;">Use Case Examples</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: var(--spacing-md); color: var(--color-navy); font-weight: 600;">AI/ML</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">IBM, Duke, Stanford, Intel, DeepLearning.AI</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">NLP search, agent tools, AI risk audits</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eee; background: #f9f9f9;">
+                            <td style="padding: var(--spacing-md); color: var(--color-navy); font-weight: 600;">Data Analytics</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">Google, IBM, AWS</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">Dashboards, BI integrations, Gemini query tools</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eee;">
+                            <td style="padding: var(--spacing-md); color: var(--color-navy); font-weight: 600;">Cybersecurity</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">Microsoft, IBM, CertNexus, Google</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">API design, access control, data handling</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #eee; background: #f9f9f9;">
+                            <td style="padding: var(--spacing-md); color: var(--color-navy); font-weight: 600;">Prompt Engineering</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">Vanderbilt, UW, Parsons</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">Custom GPT/Gemini interfaces, chatbot tools</td>
+                        </tr>
+                        <tr style="background: #f9f9f9;">
+                            <td style="padding: var(--spacing-md); color: var(--color-navy); font-weight: 600;">Project Delivery & Agile</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">Google, IBM, INSEAD</td>
+                            <td style="padding: var(--spacing-md); color: #4B5563;">AI onboarding, roadmap development, training</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 8: CTA -->
+    <section class="section section-alt">
+        <div class="container">
+            <div style="text-align: center; max-width: 800px; margin: 0 auto;">
+                <h2 class="section-headline">Ready to Work with Certified Experts?</h2>
+                <p class="section-subhead" style="margin-bottom: var(--spacing-2xl);">
+                    Whether you're exploring AI for the first time or looking to integrate machine learning, analytics, or automation into your existing workflows, we bring certified expertise and hands-on experience to every engagement.
+                </p>
+                <p style="font-size: 1.125rem; color: var(--text-secondary); margin-bottom: var(--spacing-2xl);">
+                    Let's have a conversation about how emerging technologies can deliver real results for your business—securely, strategically, and without the hype.
+                </p>
+                <div style="display: flex; gap: var(--spacing-lg); justify-content: center; flex-wrap: wrap;">
+                    <a href="contact.html" class="btn btn-primary btn-large">Start a Conversation</a>
+                    <a href="about.html" class="btn btn-secondary btn-large">Learn More About Us</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div id="footer-placeholder"></div>
+    <script src="/assets/js/footer-loader.js"></script>
+    <script src="/assets/js/main.js"></script>
+</body>
+</html>

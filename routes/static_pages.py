@@ -486,6 +486,13 @@ def blog_post(post_id):
     return send_file('blog-post.html')
 
 
+@static_pages_bp.route('/qualifications')
+@static_pages_bp.route('/qualifications.html')
+def qualifications():
+    """Serve the qualifications and certifications page"""
+    return send_file('qualifications.html')
+
+
 @static_pages_bp.route('/blog')
 def blog_redirect():
     """Redirect /blog to /blog.html"""

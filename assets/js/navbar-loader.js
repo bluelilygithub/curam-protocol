@@ -21,6 +21,7 @@
         'how-it-works.html': 'resources',
         'faq.html': 'faq',
         'blog.html': 'blog',
+        'qualifications.html': 'qualifications',
         'contact.html': 'contact'
     };
 
