@@ -9,7 +9,6 @@ Future: Can easily add JSON, Excel, and other export formats here.
 """
 
 import io
-import json
 from flask import Blueprint, request, session, Response
 import pandas as pd
 
@@ -17,8 +16,15 @@ import pandas as pd
 from config import DEFAULT_DEPARTMENT
 
 # Import utilities
-from utils.formatting import format_currency
 from utils.encoding_fix import sanitize_csv_export
+
+# Import department-specific export functions
+from routes.exports import (
+    export_finance_csv,
+    export_engineering_csv,
+    export_transmittal_csv,
+    export_logistics_csv
+)
 
 # Create blueprint
 export_bp = Blueprint('export', __name__)
@@ -34,38 +40,17 @@ def export_csv():
     department = saved.get('department', DEFAULT_DEPARTMENT)
     df = pd.DataFrame(saved['rows'])
 
+    # Route to department-specific export function
     if department == 'finance':
-        df_export = df.copy()
-        for currency_col in ['Cost', 'GST', 'FinalAmount']:
-            if currency_col in df_export.columns:
-                df_export[currency_col] = df_export[currency_col].apply(
-                    lambda x: format_currency(x) if x and x not in ("N/A", "") else "N/A"
-                )
-            else:
-                df_export[currency_col] = "N/A"
-        columns = ['Filename', 'Vendor', 'Date', 'InvoiceNum', 'Currency', 'Cost', 'GST', 'FinalAmount', 'Summary', 'ABN', 'POReference', 'PaymentTerms', 'DueDate', 'ShippingTerms', 'PortOfLoading', 'PortOfDischarge', 'VesselVoyage', 'BillOfLading', 'HSCodes', 'LineItems', 'Flags']
-        df_export = df_export[[col for col in columns if col in df_export.columns]]
-        # Convert arrays to strings for CSV
-        if 'HSCodes' in df_export.columns:
-            df_export['HSCodes'] = df_export['HSCodes'].apply(lambda x: ', '.join(x) if isinstance(x, list) else (x or ''))
-        if 'LineItems' in df_export.columns:
-            df_export['LineItems'] = df_export['LineItems'].apply(lambda x: json.dumps(x) if isinstance(x, list) else (x or ''))
-        if 'Flags' in df_export.columns:
-            df_export['Flags'] = df_export['Flags'].apply(lambda x: '; '.join(x) if isinstance(x, list) else (x or ''))
-        df_export.columns = ['Filename', 'Vendor', 'Date', 'Invoice #', 'Currency', 'Cost', 'GST', 'Final Amount', 'Summary', 'ABN', 'PO Reference', 'Payment Terms', 'Due Date', 'Shipping Terms', 'Port of Loading', 'Port of Discharge', 'Vessel/Voyage', 'Bill of Lading', 'HS Codes', 'Line Items', 'Flags']
-    elif department == 'transmittal':
-        df_export = df.copy()
-        columns = ['Filename', 'DwgNo', 'Rev', 'Title', 'Scale']
-        df_export = df_export[[col for col in columns if col in df_export.columns]]
+        df_export = export_finance_csv(df, saved)
     elif department == 'engineering':
-        df_export = df.copy()
-        schedule_type = saved.get('schedule_type')
-        if schedule_type == 'column':
-            columns = ['Filename', 'Mark', 'SectionType', 'Size', 'Length', 'Grade', 'BasePlate', 'CapPlate', 'Finish', 'Comments']
-        else:
-            columns = ['Filename', 'Mark', 'Size', 'Qty', 'Length', 'Grade', 'PaintSystem', 'Comments']
-        df_export = df_export[[col for col in columns if col in df_export.columns]]
+        df_export = export_engineering_csv(df, saved)
+    elif department == 'transmittal':
+        df_export = export_transmittal_csv(df, saved)
+    elif department == 'logistics':
+        df_export = export_logistics_csv(df, saved)
     else:
+        # Default fallback (shouldn't normally happen)
         df_export = df.copy()
         columns = ['Filename', 'Mark', 'Size', 'Qty', 'Length', 'Grade', 'PaintSystem', 'Comments']
         df_export = df_export[[col for col in columns if col in df_export.columns]]
