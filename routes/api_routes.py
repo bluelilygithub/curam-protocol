@@ -1165,6 +1165,9 @@ def get_blog_post(post_id):
         JSON with full post content, featured image, and metadata
     """
     try:
+        # Log the request for debugging
+        if current_app:
+            current_app.logger.info(f'Fetching blog post: {post_id}')
         # Try to parse as integer first
         try:
             post_id_int = int(post_id)
@@ -1215,9 +1218,12 @@ def get_blog_post(post_id):
                 continue
         
         if not blog_url or not wp_api_url:
+            error_msg = f'Unable to reach blog API or post not found. Tried URLs: {", ".join(blog_urls)}'
+            if current_app:
+                current_app.logger.error(error_msg)
             return jsonify({
                 'success': False,
-                'error': 'Unable to reach blog API or post not found',
+                'error': error_msg,
                 'post': None
             }), 503
         
@@ -1279,9 +1285,19 @@ def get_blog_post(post_id):
             }
         })
         
-    except Exception as e:
+    except requests.RequestException as e:
         return jsonify({
             'success': False,
-            'error': str(e),
+            'error': f'Network error connecting to blog API: {str(e)}',
+            'post': None
+        }), 503
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        if current_app:
+            current_app.logger.error(f'Error fetching blog post {post_id}: {error_trace}')
+        return jsonify({
+            'success': False,
+            'error': f'Server error: {str(e)}',
             'post': None
         }), 500

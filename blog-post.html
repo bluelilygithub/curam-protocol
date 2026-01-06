@@ -362,14 +362,32 @@
             }
 
             try {
-                const response = await fetch(`/api/blog-post/${postId}`);
+                const apiUrl = `/api/blog-post/${encodeURIComponent(postId)}`;
+                console.log('Fetching blog post from:', apiUrl);
+                
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+                
                 const data = await response.json();
+                console.log('Blog post data received:', data);
 
                 blogPostLoading.style.display = 'none';
+
+                if (!response.ok) {
+                    blogPostError.style.display = 'block';
+                    blogPostErrorMessage.textContent = `API Error (${response.status}): ${data.error || 'Failed to load post'}`;
+                    console.error('API response error:', response.status, data);
+                    return;
+                }
 
                 if (!data.success || !data.post) {
                     blogPostError.style.display = 'block';
                     blogPostErrorMessage.textContent = data.error || 'Post not found';
+                    console.error('API returned no post:', data);
                     return;
                 }
 
@@ -418,7 +436,17 @@
                 console.error('Error loading blog post:', error);
                 blogPostLoading.style.display = 'none';
                 blogPostError.style.display = 'block';
-                blogPostErrorMessage.textContent = 'Failed to load article. Please try again later.';
+                
+                // More detailed error message
+                let errorMsg = 'Failed to load article. ';
+                if (error.message) {
+                    errorMsg += error.message;
+                } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    errorMsg += 'Network error - please check your connection.';
+                } else {
+                    errorMsg += 'Please try again later.';
+                }
+                blogPostErrorMessage.textContent = errorMsg;
             }
         }
 
