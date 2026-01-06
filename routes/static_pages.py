@@ -16,19 +16,32 @@ static_pages_bp = Blueprint('static_pages', __name__)
 
 
 # =============================================================================
-# ASSET ROUTES (invoices, drawings)
+# SAMPLE FILE ROUTES (samples directory)
 # =============================================================================
 
+@static_pages_bp.route('/samples/<department>/<path:filename>')
+def sample_file(department, filename):
+    """Serve sample PDF files from samples directory"""
+    return send_from_directory(f'samples/{department}', filename)
+
+# Legacy routes for backward compatibility (redirect to new structure)
 @static_pages_bp.route('/invoices/<path:filename>')
 def invoices(filename):
-    """Serve invoice PDF files"""
-    return send_from_directory('invoices', filename)
+    """Legacy route - redirects to samples/finance"""
+    return send_from_directory('samples/finance', filename)
 
 
 @static_pages_bp.route('/drawings/<path:filename>')
 def drawings(filename):
-    """Serve drawing PDF files"""
-    return send_from_directory('drawings', filename)
+    """Legacy route - serves from samples/engineering or samples/transmittal"""
+    # Try engineering first, then transmittal
+    if os.path.exists(os.path.join('samples/engineering', filename)):
+        return send_from_directory('samples/engineering', filename)
+    elif os.path.exists(os.path.join('samples/transmittal', filename)):
+        return send_from_directory('samples/transmittal', filename)
+    else:
+        from flask import abort
+        abort(404)
 
 
 # =============================================================================

@@ -17,49 +17,46 @@ DEPARTMENT_SAMPLES = {
     "finance": {
         "label": "Sample invoices",
         "description": "Finance department samples",
-        "folder": "invoices",
+        "folder": "samples/finance",
         "samples": [
-            {"path": "invoices/Bne.pdf", "label": "Bne.pdf"},
-            {"path": "invoices/CloudRender.pdf", "label": "CloudRender.pdf"},
-            {"path": "invoices/Tingalpa.pdf", "label": "Tingalpa.pdf"},
-            {"path": "invoices/John Deere Construction & Forestry Commercial Invoice.pdf", "label": "John Deere Construction & Forestry Commercial Invoice.pdf"},
-            {"path": "invoices/Lenovo Global Logistics Commercial Invoice.pdf", "label": "Lenovo Global Logistics Commercial Invoice.pdf"},
-            {"path": "invoices/Shenzhen Fast-Circuit Co Commercial Invoice.pdf", "label": "Shenzhen Fast-Circuit Co Commercial Invoice.pdf"}
+            {"path": "samples/finance/CloudRender.pdf", "label": "CloudRender.pdf"},
+            {"path": "samples/finance/Tingalpa.pdf", "label": "Tingalpa.pdf"},
+            {"path": "samples/finance/John Deere Construction & Forestry Commercial Invoice.pdf", "label": "John Deere Construction & Forestry Commercial Invoice.pdf"},
+            {"path": "samples/finance/Lenovo Global Logistics Commercial Invoice.pdf", "label": "Lenovo Global Logistics Commercial Invoice.pdf"},
+            {"path": "samples/finance/Shenzhen Fast-Circuit Co Commercial Invoice.pdf", "label": "Shenzhen Fast-Circuit Co Commercial Invoice.pdf"}
         ]
     },
     "engineering": {
         "label": "Structural drawings",
         "description": "Engineering department samples",
-        "folder": "drawings",
+        "folder": "samples/engineering",
         "samples": [
-            {"path": "drawings/schedule_cad.pdf", "label": "beam_schedule_CLEAN_cad.pdf"},
-            {"path": "drawings/schedule_revit.pdf", "label": "column_schedule_CLEAN_revit.pdf"},
-            {"path": "drawings/beam_messy_scan.pdf", "label": "beam_schedule_MESSY_scan.pdf"},
-            {"path": "drawings/column_complex_messy.pdf", "label": "column_schedule_MESSY_scan.pdf"}
+            {"path": "samples/engineering/schedule_cad.pdf", "label": "beam_schedule_CLEAN_cad.pdf"},
+            {"path": "samples/engineering/schedule_revit.pdf", "label": "column_schedule_CLEAN_revit.pdf"},
+            {"path": "samples/engineering/beam_messy_scan.pdf", "label": "beam_schedule_MESSY_scan.pdf"},
+            {"path": "samples/engineering/column_complex_messy.pdf", "label": "column_schedule_MESSY_scan.pdf"}
         ]
     },
     "transmittal": {
         "label": "Drawing register samples",
         "description": "Structural drafter transmittal samples",
-        "folder": "drawings",
+        "folder": "samples/transmittal",
         "samples": [
-            {"path": "drawings/s001_general_notes.pdf", "label": "S-001 General Notes"},
-            {"path": "drawings/s100_foundation_plan.pdf", "label": "S-100 Foundation Plan"},
-            {"path": "drawings/s101_ground_floor_plan.pdf", "label": "S-101 Ground Floor"},
-            {"path": "drawings/s102_framing_plan.pdf", "label": "S-102 Framing Plan"},
-            {"path": "drawings/s500_standard_details.pdf", "label": "S-500 Details"}
+            {"path": "samples/transmittal/s100_foundation_plan.pdf", "label": "S-100 Foundation Plan"},
+            {"path": "samples/transmittal/s101_ground_floor_plan.pdf", "label": "S-101 Ground Floor"},
+            {"path": "samples/transmittal/s102_framing_plan.pdf", "label": "S-102 Framing Plan"},
+            {"path": "samples/transmittal/s500_standard_details.pdf", "label": "S-500 Details"}
         ]
     },
     "logistics": {
         "label": "Logistics samples",
         "description": "Logistics/freight forwarding samples",
-        "folder": "logistics",
+        "folder": "samples/logistics",
         "samples": [
-            {"path": "logistics/Apparel FTA List.pdf", "label": "Apparel FTA List"},
-            {"path": "logistics/Carrier Master Bill Of Lading.pdf", "label": "Carrier Master Bill of Lading"},
-            {"path": "logistics/Maersk Line - Sea Waybill Bill Of Lading.pdf", "label": "Maersk Sea Waybill"},
-            {"path": "logistics/Scribbled House Bill of Lading.pdf", "label": "Scribbled House Bill of Lading"},
-            {"path": "logistics/Timber Tally Sheet.pdf", "label": "Timber Tally Sheet"}
+            {"path": "samples/logistics/Carrier Master Bill Of Lading.pdf", "label": "Carrier Master Bill of Lading"},
+            {"path": "samples/logistics/Maersk Line - Sea Waybill Bill Of Lading.pdf", "label": "Maersk Sea Waybill"},
+            {"path": "samples/logistics/Scribbled House Bill of Lading.pdf", "label": "Scribbled House Bill of Lading"},
+            {"path": "samples/logistics/Timber Tally Sheet.pdf", "label": "Timber Tally Sheet"}
         ]
     }
 }
