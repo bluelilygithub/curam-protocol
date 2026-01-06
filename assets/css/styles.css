@@ -721,6 +721,10 @@ h1, h2, h3, h4 {
   margin-bottom: 0.75rem;
 }
 
+.hero-tagline p {
+  color: var(--color-gold);
+}
+
 .hero-headline {
   font-size: clamp(2.5rem, 6vw, 4rem);
   font-weight: 500;
@@ -743,13 +747,13 @@ h1, h2, h3, h4 {
 .hero-description {
   font-size: 1.125rem;
   font-weight: 400;
-  color: var(--text-secondary);
+  color: var(--color-white);
   line-height: 1.7;
   max-width: 600px;
   margin-bottom: 2.5rem;
 }
 
-.hero-description p{
+.hero-description p {
   color: var(--color-white);
 }
 
