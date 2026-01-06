@@ -671,6 +671,7 @@ h1, h2, h3, h4 {
 .hero-video-overlay {
   position: absolute;
   inset: 0;
+  z-index: 0;
   background: 
     radial-gradient(ellipse at 30% 20%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
     linear-gradient(135deg, rgba(10, 22, 40, 0.95) 0%, rgba(26, 45, 74, 0.85) 100%);
