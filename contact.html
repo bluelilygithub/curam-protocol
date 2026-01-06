@@ -83,6 +83,58 @@
         color: var(--color-navy);
         font-weight: 600;
       }
+      /* Microphone button styles */
+      .contact-chat-mic-btn {
+        background: transparent;
+        border: 2px solid var(--color-navy);
+        color: var(--color-navy);
+        padding: 10px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+      }
+      .contact-chat-mic-btn:hover {
+        background: var(--color-navy);
+        color: white;
+      }
+      .contact-chat-mic-btn.recording {
+        background: #dc2626;
+        border-color: #dc2626;
+        color: white;
+        animation: pulse-recording 1.5s ease-in-out infinite;
+      }
+      .contact-chat-mic-btn.recording svg {
+        animation: pulse-icon 0.8s ease-in-out infinite;
+      }
+      @keyframes pulse-recording {
+        0%, 100% {
+          box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+        }
+        50% {
+          box-shadow: 0 0 0 8px rgba(220, 38, 38, 0);
+        }
+      }
+      @keyframes pulse-icon {
+        0%, 100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.1);
+        }
+      }
+      .contact-chat-mic-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .contact-chat-mic-btn.error {
+        background: #f59e0b;
+        border-color: #f59e0b;
+        color: white;
+      }
     </style>
   </head>
   <body>
@@ -154,6 +206,14 @@
                     id="chatInput"
                     placeholder="Ask about invoice automation, beam schedules, or our protocol..."
                   />
+                  <button class="contact-chat-mic-btn" id="chatMicBtn" title="Click to speak" aria-label="Voice input">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                      <line x1="12" y1="19" x2="12" y2="23"></line>
+                      <line x1="8" y1="23" x2="16" y2="23"></line>
+                    </svg>
+                  </button>
                   <button class="contact-chat-btn" id="chatSendBtn">Send</button>
                 </div>
                 <div id="suggestedInterest" class="contact-interest-suggestion contact-hidden"></div>
@@ -277,12 +337,124 @@
       const chatContainer = document.getElementById('chatContainer');
       const chatInput = document.getElementById('chatInput');
       const chatSendBtn = document.getElementById('chatSendBtn');
+      const chatMicBtn = document.getElementById('chatMicBtn');
       const suggestedInterestDiv = document.getElementById('suggestedInterest');
       const interestSelect = document.getElementById('interest');
       const messageTextarea = document.getElementById('message');
 
       let conversationHistory = [];
       let audioContext = null;
+      
+      // Speech Recognition
+      let recognition = null;
+      let isRecording = false;
+      
+      // Initialize Speech Recognition
+      function initSpeechRecognition() {
+          // Check browser support
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          
+          if (!SpeechRecognition) {
+              console.warn('Speech recognition not supported in this browser');
+              chatMicBtn.disabled = true;
+              chatMicBtn.title = 'Voice input not supported in this browser';
+              chatMicBtn.classList.add('error');
+              return false;
+          }
+          
+          try {
+              recognition = new SpeechRecognition();
+              recognition.continuous = false; // Stop after first result
+              recognition.interimResults = false; // Only return final results
+              recognition.lang = 'en-US'; // Set language
+              
+              recognition.onstart = function() {
+                  isRecording = true;
+                  chatMicBtn.classList.add('recording');
+                  chatMicBtn.title = 'Listening... Click to stop';
+                  chatInput.placeholder = 'Listening...';
+              };
+              
+              recognition.onresult = function(event) {
+                  const transcript = event.results[0][0].transcript;
+                  chatInput.value = transcript;
+                  // Auto-send if user wants (optional - commented out for now)
+                  // sendChatMessage();
+              };
+              
+              recognition.onerror = function(event) {
+                  console.error('Speech recognition error:', event.error);
+                  isRecording = false;
+                  chatMicBtn.classList.remove('recording');
+                  chatInput.placeholder = 'Ask about invoice automation, beam schedules, or our protocol...';
+                  
+                  let errorMsg = 'Voice input error. ';
+                  switch(event.error) {
+                      case 'no-speech':
+                          errorMsg += 'No speech detected.';
+                          break;
+                      case 'audio-capture':
+                          errorMsg += 'Microphone not found.';
+                          chatMicBtn.classList.add('error');
+                          break;
+                      case 'not-allowed':
+                          errorMsg += 'Microphone permission denied.';
+                          chatMicBtn.classList.add('error');
+                          break;
+                      case 'network':
+                          errorMsg += 'Network error.';
+                          break;
+                      default:
+                          errorMsg += 'Please try again.';
+                  }
+                  
+                  chatMicBtn.title = errorMsg;
+                  setTimeout(() => {
+                      chatMicBtn.classList.remove('error');
+                      chatMicBtn.title = 'Click to speak';
+                  }, 3000);
+              };
+              
+              recognition.onend = function() {
+                  isRecording = false;
+                  chatMicBtn.classList.remove('recording');
+                  chatInput.placeholder = 'Ask about invoice automation, beam schedules, or our protocol...';
+                  chatMicBtn.title = 'Click to speak';
+              };
+              
+              return true;
+          } catch (error) {
+              console.error('Failed to initialize speech recognition:', error);
+              chatMicBtn.disabled = true;
+              chatMicBtn.title = 'Voice input unavailable';
+              return false;
+          }
+      }
+      
+      // Toggle speech recognition
+      function toggleSpeechRecognition() {
+          if (!recognition) {
+              if (!initSpeechRecognition()) {
+                  return;
+              }
+          }
+          
+          if (isRecording) {
+              // Stop recording
+              recognition.stop();
+          } else {
+              // Start recording
+              try {
+                  recognition.start();
+              } catch (error) {
+                  // Already started or other error
+                  console.log('Recognition start error:', error);
+              }
+          }
+      }
+      
+      // Initialize on page load
+      initSpeechRecognition();
 
       // Initialize audio context on first user interaction
       function initAudioContext() {
@@ -653,6 +825,14 @@
       
       // Also initialize on any click in the chat area (for better browser compatibility)
       chatInput.addEventListener('focus', initAudioContext);
+      
+      // Microphone button click handler
+      if (chatMicBtn) {
+          chatMicBtn.addEventListener('click', function() {
+              initAudioContext(); // Initialize audio context for microphone access
+              toggleSpeechRecognition();
+          });
+      }
 
       // Message relevance validation using NLP (same as AI assistant)
       // Note: messageTextarea is already declared above
