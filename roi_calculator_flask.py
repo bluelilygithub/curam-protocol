@@ -3456,8 +3456,19 @@ def roi_calculator():
             # Get industry config for automation potential
             industry_config = INDUSTRIES.get(industry, {})
             
-            # Use conservative ROI calculation (v3.1)
-            calculations = calculate_conservative_roi(staff_count, industry_config)
+            # Check if industry has full configuration (proven_tasks + tasks)
+            # Import here to avoid circular imports
+            from roi_calculator.calculations import has_full_roi_config, calculate_simple_roi
+            
+            # Use appropriate calculation based on config availability
+            if has_full_roi_config(industry_config):
+                # Full config available - use detailed conservative calculation
+                calculations = calculate_conservative_roi(staff_count, industry_config)
+            else:
+                # Fallback for industries without full config
+                # Use industry-specific automation_potential and basic assumptions
+                avg_rate = session.get('avg_rate', 130)  # Get rate from session or use default
+                calculations = calculate_simple_roi(staff_count, avg_rate, industry_config)
             session['calculations'] = calculations
             
             # Format automation potential as percentage for display

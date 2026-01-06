@@ -375,6 +375,92 @@ def calculate_metrics_v3(staff_count, avg_rate, industry_config):
     }
 
 
+def calculate_simple_roi(staff_count, avg_rate, industry_config):
+    """
+    Fallback calculation for industries without full proven_tasks configuration.
+    
+    Uses industry-specific automation_potential and basic assumptions when
+    detailed task breakdown is not available.
+    
+    This is used for industries that don't have:
+    - proven_tasks dictionary
+    - tasks array with detailed definitions
+    
+    Args:
+        staff_count: Total number of staff
+        avg_rate: Average hourly rate
+        industry_config: Industry configuration dictionary
+    
+    Returns:
+        dict: ROI calculation results compatible with calculate_conservative_roi format
+    """
+    # Use industry-specific automation potential or conservative default
+    automation_potential = industry_config.get('automation_potential', 0.35)
+    
+    # Use industry-specific hours per staff or default
+    hours_per_staff = industry_config.get('hours_per_staff_per_week', 4.0)
+    total_weekly_hours = staff_count * hours_per_staff
+    
+    # Calculate basic metrics
+    annual_burn = total_weekly_hours * avg_rate * 48
+    tier_1_savings = annual_burn * automation_potential
+    
+    # Tier 2 assumes expanded automation (add 25% more)
+    tier_2_potential = min(automation_potential + 0.25, 0.70)
+    tier_2_savings = annual_burn * tier_2_potential
+    
+    # Calculate recoverable hours
+    total_recoverable_hours = total_weekly_hours * automation_potential
+    
+    return {
+        "mode": "simple_fallback",
+        "total_staff": staff_count,
+        "doc_staff_count": staff_count,  # Assume all staff for simple calc
+        "doc_staff_percentage": 100.0,  # 100% for simple calc
+        "base_doc_staff_percentage": 100.0,
+        "base_doc_staff_count": staff_count,
+        "firm_size_category": "Standard",
+        "scaling_note": "Using industry-specific automation potential",
+        "hours_per_doc_staff": hours_per_staff,
+        "typical_doc_rate": avg_rate,
+        "total_weekly_hours": total_weekly_hours,
+        "annual_cost": annual_burn,
+        "annual_burn": annual_burn,
+        "task_analysis": [],  # No task breakdown available
+        "total_recoverable_hours": total_recoverable_hours,
+        "weighted_potential": automation_potential,
+        "proven_tier_1_savings": tier_1_savings,
+        "tier_1_savings": tier_1_savings,
+        "tier_2_potential": tier_2_potential,
+        "tier_2_savings": tier_2_savings,
+        "capacity_hours": total_recoverable_hours * 48,
+        "potential_revenue": tier_1_savings
+    }
+
+
+def has_full_roi_config(industry_config):
+    """
+    Check if industry has full configuration for conservative ROI calculation.
+    
+    Returns True if industry has:
+    - proven_tasks dictionary (non-empty)
+    - tasks array (non-empty list)
+    
+    Args:
+        industry_config: Industry configuration dictionary
+    
+    Returns:
+        bool: True if full config available, False otherwise
+    """
+    proven_tasks = industry_config.get('proven_tasks', {})
+    tasks = industry_config.get('tasks', [])
+    
+    return (
+        isinstance(proven_tasks, dict) and len(proven_tasks) > 0 and
+        isinstance(tasks, list) and len(tasks) > 0
+    )
+
+
 # Keep old function for backward compatibility (deprecated)
 def calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_config):
     """DEPRECATED: Use calculate_metrics_v3() instead"""
