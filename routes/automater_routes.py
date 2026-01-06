@@ -498,8 +498,9 @@ def index_automater():
             grouped_finance_results[filename].append(row)
     
     # Build sample_files using centralized loader (automatically discovers all departments)
+    # NOTE: use_database=False to use config.py paths (database has old paths)
     from utils.sample_loader import get_all_department_samples
-    sample_files_merged = get_all_department_samples(use_database=True)
+    sample_files_merged = get_all_department_samples(use_database=False)
     
     # Debug: Show sample counts
     for dept, config in sample_files_merged.items():
