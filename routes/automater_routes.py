@@ -18,13 +18,13 @@ from config import (
     FINANCE_UPLOAD_DIR,
     DEFAULT_DEPARTMENT,
     DEPARTMENT_SAMPLES,
-    SAMPLE_TO_DEPT,
     ROUTINE_DESCRIPTIONS,
     ROUTINE_SUMMARY
 )
+# SAMPLE_TO_DEPT now built dynamically via utils.sample_loader
 
 # Import database functions
-from database import get_samples_for_template
+# Sample loading now handled by utils.sample_loader
 
 # Import services
 from services.pdf_service import extract_text
@@ -136,16 +136,21 @@ def index_automater():
         if department == 'transmittal':
             samples = [sample for sample in selected_samples if sample]
         else:
+            # Use dynamic sample mapping (includes database samples if available)
+            from utils.sample_loader import build_sample_to_dept_mapping
+            sample_to_dept = build_sample_to_dept_mapping(use_database=True)
             samples = [
                 sample for sample in selected_samples
-                if sample and SAMPLE_TO_DEPT.get(sample) == department
+                if sample and sample_to_dept.get(sample) == department
             ]
         # Log what was selected for debugging
         if selected_samples:
             model_actions.append(f"Selected samples: {selected_samples}")
+            from utils.sample_loader import build_sample_to_dept_mapping
+            sample_to_dept = build_sample_to_dept_mapping(use_database=True)
             for sample in selected_samples:
                 if sample:
-                    dept_match = SAMPLE_TO_DEPT.get(sample, "NOT FOUND")
+                    dept_match = sample_to_dept.get(sample, "NOT FOUND")
                     model_actions.append(f"  - {sample}: mapped to department '{dept_match}'")
             model_actions.append(f"Filtered to department '{department}': {samples}")
         else:
@@ -492,36 +497,14 @@ def index_automater():
                 grouped_finance_results[filename] = []
             grouped_finance_results[filename].append(row)
     
-    # Build sample_files from database (INSIDE function, before return)
-    db_samples = {}
-    for dept in ['finance', 'engineering', 'transmittal', 'logistics']:
-        try:
-            samples = get_samples_for_template(dept)
-            if samples:
-                print(f"Database returned {len(samples)} samples for {dept}")
-                dept_info = DEPARTMENT_SAMPLES.get(dept, {})
-                db_samples[dept] = {
-                    "label": dept_info.get("label", "Samples"),
-                    "description": dept_info.get("description", ""),
-                    "folder": dept_info.get("folder", ""),
-                    "samples": samples
-                }
-            else:
-                print(f"Database returned 0 samples for {dept} - using hardcoded")
-        except Exception as e:
-            print(f"Database error for {dept}: {e}")
-            # Continue with hardcoded samples on error
+    # Build sample_files using centralized loader (automatically discovers all departments)
+    from utils.sample_loader import get_all_department_samples
+    sample_files_merged = get_all_department_samples(use_database=True)
     
-    # Merge database samples with hardcoded (database takes priority)
-    sample_files_merged = {**DEPARTMENT_SAMPLES, **db_samples}
-    print(f"Final sample count - Finance: {len(sample_files_merged.get('finance', {}).get('samples', []))}")
-    
-    # Debug: Show first sample path for finance
-    finance_samples = sample_files_merged.get('finance', {}).get('samples', [])
-    if finance_samples:
-        print(f"First finance sample path: {finance_samples[0].get('path', 'NO PATH')}")
-    else:
-        print("No finance samples in merged data!")
+    # Debug: Show sample counts
+    for dept, config in sample_files_merged.items():
+        sample_count = len(config.get('samples', []))
+        print(f"Sample count for {dept}: {sample_count}")
     
     print(f"🔍 RENDERING: department={repr(department)}, results_count={len(results) if results else 0}")
     
