@@ -136,21 +136,23 @@ def index_automater():
         if department == 'transmittal':
             samples = [sample for sample in selected_samples if sample]
         else:
-            # Use dynamic sample mapping (includes database samples if available)
-            from utils.sample_loader import build_sample_to_dept_mapping
-            sample_to_dept = build_sample_to_dept_mapping(use_database=True)
+            # Simple check: path must start with samples/{department}/
+            expected_prefix = f"samples/{department}/"
             samples = [
                 sample for sample in selected_samples
-                if sample and sample_to_dept.get(sample) == department
+                if sample and sample.startswith(expected_prefix)
             ]
         # Log what was selected for debugging
         if selected_samples:
             model_actions.append(f"Selected samples: {selected_samples}")
-            from utils.sample_loader import build_sample_to_dept_mapping
-            sample_to_dept = build_sample_to_dept_mapping(use_database=True)
             for sample in selected_samples:
                 if sample:
-                    dept_match = sample_to_dept.get(sample, "NOT FOUND")
+                    # Extract department from path (samples/{dept}/...)
+                    dept_match = "NOT FOUND"
+                    if sample.startswith("samples/"):
+                        parts = sample.split("/")
+                        if len(parts) >= 2:
+                            dept_match = parts[1]  # Extract department from path
                     model_actions.append(f"  - {sample}: mapped to department '{dept_match}'")
             model_actions.append(f"Filtered to department '{department}': {samples}")
         else:
