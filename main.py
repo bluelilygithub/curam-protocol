@@ -33,14 +33,10 @@ app.register_blueprint(export_bp)
 app.register_blueprint(api_bp)
 
 # Configure UTF-8 encoding sanitization for corrupt characters
-from utils.encoding_fix import create_safe_template_filter, sanitize_response_middleware
+from utils.encoding_fix import create_safe_template_filter
 
 # Add Jinja2 filter for automatic sanitization in templates
 app.jinja_env.filters['sanitize'] = create_safe_template_filter()
-
-# Add middleware to sanitize all HTML responses (optional - uncomment to enable)
-# This will clean ALL HTML responses automatically
-# app.after_request(sanitize_response_middleware)
 
 # Error handler for debugging
 @app.errorhandler(500)
@@ -71,14 +67,10 @@ os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
 # AUTOMATER & DEMO ROUTES
 # =============================================================================
 
-# Feasibility Preview - Sector-aware HTML page with iframe (database-driven)
 # Feasibility Preview HTML page with iframe (serves feasibility-preview.html)
 @app.route('/feasibility-preview.html')
 def feasibility_preview_html():
     """Serve feasibility-preview.html page with iframe to automater"""
-    # Try to render as template with default sector data
-    sector_slug = request.args.get('sector', 'professional-services')
-    
     # Default sector configuration
     sector_config = {
         'name': 'Professional Services',
