@@ -240,6 +240,121 @@ def build_combined_prompt(doc_type, sector_slug, text):
 
 
 # ============================================================================
+# SEARCH LOGS - Track RAG search queries
+# ============================================================================
+
+def log_search_query(query, search_type='rag', source_page=None, ip_address=None, 
+                     user_agent=None, session_id=None, results_count=0, sources=None):
+    """
+    Log a search query to the database.
+    
+    Args:
+        query (str): The search query text
+        search_type (str): Type of search - 'rag', 'blog', 'static', 'contact_assistant'
+        source_page (str): URL path where search originated
+        ip_address (str): User's IP address
+        user_agent (str): User's browser user agent
+        session_id (str): Flask session ID
+        results_count (int): Number of results returned
+        sources (list): List of source titles/URLs found
+    
+    Returns:
+        int: ID of created record, or None if failed
+    """
+    if not engine:
+        return None
+    
+    try:
+        import json
+        # Convert sources list to JSON string for JSONB
+        sources_json = json.dumps(sources) if sources else None
+        
+        with engine.connect() as conn:
+            # Check if action_logs table exists, if not use email_captures as fallback
+            try:
+                result = conn.execute(text("""
+                    INSERT INTO action_logs (
+                        action_type,
+                        action_data,
+                        source_page,
+                        ip_address,
+                        user_agent,
+                        session_id,
+                        created_at
+                    ) VALUES (
+                        :action_type,
+                        :action_data,
+                        :source_page,
+                        :ip_address,
+                        :user_agent,
+                        :session_id,
+                        NOW()
+                    )
+                    RETURNING id
+                """), {
+                    "action_type": f"search_{search_type}",
+                    "action_data": json.dumps({
+                        "query": query,
+                        "results_count": results_count,
+                        "sources": sources
+                    }),
+                    "source_page": source_page,
+                    "ip_address": ip_address,
+                    "user_agent": user_agent,
+                    "session_id": session_id
+                })
+                conn.commit()
+                record_id = result.scalar()
+                print(f"✅ Search query logged: '{query[:50]}...' ({search_type}) - ID: {record_id}")
+                return record_id
+            except Exception as table_error:
+                # Fallback: Use email_captures table if action_logs doesn't exist
+                print(f"⚠️ action_logs table not found, using email_captures fallback: {table_error}")
+                result = conn.execute(text("""
+                    INSERT INTO email_captures (
+                        email_address,
+                        report_type,
+                        source_page,
+                        request_data,
+                        ip_address,
+                        user_agent,
+                        session_id
+                    ) VALUES (
+                        :email,
+                        :report_type,
+                        :source_page,
+                        :request_data,
+                        :ip_address,
+                        :user_agent,
+                        :session_id
+                    )
+                    RETURNING id
+                """), {
+                    "email": f"search_{search_type}@system.local",
+                    "report_type": f"search_{search_type}",
+                    "source_page": source_page,
+                    "request_data": json.dumps({
+                        "query": query,
+                        "results_count": results_count,
+                        "sources": sources
+                    }),
+                    "ip_address": ip_address,
+                    "user_agent": user_agent,
+                    "session_id": session_id
+                })
+                conn.commit()
+                record_id = result.scalar()
+                print(f"✅ Search query logged (fallback): '{query[:50]}...' ({search_type}) - ID: {record_id}")
+                return record_id
+            
+    except Exception as e:
+        print(f"❌ Error logging search query: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+# ============================================================================
 # EMAIL CAPTURES - Track email report requests
 # ============================================================================
 

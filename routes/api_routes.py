@@ -25,7 +25,7 @@ from services.rag_service import perform_rag_search, perform_rag_search_fast
 from services.image_preprocessing import TESSERACT_AVAILABLE, CV2_AVAILABLE
 
 # Import database functions
-from database import capture_email_request, mark_email_sent
+from database import capture_email_request, mark_email_sent, log_search_query
 
 # Get API key from environment
 api_key = os.environ.get("GEMINI_API_KEY")
@@ -83,6 +83,18 @@ def search_blog_rag():
         
         # Phase 1: Quick search of static pages only (returns in <500ms)
         fast_results = perform_rag_search_fast(query, max_results=5)
+        
+        # Log search query to database
+        log_search_query(
+            query=query,
+            search_type='rag_fast',
+            source_page=request.referrer or '/api/search-blog',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            session_id=session.get('_id'),
+            results_count=len(fast_results.get('sources', [])),
+            sources=[s.get('title', '') for s in fast_results.get('sources', [])]
+        )
         
         # Generate quick answer from static pages only
         initial_answer = ""
@@ -151,6 +163,18 @@ def search_blog_complete():
         
         # Perform complete search (both static pages AND blog posts)
         rag_results = perform_rag_search(query, max_results=5)
+        
+        # Log search query to database
+        log_search_query(
+            query=query,
+            search_type='rag_complete',
+            source_page=request.referrer or '/api/search-blog-complete',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            session_id=session.get('_id'),
+            results_count=len(rag_results.get('sources', [])),
+            sources=[s.get('title', '') for s in rag_results.get('sources', [])]
+        )
         
         # Check if there was an error reaching the blog
         if 'error' in rag_results and not rag_results['sources']:
@@ -247,6 +271,18 @@ def contact_assistant():
                 if rag_results.get('context'):
                     rag_context = rag_results['context']
                     sources = rag_results['sources']
+                
+                # Log search query to database
+                log_search_query(
+                    query=message,
+                    search_type='contact_assistant',
+                    source_page=request.referrer or '/api/contact-assistant',
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get('User-Agent'),
+                    session_id=session.get('_id'),
+                    results_count=len(sources),
+                    sources=[s.get('title', '') for s in sources]
+                )
             except Exception as e:
                 print(f"RAG failed: {e}")
         
