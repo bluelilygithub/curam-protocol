@@ -345,11 +345,16 @@ h1, h2, h3, h4 {
   width: 100%;
   max-width: 500px;
   margin-left: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .nav-search-input {
   width: 100%;
   padding: 0.625rem 1rem;
+  padding-right: 2.75rem; /* Make room for microphone button */
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border-subtle);
   border-radius: var(--border-radius);
@@ -367,6 +372,70 @@ h1, h2, h3, h4 {
   outline: none;
   border-color: var(--cyan-accent);
   background: rgba(255, 255, 255, 0.08);
+}
+
+/* Microphone button for search */
+.nav-search-mic-btn {
+  position: absolute;
+  right: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  padding: 0.5rem;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.nav-search-mic-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--cyan-accent);
+  color: var(--cyan-accent);
+}
+
+.nav-search-mic-btn.recording {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: white;
+  animation: pulse-recording-nav 1.5s ease-in-out infinite;
+}
+
+.nav-search-mic-btn.recording svg {
+  animation: pulse-icon-nav 0.8s ease-in-out infinite;
+}
+
+@keyframes pulse-recording-nav {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0);
+  }
+}
+
+@keyframes pulse-icon-nav {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.nav-search-mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nav-search-mic-btn.error {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: white;
 }
 
 /* Nav Menu */

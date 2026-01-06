@@ -269,6 +269,122 @@ document.addEventListener('DOMContentLoaded', function() {
     // Also listen for navbarLoaded event (for dynamically loaded navbars)
     document.addEventListener('navbarLoaded', initializeDropdowns);
 
+    // Speech Recognition for search bar
+    let navRecognition = null;
+    let isNavRecording = false;
+    
+    function initNavSpeechRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const micBtn = document.getElementById('navSearchMicBtn');
+        const searchInput = document.getElementById('navSearchInput');
+        
+        if (!micBtn || !searchInput) {
+            return false;
+        }
+        
+        // Check browser support
+        if (!SpeechRecognition) {
+            console.warn('Speech recognition not supported in this browser');
+            if (micBtn) {
+                micBtn.disabled = true;
+                micBtn.title = 'Voice input not supported in this browser';
+                micBtn.classList.add('error');
+            }
+            return false;
+        }
+        
+        try {
+            navRecognition = new SpeechRecognition();
+            navRecognition.continuous = false;
+            navRecognition.interimResults = false;
+            navRecognition.lang = 'en-US';
+            
+            navRecognition.onstart = function() {
+                isNavRecording = true;
+                micBtn.classList.add('recording');
+                micBtn.title = 'Listening... Click to stop';
+                if (searchInput) {
+                    searchInput.placeholder = 'Listening...';
+                }
+            };
+            
+            navRecognition.onresult = function(event) {
+                const transcript = event.results[0][0].transcript;
+                if (searchInput) {
+                    searchInput.value = transcript;
+                    // Trigger input event so any listeners know the value changed
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            };
+            
+            navRecognition.onerror = function(event) {
+                console.error('Speech recognition error:', event.error);
+                isNavRecording = false;
+                micBtn.classList.remove('recording');
+                if (searchInput) {
+                    searchInput.placeholder = 'RAG Search...';
+                }
+                
+                let errorMsg = 'Voice input error. ';
+                switch(event.error) {
+                    case 'no-speech':
+                        errorMsg += 'No speech detected.';
+                        break;
+                    case 'audio-capture':
+                        errorMsg += 'Microphone not found.';
+                        micBtn.classList.add('error');
+                        break;
+                    case 'not-allowed':
+                        errorMsg += 'Microphone permission denied.';
+                        micBtn.classList.add('error');
+                        break;
+                    case 'network':
+                        errorMsg += 'Network error.';
+                        break;
+                    default:
+                        errorMsg += 'Please try again.';
+                }
+                
+                micBtn.title = errorMsg;
+                setTimeout(() => {
+                    micBtn.classList.remove('error');
+                    micBtn.title = 'Click to speak';
+                }, 3000);
+            };
+            
+            navRecognition.onend = function() {
+                isNavRecording = false;
+                micBtn.classList.remove('recording');
+                if (searchInput) {
+                    searchInput.placeholder = 'RAG Search...';
+                }
+                micBtn.title = 'Click to speak';
+            };
+            
+            // Attach click handler to microphone button
+            micBtn.addEventListener('click', function() {
+                if (isNavRecording) {
+                    navRecognition.stop();
+                } else {
+                    try {
+                        navRecognition.start();
+                    } catch (error) {
+                        console.log('Recognition start error:', error);
+                    }
+                }
+            });
+            
+            return true;
+        } catch (error) {
+            console.error('Failed to initialize speech recognition:', error);
+            if (micBtn) {
+                micBtn.disabled = true;
+                micBtn.title = 'Voice input unavailable';
+            }
+            return false;
+        }
+    }
+
     // Function to initialize search inputs (can be called multiple times for dynamic navbars)
     function initializeSearchInputs() {
         const searchInputs = document.querySelectorAll('.nav-search-input:not([data-search-initialized])');
@@ -308,6 +424,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
+        // Initialize speech recognition for search bar
+        initNavSpeechRecognition();
+        
         return searchInputs.length;
     }
 
@@ -315,7 +434,11 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeSearchInputs();
     
     // Also listen for navbarLoaded event (for dynamically loaded navbars)
-    document.addEventListener('navbarLoaded', initializeSearchInputs);
+    document.addEventListener('navbarLoaded', function() {
+        initializeSearchInputs();
+        // Re-initialize speech recognition after navbar loads
+        setTimeout(initNavSpeechRecognition, 100);
+    });
     
     // Fallback: Check for search input periodically if not found initially
     // This handles edge cases where navbar loads asynchronously
@@ -372,13 +495,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Listen for navbarLoaded event
-    document.addEventListener('navbarLoaded', initSearch);
+    document.addEventListener('navbarLoaded', function() {
+        initSearch();
+        setTimeout(initNavSpeechRecognition, 100);
+    });
     
     // Also try to initialize immediately if navbar is already loaded
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initSearch);
+        document.addEventListener('DOMContentLoaded', function() {
+            initSearch();
+            setTimeout(initNavSpeechRecognition, 100);
+        });
     } else {
         initSearch();
+        setTimeout(initNavSpeechRecognition, 100);
     }
 })();
 
