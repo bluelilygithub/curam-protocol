@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        /* Blog post specific overrides */
+        /* Blog post specific styles to match about.html format */
         .blog-post-back {
             display: inline-flex;
             align-items: center;
@@ -43,8 +43,13 @@
             object-fit: cover;
         }
 
+        /* WordPress content styling - match about.html white card style */
         .blog-post-content-wrapper {
-            color: var(--text-primary);
+            background: white;
+            padding: var(--spacing-3xl);
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            color: #4B5563;
             line-height: 1.8;
             font-size: 1.125rem;
         }
@@ -53,7 +58,7 @@
         .blog-post-content-wrapper h2,
         .blog-post-content-wrapper h3,
         .blog-post-content-wrapper h4 {
-            color: var(--text-primary);
+            color: var(--color-navy);
             margin-top: var(--spacing-2xl);
             margin-bottom: var(--spacing-md);
             font-weight: 600;
@@ -72,9 +77,13 @@
             font-size: 1.5rem;
         }
 
+        .blog-post-content-wrapper h4 {
+            font-size: 1.25rem;
+        }
+
         .blog-post-content-wrapper p {
             margin-bottom: var(--spacing-lg);
-            color: var(--text-secondary);
+            color: #4B5563;
         }
 
         .blog-post-content-wrapper a {
@@ -83,7 +92,7 @@
         }
 
         .blog-post-content-wrapper a:hover {
-            color: var(--text-primary);
+            color: var(--color-navy);
         }
 
         .blog-post-content-wrapper img {
@@ -97,7 +106,7 @@
         .blog-post-content-wrapper ol {
             margin: var(--spacing-lg) 0;
             padding-left: var(--spacing-2xl);
-            color: var(--text-secondary);
+            color: #4B5563;
         }
 
         .blog-post-content-wrapper li {
@@ -109,7 +118,37 @@
             padding-left: var(--spacing-lg);
             margin: var(--spacing-xl) 0;
             font-style: italic;
-            color: var(--text-secondary);
+            color: #6B7280;
+            background: #f9fafb;
+            padding: var(--spacing-lg);
+            border-radius: var(--border-radius);
+        }
+
+        .blog-post-content-wrapper code {
+            background: #f3f4f6;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: var(--color-navy);
+        }
+
+        .blog-post-content-wrapper pre {
+            background: #f3f4f6;
+            padding: var(--spacing-lg);
+            border-radius: var(--border-radius);
+            overflow-x: auto;
+            margin: var(--spacing-xl) 0;
+        }
+
+        .blog-post-content-wrapper pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .blog-post-content-wrapper strong {
+            color: var(--color-navy);
+            font-weight: 600;
         }
 
         .blog-post-meta {
@@ -139,6 +178,10 @@
         }
 
         @media (max-width: 768px) {
+            .blog-post-content-wrapper {
+                padding: var(--spacing-xl);
+            }
+
             .blog-post-meta {
                 flex-direction: column;
                 align-items: flex-start;
@@ -178,10 +221,12 @@
                     </svg>
                     Back to Articles
                 </a>
-                <h1 id="blog-post-title" class="section-headline" style="text-align: left; margin-bottom: var(--spacing-md);"></h1>
-                <div class="blog-post-meta">
-                    <span id="blog-post-date"></span>
-                    <span id="blog-post-author"></span>
+                <div class="hero-content">
+                    <h1 id="blog-post-title" class="hero-headline"></h1>
+                    <div class="blog-post-meta">
+                        <span id="blog-post-date"></span>
+                        <span id="blog-post-author"></span>
+                    </div>
                 </div>
             </div>
         </section>
