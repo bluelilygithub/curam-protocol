@@ -998,7 +998,7 @@ def get_blog_posts():
             try:
                 test_response = requests.get(f'{test_url}/wp-json/wp/v2/posts', 
                                             params={'per_page': 1}, 
-                                            timeout=5)
+                                            timeout=10)  # Increased timeout
                 if test_response.status_code == 200:
                     blog_url = test_url
                     wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
@@ -1041,11 +1041,11 @@ def get_blog_posts():
                     categories = cat_response.json()
                     if categories:
                         api_params['categories'] = categories[0]['id']
-            except Exception as e:
-                current_app.logger.warning(f"Category lookup failed: {e}")
+            except Exception:
+                pass
         
         # Fetch posts
-        response = requests.get(wp_api_url, params=api_params, timeout=15)
+        response = requests.get(wp_api_url, params=api_params, timeout=20)
         
         if response.status_code != 200:
             return jsonify({
@@ -1099,8 +1099,8 @@ def get_blog_posts():
             # This is a fallback that doesn't require an API call
             if not featured_image and featured_media_id and featured_media_id > 0:
                 # We can't construct the URL without knowing the file path
-                # But we'll log it for debugging
-                current_app.logger.debug(f"Post {post.get('id')} has featured_media ID {featured_media_id} but no embedded image")
+                # Skip logging to avoid potential issues - images will show placeholder
+                pass
             
             # Clean excerpt HTML
             excerpt_html = post.get('excerpt', {}).get('rendered', '')
@@ -1143,7 +1143,6 @@ def get_blog_posts():
         })
         
     except Exception as e:
-        current_app.logger.error(f"Error fetching blog posts: {e}")
         return jsonify({
             'success': False,
             'error': str(e),
