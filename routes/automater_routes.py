@@ -62,7 +62,8 @@ def index_automater():
     - Template rendering
     """
     department = request.form.get('department') or request.args.get('department')
-    results = []
+    results = []  # Flat list for UI display (grouped by document type)
+    results_by_file = {}  # Grouped by file for API integration
     error_message = None
     last_model_used = None
     model_attempts = []
@@ -263,13 +264,29 @@ def index_automater():
                             print(f"🔍 LOGISTICS DEBUG: Processing {len(entries)} entries from {filename}")
                             if entries:
                                 print(f"🔍 LOGISTICS DEBUG: First entry type: {type(entries[0])}, keys: {list(entries[0].keys()) if isinstance(entries[0], dict) else 'Not a dict'}")
+                            
+                            # Determine document type from first entry
+                            document_type = 'unknown'
+                            if entries and isinstance(entries[0], dict):
+                                document_type = entries[0].get('_document_type', 'unknown')
+                            
+                            # Initialize file entry in results_by_file
+                            if filename not in results_by_file:
+                                results_by_file[filename] = {
+                                    "document_type": document_type,
+                                    "rows": []
+                                }
+                            
                             for entry in entries:
                                 if not isinstance(entry, dict):
                                     print(f"⚠️ LOGISTICS WARNING: Entry is not a dict: {type(entry)}")
                                     continue
                                 entry['Filename'] = filename
-                                results.append(entry)
+                                results.append(entry)  # Add to flat list for UI
+                                results_by_file[filename]["rows"].append(entry)  # Add to file-grouped structure
+                            
                             print(f"🔍 LOGISTICS DEBUG: Total results after processing {filename}: {len(results)}")
+                            print(f"🔍 LOGISTICS DEBUG: File-grouped structure: {len(results_by_file[filename]['rows'])} rows for {filename}")
                         else:
                             model_actions.append(f"Extracted {len(entries)} row(s) from {filename}")
                             for entry in entries:
@@ -428,9 +445,15 @@ def index_automater():
             
             # Debug logging for logistics session storage
             if department == "logistics":
+                # Store file-grouped structure for API integration
+                if results_by_file:
+                    session_data["results_by_file"] = results_by_file
                 print(f"🔍 LOGISTICS DEBUG: Storing in session:")
                 print(f"  - rows count: {len(results)}")
+                print(f"  - files count: {len(results_by_file)}")
                 print(f"  - department: {department}")
+                for filename, file_data in results_by_file.items():
+                    print(f"    - {filename}: {len(file_data['rows'])} rows, type: {file_data['document_type']}")
             
             session['last_results'] = session_data
         else:
@@ -531,6 +554,7 @@ def index_automater():
     return render_template_string(
         HTML_TEMPLATE,
         results=results if results else [],
+        results_by_file=results_by_file if department == 'logistics' else {},  # File-grouped structure for API
         grouped_engineering_results=grouped_engineering_results if department == 'engineering' else {},
         grouped_finance_results=grouped_finance_results if department == 'finance' else {},
         department=department,
