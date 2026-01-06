@@ -61,21 +61,11 @@ DEPARTMENT_SAMPLES = {
     }
 }
 
-# Build sample lookup maps
-# NOTE: These are now built dynamically by utils.sample_loader
-# Keeping these for backward compatibility, but they only include config.py samples
-# For database-aware mappings, use utils.sample_loader functions
-SAMPLE_TO_DEPT = {
-    sample["path"]: dept_key
-    for dept_key, group in DEPARTMENT_SAMPLES.items()
-    for sample in group["samples"]
-}
-
-ALLOWED_SAMPLE_PATHS = {
-    sample["path"]
-    for group in DEPARTMENT_SAMPLES.values()
-    for sample in group["samples"]
-}
+# NOTE: Sample lookup maps (SAMPLE_TO_DEPT, ALLOWED_SAMPLE_PATHS) have been removed.
+# Use utils.sample_loader functions instead:
+#   - get_allowed_sample_paths() - Get set of allowed sample paths
+#   - build_sample_to_dept_mapping() - Build path -> department mapping
+# These functions support both config.py and database sources.
 
 # --- ROUTINE DESCRIPTIONS (HTML content for UI) ---
 ROUTINE_DESCRIPTIONS = {

@@ -17,9 +17,11 @@ from routes.api_routes import api_bp
 # Import configuration
 from config import (
     SECRET_KEY,
-    FINANCE_UPLOAD_DIR,
-    ALLOWED_SAMPLE_PATHS
+    FINANCE_UPLOAD_DIR
 )
+
+# Import sample loader utility
+from utils.sample_loader import get_allowed_sample_paths
 
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = SECRET_KEY
@@ -118,7 +120,9 @@ def demo_legacy():
 @app.route('/sample')
 def view_sample():
     requested = request.args.get('path')
-    if not requested or requested not in ALLOWED_SAMPLE_PATHS:
+    # Use sample_loader to get allowed paths (supports database override)
+    allowed_paths = get_allowed_sample_paths(use_database=False)
+    if not requested or requested not in allowed_paths:
         abort(404)
 
     if not os.path.isfile(requested):
