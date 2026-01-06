@@ -1149,3 +1149,139 @@ def get_blog_posts():
             'posts': [],
             'pagination': {}
         }), 500
+
+
+@api_bp.route('/api/blog-post/<post_id>', methods=['GET'])
+def get_blog_post(post_id):
+    """
+    Fetch a single WordPress blog post by ID or slug for the detail page.
+    
+    Accepts:
+    - Numeric post ID (e.g., 123)
+    - Post slug (e.g., 'my-post-title')
+    - WordPress URL path
+    
+    Returns:
+        JSON with full post content, featured image, and metadata
+    """
+    try:
+        # Try to parse as integer first
+        try:
+            post_id_int = int(post_id)
+            use_id = True
+        except ValueError:
+            use_id = False
+            post_slug = post_id
+        
+        # Get blog URL from environment variable or use default
+        env_blog_url = os.getenv('WORDPRESS_BLOG_URL', 'https://blog.curam-ai.com.au')
+        
+        blog_urls = [
+            env_blog_url,
+            'https://blog.curam-ai.com.au',
+            'https://www.curam-ai.com.au',
+            'https://curam-ai.com.au'
+        ]
+        
+        blog_url = None
+        wp_api_url = None
+        
+        # Test which blog URL is accessible and find the post
+        for test_url in blog_urls:
+            try:
+                if use_id:
+                    test_response = requests.get(f'{test_url}/wp-json/wp/v2/posts/{post_id_int}', 
+                                                params={'_embed': 'wp:featuredmedia'}, 
+                                                timeout=10)
+                else:
+                    # Try to find post by slug
+                    test_response = requests.get(f'{test_url}/wp-json/wp/v2/posts', 
+                                                params={'slug': post_slug, '_embed': 'wp:featuredmedia', 'per_page': 1}, 
+                                                timeout=10)
+                
+                if test_response.status_code == 200:
+                    blog_url = test_url
+                    if use_id:
+                        wp_api_url = f'{blog_url}/wp-json/wp/v2/posts/{post_id_int}'
+                    else:
+                        # If found by slug, get the actual post
+                        posts = test_response.json()
+                        if posts and len(posts) > 0:
+                            wp_api_url = f'{blog_url}/wp-json/wp/v2/posts/{posts[0]["id"]}'
+                        else:
+                            continue
+                    break
+            except requests.RequestException:
+                continue
+        
+        if not blog_url or not wp_api_url:
+            return jsonify({
+                'success': False,
+                'error': 'Unable to reach blog API or post not found',
+                'post': None
+            }), 503
+        
+        # Fetch post with embedded media
+        response = requests.get(wp_api_url, params={'_embed': 'wp:featuredmedia'}, timeout=20)
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'Post not found or API returned status {response.status_code}',
+                'post': None
+            }), 404
+        
+        post_data = response.json()
+        
+        # Extract featured image
+        featured_image = None
+        featured_media_id = post_data.get('featured_media', 0)
+        
+        if '_embedded' in post_data and 'wp:featuredmedia' in post_data['_embedded']:
+            media = post_data['_embedded']['wp:featuredmedia']
+            if media and isinstance(media, list) and len(media) > 0 and media[0]:
+                media_item = media[0]
+                if 'source_url' in media_item and media_item['source_url']:
+                    featured_image = media_item['source_url']
+                elif 'media_details' in media_item and 'sizes' in media_item['media_details']:
+                    sizes = media_item['media_details']['sizes']
+                    if sizes and isinstance(sizes, dict):
+                        if 'large' in sizes and isinstance(sizes['large'], dict) and 'source_url' in sizes['large']:
+                            featured_image = sizes['large']['source_url']
+                        elif 'medium_large' in sizes and isinstance(sizes['medium_large'], dict) and 'source_url' in sizes['medium_large']:
+                            featured_image = sizes['medium_large']['source_url']
+                        elif 'full' in sizes and isinstance(sizes['full'], dict) and 'source_url' in sizes['full']:
+                            featured_image = sizes['full']['source_url']
+        
+        # Format date
+        date_str = post_data.get('date', '')
+        formatted_date = None
+        if date_str:
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                formatted_date = dt.strftime('%B %d, %Y')
+            except:
+                formatted_date = date_str[:10]
+        
+        return jsonify({
+            'success': True,
+            'post': {
+                'id': post_data.get('id'),
+                'title': post_data.get('title', {}).get('rendered', 'Untitled'),
+                'content': post_data.get('content', {}).get('rendered', ''),
+                'excerpt': post_data.get('excerpt', {}).get('rendered', ''),
+                'link': post_data.get('link', ''),
+                'date': formatted_date,
+                'date_raw': date_str,
+                'featured_image': featured_image,
+                'author': post_data.get('_embedded', {}).get('author', [{}])[0].get('name', '') if '_embedded' in post_data and 'author' in post_data['_embedded'] else ''
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'post': None
+        }), 500

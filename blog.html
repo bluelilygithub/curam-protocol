@@ -479,16 +479,33 @@
                         if (ragData.sources && Array.isArray(ragData.sources)) {
                             posts = ragData.sources
                                 .filter(source => source.type === 'blog')
-                                .map(source => ({
-                                    id: source.link || Math.random(),
-                                    title: source.title || 'Untitled',
-                                    excerpt: source.excerpt || '',
-                                    link: source.link || '',
-                                    date: source.date ? new Date(source.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null,
-                                    date_raw: source.date || '',
-                                    featured_image: null, // RAG doesn't return images, will use placeholder
-                                    categories: []
-                                }));
+                                .map(source => {
+                                    // Extract post ID from WordPress URL if possible
+                                    // WordPress URLs are typically: https://blog.curam-ai.com.au/post-name/ or contain ?p=ID
+                                    let postId = null;
+                                    if (source.link) {
+                                        const urlMatch = source.link.match(/\/\?p=(\d+)/) || source.link.match(/\/wp-json\/wp\/v2\/posts\/(\d+)/);
+                                        if (urlMatch) {
+                                            postId = urlMatch[1];
+                                        } else {
+                                            // Try to extract from slug or use a hash of the link
+                                            postId = source.link.split('/').filter(Boolean).pop() || Math.random().toString(36).substr(2, 9);
+                                        }
+                                    } else {
+                                        postId = Math.random().toString(36).substr(2, 9);
+                                    }
+                                    
+                                    return {
+                                        id: postId,
+                                        title: source.title || 'Untitled',
+                                        excerpt: source.excerpt || '',
+                                        link: source.link || '', // Keep original link for reference
+                                        date: source.date ? new Date(source.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null,
+                                        date_raw: source.date || '',
+                                        featured_image: null, // RAG doesn't return images, will use placeholder
+                                        categories: []
+                                    };
+                                });
                         }
 
                         // If no blog results from RAG, show empty
@@ -572,13 +589,13 @@
                                     ${imageHtml}
                                     <div class="blog-card-content">
                                         ${post.date ? `<div class="blog-card-date">${post.date}</div>` : ''}
-                                        <h2 class="blog-card-title">
-                                            <a href="${post.link}" target="_blank" rel="noopener">${post.title}</a>
-                                        </h2>
-                                        ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''}
-                                        <a href="${post.link}" target="_blank" rel="noopener" class="blog-card-link">
-                                            Read Article →
-                                        </a>
+                                    <h2 class="blog-card-title">
+                                        <a href="/blog/${post.id}" rel="noopener">${post.title}</a>
+                                    </h2>
+                                    ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''}
+                                    <a href="/blog/${post.id}" rel="noopener" class="blog-card-link">
+                                        Read Article →
+                                    </a>
                                     </div>
                                 </article>
                             `;

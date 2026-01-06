@@ -479,6 +479,13 @@ def blog_html():
     return send_file('blog.html')
 
 
+@static_pages_bp.route('/blog/<int:post_id>')
+@static_pages_bp.route('/blog/<int:post_id>.html')
+def blog_post(post_id):
+    """Serve blog post detail page"""
+    return send_file('blog-post.html')
+
+
 @static_pages_bp.route('/blog')
 def blog_redirect():
     """Redirect /blog to /blog.html"""
