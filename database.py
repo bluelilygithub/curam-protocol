@@ -506,3 +506,140 @@ def get_email_history(email_address, limit=10):
     except Exception as e:
         print(f"❌ Error fetching email history: {e}")
         return []
+
+
+# ============================================================================
+# ROI REPORT LOGGING - Track ROI report generation
+# ============================================================================
+
+def log_roi_report(report_type, industry=None, staff_count=None, avg_rate=None,
+                  calculations=None, delivery_method='download', email_address=None,
+                  ip_address=None, user_agent=None, session_id=None, source_page=None):
+    """
+    Log ROI report generation to database.
+    
+    Tries to use action_logs table first, falls back to email_captures if needed.
+    
+    Args:
+        report_type (str): Type of report - 'pdf_download', 'email_report', 'phase1_report', 'roadmap_email'
+        industry (str): Industry name (e.g., 'Architecture & Building Services')
+        staff_count (int): Number of staff
+        avg_rate (float): Average hourly rate
+        calculations (dict): Full calculations dictionary (will be stored as JSON)
+        delivery_method (str): 'download' or 'email'
+        email_address (str): Email address if delivery_method is 'email'
+        ip_address (str): User's IP address
+        user_agent (str): User's browser user agent
+        session_id (str): Flask session ID
+        source_page (str): URL path where report was generated
+    
+    Returns:
+        int: ID of created record, or None if failed
+    """
+    if not engine:
+        print("❌ Database engine not initialized for ROI report logging")
+        return None
+    
+    try:
+        import json
+        
+        # Prepare report data for JSONB
+        report_data = {
+            'report_type': report_type,
+            'industry': industry,
+            'staff_count': staff_count,
+            'avg_rate': avg_rate,
+            'delivery_method': delivery_method,
+            'email_address': email_address,
+            # Store key metrics from calculations (not full object to avoid size issues)
+            'tier_1_savings': calculations.get('tier_1_savings') if calculations else None,
+            'tier_2_savings': calculations.get('tier_2_savings') if calculations else None,
+            'annual_burn': calculations.get('annual_burn') if calculations else None,
+            'annual_cost': calculations.get('annual_cost') if calculations else None,
+            'total_recoverable_hours': calculations.get('total_recoverable_hours') if calculations else None,
+            'weighted_potential': calculations.get('weighted_potential') if calculations else None,
+            'mode': calculations.get('mode') if calculations else None
+        }
+        
+        report_json = json.dumps(report_data)
+        
+        with engine.connect() as conn:
+            # Try action_logs table first
+            try:
+                result = conn.execute(text("""
+                    INSERT INTO action_logs (
+                        action_type,
+                        action_data,
+                        source_page,
+                        ip_address,
+                        user_agent,
+                        session_id,
+                        created_at
+                    ) VALUES (
+                        :action_type,
+                        :action_data,
+                        :source_page,
+                        :ip_address,
+                        :user_agent,
+                        :session_id,
+                        NOW()
+                    )
+                    RETURNING id
+                """), {
+                    "action_type": f"roi_report_{report_type}",
+                    "action_data": report_json,
+                    "source_page": source_page,
+                    "ip_address": ip_address,
+                    "user_agent": user_agent,
+                    "session_id": session_id
+                })
+                conn.commit()
+                record_id = result.scalar()
+                print(f"✅ ROI report logged: {report_type} ({industry}) - ID: {record_id}")
+                return record_id
+                
+            except Exception as table_error:
+                # Fallback: Use email_captures table if action_logs doesn't exist
+                print(f"⚠️ action_logs table not found, using email_captures fallback: {table_error}")
+                
+                # Use email_captures for non-email reports too (with placeholder email)
+                fallback_email = email_address if email_address else f"roi_{report_type}@system.local"
+                
+                result = conn.execute(text("""
+                    INSERT INTO email_captures (
+                        email_address,
+                        report_type,
+                        source_page,
+                        request_data,
+                        ip_address,
+                        user_agent,
+                        session_id
+                    ) VALUES (
+                        :email,
+                        :report_type,
+                        :source_page,
+                        :request_data,
+                        :ip_address,
+                        :user_agent,
+                        :session_id
+                    )
+                    RETURNING id
+                """), {
+                    "email": fallback_email,
+                    "report_type": f"roi_{report_type}",
+                    "source_page": source_page,
+                    "request_data": report_json,
+                    "ip_address": ip_address,
+                    "user_agent": user_agent,
+                    "session_id": session_id
+                })
+                conn.commit()
+                record_id = result.scalar()
+                print(f"✅ ROI report logged (fallback): {report_type} ({industry}) - ID: {record_id}")
+                return record_id
+                
+    except Exception as e:
+        print(f"❌ Error logging ROI report: {e}")
+        import traceback
+        traceback.print_exc()
+        return None

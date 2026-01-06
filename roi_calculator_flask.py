@@ -13,7 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 import io
-from database import capture_email_request, mark_email_sent
+from database import capture_email_request, mark_email_sent, log_roi_report
 
 # Configuration
 BOOKING_URL = "/booking.html"
@@ -3650,6 +3650,21 @@ def email_report():
             session_id=session.get('_id')
         )
         
+        # Also log as ROI report generation
+        log_roi_report(
+            report_type='email_report',
+            industry=industry,
+            staff_count=staff_count,
+            avg_rate=avg_rate,
+            calculations=calculations,
+            delivery_method='email',
+            email_address=email,
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            session_id=session.get('_id'),
+            source_page='/roi-calculator/results'
+        )
+        
         # Generate PDF
         pdf_buffer = generate_pdf_report(industry, staff_count, avg_rate, platform, calculations)
         pdf_bytes = pdf_buffer.getvalue()
@@ -3786,6 +3801,21 @@ def email_phase1_report():
             ip_address=request.remote_addr,
             user_agent=request.headers.get('User-Agent'),
             session_id=session.get('_id')
+        )
+        
+        # Also log as ROI report generation
+        log_roi_report(
+            report_type='phase1_report',
+            industry=session.get('industry'),
+            staff_count=session.get('staff_count'),
+            avg_rate=session.get('avg_rate'),
+            calculations=session.get('calculations'),
+            delivery_method='email',
+            email_address=email,
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            session_id=session.get('_id'),
+            source_page=request.referrer or '/roi-calculator/results'
         )
         
         # Read the Phase-1 PDF file
@@ -3969,6 +3999,21 @@ def send_roadmap_email():
         if not calculations:
             return jsonify({"success": False, "error": "No calculations found"}), 400
         
+        # Log roadmap email generation
+        log_roi_report(
+            report_type='roadmap_email',
+            industry=industry,
+            staff_count=staff_count,
+            avg_rate=avg_rate,
+            calculations=calculations,
+            delivery_method='email',
+            email_address=email,
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent'),
+            session_id=session.get('_id'),
+            source_page=request.referrer or '/roi-calculator/results'
+        )
+        
         # Generate roadmap
         roadmap = generate_automation_roadmap(industry, staff_count, avg_rate, weekly_waste)
         ai_opportunities = AI_OPPORTUNITIES.get(industry, [])
@@ -4072,6 +4117,20 @@ def download_pdf():
     
     if not calculations:
         return "No calculations found. Please complete the assessment first.", 400
+    
+    # Log PDF download to database
+    log_roi_report(
+        report_type='pdf_download',
+        industry=industry,
+        staff_count=staff_count,
+        avg_rate=avg_rate,
+        calculations=calculations,
+        delivery_method='download',
+        ip_address=request.remote_addr,
+        user_agent=request.headers.get('User-Agent'),
+        session_id=session.get('_id'),
+        source_page=request.referrer or '/roi-calculator/results'
+    )
     
     pdf_buffer = generate_pdf_report(industry, staff_count, avg_rate, platform, calculations)
     
