@@ -475,7 +475,7 @@ def phase_2_metric_agreement():
 
 @static_pages_bp.route('/blog.html')
 def blog_html():
-    """Serve blog.html page with iframe to curam-ai.com.au"""
+    """Serve blog.html page with internal blog article listing"""
     return send_file('blog.html')
 
 

@@ -8,6 +8,7 @@ This module contains all API endpoints:
 - /api/contact-assistant - AI contact assistant with RAG
 - /api/email-chat-log - Email chat log from contact assistant
 - /api/contact - Contact form submission handler
+- /api/blog-posts - Fetch WordPress blog posts for listing page
 - /email-phase3-sample - Email Phase 3 sample PDF
 """
 
@@ -957,3 +958,160 @@ The Curam AI Team"""
         
         current_app.logger.error(f"Error sending Phase 3 sample email: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@api_bp.route('/api/blog-posts', methods=['GET'])
+def get_blog_posts():
+    """
+    Fetch WordPress blog posts for the blog listing page.
+    
+    Query parameters:
+    - page: Page number (default: 1)
+    - per_page: Posts per page (default: 12, max: 100)
+    - search: Optional search query
+    - category: Optional category filter
+    
+    Returns:
+        JSON with posts array, pagination info, and total count
+    """
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 12)), 100)
+        search_query = request.args.get('search', '').strip()
+        category = request.args.get('category', '').strip()
+        
+        # Get blog URL from environment variable or use default
+        env_blog_url = os.getenv('WORDPRESS_BLOG_URL', 'https://blog.curam-ai.com.au')
+        
+        blog_urls = [
+            env_blog_url,
+            'https://blog.curam-ai.com.au',
+            'https://www.curam-ai.com.au',
+            'https://curam-ai.com.au'
+        ]
+        
+        blog_url = None
+        wp_api_url = None
+        
+        # Test which blog URL is accessible
+        for test_url in blog_urls:
+            try:
+                test_response = requests.get(f'{test_url}/wp-json/wp/v2/posts', 
+                                            params={'per_page': 1}, 
+                                            timeout=5)
+                if test_response.status_code == 200:
+                    blog_url = test_url
+                    wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
+                    break
+            except requests.RequestException:
+                continue
+        
+        if not blog_url:
+            return jsonify({
+                'success': False,
+                'error': 'Unable to reach blog API',
+                'posts': [],
+                'pagination': {}
+            }), 503
+        
+        # Build API request parameters
+        api_params = {
+            'per_page': per_page,
+            'page': page,
+            'orderby': 'date',
+            'order': 'desc',
+            '_fields': 'id,title,excerpt,link,date,featured_media,categories',
+            '_embed': 'wp:featuredmedia'
+        }
+        
+        if search_query:
+            api_params['search'] = search_query
+        
+        if category:
+            # First, get category ID from slug
+            try:
+                cat_response = requests.get(
+                    f'{blog_url}/wp-json/wp/v2/categories',
+                    params={'slug': category, 'per_page': 1},
+                    timeout=5
+                )
+                if cat_response.status_code == 200:
+                    categories = cat_response.json()
+                    if categories:
+                        api_params['categories'] = categories[0]['id']
+            except Exception as e:
+                current_app.logger.warning(f"Category lookup failed: {e}")
+        
+        # Fetch posts
+        response = requests.get(wp_api_url, params=api_params, timeout=15)
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'Blog API returned status {response.status_code}',
+                'posts': [],
+                'pagination': {}
+            }), 503
+        
+        posts_data = response.json()
+        total_posts = int(response.headers.get('X-WP-Total', 0))
+        total_pages = int(response.headers.get('X-WP-TotalPages', 1))
+        
+        # Process posts
+        posts = []
+        for post in posts_data:
+            # Extract featured image
+            featured_image = None
+            if '_embedded' in post and 'wp:featuredmedia' in post['_embedded']:
+                media = post['_embedded']['wp:featuredmedia']
+                if media and len(media) > 0:
+                    featured_image = media[0].get('source_url')
+            
+            # Clean excerpt HTML
+            excerpt_html = post.get('excerpt', {}).get('rendered', '')
+            excerpt_clean = re.sub('<[^<]+?>', '', excerpt_html).strip()
+            excerpt_clean = re.sub(r'\s+', ' ', excerpt_clean)
+            
+            # Format date
+            date_str = post.get('date', '')
+            formatted_date = None
+            if date_str:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                    formatted_date = dt.strftime('%B %d, %Y')
+                except:
+                    formatted_date = date_str[:10]
+            
+            posts.append({
+                'id': post.get('id'),
+                'title': post.get('title', {}).get('rendered', 'Untitled'),
+                'excerpt': excerpt_clean,
+                'link': post.get('link', ''),
+                'date': formatted_date,
+                'date_raw': date_str,
+                'featured_image': featured_image,
+                'categories': post.get('categories', [])
+            })
+        
+        return jsonify({
+            'success': True,
+            'posts': posts,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': total_posts,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
+            }
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching blog posts: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'posts': [],
+            'pagination': {}
+        }), 500

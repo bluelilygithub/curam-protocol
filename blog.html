@@ -3,11 +3,224 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Curam Blog | Curam-Ai Protocol™</title>
+    <title>Blog Articles | The Curam-Ai Protocol™</title>
+    <meta name="description" content="800+ technical articles on AI automation, document intelligence, and industry best practices from the Curam-Ai Protocol™ team.">
+    <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Blog-specific styles */
+        .blog-hero {
+            background: linear-gradient(180deg, var(--navy-deep) 0%, var(--navy-medium) 100%);
+            padding: var(--spacing-4xl) 0 var(--spacing-3xl);
+            text-align: center;
+        }
+
+        .blog-hero h1 {
+            font-size: clamp(2rem, 5vw, 3rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .blog-hero p {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .blog-filters {
+            display: flex;
+            gap: var(--spacing-md);
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: var(--spacing-2xl) 0;
+        }
+
+        .blog-search {
+            flex: 1;
+            min-width: 250px;
+            max-width: 400px;
+        }
+
+        .blog-search input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--border-radius);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .blog-search input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .blog-search input:focus {
+            outline: none;
+            border-color: var(--color-gold);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .blog-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: var(--spacing-xl);
+            margin: var(--spacing-2xl) 0;
+        }
+
+        .blog-card {
+            background: linear-gradient(135deg, rgba(26, 45, 74, 0.4), rgba(26, 45, 74, 0.2));
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .blog-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--color-gold);
+            box-shadow: 0 12px 40px rgba(212, 175, 55, 0.15);
+        }
+
+        .blog-card-image {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            background: var(--navy-medium);
+        }
+
+        .blog-card-content {
+            padding: var(--spacing-xl);
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .blog-card-date {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .blog-card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-md);
+            line-height: 1.3;
+        }
+
+        .blog-card-title a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .blog-card-title a:hover {
+            color: var(--color-gold);
+        }
+
+        .blog-card-excerpt {
+            font-size: 0.9375rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: var(--spacing-lg);
+            flex-grow: 1;
+        }
+
+        .blog-card-link {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            color: var(--color-gold);
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .blog-card-link:hover {
+            gap: var(--spacing-sm);
+        }
+
+        .blog-loading {
+            text-align: center;
+            padding: var(--spacing-4xl);
+            color: var(--text-secondary);
+        }
+
+        .blog-error {
+            text-align: center;
+            padding: var(--spacing-2xl);
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--border-radius);
+            color: var(--text-primary);
+            margin: var(--spacing-2xl) 0;
+        }
+
+        .blog-pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: var(--spacing-md);
+            margin: var(--spacing-3xl) 0;
+            flex-wrap: wrap;
+        }
+
+        .blog-pagination button {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--border-radius);
+            color: var(--text-primary);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .blog-pagination button:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--color-gold);
+            color: var(--color-gold);
+        }
+
+        .blog-pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .blog-pagination .page-info {
+            color: var(--text-secondary);
+            font-size: 0.9375rem;
+        }
+
+        .blog-empty {
+            text-align: center;
+            padding: var(--spacing-4xl);
+            color: var(--text-secondary);
+        }
+
+        @media (max-width: 768px) {
+            .blog-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .blog-filters {
+                flex-direction: column;
+            }
+
+            .blog-search {
+                max-width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
     <button class="scroll-down-btn" aria-label="Scroll down">
@@ -16,66 +229,204 @@
         </svg>
     </button>
     
-    <!-- Navigation -->
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
     <!-- Hero Section -->
-    <section class="hero services-hero">
-        <div class="hero-background">
-            <div class="hero-gradient"></div>
-            <div class="hero-pattern"></div>
-            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
-                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
-                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
-                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
-            </svg>
-            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
-                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
-            </svg>
-        </div>
+    <section class="blog-hero">
         <div class="container">
-            <div class="hero-content">
-                <p class="hero-eyebrow">Curam Blog</p>
-                <h1 class="hero-headline">Latest Insights and Updates</h1>
-                <p class="hero-subheadline">
-                    Stay informed about AI automation, document intelligence, and industry best practices.
-                </p>
-            </div>
+            <h1>800+ Technical Articles</h1>
+            <p>
+                Deep research on AI automation, document intelligence, and industry best practices. 
+                Every Phase 1 test draws on insights from our documented deployments.
+            </p>
         </div>
     </section>
 
-    <section class="methodology" style="padding: var(--spacing-xl) 0;">
+    <!-- Blog Content -->
+    <section class="section">
         <div class="container">
-            <div style="background: var(--color-white); border-radius: var(--border-radius); padding: var(--spacing-md); border: 2px solid #E5E7EB; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                <!-- Iframe container with clipping to show only blog articles (hiding header/menu) -->
-                <div style="width: 100%; height: 1000px; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; position: relative; background: #f9fafb;">
-                    <div style="width: 100%; height: 100%; overflow: auto; position: relative;">
-                        <iframe 
-                            src="https://www.curam-ai.com.au/blog" 
-                            width="100%" 
-                            height="3000px"
-                            frameborder="0"
-                            scrolling="yes"
-                            style="border: none; display: block; transform: translateY(-200px);"
-                            title="Curam-Ai Blog Content"
-                            allow="fullscreen"
-                            loading="lazy"
-                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-presentation"
-                        ></iframe>
-                    </div>
+            <!-- Search and Filters -->
+            <div class="blog-filters">
+                <div class="blog-search">
+                    <input 
+                        type="text" 
+                        id="blog-search-input" 
+                        placeholder="Search articles..." 
+                        autocomplete="off"
+                    >
                 </div>
-                <p style="text-align: center; margin-top: var(--spacing-md); color: var(--color-gray); font-size: 0.875rem;">
-                    Content from <a href="https://www.curam-ai.com.au" target="_blank" style="color: var(--color-gold); text-decoration: none;">www.curam-ai.com.au</a>
-                </p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="blog-loading" class="blog-loading" style="display: none;">
+                <p>Loading articles...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="blog-error" class="blog-error" style="display: none;">
+                <p id="blog-error-message"></p>
+            </div>
+
+            <!-- Blog Grid -->
+            <div id="blog-grid" class="blog-grid">
+                <!-- Articles will be inserted here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="blog-empty" class="blog-empty" style="display: none;">
+                <p>No articles found. Try a different search term.</p>
+            </div>
+
+            <!-- Pagination -->
+            <div id="blog-pagination" class="blog-pagination" style="display: none;">
+                <button id="blog-prev" disabled>← Previous</button>
+                <span class="page-info" id="blog-page-info"></span>
+                <button id="blog-next" disabled>Next →</button>
             </div>
         </div>
     </section>
 
-    <!-- Footer -->
     <div id="footer-placeholder"></div>
     <script src="assets/js/footer-loader.js"></script>
-
     <script src="assets/js/main.js"></script>
+    
+    <script>
+        // Blog listing functionality
+        (function() {
+            let currentPage = 1;
+            let currentSearch = '';
+            let isLoading = false;
+
+            const blogGrid = document.getElementById('blog-grid');
+            const blogLoading = document.getElementById('blog-loading');
+            const blogError = document.getElementById('blog-error');
+            const blogErrorMessage = document.getElementById('blog-error-message');
+            const blogEmpty = document.getElementById('blog-empty');
+            const blogPagination = document.getElementById('blog-pagination');
+            const blogPrev = document.getElementById('blog-prev');
+            const blogNext = document.getElementById('blog-next');
+            const blogPageInfo = document.getElementById('blog-page-info');
+            const searchInput = document.getElementById('blog-search-input');
+
+            // Debounce function
+            function debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+
+            // Fetch blog posts
+            async function fetchBlogPosts(page = 1, search = '') {
+                if (isLoading) return;
+                
+                isLoading = true;
+                blogGrid.innerHTML = '';
+                blogLoading.style.display = 'block';
+                blogError.style.display = 'none';
+                blogEmpty.style.display = 'none';
+                blogPagination.style.display = 'none';
+
+                try {
+                    const params = new URLSearchParams({
+                        page: page.toString(),
+                        per_page: '12'
+                    });
+                    
+                    if (search) {
+                        params.append('search', search);
+                    }
+
+                    const response = await fetch(`/api/blog-posts?${params.toString()}`);
+                    const data = await response.json();
+
+                    blogLoading.style.display = 'none';
+
+                    if (!data.success) {
+                        blogError.style.display = 'block';
+                        blogErrorMessage.textContent = data.error || 'Failed to load articles. Please try again later.';
+                        return;
+                    }
+
+                    const { posts, pagination } = data;
+
+                    if (posts.length === 0) {
+                        blogEmpty.style.display = 'block';
+                        return;
+                    }
+
+                    // Render posts
+                    blogGrid.innerHTML = posts.map(post => `
+                        <article class="blog-card">
+                            ${post.featured_image ? `
+                                <img src="${post.featured_image}" alt="${post.title}" class="blog-card-image" loading="lazy">
+                            ` : ''}
+                            <div class="blog-card-content">
+                                ${post.date ? `<div class="blog-card-date">${post.date}</div>` : ''}
+                                <h2 class="blog-card-title">
+                                    <a href="${post.link}" target="_blank" rel="noopener">${post.title}</a>
+                                </h2>
+                                ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''}
+                                <a href="${post.link}" target="_blank" rel="noopener" class="blog-card-link">
+                                    Read Article →
+                                </a>
+                            </div>
+                        </article>
+                    `).join('');
+
+                    // Update pagination
+                    if (pagination.total_pages > 1) {
+                        blogPagination.style.display = 'flex';
+                        blogPrev.disabled = !pagination.has_prev;
+                        blogNext.disabled = !pagination.has_next;
+                        blogPageInfo.textContent = `Page ${pagination.page} of ${pagination.total_pages} (${pagination.total} articles)`;
+                    }
+
+                } catch (error) {
+                    console.error('Error fetching blog posts:', error);
+                    blogLoading.style.display = 'none';
+                    blogError.style.display = 'block';
+                    blogErrorMessage.textContent = 'Failed to load articles. Please try again later.';
+                } finally {
+                    isLoading = false;
+                }
+            }
+
+            // Search handler
+            const handleSearch = debounce((value) => {
+                currentSearch = value.trim();
+                currentPage = 1;
+                fetchBlogPosts(currentPage, currentSearch);
+            }, 500);
+
+            searchInput.addEventListener('input', (e) => {
+                handleSearch(e.target.value);
+            });
+
+            // Pagination handlers
+            blogPrev.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    fetchBlogPosts(currentPage, currentSearch);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            });
+
+            blogNext.addEventListener('click', () => {
+                currentPage++;
+                fetchBlogPosts(currentPage, currentSearch);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+
+            // Initial load
+            fetchBlogPosts();
+        })();
+    </script>
 </body>
 </html>
