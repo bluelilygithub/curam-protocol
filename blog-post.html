@@ -99,19 +99,92 @@
             font-family: 'Courier New', monospace;
             font-size: 0.9em;
             color: var(--color-navy);
+            display: inline;
         }
 
         .blog-post-content-wrapper pre {
-            background: #f3f4f6;
-            padding: var(--spacing-lg);
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: var(--spacing-xl);
             border-radius: var(--border-radius);
             overflow-x: auto;
             margin: var(--spacing-xl) 0;
+            border: 1px solid #334155;
+            font-family: 'Courier New', 'Monaco', 'Consolas', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
         }
 
         .blog-post-content-wrapper pre code {
             background: none;
             padding: 0;
+            color: inherit;
+            font-size: inherit;
+            display: block;
+        }
+
+        /* WordPress specific content styling */
+        .blog-post-content-wrapper .wp-block-code,
+        .blog-post-content-wrapper .wp-block-preformatted {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: var(--spacing-xl);
+            border-radius: var(--border-radius);
+            overflow-x: auto;
+            margin: var(--spacing-xl) 0;
+            font-family: 'Courier New', 'Monaco', 'Consolas', monospace;
+        }
+
+        /* Ensure WordPress content displays properly */
+        .blog-post-content-wrapper * {
+            max-width: 100%;
+        }
+
+        /* Style WordPress blocks */
+        .blog-post-content-wrapper .wp-block-group,
+        .blog-post-content-wrapper .wp-block-columns {
+            margin: var(--spacing-xl) 0;
+        }
+
+        /* Remove any diff/editor styling that might be in content */
+        .blog-post-content-wrapper .diff,
+        .blog-post-content-wrapper .added,
+        .blog-post-content-wrapper .removed,
+        .blog-post-content-wrapper .diff-added,
+        .blog-post-content-wrapper .diff-removed,
+        .blog-post-content-wrapper .diff-context {
+            all: unset !important;
+            display: block !important;
+            background: transparent !important;
+            color: inherit !important;
+            border: none !important;
+        }
+
+        /* Ensure proper text rendering */
+        .blog-post-content-wrapper {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        /* Style tables if present */
+        .blog-post-content-wrapper table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: var(--spacing-xl) 0;
+            background: white;
+        }
+
+        .blog-post-content-wrapper table th,
+        .blog-post-content-wrapper table td {
+            padding: var(--spacing-md);
+            border: 1px solid #e5e7eb;
+            text-align: left;
+        }
+
+        .blog-post-content-wrapper table th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: var(--color-navy);
         }
 
         .blog-post-content-wrapper strong {
@@ -321,8 +394,22 @@
                     blogPostFeaturedImage.style.display = 'block';
                 }
 
-                // Set content
-                blogPostBody.innerHTML = post.content;
+                // Set content - WordPress content is already HTML
+                // Clean up any potential issues
+                let content = post.content;
+                
+                // Remove any inline styles that might interfere with display
+                content = content.replace(/style="[^"]*"/gi, '');
+                
+                // Remove diff/editor classes that might cause issues
+                content = content.replace(/class="[^"]*(?:diff|added|removed|editor)[^"]*"/gi, '');
+                
+                // Clean up any editor-specific markup
+                content = content.replace(/<span[^>]*class="[^"]*(?:diff|added|removed)[^"]*"[^>]*>/gi, '<span>');
+                content = content.replace(/<div[^>]*class="[^"]*(?:diff|added|removed|editor)[^"]*"[^>]*>/gi, '<div>');
+                
+                // Ensure code blocks are properly formatted
+                blogPostBody.innerHTML = content;
 
                 // Show content
                 blogPostContent.style.display = 'block';
