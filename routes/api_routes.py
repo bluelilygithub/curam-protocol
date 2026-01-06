@@ -1060,12 +1060,55 @@ def get_blog_posts():
         # Process posts
         posts = []
         for post in posts_data:
-            # Extract featured image
+            # Extract featured image - try multiple methods
             featured_image = None
+            featured_media_id = post.get('featured_media', 0)
+            
+            # Method 1: Try _embedded wp:featuredmedia
             if '_embedded' in post and 'wp:featuredmedia' in post['_embedded']:
                 media = post['_embedded']['wp:featuredmedia']
                 if media and len(media) > 0:
-                    featured_image = media[0].get('source_url')
+                    media_item = media[0]
+                    # Try source_url first (full size)
+                    if 'source_url' in media_item:
+                        featured_image = media_item['source_url']
+                    # Try media_details with sizes
+                    elif 'media_details' in media_item and 'sizes' in media_item['media_details']:
+                        sizes = media_item['media_details']['sizes']
+                        # Prefer large or medium size, fallback to full
+                        if 'large' in sizes:
+                            featured_image = sizes['large'].get('source_url')
+                        elif 'medium_large' in sizes:
+                            featured_image = sizes['medium_large'].get('source_url')
+                        elif 'medium' in sizes:
+                            featured_image = sizes['medium'].get('source_url')
+                        elif 'full' in sizes:
+                            featured_image = sizes['full'].get('source_url')
+                    # Try link as fallback
+                    elif 'link' in media_item:
+                        featured_image = media_item['link']
+            
+            # Method 2: If no embedded image but we have featured_media ID, fetch it
+            if not featured_image and featured_media_id and featured_media_id > 0:
+                try:
+                    media_response = requests.get(
+                        f'{blog_url}/wp-json/wp/v2/media/{featured_media_id}',
+                        timeout=5
+                    )
+                    if media_response.status_code == 200:
+                        media_data = media_response.json()
+                        if 'source_url' in media_data:
+                            featured_image = media_data['source_url']
+                        elif 'media_details' in media_data and 'sizes' in media_data['media_details']:
+                            sizes = media_data['media_details']['sizes']
+                            if 'large' in sizes:
+                                featured_image = sizes['large'].get('source_url')
+                            elif 'medium_large' in sizes:
+                                featured_image = sizes['medium_large'].get('source_url')
+                            elif 'medium' in sizes:
+                                featured_image = sizes['medium'].get('source_url')
+                except Exception as e:
+                    current_app.logger.debug(f"Failed to fetch media {featured_media_id}: {e}")
             
             # Clean excerpt HTML
             excerpt_html = post.get('excerpt', {}).get('rendered', '')
