@@ -541,9 +541,15 @@
                     // Render posts one by one with a small delay for smooth appearance
                     posts.forEach((post, index) => {
                         setTimeout(() => {
+                            // Debug: log if image is missing
+                            if (!post.featured_image) {
+                                console.log('Post missing image:', post.title, post.id);
+                            }
+                            
                             const imageHtml = post.featured_image ? `
                                 <img src="${post.featured_image}" alt="${post.title}" class="blog-card-image" loading="lazy" 
-                                     onerror="this.onerror=null; this.style.display='none'; const placeholder = this.nextElementSibling; if(placeholder) placeholder.style.display='flex';">
+                                     onerror="console.error('Image failed to load:', this.src); this.onerror=null; this.style.display='none'; const placeholder = this.nextElementSibling; if(placeholder) placeholder.style.display='flex';"
+                                     onload="console.log('Image loaded:', this.src);">
                                 <div class="blog-card-image-placeholder" style="display: none;">
                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>

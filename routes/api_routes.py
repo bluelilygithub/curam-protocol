@@ -1069,34 +1069,38 @@ def get_blog_posts():
             # Method 1: Try _embedded wp:featuredmedia
             if '_embedded' in post and 'wp:featuredmedia' in post['_embedded']:
                 media = post['_embedded']['wp:featuredmedia']
-                if media and len(media) > 0:
+                # Handle case where media might be empty array or None
+                if media and isinstance(media, list) and len(media) > 0 and media[0]:
                     media_item = media[0]
-                    # Try source_url first (full size)
-                    if 'source_url' in media_item:
+                    # Try source_url first (full size) - this is the most direct
+                    if 'source_url' in media_item and media_item['source_url']:
                         featured_image = media_item['source_url']
-                    # Try media_details with sizes
-                    elif 'media_details' in media_item and 'sizes' in media_item['media_details']:
+                    # Try media_details with sizes - prefer larger sizes for better quality
+                    if not featured_image and 'media_details' in media_item and 'sizes' in media_item['media_details']:
                         sizes = media_item['media_details']['sizes']
-                        # Prefer large or medium size, fallback to full
-                        if 'large' in sizes:
-                            featured_image = sizes['large'].get('source_url')
-                        elif 'medium_large' in sizes:
-                            featured_image = sizes['medium_large'].get('source_url')
-                        elif 'medium' in sizes:
-                            featured_image = sizes['medium'].get('source_url')
-                        elif 'full' in sizes:
-                            featured_image = sizes['full'].get('source_url')
-                    # Try link as fallback
-                    elif 'link' in media_item:
-                        featured_image = media_item['link']
+                        if sizes and isinstance(sizes, dict):
+                            # Prefer large or medium_large for card display
+                            if 'large' in sizes and isinstance(sizes['large'], dict) and 'source_url' in sizes['large']:
+                                featured_image = sizes['large']['source_url']
+                            elif 'medium_large' in sizes and isinstance(sizes['medium_large'], dict) and 'source_url' in sizes['medium_large']:
+                                featured_image = sizes['medium_large']['source_url']
+                            elif 'medium' in sizes and isinstance(sizes['medium'], dict) and 'source_url' in sizes['medium']:
+                                featured_image = sizes['medium']['source_url']
+                            elif 'full' in sizes and isinstance(sizes['full'], dict) and 'source_url' in sizes['full']:
+                                featured_image = sizes['full']['source_url']
+                            # Try any size that has source_url as last resort
+                            elif sizes:
+                                for size_name, size_data in sizes.items():
+                                    if isinstance(size_data, dict) and 'source_url' in size_data and size_data['source_url']:
+                                        featured_image = size_data['source_url']
+                                        break
             
-            # Method 2: If no embedded image but we have featured_media ID, construct URL directly
-            # This avoids making individual API calls for each post (which would be very slow)
-            # The browser will handle image loading with lazy loading
+            # Method 2: If no embedded image but we have featured_media ID, try to construct URL
+            # This is a fallback that doesn't require an API call
             if not featured_image and featured_media_id and featured_media_id > 0:
-                # We'll let the frontend handle missing images with placeholders
-                # This keeps the API response fast
-                pass
+                # We can't construct the URL without knowing the file path
+                # But we'll log it for debugging
+                current_app.logger.debug(f"Post {post.get('id')} has featured_media ID {featured_media_id} but no embedded image")
             
             # Clean excerpt HTML
             excerpt_html = post.get('excerpt', {}).get('rendered', '')
