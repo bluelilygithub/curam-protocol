@@ -749,8 +749,12 @@ h1, h2, h3, h4 {
   margin-bottom: 2.5rem;
 }
 
+.hero-description p{
+  color: var(--color-white);
+}
+
 .hero-description strong {
-  color: var(--text-primary);
+  color: var(--color-gold);
   font-weight: 500;
 }
 
