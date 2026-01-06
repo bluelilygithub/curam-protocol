@@ -208,22 +208,6 @@
             color: var(--text-primary);
         }
 
-        .blog-post-featured-image {
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto var(--spacing-3xl);
-            border-radius: var(--border-radius-lg);
-            overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .blog-post-featured-image img {
-            width: 100%;
-            height: auto;
-            display: block;
-            object-fit: cover;
-        }
-
         .blog-post-meta {
             display: flex;
             align-items: center;
@@ -304,15 +288,6 @@
             </div>
         </section>
 
-        <!-- Featured Image -->
-        <section class="section" style="padding-top: 0;">
-            <div class="container">
-                <div id="blog-post-featured-image" class="blog-post-featured-image" style="display: none;">
-                    <img id="blog-post-featured-img" src="" alt="" loading="eager">
-                </div>
-            </div>
-        </section>
-
         <!-- Post Content -->
         <section class="section section-alt">
             <div class="container">
@@ -348,8 +323,6 @@
         const blogPostTitle = document.getElementById('blog-post-title');
         const blogPostDate = document.getElementById('blog-post-date');
         const blogPostAuthor = document.getElementById('blog-post-author');
-        const blogPostFeaturedImage = document.getElementById('blog-post-featured-image');
-        const blogPostFeaturedImg = document.getElementById('blog-post-featured-img');
         const blogPostBody = document.getElementById('blog-post-body');
 
         // Fetch blog post
@@ -403,13 +376,6 @@
                 }
                 if (post.author) {
                     blogPostAuthor.textContent = `By ${post.author}`;
-                }
-
-                // Set featured image
-                if (post.featured_image) {
-                    blogPostFeaturedImg.src = post.featured_image;
-                    blogPostFeaturedImg.alt = post.title;
-                    blogPostFeaturedImage.style.display = 'block';
                 }
 
                 // Set content - WordPress content is already HTML
