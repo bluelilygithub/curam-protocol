@@ -60,7 +60,7 @@
         const navbarPlaceholder = document.getElementById('navbar-placeholder');
         if (!navbarPlaceholder) return;
 
-        fetch('assets/includes/navbar.html')
+        fetch('/assets/includes/navbar.html')
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Failed to load navbar');

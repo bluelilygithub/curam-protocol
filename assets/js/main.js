@@ -273,7 +273,8 @@ document.addEventListener('DOMContentLoaded', function() {
     let navRecognition = null;
     let isNavRecording = false;
     
-    function initNavSpeechRecognition() {
+    // Make function globally accessible
+    window.initNavSpeechRecognition = function() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const micBtn = document.getElementById('navSearchMicBtn');
         const searchInput = document.getElementById('navSearchInput');
@@ -497,18 +498,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // Listen for navbarLoaded event
     document.addEventListener('navbarLoaded', function() {
         initSearch();
-        setTimeout(initNavSpeechRecognition, 100);
+        if (window.initNavSpeechRecognition) {
+            setTimeout(window.initNavSpeechRecognition, 100);
+        }
     });
     
     // Also try to initialize immediately if navbar is already loaded
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() {
             initSearch();
-            setTimeout(initNavSpeechRecognition, 100);
+            if (window.initNavSpeechRecognition) {
+                setTimeout(window.initNavSpeechRecognition, 100);
+            }
         });
     } else {
         initSearch();
-        setTimeout(initNavSpeechRecognition, 100);
+        if (window.initNavSpeechRecognition) {
+            setTimeout(window.initNavSpeechRecognition, 100);
+        }
     }
 })();
 

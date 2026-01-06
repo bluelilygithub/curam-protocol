@@ -3,7 +3,7 @@
     const footerPlaceholder = document.getElementById('footer-placeholder');
     
     if (footerPlaceholder) {
-        fetch('assets/includes/footer.html')
+        fetch('/assets/includes/footer.html')
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Footer not found');
