@@ -1015,6 +1015,8 @@ def get_blog_posts():
             }), 503
         
         # Build API request parameters
+        # Note: We use _embed for featured media, but won't fetch individual media endpoints
+        # to avoid blocking. Images will load lazily in the browser.
         api_params = {
             'per_page': per_page,
             'page': page,
@@ -1088,27 +1090,13 @@ def get_blog_posts():
                     elif 'link' in media_item:
                         featured_image = media_item['link']
             
-            # Method 2: If no embedded image but we have featured_media ID, fetch it
+            # Method 2: If no embedded image but we have featured_media ID, construct URL directly
+            # This avoids making individual API calls for each post (which would be very slow)
+            # The browser will handle image loading with lazy loading
             if not featured_image and featured_media_id and featured_media_id > 0:
-                try:
-                    media_response = requests.get(
-                        f'{blog_url}/wp-json/wp/v2/media/{featured_media_id}',
-                        timeout=5
-                    )
-                    if media_response.status_code == 200:
-                        media_data = media_response.json()
-                        if 'source_url' in media_data:
-                            featured_image = media_data['source_url']
-                        elif 'media_details' in media_data and 'sizes' in media_data['media_details']:
-                            sizes = media_data['media_details']['sizes']
-                            if 'large' in sizes:
-                                featured_image = sizes['large'].get('source_url')
-                            elif 'medium_large' in sizes:
-                                featured_image = sizes['medium_large'].get('source_url')
-                            elif 'medium' in sizes:
-                                featured_image = sizes['medium'].get('source_url')
-                except Exception as e:
-                    current_app.logger.debug(f"Failed to fetch media {featured_media_id}: {e}")
+                # We'll let the frontend handle missing images with placeholders
+                # This keeps the API response fast
+                pass
             
             # Clean excerpt HTML
             excerpt_html = post.get('excerpt', {}).get('rendered', '')

@@ -284,6 +284,17 @@
             color: var(--text-secondary);
         }
 
+        @keyframes fadeInCard {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         @media (max-width: 768px) {
             .blog-grid {
                 grid-template-columns: 1fr;
@@ -407,6 +418,27 @@
                 };
             }
 
+            // Show skeleton loaders while fetching
+            function showSkeletonLoaders(count) {
+                blogGrid.innerHTML = '';
+                for (let i = 0; i < count; i++) {
+                    const skeleton = document.createElement('article');
+                    skeleton.className = 'blog-card';
+                    skeleton.style.opacity = '0.6';
+                    skeleton.innerHTML = `
+                        <div class="blog-card-image-placeholder" style="background: var(--navy-medium);"></div>
+                        <div class="blog-card-content">
+                            <div style="height: 12px; background: var(--navy-medium); border-radius: 4px; margin-bottom: 8px; width: 60%;"></div>
+                            <div style="height: 20px; background: var(--navy-medium); border-radius: 4px; margin-bottom: 12px; width: 90%;"></div>
+                            <div style="height: 16px; background: var(--navy-medium); border-radius: 4px; margin-bottom: 8px; width: 100%;"></div>
+                            <div style="height: 16px; background: var(--navy-medium); border-radius: 4px; margin-bottom: 12px; width: 80%;"></div>
+                            <div style="height: 14px; background: var(--navy-medium); border-radius: 4px; width: 40%;"></div>
+                        </div>
+                    `;
+                    blogGrid.appendChild(skeleton);
+                }
+            }
+
             // Fetch blog posts using RAG search or direct API
             async function fetchBlogPosts(page = 1, search = '') {
                 if (isLoading) return;
@@ -478,6 +510,9 @@
                             per_page: '12'
                         });
 
+                        // Show skeleton loaders immediately for better UX
+                        showSkeletonLoaders(12);
+                        
                         const response = await fetch(`/api/blog-posts?${params.toString()}`);
                         const data = await response.json();
 
@@ -492,6 +527,7 @@
                         pagination = data.pagination;
                     }
 
+                    // Hide loading indicator once we have posts
                     blogLoading.style.display = 'none';
 
                     if (posts.length === 0) {
@@ -499,44 +535,51 @@
                         return;
                     }
 
-                    // Render posts
-                    blogGrid.innerHTML = posts.map((post, index) => {
-                        const imageHtml = post.featured_image ? `
-                            <img src="${post.featured_image}" alt="${post.title}" class="blog-card-image" loading="lazy" 
-                                 onerror="this.onerror=null; this.style.display='none'; const placeholder = this.nextElementSibling; if(placeholder) placeholder.style.display='flex';">
-                            <div class="blog-card-image-placeholder" style="display: none;">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                    <polyline points="21 15 16 10 5 21"></polyline>
-                                </svg>
-                            </div>
-                        ` : `
-                            <div class="blog-card-image-placeholder">
-                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                                    <polyline points="21 15 16 10 5 21"></polyline>
-                                </svg>
-                            </div>
-                        `;
-                        
-                        return `
-                            <article class="blog-card">
-                                ${imageHtml}
-                                <div class="blog-card-content">
-                                    ${post.date ? `<div class="blog-card-date">${post.date}</div>` : ''}
-                                    <h2 class="blog-card-title">
-                                        <a href="${post.link}" target="_blank" rel="noopener">${post.title}</a>
-                                    </h2>
-                                    ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''}
-                                    <a href="${post.link}" target="_blank" rel="noopener" class="blog-card-link">
-                                        Read Article →
-                                    </a>
+                    // Progressive rendering - show posts as they're processed
+                    blogGrid.innerHTML = ''; // Clear grid
+                    
+                    // Render posts one by one with a small delay for smooth appearance
+                    posts.forEach((post, index) => {
+                        setTimeout(() => {
+                            const imageHtml = post.featured_image ? `
+                                <img src="${post.featured_image}" alt="${post.title}" class="blog-card-image" loading="lazy" 
+                                     onerror="this.onerror=null; this.style.display='none'; const placeholder = this.nextElementSibling; if(placeholder) placeholder.style.display='flex';">
+                                <div class="blog-card-image-placeholder" style="display: none;">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                        <polyline points="21 15 16 10 5 21"></polyline>
+                                    </svg>
                                 </div>
-                            </article>
-                        `;
-                    }).join('');
+                            ` : `
+                                <div class="blog-card-image-placeholder">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                        <polyline points="21 15 16 10 5 21"></polyline>
+                                    </svg>
+                                </div>
+                            `;
+                            
+                            const cardHtml = `
+                                <article class="blog-card" style="opacity: 0; animation: fadeInCard 0.3s ease forwards;">
+                                    ${imageHtml}
+                                    <div class="blog-card-content">
+                                        ${post.date ? `<div class="blog-card-date">${post.date}</div>` : ''}
+                                        <h2 class="blog-card-title">
+                                            <a href="${post.link}" target="_blank" rel="noopener">${post.title}</a>
+                                        </h2>
+                                        ${post.excerpt ? `<p class="blog-card-excerpt">${post.excerpt}</p>` : ''}
+                                        <a href="${post.link}" target="_blank" rel="noopener" class="blog-card-link">
+                                            Read Article →
+                                        </a>
+                                    </div>
+                                </article>
+                            `;
+                            
+                            blogGrid.insertAdjacentHTML('beforeend', cardHtml);
+                        }, index * 50); // Stagger by 50ms for smooth appearance
+                    });
 
                     // Update pagination (only show if not using RAG search and has multiple pages)
                     if (pagination.total_pages > 1 && !(search && search.trim())) {
