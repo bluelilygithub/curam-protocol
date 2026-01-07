@@ -83,11 +83,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const protocolPhases = document.querySelectorAll('.protocol-phase');
     protocolPhases.forEach(phase => {
         phase.addEventListener('mouseenter', function() {
+            this.style.willChange = 'transform';
             this.style.transform = 'translateY(-8px)';
         });
         
         phase.addEventListener('mouseleave', function() {
             this.style.transform = 'translateY(0)';
+            // Remove will-change after transition
+            setTimeout(() => {
+                this.style.willChange = 'auto';
+            }, 300);
         });
     });
 
@@ -117,6 +122,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (entry.isIntersecting) {
                 entry.target.style.opacity = '1';
                 entry.target.style.transform = 'translateY(0)';
+                // Remove will-change after animation completes for performance
+                setTimeout(() => {
+                    entry.target.style.willChange = 'auto';
+                }, 600);
             }
         });
     }, observerOptions);
@@ -127,6 +136,7 @@ document.addEventListener('DOMContentLoaded', function() {
         section.style.opacity = '0';
         section.style.transform = 'translateY(20px)';
         section.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        section.style.willChange = 'transform, opacity'; // Optimize paint
         observer.observe(section);
     });
 
@@ -323,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 isNavRecording = false;
                 micBtn.classList.remove('recording');
                 if (searchInput) {
-                    searchInput.placeholder = 'RAG Search...';
+                    searchInput.placeholder = 'AI Search...';
                 }
                 
                 let errorMsg = 'Voice input error. ';
@@ -357,7 +367,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 isNavRecording = false;
                 micBtn.classList.remove('recording');
                 if (searchInput) {
-                    searchInput.placeholder = 'RAG Search...';
+                    searchInput.placeholder = 'AI Search...';
                 }
                 micBtn.title = 'Click to speak';
             };
@@ -393,9 +403,9 @@ document.addEventListener('DOMContentLoaded', function() {
         searchInputs.forEach(input => {
             input.dataset.searchInitialized = 'true';
             
-            // Update placeholder to indicate RAG search
+            // Update placeholder to indicate AI search
             if (!input.placeholder.includes('blog') && !input.placeholder.includes('RAG') && !input.placeholder.includes('AI')) {
-                input.placeholder = 'RAG Search...';
+                input.placeholder = 'AI Search...';
             }
             
             // Handle Enter key - redirect to search results page
@@ -469,7 +479,7 @@ document.addEventListener('DOMContentLoaded', function() {
             input.dataset.searchInitialized = 'true';
             
             if (!input.placeholder.includes('blog') && !input.placeholder.includes('RAG') && !input.placeholder.includes('AI')) {
-                input.placeholder = 'RAG Search...';
+                input.placeholder = 'AI Search...';
             }
             
             input.addEventListener('keydown', function(e) {
@@ -619,29 +629,73 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Show/hide based on scroll position - only hide when at bottom of page
+        // Auto-hide button after user scrolls down (improved behavior)
         function handleScroll() {
             const windowHeight = window.innerHeight;
             const documentHeight = document.documentElement.scrollHeight;
             const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
             
-            // Check if we're at the bottom of the page (with small threshold for rounding)
-            const isAtBottom = scrollTop + windowHeight >= documentHeight - 10;
+            // Hide if scrolled more than 200px OR at bottom of page (95% scrolled)
+            const scrollPercent = (scrollTop + windowHeight) / documentHeight;
+            const isScrolledDown = scrollTop > 200;
+            const isNearBottom = scrollPercent >= 0.95;
             
-            // Hide button only if at bottom of page
-            if (isAtBottom) {
-                scrollDownBtn.classList.add('hidden');
+            if (isScrolledDown || isNearBottom) {
+                if (!scrollDownBtn.classList.contains('hidden')) {
+                    scrollDownBtn.classList.add('hidden');
+                }
             } else {
+                // Show button when near top of page
                 scrollDownBtn.classList.remove('hidden');
             }
         }
         
-        // Check on scroll
-        window.addEventListener('scroll', handleScroll);
+        // Throttle scroll events for better performance
+        let ticking = false;
+        window.addEventListener('scroll', function() {
+            if (!ticking) {
+                window.requestAnimationFrame(function() {
+                    handleScroll();
+                    ticking = false;
+                });
+                ticking = true;
+            }
+        });
+        
         // Check on resize (in case content height changes)
         window.addEventListener('resize', handleScroll);
-        // Check on load
+        
+        // Initial check on load
         handleScroll();
+    }
+    
+    // Lazy load hero video with intersection observer
+    const heroVideo = document.getElementById('hero-video');
+    if (heroVideo) {
+        // Only autoplay if user prefers motion and video is visible
+        const videoObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    // Check for prefers-reduced-motion
+                    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                    if (!prefersReducedMotion) {
+                        heroVideo.play().catch(e => console.log('Video autoplay prevented:', e));
+                    }
+                } else {
+                    // Pause when not visible to save bandwidth
+                    heroVideo.pause();
+                }
+            });
+        }, { threshold: 0.1 });
+        
+        videoObserver.observe(heroVideo);
+        
+        // On mobile or if prefers-reduced-motion, don't autoplay (poster image will show)
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || window.innerWidth < 768) {
+            heroVideo.removeAttribute('autoplay');
+        } else {
+            heroVideo.setAttribute('autoplay', '');
+        }
     }
 });
 
