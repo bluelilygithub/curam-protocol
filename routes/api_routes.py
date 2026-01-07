@@ -6,6 +6,7 @@ This module contains all API endpoints:
 - /api/search-blog - Fast RAG search (static pages only)
 - /api/search-blog-complete - Complete RAG search (static + blog)
 - /api/contact-assistant - AI contact assistant with RAG
+- /api/check-message-relevance - Check if contact form message is relevant
 - /api/email-chat-log - Email chat log from contact assistant
 - /api/contact - Contact form submission handler
 - /api/blog-posts - Fetch WordPress blog posts for listing page
@@ -14,6 +15,7 @@ This module contains all API endpoints:
 
 import os
 import re
+import json
 import base64
 import requests
 from flask import Blueprint, request, session, jsonify, current_app
@@ -425,6 +427,121 @@ Can this work with handwritten documents"""
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/check-message-relevance', methods=['POST'])
+def check_message_relevance():
+    """
+    Check if a contact form message is relevant to our services.
+    
+    Returns:
+        {
+            'is_relevant': bool,
+            'confidence': float (0.0-1.0),
+            'reason': str
+        }
+    """
+    try:
+        data = request.get_json()
+        message = data.get('message', '').strip()
+        
+        if not message:
+            return jsonify({
+                'is_relevant': True,
+                'confidence': 1.0,
+                'reason': 'Message too short to analyze'
+            }), 200
+        
+        if len(message) < 10:
+            return jsonify({
+                'is_relevant': True,
+                'confidence': 1.0,
+                'reason': 'Message too short to analyze'
+            }), 200
+        
+        if not api_key:
+            # If API key not available, default to allowing submission
+            return jsonify({
+                'is_relevant': True,
+                'confidence': 0.5,
+                'reason': 'Relevance check unavailable'
+            }), 200
+        
+        # Use Gemini to check relevance
+        try:
+            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            
+            prompt = f"""You are analyzing a contact form message to determine if it's relevant to Curam-Ai Protocol™ services.
+
+Our business focuses on:
+- AI document automation and data extraction
+- Document processing for engineering, finance, legal, and logistics industries
+- AI implementation frameworks (Phase 1-4)
+- PDF data extraction and structured data conversion
+- RAG (Retrieval-Augmented Generation) systems
+- Workflow automation for document-heavy processes
+
+Contact form message:
+"{message}"
+
+Analyze if this message is relevant to our services. Consider:
+1. Is it asking about document automation, AI implementation, or data extraction?
+2. Is it related to engineering, finance, legal, or logistics document processing?
+3. Is it asking about our services, pricing, or implementation?
+4. Is it clearly spam, unrelated (e.g., recipes, weather, sports), or completely off-topic?
+
+Respond in JSON format:
+{{
+    "is_relevant": true/false,
+    "confidence": 0.0-1.0,
+    "reason": "Brief explanation (max 50 words)"
+}}
+
+Only respond with the JSON object, no other text."""
+            
+            response = model.generate_content(prompt)
+            response_text = response.text.strip() if response.text else ""
+            
+            # Try to extract JSON from response
+            # Remove markdown code blocks if present
+            if '```json' in response_text:
+                response_text = response_text.split('```json')[1].split('```')[0].strip()
+            elif '```' in response_text:
+                response_text = response_text.split('```')[1].split('```')[0].strip()
+            
+            # Parse JSON response
+            try:
+                result = json.loads(response_text)
+                return jsonify({
+                    'is_relevant': result.get('is_relevant', True),
+                    'confidence': float(result.get('confidence', 0.5)),
+                    'reason': result.get('reason', 'Analyzed by AI')
+                }), 200
+            except json.JSONDecodeError:
+                # If JSON parsing fails, try to extract values from text
+                # Default to allowing submission if we can't parse
+                return jsonify({
+                    'is_relevant': True,
+                    'confidence': 0.5,
+                    'reason': 'Unable to parse AI response'
+                }), 200
+                
+        except Exception as e:
+            # On error, default to allowing submission
+            print(f"Error checking message relevance: {e}")
+            return jsonify({
+                'is_relevant': True,
+                'confidence': 0.5,
+                'reason': f'Check unavailable: {str(e)[:50]}'
+            }), 200
+            
+    except Exception as e:
+        # On any error, default to allowing submission
+        return jsonify({
+            'is_relevant': True,
+            'confidence': 0.5,
+            'reason': 'Error processing request'
+        }), 200
 
 
 @api_bp.route('/api/email-chat-log', methods=['POST'])
