@@ -1693,7 +1693,7 @@ p.hero-description {
 .footer-links {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-2xl);
+    gap: var(--spacing-3xl); /* Increased vertical spacing between link categories */
     width: 100%;
 }
 
@@ -1743,7 +1743,7 @@ p.hero-description {
 .footer-column a {
     color: var(--text-secondary);
     text-decoration: none;
-    font-size: 0.9rem;
+    font-size: 0.9375rem; /* Increased by 2px (0.9rem = 14.4px, 0.9375rem = 15px) */
     font-weight: 400;
     line-height: 1.5;
     transition: all 0.2s ease;
@@ -3218,12 +3218,12 @@ p.hero-description {
 
 /* Section Utilities */
 .section{
-    padding: 7.5rem 0; /* 120px - consistent section spacing */
+    padding: 6.25rem 0; /* 100px - standardized section spacing */
 }
 
 .section-alt {
   background: var(--navy-medium);
-  padding: 7.5rem 0; /* 120px - consistent section spacing */
+  padding: 6.25rem 0; /* 100px - standardized section spacing */
 }
 
 .centered {
@@ -12535,6 +12535,7 @@ p.hero-description {
 
 .industry-card-icon svg {
   stroke: var(--color-gold);
+  stroke-width: 1.5;
 }
 
 .industry-card-title {
@@ -13698,6 +13699,44 @@ p.hero-description {
     font-size: 0.9rem;
     color: var(--text-secondary);
     font-style: italic;
+}
+
+/* About Page Specific Styles */
+.comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-2xl);
+  max-width: 1000px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 768px) {
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.built-card-1 {
+  background: var(--navy-deep) !important;
+}
+
+.built-card-2 {
+  background: var(--navy-medium) !important;
+}
+
+.built-card-3 {
+  background: var(--navy-deep) !important;
+}
+
+.cta-grand-finale {
+  padding: 6.25rem 0;
+}
+
+.cta-content-grand-finale {
+  position: relative;
+  z-index: 1;
 }
 
 /* Mobile Responsiveness */
