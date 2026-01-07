@@ -13739,6 +13739,32 @@ p.hero-description {
   z-index: 1;
 }
 
+/* Technical Foundation Grid - 3×2 Layout */
+.technical-foundation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-xl);
+  margin-bottom: var(--spacing-2xl);
+}
+
+@media (max-width: 1024px) {
+  .technical-foundation-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .technical-foundation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.technical-item:hover {
+  border-color: var(--color-gold) !important;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.25) !important;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
     .phase-2-report-container {
