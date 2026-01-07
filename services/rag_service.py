@@ -297,17 +297,17 @@ def search_blog_posts(query, max_results=5):
         except Exception as e:
             print(f"WordPress search API error: {e}")
         
-        # Strategy 2: Fetch recent posts as backup
+        # Strategy 2: Fetch recent posts as backup (reduced from 300 to 50 posts)
         try:
-            pages_to_fetch = 3  # 300 posts max
+            pages_to_fetch = 1  # 50 posts max (reduced from 300)
             for page in range(1, pages_to_fetch + 1):
                 response = requests.get(wp_api_url, params={
-                    'per_page': 100,
+                    'per_page': 50,  # Reduced from 100
                     '_fields': 'id,title,content,excerpt,link,date',
                     'orderby': 'date',
                     'order': 'desc',
                     'page': page
-                }, timeout=15)
+                }, timeout=10)  # Reduced from 15s
                 if response.status_code == 200:
                     page_posts = response.json()
                     if not page_posts:

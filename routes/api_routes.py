@@ -17,8 +17,11 @@ import os
 import re
 import json
 import base64
+import time
+import hashlib
 import requests
 from flask import Blueprint, request, session, jsonify, current_app
+from functools import wraps
 
 # Import Google Generative AI
 import google.generativeai as genai
@@ -35,6 +38,37 @@ api_key = os.environ.get("GEMINI_API_KEY")
 
 # Create blueprint
 api_bp = Blueprint('api', __name__)
+
+# Simple in-memory cache for WordPress API responses
+# Cache structure: {cache_key: (data, timestamp)}
+_wordpress_cache = {}
+CACHE_TTL = 300  # 5 minutes
+
+def get_cache_key(url, params):
+    """Generate cache key from URL and params"""
+    cache_str = f"{url}:{json.dumps(params, sort_keys=True)}"
+    return hashlib.md5(cache_str.encode()).hexdigest()
+
+def get_cached_response(cache_key):
+    """Get cached response if still valid"""
+    if cache_key in _wordpress_cache:
+        data, timestamp = _wordpress_cache[cache_key]
+        if time.time() - timestamp < CACHE_TTL:
+            return data
+        else:
+            # Expired, remove from cache
+            del _wordpress_cache[cache_key]
+    return None
+
+def cache_response(cache_key, data):
+    """Cache response with timestamp"""
+    _wordpress_cache[cache_key] = (data, time.time())
+    # Limit cache size to prevent memory issues (keep last 100 entries)
+    if len(_wordpress_cache) > 100:
+        # Remove oldest entry
+        oldest_key = min(_wordpress_cache.keys(), 
+                        key=lambda k: _wordpress_cache[k][1])
+        del _wordpress_cache[oldest_key]
 
 
 @api_bp.route('/test/dependencies', methods=['GET'])
@@ -1188,20 +1222,37 @@ def get_blog_posts():
             except Exception:
                 pass
         
-        # Fetch posts
-        response = requests.get(wp_api_url, params=api_params, timeout=20)
+        # Check cache first
+        cache_key = get_cache_key(wp_api_url, api_params)
+        cached_data = get_cached_response(cache_key)
         
-        if response.status_code != 200:
-            return jsonify({
-                'success': False,
-                'error': f'Blog API returned status {response.status_code}',
-                'posts': [],
-                'pagination': {}
-            }), 503
-        
-        posts_data = response.json()
-        total_posts = int(response.headers.get('X-WP-Total', 0))
-        total_pages = int(response.headers.get('X-WP-TotalPages', 1))
+        if cached_data:
+            # Return cached response
+            posts_data = cached_data['posts']
+            total_posts = cached_data['total_posts']
+            total_pages = cached_data['total_pages']
+        else:
+            # Fetch posts from API
+            response = requests.get(wp_api_url, params=api_params, timeout=20)
+            
+            if response.status_code != 200:
+                return jsonify({
+                    'success': False,
+                    'error': f'Blog API returned status {response.status_code}',
+                    'posts': [],
+                    'pagination': {}
+                }), 503
+            
+            posts_data = response.json()
+            total_posts = int(response.headers.get('X-WP-Total', 0))
+            total_pages = int(response.headers.get('X-WP-TotalPages', 1))
+            
+            # Cache the response
+            cache_response(cache_key, {
+                'posts': posts_data,
+                'total_posts': total_posts,
+                'total_pages': total_pages
+            })
         
         # Process posts
         posts = []

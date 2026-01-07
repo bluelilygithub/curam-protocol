@@ -26,6 +26,33 @@ from utils.sample_loader import get_allowed_sample_paths
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = SECRET_KEY
 
+# Performance: Add caching headers for static assets
+@app.after_request
+def add_cache_headers(response):
+    """Add appropriate cache headers based on file type"""
+    if request.endpoint == 'static' or request.path.startswith('/assets/'):
+        # CSS and JS files - cache for 1 year (with versioning)
+        if request.path.endswith(('.css', '.js')):
+            response.cache_control.max_age = 31536000  # 1 year
+            response.cache_control.public = True
+        # Images - cache for 6 months
+        elif request.path.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico')):
+            response.cache_control.max_age = 15552000  # 6 months
+            response.cache_control.public = True
+        # Videos - cache for 1 month (large files)
+        elif request.path.endswith(('.mp4', '.webm', '.mov')):
+            response.cache_control.max_age = 2592000  # 1 month
+            response.cache_control.public = True
+        # Fonts - cache for 1 year
+        elif request.path.endswith(('.woff', '.woff2', '.ttf', '.otf', '.eot')):
+            response.cache_control.max_age = 31536000  # 1 year
+            response.cache_control.public = True
+        # Other static files - cache for 1 hour
+        else:
+            response.cache_control.max_age = 3600  # 1 hour
+            response.cache_control.public = True
+    return response
+
 # Register blueprints
 app.register_blueprint(static_pages_bp)
 app.register_blueprint(automater_bp)
