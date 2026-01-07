@@ -10,6 +10,7 @@
     padding: 15px;
     border-radius: 8px;
     margin-bottom: 20px;
+    margin-top: 20px;
     border-left: 4px solid var(--color-gold);
     display: none;
 }

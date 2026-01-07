@@ -297,6 +297,7 @@
             const container = document.getElementById('search-results-container');
             const blogSearching = document.getElementById('blog-searching');
             const updateNotification = document.getElementById('update-notification');
+            let blogSearchingBelow = null; // Will hold reference to message below results
             
             container.innerHTML = `
                 <div class="search-query-display"><h2>Search Results: "${query}"</h2></div>
@@ -316,8 +317,19 @@
                 displayResults(data.answer, data.sources, false, query);
                 
                 if (data.searching_blog) {
-                    blogSearching.innerHTML = '<div class="searching-content"><span class="searching-spinner"></span><span>' + (data.message || '🔍 Searching blog...') + '</span></div>';
+                    const message = data.message || '🔍 Searching 800+ blog articles for additional information...';
+                    
+                    // Show message ABOVE results (existing div)
+                    blogSearching.innerHTML = '<div class="searching-content"><span class="searching-spinner"></span><span>' + message + '</span></div>';
                     blogSearching.style.display = 'block';
+                    
+                    // Show message BELOW results (insert new div after container)
+                    blogSearchingBelow = document.createElement('div');
+                    blogSearchingBelow.id = 'blog-searching-below';
+                    blogSearchingBelow.className = 'blog-searching';
+                    blogSearchingBelow.innerHTML = '<div class="searching-content"><span class="searching-spinner"></span><span>' + message + '</span></div>';
+                    blogSearchingBelow.style.display = 'block';
+                    container.parentNode.insertBefore(blogSearchingBelow, container.nextSibling);
                     
                     // PHASE 2: Complete search
                     fetch('/api/search-blog-complete', {
@@ -327,7 +339,16 @@
                     })
                     .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
                     .then(d => {
+                        // Hide and remove BOTH messages when complete results arrive
                         blogSearching.style.display = 'none';
+                        if (blogSearchingBelow) {
+                            blogSearchingBelow.style.display = 'none';
+                            // Remove from DOM after hiding
+                            if (blogSearchingBelow.parentNode) {
+                                blogSearchingBelow.parentNode.removeChild(blogSearchingBelow);
+                            }
+                            blogSearchingBelow = null;
+                        }
                         if (!d.error) {
                             displayResults(d.answer, d.sources, true, query);
                             updateNotification.textContent = '✨ Enhanced with blog insights';
@@ -335,7 +356,19 @@
                             setTimeout(() => updateNotification.style.display = 'none', 3000);
                         }
                     })
-                    .catch(e => { console.warn('Blog search failed:', e); blogSearching.style.display = 'none'; });
+                    .catch(e => { 
+                        console.warn('Blog search failed:', e); 
+                        // Hide and remove BOTH messages on error
+                        blogSearching.style.display = 'none';
+                        if (blogSearchingBelow) {
+                            blogSearchingBelow.style.display = 'none';
+                            // Remove from DOM after hiding
+                            if (blogSearchingBelow.parentNode) {
+                                blogSearchingBelow.parentNode.removeChild(blogSearchingBelow);
+                            }
+                            blogSearchingBelow = null;
+                        }
+                    });
                 }
             })
             .catch(e => {
@@ -415,6 +448,15 @@
                 <div style="background:linear-gradient(135deg,var(--color-navy),#1e3a5f);color:#fff;padding:20px;border-radius:8px;margin-top:30px;text-align:center"><h3 style="color:#fff;margin-bottom:10px">Same AI for Your Documents</h3><p style="color:rgba(255,255,255,0.9);margin-bottom:15px">RAG search + document extraction at ≥90% accuracy.</p><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a href="contact.html" class="btn btn-primary" style="background:var(--color-gold);color:var(--color-navy);border:none">Book Diagnostic</a><a href="/feasibility-preview.html" class="btn btn-secondary" style="background:transparent;border:2px solid var(--color-gold);color:var(--color-gold)">Try Demo</a></div></div>`;
                 
                 container.innerHTML = html;
+                
+                // If this is the initial results (not an update), and blogSearchingBelow hasn't been created yet,
+                // it will be created by the calling code. If this is an update, make sure any existing message below is removed.
+                if (isUpdate && blogSearchingBelow) {
+                    // Already hidden by the calling code, but remove from DOM if needed
+                    if (blogSearchingBelow.parentNode) {
+                        blogSearchingBelow.parentNode.removeChild(blogSearchingBelow);
+                    }
+                }
             }
         });
     </script>
