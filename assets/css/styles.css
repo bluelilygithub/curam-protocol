@@ -145,7 +145,7 @@ h1, h2, h3, h4 {
 
 .section-subhead {
   font-size: 1.125rem;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--text-secondary);
   max-width: 800px;
   margin: 0 auto var(--spacing-2xl);
@@ -178,26 +178,30 @@ h1, h2, h3, h4 {
   background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
   color: var(--navy-deep);
   border-color: var(--color-gold);
+  padding: 1rem 2rem;
+  box-shadow: 0 4px 16px rgba(184, 150, 47, 0.4);
+  font-weight: 600;
 }
 
 .btn-primary:hover {
-  /* SUBTLE change: only opacity and slight shadow */
-  opacity: 0.9;
-  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
-  transform: none; /* Removed transform for more subtle effect */
+  opacity: 0.95;
+  box-shadow: 0 6px 20px rgba(184, 150, 47, 0.5);
+  transform: translateY(-2px);
+  transition: all 300ms ease-in-out;
 }
 
 .btn-secondary {
   background: transparent;
   color: var(--text-primary);
-  border: 2px solid var(--border-subtle);
+  border: 1px solid var(--border-subtle);
+  font-weight: 500;
 }
 
 .btn-secondary:hover {
-  /* SUBTLE change: slight background tint and gold accent */
   background: rgba(255, 255, 255, 0.08);
   border-color: var(--color-gold);
   color: var(--color-gold);
+  transition: all 300ms ease-in-out;
 }
 
 .btn-protocol {
@@ -613,6 +617,7 @@ h1, h2, h3, h4 {
   display: flex;
   align-items: center;
   padding-top: 120px;
+  padding-bottom: 7.5rem; /* 120px - consistent spacing after hero */
   overflow: hidden;
 }
 
@@ -733,7 +738,8 @@ p.hero-tagline {
 
 .hero-headline {
   font-size: clamp(2.5rem, 6vw, 4rem);
-  font-weight: 500;
+  font-weight: 800;
+  letter-spacing: 0.02em;
   line-height: 1.1;
   margin-bottom: 1.5rem;
 }
@@ -776,9 +782,17 @@ p.hero-description {
 
 .hero-cta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  align-items: center;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  align-items: flex-start;
+  margin-top: var(--spacing-xl);
+}
+
+@media (min-width: 768px) {
+  .hero-cta {
+    flex-direction: row;
+    align-items: center;
+  }
 }
 
 .hero-cta .btn-arrow {
@@ -802,19 +816,20 @@ p.hero-description {
 }
 
 .stat-card {
-  background: rgba(26, 45, 74, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(26, 45, 74, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--border-radius);
   padding: 1.5rem;
   text-align: center;
-  backdrop-filter: blur(8px);
-  transition: var(--transition);
+  backdrop-filter: blur(10px);
+  transition: all 300ms ease-in-out;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 0 20px rgba(212, 175, 55, 0.05);
 }
 
 .stat-card:hover {
-  border-color: rgba(0, 212, 255, 0.4);
-  box-shadow: 0 8px 32px rgba(0, 212, 255, 0.1);
-  transform: translateY(-4px);
+  border-color: var(--color-gold);
+  box-shadow: 0 8px 32px rgba(212, 175, 55, 0.2), inset 0 0 30px rgba(212, 175, 55, 0.1);
+  transform: translateY(-5px);
 }
 
 .stat-number {
@@ -1132,14 +1147,8 @@ p.hero-description {
 
 /* ========== METHODOLOGY / PROTOCOL SECTION ========== */
 .methodology {
-  padding: var(--spacing-3xl) 0;
+  padding: 7.5rem 0; /* 120px - consistent with other sections */
   background: var(--navy-medium);
-}
-
-@media (min-width: 768px) {
-  .methodology {
-    padding: 6rem 0;
-  }
 }
 
 .protocol-assurance-callout {
@@ -1161,6 +1170,33 @@ p.hero-description {
 .protocol-diagram {
   display: grid;
   gap: var(--spacing-lg);
+  position: relative;
+  margin-top: var(--spacing-2xl);
+}
+
+/* Progress indicator line connecting phase cards */
+@media (min-width: 1024px) {
+  .protocol-diagram::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, 
+      transparent 0%, 
+      var(--color-gold) 10%, 
+      var(--color-gold) 90%, 
+      transparent 100%);
+    opacity: 0.3;
+    z-index: 0;
+    transform: translateY(-50%);
+  }
+  
+  .protocol-phase {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 @media (min-width: 768px) {
@@ -1180,17 +1216,19 @@ p.hero-description {
   background: var(--navy-deep);
   border: 1px solid var(--border-subtle);
   border-radius: var(--border-radius-lg);
-  padding: var(--spacing-2xl) var(--spacing-xl); /* Increased vertical padding */
+  padding: var(--spacing-3xl) var(--spacing-xl); /* Increased internal padding for breathing room */
   text-align: center;
-  transition: var(--transition);
+  transition: all 300ms ease-in-out;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .protocol-phase:hover {
-  border-color: rgba(212, 175, 55, 0.4);
-  transform: translateX(4px);
-  box-shadow: 0 8px 30px rgba(212, 175, 55, 0.15);
+  border-color: var(--color-gold);
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(212, 175, 55, 0.25);
+  transition: all 300ms ease-in-out;
 }
 
 /* Phase actions container - pushes buttons to bottom */
@@ -1214,6 +1252,10 @@ p.hero-description {
   color: var(--color-gold);
 }
 
+.phase-icon svg {
+  stroke-width: 1.5; /* Standardized stroke width */
+}
+
 .phase-number {
   font-size: 0.75rem;
   font-weight: 700;
@@ -1227,13 +1269,13 @@ p.hero-description {
   font-size: 1.375rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: var(--spacing-md); /* More space between title and subtitle */
 }
 
 .phase-subtitle {
   font-size: 0.875rem;
   color: var(--text-muted);
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-lg); /* More space before details */
 }
 
 .phase-details {
@@ -1263,7 +1305,10 @@ p.hero-description {
 
 .phase-deliverables {
   text-align: left;
-  margin-bottom: var(--spacing-md);
+  margin-bottom: var(--spacing-lg); /* More space after deliverables */
+  padding: var(--spacing-md);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--border-radius);
 }
 
 .phase-deliverables li {
@@ -1271,7 +1316,7 @@ p.hero-description {
   color: var(--text-secondary);
   padding-left: var(--spacing-lg);
   position: relative;
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm); /* Tighter spacing within list */
 }
 
 .phase-deliverables li::before {
@@ -3173,12 +3218,12 @@ p.hero-description {
 
 /* Section Utilities */
 .section{
-    padding:var(--spacing-4xl) 0;
+    padding: 7.5rem 0; /* 120px - consistent section spacing */
 }
 
 .section-alt {
   background: var(--navy-medium);
-  padding: var(--spacing-4xl) 0;
+  padding: 7.5rem 0; /* 120px - consistent section spacing */
 }
 
 .centered {
@@ -12072,14 +12117,19 @@ p.hero-description {
 
 .sector-card:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(212, 175, 55, 0.4);
-  transform: translateY(-4px); /* More subtle - was -8px */
-  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.12); /* More subtle */
+  border-color: var(--color-gold);
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(212, 175, 55, 0.25);
+  transition: all 300ms ease-in-out;
 }
 
 .sector-icon {
   margin-bottom: var(--spacing-xl);
   opacity: 0.9;
+}
+
+.sector-icon svg {
+  stroke-width: 1.5; /* Standardized to match phase icons */
 }
 
 .sector-card h3 {
