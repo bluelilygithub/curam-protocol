@@ -341,12 +341,47 @@ def search_blog_posts(query, max_results=5):
         if not query_words:
             query_words = set(query_lower.split())
         
+        # Business domain keywords - posts should relate to these topics
+        domain_keywords = {
+            'document', 'automation', 'ai', 'artificial intelligence', 'machine learning', 'llm',
+            'extraction', 'pdf', 'ocr', 'rag', 'retrieval', 'augmented', 'generation',
+            'workflow', 'process', 'business', 'consulting', 'implementation', 'enterprise',
+            'invoice', 'contract', 'tender', 'compliance', 'audit', 'finance', 'accounting',
+            'legal', 'engineering', 'construction', 'logistics', 'transmittal', 'protocol',
+            'gemini', 'openai', 'chatgpt', 'claude', 'anthropic', 'api', 'integration',
+            'feasibility', 'roi', 'cost', 'pricing', 'guarantee', 'phase', 'delivery',
+            'data', 'intelligence', 'semantic', 'embedding', 'vector', 'nlp', 'ml',
+            'curam', 'software', 'system', 'platform', 'solution', 'service', 'technology'
+        }
+        
+        # Consumer/off-topic keywords - posts with these (without domain keywords) are penalized
+        off_topic_keywords = {
+            'consumer device', 'smartphone', 'tablet', 'gadget', 'appliance', 'rabbit r1',
+            'recipe', 'cooking', 'weather', 'sports', 'celebrity', 'movie', 'game',
+            'restaurant', 'hotel', 'travel', 'vacation', 'music', 'fashion', 'car review',
+            'bitcoin', 'crypto', 'stock', 'forex', 'dating', 'pets', 'gardening',
+            'mars', 'venus', 'planet', 'space exploration', 'relationship advice', 'novel', 'fiction'
+        }
+        
         def calculate_relevance(post):
             score = 0
             title = post.get('title', {}).get('rendered', '').lower()
             excerpt = post.get('excerpt', {}).get('rendered', '').lower()
             content = post.get('content', {}).get('rendered', '').lower()
             
+            # Combine all text for domain relevance check
+            combined_text = f"{title} {excerpt} {content[:1000]}".lower()
+            
+            # Check domain relevance - penalize if no domain keywords found
+            has_domain_keywords = any(keyword in combined_text for keyword in domain_keywords)
+            has_off_topic = any(keyword in combined_text for keyword in off_topic_keywords)
+            
+            # Domain relevance penalty: if query is a single word and post has off-topic but no domain keywords, heavily penalize
+            if len(query_words) == 1 and has_off_topic and not has_domain_keywords:
+                # This is likely a consumer product or unrelated topic
+                score -= 50  # Heavy penalty for completely off-topic content
+            
+            # Keyword matching scoring
             for word in query_words:
                 if word in title:
                     score += 10
@@ -362,24 +397,31 @@ def search_blog_posts(query, max_results=5):
             if query_lower in content:
                 score += 5
             
-            return score
+            # Domain relevance bonus: boost posts that have domain keywords
+            if has_domain_keywords:
+                score += 15  # Bonus for business-relevant content
+            
+            return max(score, 0)  # Ensure non-negative
         
         # Sort and take top results
         posts_with_scores = [(p, calculate_relevance(p)) for p in all_posts]
         posts_with_scores.sort(key=lambda x: x[1], reverse=True)
         
-        # Filter by minimum score, but be more lenient for single-word queries
+        # Filter by minimum score, but ensure domain relevance for single-word queries
+        # Single-word queries now need domain keywords (15 bonus) + at least 1 keyword match = 16+ total
         if len(query_words) == 1:
-            MINIMUM_SCORE = 1  # Single word: accept any match
+            MINIMUM_SCORE = 15  # Single word: require domain relevance (off-topic posts get negative scores)
         else:
             MINIMUM_SCORE = 5  # Multi-word: require at least 5 points
         
-        # Filter posts by minimum score
-        filtered_posts = [p for p, score in posts_with_scores if score >= MINIMUM_SCORE]
+        # Filter posts by minimum score AND ensure they're not penalized (score > 0)
+        filtered_posts = [p for p, score in posts_with_scores if score >= MINIMUM_SCORE and score > 0]
         
-        # If no results meet minimum, return top results anyway (even with low scores)
+        # If no results meet minimum, return top results anyway (but only positive scores)
         if not filtered_posts and posts_with_scores:
-            posts = [p for p, score in posts_with_scores[:max_results]]
+            # Only return posts with positive scores (filter out penalized off-topic posts)
+            positive_posts = [p for p, score in posts_with_scores if score > 0][:max_results]
+            posts = positive_posts if positive_posts else []
         else:
             posts = filtered_posts[:max_results]
         
