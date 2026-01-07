@@ -12507,11 +12507,11 @@ p.hero-description {
 }
 
 .industry-card {
-  background: white;
-  border: 1px solid #E5E7EB;
+  background: var(--navy-deep);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-2xl);
-  transition: all 0.3s ease;
+  transition: all 300ms ease-in-out;
   display: flex;
   flex-direction: column;
 }
@@ -12519,7 +12519,11 @@ p.hero-description {
 .industry-card:hover {
   transform: translateY(-6px);
   border-color: var(--color-gold);
-  box-shadow: 0 12px 40px rgba(212, 175, 55, 0.15);
+  box-shadow: 0 12px 40px rgba(212, 175, 55, 0.25);
+}
+
+.industry-card:last-child {
+  border-color: var(--color-gold);
 }
 
 .industry-card-icon {
@@ -12541,14 +12545,14 @@ p.hero-description {
 .industry-card-title {
   font-size: 1.375rem;
   font-weight: 600;
-  color: var(--navy-deep);
+  color: var(--text-primary);
   margin-bottom: var(--spacing-sm);
   line-height: 1.3;
 }
 
 .industry-card-subtitle {
   font-size: 0.9375rem;
-  color: #6B7280;
+  color: var(--text-secondary);
   margin-bottom: var(--spacing-lg);
   line-height: 1.5;
 }
@@ -12564,7 +12568,7 @@ p.hero-description {
   padding: var(--spacing-sm) 0;
   padding-left: var(--spacing-lg);
   position: relative;
-  color: #4B5563;
+  color: var(--text-secondary);
   font-size: 0.9375rem;
   line-height: 1.6;
 }
@@ -13710,6 +13714,21 @@ p.hero-description {
   max-width: 1000px;
   margin-left: auto;
   margin-right: auto;
+}
+
+.comparison-card {
+  transition: all 300ms ease-in-out;
+}
+
+.comparison-card:hover {
+  border-color: rgba(212, 175, 55, 0.6) !important;
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.2) !important;
+  transform: translateY(-2px);
+}
+
+.comparison-card-gold:hover {
+  border-color: var(--color-gold) !important;
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.3) !important;
 }
 
 @media (max-width: 768px) {
