@@ -721,8 +721,8 @@ h1, h2, h3, h4 {
   margin-bottom: 0.75rem;
 }
 
-.hero.homepage-hero .hero-tagline p {
-  color: var(--color-gold);
+p.hero-tagline { 
+  color: var(--color-white); 
 }
 
 .hero-headline {
@@ -753,8 +753,8 @@ h1, h2, h3, h4 {
   margin-bottom: 2.5rem;
 }
 
-.hero.homepage-hero .hero-description p {
-  color: var(--color-white);
+p.hero-description { 
+  color: var(--color-white); 
 }
 
 .hero-description strong {
