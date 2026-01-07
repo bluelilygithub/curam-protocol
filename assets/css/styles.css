@@ -725,6 +725,12 @@ p.hero-tagline {
   color: var(--color-white); 
 }
 
+/* Homepage hero with video background - specific color overrides */
+.homepage-hero .hero-tagline,
+.homepage-hero p.hero-tagline {
+  color: var(--color-gold);
+}
+
 .hero-headline {
   font-size: clamp(2.5rem, 6vw, 4rem);
   font-weight: 500;
@@ -755,6 +761,12 @@ p.hero-tagline {
 
 p.hero-description { 
   color: var(--color-white); 
+}
+
+/* Homepage hero with video background - ensure description is white */
+.homepage-hero .hero-description,
+.homepage-hero p.hero-description {
+  color: var(--color-white);
 }
 
 .hero-description strong {
