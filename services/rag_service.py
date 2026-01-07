@@ -223,8 +223,19 @@ def search_static_html_pages(query):
     ranked_pages = sorted(pages, key=calculate_page_relevance, reverse=True)
     
     # Filter and return top results
-    MINIMUM_SCORE = 10
+    # Use dynamic minimum score: lower for single-word queries, higher for multi-word
+    # This ensures single words like "tesla" or "audit" aren't filtered out
+    if len(query_words) == 1:
+        MINIMUM_SCORE = 1  # Single word: accept any match (content match = 1 point)
+    else:
+        MINIMUM_SCORE = 5  # Multi-word: require at least 5 points (e.g., 2 words in content = 2 points, or 1 in title = 10 points)
+    
     relevant_pages = [p for p in ranked_pages if calculate_page_relevance(p) >= MINIMUM_SCORE][:5]
+    
+    # If no results with minimum score, return top 3 anyway (even with score 0)
+    # This ensures users always get some results, even if relevance is low
+    if not relevant_pages and ranked_pages:
+        relevant_pages = ranked_pages[:3]
     
     return relevant_pages
 
@@ -356,7 +367,21 @@ def search_blog_posts(query, max_results=5):
         # Sort and take top results
         posts_with_scores = [(p, calculate_relevance(p)) for p in all_posts]
         posts_with_scores.sort(key=lambda x: x[1], reverse=True)
-        posts = [p for p, score in posts_with_scores[:max_results]]
+        
+        # Filter by minimum score, but be more lenient for single-word queries
+        if len(query_words) == 1:
+            MINIMUM_SCORE = 1  # Single word: accept any match
+        else:
+            MINIMUM_SCORE = 5  # Multi-word: require at least 5 points
+        
+        # Filter posts by minimum score
+        filtered_posts = [p for p, score in posts_with_scores if score >= MINIMUM_SCORE]
+        
+        # If no results meet minimum, return top results anyway (even with low scores)
+        if not filtered_posts and posts_with_scores:
+            posts = [p for p, score in posts_with_scores[:max_results]]
+        else:
+            posts = filtered_posts[:max_results]
         
         return {
             'posts': posts,
