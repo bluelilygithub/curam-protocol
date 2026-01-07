@@ -219,8 +219,14 @@
                 <div id="suggestedInterest" class="contact-interest-suggestion contact-hidden"></div>
 
                 <!-- Email Chat Log Section -->
+                <div class="contact-email-toggle-wrapper">
+                  <button class="contact-email-toggle-btn" id="emailChatToggleBtn">
+                    <span>📧</span>
+                    <span>Email this conversation</span>
+                    <span class="toggle-arrow">▼</span>
+                  </button>
+                </div>
                 <div class="contact-email-section contact-hidden" id="emailChatSection">
-                  <p class="contact-email-section-title">📧 Email this conversation</p>
                   <p class="contact-email-section-desc">
                     Get a copy of our conversation sent to your email for your records.
                   </p>
@@ -728,10 +734,7 @@
                       showSuggestedInterest(data.suggested_interest);
                   }
 
-                  // Show email section after at least 2 messages (user + assistant)
-                  if (conversationHistory.length >= 2) {
-                      document.getElementById('emailChatSection').classList.remove('contact-hidden');
-                  }
+                  // Email section is now toggleable via button - no auto-show
               }
           } catch (error) {
               // Remove loading animation on error
@@ -748,11 +751,31 @@
       }
 
       // Email chat log functionality
+      const emailChatToggleBtn = document.getElementById('emailChatToggleBtn');
+      const emailChatSection = document.getElementById('emailChatSection');
       const emailChatBtn = document.getElementById('emailChatBtn');
       const emailInput = document.getElementById('emailInput');
       const emailStatus = document.getElementById('emailStatus');
       const nameInput = document.getElementById('name');
       const companyInput = document.getElementById('company');
+      
+      // Toggle email section visibility
+      if (emailChatToggleBtn && emailChatSection) {
+          emailChatToggleBtn.addEventListener('click', function() {
+              const isHidden = emailChatSection.classList.contains('contact-hidden');
+              const arrow = this.querySelector('.toggle-arrow');
+              
+              if (isHidden) {
+                  emailChatSection.classList.remove('contact-hidden');
+                  if (arrow) arrow.textContent = '▲';
+                  this.classList.add('active');
+              } else {
+                  emailChatSection.classList.add('contact-hidden');
+                  if (arrow) arrow.textContent = '▼';
+                  this.classList.remove('active');
+              }
+          });
+      }
 
       // Pre-fill email from form if available
       const emailFormInput = document.getElementById('email');

@@ -8311,8 +8311,49 @@ p.hero-description {
     text-decoration: underline;
 }
 
-.contact-email-section {
+.contact-email-toggle-wrapper {
     margin-top: var(--spacing-md);
+}
+
+.contact-email-toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: transparent;
+    border: 1px solid #E5E7EB;
+    border-radius: var(--border-radius);
+    color: var(--color-navy);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+    width: 100%;
+    justify-content: space-between;
+}
+
+.contact-email-toggle-btn:hover {
+    background: #F9FAFB;
+    border-color: var(--color-gold);
+}
+
+.contact-email-toggle-btn.active {
+    background: #F9FAFB;
+    border-color: var(--color-gold);
+}
+
+.contact-email-toggle-btn .toggle-arrow {
+    font-size: 0.75rem;
+    transition: transform var(--transition);
+    color: var(--color-gray);
+}
+
+.contact-email-toggle-btn.active .toggle-arrow {
+    color: var(--color-gold);
+}
+
+.contact-email-section {
+    margin-top: var(--spacing-sm);
     padding: var(--spacing-md);
     background: #F9FAFB;
     border-radius: var(--border-radius);

@@ -339,24 +339,51 @@ Use paragraphs (\n\n)."""
             
             text = re.sub(r'"([^"]+)"', link_it, text)
         
-        # Format paragraphs
+        # Format paragraphs with better human-readable formatting
         parts = []
-        for para in text.split('\n\n'):
+        # Split by double newlines first (paragraphs)
+        paragraphs = text.split('\n\n')
+        
+        for para in paragraphs:
             para = para.strip()
             if not para:
                 continue
             # Skip meaningless short content (single punctuation, stray characters)
             if len(para) <= 2 and not para.isalnum():
                 continue
-            if '- ' in para or '• ' in para:
-                items = []
-                for line in para.split('\n'):
-                    if line.strip().startswith(('-', '•')):
-                        items.append(f'<li>{line.lstrip("-• ").strip()}</li>')
-                if items:
-                    parts.append(f'<ul>{"".join(items)}</ul>')
+            
+            # Check if it's a list (starts with -, •, or numbered)
+            lines = para.split('\n')
+            is_list = False
+            list_items = []
+            
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                # Check for bullet points or numbered lists
+                if line.startswith(('-', '•', '*')) or re.match(r'^\d+[\.\)]\s', line):
+                    is_list = True
+                    # Clean up the list item
+                    clean_item = re.sub(r'^[-•*]\s*', '', line)
+                    clean_item = re.sub(r'^\d+[\.\)]\s*', '', clean_item)
+                    list_items.append(f'<li>{clean_item}</li>')
+                elif is_list and line:  # Continue list if previous was list item
+                    # Check if this line continues the previous item or is a new paragraph
+                    if len(line) < 100:  # Short line might be continuation
+                        list_items[-1] = list_items[-1].replace('</li>', f' {line}</li>')
+                    else:
+                        # Long line is probably a new paragraph
+                        is_list = False
+                        break
+            
+            if is_list and list_items:
+                parts.append(f'<ul>{"".join(list_items)}</ul>')
             else:
-                parts.append(f'<p>{para.replace(chr(10), "<br>")}</p>')
+                # Regular paragraph - preserve line breaks within paragraph
+                para_html = para.replace('\n', '<br>')
+                # Make sure paragraphs are properly formatted
+                parts.append(f'<p>{para_html}</p>')
         
         html = ''.join(parts) if parts else f'<p>{text}</p>'
         
