@@ -222,16 +222,20 @@ h1, h2, h3, h4 {
 }
 
 .btn-nav {
-  background: var(--color-gold);
-  color: var(--navy-deep);
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   padding: 0.5rem 1rem !important;
   border-radius: var(--border-radius);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 0.875rem;
+  transition: all 300ms ease-in-out;
 }
 
 .btn-nav:hover {
-  background: var(--color-gold-dark);
+  border-color: var(--color-gold);
+  color: var(--color-gold);
+  background: rgba(212, 175, 55, 0.1);
 }
 
 /* ========== NAVIGATION (Original Structure) ========== */
@@ -484,6 +488,13 @@ h1, h2, h3, h4 {
 
 .dropdown-chevron {
   transition: transform var(--transition-fast);
+  opacity: 0.8;
+  margin-left: 0.25rem;
+  vertical-align: middle;
+}
+
+.dropdown-chevron:hover {
+  opacity: 1;
 }
 
 .nav-dropdown:hover .dropdown-chevron {
@@ -9745,22 +9756,21 @@ p.hero-description {
 
 .btn-outline {
     background: transparent;
-    border: 2px solid #E5E7EB;
-    color: #ffffff;
-    font-weight: 600;
-    padding: 0.5rem 1.5rem;
-    border-radius: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: var(--text-primary);
+    font-weight: 500;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--border-radius);
     text-decoration: none;
-    transition: all 0.3s ease;
+    transition: all 300ms ease-in-out;
     font-size: 0.9rem;
 }
 
 .btn-outline:hover {
-    /* SUBTLE change: slight gold tint, no drastic color inversion */
     background: rgba(212, 175, 55, 0.15);
     border-color: var(--color-gold);
     color: var(--color-gold);
-    transform: none; /* Removed transform for more subtle effect */
+    transform: translateY(-2px);
 }
 
 /* Example Boxes with Colored Backgrounds */
@@ -12717,21 +12727,23 @@ p.hero-description {
 /* Industry Cards (Sector Selection) */
 .sector-selection .industry-card {
   background: var(--navy-deep);
-  border: 2px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 3px solid var(--color-gold);
   border-radius: var(--border-radius-lg);
-  padding: 2rem;
+  padding: var(--spacing-3xl);
   text-decoration: none;
+  transition: all 300ms ease-in-out;
   color: inherit;
   display: flex;
   flex-direction: column;
-  transition: var(--transition);
   position: relative;
 }
 
 .sector-selection .industry-card:hover {
   border-color: var(--color-gold);
-  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
-  transform: translateY(-2px);
+  border-left-width: 4px;
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.25);
+  transform: translateY(-4px);
 }
 
 .sector-selection .industry-card h3 {
@@ -12776,10 +12788,13 @@ p.hero-description {
   color: var(--color-gold);
   font-weight: 600;
   font-size: 0.9375rem;
+  transition: all 300ms ease-in-out;
 }
 
 .sector-selection .industry-card:hover .card-link {
-  text-decoration: underline;
+  background: rgba(212, 175, 55, 0.25) !important;
+  border-color: var(--color-gold) !important;
+  transform: translateY(-2px);
 }
 
 .sector-selection .card-badge {
@@ -12935,17 +12950,25 @@ p.hero-description {
 /* CTA Cards (Final Section) */
 .final-cta-section .cta-card {
   background: var(--navy-deep);
-  border: 2px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--border-radius-lg);
   padding: 2rem;
   display: flex;
   flex-direction: column;
   position: relative;
+  transition: all 300ms ease-in-out;
+}
+
+.final-cta-section .cta-card:hover {
+  border-color: var(--color-gold);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(212, 175, 55, 0.25);
 }
 
 .final-cta-section .cta-card-primary {
   border-color: var(--color-gold);
-  background: linear-gradient(to bottom, rgba(212, 175, 55, 0.1), var(--navy-deep));
+  border-width: 2px;
+  background: linear-gradient(to bottom, rgba(212, 175, 55, 0.15), var(--navy-deep));
 }
 
 .final-cta-section .card-badge-primary {
@@ -13005,6 +13028,12 @@ p.hero-description {
   display: block;
   width: 100%;
   text-align: center;
+}
+
+.btn-large {
+  padding: 1rem 2rem;
+  font-size: 1.125rem;
+  font-weight: 600;
 }
 
 /* Utility Classes */
