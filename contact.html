@@ -874,12 +874,24 @@
               }
               
               const data = await response.json();
+              console.log('API response data:', data);
+              
+              // Parse is_relevant - handle boolean, string, or undefined
+              let isRelevant = true; // Default to true
+              if (data.is_relevant === false || data.is_relevant === 'false') {
+                  isRelevant = false;
+              } else if (data.is_relevant === true || data.is_relevant === 'true') {
+                  isRelevant = true;
+              }
               
               const result = {
-                  isRelevant: data.is_relevant !== false, // Default to true if not specified
-                  confidence: data.confidence || 0.5,
+                  isRelevant: isRelevant,
+                  confidence: parseFloat(data.confidence) || 0.5,
                   reason: data.reason || 'Analyzed by AI'
               };
+              
+              console.log('Parsed result:', result);
+              console.log('isRelevant value:', result.isRelevant, 'type:', typeof result.isRelevant);
               
               // Cache the result
               cachedResult = result;
@@ -897,8 +909,13 @@
       }
       
       async function updateRelevanceWarning() {
-          if (!messageTextarea || !relevanceWarning) {
-              console.error('Message textarea or relevance warning element not found');
+          if (!messageTextarea) {
+              console.error('Message textarea not found');
+              return;
+          }
+          
+          if (!relevanceWarning) {
+              console.error('Relevance warning element not found. Looking for #message-relevance-warning');
               return;
           }
           
@@ -920,13 +937,21 @@
               const result = await checkMessageRelevance(message);
               
               if (result) {
-                  // Show warning if not relevant and confidence is low
-                  if (!result.isRelevant && result.confidence < 0.7) {
+                  console.log('Relevance check result:', result);
+                  
+                  // Show warning if message is not relevant
+                  // We show it if isRelevant is false, regardless of confidence
+                  // (confidence can be used for other purposes, but if it's not relevant, we warn)
+                  if (!result.isRelevant) {
+                      console.log('Message is not relevant - showing warning');
                       relevanceWarning.classList.remove('contact-hidden');
                   } else {
-                      // Hide warning if relevant or confidence is high
+                      console.log('Message is relevant - hiding warning');
+                      // Hide warning if relevant
                       relevanceWarning.classList.add('contact-hidden');
                   }
+              } else {
+                  console.log('No result from relevance check');
               }
               // If no result (e.g., check in progress or error), keep current state
           } catch (error) {
