@@ -289,6 +289,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Speech Recognition for search bar
     let navRecognition = null;
     let isNavRecording = false;
+    let isNavStopping = false;
+    let isNavStopping = false; // Track if we're in the process of stopping
     
     // Make function globally accessible
     window.initNavSpeechRecognition = function() {
@@ -376,6 +378,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // 'aborted' is normal when we manually stop
                 if (event.error === 'aborted') {
                     isNavRecording = false;
+                    isNavStopping = false; // Allow new actions after abort
                     micBtn.classList.remove('recording');
                     if (searchInput) {
                         searchInput.placeholder = 'AI Search...';
@@ -424,6 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             navRecognition.onend = function() {
                 isNavRecording = false;
+                isNavStopping = false; // Allow new actions after stop completes
                 micBtn.classList.remove('recording');
                 if (searchInput) {
                     searchInput.placeholder = 'AI Search...';
@@ -436,25 +440,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 e.stopPropagation();
                 
-                // Check actual recognition state - use state property if available, fallback to flag
+                // Prevent double-clicks while stopping/starting
+                if (isNavStopping) {
+                    return;
+                }
+                
+                // Check actual recognition state
                 const actualState = navRecognition.state;
-                const isCurrentlyRunning = actualState === 'running' || actualState === 'starting' || isNavRecording;
+                const isCurrentlyRunning = (actualState === 'running' || actualState === 'starting') && isNavRecording;
                 
                 if (isCurrentlyRunning) {
-                    // Stop recording
+                    // Stop recording - wait for onend to reset flag
+                    isNavStopping = true;
                     try {
                         navRecognition.stop();
+                        // UI will be reset in onend handler
                     } catch (err) {
-                        // Ignore errors when stopping
-                    }
-                    isNavRecording = false;
-                    micBtn.classList.remove('recording');
-                    if (searchInput) {
-                        searchInput.placeholder = 'AI Search...';
+                        // If stop fails, reset state manually
+                        isNavStopping = false;
+                        isNavRecording = false;
+                        micBtn.classList.remove('recording');
+                        if (searchInput) {
+                            searchInput.placeholder = 'AI Search...';
+                        }
+                        micBtn.title = 'Click to speak';
                     }
                 } else {
-                    // Start recording - DON'T set flag yet, wait for onstart
-                    // Just update UI optimistically
+                    // Start recording - check state first
+                    const state = navRecognition.state;
+                    if (state === 'running' || state === 'starting') {
+                        // Already running but flag was wrong - just sync the flag
+                        isNavRecording = true;
+                        micBtn.classList.add('recording');
+                        if (searchInput) {
+                            searchInput.placeholder = 'Listening... Speak now';
+                        }
+                        micBtn.title = 'Listening... Click to stop';
+                        return;
+                    }
+                    
+                    // Update UI optimistically
                     micBtn.classList.add('recording');
                     if (searchInput) {
                         searchInput.placeholder = 'Starting...';
@@ -462,17 +487,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     micBtn.title = 'Starting...';
                     
                     try {
-                        // Double-check state right before starting
-                        if (navRecognition.state === 'running' || navRecognition.state === 'starting') {
-                            // Already running somehow - don't try to start
-                            micBtn.classList.remove('recording');
-                            if (searchInput) {
-                                searchInput.placeholder = 'AI Search...';
-                            }
-                            micBtn.title = 'Click to speak';
-                            return;
-                        }
-                        
                         // Safe to start - onstart handler will set the flag
                         navRecognition.start();
                     } catch (error) {
@@ -483,28 +497,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         micBtn.title = 'Click to speak';
                         
-                        // If invalid state error, it's already running - stop first
+                        // If invalid state error, it's already running - sync state instead
                         if (error.name === 'InvalidStateError' || (error.message && error.message.includes('already'))) {
-                            try {
-                                navRecognition.stop();
-                                setTimeout(() => {
-                                    try {
-                                        micBtn.classList.add('recording');
-                                        if (searchInput) {
-                                            searchInput.placeholder = 'Starting...';
-                                        }
-                                        navRecognition.start();
-                                    } catch (retryErr) {
-                                        console.error('Nav recognition retry error:', retryErr);
-                                        micBtn.classList.remove('recording');
-                                        if (searchInput) {
-                                            searchInput.placeholder = 'AI Search...';
-                                        }
-                                    }
-                                }, 300);
-                            } catch (stopErr) {
-                                // Ignore stop errors
+                            // Recognition is already running - just sync our state
+                            isNavRecording = true;
+                            micBtn.classList.add('recording');
+                            if (searchInput) {
+                                searchInput.placeholder = 'Listening... Speak now';
                             }
+                            micBtn.title = 'Listening... Click to stop';
                         }
                     }
                 }
