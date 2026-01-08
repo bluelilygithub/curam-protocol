@@ -747,11 +747,10 @@ h1, h2, h3, h4 {
 }
 
 .chat-panel-content .contact-chat-window {
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
   margin-bottom: var(--spacing-md);
   min-height: 200px;
-  max-height: 400px;
 }
 
 .scroll-down-btn:hover {
@@ -8480,6 +8479,8 @@ p.hero-description {
 .contact-chat-input-row {
     display: flex;
     gap: var(--spacing-sm);
+    flex-shrink: 0;
+    margin-top: var(--spacing-md);
 }
 
 .contact-chat-field {
@@ -8547,7 +8548,8 @@ p.hero-description {
 }
 
 .contact-email-toggle-wrapper {
-    margin-top: var(--spacing-md);
+    margin-top: 0;
+    flex-shrink: 0;
 }
 
 .contact-email-toggle-btn {
@@ -8593,6 +8595,7 @@ p.hero-description {
     background: #F9FAFB;
     border-radius: var(--border-radius);
     border: 1px solid #E5E7EB;
+    flex-shrink: 0;
 }
 
 .contact-email-section-title {
