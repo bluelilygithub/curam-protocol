@@ -396,35 +396,55 @@
           
           try {
               recognition = new SpeechRecognition();
-              recognition.continuous = false; // Stop after first result
-              recognition.interimResults = false; // Only return final results
+              recognition.continuous = true; // Keep listening
+              recognition.interimResults = true; // Show interim results
               recognition.lang = 'en-US'; // Set language
               
               recognition.onstart = function() {
                   isRecording = true;
                   chatMicBtn.classList.add('recording');
                   chatMicBtn.title = 'Listening... Click to stop';
-                  chatInput.placeholder = 'Listening...';
+                  chatInput.placeholder = 'Listening... Speak now';
+                  console.log('Chat speech recognition started');
               };
               
               recognition.onresult = function(event) {
-                  const transcript = event.results[0][0].transcript;
-                  chatInput.value = transcript;
-                  // Auto-send if user wants (optional - commented out for now)
-                  // sendChatMessage();
+                  console.log('Chat speech recognition result:', event);
+                  let finalTranscript = '';
+                  let interimTranscript = '';
+                  
+                  for (let i = event.resultIndex; i < event.results.length; i++) {
+                      const transcript = event.results[i][0].transcript;
+                      if (event.results[i].isFinal) {
+                          finalTranscript += transcript + ' ';
+                      } else {
+                          interimTranscript += transcript;
+                      }
+                  }
+                  
+                  // Update input with final results, or show interim
+                  if (finalTranscript) {
+                      chatInput.value = (chatInput.value.trim() ? chatInput.value + ' ' : '') + finalTranscript.trim();
+                  } else if (interimTranscript && !chatInput.value) {
+                      chatInput.value = interimTranscript;
+                  }
               };
               
               recognition.onerror = function(event) {
-                  console.error('Speech recognition error:', event.error);
+                  console.error('Chat speech recognition error:', event.error, event);
                   isRecording = false;
                   chatMicBtn.classList.remove('recording');
                   chatInput.placeholder = 'Ask about invoice automation, beam schedules, or our protocol...';
                   
                   let errorMsg = 'Voice input error. ';
+                  // Don't show error for 'no-speech' if we're using continuous mode
+                  if (event.error === 'no-speech') {
+                      console.log('No speech detected in chat, but continuing to listen...');
+                      // For continuous mode, no-speech might just mean a pause
+                      return; // Don't stop recognition, let it continue
+                  }
+                  
                   switch(event.error) {
-                      case 'no-speech':
-                          errorMsg += 'No speech detected.';
-                          break;
                       case 'audio-capture':
                           errorMsg += 'Microphone not found.';
                           chatMicBtn.classList.add('error');
@@ -436,6 +456,10 @@
                       case 'network':
                           errorMsg += 'Network error.';
                           break;
+                      case 'aborted':
+                          // Recognition was stopped, this is normal
+                          console.log('Chat recognition aborted (normal)');
+                          return;
                       default:
                           errorMsg += 'Please try again.';
                   }
@@ -579,41 +603,52 @@
               };
 
               messageRecognition.onresult = function(event) {
-                  console.log('Speech recognition event:', event);
-                  if (event.results && event.results.length > 0) {
-                      let fullTranscript = '';
-                      // Combine all results (in case continuous is true or multiple words)
-                      for (let i = event.results.length - 1; i >= 0; i--) {
-                          if (event.results[i] && event.results[i].isFinal && event.results[i][0]) {
-                              fullTranscript = event.results[i][0].transcript + ' ' + fullTranscript;
+                  console.log('Message speech recognition event:', event);
+                  let finalTranscript = '';
+                  let interimTranscript = '';
+                  
+                  for (let i = event.resultIndex; i < event.results.length; i++) {
+                      if (event.results[i] && event.results[i][0]) {
+                          const transcript = event.results[i][0].transcript;
+                          if (event.results[i].isFinal) {
+                              finalTranscript += transcript + ' ';
+                          } else {
+                              interimTranscript += transcript;
                           }
                       }
-                      // If no final results, use the last one
-                      if (!fullTranscript && event.results[event.results.length - 1][0]) {
-                          fullTranscript = event.results[event.results.length - 1][0].transcript;
-                      }
-                      const transcript = fullTranscript.trim();
-                      console.log('Speech recognition transcript:', transcript);
-                      if (transcript && messageTextarea) {
-                          const currentValue = messageTextarea.value.trim();
-                          messageTextarea.value = currentValue ? currentValue + ' ' + transcript : transcript;
-                          messageTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                  }
+                  
+                  if (finalTranscript && messageTextarea) {
+                      // Append final results to existing text
+                      const currentValue = messageTextarea.value.trim();
+                      messageTextarea.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
+                      messageTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                      console.log('Final transcript added:', finalTranscript.trim());
+                  } else if (interimTranscript && messageTextarea) {
+                      // Show interim results only if textarea is empty
+                      if (!messageTextarea.value.trim()) {
+                          messageTextarea.value = interimTranscript;
                       }
                   }
               };
 
               messageRecognition.onerror = function(event) {
-                  console.error('Speech recognition error:', event.error);
+                  console.error('Message speech recognition error:', event.error, event);
                   isRecordingMessage = false;
                   if (messageMicBtn) {
                       messageMicBtn.classList.remove('recording');
                       messageTextarea.placeholder = 'Tell us about your current challenges or what you\'d like to learn more about...';
                       
                       let errorMsg = 'Voice input error. ';
+                      // Don't show error for 'no-speech' if we're using continuous mode - just restart
+                      if (event.error === 'no-speech') {
+                          console.log('No speech detected, but continuing to listen...');
+                          // For continuous mode, no-speech might just mean a pause
+                          // Only show error if it's persistent
+                          return; // Don't stop recognition, let it continue
+                      }
+                      
                       switch(event.error) {
-                          case 'no-speech':
-                              errorMsg += 'No speech detected.';
-                              break;
                           case 'audio-capture':
                               errorMsg += 'Microphone not found.';
                               messageMicBtn.classList.add('error');
@@ -625,6 +660,10 @@
                           case 'network':
                               errorMsg += 'Network error.';
                               break;
+                          case 'aborted':
+                              // Recognition was stopped, this is normal
+                              console.log('Recognition aborted (normal)');
+                              return;
                           default:
                               errorMsg += 'Please try again.';
                       }
@@ -660,17 +699,39 @@
       function toggleMessageSpeechRecognition() {
           if (!messageRecognition) {
               if (!initMessageSpeechRecognition()) {
+                  console.error('Failed to initialize message speech recognition');
                   return;
               }
           }
 
           if (isRecordingMessage) {
+              console.log('Stopping message speech recognition');
               messageRecognition.stop();
           } else {
               try {
-                  messageRecognition.start();
+                  console.log('Starting message speech recognition');
+                  // Check if already running
+                  if (messageRecognition.state === 'running') {
+                      messageRecognition.stop();
+                      setTimeout(() => {
+                          messageRecognition.start();
+                      }, 100);
+                  } else {
+                      messageRecognition.start();
+                  }
               } catch (error) {
-                  console.log('Message recognition start error:', error);
+                  console.error('Message recognition start error:', error);
+                  // If already started, stop and restart
+                  if (error.message && (error.message.includes('already started') || error.message.includes('started'))) {
+                      messageRecognition.stop();
+                      setTimeout(() => {
+                          try {
+                              messageRecognition.start();
+                          } catch (e) {
+                              console.error('Retry failed:', e);
+                          }
+                      }, 200);
+                  }
               }
           }
       }

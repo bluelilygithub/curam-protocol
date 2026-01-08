@@ -617,9 +617,10 @@ function initializeScrollDownButton() {
     
     if (!scrollDownBtn) return;
     
-    // Store the click handler function
+    // Store the click handler function - use a persistent reference
     function handleClick(e) {
         e.preventDefault();
+        e.stopPropagation();
         const protocolSection = document.getElementById('protocol');
         if (protocolSection) {
             const offsetTop = protocolSection.offsetTop - 80; // Account for sticky nav
@@ -638,29 +639,31 @@ function initializeScrollDownButton() {
         }
     }
     
-    // Remove existing listeners and add new one
-    scrollDownBtn.replaceWith(scrollDownBtn.cloneNode(true));
-    const newBtn = document.querySelector('.scroll-down-btn');
-    newBtn.addEventListener('click', handleClick);
+    // Add click handler directly (don't clone - that breaks references)
+    scrollDownBtn.addEventListener('click', handleClick);
     
-    // Auto-hide button after user scrolls down (improved behavior)
+    // Auto-hide button when at bottom of page
     function handleScroll() {
         const windowHeight = window.innerHeight;
         const documentHeight = document.documentElement.scrollHeight;
         const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
         
-        // Show button until end of page (hide only when at bottom)
+        // Check if we're at the bottom of the page
         const scrollPercent = (scrollTop + windowHeight) / documentHeight;
-        const isAtBottom = scrollPercent >= 0.95 || (scrollTop + windowHeight) >= documentHeight - 10;
+        const distanceFromBottom = documentHeight - (scrollTop + windowHeight);
+        const isAtBottom = scrollPercent >= 0.98 || distanceFromBottom < 50; // Within 50px of bottom
         
-        if (isAtBottom) {
-            // Hide when at bottom of page
-            if (!newBtn.classList.contains('hidden')) {
-                newBtn.classList.add('hidden');
+        const btn = document.querySelector('.scroll-down-btn');
+        if (btn) {
+            if (isAtBottom) {
+                // Hide when at bottom of page
+                if (!btn.classList.contains('hidden')) {
+                    btn.classList.add('hidden');
+                }
+            } else {
+                // Show button until end of page
+                btn.classList.remove('hidden');
             }
-        } else {
-            // Show button until end of page
-            newBtn.classList.remove('hidden');
         }
     }
     
@@ -691,8 +694,8 @@ if (document.readyState === 'loading') {
 }
     
     // Lazy load hero video with intersection observer
-    const heroVideo = document.getElementById('hero-video');
-    if (heroVideo) {
+    const heroVideoLazy = document.getElementById('hero-video');
+    if (heroVideoLazy) {
         // Only autoplay if user prefers motion and video is visible
         const videoObserver = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
@@ -700,22 +703,22 @@ if (document.readyState === 'loading') {
                     // Check for prefers-reduced-motion
                     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
                     if (!prefersReducedMotion) {
-                        heroVideo.play().catch(e => console.log('Video autoplay prevented:', e));
+                        heroVideoLazy.play().catch(e => console.log('Video autoplay prevented:', e));
                     }
                 } else {
                     // Pause when not visible to save bandwidth
-                    heroVideo.pause();
+                    heroVideoLazy.pause();
                 }
             });
         }, { threshold: 0.1 });
         
-        videoObserver.observe(heroVideo);
+        videoObserver.observe(heroVideoLazy);
         
         // On mobile or if prefers-reduced-motion, don't autoplay (poster image will show)
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || window.innerWidth < 768) {
-            heroVideo.removeAttribute('autoplay');
+            heroVideoLazy.removeAttribute('autoplay');
         } else {
-            heroVideo.setAttribute('autoplay', '');
+            heroVideoLazy.setAttribute('autoplay', '');
         }
     }
 });
