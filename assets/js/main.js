@@ -664,13 +664,28 @@ function initializeScrollDownButton() {
         return isValid;
     });
     
-    // Sort sections by their position on the page (top to bottom)
+    // Sort sections by their position on the page (top to bottom) using absolute positions
     mainSections.sort((a, b) => {
-        return a.offsetTop - b.offsetTop;
+        const rectA = a.getBoundingClientRect();
+        const rectB = b.getBoundingClientRect();
+        const scrollTop = window.scrollY || window.pageYOffset;
+        const topA = rectA.top + scrollTop;
+        const topB = rectB.top + scrollTop;
+        return topA - topB;
     });
     
-    // Debug logging (can be removed later)
-    console.log('Scroll button: Found', mainSections.length, 'sections:', mainSections.map(s => s.className || 'no-class'));
+    // Debug logging
+    console.log('Scroll button: Found', mainSections.length, 'valid sections');
+    mainSections.forEach((s, i) => {
+        const rect = s.getBoundingClientRect();
+        const scrollTop = window.scrollY || window.pageYOffset;
+        console.log(`  ${i}: ${s.className || 'no-class'} - top: ${rect.top + scrollTop}, height: ${rect.height}`);
+    });
+    
+    if (mainSections.length === 0) {
+        console.warn('Scroll button: No valid sections found! Button will not work.');
+        return;
+    }
     
     function getCurrentSectionIndex() {
         const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
@@ -708,14 +723,15 @@ function initializeScrollDownButton() {
     
     function scrollToNextSection() {
         if (mainSections.length === 0) {
-            console.log('Scroll button: No sections found');
+            console.error('Scroll button: No sections found');
             return;
         }
         
         const currentIndex = getCurrentSectionIndex();
         const nextIndex = currentIndex + 1;
         
-        console.log('Scroll button: Current index:', currentIndex, 'of', mainSections.length, 'sections');
+        console.log('Scroll button: Current index:', currentIndex, 'of', mainSections.length - 1, 'sections');
+        console.log('Scroll button: Next index:', nextIndex);
         
         // If there's a next section, scroll to it
         if (nextIndex < mainSections.length) {
@@ -724,11 +740,21 @@ function initializeScrollDownButton() {
             const rect = nextSection.getBoundingClientRect();
             const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
             const offsetTop = rect.top + scrollTop - 80; // Account for sticky nav
+            console.log('Scroll button: Next section rect:', rect);
+            console.log('Scroll button: Current scrollTop:', scrollTop);
             console.log('Scroll button: Scrolling to next section at', offsetTop, 'section:', nextSection.className);
+            
+            const targetScroll = Math.max(0, offsetTop);
             window.scrollTo({
-                top: Math.max(0, offsetTop), // Ensure we don't scroll to negative position
+                top: targetScroll,
                 behavior: 'smooth'
             });
+            
+            // Verify scroll happened
+            setTimeout(() => {
+                const newScroll = window.scrollY || window.pageYOffset;
+                console.log('Scroll button: After scroll, position is:', newScroll);
+            }, 100);
         } else {
             // If at last section, scroll to bottom
             console.log('Scroll button: At last section, scrolling to bottom');
@@ -743,15 +769,45 @@ function initializeScrollDownButton() {
     function handleClick(e) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('Scroll button: Clicked!');
+        e.stopImmediatePropagation();
+        console.log('Scroll button: Clicked! Current scroll:', window.scrollY || window.pageYOffset);
+        console.log('Scroll button: Main sections available:', mainSections.length);
+        if (mainSections.length === 0) {
+            console.error('Scroll button: No sections available! Cannot scroll.');
+            return;
+        }
         scrollToNextSection();
     }
     
     // Remove any existing listeners by cloning
     const newBtn = scrollDownBtn.cloneNode(true);
     scrollDownBtn.parentNode.replaceChild(newBtn, scrollDownBtn);
-    newBtn.addEventListener('click', handleClick);
-    console.log('Scroll button: Initialized with', mainSections.length, 'sections');
+    
+    // Verify button exists after replacement
+    const verifyBtn = document.querySelector('.scroll-down-btn');
+    if (!verifyBtn) {
+        console.error('Scroll button: Button disappeared after replacement!');
+        return;
+    }
+    
+    // Test if button is clickable
+    console.log('Scroll button: Button after replacement:', verifyBtn);
+    console.log('Scroll button: Button computed style:', window.getComputedStyle(verifyBtn));
+    console.log('Scroll button: Button pointer-events:', window.getComputedStyle(verifyBtn).pointerEvents);
+    console.log('Scroll button: Button z-index:', window.getComputedStyle(verifyBtn).zIndex);
+    
+    // Add click handler with capture phase to ensure it fires
+    verifyBtn.addEventListener('click', handleClick, true);
+    verifyBtn.addEventListener('click', handleClick, false);
+    
+    // Also add mouseup as alternative
+    verifyBtn.addEventListener('mouseup', function(e) {
+        console.log('Scroll button: Mouseup event fired');
+        handleClick(e);
+    });
+    
+    console.log('Scroll button: Button initialized and listeners attached to:', verifyBtn);
+    console.log('Scroll button: Button position:', verifyBtn.getBoundingClientRect());
     
     // Auto-hide button when at bottom of page or last section
     function handleScroll() {
@@ -799,12 +855,38 @@ function initializeScrollDownButton() {
     handleScroll();
 }
 
-// Initialize on DOM ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeScrollDownButton);
-} else {
-    initializeScrollDownButton();
+// Initialize on DOM ready - also wait a bit for dynamic content to load
+function initScrollButton() {
+    console.log('Scroll button: Initializing... DOM ready state:', document.readyState);
+    // Small delay to ensure all sections are rendered (especially for dynamically loaded content)
+    setTimeout(() => {
+        console.log('Scroll button: Running initialization after delay');
+        initializeScrollDownButton();
+    }, 200);
 }
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initScrollButton);
+    console.log('Scroll button: Waiting for DOMContentLoaded');
+} else {
+    console.log('Scroll button: DOM already loaded, initializing immediately');
+    initScrollButton();
+}
+
+// Also reinitialize after a longer delay in case content loads late (like navbar)
+setTimeout(() => {
+    const btn = document.querySelector('.scroll-down-btn');
+    if (btn) {
+        console.log('Scroll button: Delayed initialization check - button exists:', !!btn);
+        if (!btn.dataset.initialized) {
+            console.log('Scroll button: Reinitializing after delay (button not yet initialized)');
+            btn.dataset.initialized = 'true';
+            initializeScrollDownButton();
+        }
+    } else {
+        console.warn('Scroll button: Delayed initialization check - button NOT found!');
+    }
+}, 1000);
 
 // Lazy load hero video with intersection observer
 const heroVideoLazy = document.getElementById('hero-video');
