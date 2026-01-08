@@ -5316,12 +5316,20 @@ p.hero-description {
 
 .report-table th {
   background: var(--color-navy);
-  color: var(--color-white);
-  font-weight: 600;
+  color: var(--color-gold);
+  font-weight: 900;
+}
+.report-table th:first-child {
+  color: #fff;
 }
 
 .report-table tr:nth-child(even) {
   background: var(--color-light-gray);
+}
+
+.report-table.header td {
+  color: var(--color-gold-dark);
+  font-weight: 400;
 }
 
 .report-table-clean {
