@@ -289,7 +289,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Speech Recognition for search bar
     let navRecognition = null;
     let isNavRecording = false;
-    let isNavStopping = false;
     let isNavStopping = false; // Track if we're in the process of stopping
     
     // Make function globally accessible
