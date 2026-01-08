@@ -656,7 +656,7 @@ h1, h2, h3, h4 {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  z-index: 1010;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.3s ease, visibility 0.3s ease;
@@ -677,7 +677,7 @@ h1, h2, h3, h4 {
   height: 100vh;
   background: #ffffff;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
-  z-index: 1001;
+  z-index: 1011;
   display: flex;
   flex-direction: column;
   transition: right 0.3s ease-in-out;
