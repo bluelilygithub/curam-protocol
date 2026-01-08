@@ -406,11 +406,9 @@
                   chatMicBtn.classList.add('recording');
                   chatMicBtn.title = 'Listening... Click to stop';
                   chatInput.placeholder = 'Listening... Speak now';
-                  console.log('Chat speech recognition started');
               };
               
               recognition.onresult = function(event) {
-                  console.log('Chat speech recognition result:', event);
                   let finalTranscript = '';
                   let interimTranscript = '';
                   
@@ -426,11 +424,15 @@
                   }
                   
                   // Update input with final results, or show interim
-                  if (finalTranscript) {
-                      chatInput.value = (chatInput.value.trim() ? chatInput.value + ' ' : '') + finalTranscript.trim();
-                      console.log('Chat final transcript added:', finalTranscript.trim());
-                  } else if (interimTranscript && !chatInput.value) {
-                      chatInput.value = interimTranscript;
+                  if (finalTranscript && chatInput) {
+                      const currentValue = chatInput.value.trim();
+                      chatInput.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
+                      chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+                  } else if (interimTranscript && chatInput) {
+                      // Show interim results - append to final results if any exist
+                      const currentValue = chatInput.value.trim();
+                      // Only show interim if we don't already have final results (check if last part is interim)
+                      chatInput.value = currentValue || interimTranscript;
                   }
               };
               
@@ -462,7 +464,6 @@
                           break;
                       case 'aborted':
                           // Recognition was stopped, this is normal
-                          console.log('Chat recognition aborted (normal)');
                           return;
                       default:
                           errorMsg += 'Please try again.';
@@ -607,7 +608,6 @@
               };
 
               messageRecognition.onresult = function(event) {
-                  console.log('Message speech recognition event:', event);
                   let finalTranscript = '';
                   let interimTranscript = '';
                   
@@ -627,12 +627,10 @@
                       const currentValue = messageTextarea.value.trim();
                       messageTextarea.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
                       messageTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-                      console.log('Final transcript added:', finalTranscript.trim());
                   } else if (interimTranscript && messageTextarea) {
-                      // Show interim results only if textarea is empty
-                      if (!messageTextarea.value.trim()) {
-                          messageTextarea.value = interimTranscript;
-                      }
+                      // Show interim results
+                      const currentValue = messageTextarea.value.trim();
+                      messageTextarea.value = currentValue || interimTranscript;
                   }
               };
 
@@ -1249,15 +1247,11 @@
                   // We show it if isRelevant is false, regardless of confidence
                   // (confidence can be used for other purposes, but if it's not relevant, we warn)
                   if (!result.isRelevant) {
-                      console.log('Message is not relevant - showing warning');
                       relevanceWarning.classList.remove('contact-hidden');
                   } else {
-                      console.log('Message is relevant - hiding warning');
                       // Hide warning if relevant
                       relevanceWarning.classList.add('contact-hidden');
                   }
-              } else {
-                  console.log('No result from relevance check');
               }
               // If no result (e.g., check in progress or error), keep current state
           } catch (error) {

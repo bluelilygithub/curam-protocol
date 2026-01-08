@@ -318,7 +318,6 @@ document.addEventListener('DOMContentLoaded', function() {
             navRecognition.lang = 'en-US';
             
             navRecognition.onstart = function() {
-                console.log('Nav speech recognition started');
                 isNavRecording = true;
                 micBtn.classList.add('recording');
                 micBtn.title = 'Listening... Click to stop';
@@ -328,15 +327,30 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             navRecognition.onresult = function(event) {
-                console.log('Nav speech recognition result:', event);
-                if (event.results && event.results.length > 0 && event.results[0].length > 0) {
-                    const transcript = event.results[0][0].transcript;
-                    console.log('Nav transcript:', transcript);
-                    if (searchInput) {
-                        searchInput.value = transcript;
-                        // Trigger input event so any listeners know the value changed
-                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                let finalTranscript = '';
+                let interimTranscript = '';
+                
+                // Loop through all results and accumulate transcripts
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i] && event.results[i][0]) {
+                        const transcript = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript + ' ';
+                        } else {
+                            interimTranscript += transcript;
+                        }
                     }
+                }
+                
+                // Update input with final results, or show interim
+                if (finalTranscript && searchInput) {
+                    const currentValue = searchInput.value.trim();
+                    searchInput.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
+                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                } else if (interimTranscript && searchInput) {
+                    // Show interim results
+                    const currentValue = searchInput.value.trim();
+                    searchInput.value = currentValue || interimTranscript;
                 }
             };
             
@@ -674,16 +688,7 @@ function initializeScrollDownButton() {
         return topA - topB;
     });
     
-    // Debug logging
-    console.log('Scroll button: Found', mainSections.length, 'valid sections');
-    mainSections.forEach((s, i) => {
-        const rect = s.getBoundingClientRect();
-        const scrollTop = window.scrollY || window.pageYOffset;
-        console.log(`  ${i}: ${s.className || 'no-class'} - top: ${rect.top + scrollTop}, height: ${rect.height}`);
-    });
-    
     if (mainSections.length === 0) {
-        console.warn('Scroll button: No valid sections found! Button will not work.');
         return;
     }
     
@@ -723,15 +728,11 @@ function initializeScrollDownButton() {
     
     function scrollToNextSection() {
         if (mainSections.length === 0) {
-            console.error('Scroll button: No sections found');
             return;
         }
         
         const currentIndex = getCurrentSectionIndex();
         const nextIndex = currentIndex + 1;
-        
-        console.log('Scroll button: Current index:', currentIndex, 'of', mainSections.length - 1, 'sections');
-        console.log('Scroll button: Next index:', nextIndex);
         
         // If there's a next section, scroll to it
         if (nextIndex < mainSections.length) {
@@ -740,24 +741,13 @@ function initializeScrollDownButton() {
             const rect = nextSection.getBoundingClientRect();
             const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
             const offsetTop = rect.top + scrollTop - 80; // Account for sticky nav
-            console.log('Scroll button: Next section rect:', rect);
-            console.log('Scroll button: Current scrollTop:', scrollTop);
-            console.log('Scroll button: Scrolling to next section at', offsetTop, 'section:', nextSection.className);
-            
             const targetScroll = Math.max(0, offsetTop);
             window.scrollTo({
                 top: targetScroll,
                 behavior: 'smooth'
             });
-            
-            // Verify scroll happened
-            setTimeout(() => {
-                const newScroll = window.scrollY || window.pageYOffset;
-                console.log('Scroll button: After scroll, position is:', newScroll);
-            }, 100);
         } else {
             // If at last section, scroll to bottom
-            console.log('Scroll button: At last section, scrolling to bottom');
             window.scrollTo({
                 top: document.documentElement.scrollHeight,
                 behavior: 'smooth'
@@ -769,11 +759,7 @@ function initializeScrollDownButton() {
     function handleClick(e) {
         e.preventDefault();
         e.stopPropagation();
-        e.stopImmediatePropagation();
-        console.log('Scroll button: Clicked! Current scroll:', window.scrollY || window.pageYOffset);
-        console.log('Scroll button: Main sections available:', mainSections.length);
         if (mainSections.length === 0) {
-            console.error('Scroll button: No sections available! Cannot scroll.');
             return;
         }
         scrollToNextSection();
@@ -783,31 +769,8 @@ function initializeScrollDownButton() {
     const newBtn = scrollDownBtn.cloneNode(true);
     scrollDownBtn.parentNode.replaceChild(newBtn, scrollDownBtn);
     
-    // Verify button exists after replacement
-    const verifyBtn = document.querySelector('.scroll-down-btn');
-    if (!verifyBtn) {
-        console.error('Scroll button: Button disappeared after replacement!');
-        return;
-    }
-    
-    // Test if button is clickable
-    console.log('Scroll button: Button after replacement:', verifyBtn);
-    console.log('Scroll button: Button computed style:', window.getComputedStyle(verifyBtn));
-    console.log('Scroll button: Button pointer-events:', window.getComputedStyle(verifyBtn).pointerEvents);
-    console.log('Scroll button: Button z-index:', window.getComputedStyle(verifyBtn).zIndex);
-    
-    // Add click handler with capture phase to ensure it fires
-    verifyBtn.addEventListener('click', handleClick, true);
-    verifyBtn.addEventListener('click', handleClick, false);
-    
-    // Also add mouseup as alternative
-    verifyBtn.addEventListener('mouseup', function(e) {
-        console.log('Scroll button: Mouseup event fired');
-        handleClick(e);
-    });
-    
-    console.log('Scroll button: Button initialized and listeners attached to:', verifyBtn);
-    console.log('Scroll button: Button position:', verifyBtn.getBoundingClientRect());
+    // Add click handler
+    newBtn.addEventListener('click', handleClick);
     
     // Auto-hide button when at bottom of page or last section
     function handleScroll() {
@@ -857,34 +820,24 @@ function initializeScrollDownButton() {
 
 // Initialize on DOM ready - also wait a bit for dynamic content to load
 function initScrollButton() {
-    console.log('Scroll button: Initializing... DOM ready state:', document.readyState);
     // Small delay to ensure all sections are rendered (especially for dynamically loaded content)
     setTimeout(() => {
-        console.log('Scroll button: Running initialization after delay');
         initializeScrollDownButton();
     }, 200);
 }
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initScrollButton);
-    console.log('Scroll button: Waiting for DOMContentLoaded');
 } else {
-    console.log('Scroll button: DOM already loaded, initializing immediately');
     initScrollButton();
 }
 
 // Also reinitialize after a longer delay in case content loads late (like navbar)
 setTimeout(() => {
     const btn = document.querySelector('.scroll-down-btn');
-    if (btn) {
-        console.log('Scroll button: Delayed initialization check - button exists:', !!btn);
-        if (!btn.dataset.initialized) {
-            console.log('Scroll button: Reinitializing after delay (button not yet initialized)');
-            btn.dataset.initialized = 'true';
-            initializeScrollDownButton();
-        }
-    } else {
-        console.warn('Scroll button: Delayed initialization check - button NOT found!');
+    if (btn && !btn.dataset.initialized) {
+        btn.dataset.initialized = 'true';
+        initializeScrollDownButton();
     }
 }, 1000);
 
@@ -923,29 +876,22 @@ if (heroVideoLazy) {
 // ============================================================================
 
 (function initSearchWhenReady() {
-    console.log('🎯 Search: Watching for navbar to load...');
-    
     function attachSearchListener() {
         const searchInput = document.querySelector('.nav-search-input');
         
         if (!searchInput) {
-            console.log('⏳ Search input not found');
             return false;
         }
         
         if (searchInput.hasAttribute('data-search-ready')) {
-            console.log('ℹ️ Search already initialized');
             return true;
         }
-        
-        console.log('✅ Search input found, attaching listener');
         
         searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 const query = this.value.trim();
                 if (query) {
-                    console.log('🔍 Searching for:', query);
                     window.location.href = `/search-results?q=${encodeURIComponent(query)}`;
                 } else {
                     alert('Please enter a search term');
@@ -954,7 +900,6 @@ if (heroVideoLazy) {
         });
         
         searchInput.setAttribute('data-search-ready', 'true');
-        console.log('✅ Search initialized successfully');
         return true;
     }
     
@@ -965,11 +910,8 @@ if (heroVideoLazy) {
     
     // Watch for navbar to be added to DOM
     const observer = new MutationObserver(function(mutations) {
-        console.log('🔄 DOM changed, checking for navbar...');
-        
         if (attachSearchListener()) {
             observer.disconnect();
-            console.log('✅ Observer disconnected, search ready');
         }
     });
     
@@ -981,22 +923,17 @@ if (heroVideoLazy) {
             childList: true,
             subtree: true
         });
-        console.log('👀 Watching navbar-placeholder for changes');
     } else {
-        console.error('❌ navbar-placeholder not found!');
-        
         // Fallback: watch entire document
         observer.observe(document.body, {
             childList: true,
             subtree: true
         });
-        console.log('👀 Watching entire document as fallback');
     }
     
     // Safety timeout: disconnect after 5 seconds
     setTimeout(function() {
         observer.disconnect();
-        console.log('⏱️ Observer timeout, disconnected');
     }, 5000);
     
 })();
