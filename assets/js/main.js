@@ -643,33 +643,76 @@ function initializeScrollDownButton() {
     const scrollDownBtn = document.querySelector('.scroll-down-btn');
     
     if (!scrollDownBtn) {
-        console.log('Scroll down button not found');
         return;
     }
     
-    console.log('Initializing scroll down button');
+    // Find all major sections on the page
+    // Look for sections with class "section", "section-block", "methodology", etc.
+    const sections = Array.from(document.querySelectorAll('section.section, section.methodology, section.section-block, section.section-alt, section.hero'));
     
-    // Store the click handler function - use a persistent reference
-    function handleClick(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        console.log('Scroll down button clicked');
-        const protocolSection = document.getElementById('protocol');
-        if (protocolSection) {
-            const offsetTop = protocolSection.offsetTop - 80; // Account for sticky nav
+    // Filter to get only visible, meaningful sections
+    const mainSections = sections.filter(section => {
+        const rect = section.getBoundingClientRect();
+        return rect.height > 100; // Only count sections taller than 100px
+    });
+    
+    function getCurrentSectionIndex() {
+        const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+        const windowHeight = window.innerHeight;
+        const viewportCenter = scrollTop + (windowHeight / 2);
+        
+        // Find which section is closest to viewport center
+        let closestIndex = 0;
+        let closestDistance = Infinity;
+        
+        mainSections.forEach((section, index) => {
+            const sectionTop = section.offsetTop;
+            const sectionBottom = sectionTop + section.offsetHeight;
+            const sectionCenter = sectionTop + (section.offsetHeight / 2);
+            
+            // Check if viewport center is within this section
+            if (viewportCenter >= sectionTop && viewportCenter <= sectionBottom) {
+                closestIndex = index;
+                closestDistance = 0;
+            } else {
+                // Calculate distance to section center
+                const distance = Math.abs(viewportCenter - sectionCenter);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = index;
+                }
+            }
+        });
+        
+        return closestIndex;
+    }
+    
+    function scrollToNextSection() {
+        const currentIndex = getCurrentSectionIndex();
+        const nextIndex = currentIndex + 1;
+        
+        // If there's a next section, scroll to it
+        if (nextIndex < mainSections.length) {
+            const nextSection = mainSections[nextIndex];
+            const offsetTop = nextSection.offsetTop - 80; // Account for sticky nav
             window.scrollTo({
                 top: offsetTop,
                 behavior: 'smooth'
             });
         } else {
-            // If no protocol section, scroll down one viewport height
-            const viewportHeight = window.innerHeight;
-            const currentScroll = window.scrollY || window.pageYOffset;
+            // If at last section, scroll to bottom
             window.scrollTo({
-                top: currentScroll + viewportHeight,
+                top: document.documentElement.scrollHeight,
                 behavior: 'smooth'
             });
         }
+    }
+    
+    // Store the click handler function
+    function handleClick(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        scrollToNextSection();
     }
     
     // Remove any existing listeners by cloning
@@ -677,7 +720,7 @@ function initializeScrollDownButton() {
     scrollDownBtn.parentNode.replaceChild(newBtn, scrollDownBtn);
     newBtn.addEventListener('click', handleClick);
     
-    // Auto-hide button when at bottom of page
+    // Auto-hide button when at bottom of page or last section
     function handleScroll() {
         const windowHeight = window.innerHeight;
         const documentHeight = document.documentElement.scrollHeight;
@@ -686,12 +729,16 @@ function initializeScrollDownButton() {
         // Check if we're at the bottom of the page
         const scrollPercent = (scrollTop + windowHeight) / documentHeight;
         const distanceFromBottom = documentHeight - (scrollTop + windowHeight);
-        const isAtBottom = scrollPercent >= 0.98 || distanceFromBottom < 50; // Within 50px of bottom
+        const isAtBottom = scrollPercent >= 0.98 || distanceFromBottom < 50;
+        
+        // Also check if we're in the last section
+        const currentIndex = getCurrentSectionIndex();
+        const isInLastSection = currentIndex >= mainSections.length - 1;
         
         const btn = document.querySelector('.scroll-down-btn');
         if (btn) {
-            if (isAtBottom) {
-                // Hide when at bottom of page
+            if (isAtBottom || isInLastSection) {
+                // Hide when at bottom of page or in last section
                 btn.classList.add('hidden');
             } else {
                 // Show button until end of page
