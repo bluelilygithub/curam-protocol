@@ -8963,8 +8963,6 @@ p.hero-description {
     border: 1px solid rgba(212, 175, 55, 0.3);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-xl);
-    margin: var(--spacing-xl) 0;
-    max-width: 900px;
 }
 
 .hero-summary-list {
@@ -8972,7 +8970,7 @@ p.hero-description {
     padding: 0;
     margin: 0;
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
     gap: var(--spacing-md);
     line-height: 1.6;
 }
@@ -8993,8 +8991,8 @@ p.hero-description {
 }
 
 @media (max-width: 768px) {
-    .hero-summary-list {
-        grid-template-columns: 1fr;
+    .grid-2 {
+        grid-template-columns: 1fr !important;
     }
     
     .hero-summary-box {
