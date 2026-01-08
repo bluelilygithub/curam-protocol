@@ -155,6 +155,20 @@ h1, h2, h3, h4 {
   text-align: center;
 }
 
+.section-headline svg {
+  height: 1em;
+  width: auto;
+  border: 2px solid white;
+  border-radius: 6px;
+  padding: 0.2em;
+  vertical-align: middle;
+  margin-right: 10px;
+}
+
+.section-headline svg path {
+  stroke: white;
+}
+
 .section-subhead {
   font-size: 1.125rem;
   font-weight: 500;

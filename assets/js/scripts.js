@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }, observerOptions);
 
   // Observe elements that should animate on scroll
-  document.querySelectorAll('.protocol-phase, .product-feature-card, .selector-row, .faq-accordion-item').forEach(el => {
+  document.querySelectorAll('.protocol-phase, .product-feature-card, .selector-row').forEach(el => {
     el.style.opacity = '0';
     observer.observe(el);
   });
