@@ -8959,13 +8959,12 @@ p.hero-description {
 
 /* Hero Summary Box */
 .hero-summary-box {
-    background: rgba(26, 45, 74, 0.4);
-    border: 1px solid rgba(212, 175, 55, 0.2);
+    background: var(--navy-deep);
+    border: 1px solid rgba(212, 175, 55, 0.3);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-xl);
     margin: var(--spacing-xl) 0;
     max-width: 900px;
-    backdrop-filter: blur(8px);
 }
 
 .hero-summary-list {
@@ -8973,28 +8972,24 @@ p.hero-description {
     padding: 0;
     margin: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-md);
+    line-height: 1.6;
 }
 
-.hero-summary-item {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
-}
-
-.hero-summary-label {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-gold);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.hero-summary-value {
-    font-size: 0.95rem;
+.hero-summary-list li {
+    padding-left: var(--spacing-lg);
+    position: relative;
     color: var(--text-primary);
-    line-height: 1.5;
+    font-size: 0.95rem;
+}
+
+.hero-summary-list li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: var(--color-gold);
+    font-weight: 600;
 }
 
 @media (max-width: 768px) {
