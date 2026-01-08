@@ -8970,24 +8970,14 @@ p.hero-description {
     padding: 0;
     margin: 0;
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-md);
     line-height: 1.6;
 }
 
 .hero-summary-list li {
-    padding-left: var(--spacing-lg);
-    position: relative;
     color: var(--text-primary);
     font-size: 0.95rem;
-}
-
-.hero-summary-list li::before {
-    content: '•';
-    position: absolute;
-    left: 0;
-    color: var(--color-gold);
-    font-weight: 600;
 }
 
 @media (max-width: 768px) {
@@ -8997,6 +8987,10 @@ p.hero-description {
     
     .hero-summary-box {
         padding: var(--spacing-lg);
+    }
+    
+    .hero-summary-list {
+        grid-template-columns: 1fr;
     }
 }
 
