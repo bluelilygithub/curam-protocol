@@ -5327,7 +5327,7 @@ p.hero-description {
   background: var(--color-light-gray);
 }
 
-.report-table.header td {
+.report-table td.header { 
   color: var(--color-gold-dark);
   font-weight: 400;
 }
