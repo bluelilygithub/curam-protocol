@@ -11,6 +11,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        /* HERO SPACING FIX */
+        .hero {
+            padding-top: 160px !important;
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+
         /* ICON BADGE STYLING */
         .pain-icon-wrapper {
             display: inline-flex;
@@ -70,13 +78,17 @@
             display: block;
             margin-bottom: 0.5rem;
         }
+
+        @media (max-width: 768px) {
+            .hero { padding-top: 120px !important; }
+        }
     </style>
 </head>
 <body>
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
-    <section class="hero" style="min-height: 75vh;">
+    <section class="hero">
         <div class="hero-background">
             <div class="hero-gradient"></div>
             <div class="hero-pattern"></div>
@@ -240,6 +252,28 @@
         </div>
     </section>
 
+    <section class="section-alt">
+        <div class="container">
+            <h2 class="section-headline">Who We're Built For</h2>
+            <div class="highlight-box sweet-spot">
+                <h3>The Capacity Sweet Spot</h3>
+                <div class="sweet-spot-stats">
+                    <div class="stat">
+                        <span class="stat-value" style="font-size: 2rem; font-weight: 800; color: var(--color-gold); display: block;">100+ hrs/month</span>
+                        <span class="stat-label">manual processing</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" style="font-size: 2rem; font-weight: 800; color: var(--color-gold); display: block;">$150k+/year</span>
+                        <span class="stat-label">lost billable potential</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value" style="font-size: 2rem; font-weight: 800; color: var(--color-gold); display: block;">Azure Ready</span>
+                        <span class="stat-label">but manually bridging</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
     <div id="footer-placeholder"></div>
     <script src="assets/js/footer-loader.js"></script>
