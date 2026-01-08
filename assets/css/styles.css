@@ -8978,6 +8978,19 @@ p.hero-description {
 .hero-summary-list li {
     color: var(--text-primary);
     font-size: 0.95rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.hero-summary-label {
+    color: var(--color-gold);
+    display: block;
+}
+
+.hero-summary-value {
+    color: var(--text-primary);
+    display: block;
 }
 
 @media (max-width: 768px) {
