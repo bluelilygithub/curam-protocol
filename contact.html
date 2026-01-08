@@ -138,12 +138,91 @@
     </style>
   </head>
   <body>
-    <!-- Scroll Down Button -->
+    <!-- Scroll Down Button (centered) -->
     <button class="scroll-down-btn" aria-label="Scroll down">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 5v14M19 12l-7 7-7-7" />
       </svg>
     </button>
+
+    <!-- Floating Chat Icon (bottom-right) -->
+    <button class="floating-chat-btn" id="floatingChatBtn" aria-label="Open AI chat assistant">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+    </button>
+
+    <!-- Slide-in Chat Panel Modal -->
+    <div class="chat-panel-overlay" id="chatPanelOverlay">
+      <div class="chat-panel" id="chatPanel">
+        <div class="chat-panel-header">
+          <div class="chat-panel-header-content">
+            <h3>AI Inquiry Assistant</h3>
+            <span class="contact-ai-tag">AI</span>
+          </div>
+          <button class="chat-panel-close" id="chatPanelClose" aria-label="Close chat">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div class="chat-panel-content">
+          <p class="contact-ai-intro">
+            Not sure where to start? Ask me about your document automation needs, and I'll help guide you to the
+            right solution.
+          </p>
+          <div class="contact-chat-window" id="chatContainer">
+            <div class="contact-chat-msg assistant">
+              <div class="contact-msg-bubble">
+                Hi! I'm here to help you find the right document automation solution. What challenges are you facing
+                with document processing?
+              </div>
+            </div>
+          </div>
+          <div class="contact-chat-input-row">
+            <input
+              type="text"
+              class="contact-chat-field"
+              id="chatInput"
+              placeholder="Ask about invoice automation, beam schedules, or our protocol..."
+            />
+            <button class="contact-chat-mic-btn" id="chatMicBtn" title="Click to speak" aria-label="Voice input">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+              </svg>
+            </button>
+            <button class="contact-chat-btn" id="chatSendBtn">Send</button>
+          </div>
+          <div id="suggestedInterest" class="contact-interest-suggestion contact-hidden"></div>
+
+          <!-- Email Chat Log Section -->
+          <div class="contact-email-toggle-wrapper">
+            <button class="contact-email-toggle-btn" id="emailChatToggleBtn">
+              <span>📧</span>
+              <span>Email this conversation</span>
+              <span class="toggle-arrow">▼</span>
+            </button>
+          </div>
+          <div class="contact-email-section contact-hidden" id="emailChatSection">
+            <p class="contact-email-section-desc">
+              Get a copy of our conversation sent to your email for your records.
+            </p>
+            <div class="contact-email-form-row">
+              <div class="contact-email-field-group">
+                <label for="emailInput">Your Email Address</label>
+                <input type="email" class="contact-email-field" id="emailInput" placeholder="your.email@example.com" />
+              </div>
+              <button class="contact-email-btn" id="emailChatBtn">Send Email</button>
+            </div>
+            <div id="emailStatus"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Navigation -->
     <div id="navbar-placeholder"></div>
@@ -179,70 +258,7 @@
       <!-- Combined AI Assistant + Contact Form Section -->
       <section class="contact-section">
         <div class="container">
-          <div class="contact-two-col">
-            <!-- AI Assistant -->
-            <div class="contact-ai-assistant-container">
-              <div class="contact-ai-assistant-box">
-                <div class="contact-ai-header">
-                  <h3>AI Inquiry Assistant</h3>
-                  <span class="contact-ai-tag">AI</span>
-                </div>
-                <p class="contact-ai-intro">
-                  Not sure where to start? Ask me about your document automation needs, and I'll help guide you to the
-                  right solution.
-                </p>
-                <div class="contact-chat-window" id="chatContainer">
-                  <div class="contact-chat-msg assistant">
-                    <div class="contact-msg-bubble">
-                      Hi! I'm here to help you find the right document automation solution. What challenges are you facing
-                      with document processing?
-                    </div>
-                  </div>
-                </div>
-                <div class="contact-chat-input-row">
-                  <input
-                    type="text"
-                    class="contact-chat-field"
-                    id="chatInput"
-                    placeholder="Ask about invoice automation, beam schedules, or our protocol..."
-                  />
-                  <button class="contact-chat-mic-btn" id="chatMicBtn" title="Click to speak" aria-label="Voice input">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                      <line x1="12" y1="19" x2="12" y2="23"></line>
-                      <line x1="8" y1="23" x2="16" y2="23"></line>
-                    </svg>
-                  </button>
-                  <button class="contact-chat-btn" id="chatSendBtn">Send</button>
-                </div>
-                <div id="suggestedInterest" class="contact-interest-suggestion contact-hidden"></div>
-
-                <!-- Email Chat Log Section -->
-                <div class="contact-email-toggle-wrapper">
-                  <button class="contact-email-toggle-btn" id="emailChatToggleBtn">
-                    <span>📧</span>
-                    <span>Email this conversation</span>
-                    <span class="toggle-arrow">▼</span>
-                  </button>
-                </div>
-                <div class="contact-email-section contact-hidden" id="emailChatSection">
-                  <p class="contact-email-section-desc">
-                    Get a copy of our conversation sent to your email for your records.
-                  </p>
-                  <div class="contact-email-form-row">
-                    <div class="contact-email-field-group">
-                      <label for="emailInput">Your Email Address</label>
-                      <input type="email" class="contact-email-field" id="emailInput" placeholder="your.email@example.com" />
-                    </div>
-                    <button class="contact-email-btn" id="emailChatBtn">Send Email</button>
-                  </div>
-                  <div id="emailStatus"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Contact Form -->
+          <!-- Contact Form (Full Width) -->
             <div class="contact-form-box">
               <h2>Contact Us</h2>
               <form id="contactForm" action="#" method="POST">
@@ -276,12 +292,22 @@
 
                 <div class="contact-form-field">
                   <label for="message">Message *</label>
-                  <textarea
-                    id="message"
-                    name="message"
-                    required
-                    placeholder="Tell us about your current challenges or what you'd like to learn more about..."
-                  ></textarea>
+                  <div class="contact-form-textarea-wrapper">
+                    <textarea
+                      id="message"
+                      name="message"
+                      required
+                      placeholder="Tell us about your current challenges or what you'd like to learn more about..."
+                    ></textarea>
+                    <button class="contact-form-mic-btn" id="messageMicBtn" title="Click to speak" aria-label="Voice input" type="button">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                      </svg>
+                    </button>
+                  </div>
                   <div id="message-relevance-warning" class="message-relevance-warning contact-hidden">
                     <strong>⚠️ Note:</strong> Your message doesn't appear to be related to our services (document automation, AI implementation, structural engineering workflows, or the Curam-Ai Protocol). We may not be able to assist with your inquiry. Please consider if your question relates to our services before submitting.
                   </div>
@@ -461,6 +487,176 @@
       
       // Initialize on page load
       initSpeechRecognition();
+
+      // ========== CHAT PANEL MODAL FUNCTIONALITY ==========
+      const floatingChatBtn = document.getElementById('floatingChatBtn');
+      const chatPanelOverlay = document.getElementById('chatPanelOverlay');
+      const chatPanelClose = document.getElementById('chatPanelClose');
+
+      function openChatPanel() {
+          chatPanelOverlay.classList.add('active');
+          document.body.style.overflow = 'hidden'; // Prevent body scroll
+          // Scroll chat window to bottom on open
+          setTimeout(() => {
+              const chatWindow = document.getElementById('chatContainer');
+              if (chatWindow) {
+                  chatWindow.scrollTop = chatWindow.scrollHeight;
+              }
+          }, 100);
+      }
+
+      function closeChatPanel() {
+          chatPanelOverlay.classList.remove('active');
+          document.body.style.overflow = ''; // Restore body scroll
+      }
+
+      if (floatingChatBtn) {
+          floatingChatBtn.addEventListener('click', openChatPanel);
+      }
+
+      if (chatPanelClose) {
+          chatPanelClose.addEventListener('click', closeChatPanel);
+      }
+
+      if (chatPanelOverlay) {
+          chatPanelOverlay.addEventListener('click', function(e) {
+              // Close if clicking on overlay (not panel itself)
+              if (e.target === chatPanelOverlay) {
+                  closeChatPanel();
+              }
+          });
+      }
+
+      // Close on Escape key
+      document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape' && chatPanelOverlay.classList.contains('active')) {
+              closeChatPanel();
+          }
+      });
+
+      // ========== CONTACT FORM TEXTAREA MICROPHONE ==========
+      const messageTextarea = document.getElementById('message');
+      const messageMicBtn = document.getElementById('messageMicBtn');
+      let messageRecognition = null;
+      let isRecordingMessage = false;
+
+      function initMessageSpeechRecognition() {
+          if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+              if (messageMicBtn) {
+                  messageMicBtn.disabled = true;
+                  messageMicBtn.title = 'Voice input not supported';
+              }
+              return false;
+          }
+
+          try {
+              const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+              messageRecognition = new SpeechRecognition();
+              messageRecognition.continuous = false;
+              messageRecognition.interimResults = false;
+              messageRecognition.lang = 'en-US';
+
+              if (messageMicBtn) {
+                  messageMicBtn.addEventListener('click', toggleMessageSpeechRecognition);
+              }
+
+              messageRecognition.onstart = function() {
+                  isRecordingMessage = true;
+                  if (messageMicBtn) {
+                      messageMicBtn.classList.add('recording');
+                      messageMicBtn.title = 'Listening... Click to stop';
+                  }
+                  if (messageTextarea) {
+                      messageTextarea.placeholder = 'Listening...';
+                  }
+              };
+
+              messageRecognition.onresult = function(event) {
+                  const transcript = event.results[0][0].transcript;
+                  if (messageTextarea) {
+                      const currentValue = messageTextarea.value.trim();
+                      messageTextarea.value = currentValue ? currentValue + ' ' + transcript : transcript;
+                      messageTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                  }
+              };
+
+              messageRecognition.onerror = function(event) {
+                  console.error('Speech recognition error:', event.error);
+                  isRecordingMessage = false;
+                  if (messageMicBtn) {
+                      messageMicBtn.classList.remove('recording');
+                      messageTextarea.placeholder = 'Tell us about your current challenges or what you\'d like to learn more about...';
+                      
+                      let errorMsg = 'Voice input error. ';
+                      switch(event.error) {
+                          case 'no-speech':
+                              errorMsg += 'No speech detected.';
+                              break;
+                          case 'audio-capture':
+                              errorMsg += 'Microphone not found.';
+                              messageMicBtn.classList.add('error');
+                              break;
+                          case 'not-allowed':
+                              errorMsg += 'Microphone permission denied.';
+                              messageMicBtn.classList.add('error');
+                              break;
+                          case 'network':
+                              errorMsg += 'Network error.';
+                              break;
+                          default:
+                              errorMsg += 'Please try again.';
+                      }
+                      
+                      messageMicBtn.title = errorMsg;
+                      setTimeout(() => {
+                          messageMicBtn.classList.remove('error');
+                          messageMicBtn.title = 'Click to speak';
+                      }, 3000);
+                  }
+              };
+
+              messageRecognition.onend = function() {
+                  isRecordingMessage = false;
+                  if (messageMicBtn) {
+                      messageMicBtn.classList.remove('recording');
+                      messageTextarea.placeholder = 'Tell us about your current challenges or what you\'d like to learn more about...';
+                      messageMicBtn.title = 'Click to speak';
+                  }
+              };
+
+              return true;
+          } catch (error) {
+              console.error('Failed to initialize message speech recognition:', error);
+              if (messageMicBtn) {
+                  messageMicBtn.disabled = true;
+                  messageMicBtn.title = 'Voice input unavailable';
+              }
+              return false;
+          }
+      }
+
+      function toggleMessageSpeechRecognition() {
+          if (!messageRecognition) {
+              if (!initMessageSpeechRecognition()) {
+                  return;
+              }
+          }
+
+          if (isRecordingMessage) {
+              messageRecognition.stop();
+          } else {
+              try {
+                  messageRecognition.start();
+              } catch (error) {
+                  console.log('Message recognition start error:', error);
+              }
+          }
+      }
+
+      // Initialize message speech recognition on page load
+      if (messageMicBtn && messageTextarea) {
+          initMessageSpeechRecognition();
+      }
 
       // Initialize audio context on first user interaction
       function initAudioContext() {

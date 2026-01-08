@@ -588,9 +588,9 @@ h1, h2, h3, h4 {
 .scroll-down-btn {
   position: fixed;
   bottom: 2rem;
-  right: 2rem;
-  left: auto;
-  transform: none;
+  left: 50%;
+  transform: translateX(-50%);
+  right: auto;
   width: 48px;
   height: 48px;
   background: rgba(0, 212, 255, 0.1);
@@ -613,7 +613,145 @@ h1, h2, h3, h4 {
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  transform: translateY(10px);
+  transform: translateX(-50%) translateY(10px);
+}
+
+/* ========== FLOATING CHAT BUTTON ========== */
+.floating-chat-btn {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  left: auto;
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+  border: 2px solid var(--color-gold);
+  border-radius: 50%;
+  color: var(--color-navy);
+  cursor: pointer;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(212, 175, 55, 0.4);
+  will-change: transform;
+}
+
+.floating-chat-btn:hover {
+  background: linear-gradient(135deg, var(--color-gold-dark), var(--color-gold));
+  box-shadow: 0 6px 24px rgba(212, 175, 55, 0.5);
+  transform: translateY(-3px) scale(1.05);
+}
+
+.floating-chat-btn:active {
+  transform: translateY(-1px) scale(0.98);
+}
+
+/* ========== CHAT PANEL SLIDE-IN MODAL ========== */
+.chat-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  backdrop-filter: blur(4px);
+}
+
+.chat-panel-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.chat-panel {
+  position: fixed;
+  top: 0;
+  right: -100%;
+  width: 100%;
+  max-width: 450px;
+  height: 100vh;
+  background: #ffffff;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  transition: right 0.3s ease-in-out;
+  overflow: hidden;
+}
+
+.chat-panel-overlay.active .chat-panel {
+  right: 0;
+}
+
+.chat-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-lg);
+  border-bottom: 2px solid #E5E7EB;
+  background: var(--color-navy);
+  color: white;
+}
+
+.chat-panel-header-content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.chat-panel-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: white;
+}
+
+.chat-panel-close {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.chat-panel-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.chat-panel-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--spacing-lg);
+  background: #ffffff;
+}
+
+.chat-panel-content .contact-ai-intro {
+  margin-bottom: var(--spacing-md);
+  color: var(--color-navy);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.chat-panel-content .contact-chat-window {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: var(--spacing-md);
+  min-height: 200px;
+  max-height: 400px;
 }
 
 .scroll-down-btn:hover {
@@ -8240,7 +8378,7 @@ p.hero-description {
 /* Two-column layout for AI + Form on desktop */
 .contact-two-col {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: var(--spacing-xl);
     align-items: start;
 }
@@ -8583,10 +8721,13 @@ p.hero-description {
 /* Contact Form */
 .contact-form-box {
     width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
     background: #ffffff;
-    padding: var(--spacing-lg);
+    padding: var(--spacing-xl);
     border-radius: var(--border-radius);
     border: 2px solid #E5E7EB;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .contact-form-box h2 {
@@ -8616,6 +8757,7 @@ p.hero-description {
     font-family: var(--font-sans);
     font-size: 1rem;
     transition: var(--transition);
+    margin: 0;
 }
 
 .contact-form-field input:focus,
