@@ -652,20 +652,25 @@ function initializeScrollDownButton() {
     
     // Filter to get only visible, meaningful sections (exclude footer/header sections)
     const mainSections = sections.filter(section => {
-        const rect = section.getBoundingClientRect();
-        const height = rect.height;
+        // Wait for layout to calculate - force a reflow if needed
+        const height = section.offsetHeight || section.getBoundingClientRect().height;
         // Only count sections taller than 100px and exclude common footer/header patterns
         const classList = Array.from(section.classList);
         const isExcluded = classList.some(cls => 
             cls.includes('footer') || cls.includes('header') || cls.includes('nav')
         );
-        return height > 100 && !isExcluded;
+        // If height is 0, it might be hidden or not rendered yet - skip those
+        const isValid = height > 100 && !isExcluded && section.offsetTop >= 0;
+        return isValid;
     });
     
     // Sort sections by their position on the page (top to bottom)
     mainSections.sort((a, b) => {
         return a.offsetTop - b.offsetTop;
     });
+    
+    // Debug logging (can be removed later)
+    console.log('Scroll button: Found', mainSections.length, 'sections:', mainSections.map(s => s.className || 'no-class'));
     
     function getCurrentSectionIndex() {
         const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
@@ -677,9 +682,12 @@ function initializeScrollDownButton() {
         let closestDistance = Infinity;
         
         mainSections.forEach((section, index) => {
-            const sectionTop = section.offsetTop;
-            const sectionBottom = sectionTop + section.offsetHeight;
-            const sectionCenter = sectionTop + (section.offsetHeight / 2);
+            // Use getBoundingClientRect for absolute position (accounts for parent containers)
+            const rect = section.getBoundingClientRect();
+            const sectionTop = rect.top + scrollTop;
+            const sectionHeight = rect.height || section.offsetHeight;
+            const sectionBottom = sectionTop + sectionHeight;
+            const sectionCenter = sectionTop + (sectionHeight / 2);
             
             // Check if viewport center is within this section
             if (viewportCenter >= sectionTop && viewportCenter <= sectionBottom) {
@@ -699,19 +707,31 @@ function initializeScrollDownButton() {
     }
     
     function scrollToNextSection() {
+        if (mainSections.length === 0) {
+            console.log('Scroll button: No sections found');
+            return;
+        }
+        
         const currentIndex = getCurrentSectionIndex();
         const nextIndex = currentIndex + 1;
+        
+        console.log('Scroll button: Current index:', currentIndex, 'of', mainSections.length, 'sections');
         
         // If there's a next section, scroll to it
         if (nextIndex < mainSections.length) {
             const nextSection = mainSections[nextIndex];
-            const offsetTop = nextSection.offsetTop - 80; // Account for sticky nav
+            // Use getBoundingClientRect for absolute position (accounts for parent containers)
+            const rect = nextSection.getBoundingClientRect();
+            const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+            const offsetTop = rect.top + scrollTop - 80; // Account for sticky nav
+            console.log('Scroll button: Scrolling to next section at', offsetTop, 'section:', nextSection.className);
             window.scrollTo({
-                top: offsetTop,
+                top: Math.max(0, offsetTop), // Ensure we don't scroll to negative position
                 behavior: 'smooth'
             });
         } else {
             // If at last section, scroll to bottom
+            console.log('Scroll button: At last section, scrolling to bottom');
             window.scrollTo({
                 top: document.documentElement.scrollHeight,
                 behavior: 'smooth'
@@ -723,6 +743,7 @@ function initializeScrollDownButton() {
     function handleClick(e) {
         e.preventDefault();
         e.stopPropagation();
+        console.log('Scroll button: Clicked!');
         scrollToNextSection();
     }
     
@@ -730,6 +751,7 @@ function initializeScrollDownButton() {
     const newBtn = scrollDownBtn.cloneNode(true);
     scrollDownBtn.parentNode.replaceChild(newBtn, scrollDownBtn);
     newBtn.addEventListener('click', handleClick);
+    console.log('Scroll button: Initialized with', mainSections.length, 'sections');
     
     // Auto-hide button when at bottom of page or last section
     function handleScroll() {
