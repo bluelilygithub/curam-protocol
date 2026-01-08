@@ -42,6 +42,13 @@
             font-weight: 700;
             color: var(--text-primary);
         }
+        .faq-accordion-content p {
+            margin-bottom: 1rem;
+        }
+        .faq-accordion-content ul {
+            margin-bottom: 1rem;
+            padding-left: 1.5rem;
+        }
     </style>
 </head>
 <body>
@@ -58,7 +65,7 @@
                 <p class="hero-eyebrow">The Curam-Ai Protocol™</p>
                 <h1 class="hero-headline">Frequently Asked Questions</h1>
                 <p class="hero-subheadline">
-                    Answers to the critical questions CTOs, CFOs, and Partners ask about security, ownership, and technical validation.
+                    Detailed answers for CTOs, CFOs, and Partners regarding the financial, security, and technical aspects of AI implementation.
                 </p>
             </div>
         </div>
@@ -80,19 +87,43 @@
             <div class="faq-accordion">
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>What's the total investment if we complete all four phases?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>Total ranges $37k-$51k: Phase 1: $1,500 | Phase 2: $7,500 | Phase 3: $8-12k | Phase 4: $20-30k. Typical payback is 3.2 months.</p></div>
+                    <div class="faq-accordion-content">
+                        <p>Total ranges $37k–$51k if you complete all phases:</p>
+                        <ul>
+                            <li>Phase 1 (Feasibility): $1,500</li>
+                            <li>Phase 2 (Roadmap): $7,500</li>
+                            <li>Phase 3 (Compliance): $8–12k</li>
+                            <li>Phase 4 (Implementation): $20–30k</li>
+                        </ul>
+                        <p>You control the investment. Exit after any phase. Most firms invest ~$40k total. Typical payback: 3–9 months.</p>
+                    </div>
                 </div>
                 <div class="faq-accordion-item">
-                    <div class="faq-accordion-header"><h3>Why pay $1,500 for Phase 1 when you have a demo?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>The demo shows the tech works. The $1,500 proves it works on YOUR documents with 90%+ accuracy, eliminating the risk of a failed $50k project.</p></div>
+                    <div class="faq-accordion-header"><h3>Why should we pay $1,500 for Phase 1 when you have a demo?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-content">
+                        <p>The demo shows the tech works. The $1,500 proves it works on YOUR documents.</p>
+                        <p>You get 90%+ accuracy or a full refund. This eliminates the risk of a $40k implementation failing because we never tested your actual data. Think of it as insurance against a failed AI project.</p>
+                    </div>
                 </div>
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Can we defer payment until we see ROI?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>We share the risk by holding 15% of the Phase 4 fee until your success metrics and promised ROI are met.</p></div>
+                    <div class="faq-accordion-content">
+                        <p>We share the risk. We hold 15% of the Phase 4 fee until success metrics are met.</p>
+                        <p>This means you pay 85% upfront, and we don't get the remaining 15% until we prove the ROI promised in Phase 2. Our fee is contingent on your measurable results.</p>
+                    </div>
                 </div>
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>What prevents costs from spiraling?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>Every phase is fixed-price, fixed-scope, and fixed-timeline. You approve each commercial gate before we proceed.</p></div>
+                    <div class="faq-accordion-content">
+                        <p>Every phase is fixed-price, fixed-scope, and fixed-timeline.</p>
+                        <p>Phase 1 is ALWAYS $1,500 for 48 hours. No "it depends on complexity" pricing. You approve each commercial gate before we start. No surprises, no scope creep.</p>
+                    </div>
+                </div>
+                <div class="faq-accordion-item">
+                    <div class="faq-accordion-header"><h3>We already use Xero/MYOB. Why do we need this?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-content">
+                        <p>Xero imports data; we validate it first. We act as a quality gate checking Vendor ABN validity, duplicate invoices, GL coding errors, and approval thresholds. Xero doesn't do this natively with high-complexity technical documents.</p>
+                    </div>
                 </div>
             </div>
 
@@ -110,16 +141,20 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Is the Phase 2 'Security Readiness Review' a formal cybersecurity audit?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>No. Our review is a targeted technical investigation for the AI implementation. It verifies permission scoping and zero-egress integrity. It provides the evidence your auditor needs but doesn't replace a full ISO audit.</p>
+                        <p>No. Our review is a targeted investigation for the AI implementation. It verifies permission scoping and zero-egress integrity to ensure the environment is safe for deployment. It provides the evidence your actual auditor will need but doesn't replace your annual independent certification.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Does all data stay within our M365/Azure environment?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>Yes. 100% of processing happens inside your tenant. We configure zero-egress compliance from day one.</p></div>
+                    <div class="faq-accordion-content">
+                        <p>Yes. 100% of processing happens inside your tenant. We configure zero-egress compliance from day one. You control the keys, you control the data.</p>
+                    </div>
                 </div>
                 <div class="faq-accordion-item">
-                    <div class="faq-accordion-header"><h3>How do you guarantee ISO 27001 compliance?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>Phase 3 creates the evidence package (data flow diagrams, access matrices) your auditors need to validate the deployment against ISO controls.</p></div>
+                    <div class="faq-accordion-header"><h3>Where is data processed? Can you guarantee Australian data residency?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-content">
+                        <p>All processing occurs exclusively within your Azure/M365 cloud tenant. If you specify Australian data residency (Azure Australia East), we configure the solution to respect that. No data is routed outside your secure environment.</p>
+                    </div>
                 </div>
             </div>
 
@@ -137,11 +172,15 @@
             <div class="faq-accordion">
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Are we locked into your services? Do we own the code?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>No lock-in. You own 100% of the source code and documentation at the end of Phase 4. Zero ongoing licensing fees from Curam-Ai.</p></div>
+                    <div class="faq-accordion-content">
+                        <p>No lock-in. You own 100% of the source code. At the end of Phase 4, we transfer all scripts, architecture documentation, and video walkthroughs to you. You can fire us and hire any developer to maintain it.</p>
+                    </div>
                 </div>
                 <div class="faq-accordion-item">
-                    <div class="faq-accordion-header"><h3>Who handles maintenance after deployment?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>Maintenance is internal-ready. We provide an optional Tier 2 backstop for $500/mo to handle AI retraining or complex API changes.</p></div>
+                    <div class="faq-accordion-header"><h3>Who handles maintenance and enhancements?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-content">
+                        <p>You own the system. Routine tasks (adding vendors, adjusting rules) are internal-ready. We offer an optional Tier 2 retainer for $500/month for AI retraining or complex troubleshooting.</p>
+                    </div>
                 </div>
             </div>
 
@@ -151,17 +190,27 @@
                         <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
                     </svg>
                 </div>
-                <h2 class="faq-category-title">Industry Capabilities</h2>
+                <h2 class="faq-category-title">Engineering & Built Environment</h2>
             </div>
 
             <div class="faq-accordion">
                 <div class="faq-accordion-item">
-                    <div class="faq-accordion-header"><h3>How does this help Engineering Firms?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>We automate Drawing Registers, Beam Schedules, and Test Reports, reclaiming the 20% of technical time lost to admin.</p></div>
+                    <div class="faq-accordion-header"><h3>Do you have examples specific to civil/structural engineering?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-content">
+                        <p>Yes. Our models handle Concrete Test Reports (lot numbers, slump, strength), Beam Schedules (dimensions, steel grade), and Drawing Registers (revisions, dates). We pre-train on technical jargon, not just generic text.</p>
+                    </div>
                 </div>
                 <div class="faq-accordion-item">
-                    <div class="faq-accordion-header"><h3>How does this help Logistics Firms?</h3><span class="faq-accordion-icon">+</span></div>
-                    <div class="faq-accordion-content"><p>We automate Manifest entry and Customs validation, reducing operational data entry by ~40% and preventing classification fines.</p></div>
+                    <div class="faq-accordion-header"><h3>How do you ensure AI didn't swap a 'UB' for a 'UC' on a schedule?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-content">
+                        <p>Every extraction includes source verification. The AI copies exactly what is in the PDF—it doesn't interpret. If a scan is unclear, it flags a confidence score <90% for human review rather than guessing.</p>
+                    </div>
+                </div>
+                <div class="faq-accordion-item">
+                    <div class="faq-accordion-header"><h3>Can this handle BIM schedules and Revit exports?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-content">
+                        <p>Yes. We handle window/door schedules and drawing registers exported from Revit or ArchiCAD, maintaining revision control and auto-populating your internal registers. Typical savings: 8-12 hours per week.</p>
+                    </div>
                 </div>
             </div>
 
