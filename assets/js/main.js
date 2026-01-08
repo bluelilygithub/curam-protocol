@@ -647,13 +647,24 @@ function initializeScrollDownButton() {
     }
     
     // Find all major sections on the page
-    // Look for sections with class "section", "section-block", "methodology", etc.
-    const sections = Array.from(document.querySelectorAll('section.section, section.methodology, section.section-block, section.section-alt, section.hero'));
+    // Look for all sections, including contact-section, faq, etc.
+    const sections = Array.from(document.querySelectorAll('section'));
     
-    // Filter to get only visible, meaningful sections
+    // Filter to get only visible, meaningful sections (exclude footer/header sections)
     const mainSections = sections.filter(section => {
         const rect = section.getBoundingClientRect();
-        return rect.height > 100; // Only count sections taller than 100px
+        const height = rect.height;
+        // Only count sections taller than 100px and exclude common footer/header patterns
+        const classList = Array.from(section.classList);
+        const isExcluded = classList.some(cls => 
+            cls.includes('footer') || cls.includes('header') || cls.includes('nav')
+        );
+        return height > 100 && !isExcluded;
+    });
+    
+    // Sort sections by their position on the page (top to bottom)
+    mainSections.sort((a, b) => {
+        return a.offsetTop - b.offsetTop;
     });
     
     function getCurrentSectionIndex() {
