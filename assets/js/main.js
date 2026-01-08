@@ -313,25 +313,30 @@ document.addEventListener('DOMContentLoaded', function() {
         
         try {
             navRecognition = new SpeechRecognition();
-            navRecognition.continuous = false;
-            navRecognition.interimResults = false;
+            navRecognition.continuous = true; // Keep listening
+            navRecognition.interimResults = true; // Show interim results
             navRecognition.lang = 'en-US';
             
             navRecognition.onstart = function() {
+                console.log('Nav speech recognition started');
                 isNavRecording = true;
                 micBtn.classList.add('recording');
                 micBtn.title = 'Listening... Click to stop';
                 if (searchInput) {
-                    searchInput.placeholder = 'Listening...';
+                    searchInput.placeholder = 'Listening... Speak now';
                 }
             };
             
             navRecognition.onresult = function(event) {
-                const transcript = event.results[0][0].transcript;
-                if (searchInput) {
-                    searchInput.value = transcript;
-                    // Trigger input event so any listeners know the value changed
-                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                console.log('Nav speech recognition result:', event);
+                if (event.results && event.results.length > 0 && event.results[0].length > 0) {
+                    const transcript = event.results[0][0].transcript;
+                    console.log('Nav transcript:', transcript);
+                    if (searchInput) {
+                        searchInput.value = transcript;
+                        // Trigger input event so any listeners know the value changed
+                        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
                 }
             };
             
@@ -380,14 +385,36 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             // Attach click handler to microphone button
-            micBtn.addEventListener('click', function() {
+            micBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Nav mic button clicked, isRecording:', isNavRecording);
                 if (isNavRecording) {
                     navRecognition.stop();
                 } else {
                     try {
-                        navRecognition.start();
+                        console.log('Starting nav speech recognition');
+                        if (navRecognition.state === 'running') {
+                            navRecognition.stop();
+                            setTimeout(() => {
+                                navRecognition.start();
+                            }, 100);
+                        } else {
+                            navRecognition.start();
+                        }
                     } catch (error) {
-                        console.log('Recognition start error:', error);
+                        console.error('Nav recognition start error:', error);
+                        // If already started, stop and restart
+                        if (error.message && error.message.includes('already started')) {
+                            navRecognition.stop();
+                            setTimeout(() => {
+                                try {
+                                    navRecognition.start();
+                                } catch (e) {
+                                    console.error('Nav retry failed:', e);
+                                }
+                            }, 200);
+                        }
                     }
                 }
             });
@@ -615,12 +642,18 @@ document.head.appendChild(style);
 function initializeScrollDownButton() {
     const scrollDownBtn = document.querySelector('.scroll-down-btn');
     
-    if (!scrollDownBtn) return;
+    if (!scrollDownBtn) {
+        console.log('Scroll down button not found');
+        return;
+    }
+    
+    console.log('Initializing scroll down button');
     
     // Store the click handler function - use a persistent reference
     function handleClick(e) {
         e.preventDefault();
         e.stopPropagation();
+        console.log('Scroll down button clicked');
         const protocolSection = document.getElementById('protocol');
         if (protocolSection) {
             const offsetTop = protocolSection.offsetTop - 80; // Account for sticky nav
@@ -639,8 +672,10 @@ function initializeScrollDownButton() {
         }
     }
     
-    // Add click handler directly (don't clone - that breaks references)
-    scrollDownBtn.addEventListener('click', handleClick);
+    // Remove any existing listeners by cloning
+    const newBtn = scrollDownBtn.cloneNode(true);
+    scrollDownBtn.parentNode.replaceChild(newBtn, scrollDownBtn);
+    newBtn.addEventListener('click', handleClick);
     
     // Auto-hide button when at bottom of page
     function handleScroll() {
@@ -657,9 +692,7 @@ function initializeScrollDownButton() {
         if (btn) {
             if (isAtBottom) {
                 // Hide when at bottom of page
-                if (!btn.classList.contains('hidden')) {
-                    btn.classList.add('hidden');
-                }
+                btn.classList.add('hidden');
             } else {
                 // Show button until end of page
                 btn.classList.remove('hidden');
@@ -692,36 +725,35 @@ if (document.readyState === 'loading') {
 } else {
     initializeScrollDownButton();
 }
-    
-    // Lazy load hero video with intersection observer
-    const heroVideoLazy = document.getElementById('hero-video');
-    if (heroVideoLazy) {
-        // Only autoplay if user prefers motion and video is visible
-        const videoObserver = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    // Check for prefers-reduced-motion
-                    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-                    if (!prefersReducedMotion) {
-                        heroVideoLazy.play().catch(e => console.log('Video autoplay prevented:', e));
-                    }
-                } else {
-                    // Pause when not visible to save bandwidth
-                    heroVideoLazy.pause();
+
+// Lazy load hero video with intersection observer
+const heroVideoLazy = document.getElementById('hero-video');
+if (heroVideoLazy) {
+    // Only autoplay if user prefers motion and video is visible
+    const videoObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                // Check for prefers-reduced-motion
+                const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                if (!prefersReducedMotion) {
+                    heroVideoLazy.play().catch(e => console.log('Video autoplay prevented:', e));
                 }
-            });
-        }, { threshold: 0.1 });
-        
-        videoObserver.observe(heroVideoLazy);
-        
-        // On mobile or if prefers-reduced-motion, don't autoplay (poster image will show)
-        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || window.innerWidth < 768) {
-            heroVideoLazy.removeAttribute('autoplay');
-        } else {
-            heroVideoLazy.setAttribute('autoplay', '');
-        }
+            } else {
+                // Pause when not visible to save bandwidth
+                heroVideoLazy.pause();
+            }
+        });
+    }, { threshold: 0.1 });
+    
+    videoObserver.observe(heroVideoLazy);
+    
+    // On mobile or if prefers-reduced-motion, don't autoplay (poster image will show)
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || window.innerWidth < 768) {
+        heroVideoLazy.removeAttribute('autoplay');
+    } else {
+        heroVideoLazy.setAttribute('autoplay', '');
     }
-});
+}
 
 
 // ============================================================================

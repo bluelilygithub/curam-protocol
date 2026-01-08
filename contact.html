@@ -414,17 +414,20 @@
                   let interimTranscript = '';
                   
                   for (let i = event.resultIndex; i < event.results.length; i++) {
-                      const transcript = event.results[i][0].transcript;
-                      if (event.results[i].isFinal) {
-                          finalTranscript += transcript + ' ';
-                      } else {
-                          interimTranscript += transcript;
+                      if (event.results[i] && event.results[i][0]) {
+                          const transcript = event.results[i][0].transcript;
+                          if (event.results[i].isFinal) {
+                              finalTranscript += transcript + ' ';
+                          } else {
+                              interimTranscript += transcript;
+                          }
                       }
                   }
                   
                   // Update input with final results, or show interim
                   if (finalTranscript) {
                       chatInput.value = (chatInput.value.trim() ? chatInput.value + ' ' : '') + finalTranscript.trim();
+                      console.log('Chat final transcript added:', finalTranscript.trim());
                   } else if (interimTranscript && !chatInput.value) {
                       chatInput.value = interimTranscript;
                   }
