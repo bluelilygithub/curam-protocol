@@ -385,7 +385,15 @@ def phase_1_feasibility():
         return "Phase 1 Feasibility page not found.", 404
 
 
-# phase-2-roadmap.html removed - file does not exist
+@static_pages_bp.route('/phase-2-roadmap')
+@static_pages_bp.route('/phase-2-roadmap.html')
+def phase_2_roadmap():
+    """Serve the Phase 2 Roadmap page"""
+    try:
+        return send_file('phase-2-roadmap.html')
+    except:
+        return "Phase 2 Roadmap page not found.", 404
+
 
 @static_pages_bp.route('/phase-3-compliance')
 @static_pages_bp.route('/phase-3-compliance.html')
