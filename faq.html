@@ -10,6 +10,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        /* CSS FIX: Prevents content from disappearing due to JS scroll-animation conflicts */
+        .section, .faq-category-header, .faq-accordion, .hero-content {
+            opacity: 1 !important;
+            transform: none !important;
+            visibility: visible !important;
+            transition: none !important;
+        }
+
         .faq-category-icon {
             display: inline-flex;
             align-items: center;
@@ -22,6 +30,7 @@
             vertical-align: middle;
             margin-right: 15px;
             flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         .faq-category-icon svg { width: 24px; height: 24px; stroke: #FFFFFF; }
         .faq-category-header {
@@ -83,7 +92,6 @@
                             <li><strong>Phase 4 (Implementation):</strong> $20–30k</li>
                         </ul>
                         <p>You control the investment. Exit after any phase. Most firms invest ~$40k total. Typical payback: 3–9 months.</p>
-                        
                     </div>
                 </div>
                 <div class="faq-accordion-item">
@@ -107,18 +115,18 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>We already use Xero/MYOB. Why do we need this?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>Xero imports data. We validate it first. Think of us as a quality gate BEFORE Xero. We check: Vendor ABN validity (catches fraud), Duplicate invoices (prevents double-payment), Coding errors (routes to correct GL accounts), and Approval thresholds (enforces spend limits). Xero doesn't do this. Generic OCR tools don't do this. We custom-tune validation to YOUR financial controls.</p>
+                        <p>Xero imports data. We validate it first. Think of us as a quality gate BEFORE Xero. We check Vendor ABN validity, duplicate invoices, GL coding errors, and approval thresholds. Xero doesn't do this. Generic OCR tools don't do this. We custom-tune validation to YOUR financial controls.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>How much time will our staff need to invest across all phases?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>Total: ~65 hours spread over 8–10 weeks.</p>
+                        <p>Total: ~65 hours spread over 8–12 weeks.</p>
                         <ul>
-                            <li><strong>Phase 1 (Feasibility):</strong> 2 hours to discuss 5–10 sample PDFs. Zero staff time after that.</li>
-                            <li><strong>Phase 2 (Roadmap):</strong> 5 hours from Leadership (kick-off/review) + 4 hours from SMEs (Finance/Project Mgmt) over 3 weeks.</li>
-                            <li><strong>Phase 3 (Compliance):</strong> 6 hours for IT Admin kick-off + 8 hours for policy review/approval.</li>
-                            <li><strong>Phase 4 (Deployment):</strong> 40 hours for User Training and UAT testing with 2–3 end users.</li>
+                            <li><strong>Phase 1:</strong> 2 hours (Sample PDF discussion).</li>
+                            <li><strong>Phase 2:</strong> 5 hours Leadership + 4 hours SMEs over 3 weeks.</li>
+                            <li><strong>Phase 3:</strong> 6 hours IT Admin + 8 hours Policy Review.</li>
+                            <li><strong>Phase 4:</strong> 40 hours for User Training and UAT testing with 2–3 end users.</li>
                         </ul>
                     </div>
                 </div>
@@ -132,14 +140,13 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Is the Phase 2 'Security Readiness Review' a formal cybersecurity audit?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>No. It is important to distinguish between a General Cybersecurity Audit and our <strong>AI Readiness Review</strong>. A formal audit evaluates your entire company’s IT posture. Our Phase 2 Review is a targeted investigation specifically for the AI implementation. We verify Permission Scoping, API Integrity, and Identity Management for the AI deployment. It provides the technical evidence your actual auditor will eventually need.</p>
+                        <p>No. It is critical to distinguish between a General Cybersecurity Audit and our <strong>AI Readiness Review</strong>. A formal audit evaluates your entire company’s IT posture. Our Phase 2 Review is a targeted investigation specifically for the AI implementation. We verify Permission Scoping, API Integrity, and Identity Management. This review provides the technical evidence your actual auditor will eventually need, but it does not replace your annual independent certification.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Does all data stay within our M365/Azure environment?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
                         <p>Yes. 100% of processing happens inside your M365/Azure tenant. No data leaves your environment. We configure zero-egress compliance from day one. You control the keys, you control the data.</p>
-                        
                     </div>
                 </div>
                 <div class="faq-accordion-item">
@@ -151,7 +158,7 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Where is data processed? Can you guarantee Australian data residency?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>All processing occurs exclusively within your Azure/M365 cloud tenant. If you specify Australian data residency (Azure Australia East region), we configure the solution to respect that. No data is routed outside your secure environment.</p>
+                        <p>All processing occurs exclusively within your Azure/M365 cloud tenant. If you specify Australian data residency (Azure Australia East), we configure the solution to respect that. No data is routed outside your secure environment.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
@@ -163,7 +170,7 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>What is the security protocol for legacy on-premise servers?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>We use Microsoft's Power Platform Data Gateway—a secure, Microsoft-certified connector that runs inside your firewall with no inbound ports needed. It sends only encrypted data to your M365 tenant. Trade-off: On-premise setups add 2–5 seconds per file retrieval.</p>
+                        <p>We use Microsoft's Power Platform Data Gateway—a secure, Microsoft-certified connector that runs inside your firewall with no inbound ports needed. It sends only encrypted data to your M365 tenant.</p>
                     </div>
                 </div>
             </div>
@@ -176,13 +183,13 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Are we locked into your services? Do we own the source code?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>No lock-in. Period. You own 100% of the source code. At the conclusion of Phase 4, we transfer complete ownership: full source code, architecture documentation, video walkthroughs, and training materials. You can fire us and hire any developer to maintain it. Zero ongoing licensing fees from Curam-Ai.</p>
+                        <p>No lock-in. Period. You own 100% of the source code. At the conclusion of Phase 4, we transfer complete ownership: all workflows, all scripts, architecture documentation, and video walkthroughs. You can hire any developer to maintain it. Zero ongoing licensing fees from Curam-Ai.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>What do we own after deployment, and who handles maintenance?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>You own the system. Maintenance tasks like adding vendors or adjusting rules can be handled by any IT admin. We also offer an optional Tier 2 retainer (AI model retraining, complex troubleshooting) for $500/month for 2 hours support.</p>
+                        <p>You own the system. Maintenance tasks like adding vendors or adjusting rules can be handled by any IT admin familiar with M365. For complex enhancements, you can DIY, re-engage us for fixed-price sprints, or use our Tier 2 Support retainer ($500/month).</p>
                     </div>
                 </div>
             </div>
@@ -195,7 +202,7 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>How do you guarantee accuracy and prevent AI hallucinations?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>We use a three-layer validation system: <strong>Grounding</strong> (AI only extracts from your docs), <strong>Confidence Scoring</strong> (flags <90% confident items for human review), and <strong>ERP Cross-Checks</strong> (validation against vendor master lists/project codes).</p>
+                        <p>We use a three-layer validation system: <strong>Grounding</strong> (AI only extracts from your documents), <strong>Confidence Scoring</strong> (flags items scoring <90% for human review), and <strong>ERP Cross-Checks</strong> (validation against vendor master lists/project codes).</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
@@ -213,7 +220,7 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>How much time will my team spend on human review?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>Typically 5–15 minutes per day reviewing the <10% of documents the AI flags. This is high-value risk mitigation, not cleanup. We factor this into ROI calculations upfront.</p>
+                        <p>Typically 5–15 minutes per day reviewing the <10% of documents the AI flags. This is high-value risk mitigation, not cleanup.</p>
                     </div>
                 </div>
             </div>
@@ -238,7 +245,7 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>How does this help wealth management firms with ASIC reporting?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>We automate client statement processing and performance reporting. Built-in compliance checks for fee disclosure statements and SOA generation ensure a 60% reduction in reconciliation time.</p>
+                        <p>We automate client statement processing and performance reporting. Built-in compliance checks for fee disclosure statements ensure a 60% reduction in reconciliation time.</p>
                     </div>
                 </div>
             </div>
@@ -251,17 +258,17 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Do you have examples specific to civil/structural engineering?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>Yes. We extract data from Concrete Test Reports (lot numbers, slump, strength), Beam Schedules (dimensions, steel grade), and Drawing Registers (revisions, dates). We handle dimensions, steel grade, and placement notes specifically.</p>
+                        <p>Yes. We extract data from Concrete Test Reports, Beam Schedules, and Drawing Registers. We handle dimensions, steel grade, and placement notes specifically trained on engineering formats.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>How can I be certain AI didn't swap a 'UB' for a 'UC' on a critical schedule?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>Every extraction includes source verification. The AI copies exactly what is in the PDF. If there is ambiguity (damaged scan, unclear text), the system flags it for review rather than guessing.</p>
+                        <p>Every extraction includes source verification. The AI copies exactly what is in the PDF. If there is ambiguity, the system flags it for review rather than guessing.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
-                    <div class="faq-accordion-header"><h3>How does this help with WorkSafe Queensland compliance for construction?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-header"><h3>How does this help with WorkSafe Queensland compliance?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
                         <p>We automate SWMS tracking, subcontractor certification, and site diary digitization. Alerts trigger 30 days before certificate expiry, ensuring zero gaps in documentation.</p>
                     </div>
