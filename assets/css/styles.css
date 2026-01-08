@@ -11343,6 +11343,30 @@ p.hero-description {
   font-weight: 700;
 }
 
+/* Phase 4 Deliverable Lists */
+.phase-4-deliverable-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0;
+}
+
+.phase-4-deliverable-list li {
+  position: relative;
+  padding-left: 1.5rem;
+  margin-bottom: var(--spacing-sm);
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+.phase-4-deliverable-list li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--color-gold);
+  font-weight: 700;
+}
+
 .note {
   background: rgba(212, 175, 55, 0.08);
   padding: var(--spacing-md);
