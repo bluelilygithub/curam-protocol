@@ -409,12 +409,14 @@
               };
               
               recognition.onresult = function(event) {
+                  console.log('📢 Chat onresult fired, results length:', event.results.length);
                   let finalTranscript = '';
                   let interimTranscript = '';
                   
                   for (let i = event.resultIndex; i < event.results.length; i++) {
                       if (event.results[i] && event.results[i][0]) {
                           const transcript = event.results[i][0].transcript;
+                          console.log(`  Result ${i}: "${transcript}" (isFinal: ${event.results[i].isFinal})`);
                           if (event.results[i].isFinal) {
                               finalTranscript += transcript + ' ';
                           } else {
@@ -423,16 +425,25 @@
                       }
                   }
                   
+                  console.log('  Final:', finalTranscript, 'Interim:', interimTranscript);
+                  
+                  // Get the input fresh to ensure we have the right reference
+                  const input = document.getElementById('chatInput');
+                  if (!input) {
+                      console.error('❌ chatInput not found in DOM!');
+                      return;
+                  }
+                  
                   // Update input with final results, or show interim
-                  if (finalTranscript && chatInput) {
-                      const currentValue = chatInput.value.trim();
-                      chatInput.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
-                      chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-                  } else if (interimTranscript && chatInput) {
-                      // Show interim results - append to final results if any exist
-                      const currentValue = chatInput.value.trim();
-                      // Only show interim if we don't already have final results (check if last part is interim)
-                      chatInput.value = currentValue || interimTranscript;
+                  if (finalTranscript) {
+                      const currentValue = input.value.trim();
+                      input.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
+                      input.dispatchEvent(new Event('input', { bubbles: true }));
+                      console.log('✅ Updated chatInput with final:', input.value);
+                  } else if (interimTranscript) {
+                      const currentValue = input.value.trim();
+                      input.value = currentValue || interimTranscript;
+                      console.log('✅ Updated chatInput with interim:', input.value);
                   }
               };
               
@@ -500,16 +511,69 @@
               }
           }
           
-          if (isRecording) {
+          // Check actual recognition state
+          const actualState = recognition.state;
+          const isCurrentlyRunning = actualState === 'running' || actualState === 'starting' || isRecording;
+          
+          if (isCurrentlyRunning) {
               // Stop recording
-              recognition.stop();
-          } else {
-              // Start recording
               try {
-                  recognition.start();
+                  recognition.stop();
+              } catch (err) {
+                  // Ignore errors when stopping
+              }
+              isRecording = false;
+              chatMicBtn.classList.remove('recording');
+              chatInput.placeholder = 'Ask about invoice automation, beam schedules, or our protocol...';
+          } else {
+              // Start recording - set flag optimistically
+              isRecording = true;
+              chatMicBtn.classList.add('recording');
+              chatInput.placeholder = 'Listening... Speak now';
+              
+              try {
+                  if (actualState === 'running' || actualState === 'starting') {
+                      recognition.stop();
+                      setTimeout(() => {
+                          try {
+                              recognition.start();
+                          } catch (err) {
+                              console.error('Chat recognition restart error:', err);
+                              isRecording = false;
+                              chatMicBtn.classList.remove('recording');
+                              chatInput.placeholder = 'Ask about invoice automation, beam schedules, or our protocol...';
+                          }
+                      }, 200);
+                  } else {
+                      recognition.start();
+                  }
               } catch (error) {
-                  // Already started or other error
-                  console.log('Recognition start error:', error);
+                  console.error('Chat recognition start error:', error);
+                  isRecording = false;
+                  chatMicBtn.classList.remove('recording');
+                  chatInput.placeholder = 'Ask about invoice automation, beam schedules, or our protocol...';
+                  
+                  if (error.name === 'InvalidStateError' || (error.message && error.message.includes('already'))) {
+                      setTimeout(() => {
+                          try {
+                              recognition.stop();
+                              setTimeout(() => {
+                                  try {
+                                      isRecording = true;
+                                      chatMicBtn.classList.add('recording');
+                                      chatInput.placeholder = 'Listening... Speak now';
+                                      recognition.start();
+                                  } catch (retryErr) {
+                                      console.error('Chat recognition retry error:', retryErr);
+                                      isRecording = false;
+                                      chatMicBtn.classList.remove('recording');
+                                  }
+                              }, 300);
+                          } catch (stopErr) {
+                              // Ignore stop errors
+                          }
+                      }, 100);
+                  }
               }
           }
       }
@@ -608,12 +672,14 @@
               };
 
               messageRecognition.onresult = function(event) {
+                  console.log('📢 Message onresult fired, results length:', event.results.length);
                   let finalTranscript = '';
                   let interimTranscript = '';
                   
                   for (let i = event.resultIndex; i < event.results.length; i++) {
                       if (event.results[i] && event.results[i][0]) {
                           const transcript = event.results[i][0].transcript;
+                          console.log(`  Result ${i}: "${transcript}" (isFinal: ${event.results[i].isFinal})`);
                           if (event.results[i].isFinal) {
                               finalTranscript += transcript + ' ';
                           } else {
@@ -622,15 +688,30 @@
                       }
                   }
                   
-                  if (finalTranscript && messageTextarea) {
+                  console.log('  Final:', finalTranscript, 'Interim:', interimTranscript);
+                  console.log('  messageTextarea exists:', !!messageTextarea);
+                  
+                  // Get the textarea fresh to ensure we have the right reference
+                  const textarea = document.getElementById('message');
+                  if (!textarea) {
+                      console.error('❌ message textarea not found in DOM!');
+                      return;
+                  }
+                  
+                  if (finalTranscript) {
                       // Append final results to existing text
-                      const currentValue = messageTextarea.value.trim();
-                      messageTextarea.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
-                      messageTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-                  } else if (interimTranscript && messageTextarea) {
-                      // Show interim results
-                      const currentValue = messageTextarea.value.trim();
-                      messageTextarea.value = currentValue || interimTranscript;
+                      const currentValue = textarea.value.trim();
+                      textarea.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
+                      textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                      console.log('✅ Updated textarea with final:', textarea.value);
+                  } else if (interimTranscript) {
+                      // Show interim results (replace any interim that was shown)
+                      // Keep existing final text, but update interim
+                      const currentValue = textarea.value.trim();
+                      // If we have existing text, keep it and append interim
+                      // Otherwise just show interim
+                      textarea.value = currentValue || interimTranscript;
+                      console.log('✅ Updated textarea with interim:', textarea.value);
                   }
               };
 
@@ -706,33 +787,94 @@
               }
           }
 
-          if (isRecordingMessage) {
-              console.log('Stopping message speech recognition');
-              messageRecognition.stop();
-          } else {
+          // Check actual recognition state
+          const actualState = messageRecognition.state;
+          const isCurrentlyRunning = actualState === 'running' || actualState === 'starting' || isRecordingMessage;
+
+          if (isCurrentlyRunning) {
+              // Stop recording
               try {
-                  console.log('Starting message speech recognition');
-                  // Check if already running
-                  if (messageRecognition.state === 'running') {
+                  messageRecognition.stop();
+              } catch (err) {
+                  // Ignore errors when stopping
+              }
+              isRecordingMessage = false;
+              if (messageMicBtn) {
+                  messageMicBtn.classList.remove('recording');
+                  messageMicBtn.title = 'Click to speak';
+              }
+              if (messageTextarea) {
+                  messageTextarea.placeholder = 'Tell us about your current challenges or what you\'d like to learn more about...';
+              }
+          } else {
+              // Start recording - set flag optimistically
+              isRecordingMessage = true;
+              if (messageMicBtn) {
+                  messageMicBtn.classList.add('recording');
+                  messageMicBtn.title = 'Listening... Click to stop';
+              }
+              if (messageTextarea) {
+                  messageTextarea.placeholder = 'Listening...';
+              }
+              
+              try {
+                  if (actualState === 'running' || actualState === 'starting') {
                       messageRecognition.stop();
                       setTimeout(() => {
-                          messageRecognition.start();
-                      }, 100);
+                          try {
+                              messageRecognition.start();
+                          } catch (err) {
+                              console.error('Message recognition restart error:', err);
+                              isRecordingMessage = false;
+                              if (messageMicBtn) {
+                                  messageMicBtn.classList.remove('recording');
+                              }
+                              if (messageTextarea) {
+                                  messageTextarea.placeholder = 'Tell us about your current challenges or what you\'d like to learn more about...';
+                              }
+                          }
+                      }, 200);
                   } else {
                       messageRecognition.start();
                   }
               } catch (error) {
                   console.error('Message recognition start error:', error);
-                  // If already started, stop and restart
-                  if (error.message && (error.message.includes('already started') || error.message.includes('started'))) {
-                      messageRecognition.stop();
+                  isRecordingMessage = false;
+                  if (messageMicBtn) {
+                      messageMicBtn.classList.remove('recording');
+                      messageMicBtn.title = 'Click to speak';
+                  }
+                  if (messageTextarea) {
+                      messageTextarea.placeholder = 'Tell us about your current challenges or what you\'d like to learn more about...';
+                  }
+                  
+                  if (error.name === 'InvalidStateError' || (error.message && error.message.includes('already'))) {
                       setTimeout(() => {
                           try {
-                              messageRecognition.start();
-                          } catch (e) {
-                              console.error('Retry failed:', e);
+                              messageRecognition.stop();
+                              setTimeout(() => {
+                                  try {
+                                      isRecordingMessage = true;
+                                      if (messageMicBtn) {
+                                          messageMicBtn.classList.add('recording');
+                                          messageMicBtn.title = 'Listening... Click to stop';
+                                      }
+                                      if (messageTextarea) {
+                                          messageTextarea.placeholder = 'Listening...';
+                                      }
+                                      messageRecognition.start();
+                                  } catch (retryErr) {
+                                      console.error('Message recognition retry error:', retryErr);
+                                      isRecordingMessage = false;
+                                      if (messageMicBtn) {
+                                          messageMicBtn.classList.remove('recording');
+                                      }
+                                  }
+                              }, 300);
+                          } catch (stopErr) {
+                              // Ignore stop errors
                           }
-                      }, 200);
+                      }, 100);
                   }
               }
           }

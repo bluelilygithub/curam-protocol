@@ -327,6 +327,7 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             navRecognition.onresult = function(event) {
+                console.log('📢 Nav onresult fired, results length:', event.results.length);
                 let finalTranscript = '';
                 let interimTranscript = '';
                 
@@ -334,6 +335,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (let i = event.resultIndex; i < event.results.length; i++) {
                     if (event.results[i] && event.results[i][0]) {
                         const transcript = event.results[i][0].transcript;
+                        console.log(`  Result ${i}: "${transcript}" (isFinal: ${event.results[i].isFinal})`);
                         if (event.results[i].isFinal) {
                             finalTranscript += transcript + ' ';
                         } else {
@@ -342,15 +344,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
+                console.log('  Final:', finalTranscript, 'Interim:', interimTranscript);
+                
+                // Get the input fresh to ensure we have the right reference
+                const input = document.querySelector('.nav-search-input');
+                if (!input) {
+                    console.error('❌ nav-search-input not found in DOM!');
+                    return;
+                }
+                
                 // Update input with final results, or show interim
-                if (finalTranscript && searchInput) {
-                    const currentValue = searchInput.value.trim();
-                    searchInput.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
-                    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-                } else if (interimTranscript && searchInput) {
-                    // Show interim results
-                    const currentValue = searchInput.value.trim();
-                    searchInput.value = currentValue || interimTranscript;
+                if (finalTranscript) {
+                    const currentValue = input.value.trim();
+                    input.value = currentValue ? currentValue + ' ' + finalTranscript.trim() : finalTranscript.trim();
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    console.log('✅ Updated nav input with final:', input.value);
+                } else if (interimTranscript) {
+                    const currentValue = input.value.trim();
+                    input.value = currentValue || interimTranscript;
+                    console.log('✅ Updated nav input with interim:', input.value);
                 }
             };
             
@@ -402,32 +414,83 @@ document.addEventListener('DOMContentLoaded', function() {
             micBtn.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                console.log('Nav mic button clicked, isRecording:', isNavRecording);
-                if (isNavRecording) {
-                    navRecognition.stop();
-                } else {
+                
+                // Check actual recognition state - use state property if available, fallback to flag
+                const actualState = navRecognition.state;
+                const isCurrentlyRunning = actualState === 'running' || actualState === 'starting' || isNavRecording;
+                
+                if (isCurrentlyRunning) {
+                    // Stop recording
                     try {
-                        console.log('Starting nav speech recognition');
-                        if (navRecognition.state === 'running') {
-                            navRecognition.stop();
-                            setTimeout(() => {
-                                navRecognition.start();
-                            }, 100);
-                        } else {
-                            navRecognition.start();
-                        }
-                    } catch (error) {
-                        console.error('Nav recognition start error:', error);
-                        // If already started, stop and restart
-                        if (error.message && error.message.includes('already started')) {
+                        navRecognition.stop();
+                    } catch (err) {
+                        // Ignore errors when stopping
+                    }
+                    isNavRecording = false;
+                    micBtn.classList.remove('recording');
+                    if (searchInput) {
+                        searchInput.placeholder = 'AI Search...';
+                    }
+                } else {
+                    // Start recording - set flag optimistically
+                    isNavRecording = true;
+                    micBtn.classList.add('recording');
+                    if (searchInput) {
+                        searchInput.placeholder = 'Listening... Speak now';
+                    }
+                    
+                    try {
+                        // Check state before starting
+                        if (actualState === 'running' || actualState === 'starting') {
+                            // Already running, stop first
                             navRecognition.stop();
                             setTimeout(() => {
                                 try {
                                     navRecognition.start();
-                                } catch (e) {
-                                    console.error('Nav retry failed:', e);
+                                } catch (err) {
+                                    console.error('Nav recognition restart error:', err);
+                                    isNavRecording = false;
+                                    micBtn.classList.remove('recording');
+                                    if (searchInput) {
+                                        searchInput.placeholder = 'AI Search...';
+                                    }
                                 }
                             }, 200);
+                        } else {
+                            // Safe to start
+                            navRecognition.start();
+                        }
+                    } catch (error) {
+                        console.error('Nav recognition start error:', error);
+                        isNavRecording = false;
+                        micBtn.classList.remove('recording');
+                        if (searchInput) {
+                            searchInput.placeholder = 'AI Search...';
+                        }
+                        
+                        // If invalid state error, wait and try again
+                        if (error.name === 'InvalidStateError' || (error.message && error.message.includes('already'))) {
+                            setTimeout(() => {
+                                try {
+                                    navRecognition.stop();
+                                    setTimeout(() => {
+                                        try {
+                                            isNavRecording = true;
+                                            micBtn.classList.add('recording');
+                                            if (searchInput) {
+                                                searchInput.placeholder = 'Listening... Speak now';
+                                            }
+                                            navRecognition.start();
+                                        } catch (retryErr) {
+                                            console.error('Nav recognition retry error:', retryErr);
+                                            isNavRecording = false;
+                                            micBtn.classList.remove('recording');
+                                        }
+                                    }, 300);
+                                } catch (stopErr) {
+                                    // Ignore stop errors
+                                }
+                            }, 100);
                         }
                     }
                 }
