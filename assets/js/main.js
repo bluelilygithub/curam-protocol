@@ -318,6 +318,7 @@ document.addEventListener('DOMContentLoaded', function() {
             navRecognition.lang = 'en-US';
             
             navRecognition.onstart = function() {
+                // Only set flag when recognition actually starts
                 isNavRecording = true;
                 micBtn.classList.add('recording');
                 micBtn.title = 'Listening... Click to stop';
@@ -367,6 +368,23 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             navRecognition.onerror = function(event) {
+                // In continuous mode, 'no-speech' is normal - just continue listening
+                if (event.error === 'no-speech') {
+                    return; // Don't stop or show error
+                }
+                
+                // 'aborted' is normal when we manually stop
+                if (event.error === 'aborted') {
+                    isNavRecording = false;
+                    micBtn.classList.remove('recording');
+                    if (searchInput) {
+                        searchInput.placeholder = 'AI Search...';
+                    }
+                    micBtn.title = 'Click to speak';
+                    return;
+                }
+                
+                // For other errors, stop and show error
                 console.error('Speech recognition error:', event.error);
                 isNavRecording = false;
                 micBtn.classList.remove('recording');
@@ -376,9 +394,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 let errorMsg = 'Voice input error. ';
                 switch(event.error) {
-                    case 'no-speech':
-                        errorMsg += 'No speech detected.';
-                        break;
                     case 'audio-capture':
                         errorMsg += 'Microphone not found.';
                         micBtn.classList.add('error');
@@ -399,6 +414,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     micBtn.classList.remove('error');
                     micBtn.title = 'Click to speak';
                 }, 3000);
+                
+                try {
+                    navRecognition.stop();
+                } catch (err) {
+                    // Ignore stop errors
+                }
             };
             
             navRecognition.onend = function() {
@@ -432,65 +453,58 @@ document.addEventListener('DOMContentLoaded', function() {
                         searchInput.placeholder = 'AI Search...';
                     }
                 } else {
-                    // Start recording - set flag optimistically
-                    isNavRecording = true;
+                    // Start recording - DON'T set flag yet, wait for onstart
+                    // Just update UI optimistically
                     micBtn.classList.add('recording');
                     if (searchInput) {
-                        searchInput.placeholder = 'Listening... Speak now';
+                        searchInput.placeholder = 'Starting...';
                     }
+                    micBtn.title = 'Starting...';
                     
                     try {
-                        // Check state before starting
-                        if (actualState === 'running' || actualState === 'starting') {
-                            // Already running, stop first
-                            navRecognition.stop();
-                            setTimeout(() => {
-                                try {
-                                    navRecognition.start();
-                                } catch (err) {
-                                    console.error('Nav recognition restart error:', err);
-                                    isNavRecording = false;
-                                    micBtn.classList.remove('recording');
-                                    if (searchInput) {
-                                        searchInput.placeholder = 'AI Search...';
-                                    }
-                                }
-                            }, 200);
-                        } else {
-                            // Safe to start
-                            navRecognition.start();
+                        // Double-check state right before starting
+                        if (navRecognition.state === 'running' || navRecognition.state === 'starting') {
+                            // Already running somehow - don't try to start
+                            micBtn.classList.remove('recording');
+                            if (searchInput) {
+                                searchInput.placeholder = 'AI Search...';
+                            }
+                            micBtn.title = 'Click to speak';
+                            return;
                         }
+                        
+                        // Safe to start - onstart handler will set the flag
+                        navRecognition.start();
                     } catch (error) {
                         console.error('Nav recognition start error:', error);
-                        isNavRecording = false;
                         micBtn.classList.remove('recording');
                         if (searchInput) {
                             searchInput.placeholder = 'AI Search...';
                         }
+                        micBtn.title = 'Click to speak';
                         
-                        // If invalid state error, wait and try again
+                        // If invalid state error, it's already running - stop first
                         if (error.name === 'InvalidStateError' || (error.message && error.message.includes('already'))) {
-                            setTimeout(() => {
-                                try {
-                                    navRecognition.stop();
-                                    setTimeout(() => {
-                                        try {
-                                            isNavRecording = true;
-                                            micBtn.classList.add('recording');
-                                            if (searchInput) {
-                                                searchInput.placeholder = 'Listening... Speak now';
-                                            }
-                                            navRecognition.start();
-                                        } catch (retryErr) {
-                                            console.error('Nav recognition retry error:', retryErr);
-                                            isNavRecording = false;
-                                            micBtn.classList.remove('recording');
+                            try {
+                                navRecognition.stop();
+                                setTimeout(() => {
+                                    try {
+                                        micBtn.classList.add('recording');
+                                        if (searchInput) {
+                                            searchInput.placeholder = 'Starting...';
                                         }
-                                    }, 300);
-                                } catch (stopErr) {
-                                    // Ignore stop errors
-                                }
-                            }, 100);
+                                        navRecognition.start();
+                                    } catch (retryErr) {
+                                        console.error('Nav recognition retry error:', retryErr);
+                                        micBtn.classList.remove('recording');
+                                        if (searchInput) {
+                                            searchInput.placeholder = 'AI Search...';
+                                        }
+                                    }
+                                }, 300);
+                            } catch (stopErr) {
+                                // Ignore stop errors
+                            }
                         }
                     }
                 }
