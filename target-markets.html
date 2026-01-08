@@ -3,13 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Who We Serve | Document Automation for Australian SMEs | Curam-Ai Protocol</title>
-    <meta name="description" content="The Curam-Ai Protocol serves document-heavy professional services, built environment, and logistics firms (10-100 staff) across Australia. See if you're a fit.">
+    <title>Who We Serve | Document Automation for Australian SMEs | Curam-Ai Protocol™</title>
+    <meta name="description" content="The Curam-Ai Protocol serves document-heavy professional services, built environment, and logistics firms (30-100 staff) across Australia. Reclaim your billable capacity.">
     <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Shared Icon Badge Style from FAQ */
+        .pain-icon-wrapper {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--color-gold-dark);
+            border: 2px solid var(--color-gold-dark);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            margin-bottom: var(--spacing-lg);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .pain-icon-wrapper svg {
+            width: 30px;
+            height: 30px;
+            stroke: #FFFFFF;
+        }
+        .industry-card .card-footer strong {
+            color: var(--color-gold);
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+    </style>
 </head>
 <body>
     <button class="scroll-down-btn" aria-label="Scroll down">
@@ -17,7 +42,7 @@
             <path d="M12 5v14M19 12l-7 7-7-7"/>
         </svg>
     </button>
-        
+            
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
@@ -25,26 +50,34 @@
         <div class="hero-background">
             <div class="hero-gradient"></div>
             <div class="hero-pattern"></div>
+            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+            </svg>
+            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+            </svg>
         </div>
         <div class="container">
-            <h1>Is Your Firm Ready for Document Automation?</h1>
-            <p class="hero-subtitle">We serve SMEs (35-100 staff) spending 50+ hours/month on manual document processing.</p>
+            <h1>Reclaim 4,000+ Annual Hours from Your <span class="text-accent">Technical Production Line.</span></h1>
+            <p class="hero-subtitle">The Protocol is built for Australian SMEs (35-100 staff) losing billable capacity to manual data bridging.</p>
             
             <div class="qualification-badges">
                 <span class="qual-badge">100+ hrs/month on docs</span>
-                <span class="qual-badge">Cloud infrastructure</span>
+                <span class="qual-badge">Azure/AWS Ready</span>
                 <span class="qual-badge">High-value technical staff</span>
-                <span class="qual-badge">Risk-averse culture</span>
+                <span class="qual-badge">Zero Vendor Lock-in</span>
             </div>
             
             <div class="hero-stats-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 900px; margin: 2rem auto;">
                 <div class="stat-card">
-                    <div class="stat-number">3,500+</div>
+                    <div class="stat-number">4,000+</div>
                     <div class="stat-label">Hours Released</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">95%+</div>
-                    <div class="stat-label">Accuracy Rate</div>
+                    <div class="stat-label">Accuracy Target</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">48hr</div>
@@ -53,113 +86,130 @@
             </div>
             
             <div class="cta-group">
-                <a href="feasibility-sprint-report.html" class="btn btn-primary btn-large">Calculate Industry Savings →</a>
-                <a href="roi.html" class="btn btn-outline">See it in action</a>
+                <a href="roi.html" class="btn btn-primary btn-large">Calculate Reclaimed Capacity →</a>
+                <a href="contact.html" class="btn btn-outline">Talk to an Engineer</a>
             </div>
         </div>
     </section>
 
     <section class="section-alt sector-selection">
         <div class="container">
-            <h2 class="section-headline">Choose Your Industry</h2>
-            <p class="section-subhead">We specialize in three document-intensive sectors across Australia:</p>
+            <h2 class="section-headline">Targeted SME Solutions</h2>
+            <p class="section-subhead">We specialize in three document-intensive sectors where technical professionals are bogged down by administrative bridging:</p>
             
             <div class="card-grid-3">
                 <a href="phase-2-roadmap.html?sector=engineering" class="industry-card">
                     <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Built Environment</h3>
                     <ul class="industry-list">
-                        <li>Engineering Consultancies</li>
-                        <li>Architecture Firms</li>
-                        <li>Construction Companies</li>
-                        <li>Mining Services</li>
+                        <li>Structural & Civil Engineers</li>
+                        <li>BIM-Heavy Architecture Firms</li>
+                        <li>Tier 2 & 3 Construction</li>
                     </ul>
                     <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <span style="font-weight: 700; color: var(--color-gold); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--spacing-xs);">Documents:</span>
-                        <span style="color: var(--text-secondary); font-size: 0.9375rem;">Transmittals, specifications, drawing registers, site diaries</span>
+                        <strong>The Prize:</strong>
+                        <p style="color: var(--text-secondary); font-size: 0.9375rem;">Automating drawing registers, concrete test reports, and transmittals to keep senior engineers on billable work.</p>
                     </div>
-                    <span class="card-link" style="display: inline-block; margin-top: var(--spacing-lg); padding: var(--spacing-sm) var(--spacing-md); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: var(--border-radius); color: var(--color-gold); font-weight: 600; text-align: center; width: 100%;">See Validated Results →</span>
+                    <span class="card-link" style="display: inline-block; margin-top: var(--spacing-lg); padding: var(--spacing-sm) var(--spacing-md); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: var(--border-radius); color: var(--color-gold); font-weight: 600; text-align: center; width: 100%;">Release Billable Capacity →</span>
                 </a>
 
                 <a href="phase-2-roadmap.html?sector=accounting" class="industry-card">
                     <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Professional Services</h3>
                     <ul class="industry-list">
-                        <li>Accounting & Advisory</li>
-                        <li>Legal Practices</li>
-                        <li>Wealth Management</li>
-                        <li>Insurance Underwriting</li>
+                        <li>Multi-Partner Accounting Firms</li>
+                        <li>Legal Practices (Matter-Heavy)</li>
+                        <li>Wealth Management Groups</li>
                     </ul>
                     <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <span style="font-weight: 700; color: var(--color-gold); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--spacing-xs);">Documents:</span>
-                        <span style="color: var(--text-secondary); font-size: 0.9375rem;">Invoices, contracts, statements, trust reconciliations</span>
+                        <strong>The Prize:</strong>
+                        <p style="color: var(--text-secondary); font-size: 0.9375rem;">Removing the manual 'Human Bridge' in trust account reconciliations and ASIC compliance statement processing.</p>
                     </div>
-                    <span class="card-link" style="display: inline-block; margin-top: var(--spacing-lg); padding: var(--spacing-sm) var(--spacing-md); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: var(--border-radius); color: var(--color-gold); font-weight: 600; text-align: center; width: 100%;">See Validated Results →</span>
+                    <span class="card-link" style="display: inline-block; margin-top: var(--spacing-lg); padding: var(--spacing-sm) var(--spacing-md); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: var(--border-radius); color: var(--color-gold); font-weight: 600; text-align: center; width: 100%;">Scale Without New Hires →</span>
                 </a>
 
                 <a href="phase-2-roadmap.html?sector=logistics" class="industry-card">
                     <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Logistics & Compliance</h3>
                     <ul class="industry-list">
-                        <li>Logistics & Freight</li>
+                        <li>Freight Forwarders & Hubs</li>
                         <li>Healthcare Administration</li>
-                        <li>Government Contractors</li>
+                        <li>Government Grant Recipients</li>
                     </ul>
                     <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <span style="font-weight: 700; color: var(--color-gold); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: var(--spacing-xs);">Documents:</span>
-                        <span style="color: var(--text-secondary); font-size: 0.9375rem;">Bills of lading, PODs, customs docs, grant reports</span>
+                        <strong>The Prize:</strong>
+                        <p style="color: var(--text-secondary); font-size: 0.9375rem;">Handling 1,000+ manifests/BOMs per month with zero manual entry and guaranteed customs tariff compliance.</p>
                     </div>
-                    <span class="card-link" style="display: inline-block; margin-top: var(--spacing-lg); padding: var(--spacing-sm) var(--spacing-md); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: var(--border-radius); color: var(--color-gold); font-weight: 600; text-align: center; width: 100%;">See Validated Results →</span>
+                    <span class="card-link" style="display: inline-block; margin-top: var(--spacing-lg); padding: var(--spacing-sm) var(--spacing-md); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: var(--border-radius); color: var(--color-gold); font-weight: 600; text-align: center; width: 100%;">Eliminate Data Entry →</span>
                 </a>
             </div>
-            <p class="note-text">Don't see your industry? <a href="contact.html">Book a call</a> - we work with any document-heavy business.</p>
+            <p class="note-text">Don't see your specific documents? <a href="contact.html">Book a diagnostic call</a> - we work with any document-heavy SME stack.</p>
         </div>
     </section>
 
-    <section class="section pain-points-section" style="padding: 9.375rem 0;">
+    <section class="section pain-points-section">
         <div class="container">
             <h2 class="section-headline">Do These Problems Sound Familiar?</h2>
-            <p class="section-subhead">The daily frustrations that bring firms to The Protocol:</p>
+            <p class="section-subhead">The daily frictions that signal a "Technical Capacity Leak":</p>
             
             <div class="card-grid-2" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-2xl);">
                 <div class="pain-card">
-                    <div class="pain-icon" style="font-size: 4rem; margin-bottom: var(--spacing-lg); filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));">⏰</div>
+                    <div class="pain-icon-wrapper">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                    </div>
                     <h3>Wasted Billable Hours</h3>
-                    <p>Your $150-$300/hour staff spend 5-15 hours per week on data entry instead of billable client work.</p>
+                    <p>Your $150–$300/hour technical staff are spending 15% of their week on junior-level documentation instead of client work.</p>
                 </div>
+
                 <div class="pain-card">
-                    <div class="pain-icon" style="font-size: 4rem; margin-bottom: var(--spacing-lg); filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));">📄</div>
-                    <h3>Repetitive Processing</h3>
-                    <p>Every invoice or report requires manual extraction. Same task, different document, over and over.</p>
+                    <div class="pain-icon-wrapper">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                            <path d="M12 11h4"></path>
+                            <path d="M12 16h4"></path>
+                            <path d="M8 11h.01"></path>
+                            <path d="M8 16h.01"></path>
+                        </svg>
+                    </div>
+                    <h3>Repetitive Data Bridging</h3>
+                    <p>Every report or invoice requires manual extraction. Same task, different document, acting as a human bridge between systems.</p>
                 </div>
+
                 <div class="pain-card">
-                    <div class="pain-icon" style="font-size: 4rem; margin-bottom: var(--spacing-lg); filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));">⚠️</div>
-                    <h3>Human Error Risk</h3>
-                    <p>Manual transcription mistakes lead to wrong numbers in contracts or incorrect billing.</p>
+                    <div class="pain-icon-wrapper">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </div>
+                    <h3>Manual Transcription Risk</h3>
+                    <p>Transcription errors in schedules or contracts lead to incorrect billing, project delays, or insurance exposure.</p>
                 </div>
+
                 <div class="pain-card">
-                    <div class="pain-icon" style="font-size: 4rem; margin-bottom: var(--spacing-lg); filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.5));">🔒</div>
+                    <div class="pain-icon-wrapper">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                    </div>
                     <h3>Failed AI Attempts</h3>
-                    <p>You've been burned by vendors who couldn't handle messy real-world documents. You are rightfully skeptical.</p>
+                    <p>You've been burned by generic "AI" tools or portals that couldn't handle messy, real-world industry documents.</p>
                 </div>
             </div>
-            
+
             <div style="text-align: center; margin-top: var(--spacing-3xl);">
-                <a href="feasibility-sprint-report.html" class="btn btn-primary btn-large">See How We Solve These →</a>
+                <a href="phase-1-feasibility.html" class="btn btn-primary btn-large">Prove Technical Feasibility in 48hrs →</a>
             </div>
-            
-            <style>
-                @media (max-width: 768px) {
-                    .pain-points-section .card-grid-2 {
-                        grid-template-columns: 1fr !important;
-                    }
-                }
-            </style>
         </div>
     </section>
 
     <section class="section-alt firm-profile-section">
         <div class="container">
             <h2 class="section-headline">Who We're Built For</h2>
-            <p class="section-subhead">The Protocol works best for firms with these characteristics:</p>
-            <p class="section-subhead" style="font-size: 1rem; margin-top: var(--spacing-sm);">Established Australian SMEs that need validation before committing to large-scale automation projects.</p>
+            <p class="section-subhead">The Protocol is tuned for established firms needing validation before committing to production.</p>
             
             <div class="profile-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px; margin-bottom: 60px;">
                 <div class="profile-column">
@@ -168,17 +218,17 @@
                         <li style="margin-bottom: var(--spacing-md); padding-left: var(--spacing-lg); position: relative;">
                             <span style="position: absolute; left: 0; color: var(--color-gold); font-weight: 700;">•</span>
                             <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">30-100 employees</strong>
-                            <span style="color: var(--text-secondary);">Established mid-market</span>
+                            <span style="color: var(--text-secondary);">Mid-market engineering and technical hubs.</span>
                         </li>
                         <li style="margin-bottom: var(--spacing-md); padding-left: var(--spacing-lg); position: relative;">
                             <span style="position: absolute; left: 0; color: var(--color-gold); font-weight: 700;">•</span>
                             <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">Technical staff</strong>
-                            <span style="color: var(--text-secondary);">With high hourly rates</span>
+                            <span style="color: var(--text-secondary);">With hourly rates that make documentation a liability.</span>
                         </li>
                         <li style="margin-bottom: var(--spacing-md); padding-left: var(--spacing-lg); position: relative;">
                             <span style="position: absolute; left: 0; color: var(--color-gold); font-weight: 700;">•</span>
-                            <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">Partners/principals</strong>
-                            <span style="color: var(--text-secondary);">Focused on client work</span>
+                            <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">Cloud Native</strong>
+                            <span style="color: var(--text-secondary);">Already operating within Azure, AWS, or GCP tenants.</span>
                         </li>
                     </ul>
                 </div>
@@ -187,37 +237,37 @@
                     <ul style="list-style: none; padding: 0;">
                         <li style="margin-bottom: var(--spacing-md); padding-left: var(--spacing-lg); position: relative;">
                             <span style="position: absolute; left: 0; color: var(--color-gold); font-weight: 700;">•</span>
-                            <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">Skeptical but open:</strong>
-                            <span style="color: var(--text-secondary);">"Show me proof first"</span>
+                            <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">Evidence-Driven:</strong>
+                            <span style="color: var(--text-secondary);">"Show me accuracy on MY documents first."</span>
                         </li>
                         <li style="margin-bottom: var(--spacing-md); padding-left: var(--spacing-lg); position: relative;">
                             <span style="position: absolute; left: 0; color: var(--color-gold); font-weight: 700;">•</span>
-                            <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">Budget-conscious:</strong>
-                            <span style="color: var(--text-secondary);">Need board-ready ROI</span>
+                            <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">IP Focused:</strong>
+                            <span style="color: var(--text-secondary);">Refuse to pay per-document or per-user fees forever.</span>
                         </li>
                         <li style="margin-bottom: var(--spacing-md); padding-left: var(--spacing-lg); position: relative;">
                             <span style="position: absolute; left: 0; color: var(--color-gold); font-weight: 700;">•</span>
-                            <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">Prefer validation:</strong>
-                            <span style="color: var(--text-secondary);">Want a phased approach</span>
+                            <strong style="color: var(--text-primary); font-size: 1.125rem; display: block; margin-bottom: var(--spacing-xs);">Compliance Heavy:</strong>
+                            <span style="color: var(--text-secondary);">Blocked by security or PI insurance hurdles.</span>
                         </li>
                     </ul>
                 </div>
             </div>
-
+            
             <div class="highlight-box sweet-spot">
-                <h3>The Sweet Spot</h3>
+                <h3>The Capacity Sweet Spot</h3>
                 <div class="sweet-spot-stats">
                     <div class="stat">
                         <span class="stat-value" style="font-size: 2rem; font-weight: 800; color: var(--color-gold); display: block; margin-bottom: var(--spacing-sm);">100+ hrs/month</span>
-                        <span class="stat-label" style="font-size: 1rem; color: var(--text-primary); font-weight: 500;">manual processing</span>
+                        <span class="stat-label" style="font-size: 1rem; color: var(--text-primary); font-weight: 500;">manual data entry</span>
                     </div>
                     <div class="stat">
                         <span class="stat-value" style="font-size: 2rem; font-weight: 800; color: var(--color-gold); display: block; margin-bottom: var(--spacing-sm);">$150k+/year</span>
-                        <span class="stat-label" style="font-size: 1rem; color: var(--text-primary); font-weight: 500;">wasted on documentation capacity</span>
+                        <span class="stat-label" style="font-size: 1rem; color: var(--text-primary); font-weight: 500;">lost billable potential</span>
                     </div>
                     <div class="stat">
-                        <span class="stat-value" style="font-size: 2rem; font-weight: 800; color: var(--color-gold); display: block; margin-bottom: var(--spacing-sm);">Cloud-ready</span>
-                        <span class="stat-label" style="font-size: 1rem; color: var(--text-primary); font-weight: 500;">but manually bridging gaps</span>
+                        <span class="stat-value" style="font-size: 2rem; font-weight: 800; color: var(--color-gold); display: block; margin-bottom: var(--spacing-sm);">No Vendor Lock-in</span>
+                        <span class="stat-label" style="font-size: 1rem; color: var(--text-primary); font-weight: 500;">100% IP Ownership</span>
                     </div>
                 </div>
             </div>
@@ -226,24 +276,21 @@
 
     <section class="section final-cta-section">
         <div class="container">
-            <h2 class="section-headline">Ready to See If You're a Fit?</h2>
-            
+            <h2 class="section-headline">Ready to Reclaim Your Firm's Capacity?</h2>
             <div class="card-grid-3">
                 <div class="cta-card cta-card-primary">
-                    <h3>See Sample Reports</h3>
-                    <p>View the actual <strong>$1,500 Feasibility Sprint</strong> deliverables and the Strategic Roadmaps we've delivered to firms like yours.</p>
-                    <a href="feasibility-sprint-report.html" class="btn btn-primary btn-block">Preview the Report →</a>
+                    <h3>See The Results</h3>
+                    <p>Preview the actual <strong>Auditor Evidence Packages</strong> and ROI models we deliver to firms like yours.</p>
+                    <a href="phase-3-compliance.html" class="btn btn-primary btn-block">The Compliance Shield →</a>
                 </div>
-
                 <div class="cta-card">
                     <h3>Calculate Your ROI</h3>
-                    <p>See what automation could save your firm. Based on your industry, staff count, and document volume.</p>
-                    <a href="roi.html" class="btn btn-outline btn-block">Try ROI Calculator →</a>
+                    <p>See what 4,000 reclaimed technical hours could mean for your bottom line.</p>
+                    <a href="/roi.html" class="btn btn-outline btn-block">Try ROI Calculator →</a>
                 </div>
-
                 <div class="cta-card">
                     <h3>Book a Diagnostic</h3>
-                    <p>Ready to talk? We'll assess your workflows and give you a realistic "go/no-go" for Phase 1.</p>
+                    <p>Ready to talk? We'll assess your environment and workflows for a Phase 1 Sprint.</p>
                     <a href="contact.html" class="btn btn-outline btn-block">Talk to an Engineer →</a>
                 </div>
             </div>
