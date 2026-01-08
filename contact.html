@@ -536,7 +536,7 @@
 
       // ========== CONTACT FORM TEXTAREA MICROPHONE ==========
       // Note: messageTextarea is already declared above
-      const messageMicBtn = document.getElementById('messageMicBtn');
+      let messageMicBtn = document.getElementById('messageMicBtn');
       let messageRecognition = null;
       let isRecordingMessage = false;
 
@@ -552,12 +552,19 @@
           try {
               const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
               messageRecognition = new SpeechRecognition();
-              messageRecognition.continuous = false;
-              messageRecognition.interimResults = false;
+              messageRecognition.continuous = true; // Allow continuous recognition
+              messageRecognition.interimResults = true; // Show interim results for better UX
               messageRecognition.lang = 'en-US';
 
               if (messageMicBtn) {
-                  messageMicBtn.addEventListener('click', toggleMessageSpeechRecognition);
+                  // Remove existing listeners by cloning
+                  messageMicBtn.replaceWith(messageMicBtn.cloneNode(true));
+                  messageMicBtn = document.getElementById('messageMicBtn');
+                  messageMicBtn.addEventListener('click', function(e) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleMessageSpeechRecognition();
+                  });
               }
 
               messageRecognition.onstart = function() {
@@ -572,11 +579,26 @@
               };
 
               messageRecognition.onresult = function(event) {
-                  const transcript = event.results[0][0].transcript;
-                  if (messageTextarea) {
-                      const currentValue = messageTextarea.value.trim();
-                      messageTextarea.value = currentValue ? currentValue + ' ' + transcript : transcript;
-                      messageTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                  console.log('Speech recognition event:', event);
+                  if (event.results && event.results.length > 0) {
+                      let fullTranscript = '';
+                      // Combine all results (in case continuous is true or multiple words)
+                      for (let i = event.results.length - 1; i >= 0; i--) {
+                          if (event.results[i] && event.results[i].isFinal && event.results[i][0]) {
+                              fullTranscript = event.results[i][0].transcript + ' ' + fullTranscript;
+                          }
+                      }
+                      // If no final results, use the last one
+                      if (!fullTranscript && event.results[event.results.length - 1][0]) {
+                          fullTranscript = event.results[event.results.length - 1][0].transcript;
+                      }
+                      const transcript = fullTranscript.trim();
+                      console.log('Speech recognition transcript:', transcript);
+                      if (transcript && messageTextarea) {
+                          const currentValue = messageTextarea.value.trim();
+                          messageTextarea.value = currentValue ? currentValue + ' ' + transcript : transcript;
+                          messageTextarea.dispatchEvent(new Event('input', { bubbles: true }));
+                      }
                   }
               };
 

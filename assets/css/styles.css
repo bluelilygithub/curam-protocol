@@ -8748,7 +8748,16 @@ p.hero-description {
 }
 
 .contact-form-field input,
-.contact-form-field select,
+.contact-form-field select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 2px solid #E5E7EB;
+    border-radius: var(--border-radius);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    transition: var(--transition);
+}
+
 .contact-form-field textarea {
     width: 100%;
     padding: 0.75rem;

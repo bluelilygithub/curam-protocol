@@ -65,19 +65,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Navbar scroll effect
     let lastScroll = 0;
-    const navbar = document.querySelector('.navbar');
+    function initializeNavbarScroll() {
+        const navbar = document.querySelector('.navbar');
+        if (!navbar) return;
+        
+        window.addEventListener('scroll', function() {
+            const currentScroll = window.pageYOffset;
+            
+            if (currentScroll > 100) {
+                navbar.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.1)';
+            } else {
+                navbar.style.boxShadow = 'none';
+            }
+            
+            lastScroll = currentScroll;
+        });
+    }
     
-    window.addEventListener('scroll', function() {
-        const currentScroll = window.pageYOffset;
-        
-        if (currentScroll > 100) {
-            navbar.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.1)';
-        } else {
-            navbar.style.boxShadow = 'none';
-        }
-        
-        lastScroll = currentScroll;
-    });
+    // Initialize immediately if navbar exists, or wait for it
+    initializeNavbarScroll();
+    document.addEventListener('navbarLoaded', initializeNavbarScroll);
 
     // Protocol phase hover animations
     const protocolPhases = document.querySelectorAll('.protocol-phase');
@@ -605,69 +612,83 @@ style.textContent = `
 document.head.appendChild(style);
 
 // Scroll Down Button functionality
-document.addEventListener('DOMContentLoaded', function() {
+function initializeScrollDownButton() {
     const scrollDownBtn = document.querySelector('.scroll-down-btn');
     
-    if (scrollDownBtn) {
-        // Click handler - scroll to protocol section if it exists, otherwise scroll down one viewport
-        scrollDownBtn.addEventListener('click', function() {
-            const protocolSection = document.getElementById('protocol');
-            if (protocolSection) {
-                const offsetTop = protocolSection.offsetTop - 80; // Account for sticky nav
-                window.scrollTo({
-                    top: offsetTop,
-                    behavior: 'smooth'
-                });
-            } else {
-                // If no protocol section, scroll down one viewport height
-                const viewportHeight = window.innerHeight;
-                const currentScroll = window.scrollY || window.pageYOffset;
-                window.scrollTo({
-                    top: currentScroll + viewportHeight,
-                    behavior: 'smooth'
-                });
-            }
-        });
-        
-        // Auto-hide button after user scrolls down (improved behavior)
-        function handleScroll() {
-            const windowHeight = window.innerHeight;
-            const documentHeight = document.documentElement.scrollHeight;
-            const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
-            
-            // Show button until end of page (hide only when at bottom)
-            const scrollPercent = (scrollTop + windowHeight) / documentHeight;
-            const isAtBottom = scrollPercent >= 0.95 || (scrollTop + windowHeight) >= documentHeight - 10;
-            
-            if (isAtBottom) {
-                // Hide when at bottom of page
-                if (!scrollDownBtn.classList.contains('hidden')) {
-                    scrollDownBtn.classList.add('hidden');
-                }
-            } else {
-                // Show button until end of page
-                scrollDownBtn.classList.remove('hidden');
-            }
+    if (!scrollDownBtn) return;
+    
+    // Store the click handler function
+    function handleClick(e) {
+        e.preventDefault();
+        const protocolSection = document.getElementById('protocol');
+        if (protocolSection) {
+            const offsetTop = protocolSection.offsetTop - 80; // Account for sticky nav
+            window.scrollTo({
+                top: offsetTop,
+                behavior: 'smooth'
+            });
+        } else {
+            // If no protocol section, scroll down one viewport height
+            const viewportHeight = window.innerHeight;
+            const currentScroll = window.scrollY || window.pageYOffset;
+            window.scrollTo({
+                top: currentScroll + viewportHeight,
+                behavior: 'smooth'
+            });
         }
-        
-        // Throttle scroll events for better performance
-        let ticking = false;
-        window.addEventListener('scroll', function() {
-            if (!ticking) {
-                window.requestAnimationFrame(function() {
-                    handleScroll();
-                    ticking = false;
-                });
-                ticking = true;
-            }
-        });
-        
-        // Check on resize (in case content height changes)
-        window.addEventListener('resize', handleScroll);
-        
-        // Initial check on load
-        handleScroll();
     }
+    
+    // Remove existing listeners and add new one
+    scrollDownBtn.replaceWith(scrollDownBtn.cloneNode(true));
+    const newBtn = document.querySelector('.scroll-down-btn');
+    newBtn.addEventListener('click', handleClick);
+    
+    // Auto-hide button after user scrolls down (improved behavior)
+    function handleScroll() {
+        const windowHeight = window.innerHeight;
+        const documentHeight = document.documentElement.scrollHeight;
+        const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+        
+        // Show button until end of page (hide only when at bottom)
+        const scrollPercent = (scrollTop + windowHeight) / documentHeight;
+        const isAtBottom = scrollPercent >= 0.95 || (scrollTop + windowHeight) >= documentHeight - 10;
+        
+        if (isAtBottom) {
+            // Hide when at bottom of page
+            if (!newBtn.classList.contains('hidden')) {
+                newBtn.classList.add('hidden');
+            }
+        } else {
+            // Show button until end of page
+            newBtn.classList.remove('hidden');
+        }
+    }
+    
+    // Throttle scroll events for better performance
+    let ticking = false;
+    function throttledScroll() {
+        if (!ticking) {
+            window.requestAnimationFrame(function() {
+                handleScroll();
+                ticking = false;
+            });
+            ticking = true;
+        }
+    }
+    
+    window.addEventListener('scroll', throttledScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
+    
+    // Initial check on load
+    handleScroll();
+}
+
+// Initialize on DOM ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeScrollDownButton);
+} else {
+    initializeScrollDownButton();
+}
     
     // Lazy load hero video with intersection observer
     const heroVideo = document.getElementById('hero-video');
