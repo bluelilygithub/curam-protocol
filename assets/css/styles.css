@@ -588,9 +588,9 @@ h1, h2, h3, h4 {
 .scroll-down-btn {
   position: fixed;
   bottom: 2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  right: auto;
+  right: 2rem;
+  left: auto;
+  transform: none;
   width: 48px;
   height: 48px;
   background: rgba(0, 212, 255, 0.1);
@@ -613,15 +613,15 @@ h1, h2, h3, h4 {
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  transform: translateX(-50%) translateY(10px);
+  transform: translateY(10px);
 }
 
 /* ========== FLOATING CHAT BUTTON ========== */
 .floating-chat-btn {
   position: fixed;
-  bottom: 2rem;
+  top: 50%;
   right: 2rem;
-  left: auto;
+  transform: translateY(-50%);
   width: 56px;
   height: 56px;
   background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
@@ -641,11 +641,11 @@ h1, h2, h3, h4 {
 .floating-chat-btn:hover {
   background: linear-gradient(135deg, var(--color-gold-dark), var(--color-gold));
   box-shadow: 0 6px 24px rgba(212, 175, 55, 0.5);
-  transform: translateY(-3px) scale(1.05);
+  transform: translateY(-50%) translateX(-3px) scale(1.05);
 }
 
 .floating-chat-btn:active {
-  transform: translateY(-1px) scale(0.98);
+  transform: translateY(-50%) translateX(-1px) scale(0.98);
 }
 
 /* ========== CHAT PANEL SLIDE-IN MODAL ========== */
@@ -8757,7 +8757,8 @@ p.hero-description {
     font-family: var(--font-sans);
     font-size: 1rem;
     transition: var(--transition);
-    margin: 0;
+    min-height: 120px;
+    resize: vertical;
 }
 
 .contact-form-field input:focus,
@@ -8767,9 +8768,60 @@ p.hero-description {
     border-color: var(--color-gold);
 }
 
-.contact-form-field textarea {
-    min-height: 120px;
-    resize: vertical;
+.contact-form-textarea-wrapper {
+    position: relative;
+    display: block;
+}
+
+.contact-form-textarea-wrapper textarea {
+    padding-right: 3.5rem; /* Make room for mic button */
+}
+
+.contact-form-mic-btn {
+    position: absolute;
+    bottom: 0.75rem;
+    right: 0.75rem;
+    background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+    border: 2px solid var(--color-gold);
+    color: var(--color-navy);
+    padding: 8px 10px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    width: 36px;
+    height: 36px;
+    box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3);
+}
+
+.contact-form-mic-btn:hover {
+    background: linear-gradient(135deg, var(--color-gold-dark), var(--color-gold));
+    box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
+    transform: scale(1.05);
+}
+
+.contact-form-mic-btn.recording {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: white;
+    animation: pulse-recording 1.5s ease-in-out infinite;
+}
+
+.contact-form-mic-btn.recording svg {
+    animation: pulse-icon 0.8s ease-in-out infinite;
+}
+
+.contact-form-mic-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.contact-form-mic-btn.error {
+    background: #f59e0b;
+    border-color: #f59e0b;
+    color: white;
 }
 
 .contact-form-submit {

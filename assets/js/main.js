@@ -635,17 +635,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const documentHeight = document.documentElement.scrollHeight;
             const scrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
             
-            // Hide if scrolled more than 200px OR at bottom of page (95% scrolled)
+            // Show button until end of page (hide only when at bottom)
             const scrollPercent = (scrollTop + windowHeight) / documentHeight;
-            const isScrolledDown = scrollTop > 200;
-            const isNearBottom = scrollPercent >= 0.95;
+            const isAtBottom = scrollPercent >= 0.95 || (scrollTop + windowHeight) >= documentHeight - 10;
             
-            if (isScrolledDown || isNearBottom) {
+            if (isAtBottom) {
+                // Hide when at bottom of page
                 if (!scrollDownBtn.classList.contains('hidden')) {
                     scrollDownBtn.classList.add('hidden');
                 }
             } else {
-                // Show button when near top of page
+                // Show button until end of page
                 scrollDownBtn.classList.remove('hidden');
             }
         }
