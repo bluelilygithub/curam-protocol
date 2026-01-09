@@ -296,7 +296,7 @@ def calculate_conservative_roi(total_staff, industry_config):
         "industry_variance_multiplier": industry_variance_multiplier,
         "adjusted_tier_1_savings": adjusted_tier_1_savings,
         "tier_2_potential": tier_2_potential,
-        "tier_2_savings": tier_2_savings,
+        "tier_2_savings": adjusted_tier_2_savings,  # Return adjusted value for backward compatibility
         "adjusted_tier_2_savings": adjusted_tier_2_savings,
         "capacity_hours": total_recoverable_hours * 48,
         "potential_revenue": adjusted_tier_1_savings,
@@ -379,11 +379,11 @@ def calculate_metrics_v3(staff_count, avg_rate, industry_config):
         "task_analysis": task_analysis,
         "total_recoverable_hours_per_week": total_recoverable_hours,
         "weighted_automation_potential": weighted_automation_potential,
-        "tier_1_savings": tier_1_savings,
+        "tier_1_savings": adjusted_tier_1_savings,  # Return adjusted value for backward compatibility
         "industry_variance_multiplier": industry_variance_multiplier,
         "adjusted_tier_1_savings": adjusted_tier_1_savings,
         "tier_2_potential": tier_2_potential,
-        "tier_2_savings": tier_2_savings,
+        "tier_2_savings": adjusted_tier_2_savings,  # Return adjusted value for backward compatibility
         "adjusted_tier_2_savings": adjusted_tier_2_savings,
         "tier_2_cost": annual_burn - adjusted_tier_2_savings,
         "capacity_hours": total_recoverable_hours * 48,
@@ -455,7 +455,7 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
         "adjusted_tier_1_savings": adjusted_tier_1_savings,
         "tier_1_savings": adjusted_tier_1_savings,
         "tier_2_potential": tier_2_potential,
-        "tier_2_savings": tier_2_savings,
+        "tier_2_savings": adjusted_tier_2_savings,  # Return adjusted value for backward compatibility
         "adjusted_tier_2_savings": adjusted_tier_2_savings,
         "capacity_hours": total_recoverable_hours * 48,
         "potential_revenue": adjusted_tier_1_savings

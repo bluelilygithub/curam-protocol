@@ -1129,11 +1129,15 @@ def generate_pdf_report(industry, staff_count, avg_rate, platform, calculations)
     story.append(Paragraph("Financial Analysis", heading_style))
     automation_potential_pct = int(calculations.get('automation_potential', 0.40) * 100)
     tier_2_potential_pct = int(calculations.get('tier_2_potential', 0.70) * 100)
+    # Use adjusted savings values (with Industry Variance Multiplier applied)
+    tier1_savings = calculations.get('adjusted_tier_1_savings', calculations.get('tier_1_savings', 0))
+    tier2_savings = calculations.get('adjusted_tier_2_savings', calculations.get('tier_2_savings', 0))
+    
     calc_data = [
         ["Metric", "Value"],
         ["Annual Revenue Leakage", format_currency(calculations['annual_burn'])],
-        [f"Tier 1 Opportunity (Immediate Opportunity - {automation_potential_pct}% Reduction)", format_currency(calculations['tier_1_savings'])],
-        [f"Tier 2 Opportunity (Expanded Automation - {tier_2_potential_pct}% Reduction)", format_currency(calculations['tier_2_savings'])],
+        [f"Tier 1 Opportunity (Immediate Opportunity - {automation_potential_pct}% Reduction)", format_currency(tier1_savings)],
+        [f"Tier 2 Opportunity (Expanded Automation - {tier_2_potential_pct}% Reduction)", format_currency(tier2_savings)],
         ["Capacity Hours Unlocked", f"{calculations['capacity_hours']:,.0f} hours"],
         ["Potential Revenue Opportunity", format_currency(calculations['potential_revenue'])]
     ]
@@ -1155,8 +1159,11 @@ def generate_pdf_report(industry, staff_count, avg_rate, platform, calculations)
     story.append(Paragraph("Recommended Next Steps", heading_style))
     automation_potential_pct = int(calculations.get('automation_potential', 0.40) * 100)
     tier_2_potential_pct = int(calculations.get('tier_2_potential', 0.70) * 100)
+    # Use adjusted savings values for recommendations
+    tier1_savings_rec = calculations.get('adjusted_tier_1_savings', calculations.get('tier_1_savings', 0))
+    
     recommendations = [
-        f"<b>Tier 1 Implementation ({automation_potential_pct}% Reduction):</b> Focus on automated data extraction to achieve immediate savings of {format_currency(calculations['tier_1_savings'])} annually.",
+        f"<b>Tier 1 Implementation ({automation_potential_pct}% Reduction):</b> Focus on automated data extraction to achieve immediate savings of {format_currency(tier1_savings_rec)} annually.",
         f"<b>Tier 2 Implementation ({tier_2_potential_pct}% Reduction):</b> Expand automation to unlock {calculations['capacity_hours']:,.0f} billable hours, representing {format_currency(calculations['potential_revenue'])} in revenue capacity.",
         "<b>Next Action:</b> Book a Discovery Call to validate these numbers and discuss implementation roadmap."
     ]
@@ -2604,7 +2611,7 @@ HTML_TEMPLATE = """
             </div>
             
             <div class="roi-result-card roi-result-card-primary">
-                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0))) }}</div>
+                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.get('adjusted_tier_1_savings', calculations.get('tier_1_savings', 0))) }}</div>
                 <div class="roi-result-label">Proven Low-Hanging Fruit ({{ (calculations.weighted_potential * 100)|round(0)|int }}%)</div>
                 <p class="roi-result-description"><strong>Conservative estimate</strong> on tasks we KNOW we can automate</p>
             </div>
@@ -2623,7 +2630,7 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="tier-2-note">
-            <h4>📈 Tier 2 Opportunity: ${{ "{:,.0f}".format(calculations.get('tier_2_savings', 0)) }}</h4>
+            <h4>📈 Tier 2 Opportunity: ${{ "{:,.0f}".format(calculations.get('adjusted_tier_2_savings', calculations.get('tier_2_savings', 0))) }}</h4>
             <p>With expanded automation and workflow optimization (typically 12-18 months), firms achieve {{ (calculations.get('tier_2_potential', 0.70) * 100)|round(0)|int }}% efficiency gains. <strong>But let's prove Phase 1 first.</strong></p>
         </div>
         
@@ -3477,19 +3484,24 @@ def roi_calculator():
             
             # Create chart data with proper formatting
             tier2_percentage = int(calculations.get('tier_2_potential', 0.70) * 100)
+            # Get adjusted savings values (with Industry Variance Multiplier applied)
+            tier1_savings_display = calculations.get('adjusted_tier_1_savings', calculations.get('tier_1_savings', 0))
+            tier2_savings_display = calculations.get('adjusted_tier_2_savings', calculations.get('tier_2_savings', 0))
+            annual_cost_display = calculations.get('annual_cost', calculations.get('annual_burn', 0))
+            
             chart_data = {
                 "data": [{
-                    "x": ["Today's<br>Cost", f"After Phase 1<br>(Save {format_currency(calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0)))})", f"After Phase 2<br>(Save {format_currency(calculations.get('tier_2_savings', 0))})"],
+                    "x": ["Today's<br>Cost", f"After Phase 1<br>(Save {format_currency(tier1_savings_display)})", f"After Phase 2<br>(Save {format_currency(tier2_savings_display)})"],
                     "y": [
-                        calculations.get('annual_cost', calculations.get('annual_burn', 0)),
-                        calculations.get('annual_cost', calculations.get('annual_burn', 0)) - calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0)),
-                        calculations.get('annual_cost', calculations.get('annual_burn', 0)) - calculations.get('tier_2_savings', 0)
+                        annual_cost_display,
+                        annual_cost_display - tier1_savings_display,
+                        annual_cost_display - tier2_savings_display
                     ],
                     "type": "bar",
                     "marker": {"color": ["#0B1221", "#D4AF37", "#B8941F"]},
-                    "text": [format_currency(calculations.get('annual_cost', calculations.get('annual_burn', 0))), 
-                            format_currency(calculations.get('annual_cost', calculations.get('annual_burn', 0)) - calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0))),
-                            format_currency(calculations.get('annual_cost', calculations.get('annual_burn', 0)) - calculations.get('tier_2_savings', 0))],
+                    "text": [format_currency(annual_cost_display), 
+                            format_currency(annual_cost_display - tier1_savings_display),
+                            format_currency(annual_cost_display - tier2_savings_display)],
                     "textposition": "outside",
                     "hovertemplate": "%{y:$,.0f}<extra></extra>",
                     "textfont": {"size": 12}
@@ -3549,7 +3561,8 @@ def roi_calculator():
             # Calculate additional metrics for universal template
             total_weekly_hours = calculations.get('total_weekly_hours', 0)
             total_annual_hours = total_weekly_hours * 48
-            tier1_savings = calculations.get('proven_tier_1_savings', calculations.get('tier_1_savings', 0))
+            # Use adjusted savings value (with Industry Variance Multiplier applied)
+            tier1_savings = calculations.get('adjusted_tier_1_savings', calculations.get('tier_1_savings', 0))
             
             # Industry slug for URL
             industry_slug = industry.lower().replace(' & ', '-').replace(' ', '-')
