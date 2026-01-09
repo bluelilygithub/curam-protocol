@@ -148,11 +148,34 @@ h1, h2, h3, h4 {
 }
 
 .section-headline {
-  font-size: clamp(2rem, 4vw, 2.75rem); /* Increased by ~12% */
+  font-size: clamp(1.5rem, 4vw, 2.75rem); /* Reduced mobile size from 2rem to 1.5rem */
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: var(--spacing-xl); /* More whitespace */
+  margin-bottom: var(--spacing-lg); /* Reduced from xl to lg */
   text-align: center;
+}
+
+@media (max-width: 768px) {
+  .section-headline {
+    font-size: clamp(1.25rem, 5vw, 1.75rem);
+    margin-bottom: var(--spacing-md);
+  }
+  
+  h1 {
+    font-size: clamp(1.5rem, 6vw, 2rem);
+  }
+  
+  h2 {
+    font-size: clamp(1.25rem, 5vw, 1.75rem);
+  }
+  
+  h3 {
+    font-size: clamp(1.125rem, 4vw, 1.5rem);
+  }
+  
+  h4 {
+    font-size: clamp(1rem, 3vw, 1.25rem);
+  }
 }
 
 .section-headline svg {
@@ -2423,6 +2446,33 @@ p.hero-description {
   overflow: hidden;
 }
 
+@media (max-width: 768px) {
+  .phase-card-enhanced {
+    padding: var(--spacing-md);
+  }
+  
+  .phase-card-number {
+    font-size: 2rem;
+    top: var(--spacing-sm);
+    right: var(--spacing-sm);
+  }
+  
+  .phase-card-enhanced .phase-card-title {
+    font-size: 1.125rem;
+  }
+  
+  .phase-card-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .phase-card-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
 .phase-card-enhanced:hover {
   border-color: var(--border-accent);
   transform: translateY(-4px);
@@ -2563,6 +2613,33 @@ p.hero-description {
   transition: var(--transition);
 }
 
+@media (max-width: 768px) {
+  .advantage-card-inner {
+    padding: var(--spacing-md);
+  }
+  
+  .advantage-icon-wrapper {
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .advantage-icon-wrapper svg {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .advantage-card-title {
+    font-size: 1.125rem;
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .advantage-card-desc {
+    font-size: 0.875rem;
+    margin-bottom: var(--spacing-md);
+  }
+}
+
 .advantage-card-enhanced:hover .advantage-card-inner {
   border-color: var(--border-accent);
   transform: translateY(-4px);
@@ -2644,6 +2721,24 @@ p.hero-description {
     padding: var(--spacing-xl);
     text-align: center;
     transition: var(--transition);
+}
+
+@media (max-width: 768px) {
+  .feature-card-enhanced {
+    padding: var(--spacing-md);
+  }
+  
+  .feature-card-with-image .feature-card-title {
+    font-size: 1rem;
+  }
+  
+  .feature-card-body {
+    padding: var(--spacing-md);
+  }
+  
+  .feature-card-image {
+    height: 120px;
+  }
 }
 
 .feature-card-enhanced:hover {
@@ -3220,6 +3315,23 @@ p.hero-description {
   overflow: hidden;
 }
 
+@media (max-width: 768px) {
+  .service-detail-card {
+    padding: var(--spacing-md);
+  }
+  
+  .service-detail-card h3 {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .service-detail-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: var(--spacing-sm);
+  }
+}
+
 .service-detail-card::before {
   content: '';
   position: absolute;
@@ -3364,6 +3476,23 @@ p.hero-description {
   transition: var(--transition);
 }
 
+@media (max-width: 768px) {
+  .entry-point-card {
+    padding: var(--spacing-md);
+  }
+  
+  .entry-point-card h3 {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .entry-point-icon {
+    width: 56px;
+    height: 56px;
+    margin-bottom: var(--spacing-md);
+  }
+}
+
 .entry-point-card:hover {
   border-color: var(--color-gold);
   transform: translateY(-4px);
@@ -3465,6 +3594,27 @@ p.hero-description {
   text-align: center;
 }
 
+@media (max-width: 768px) {
+  .target-characteristic-card {
+    padding: var(--spacing-md);
+  }
+  
+  .target-characteristic-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .target-characteristic-card h3 {
+    font-size: 0.9375rem;
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .target-characteristic-card p {
+    font-size: 0.8125rem;
+  }
+}
+
 .target-characteristic-card:hover {
   border-color: var(--cyan-accent);
   transform: translateY(-4px);
@@ -3518,6 +3668,39 @@ p.hero-description {
   transition: var(--transition);
   position: relative;
   overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .decision-maker-card {
+    padding: var(--spacing-md);
+  }
+  
+  .decision-maker-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .decision-maker-icon {
+    width: 48px;
+    height: 48px;
+  }
+  
+  .decision-maker-card h3 {
+    font-size: 1.125rem;
+  }
+  
+  .decision-maker-label {
+    font-size: 0.8125rem;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .decision-maker-card li {
+    font-size: 0.875rem;
+    padding: var(--spacing-xs) 0;
+    padding-left: var(--spacing-md);
+  }
 }
 
 .decision-maker-card::before {
@@ -3660,6 +3843,26 @@ p.hero-description {
   padding: var(--spacing-xl);
   transition: var(--transition);
   position: relative;
+}
+
+@media (max-width: 768px) {
+  .pain-point-card {
+    padding: var(--spacing-md);
+  }
+  
+  .pain-point-number {
+    font-size: 1.5rem;
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .pain-point-card h3 {
+    font-size: 0.9375rem;
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .pain-point-card p {
+    font-size: 0.8125rem;
+  }
 }
 
 .pain-point-card:hover {
@@ -4296,6 +4499,35 @@ p.hero-description {
   border: 1px solid var(--border-subtle);
 }
 
+@media (max-width: 768px) {
+  .protocol-detail-card {
+    padding: var(--spacing-md);
+  }
+  
+  .protocol-detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+  }
+  
+  .protocol-detail-price {
+    font-size: 1.5rem;
+  }
+  
+  .protocol-detail-card h4 {
+    font-size: 0.9375rem;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .protocol-detail-list li {
+    font-size: 0.875rem;
+    padding-left: var(--spacing-md);
+    margin-bottom: var(--spacing-xs);
+  }
+}
+
 .protocol-detail-card-gold {
   border-left: 4px solid var(--color-gold);
 }
@@ -4720,6 +4952,43 @@ p.hero-description {
   text-align: center;
   border: 1px solid rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .roi-result-card {
+    padding: var(--spacing-md);
+  }
+  
+  .roi-result-stat {
+    font-size: clamp(1.75rem, 6vw, 2.5rem);
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .roi-result-label {
+    font-size: 0.9375rem;
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .roi-result-description {
+    font-size: 0.8125rem;
+  }
+  
+  .roi-insight-card {
+    padding: var(--spacing-md);
+  }
+  
+  .roi-insight-card h3 {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-xs);
+  }
+  
+  .roi-insight-card p {
+    font-size: 0.875rem;
+  }
+  
+  .roi-cta-box {
+    padding: var(--spacing-xl) var(--spacing-md);
+  }
 }
 
 .roi-result-card:hover {
@@ -7113,45 +7382,85 @@ p.hero-description {
   .faq-nav {
     justify-content: flex-start;
     overflow-x: auto;
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm);
     gap: var(--spacing-xs);
   }
   
   .faq-nav-item {
     white-space: nowrap;
-    padding: var(--spacing-sm) var(--spacing-md);
-    font-size: 0.875rem;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.8125rem;
   }
   
   .faq-sidebar {
     grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+  
+  .faq-sidebar-card {
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
   }
   
   .faq-category-title {
-    font-size: 1.25rem;
+    font-size: 1.125rem;
+    padding: var(--spacing-md);
   }
   
   .faq-question {
     padding: var(--spacing-md);
     font-size: 0.9375rem;
+    gap: var(--spacing-sm);
   }
   
   .faq-item.active .faq-answer {
     padding: 0 var(--spacing-md) var(--spacing-md);
   }
   
+  .faq-card {
+    padding: var(--spacing-md);
+  }
+  
+  .faq-card-question {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-sm);
+    gap: var(--spacing-sm);
+  }
+  
+  .faq-card-question-icon {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+  }
+  
   .faq-cta-headline {
-    font-size: 1.75rem;
+    font-size: clamp(1.5rem, 5vw, 1.75rem);
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  .faq-cta-subhead {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-lg);
   }
   
   .faq-cta-buttons {
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
+    gap: var(--spacing-sm);
+  }
+  
+  .faq-cta-buttons .btn {
+    width: 100%;
   }
   
   .faq-cta-features {
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
+    gap: var(--spacing-sm);
+  }
+  
+  .faq-cta {
+    padding: var(--spacing-2xl) var(--spacing-md);
   }
 }
 
@@ -9007,11 +9316,27 @@ p.hero-description {
     }
     
     .hero-summary-box {
-        padding: var(--spacing-lg);
+        padding: var(--spacing-md);
+        margin-top: var(--spacing-lg);
     }
     
     .hero-summary-list {
         grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
+    }
+    
+    .hero-summary-list li {
+        font-size: 0.875rem;
+        gap: var(--spacing-xs);
+    }
+    
+    .hero-summary-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .hero-summary-value {
+        font-size: 0.8125rem;
     }
 }
 
@@ -12197,6 +12522,131 @@ p.hero-description {
   padding: var(--section-padding) 0;
 }
 
+@media (max-width: 768px) {
+  :root {
+    --section-padding: 40px;
+  }
+  
+  section {
+    padding: var(--section-padding) 0;
+  }
+  
+  /* Reduce excessive margins on mobile */
+  .container {
+    padding: 0 var(--spacing-md);
+  }
+  
+  /* Fix cards with too much margin */
+  .cards-grid,
+  .cards-grid-2,
+  .cards-grid-3,
+  .features-grid-4 {
+    margin-top: var(--spacing-lg);
+    gap: var(--spacing-md);
+  }
+  
+  /* Fix excessive spacing in sections */
+  .section-subhead {
+    margin-bottom: var(--spacing-lg);
+    font-size: 1rem;
+  }
+  
+  /* Reduce large heading margins */
+  h1, h2, h3, h4 {
+    margin-bottom: var(--spacing-md);
+  }
+  
+  /* Fix grid gaps that are too large on mobile */
+  .phases-grid,
+  .advantages-grid-enhanced,
+  .features-grid-enhanced {
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+  }
+  
+  /* Reduce stat card padding */
+  .hero-stat-card {
+    padding: var(--spacing-md);
+  }
+  
+  /* Fix demo section padding */
+  .demo-section {
+    padding: var(--spacing-xl) 0;
+  }
+  
+  .demo-container {
+    margin: 0 var(--spacing-md);
+  }
+  
+  .demo-header {
+    padding: var(--spacing-md) var(--spacing-lg);
+  }
+  
+  .demo-iframe-wrapper {
+    height: 600px;
+  }
+  
+  /* Fix report section padding */
+  .report-slideshow-title h2 {
+    font-size: clamp(1.5rem, 5vw, 2rem);
+  }
+  
+  .report-slide-cover-content h1 {
+    font-size: clamp(1.75rem, 6vw, 2.5rem);
+  }
+  
+  .report-slide-cover-content h2 {
+    font-size: clamp(1.25rem, 4vw, 1.75rem);
+  }
+  
+  /* Fix contact page cards */
+  .contact-form-wrapper {
+    padding: var(--spacing-md);
+  }
+  
+  .contact-form-header h2 {
+    font-size: 1.25rem;
+  }
+  
+  /* Fix ROI calculator padding */
+  .roi-calculator-wrapper {
+    padding: var(--spacing-md);
+  }
+  
+  .roi-breakdown-container {
+    padding: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+  }
+  
+  .breakdown-title {
+    font-size: clamp(1.25rem, 4vw, 1.75rem);
+    margin-bottom: var(--spacing-md);
+  }
+  
+  /* Fix trust metrics */
+  .trust-metric {
+    padding: var(--spacing-lg) var(--spacing-md);
+  }
+  
+  .trust-metric-number {
+    font-size: clamp(2rem, 6vw, 3rem);
+  }
+  
+  /* Reduce icon wrapper sizes on mobile */
+  .advantage-icon-wrapper,
+  .feature-icon-bg,
+  .entry-point-icon {
+    width: 48px;
+    height: 48px;
+  }
+  
+  .advantage-icon-wrapper svg,
+  .feature-icon-bg svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
 .trust-metrics-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -12469,6 +12919,22 @@ p.hero-description {
   min-height: 280px; /* Ensures consistent card height */
 }
 
+@media (max-width: 768px) {
+  .sector-card {
+    padding: var(--spacing-xl) var(--spacing-md);
+    min-height: auto;
+  }
+  
+  .sector-card h3 {
+    font-size: clamp(1.25rem, 4vw, 1.5rem);
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .sector-icon {
+    margin-bottom: var(--spacing-md);
+  }
+}
+
 .sector-card:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: var(--color-gold);
@@ -12601,6 +13067,26 @@ p.hero-description {
   backdrop-filter: blur(8px);
 }
 
+@media (max-width: 768px) {
+  .content-panel {
+    padding: var(--spacing-md);
+  }
+  
+  .highlight-panel {
+    padding: var(--spacing-md) var(--spacing-sm);
+  }
+  
+  .cards-grid {
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-lg);
+  }
+  
+  .cards-grid-2,
+  .cards-grid-3 {
+    gap: var(--spacing-md);
+  }
+}
+
 .panel-content {
   max-width: 800px;
   margin: 0 auto;
@@ -12614,6 +13100,12 @@ p.hero-description {
   border-radius: var(--border-radius-lg);
   padding: var(--spacing-3xl) var(--spacing-2xl);
   text-align: center;
+}
+
+@media (max-width: 768px) {
+  .highlight-panel {
+    padding: var(--spacing-lg) var(--spacing-md);
+  }
 }
 
 /* Cards Grid System */
@@ -13421,6 +13913,30 @@ p.hero-description {
   gap: 2rem;
 }
 
+@media (max-width: 768px) {
+  .card-grid-2,
+  .card-grid-3,
+  .features-grid-4 {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+  
+  .card-grid-2 {
+    grid-template-columns: 1fr;
+    minmax: none;
+  }
+  
+  .card-grid-3 {
+    grid-template-columns: 1fr;
+    minmax: none;
+  }
+  
+  .features-grid-4 {
+    grid-template-columns: 1fr;
+    minmax: none;
+  }
+}
+
 /* Mobile Responsiveness for Target Markets Page */
 @media (max-width: 768px) {
   .qualification-badges {
@@ -13434,6 +13950,7 @@ p.hero-description {
   
   .cta-group {
     flex-direction: column;
+    gap: var(--spacing-sm);
   }
   
   .cta-group .btn {
@@ -13445,15 +13962,44 @@ p.hero-description {
   .features-grid-4,
   .firm-profile-section .profile-grid {
     grid-template-columns: 1fr;
+    gap: var(--spacing-md);
   }
   
   .sweet-spot-stats {
     grid-template-columns: 1fr;
-    gap: 1.5rem;
+    gap: var(--spacing-md);
   }
   
   .hero-subtitle {
     font-size: 1rem;
+  }
+  
+  /* Reduce card padding on mobile */
+  .target-characteristic-card,
+  .decision-maker-card,
+  .pain-point-card,
+  .protocol-detail-card,
+  .roi-insight-card,
+  .roi-result-card {
+    padding: var(--spacing-md);
+  }
+  
+  /* Reduce heading sizes on mobile */
+  .target-characteristic-card h3,
+  .decision-maker-card h3,
+  .pain-point-card h3,
+  .protocol-detail-card h3,
+  .roi-insight-card h3 {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-sm);
+  }
+  
+  /* Reduce icon sizes on mobile */
+  .decision-maker-icon,
+  .target-characteristic-icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: var(--spacing-sm);
   }
 }
 
@@ -13468,7 +14014,7 @@ p.hero-description {
 }
 
 .breakdown-title {
-    font-size: 2rem;
+    font-size: clamp(1.5rem, 4vw, 2rem);
     color: var(--color-gold);
     margin-bottom: var(--spacing-xl);
     text-align: center;
@@ -14197,4 +14743,134 @@ p.hero-description {
     .phase-2-sign-off-grid {
         grid-template-columns: 1fr;
     }
+    
+    /* Fix comparison cards on mobile */
+    .comparison-card {
+        padding: var(--spacing-md);
+    }
+}
+
+/* ========================================
+   COMPREHENSIVE MOBILE OPTIMIZATION
+   Final fixes for cards, headings, margins
+   ======================================== */
+@media (max-width: 768px) {
+  /* Section padding reduction */
+  section {
+    padding: var(--spacing-2xl) 0;
+  }
+  
+  /* Container padding reduction */
+  .container {
+    padding: 0 var(--spacing-md);
+  }
+  
+  /* Reduce all large headings on mobile */
+  .hero-headline {
+    font-size: clamp(1.75rem, 6vw, 2.25rem);
+    margin-bottom: var(--spacing-md);
+  }
+  
+  .section-headline {
+    font-size: clamp(1.25rem, 5vw, 1.75rem);
+    margin-bottom: var(--spacing-md);
+  }
+  
+  /* Fix all card padding to be mobile-friendly */
+  .card,
+  [class*="card"],
+  [class*="Card"] {
+    padding: var(--spacing-md) !important;
+  }
+  
+  /* Specific card overrides where needed */
+  .phase-card-enhanced,
+  .advantage-card-inner,
+  .feature-card-enhanced,
+  .service-detail-card,
+  .entry-point-card,
+  .target-characteristic-card,
+  .decision-maker-card,
+  .pain-point-card,
+  .protocol-detail-card,
+  .roi-result-card,
+  .roi-insight-card,
+  .comparison-card {
+    padding: var(--spacing-md) !important;
+  }
+  
+  /* Fix icon sizes on mobile */
+  [class*="icon-wrapper"],
+  [class*="icon-bg"],
+  [class*="-icon"] {
+    width: 40px !important;
+    height: 40px !important;
+  }
+  
+  [class*="icon-wrapper"] svg,
+  [class*="icon-bg"] svg,
+  [class*="-icon"] svg {
+    width: 24px !important;
+    height: 24px !important;
+  }
+  
+  /* Reduce heading sizes in cards */
+  .card h1,
+  .card h2,
+  .card h3,
+  .card h4,
+  [class*="card"] h1,
+  [class*="card"] h2,
+  [class*="card"] h3,
+  [class*="card"] h4 {
+    font-size: clamp(1rem, 3vw, 1.25rem) !important;
+    margin-bottom: var(--spacing-sm) !important;
+  }
+  
+  /* Fix margins that are too large */
+  .cards-grid,
+  .cards-grid-2,
+  .cards-grid-3,
+  .features-grid-4,
+  .phases-grid,
+  .advantages-grid-enhanced,
+  .features-grid-enhanced {
+    margin-top: var(--spacing-lg) !important;
+    gap: var(--spacing-md) !important;
+  }
+  
+  /* Reduce gap between grid items */
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    gap: var(--spacing-md) !important;
+  }
+  
+  /* Fix section spacing */
+  .section-subhead {
+    margin-bottom: var(--spacing-lg) !important;
+    font-size: 1rem !important;
+  }
+  
+  /* Reduce large number displays */
+  .stat-number,
+  .hero-stat-number,
+  .roi-result-stat,
+  .phase-2-metric-value {
+    font-size: clamp(1.5rem, 5vw, 2rem) !important;
+  }
+  
+  /* Fix button groups */
+  .btn-group,
+  .cta-group,
+  .hero-cta {
+    flex-direction: column !important;
+    gap: var(--spacing-sm) !important;
+  }
+  
+  .btn-group .btn,
+  .cta-group .btn,
+  .hero-cta .btn {
+    width: 100% !important;
+  }
 }
