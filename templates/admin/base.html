@@ -273,6 +273,11 @@
                         </a>
                     </li>
                     <li class="admin-nav-item">
+                        <a href="{{ url_for('admin.documentation_index') }}" class="admin-nav-link {% if 'documentation' in request.endpoint %}active{% endif %}">
+                            Documentation
+                        </a>
+                    </li>
+                    <li class="admin-nav-item">
                         <a href="{{ url_for('admin.logout') }}" class="admin-nav-link">
                             Logout
                         </a>

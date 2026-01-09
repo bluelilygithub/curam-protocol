@@ -208,3 +208,21 @@ def analytics():
                          analytics=analytics_data,
                          date_from=date_from,
                          date_to=date_to)
+
+
+# =============================================================================
+# DOCUMENTATION ROUTES (Internal Q&A/FAQ)
+# =============================================================================
+
+@admin_bp.route('/documentation')
+@require_admin
+def documentation_index():
+    """Internal documentation index page"""
+    return render_template('admin/documentation/index.html')
+
+
+@admin_bp.route('/documentation/roi')
+@require_admin
+def documentation_roi():
+    """ROI FAQ page for internal documentation"""
+    return render_template('admin/documentation/roi.html')

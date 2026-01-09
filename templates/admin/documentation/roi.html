@@ -1,0 +1,246 @@
+{% extends "admin/base.html" %}
+
+{% block title %}ROI Documentation{% endblock %}
+
+{% block extra_head %}
+    <style>
+        .doc-section {
+            margin-bottom: 2rem;
+        }
+        
+        .doc-category-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            background: #0B1221;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-bottom: 0.5rem;
+        }
+        
+        .doc-category-header:hover {
+            background: #1a2332;
+        }
+        
+        .doc-category-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+            color: #D4AF37;
+        }
+        
+        .doc-category-chevron {
+            font-size: 0.875rem;
+            color: #D4AF37;
+            transition: transform 0.3s ease;
+        }
+        
+        .doc-category-section:not(.collapsed) .doc-category-chevron {
+            transform: rotate(90deg);
+        }
+        
+        .doc-category-content {
+            max-height: 5000px;
+            overflow: hidden;
+            transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.4s ease;
+            opacity: 1;
+            margin-top: 0.5rem;
+        }
+        
+        .doc-category-section.collapsed .doc-category-content {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        
+        .doc-card {
+            background: #fff;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .doc-question {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #0B1221;
+            margin: 0 0 1rem 0;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #D4AF37;
+        }
+        
+        .doc-answer {
+            color: #4B5563;
+            line-height: 1.7;
+        }
+        
+        .doc-answer p {
+            margin-bottom: 1rem;
+        }
+        
+        .doc-answer p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .doc-answer ul, .doc-answer ol {
+            margin: 1rem 0;
+            padding-left: 2rem;
+        }
+        
+        .doc-answer li {
+            margin-bottom: 0.75rem;
+        }
+        
+        .doc-answer strong {
+            color: #0B1221;
+            font-weight: 600;
+        }
+        
+        .doc-answer em {
+            color: #6B7280;
+            font-style: italic;
+        }
+        
+        .math-formula {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #E5E7EB;
+            display: inline-block;
+            margin: 0.25rem 0;
+        }
+        
+        .highlight-box {
+            background: #FEF3C7;
+            border-left: 4px solid #D4AF37;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1.5rem;
+            color: #D4AF37;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+        
+        .back-link:hover {
+            color: #B8941F;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="admin-header">
+        <div>
+            <a href="{{ url_for('admin.documentation_index') }}" class="back-link">← Back to Documentation</a>
+            <h2>ROI Documentation</h2>
+        </div>
+    </div>
+
+    <div class="doc-section">
+        <div class="doc-category-section">
+            <div class="doc-category-header doc-category-toggle">
+                <h3 class="doc-category-title">
+                    <span>ROI</span>
+                    <span class="doc-category-count" style="color: rgba(255,255,255,0.7); font-size: 0.875rem; font-weight: 400;">(1)</span>
+                </h3>
+                <span class="doc-category-chevron">▶</span>
+            </div>
+            <div class="doc-category-content">
+                <div class="doc-card">
+                    <h4 class="doc-question">Accounting</h4>
+                    <div class="doc-answer">
+                        <p>To arrive at a figure like $700,000, we aren't just looking at "time saved"; we are looking at the <strong>Total Loaded Cost of Production</strong> and the <strong>Opportunity Cost of Headcount</strong>.</p>
+                        
+                        <p>For a firm with 50+ staff, the production floor (Mid/Juniors and Admin) represents the largest line item in the budget. Here is the mathematical breakdown of how those savings materialize across your specific staff tiers:</p>
+                        
+                        <h5 style="color: #0B1221; font-size: 1rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">1. The Mid & Junior Tier (25 Staff)</h5>
+                        <p>This is where the bulk of the "Accounting Logic" automation happens (GL coding, inter-entity matching, basic reconciliations).</p>
+                        <ul>
+                            <li><strong>Time Recovery:</strong> 5 hours per week per person. <em>(This is conservative; in many firms, juniors spend 15+ hours on manual data work).</em></li>
+                            <li><strong>Weekly Total:</strong> <span class="math-formula">25 staff × 5 hours = 125 hours/week</span></li>
+                            <li><strong>Annual Total:</strong> <span class="math-formula">125 hours × 48 weeks = 6,000 production hours</span></li>
+                            <li><strong>Cost Value:</strong> At a mid-market loaded cost (salary + super + overhead) of ~$100/hr, that is <strong>$600,000</strong> in recovered capacity.</li>
+                        </ul>
+                        
+                        <h5 style="color: #0B1221; font-size: 1rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">2. The Admin Tier (10 Staff)</h5>
+                        <p>This tier handles the "Document Drudgery" (filing PDFs, rename-matching, chasing missing info).</p>
+                        <ul>
+                            <li><strong>Time Recovery:</strong> 8 hours per week per person <em>(1 full day of manual admin)</em>.</li>
+                            <li><strong>Weekly Total:</strong> <span class="math-formula">10 staff × 8 hours = 80 hours/week</span></li>
+                            <li><strong>Annual Total:</strong> <span class="math-formula">80 hours × 48 weeks = 3,840 admin hours</span></li>
+                            <li><strong>Cost Value:</strong> At a loaded cost of ~$50/hr, that is <strong>$192,000</strong> in recovered capacity.</li>
+                        </ul>
+                        
+                        <div class="highlight-box">
+                            <p style="margin: 0;"><strong>The "Skeptic's Adjustment"</strong></p>
+                            <p style="margin: 0.5rem 0 0;">If we add those together (<span class="math-formula">$600k + $192k</span>), we get <strong>$792,000</strong>. We round down to <strong>$700,000</strong> to account for "implementation friction" and the fact that staff don't always fill every recovered minute with billable work.</p>
+                        </div>
+                        
+                        <h5 style="color: #0B1221; font-size: 1rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Why this number is "Real" for a Partner:</h5>
+                        <p>While you don't necessarily "fire" staff to get this $700k back, the value is realized in three ways:</p>
+                        <ol>
+                            <li><strong>Headcount Avoidance:</strong> You can grow your revenue by 15-20% without hiring the next 5-8 people. In the current Australian talent market, avoiding 5 hires saves you ~$500k in salaries alone, plus recruitment fees.</li>
+                            <li><strong>Senior Leverage:</strong> Because the 25 Mid/Juniors are producing "Audit-Ready" work, your 15 Seniors spend less time "fixing" and more time "reviewing." If each Senior saves just 2 hours a week of correction work, that's another <strong>$150k+</strong> of high-value time unlocked.</li>
+                            <li><strong>Write-offs:</strong> Much of the manual data entry performed by juniors is often written off because it exceeds the fixed fee for the job. Automation turns those write-offs back into profit.</li>
+                        </ol>
+                        
+                        <div class="highlight-box">
+                            <p style="margin: 0;"><strong>Summary for the Website</strong></p>
+                            <p style="margin: 0.5rem 0 0;">On the page, we frame this as "Annual Production Value." It tells the Partner: "This is the cost of the manual labor your firm is currently 'burning' on tasks that AI can do with 90% accuracy."</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Accordion functionality for documentation categories
+        document.addEventListener('DOMContentLoaded', function() {
+            // Collapse all categories initially
+            const categorySections = document.querySelectorAll('.doc-category-section');
+            categorySections.forEach(section => {
+                section.classList.add('collapsed');
+            });
+            
+            // Toggle categories when header is clicked
+            const categoryHeaders = document.querySelectorAll('.doc-category-toggle');
+            categoryHeaders.forEach(header => {
+                header.addEventListener('click', function() {
+                    const section = this.closest('.doc-category-section');
+                    const isCollapsed = section.classList.contains('collapsed');
+                    
+                    // Close all other sections (only one open at a time)
+                    categorySections.forEach(s => {
+                        if (s !== section) {
+                            s.classList.add('collapsed');
+                        }
+                    });
+                    
+                    // Toggle current section
+                    if (isCollapsed) {
+                        section.classList.remove('collapsed');
+                    } else {
+                        section.classList.add('collapsed');
+                    }
+                });
+            });
+        });
+    </script>
+{% endblock %}
