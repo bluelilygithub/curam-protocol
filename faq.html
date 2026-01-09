@@ -25,7 +25,10 @@
         @media (max-width: 768px) { .faq-cards-grid { grid-template-columns: 1fr; } }
         .faq-card { background: var(--navy-deep); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--border-radius-lg); padding: var(--spacing-xl); transition: all 0.3s ease; }
         .faq-card:hover { border-color: var(--color-gold); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(212, 175, 55, 0.15); }
-        .faq-card-question { font-size: 1.125rem; font-weight: 600; color: var(--text-primary); margin: 0 0 var(--spacing-md) 0; line-height: 1.4; }
+        .faq-card-question { font-size: 1.125rem; font-weight: 600; color: var(--text-primary); margin: 0 0 var(--spacing-md) 0; line-height: 1.4; display: flex; align-items: flex-start; gap: var(--spacing-md); }
+        .faq-card-question-text { flex: 1; }
+        .faq-card-icon { flex-shrink: 0; width: 24px; height: 24px; margin-top: 2px; }
+        .faq-card-icon svg { width: 24px; height: 24px; stroke: var(--color-gold); }
         .faq-card-answer { font-size: 0.95rem; color: var(--text-secondary); line-height: 1.7; }
         .faq-card-answer p { margin-bottom: 1rem; }
         .faq-card-answer p:last-child { margin-bottom: 0; }
@@ -268,13 +271,46 @@
         document.addEventListener('DOMContentLoaded', function() {
             const categorySections = document.querySelectorAll('.faq-category-section');
             
-            // Add question counts to each category
+            // Add question counts and icons to each category
             categorySections.forEach(section => {
                 const cardsGrid = section.querySelector('.faq-cards-grid');
                 const countElement = section.querySelector('.faq-category-count');
+                const categoryIcon = section.querySelector('.faq-category-icon svg');
+                
+                // Add question count
                 if (cardsGrid && countElement) {
                     const questionCount = cardsGrid.querySelectorAll('.faq-card').length;
                     countElement.textContent = ` (${questionCount})`;
+                }
+                
+                // Add icon to each card in this category
+                if (categoryIcon && cardsGrid) {
+                    const cards = cardsGrid.querySelectorAll('.faq-card');
+                    cards.forEach(card => {
+                        const question = card.querySelector('.faq-card-question');
+                        if (question && !question.querySelector('.faq-card-icon')) {
+                            // Wrap existing text in a span if it's not already wrapped
+                            let questionText = question.textContent;
+                            // Clear the question content
+                            question.innerHTML = '';
+                            
+                            // Clone the SVG icon
+                            const iconClone = categoryIcon.cloneNode(true);
+                            // Create icon wrapper
+                            const iconWrapper = document.createElement('div');
+                            iconWrapper.className = 'faq-card-icon';
+                            iconWrapper.appendChild(iconClone);
+                            
+                            // Create text wrapper
+                            const textWrapper = document.createElement('span');
+                            textWrapper.className = 'faq-card-question-text';
+                            textWrapper.textContent = questionText;
+                            
+                            // Add icon and text to question
+                            question.appendChild(iconWrapper);
+                            question.appendChild(textWrapper);
+                        }
+                    });
                 }
             });
             
