@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine, text
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -902,3 +903,114 @@ def get_extraction_analytics(date_from=None, date_to=None):
         import traceback
         traceback.print_exc()
         return {}
+
+
+# =============================================================================
+# USER MANAGEMENT FUNCTIONS (for admin authentication)
+# =============================================================================
+
+def get_user_by_username(username):
+    """Get user by username"""
+    if not engine:
+        return None
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT id, username, password_hash, email, full_name, is_active, is_admin, last_login
+                FROM users
+                WHERE username = :username AND is_active = true
+            """), {"username": username})
+            row = result.fetchone()
+            if row:
+                return dict(row._mapping)
+            return None
+    except Exception as e:
+        print(f"❌ Error fetching user: {e}")
+        return None
+
+
+def verify_user_password(username, password):
+    """Verify username and password"""
+    if not engine:
+        return False
+    
+    try:
+        user = get_user_by_username(username)
+        if not user:
+            return False
+        
+        return check_password_hash(user['password_hash'], password)
+    except Exception as e:
+        print(f"❌ Error verifying password: {e}")
+        return False
+
+
+def update_user_password(username, new_password):
+    """Update user password"""
+    if not engine:
+        return False
+    
+    try:
+        password_hash = generate_password_hash(new_password)
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                UPDATE users
+                SET password_hash = :password_hash,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE username = :username AND is_active = true
+            """), {"username": username, "password_hash": password_hash})
+            conn.commit()
+            return result.rowcount > 0
+    except Exception as e:
+        print(f"❌ Error updating password: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def update_user_last_login(username):
+    """Update user's last login timestamp"""
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE users
+                SET last_login = CURRENT_TIMESTAMP
+                WHERE username = :username
+            """), {"username": username})
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"❌ Error updating last login: {e}")
+        return False
+
+
+def create_admin_user(username, password, email=None, full_name=None):
+    """Create a new admin user (helper function for initial setup)"""
+    if not engine:
+        return False
+    
+    try:
+        password_hash = generate_password_hash(password)
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                INSERT INTO users (username, password_hash, email, full_name, is_active, is_admin)
+                VALUES (:username, :password_hash, :email, :full_name, true, true)
+                ON CONFLICT (username) DO NOTHING
+                RETURNING id
+            """), {
+                "username": username,
+                "password_hash": password_hash,
+                "email": email,
+                "full_name": full_name
+            })
+            conn.commit()
+            return result.fetchone() is not None
+    except Exception as e:
+        print(f"❌ Error creating user: {e}")
+        import traceback
+        traceback.print_exc()
+        return False

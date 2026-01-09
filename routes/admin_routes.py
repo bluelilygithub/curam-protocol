@@ -16,12 +16,16 @@ from database import (
     get_extraction_results,
     get_extraction_analytics,
     get_sectors,
-    get_document_types_by_sector
+    get_document_types_by_sector,
+    verify_user_password,
+    update_user_password,
+    update_user_last_login,
+    get_user_by_username
 )
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
-# Simple authentication using environment variables
+# Fallback authentication using environment variables (if users table doesn't exist)
 ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'changeme123')
 
@@ -42,7 +46,14 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
         
-        if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
+        # Try database authentication first
+        if verify_user_password(username, password):
+            session['admin_authenticated'] = True
+            session['admin_username'] = username
+            update_user_last_login(username)
+            return redirect(url_for('admin.dashboard'))
+        # Fallback to environment variable authentication
+        elif username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
             session['admin_authenticated'] = True
             session['admin_username'] = username
             return redirect(url_for('admin.dashboard'))
@@ -208,6 +219,44 @@ def analytics():
                          analytics=analytics_data,
                          date_from=date_from,
                          date_to=date_to)
+
+
+@admin_bp.route('/change-password', methods=['GET', 'POST'])
+@require_admin
+def change_password():
+    """Change password page"""
+    if request.method == 'POST':
+        current_password = request.form.get('current_password', '').strip()
+        new_password = request.form.get('new_password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+        
+        username = session.get('admin_username')
+        if not username:
+            return render_template('admin/change_password.html', error='Session expired. Please login again.')
+        
+        # Validate inputs
+        if not current_password or not new_password or not confirm_password:
+            return render_template('admin/change_password.html', error='All fields are required.')
+        
+        if new_password != confirm_password:
+            return render_template('admin/change_password.html', error='New passwords do not match.')
+        
+        if len(new_password) < 8:
+            return render_template('admin/change_password.html', error='New password must be at least 8 characters long.')
+        
+        # Verify current password
+        if not verify_user_password(username, current_password):
+            # Try fallback to environment variable
+            if username != ADMIN_USERNAME or current_password != ADMIN_PASSWORD:
+                return render_template('admin/change_password.html', error='Current password is incorrect.')
+        
+        # Update password in database
+        if update_user_password(username, new_password):
+            return render_template('admin/change_password.html', success='Password updated successfully!')
+        else:
+            return render_template('admin/change_password.html', error='Failed to update password. Please try again.')
+    
+    return render_template('admin/change_password.html')
 
 
 # =============================================================================

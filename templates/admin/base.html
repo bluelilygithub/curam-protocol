@@ -277,6 +277,11 @@
                             Documentation
                         </a>
                     </li>
+                    <li class="admin-nav-item" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <a href="{{ url_for('admin.change_password') }}" class="admin-nav-link {% if request.endpoint == 'admin.change_password' %}active{% endif %}">
+                            Change Password
+                        </a>
+                    </li>
                     <li class="admin-nav-item">
                         <a href="{{ url_for('admin.logout') }}" class="admin-nav-link">
                             Logout
