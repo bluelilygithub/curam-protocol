@@ -10,6 +10,7 @@
     <style>
         .section, .faq-category-header, .faq-accordion, .hero-content { opacity: 1 !important; transform: none !important; visibility: visible !important; transition: none !important; }
         .faq-category-section { margin-bottom: 2rem; }
+        .faq-category-count { color: var(--color-gold); font-weight: 400; font-size: 1.25rem; margin-left: 0.5rem; }
         .faq-category-icon { display: inline-flex; align-items: center; justify-content: center; background-color: var(--color-gold-dark); border: 2px solid var(--color-gold-dark); border-radius: 50%; width: 48px; height: 48px; vertical-align: middle; margin-right: 15px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .faq-category-icon svg { width: 24px; height: 24px; stroke: #FFFFFF; }
         .faq-category-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0; padding: var(--spacing-lg); padding-bottom: var(--spacing-md); border-bottom: 1px solid rgba(255,255,255,0.1); cursor: pointer; transition: background-color 0.3s ease; border-radius: var(--border-radius); }
@@ -17,7 +18,7 @@
         .faq-category-toggle { margin-bottom: 0; }
         .faq-category-title { margin: 0; font-size: 1.75rem; font-weight: 700; color: var(--text-primary); }
         .faq-category-chevron { font-size: 1rem; color: var(--color-gold); transition: transform 0.3s ease; margin-left: var(--spacing-md); }
-        .faq-category-section.collapsed .faq-category-chevron { transform: rotate(-90deg); }
+        .faq-category-section:not(.collapsed) .faq-category-chevron { transform: rotate(90deg); }
         .faq-category-content { max-height: 5000px; overflow: hidden; transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.4s ease; opacity: 1; margin-top: var(--spacing-lg); }
         .faq-category-section.collapsed .faq-category-content { max-height: 0; opacity: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; }
         .faq-accordion-content p { margin-bottom: 1rem; line-height: 1.6; }
@@ -52,13 +53,13 @@
 
     <section class="section"><div class="container">
             
-        <div class="faq-category-section">
+        <div class="faq-category-section collapsed">
             <div class="faq-category-header faq-category-toggle">
                 <div style="display: flex; align-items: center; flex: 1;">
                     <div class="faq-category-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg></div>
-                    <h2 class="faq-category-title">CFO & Financial Concerns</h2>
+                    <h2 class="faq-category-title">CFO & Financial Concerns<span class="faq-category-count"></span></h2>
                 </div>
-                <span class="faq-category-chevron">▼</span>
+                <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
                 <div class="faq-accordion">
@@ -73,13 +74,13 @@
             </div>
         </div>
 
-        <div class="faq-category-section">
+        <div class="faq-category-section collapsed">
             <div class="faq-category-header faq-category-toggle">
                 <div style="display: flex; align-items: center; flex: 1;">
                     <div class="faq-category-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg></div>
-                    <h2 class="faq-category-title">Security & Compliance</h2>
+                    <h2 class="faq-category-title">Security & Compliance<span class="faq-category-count"></span></h2>
                 </div>
-                <span class="faq-category-chevron">▼</span>
+                <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
                 <div class="faq-accordion">
@@ -96,13 +97,13 @@
             </div>
         </div>
 
-        <div class="faq-category-section">
+        <div class="faq-category-section collapsed">
             <div class="faq-category-header faq-category-toggle">
                 <div style="display: flex; align-items: center; flex: 1;">
                     <div class="faq-category-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.29 7 12 12 20.71 7"></polyline></svg></div>
-                    <h2 class="faq-category-title">Ownership & Vendor Lock-in</h2>
+                    <h2 class="faq-category-title">Ownership & Vendor Lock-in<span class="faq-category-count"></span></h2>
                 </div>
-                <span class="faq-category-chevron">▼</span>
+                <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
                 <div class="faq-accordion">
@@ -112,13 +113,13 @@
             </div>
         </div>
 
-        <div class="faq-category-section">
+        <div class="faq-category-section collapsed">
             <div class="faq-category-header faq-category-toggle">
                 <div style="display: flex; align-items: center; flex: 1;">
                     <div class="faq-category-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"></circle></svg></div>
-                    <h2 class="faq-category-title">Accuracy & Risk Management</h2>
+                    <h2 class="faq-category-title">Accuracy & Risk Management<span class="faq-category-count"></span></h2>
                 </div>
-                <span class="faq-category-chevron">▼</span>
+                <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
                 <div class="faq-accordion">
@@ -132,13 +133,13 @@
             </div>
         </div>
 
-        <div class="faq-category-section">
+        <div class="faq-category-section collapsed">
             <div class="faq-category-header faq-category-toggle">
                 <div style="display: flex; align-items: center; flex: 1;">
                     <div class="faq-category-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path></svg></div>
-                    <h2 class="faq-category-title">Sector Specifics</h2>
+                    <h2 class="faq-category-title">Sector Specifics<span class="faq-category-count"></span></h2>
                 </div>
-                <span class="faq-category-chevron">▼</span>
+                <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
                 <div class="faq-accordion">
@@ -162,12 +163,39 @@
     <script>
         // FAQ Category Toggle Functionality
         document.addEventListener('DOMContentLoaded', function() {
+            const categorySections = document.querySelectorAll('.faq-category-section');
+            
+            // Add question counts to each category
+            categorySections.forEach(section => {
+                const accordion = section.querySelector('.faq-accordion');
+                const countElement = section.querySelector('.faq-category-count');
+                if (accordion && countElement) {
+                    const questionCount = accordion.querySelectorAll('.faq-accordion-item').length;
+                    countElement.textContent = ` (${questionCount})`;
+                }
+            });
+            
+            // Handle toggle with accordion behavior (only one open at a time)
             const categoryToggles = document.querySelectorAll('.faq-category-toggle');
             
             categoryToggles.forEach(toggle => {
                 toggle.addEventListener('click', function() {
                     const categorySection = this.closest('.faq-category-section');
-                    categorySection.classList.toggle('collapsed');
+                    const isCurrentlyCollapsed = categorySection.classList.contains('collapsed');
+                    
+                    // Close all other sections
+                    categorySections.forEach(section => {
+                        if (section !== categorySection) {
+                            section.classList.add('collapsed');
+                        }
+                    });
+                    
+                    // Toggle current section
+                    if (isCurrentlyCollapsed) {
+                        categorySection.classList.remove('collapsed');
+                    } else {
+                        categorySection.classList.add('collapsed');
+                    }
                 });
             });
         });
