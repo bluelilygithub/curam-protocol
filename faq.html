@@ -21,10 +21,17 @@
         .faq-category-section:not(.collapsed) .faq-category-chevron { transform: rotate(90deg); }
         .faq-category-content { max-height: 5000px; overflow: hidden; transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.4s ease; opacity: 1; margin-top: var(--spacing-lg); }
         .faq-category-section.collapsed .faq-category-content { max-height: 0; opacity: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; }
-        .faq-accordion-content p { margin-bottom: 1rem; line-height: 1.6; }
-        .faq-accordion-content ul { margin-bottom: 1rem; padding-left: 1.5rem; }
-        .faq-accordion-content li { margin-bottom: 0.5rem; }
-        .faq-accordion-content strong { color: var(--color-gold); }
+        .faq-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--spacing-lg); margin-top: var(--spacing-lg); }
+        @media (max-width: 768px) { .faq-cards-grid { grid-template-columns: 1fr; } }
+        .faq-card { background: var(--navy-deep); border: 1px solid rgba(255,255,255,0.1); border-radius: var(--border-radius-lg); padding: var(--spacing-xl); transition: all 0.3s ease; }
+        .faq-card:hover { border-color: var(--color-gold); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(212, 175, 55, 0.15); }
+        .faq-card-question { font-size: 1.125rem; font-weight: 600; color: var(--text-primary); margin: 0 0 var(--spacing-md) 0; line-height: 1.4; }
+        .faq-card-answer { font-size: 0.95rem; color: var(--text-secondary); line-height: 1.7; }
+        .faq-card-answer p { margin-bottom: 1rem; }
+        .faq-card-answer p:last-child { margin-bottom: 0; }
+        .faq-card-answer ul { margin: 1rem 0; padding-left: 1.5rem; }
+        .faq-card-answer li { margin-bottom: 0.5rem; }
+        .faq-card-answer strong { color: var(--color-gold); }
     </style>
 </head>
 <body>
@@ -62,14 +69,35 @@
                 <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
-                <div class="faq-accordion">
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>What's the total investment if we complete all four phases?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Total ranges $37k–$70k+ if you complete all phases:</p><ul><li><strong>Phase 1 (Feasibility):</strong> $1,500</li><li><strong>Phase 2 (Roadmap):</strong> $7,500</li><li><strong>Phase 3 (Compliance):</strong> $8–12k</li><li><strong>Phase 4 (Implementation):</strong> Typically $20–50k+ depending on complexity.</li></ul><p>You control the investment. Exit after any phase. Typical payback: 3–9 months.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Does this integrate with my software (LEAP, CargoWise, etc.)?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Yes. We provide structured data in <strong>JSON, CSV, or XML</strong> formats for most systems. We support <strong>Zapier</strong> for direct hand-offs. We act as the data-entry layer for <strong>Xero, MYOB, LEAP, Smokeball, Xplan, and CargoWise</strong>.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Why pay $1,500 for Phase 1 when you have a demo?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>The demo shows the tech works. The $1,500 proves it works on <strong>YOUR</strong> documents. You get 90%+ accuracy or a full refund. This eliminates the risk of a $50k implementation failing because your actual documents were never tested.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Can we defer payment until we see ROI?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>We hold 15% of the Phase 4 fee until success metrics are met. We share the risk. Our fee is contingent on your measurable results.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>What prevents open-ended project costs?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Every phase is fixed-price, fixed-scope, fixed-timeline. No scope creep, no Agile black box.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>We already use Xero/MYOB. Why do we need this?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Xero imports data; we validate it first. We check ABNs, duplicate invoices, and GL coding errors BEFORE they hit your ledger.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>How much staff time is required across all phases?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Total: ~65 hours over 8–12 weeks. Phase 1 only requires 2 hours of technical staff time.</p></div></div>
+                <div class="faq-cards-grid">
+            <div class="faq-card">
+                <h3 class="faq-card-question">What's the total investment if we complete all four phases?</h3>
+                <div class="faq-card-answer"><p>Total ranges $37k–$70k+ if you complete all phases:</p><ul><li><strong>Phase 1 (Feasibility):</strong> $1,500</li><li><strong>Phase 2 (Roadmap):</strong> $7,500</li><li><strong>Phase 3 (Compliance):</strong> $8–12k</li><li><strong>Phase 4 (Implementation):</strong> Typically $20–50k+ depending on complexity.</li></ul><p>You control the investment. Exit after any phase. Typical payback: 3–9 months.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Does this integrate with my software (LEAP, CargoWise, etc.)?</h3>
+                <div class="faq-card-answer"><p>Yes. We provide structured data in <strong>JSON, CSV, or XML</strong> formats for most systems. We support <strong>Zapier</strong> for direct hand-offs. We act as the data-entry layer for <strong>Xero, MYOB, LEAP, Smokeball, Xplan, and CargoWise</strong>.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Why pay $1,500 for Phase 1 when you have a demo?</h3>
+                <div class="faq-card-answer"><p>The demo shows the tech works. The $1,500 proves it works on <strong>YOUR</strong> documents. You get 90%+ accuracy or a full refund. This eliminates the risk of a $50k implementation failing because your actual documents were never tested.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Can we defer payment until we see ROI?</h3>
+                <div class="faq-card-answer"><p>We hold 15% of the Phase 4 fee until success metrics are met. We share the risk. Our fee is contingent on your measurable results.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">What prevents open-ended project costs?</h3>
+                <div class="faq-card-answer"><p>Every phase is fixed-price, fixed-scope, fixed-timeline. No scope creep, no Agile black box.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">We already use Xero/MYOB. Why do we need this?</h3>
+                <div class="faq-card-answer"><p>Xero imports data; we validate it first. We check ABNs, duplicate invoices, and GL coding errors BEFORE they hit your ledger.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">How much staff time is required across all phases?</h3>
+                <div class="faq-card-answer"><p>Total: ~65 hours over 8–12 weeks. Phase 1 only requires 2 hours of technical staff time.</p></div>
+            </div>
                 </div>
             </div>
         </div>
@@ -83,16 +111,43 @@
                 <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
-                <div class="faq-accordion">
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>How do you address the Privacy Act 1988 (Cth)?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Through <strong>Data Sovereignty</strong>. The Protocol is deployed inside <strong>your own</strong> Azure, AWS, or GCP tenant. Data never leaves your environment or the Australian jurisdiction.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Can we test the AI if our documents contain highly sensitive PII?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Yes. We recommend a <strong>Redacted Feasibility Sprint</strong>. You black out PII on 15 sample documents before sending them to us to prove accuracy without exposing live data.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Is the Phase 2 'Security Readiness Review' a formal audit?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>No. It is an <strong>AI Readiness Review</strong> investigating Permission Scoping and API Integrity. It provides evidence your actual auditor will need.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Do you meet SOC2, ISO, and Australian Privacy Principles (APP)?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Yes. By deploying internally, we inherit your posture. We provide configuration documentation for your SOC2/ISO auditors in Phase 2.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Does all data stay within our environment?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Yes. 100% of processing happens in your tenant. No data leaves your control. No data is used to train public models.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>How do you guarantee ISO 27001 compliance?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>We map deployment against ISO 27001 controls in Phase 3, creating data flow diagrams and access control matrices.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Where is data processed?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Exclusively within your specified region (e.g., Azure Australia East). We guarantee Australian data residency.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Will this require opening new firewall ports?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>No. Zero new firewall ports. Integration uses outbound-only communication via secure APIs already authorized.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>What is the protocol for legacy on-premise servers?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>We use Microsoft's Data Gateway—a secure connector running inside your firewall with no inbound ports needed.</p></div></div>
+                <div class="faq-cards-grid">
+            <div class="faq-card">
+                <h3 class="faq-card-question">How do you address the Privacy Act 1988 (Cth)?</h3>
+                <div class="faq-card-answer"><p>Through <strong>Data Sovereignty</strong>. The Protocol is deployed inside <strong>your own</strong> Azure, AWS, or GCP tenant. Data never leaves your environment or the Australian jurisdiction.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Can we test the AI if our documents contain highly sensitive PII?</h3>
+                <div class="faq-card-answer"><p>Yes. We recommend a <strong>Redacted Feasibility Sprint</strong>. You black out PII on 15 sample documents before sending them to us to prove accuracy without exposing live data.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Is the Phase 2 'Security Readiness Review' a formal audit?</h3>
+                <div class="faq-card-answer"><p>No. It is an <strong>AI Readiness Review</strong> investigating Permission Scoping and API Integrity. It provides evidence your actual auditor will need.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Do you meet SOC2, ISO, and Australian Privacy Principles (APP)?</h3>
+                <div class="faq-card-answer"><p>Yes. By deploying internally, we inherit your posture. We provide configuration documentation for your SOC2/ISO auditors in Phase 2.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Does all data stay within our environment?</h3>
+                <div class="faq-card-answer"><p>Yes. 100% of processing happens in your tenant. No data leaves your control. No data is used to train public models.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">How do you guarantee ISO 27001 compliance?</h3>
+                <div class="faq-card-answer"><p>We map deployment against ISO 27001 controls in Phase 3, creating data flow diagrams and access control matrices.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Where is data processed?</h3>
+                <div class="faq-card-answer"><p>Exclusively within your specified region (e.g., Azure Australia East). We guarantee Australian data residency.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Will this require opening new firewall ports?</h3>
+                <div class="faq-card-answer"><p>No. Zero new firewall ports. Integration uses outbound-only communication via secure APIs already authorized.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">What is the protocol for legacy on-premise servers?</h3>
+                <div class="faq-card-answer"><p>We use Microsoft's Data Gateway—a secure connector running inside your firewall with no inbound ports needed.</p></div>
+            </div>
                 </div>
             </div>
         </div>
@@ -106,9 +161,15 @@
                 <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
-                <div class="faq-accordion">
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Are we locked into your services? Do we own the source code?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>No lock-in. You own 100% of the source code. At Phase 4 conclusion, we transfer all workflows, scripts, and documentation. Zero ongoing licensing fees.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Who handles maintenance?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>You own the system. Your IT admin can handle it, or you can use our Tier 2 support retainer ($500/month).</p></div></div>
+                <div class="faq-cards-grid">
+            <div class="faq-card">
+                <h3 class="faq-card-question">Are we locked into your services? Do we own the source code?</h3>
+                <div class="faq-card-answer"><p>No lock-in. You own 100% of the source code. At Phase 4 conclusion, we transfer all workflows, scripts, and documentation. Zero ongoing licensing fees.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Who handles maintenance?</h3>
+                <div class="faq-card-answer"><p>You own the system. Your IT admin can handle it, or you can use our Tier 2 support retainer ($500/month).</p></div>
+            </div>
                 </div>
             </div>
         </div>
@@ -122,13 +183,31 @@
                 <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
-                <div class="faq-accordion">
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>How can AI make "judgment-based" calls?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Our AI mimics senior-associate logic. We use <strong>The Protocol™</strong> to set specific confidence thresholds. Anything falling below 90% confidence is flagged for human review.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>How accurate is the digitization of handwritten site logs?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Accuracy depends on handwriting quality. Realistically, we may not be 100% accurate on handwritten docs, which is why we implement <strong>Human-in-the-Loop</strong> verification.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>How do you guarantee accuracy and prevent AI hallucinations?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Through a three-layer system: <strong>Grounding</strong> (AI only extracts from your documents), <strong>Confidence Scoring</strong>, and <strong>ERP Cross-Checks</strong>.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>What if the AI fails on our most critical documents?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>This is why Phase 1 is mandatory. If we can't hit 90% accuracy on your documents, you get a full refund immediately.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>What if the AI makes a costly mistake in production?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Validation layers flag errors before they reach your ERP. Furthermore, we carry Professional Indemnity insurance that covers our AI implementations.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>How much time will my team spend on human review?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>Typically 5–15 minutes per day reviewing the <10% of documents the AI flags as low-confidence.</p></div></div>
+                <div class="faq-cards-grid">
+            <div class="faq-card">
+                <h3 class="faq-card-question">How can AI make "judgment-based" calls?</h3>
+                <div class="faq-card-answer"><p>Our AI mimics senior-associate logic. We use <strong>The Protocol™</strong> to set specific confidence thresholds. Anything falling below 90% confidence is flagged for human review.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">How accurate is the digitization of handwritten site logs?</h3>
+                <div class="faq-card-answer"><p>Accuracy depends on handwriting quality. Realistically, we may not be 100% accurate on handwritten docs, which is why we implement <strong>Human-in-the-Loop</strong> verification.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">How do you guarantee accuracy and prevent AI hallucinations?</h3>
+                <div class="faq-card-answer"><p>Through a three-layer system: <strong>Grounding</strong> (AI only extracts from your documents), <strong>Confidence Scoring</strong>, and <strong>ERP Cross-Checks</strong>.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">What if the AI fails on our most critical documents?</h3>
+                <div class="faq-card-answer"><p>This is why Phase 1 is mandatory. If we can't hit 90% accuracy on your documents, you get a full refund immediately.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">What if the AI makes a costly mistake in production?</h3>
+                <div class="faq-card-answer"><p>Validation layers flag errors before they reach your ERP. Furthermore, we carry Professional Indemnity insurance that covers our AI implementations.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">How much time will my team spend on human review?</h3>
+                <div class="faq-card-answer"><p>Typically 5–15 minutes per day reviewing the <10% of documents the AI flags as low-confidence.</p></div>
+            </div>
                 </div>
             </div>
         </div>
@@ -142,15 +221,39 @@
                 <span class="faq-category-chevron">▶</span>
             </div>
             <div class="faq-category-content">
-                <div class="faq-accordion">
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Accounting: Trust Account Reconciliations?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>We automate the three-way match: bank statement → trust ledger → client matter files. Saves 8–12 hours per month.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Legal: Privileged Documents?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>All processing happens in your tenant. No data leaves your control, ensuring solicitor-client privilege requirements.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Wealth Management: ASIC reporting?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>We automate statement processing and built-in compliance checks for fee disclosure statements.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Engineering: Can AI read CAD/Revit directly?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>We automate metadata and schedule extraction from PDF exports of these drawings. We do not work with raw CAD/Revit files.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Engineering: Does site diary digitization work offline?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>No. Our solution is by nature an online cloud framework for real-time office/field sync.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Construction: WorkSafe Queensland compliance?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>We automate SWMS tracking and subcontractor certification. Alerts trigger 30 days before certificate expiry.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Logistics: Customs documentation?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>We extract 40+ fields from Bills of Lading and validate tariff codes. Data exports to <strong>CargoWise</strong> via JSON/CSV.</p></div></div>
-            <div class="faq-accordion-item"><div class="faq-accordion-header"><h3>Government: Grant acquittal reporting?</h3><span class="faq-accordion-icon">+</span></div><div class="faq-accordion-content"><p>We automate service logging and timestamps, matching delivery data to funding agreements to secure contract retention.</p></div></div>
+                <div class="faq-cards-grid">
+            <div class="faq-card">
+                <h3 class="faq-card-question">Accounting: Trust Account Reconciliations?</h3>
+                <div class="faq-card-answer"><p>We automate the three-way match: bank statement → trust ledger → client matter files. Saves 8–12 hours per month.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Legal: Privileged Documents?</h3>
+                <div class="faq-card-answer"><p>All processing happens in your tenant. No data leaves your control, ensuring solicitor-client privilege requirements.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Wealth Management: ASIC reporting?</h3>
+                <div class="faq-card-answer"><p>We automate statement processing and built-in compliance checks for fee disclosure statements.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Engineering: Can AI read CAD/Revit directly?</h3>
+                <div class="faq-card-answer"><p>We automate metadata and schedule extraction from PDF exports of these drawings. We do not work with raw CAD/Revit files.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Engineering: Does site diary digitization work offline?</h3>
+                <div class="faq-card-answer"><p>No. Our solution is by nature an online cloud framework for real-time office/field sync.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Construction: WorkSafe Queensland compliance?</h3>
+                <div class="faq-card-answer"><p>We automate SWMS tracking and subcontractor certification. Alerts trigger 30 days before certificate expiry.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Logistics: Customs documentation?</h3>
+                <div class="faq-card-answer"><p>We extract 40+ fields from Bills of Lading and validate tariff codes. Data exports to <strong>CargoWise</strong> via JSON/CSV.</p></div>
+            </div>
+            <div class="faq-card">
+                <h3 class="faq-card-question">Government: Grant acquittal reporting?</h3>
+                <div class="faq-card-answer"><p>We automate service logging and timestamps, matching delivery data to funding agreements to secure contract retention.</p></div>
+            </div>
                 </div>
             </div>
         </div>
@@ -167,10 +270,10 @@
             
             // Add question counts to each category
             categorySections.forEach(section => {
-                const accordion = section.querySelector('.faq-accordion');
+                const cardsGrid = section.querySelector('.faq-cards-grid');
                 const countElement = section.querySelector('.faq-category-count');
-                if (accordion && countElement) {
-                    const questionCount = accordion.querySelectorAll('.faq-accordion-item').length;
+                if (cardsGrid && countElement) {
+                    const questionCount = cardsGrid.querySelectorAll('.faq-card').length;
                     countElement.textContent = ` (${questionCount})`;
                 }
             });
