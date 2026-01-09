@@ -1,0 +1,62 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Document Types{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h2>Document Types</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Manage document type configurations</p>
+    </div>
+</div>
+
+<div class="admin-card">
+    <h3>All Document Types ({{ document_types | length }})</h3>
+    {% if document_types %}
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Slug</th>
+                <th>Sector</th>
+                <th>Demo Enabled</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dt in document_types %}
+            <tr>
+                <td><strong>{{ dt.get('name', 'Unknown') }}</strong></td>
+                <td><code style="background: #F3F4F6; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.875rem;">{{ dt.get('slug', 'N/A') }}</code></td>
+                <td>{{ dt.get('sector_name', 'Unknown') }}</td>
+                <td>
+                    {% if dt.get('demo_enabled') %}
+                        <span class="badge badge-success">Enabled</span>
+                    {% else %}
+                        <span class="badge badge-warning">Disabled</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if dt.get('active', True) %}
+                        <span class="badge badge-success">Active</span>
+                    {% else %}
+                        <span class="badge badge-error">Inactive</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #6B7280;">No document types configured.</p>
+    {% endif %}
+</div>
+
+<div class="admin-card">
+    <h3>Note</h3>
+    <p style="color: #6B7280;">
+        Document type management (add/edit/delete) will be available in a future update. 
+        Currently, document types are managed through the database directly.
+    </p>
+</div>
+{% endblock %}

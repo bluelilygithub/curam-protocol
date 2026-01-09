@@ -1,0 +1,82 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h2>Analytics</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Comprehensive extraction performance metrics</p>
+    </div>
+    <div class="admin-header-actions">
+        <form method="GET" action="{{ url_for('admin.analytics') }}" style="display: flex; gap: 0.5rem;">
+            <input type="date" name="date_from" value="{{ date_from[:10] if date_from else '' }}" style="padding: 0.5rem; border: 1px solid #E5E7EB; border-radius: 6px;">
+            <input type="date" name="date_to" value="{{ date_to[:10] if date_to else '' }}" style="padding: 0.5rem; border: 1px solid #E5E7EB; border-radius: 6px;">
+            <button type="submit" class="btn-admin">Update</button>
+        </form>
+    </div>
+</div>
+
+<div class="admin-stats-grid">
+    <div class="admin-stat-card">
+        <div class="admin-stat-label">Total Extractions</div>
+        <div class="admin-stat-value">{{ analytics.get('total_extractions', 0) | int }}</div>
+        <div style="color: #6B7280; font-size: 0.875rem;">In selected period</div>
+    </div>
+    
+    <div class="admin-stat-card">
+        <div class="admin-stat-label">Success Rate</div>
+        <div class="admin-stat-value">{{ analytics.get('success_rate', 0) | round(1) }}%</div>
+        <div style="color: #6B7280; font-size: 0.875rem;">
+            {{ analytics.get('successful_extractions', 0) | int }} of {{ analytics.get('total_extractions', 0) | int }}
+        </div>
+    </div>
+    
+    <div class="admin-stat-card">
+        <div class="admin-stat-label">Avg Processing Time</div>
+        <div class="admin-stat-value">{{ (analytics.get('avg_processing_time_ms', 0) / 1000) | round(2) }}s</div>
+        <div style="color: #6B7280; font-size: 0.875rem;">Per extraction</div>
+    </div>
+</div>
+
+<div class="admin-card">
+    <h3>Extractions by Document Type</h3>
+    {% if analytics.get('extractions_by_document_type') %}
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Document Type</th>
+                <th>Count</th>
+                <th>Percentage</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in analytics.get('extractions_by_document_type', []) %}
+            <tr>
+                <td><strong>{{ item.get('name', 'Unknown') }}</strong></td>
+                <td>{{ item.get('count', 0) | int }}</td>
+                <td>
+                    {% set total = analytics.get('total_extractions', 1) %}
+                    {% if total > 0 %}
+                        {{ ((item.get('count', 0) / total) * 100) | round(1) }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #6B7280;">No extraction data available for the selected period.</p>
+    {% endif %}
+</div>
+
+<div class="admin-card">
+    <h3>Note</h3>
+    <p style="color: #6B7280;">
+        Advanced analytics (charts, trends, field-level analysis) will be available in a future update.
+        Currently showing basic metrics from the extraction_results table.
+    </p>
+</div>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h2>Dashboard</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Overview of system activity</p>
+    </div>
+    <div class="admin-header-actions">
+        <span style="color: #6B7280; font-size: 0.875rem;">Logged in as: <strong>{{ session.get('admin_username', 'admin') }}</strong></span>
+    </div>
+</div>
+
+<div class="admin-stats-grid">
+    <div class="admin-stat-card">
+        <div class="admin-stat-label">Total Extractions</div>
+        <div class="admin-stat-value">{{ analytics.get('total_extractions', 0) | int }}</div>
+        <div style="color: #6B7280; font-size: 0.875rem;">Last 30 days</div>
+    </div>
+    
+    <div class="admin-stat-card">
+        <div class="admin-stat-label">Success Rate</div>
+        <div class="admin-stat-value">{{ analytics.get('success_rate', 0) | round(1) }}%</div>
+        <div style="color: #6B7280; font-size: 0.875rem;">
+            {{ analytics.get('successful_extractions', 0) | int }} successful
+        </div>
+    </div>
+    
+    <div class="admin-stat-card">
+        <div class="admin-stat-label">Avg Processing Time</div>
+        <div class="admin-stat-value">{{ (analytics.get('avg_processing_time_ms', 0) / 1000) | round(2) }}s</div>
+        <div style="color: #6B7280; font-size: 0.875rem;">Per extraction</div>
+    </div>
+    
+    <div class="admin-stat-card">
+        <div class="admin-stat-label">Document Types</div>
+        <div class="admin-stat-value">{{ doc_types_summary | length }}</div>
+        <div style="color: #6B7280; font-size: 0.875rem;">Active types</div>
+    </div>
+</div>
+
+<div class="admin-card">
+    <h3>Recent Extractions</h3>
+    {% if recent_extractions %}
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Document Type</th>
+                <th>Status</th>
+                <th>Processing Time</th>
+                <th>Created</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for extraction in recent_extractions[:10] %}
+            <tr>
+                <td>{{ extraction.get('uploaded_file_name', 'N/A') }}</td>
+                <td>{{ extraction.get('document_type_name', 'Unknown') }}</td>
+                <td>
+                    {% if extraction.get('validation_errors') %}
+                        <span class="badge badge-error">Errors</span>
+                    {% else %}
+                        <span class="badge badge-success">Success</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if extraction.get('processing_time_ms') %}
+                        {{ (extraction.get('processing_time_ms') / 1000) | round(2) }}s
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% if extraction.get('created_at') %}
+                        {{ extraction.get('created_at').strftime('%Y-%m-%d %H:%M') if extraction.get('created_at') else 'N/A' }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div style="margin-top: 1rem;">
+        <a href="{{ url_for('admin.extractions') }}" class="btn-admin">View All Extractions →</a>
+    </div>
+    {% else %}
+    <p style="color: #6B7280;">No extractions yet. Extraction results will appear here once the system starts logging.</p>
+    {% endif %}
+</div>
+
+<div class="admin-card">
+    <h3>Extractions by Document Type</h3>
+    {% if analytics.get('extractions_by_document_type') %}
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Document Type</th>
+                <th>Count</th>
+                <th>Percentage</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in analytics.get('extractions_by_document_type', []) %}
+            <tr>
+                <td>{{ item.get('name', 'Unknown') }}</td>
+                <td>{{ item.get('count', 0) | int }}</td>
+                <td>
+                    {% set total = analytics.get('total_extractions', 1) %}
+                    {% if total > 0 %}
+                        {{ ((item.get('count', 0) / total) * 100) | round(1) }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #6B7280;">No extraction data available yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

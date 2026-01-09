@@ -643,3 +643,262 @@ def log_roi_report(report_type, industry=None, staff_count=None, avg_rate=None,
         import traceback
         traceback.print_exc()
         return None
+
+
+# ============================================================================
+# EXTRACTION RESULTS - Store extraction history for admin panel
+# ============================================================================
+
+def save_extraction_result(
+    document_type_slug=None,
+    document_type_id=None,
+    uploaded_file_name=None,
+    extracted_data=None,
+    confidence_scores=None,
+    validation_errors=None,
+    processing_time_ms=None,
+    user_session_id=None,
+    user_feedback=None,
+    feedback_notes=None
+):
+    """
+    Save extraction result to database for analytics and quality monitoring.
+    
+    Args:
+        document_type_slug: Slug like 'vendor-invoice', 'beam-schedule'
+        document_type_id: Database ID (will look up if slug provided)
+        uploaded_file_name: Original filename
+        extracted_data: JSONB dict of extracted fields
+        confidence_scores: JSONB dict of per-field confidence scores
+        validation_errors: JSONB array of validation failures
+        processing_time_ms: Processing time in milliseconds
+        user_session_id: Flask session ID
+        user_feedback: 'positive', 'negative', 'neutral'
+        feedback_notes: User's feedback text
+    
+    Returns:
+        int: ID of created record, or None if failed
+    """
+    if not engine:
+        return None
+    
+    try:
+        # Look up document_type_id if slug provided
+        if document_type_slug and not document_type_id:
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT id FROM document_types WHERE slug = :slug
+                """), {"slug": document_type_slug})
+                row = result.fetchone()
+                if row:
+                    document_type_id = row[0]
+        
+        if not document_type_id:
+            print(f"⚠️ Warning: Could not find document_type_id for slug: {document_type_slug}")
+            return None
+        
+        import json
+        
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                INSERT INTO extraction_results (
+                    document_type_id,
+                    uploaded_file_name,
+                    extracted_data,
+                    confidence_scores,
+                    validation_errors,
+                    processing_time_ms,
+                    user_session_id,
+                    user_feedback,
+                    feedback_notes,
+                    created_at
+                ) VALUES (
+                    :document_type_id,
+                    :uploaded_file_name,
+                    :extracted_data,
+                    :confidence_scores,
+                    :validation_errors,
+                    :processing_time_ms,
+                    :user_session_id,
+                    :user_feedback,
+                    :feedback_notes,
+                    NOW()
+                )
+                RETURNING id
+            """), {
+                "document_type_id": document_type_id,
+                "uploaded_file_name": uploaded_file_name,
+                "extracted_data": json.dumps(extracted_data) if extracted_data else None,
+                "confidence_scores": json.dumps(confidence_scores) if confidence_scores else None,
+                "validation_errors": json.dumps(validation_errors) if validation_errors else None,
+                "processing_time_ms": processing_time_ms,
+                "user_session_id": user_session_id,
+                "user_feedback": user_feedback,
+                "feedback_notes": feedback_notes
+            })
+            conn.commit()
+            record_id = result.scalar()
+            print(f"✅ Extraction result saved: ID {record_id}")
+            return record_id
+            
+    except Exception as e:
+        print(f"❌ Error saving extraction result: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_extraction_results(filters=None, limit=100, offset=0):
+    """
+    Get extraction results with optional filters.
+    
+    Args:
+        filters: Dict with keys:
+            - document_type_id: Filter by document type
+            - date_from: Start date (datetime string)
+            - date_to: End date (datetime string)
+            - success_only: Boolean (only successful extractions)
+        limit: Max records to return
+        offset: Pagination offset
+    
+    Returns:
+        list: List of extraction result dicts
+    """
+    if not engine:
+        return []
+    
+    try:
+        where_clauses = []
+        params = {"limit": limit, "offset": offset}
+        
+        if filters:
+            if filters.get('document_type_id'):
+                where_clauses.append("er.document_type_id = :document_type_id")
+                params['document_type_id'] = filters['document_type_id']
+            
+            if filters.get('date_from'):
+                where_clauses.append("er.created_at >= :date_from")
+                params['date_from'] = filters['date_from']
+            
+            if filters.get('date_to'):
+                where_clauses.append("er.created_at <= :date_to")
+                params['date_to'] = filters['date_to']
+            
+            if filters.get('success_only'):
+                where_clauses.append("(er.validation_errors IS NULL OR er.validation_errors::text = '[]'::text OR er.validation_errors::text = 'null')")
+        
+        where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
+        
+        with engine.connect() as conn:
+            result = conn.execute(text(f"""
+                SELECT 
+                    er.id,
+                    er.document_type_id,
+                    dt.slug as document_type_slug,
+                    dt.name as document_type_name,
+                    er.uploaded_file_name,
+                    er.extracted_data,
+                    er.confidence_scores,
+                    er.validation_errors,
+                    er.processing_time_ms,
+                    er.user_feedback,
+                    er.feedback_notes,
+                    er.created_at
+                FROM extraction_results er
+                LEFT JOIN document_types dt ON er.document_type_id = dt.id
+                {where_sql}
+                ORDER BY er.created_at DESC
+                LIMIT :limit OFFSET :offset
+            """), params)
+            
+            rows = result.fetchall()
+            return [dict(row._mapping) for row in rows]
+            
+    except Exception as e:
+        print(f"❌ Error fetching extraction results: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
+def get_extraction_analytics(date_from=None, date_to=None):
+    """
+    Get extraction analytics and metrics.
+    
+    Returns:
+        dict: Analytics data including:
+            - total_extractions
+            - success_rate
+            - avg_processing_time_ms
+            - extractions_by_document_type
+    """
+    if not engine:
+        return {}
+    
+    try:
+        where_clause = ""
+        params = {}
+        
+        if date_from and date_to:
+            where_clause = "WHERE created_at BETWEEN :date_from AND :date_to"
+            params = {"date_from": date_from, "date_to": date_to}
+        elif date_from:
+            where_clause = "WHERE created_at >= :date_from"
+            params = {"date_from": date_from}
+        elif date_to:
+            where_clause = "WHERE created_at <= :date_to"
+            params = {"date_to": date_to}
+        
+        with engine.connect() as conn:
+            # Total extractions
+            total_result = conn.execute(text(f"""
+                SELECT COUNT(*) as total FROM extraction_results {where_clause}
+            """), params)
+            total_extractions = total_result.scalar() or 0
+            
+            # Success rate (no validation errors)
+            success_result = conn.execute(text(f"""
+                SELECT COUNT(*) as successful
+                FROM extraction_results
+                {where_clause}
+                AND (validation_errors IS NULL OR validation_errors::text = '[]'::text OR validation_errors::text = 'null')
+            """), params)
+            successful = success_result.scalar() or 0
+            success_rate = (successful / total_extractions * 100) if total_extractions > 0 else 0
+            
+            # Average processing time
+            time_result = conn.execute(text(f"""
+                SELECT AVG(processing_time_ms) as avg_time
+                FROM extraction_results
+                {where_clause}
+                AND processing_time_ms IS NOT NULL
+            """), params)
+            avg_processing_time = time_result.scalar() or 0
+            
+            # Extractions by document type
+            type_result = conn.execute(text(f"""
+                SELECT 
+                    dt.slug,
+                    dt.name,
+                    COUNT(*) as count
+                FROM extraction_results er
+                LEFT JOIN document_types dt ON er.document_type_id = dt.id
+                {where_clause}
+                GROUP BY dt.id, dt.slug, dt.name
+                ORDER BY count DESC
+            """), params)
+            by_document_type = [dict(row._mapping) for row in type_result]
+            
+            return {
+                "total_extractions": total_extractions,
+                "successful_extractions": successful,
+                "success_rate": round(success_rate, 2),
+                "avg_processing_time_ms": round(avg_processing_time, 2),
+                "extractions_by_document_type": by_document_type
+            }
+            
+    except Exception as e:
+        print(f"❌ Error fetching analytics: {e}")
+        import traceback
+        traceback.print_exc()
+        return {}

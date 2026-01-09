@@ -15,6 +15,9 @@ from routes.export_routes import export_bp
 # Phase 4.4: API Routes Blueprint
 from routes.api_routes import api_bp
 
+# Admin Panel Blueprint
+from routes.admin_routes import admin_bp
+
 # Import configuration
 from config import (
     SECRET_KEY,
@@ -78,6 +81,7 @@ app.register_blueprint(static_pages_bp)
 app.register_blueprint(automater_bp)
 app.register_blueprint(export_bp)
 app.register_blueprint(api_bp)
+app.register_blueprint(admin_bp)  # Admin panel (separate, doesn't modify existing code)
 
 # Configure UTF-8 encoding sanitization for corrupt characters
 from utils.encoding_fix import create_safe_template_filter

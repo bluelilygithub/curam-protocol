@@ -1,0 +1,113 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Extractions{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h2>Extraction History</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">View and filter extraction results</p>
+    </div>
+</div>
+
+<div class="admin-card">
+    <h3>Filters</h3>
+    <form method="GET" action="{{ url_for('admin.extractions') }}" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+        <div>
+            <label for="document_type_id" style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.875rem;">Document Type</label>
+            <select name="document_type_id" id="document_type_id" style="width: 100%; padding: 0.5rem; border: 1px solid #E5E7EB; border-radius: 6px;">
+                <option value="">All Types</option>
+                {% for dt in document_types %}
+                <option value="{{ dt.get('id') }}" {% if filters.get('document_type_id') == dt.get('id') %}selected{% endif %}>
+                    {{ dt.get('name', 'Unknown') }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div>
+            <label for="date_from" style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.875rem;">Date From</label>
+            <input type="date" name="date_from" id="date_from" value="{{ filters.get('date_from', '') }}" style="width: 100%; padding: 0.5rem; border: 1px solid #E5E7EB; border-radius: 6px;">
+        </div>
+        
+        <div>
+            <label for="date_to" style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.875rem;">Date To</label>
+            <input type="date" name="date_to" id="date_to" value="{{ filters.get('date_to', '') }}" style="width: 100%; padding: 0.5rem; border: 1px solid #E5E7EB; border-radius: 6px;">
+        </div>
+        
+        <div>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.875rem;">Options</label>
+            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" name="success_only" value="true" {% if filters.get('success_only') %}checked{% endif %}>
+                <span>Success only</span>
+            </label>
+        </div>
+        
+        <div style="display: flex; align-items: flex-end; gap: 0.5rem;">
+            <button type="submit" class="btn-admin">Apply Filters</button>
+            <a href="{{ url_for('admin.extractions') }}" class="btn-admin btn-admin-secondary">Clear</a>
+        </div>
+    </form>
+</div>
+
+<div class="admin-card">
+    <h3>Extractions ({{ extractions | length }} results)</h3>
+    {% if extractions %}
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Filename</th>
+                <th>Document Type</th>
+                <th>Status</th>
+                <th>Processing Time</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for extraction in extractions %}
+            <tr>
+                <td>#{{ extraction.get('id', 'N/A') }}</td>
+                <td>{{ extraction.get('uploaded_file_name', 'N/A') }}</td>
+                <td>{{ extraction.get('document_type_name', 'Unknown') }}</td>
+                <td>
+                    {% if extraction.get('validation_errors') %}
+                        <span class="badge badge-error">Errors</span>
+                    {% else %}
+                        <span class="badge badge-success">Success</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if extraction.get('processing_time_ms') %}
+                        {{ (extraction.get('processing_time_ms') / 1000) | round(2) }}s
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    {% if extraction.get('created_at') %}
+                        {{ extraction.get('created_at').strftime('%Y-%m-%d %H:%M') if extraction.get('created_at') else 'N/A' }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    <button onclick="viewExtraction({{ extraction.get('id') }})" class="btn-admin btn-admin-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.875rem;">View</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #6B7280;">No extractions found matching your filters.</p>
+    {% endif %}
+</div>
+
+<script>
+function viewExtraction(id) {
+    // TODO: Implement extraction detail modal
+    alert('Extraction detail view coming soon. ID: ' + id);
+}
+</script>
+{% endblock %}

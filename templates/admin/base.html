@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Panel{% endblock %} - Curam-Ai Protocol</title>
+    <link rel="icon" type="image/png" href="/assets/images/curam-ai-logo.png">
+    <link rel="stylesheet" href="/assets/css/styles.css?v={{ static_version }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Admin Panel Specific Styles */
+        .admin-container {
+            display: flex;
+            min-height: 100vh;
+            background: #f8f9fa;
+        }
+        
+        .admin-sidebar {
+            width: 260px;
+            background: #0B1221;
+            color: #fff;
+            padding: 2rem 0;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        
+        .admin-sidebar-header {
+            padding: 0 1.5rem 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 1rem;
+        }
+        
+        .admin-sidebar-header h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #D4AF37;
+            margin: 0;
+        }
+        
+        .admin-sidebar-header p {
+            font-size: 0.875rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 0.25rem 0 0;
+        }
+        
+        .admin-nav {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .admin-nav-item {
+            margin: 0.25rem 0;
+        }
+        
+        .admin-nav-link {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        
+        .admin-nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        
+        .admin-nav-link.active {
+            background: rgba(212, 175, 55, 0.2);
+            color: #D4AF37;
+            border-left: 3px solid #D4AF37;
+        }
+        
+        .admin-main {
+            flex: 1;
+            margin-left: 260px;
+            padding: 2rem;
+        }
+        
+        .admin-header {
+            background: #fff;
+            padding: 1.5rem 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .admin-header h2 {
+            margin: 0;
+            font-size: 1.75rem;
+            color: #0B1221;
+        }
+        
+        .admin-header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .admin-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1.5rem;
+        }
+        
+        .admin-card h3 {
+            margin: 0 0 1rem;
+            font-size: 1.25rem;
+            color: #0B1221;
+        }
+        
+        .admin-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .admin-stat-card {
+            background: #fff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .admin-stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0B1221;
+            margin: 0.5rem 0;
+        }
+        
+        .admin-stat-label {
+            color: #6B7280;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .admin-table th {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 2px solid #E5E7EB;
+            font-weight: 600;
+            color: #0B1221;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .admin-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #E5E7EB;
+            color: #4B5563;
+        }
+        
+        .admin-table tr:hover {
+            background: #F8F9FA;
+        }
+        
+        .btn-admin {
+            background: #D4AF37;
+            color: #0B1221;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s;
+        }
+        
+        .btn-admin:hover {
+            background: #B8941F;
+            transform: translateY(-1px);
+        }
+        
+        .btn-admin-secondary {
+            background: #E5E7EB;
+            color: #4B5563;
+        }
+        
+        .btn-admin-secondary:hover {
+            background: #D1D5DB;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge-success {
+            background: #D1FAE5;
+            color: #065F46;
+        }
+        
+        .badge-warning {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+        
+        .badge-error {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+        
+        .badge-info {
+            background: #DBEAFE;
+            color: #1E40AF;
+        }
+        
+        @media (max-width: 768px) {
+            .admin-sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            
+            .admin-main {
+                margin-left: 0;
+                padding: 1rem;
+            }
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <div class="admin-container">
+        <aside class="admin-sidebar">
+            <div class="admin-sidebar-header">
+                <h1>Curam-AI Admin</h1>
+                <p>System Management</p>
+            </div>
+            <nav>
+                <ul class="admin-nav">
+                    <li class="admin-nav-item">
+                        <a href="{{ url_for('admin.dashboard') }}" class="admin-nav-link {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
+                            Dashboard
+                        </a>
+                    </li>
+                    <li class="admin-nav-item">
+                        <a href="{{ url_for('admin.extractions') }}" class="admin-nav-link {% if request.endpoint == 'admin.extractions' %}active{% endif %}">
+                            Extractions
+                        </a>
+                    </li>
+                    <li class="admin-nav-item">
+                        <a href="{{ url_for('admin.document_types') }}" class="admin-nav-link {% if request.endpoint == 'admin.document_types' %}active{% endif %}">
+                            Document Types
+                        </a>
+                    </li>
+                    <li class="admin-nav-item">
+                        <a href="{{ url_for('admin.analytics') }}" class="admin-nav-link {% if request.endpoint == 'admin.analytics' %}active{% endif %}">
+                            Analytics
+                        </a>
+                    </li>
+                    <li class="admin-nav-item">
+                        <a href="{{ url_for('admin.logout') }}" class="admin-nav-link">
+                            Logout
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+        
+        <main class="admin-main">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
