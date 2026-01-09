@@ -1,5 +1,6 @@
 import os
 from flask import Flask, request, render_template, send_file, abort, redirect
+from flask_compress import Compress
 import google.generativeai as genai
 
 # Phase 4.1: Static Pages Blueprint
@@ -26,15 +27,27 @@ from utils.sample_loader import get_allowed_sample_paths
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = SECRET_KEY
 
-# Performance: Add caching headers for static assets
+# Performance: Enable Gzip/Brotli compression
+Compress(app)
+
+# Performance: Add caching headers for static assets with versioning
+# Version number - increment when static assets change
+STATIC_ASSETS_VERSION = "1.0.0"
+
+@app.context_processor
+def inject_version():
+    """Inject version number into templates for cache busting"""
+    return {'static_version': STATIC_ASSETS_VERSION}
+
 @app.after_request
 def add_cache_headers(response):
     """Add appropriate cache headers based on file type"""
     if request.endpoint == 'static' or request.path.startswith('/assets/'):
-        # CSS and JS files - cache for 1 year (with versioning)
+        # CSS and JS files - cache for 1 year (with versioning in URL)
         if request.path.endswith(('.css', '.js')):
             response.cache_control.max_age = 31536000  # 1 year
             response.cache_control.public = True
+            response.cache_control.immutable = True  # Indicates file won't change
         # Images - cache for 6 months
         elif request.path.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico')):
             response.cache_control.max_age = 15552000  # 6 months
@@ -47,10 +60,17 @@ def add_cache_headers(response):
         elif request.path.endswith(('.woff', '.woff2', '.ttf', '.otf', '.eot')):
             response.cache_control.max_age = 31536000  # 1 year
             response.cache_control.public = True
+            response.cache_control.immutable = True
         # Other static files - cache for 1 hour
         else:
             response.cache_control.max_age = 3600  # 1 hour
             response.cache_control.public = True
+    
+    # Add security headers
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
     return response
 
 # Register blueprints

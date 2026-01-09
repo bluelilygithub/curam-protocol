@@ -6,10 +6,10 @@
     <title>{% block title %}Curam-Ai Protocol{% endblock %}</title>
     <meta name="description" content="{% block description %}AI automation for mid-market professional services{% endblock %}">
     <link rel="icon" type="image/png" href="/assets/images/curam-ai-logo.png">
-    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/styles.css?v={{ static_version }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -136,7 +136,7 @@
         </div>
     </footer>
 
-    <script src="/assets/js/main.js"></script>
+    <script src="/assets/js/main.js?v={{ static_version }}" defer></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>
