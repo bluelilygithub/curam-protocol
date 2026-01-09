@@ -95,9 +95,9 @@
                     </div>
                 </div>
                 <div class="faq-accordion-item">
-                    <div class="faq-accordion-header"><h3>Does this integrate with my Practice Management Software?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-header"><h3>Does this integrate with my Practice Management Software or ERP?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>Yes. Our solutions are designed to bridge the gap between your document storage (SharePoint, Google Drive) and core platforms. We use API-first connectivity to ensure data flows seamlessly into <strong>Xero, MYOB, LEAP, Smokeball, and Xplan</strong>. We act as the intelligent data-entry layer for your existing source of truth.</p>
+                        <p>Yes. Our solutions are designed to bridge the gap between your document storage (SharePoint, Google Drive) and core platforms. We use API-first connectivity to ensure data flows seamlessly into <strong>Xero, MYOB, LEAP, Smokeball, and Xplan</strong>. For Logistics, we provide structured <strong>JSON, CSV, or XML</strong> for direct import into <strong>CargoWise</strong>. We act as the intelligent data-entry layer for your existing source of truth.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
@@ -144,6 +144,18 @@
             </div>
             <div class="faq-accordion">
                 <div class="faq-accordion-item">
+                    <div class="faq-accordion-header"><h3>How do you address the Privacy Act 1988 (Cth)?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-content">
+                        <p>We address the Privacy Act through <strong>Data Sovereignty</strong>. Unlike generic AI tools that store your data on their own clouds, our Protocol is deployed directly inside <strong>your own</strong> Microsoft Azure, AWS, or Google Cloud tenant. Your sensitive client data never technically leaves your control or the Australian jurisdiction, ensuring compliance with Australian Privacy Principles (APPs).</p>
+                    </div>
+                </div>
+                <div class="faq-accordion-item">
+                    <div class="faq-accordion-header"><h3>Can we test the AI if our documents contain highly sensitive PII?</h3><span class="faq-accordion-icon">+</span></div>
+                    <div class="faq-accordion-content">
+                        <p>Yes. For firms concerned about the Privacy Act (such as Healthcare or Legal), we recommend a <strong>Redacted Feasibility Sprint</strong>. You black out personally identifiable information (PII) on 15 sample documents before sending them to us. This allows us to prove the AI's logic and extraction accuracy on complex tables and fields without touching "live" sensitive data during the evaluation phase.</p>
+                    </div>
+                </div>
+                <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Is the Phase 2 'Security Readiness Review' a formal cybersecurity audit?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
                         <p>No. It is critical to distinguish between a General Cybersecurity Audit and our <strong>AI Readiness Review</strong>. A formal audit evaluates your entire company’s IT posture. Our Phase 2 Review is a targeted investigation specifically for the AI implementation. We verify Permission Scoping, API Integrity, and Identity Management. This review provides the technical evidence your actual auditor will eventually need, but it does not replace your annual independent certification.</p>
@@ -152,7 +164,7 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Do you meet SOC2, ISO, and Australian Privacy Principle (APP) standards?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>Yes. Because the solution is deployed within your own cloud environment, it inherits your existing compliance posture. During Phase 2, we provide the specific configuration documentation required for SOC2 and ISO audits, and ensure all data handling aligns with the <strong>Australian Privacy Act</strong> and <strong>Data Sovereignty</strong> requirements.</p>
+                        <p>Yes. Because the solution is deployed within your own cloud environment, it inherits your existing compliance posture. During Phase 2, we provide the specific configuration documentation required for SOC2 and ISO audits, and ensure all data handling aligns with <strong>Australian Privacy Act</strong> and <strong>Data Sovereignty</strong> requirements.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
@@ -214,7 +226,8 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>How can AI make "judgment-based" calls?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>Our AI doesn't replace professional judgment; it mimics the "first-pass" logic of a senior associate. We use <strong>The Protocol™</strong> to set specific confidence thresholds. If the AI is 99% sure a document meets a compliance rule, it proceeds; if it encounters an edge case requiring nuance, it flags it for human review. This is <strong>Human-in-the-loop</strong> automation, not "Set-and-forget."</p>
+                        <p>Our AI doesn't replace professional judgment; it mimics the "first-pass" logic of a senior associate. We use <strong>The Protocol™</strong> to set specific confidence thresholds. If the AI is 90%+ sure a document meets a compliance rule, it proceeds; if it encounters an edge case requiring nuance, it flags it for human review. This is <strong>Human-in-the-loop</strong> automation, not "Set-and-forget."</p>
+                        
                     </div>
                 </div>
                 <div class="faq-accordion-item">
@@ -307,13 +320,13 @@
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>How does this handle customs documentation and tariff codes?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>We extract 47 fields from Bills of Lading and validate tariff codes against ABF schedules, preventing $5k–$50k fines and speeding up clearance by 2.5 days.</p>
+                        <p>We extract 47 fields from Bills of Lading and validate tariff codes against ABF schedules, preventing $5k–$50k fines and speeding up clearance by 2.5 days. Data is formatted as <strong>JSON, CSV, or XML</strong> for direct import into <strong>CargoWise</strong>.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
                     <div class="faq-accordion-header"><h3>Is this HIPAA/Privacy Act compliant for healthcare?</h3><span class="faq-accordion-icon">+</span></div>
                     <div class="faq-accordion-content">
-                        <p>Yes. All patient data processing occurs within your secure Azure tenant in Australian data centers with zero-egress compliance and complete audit trails.</p>
+                        <p>Yes. All patient data processing occurs within your secure Azure tenant in Australian data centers with zero-egress compliance and complete audit trails, adhering to the <strong>Privacy Act 1988 (Cth)</strong>.</p>
                     </div>
                 </div>
                 <div class="faq-accordion-item">
