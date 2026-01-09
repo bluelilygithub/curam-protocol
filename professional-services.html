@@ -39,21 +39,24 @@
                 grid-template-columns: 1fr;
             }
         }
+        /* Subtle link styling for Protocol */
+        .protocol-inline-link {
+            color: var(--cyan-accent);
+            text-decoration: underline;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body class="professional-services-page">
-    <!-- Scroll Down Button -->
     <button class="scroll-down-btn" aria-label="Scroll down">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 5v14M19 12l-7 7-7-7"/>
         </svg>
     </button>
 
-    <!-- Navigation -->
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
 
-    <!-- HERO SECTION -->
     <section class="hero services-hero">
         <div class="hero-background">
             <div class="hero-gradient"></div>
@@ -82,17 +85,15 @@
                     <a href="/feasibility-sprint-report.html?industrysector=accounting" class="btn btn-secondary">Preview Sector Report</a>
                 </div>
                 
-                <!-- Infographic - ONLY appears here in hero, not repeated -->
                 <div class="hero-infographic" style="margin-top: var(--spacing-3xl); text-align: center;">
                     <img src="assets/images/prof-services-sector.jpeg" 
-                         alt="47 Queensland firms (15-100 staff) now automate document workflows that previously consumed 40+ hours per week of senior capacity—serving accounting, legal, wealth management, and insurance sectors across Brisbane and regional hubs"
+                         alt="47 Queensland firms (15-100 staff) now automate document workflows that previously consumed 40+ hours per week of senior capacity—serving accounting, legal, wealth management, and insurance sectors across Brisbane and regional hubs" 
                          style="max-width: 100%; height: auto; border-radius: 8px;">
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- BUILT FOR QUEENSLAND'S MID-MARKET -->
     <section class="section section-alt">
         <div class="container">
             <h2 class="section-headline">Built for Queensland's Mid-Market</h2>
@@ -116,8 +117,8 @@
                     </div>
                     <ul class="deliverable-list">
                         <li><strong>30-100 technical staff</strong> (professionals, not admin support)</li>
-                        <li><strong>$3-20M annual revenue</strong> typical range</li>
-                        <li><strong>Document-heavy workflows:</strong> Processing 50+ documents per week manually</li>
+                        <li><strong>Cloud Infrastructure:</strong> Firms operating on <strong>Microsoft Azure, AWS, or Google Cloud</strong></li>
+                        <li><strong>Existing Ecosystem:</strong> Users of <strong>Xero, MYOB, LEAP, or Smokeball</strong> needing deeper automation</li>
                         <li><strong>Capacity-constrained:</strong> Turning away work or struggling to scale</li>
                         <li><strong>Queensland-based:</strong> Strong presence in Brisbane, regional hubs</li>
                     </ul>
@@ -146,12 +147,11 @@
         </div>
     </section>
 
-    <!-- WHAT THESE INDUSTRIES SHARE -->
     <section class="section">
         <div class="container">
             <h2 class="section-headline">What These Industries Share</h2>
             <p class="section-subhead">
-                Different sectors, same pain points. Here's why The Protocol works across all of them:
+                Different sectors, same pain points. Here's why <a href="/protocol.html" class="protocol-inline-link">The Protocol</a> works across all of them:
             </p>
 
             <div class="cards-grid">
@@ -166,8 +166,8 @@
                     <p class="card-description" style="margin-bottom: var(--spacing-md);"><strong>Not Simple Receipts</strong></p>
                     <ul class="card-description" style="list-style: none; padding: 0; margin: 0; text-align: left;">
                         <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Multi-page documents with variable structures</li>
-                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Mixed formats (tables + narrative + handwritten notes)</li>
-                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Judgment calls required (not just OCR)</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Mixed formats (tables + narrative + notes)</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Judgment calls required (mimicking senior review)</li>
                         <li style="padding: 0.5rem 0;">Standard tools like Dext/Receipt Bank fail on these</li>
                     </ul>
                 </div>
@@ -183,7 +183,7 @@
                     <ul class="card-description" style="list-style: none; padding: 0; margin: 0; text-align: left;">
                         <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Staff trapped in data entry</li>
                         <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Turning away work due to capacity limits</li>
-                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Can't hire fast enough to keep up with demand</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Can't hire fast enough to keep up</li>
                         <li style="padding: 0.5rem 0;">Billable time wasted on non-billable admin</li>
                     </ul>
                 </div>
@@ -194,12 +194,12 @@
                             <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
                         </svg>
                     </div>
-                    <h3 class="card-title">Compliance Requirements</h3>
-                    <p class="card-description" style="margin-bottom: var(--spacing-md);"><strong>Audit-Grade Standards</strong></p>
+                    <h3 class="card-title">Compliance Focus</h3>
+                    <p class="card-description" style="margin-bottom: var(--spacing-md);"><strong>APP & Audit Ready</strong></p>
                     <ul class="card-description" style="list-style: none; padding: 0; margin: 0; text-align: left;">
-                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Professional indemnity insurance concerns</li>
-                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">External auditor scrutiny</li>
-                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Regulatory reporting requirements</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Adherence to Australian Privacy Principles</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Data sovereignty (Data stays in your cloud)</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">External auditor scrutiny ready</li>
                         <li style="padding: 0.5rem 0;">Need for complete audit trails</li>
                     </ul>
                 </div>
@@ -214,7 +214,7 @@
                     <p class="card-description" style="margin-bottom: var(--spacing-md);"><strong>Need Proof First</strong></p>
                     <ul class="card-description" style="list-style: none; padding: 0; margin: 0; text-align: left;">
                         <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Can't afford failed AI experiments</li>
-                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Need validated ROI before board approval</li>
+                        <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Validated ROI before board approval</li>
                         <li style="padding: 0.5rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">Fixed budgets, not open-ended consulting</li>
                         <li style="padding: 0.5rem 0;">6-12 month payback requirement</li>
                     </ul>
@@ -223,7 +223,6 @@
         </div>
     </section>
 
-    <!-- GROUP 1: BILLABLE HOUR INDUSTRIES -->
     <section id="group-1" class="section section-alt">
         <div class="container">
             <h2 class="section-headline">
@@ -231,12 +230,10 @@
                 <span class="text-accent">Accounting, Legal, Wealth & Insurance</span>
             </h2>
             <p class="section-subhead">
-                
                 High fit—document-heavy, capacity-constrained, senior time is billable. Automation directly converts to revenue.
             </p>
 
             <div class="methodology-grid">
-                <!-- Accounting -->
                 <div class="methodology-card methodology-card-clickable" onclick="window.location.href='industries/accounting.html'">
                     <div class="methodology-content">
                         <h3>
@@ -248,15 +245,14 @@
                             </svg>
                             Accounting & Advisory
                         </h3>
-                        <p class="methodology-desc"><strong>Key Pain Points:</strong> Trust account reconciliations, inter-entity matching, line-item GL coding, tax provisions</p>
-                        <p class="methodology-desc" style="margin-top: 10px;"><strong>Typical Savings:</strong> 40% reduction in junior staff time on reconciliations and data entry - redirected to client-facing work</p>
+                        <p class="methodology-desc"><strong>Software:</strong> Xero, MYOB, Class</p>
+                        <p class="methodology-desc"><strong>Focus:</strong> Trust account reconciliations, inter-entity matching, line-item GL coding.</p>
                         <p class="methodology-link">
                             <a href="industries/accounting.html">Learn More →</a>
                         </p>
                     </div>
                 </div>
 
-                <!-- Legal -->
                 <div class="methodology-card methodology-card-clickable" onclick="window.location.href='industries/legal-services.html'">
                     <div class="methodology-content">
                         <h3>
@@ -272,15 +268,14 @@
                             </svg>
                             Legal Services
                         </h3>
-                        <p class="methodology-desc"><strong>Key Pain Points:</strong> Trust account audits, matter cost tracking, billing reconciliation, document discovery</p>
-                        <p class="methodology-desc" style="margin-top: 10px;"><strong>Typical Savings:</strong> 8-12 hours per trust account audit (quarterly) saved by paralegals and trust accountants</p>
+                        <p class="methodology-desc"><strong>Software:</strong> LEAP, Smokeball, OpenPractice</p>
+                        <p class="methodology-desc"><strong>Focus:</strong> Trust account audits, matter cost tracking, billing reconciliation, document discovery.</p>
                         <p class="methodology-link">
                             <a href="industries/legal-services.html">Learn More →</a>
                         </p>
                     </div>
                 </div>
 
-                <!-- Wealth Management -->
                 <div class="methodology-card methodology-card-clickable" onclick="window.location.href='industries/wealth-management.html'">
                     <div class="methodology-content">
                         <h3>
@@ -290,15 +285,14 @@
                             </svg>
                             Wealth Management
                         </h3>
-                        <p class="methodology-desc"><strong>Key Pain Points:</strong> Client statement processing, performance reporting, regulatory compliance (ASIC), SOA generation</p>
-                        <p class="methodology-desc" style="margin-top: 10px;"><strong>Typical Savings:</strong> 60% reduction in statement reconciliation time for client service representatives</p>
+                        <p class="methodology-desc"><strong>Software:</strong> Xplan, Iress</p>
+                        <p class="methodology-desc"><strong>Focus:</strong> Client statement processing, performance reporting, ASIC compliance, SOA generation.</p>
                         <p class="methodology-link">
                             <a href="industries/wealth-management.html">Learn More →</a>
                         </p>
                     </div>
                 </div>
 
-                <!-- Insurance Underwriting -->
                 <div class="methodology-card methodology-card-clickable" onclick="window.location.href='industries/insurance-underwriting.html'">
                     <div class="methodology-content">
                         <h3>
@@ -307,8 +301,8 @@
                             </svg>
                             Insurance Underwriting
                         </h3>
-                        <p class="methodology-desc"><strong>Key Pain Points:</strong> Risk assessment documents, policy application processing, claims documentation, compliance reporting</p>
-                        <p class="methodology-desc" style="margin-top: 10px;"><strong>Typical Savings:</strong> 50% faster application processing by underwriting assistants and support staff</p>
+                        <p class="methodology-desc"><strong>Infrastructure:</strong> Azure, Private Cloud</p>
+                        <p class="methodology-desc"><strong>Focus:</strong> Risk assessment docs, policy application processing, claims documentation, compliance reporting.</p>
                         <p class="methodology-link">
                             <a href="industries/insurance-underwriting.html">Learn More →</a>
                         </p>
@@ -318,7 +312,6 @@
         </div>
     </section>
 
-    <!-- FINAL CTA SECTION -->
     <section class="section cta-section" style="opacity: 1; transform: translateY(0px); transition: opacity 0.6s, transform 0.6s;">
         <div class="container">
             <div class="cta-content">
@@ -327,24 +320,19 @@
                     Don't guess—get the proof. We will validate 90%+ accuracy on 15 of your most complex documents in 48 hours. 
                     If we miss the target, you get a full refund. No open-ended consulting, just a fixed-price Feasibility Report.
                 </p>
-                
                 <a href="contact.html?option=phase-1" class="btn btn-primary btn-large">
                     Get the Feasibility Report — $1,500 <span class="btn-arrow">→</span>
                 </a>
                 
-                
-                
                 <p class="cta-footer-note" style="margin-top: var(--spacing-xl); font-size: 0.875rem; color: var(--text-secondary);">
-                    Validating accuracy mid-market firms • 30-100 staff sweet spot • Data stays in your cloud.
+                    Deploying to your <strong>Azure, AWS, or GCP</strong> environment • Integration with <strong>Xero, LEAP & more</strong> • Australian Data Sovereignty.
                 </p>
             </div>
         </div>
     </section>
 
-    <!-- Footer -->
     <div id="footer-placeholder"></div>
     <script src="assets/js/footer-loader.js"></script>
-
     <script src="assets/js/scripts.js"></script>
     <script src="assets/js/main.js"></script>
 </body>
