@@ -28,6 +28,8 @@ pip install -r requirements.txt
 DATABASE_URL=postgresql://...
 GEMINI_API_KEY=...
 SECRET_KEY=...
+ADMIN_USERNAME=admin  # Optional: for admin dashboard
+ADMIN_PASSWORD=changeme123  # Optional: for admin dashboard
 ```
 
 **4. Run Locally**
@@ -41,6 +43,71 @@ python main.py
 - Select a department (Finance/Engineering/Transmittal)
 - Use sample PDFs from `/assets/samples/`
 - Verify extraction accuracy (90%+ expected)
+
+**6. Access Admin Dashboard**
+- Navigate to `http://localhost:5000/admin`
+- Login with `ADMIN_USERNAME` / `ADMIN_PASSWORD` (or create user via `create_admin_user.py`)
+
+---
+
+## Admin Dashboard Usage
+
+### Accessing the Admin Dashboard
+
+**URL:** `/admin`
+
+**Authentication:**
+1. **Database-backed (Recommended):**
+   ```bash
+   python create_admin_user.py
+   # Follow prompts to create user
+   ```
+
+2. **Environment Variable Fallback:**
+   - Set `ADMIN_USERNAME` and `ADMIN_PASSWORD` in Railway/environment
+
+### Features
+
+**Dashboard (`/admin`):**
+- System analytics (extractions, success rate, processing time)
+- Recent extraction results
+- Document types overview
+
+**Extractions (`/admin/extractions`):**
+- View all extraction results
+- Filter by document type, date range, success status
+- Export data (if implemented)
+
+**Document Types (`/admin/document-types`):**
+- View all configured document types
+- Sector associations
+- Demo status
+
+**Analytics (`/admin/analytics`):**
+- Overall extraction performance
+- Success rates by document type
+- Processing time trends
+
+**Documentation (`/admin/documentation`):**
+- Internal ROI documentation
+- Industry-specific ROI justifications
+- Sector groupings
+- FAQ-style collapsible content
+
+**Change Password (`/admin/change-password`):**
+- Update admin password
+- Requires current password verification
+
+### Managing Users
+
+**Create New Admin User:**
+```bash
+python create_admin_user.py
+```
+
+**Update Password:**
+- Via admin dashboard: `/admin/change-password`
+- Via database: Update `users.password_hash` (use Werkzeug)
 
 ---
 
@@ -101,28 +168,49 @@ def build_new_type_prompt(text):
 
 **Step 1: Update Industry Config**
 ```python
-# In industries.py
+# In roi_calculator/config/industries.py
 INDUSTRIES = {
-    'new-industry': {
-        'name': 'New Industry Name',
-        'base_automation_potential': 0.45,  # 45% baseline
-        'avg_hourly_rate': 180,
-        'confidence_adjustment': 1.0,
-        'default_staff_count': 50,
-        'default_hours_per_week': 10
+    'New Industry': {
+        'context': 'Industry description',
+        'industry_variance_multiplier': 0.75,  # 0.90 (high), 0.75 (medium), 0.60 (low)
+        'pain_point_question': 'Question text',
+        'pain_point_options': [...],
+        'weekly_hours_question': 'Question text',
+        'weekly_hours_range': [10, 200, 60],
+        'automation_potential': 0.40,  # 40% baseline
+        # ... other config
     }
 }
 ```
 
 **Step 2: Add to UI**
-- Update industry selection page
-- Add to results display
+- Update industry selection page (`roi.html`)
+- Add to results display (`roi_calculator_flask.py`)
 - Update PDF report template
 
 **Step 3: Test**
 - Run ROI calculator with new industry
-- Verify calculations are correct
-- Check PDF report generation
+- Verify Industry Variance Multiplier is applied
+- Check three scenarios (Conservative/Probable/Optimistic) display correctly
+- Verify Staff Adoption Sensitivity calculations
+
+### Understanding ROI Calculations
+
+**Industry Variance Multiplier:**
+- Adjusts ROI based on industry fit to Phase 1 model
+- High-Reliability (0.90): Structured data (Accounting, Logistics, Insurance, Wealth)
+- Medium-Reliability (0.75): Semi-structured (Legal, Engineering, Architecture, etc.)
+- Low-Reliability (0.60): Unstructured (placeholder for future)
+
+**Three Savings Scenarios:**
+- **Conservative:** Base rate × variance multiplier
+- **Probable:** Conservative × 1.15 (15% above)
+- **Optimistic:** Conservative × 1.35 (35% above)
+
+**Staff Adoption Sensitivity:**
+- Applied to Probable scenario
+- High (80%), Expected (60%), Low (40%) adoption rates
+- Provides realistic ROI based on organizational adoption
 
 ---
 
@@ -502,8 +590,9 @@ SELECT * FROM extraction_logs ORDER BY created_at DESC LIMIT 10;
 ## Support Resources
 
 **Internal Documentation:**
-- `TECHNICAL_OVERVIEW.md` - How the system works technically
-- `INFRASTRUCTURE_OVERVIEW.md` - Deployment and infrastructure
+- `TECHNICAL_OVERVIEW.md` - How the system works technically (includes admin dashboard, ROI calculations)
+- `INFRASTRUCTURE_OVERVIEW.md` - Deployment and infrastructure (includes admin dashboard setup)
+- `PHASE_1_CALCULATION_METHODOLOGY.md` - Detailed ROI calculation methodology
 
 **External Resources:**
 - Google Gemini API Docs: https://ai.google.dev/docs

@@ -41,7 +41,8 @@ PDF Upload
 ```
 main.py                          # Flask application (1,627 lines)
 ├── routes/
-│   └── static_pages.py          # Marketing page routes
+│   ├── static_pages.py          # Marketing page routes
+│   └── admin_routes.py          # Admin dashboard blueprint (/admin)
 ├── services/
 │   ├── gemini_service.py        # AI extraction (152KB, 40K+ char prompts)
 │   ├── pdf_service.py           # PDF text extraction
@@ -53,7 +54,12 @@ main.py                          # Flask application (1,627 lines)
 │   └── formatting.py            # Output formatting
 ├── models/
 │   └── department_config.py     # Document schemas
+├── roi_calculator/
+│   ├── calculations.py          # ROI calculation logic (with Industry Variance Multiplier)
+│   └── config/
+│       └── industries.py        # Industry configurations (multipliers, rates)
 └── templates/                   # Jinja2 HTML templates
+    └── admin/                   # Admin dashboard templates
 ```
 
 ---
@@ -500,3 +506,142 @@ for model_name in fallback_models:
 - Post-processing validation
 
 **Result:** 93% accuracy on real-world documents
+
+---
+
+## Admin Dashboard
+
+### Architecture
+
+**Location:** `/admin` route (separate Flask blueprint)
+
+**Files:**
+- `routes/admin_routes.py` - Admin routes and authentication
+- `templates/admin/` - Admin dashboard templates
+- Database-backed authentication (with environment variable fallback)
+
+### Features
+
+**1. Authentication**
+- Database-backed user authentication (`users` table)
+- Fallback to environment variables (`ADMIN_USERNAME`, `ADMIN_PASSWORD`)
+- Session-based authentication
+- Password change functionality
+
+**2. Dashboard (`/admin`)**
+- System analytics (extractions, success rate, processing time)
+- Recent extraction results
+- Document types overview
+
+**3. Extraction Management (`/admin/extractions`)**
+- View all extraction results
+- Filter by document type, date range, success status
+- Detailed extraction metadata
+
+**4. Document Types (`/admin/document-types`)**
+- View all configured document types
+- Sector associations
+- Demo status
+
+**5. Analytics (`/admin/analytics`)**
+- Overall extraction performance metrics
+- Success rates by document type
+- Processing time trends
+
+**6. Documentation (`/admin/documentation`)**
+- Internal documentation section
+- ROI justifications by industry
+- Sector groupings
+- FAQ-style collapsible content
+
+**7. User Management**
+- Password change (`/admin/change-password`)
+- User authentication via `users` table
+
+### Database Integration
+
+**Tables Used:**
+- `users` - Admin user authentication
+- `extraction_results` - Extraction history and analytics
+- `sectors` - Industry sectors
+- `document_types` - Document type configurations
+
+**Key Functions (in `database.py`):**
+- `get_user_by_username()` - User lookup
+- `verify_user_password()` - Password verification
+- `update_user_password()` - Password updates
+- `get_extraction_results()` - Extraction history
+- `get_extraction_analytics()` - Performance metrics
+
+---
+
+## ROI Calculation System
+
+### Industry Variance Multiplier
+
+**Purpose:** Adjusts ROI calculations based on how well each industry's document types align with the proven Phase 1 automation model.
+
+**Multiplier Tiers:**
+- **High-Reliability (0.90):** Structured data, proven success
+  - Accounting & Advisory
+  - Logistics & Freight
+  - Insurance Underwriting
+  - Wealth Management
+- **Medium-Reliability (0.75):** Semi-structured documents, good fit
+  - Legal Services
+  - Construction/Engineering
+  - Architecture & Building Services
+  - Property Management
+  - Mining Services
+  - Healthcare Admin
+  - Government Contractors
+- **Low-Reliability (0.60):** Unstructured, requires validation (placeholder)
+
+### Calculation Flow
+
+**Location:** `roi_calculator/calculations.py`
+
+**Steps:**
+1. Calculate base ROI using standard P1 methodology (staff, hours, rates, tasks)
+2. Sum all task savings to get `total_proven_savings`
+3. **Apply Industry Variance Multiplier** to final savings value
+4. Return both pre-multiplier and post-multiplier values for transparency
+
+**Formula:**
+```
+Adjusted Annual Production Value = Base Savings × Industry Variance Multiplier
+```
+
+**Example (50-person Accounting firm):**
+- Base calculation: $792,000 savings
+- Multiplier: 0.90 (High-Reliability)
+- **Adjusted: $792,000 × 0.90 = $712,800 → $700,000 (rounded)**
+
+### Three Savings Scenarios
+
+**Implemented in ROI Calculator:**
+- **Conservative:** Base rate × variance multiplier
+- **Probable:** Conservative × 1.15 (15% above conservative)
+- **Optimistic:** Conservative × 1.35 (35% above conservative)
+
+### Staff Adoption Sensitivity
+
+**Applied to Probable Scenario:**
+- **High Adoption (80%):** 80% of staff adopt automation
+- **Expected Adoption (60%):** 60% of staff adopt (default)
+- **Low Adoption (40%):** 40% of staff adopt
+
+**Impact:** Provides two-dimensional ROI view (technical automation potential + organizational adoption)
+
+### Configuration
+
+**Industry Configs:** `roi_calculator/config/industries.py`
+- Each industry has `industry_variance_multiplier` field
+- Loaded cost rates per industry
+- Automation potential percentages
+- Task-specific breakdowns
+
+**Key Files:**
+- `roi_calculator/calculations.py` - Core calculation logic
+- `roi_calculator_flask.py` - Flask routes and template rendering
+- `templates/admin/documentation/roi.html` - ROI documentation

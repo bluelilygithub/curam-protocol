@@ -44,6 +44,8 @@ pandas==2.1.4
 SQLAlchemy==2.0.23
 psycopg2-binary==2.9.9
 python-dotenv==1.0.0
+flask-compress>=1.14
+Werkzeug>=3.0.0
 ```
 
 ---
@@ -57,6 +59,15 @@ python-dotenv==1.0.0
 | `GEMINI_API_KEY` | `AIza...` | Google Gemini API access |
 | `SECRET_KEY` | `abc123...` (32+ chars) | Flask session encryption |
 | `DATABASE_URL` | `postgresql://...` | Auto-set by Railway PostgreSQL |
+
+### Admin Dashboard Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `ADMIN_USERNAME` | `admin` | Admin dashboard username (fallback if users table not configured) |
+| `ADMIN_PASSWORD` | `changeme123` | Admin dashboard password (fallback if users table not configured) |
+
+**Note:** For production, use database-backed authentication via `users` table. Environment variables serve as fallback only.
 
 **Generate SECRET_KEY:**
 ```python
@@ -142,6 +153,35 @@ CREATE TABLE prompt_templates (
 ```
 
 **⚠️ CRITICAL:** All `prompt_templates.is_active = false`. System uses code-based prompts in `gemini_service.py` (40K+ chars vs 1,733 in database).
+
+4. **`users`** - Admin dashboard authentication
+```sql
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(100) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
+    full_name VARCHAR(200),
+    is_active BOOLEAN DEFAULT true,
+    is_admin BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login TIMESTAMP
+);
+```
+
+5. **`extraction_results`** - Extraction history and analytics
+```sql
+CREATE TABLE extraction_results (
+    id SERIAL PRIMARY KEY,
+    document_type_id INTEGER,
+    uploaded_file_name VARCHAR(500),
+    extracted_data JSONB,
+    confidence_scores JSONB,
+    validation_errors JSONB,
+    processing_time_ms INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
 ### Database Access
 
@@ -279,13 +319,14 @@ ResourceExhausted  # API quota exceeded
 
 **Available:**
 - Railway logs (stdout/stderr)
-- Database logs (action_logs, extraction_logs tables)
+- Database logs (action_logs, extraction_results tables)
 - Console output (Python print statements)
+- Admin dashboard analytics (`/admin/analytics`)
 
 **Not Currently Configured:**
 - Error tracking service (Sentry, Rollbar)
 - Uptime monitoring
-- Performance metrics
+- Performance metrics dashboards
 - Automated alerts
 
 **Recommendations:**
