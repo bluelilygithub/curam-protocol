@@ -65,18 +65,57 @@
             background: #fff;
             border: 1px solid #E5E7EB;
             border-radius: 8px;
-            padding: 1.5rem;
             margin-bottom: 1rem;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .doc-question-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            background: #F8F9FA;
+            border-bottom: 1px solid #E5E7EB;
+            transition: background-color 0.2s;
+        }
+        
+        .doc-question-header:hover {
+            background: #F1F3F5;
         }
         
         .doc-question {
             font-size: 1.125rem;
             font-weight: 600;
             color: #0B1221;
-            margin: 0 0 1rem 0;
-            padding-bottom: 0.75rem;
-            border-bottom: 2px solid #D4AF37;
+            margin: 0;
+        }
+        
+        .doc-question-chevron {
+            font-size: 0.875rem;
+            color: #D4AF37;
+            transition: transform 0.3s ease;
+            margin-left: 1rem;
+        }
+        
+        .doc-question-item:not(.collapsed) .doc-question-chevron {
+            transform: rotate(90deg);
+        }
+        
+        .doc-question-content {
+            max-height: 5000px;
+            overflow: hidden;
+            transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.4s ease;
+            opacity: 1;
+            padding: 1.5rem;
+        }
+        
+        .doc-question-item.collapsed .doc-question-content {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
         }
         
         .doc-answer {
@@ -162,9 +201,13 @@
                 <span class="doc-category-chevron">▶</span>
             </div>
             <div class="doc-category-content">
-                <div class="doc-card">
-                    <h4 class="doc-question">Accounting</h4>
-                    <div class="doc-answer">
+                <div class="doc-card doc-question-item collapsed">
+                    <div class="doc-question-header doc-question-toggle">
+                        <h4 class="doc-question">Accounting</h4>
+                        <span class="doc-question-chevron">▶</span>
+                    </div>
+                    <div class="doc-question-content">
+                        <div class="doc-answer">
                         <p>To arrive at a figure like $700,000, we aren't just looking at "time saved"; we are looking at the <strong>Total Loaded Cost of Production</strong> and the <strong>Opportunity Cost of Headcount</strong>.</p>
                         
                         <p>For a firm with 50+ staff, the production floor (Mid/Juniors and Admin) represents the largest line item in the budget. Here is the mathematical breakdown of how those savings materialize across your specific staff tiers:</p>
@@ -204,12 +247,17 @@
                             <p style="margin: 0;"><strong>Summary for the Website</strong></p>
                             <p style="margin: 0.5rem 0 0;">On the page, we frame this as "Annual Production Value." It tells the Partner: "This is the cost of the manual labor your firm is currently 'burning' on tasks that AI can do with 90% accuracy."</p>
                         </div>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="doc-card">
-                    <h4 class="doc-question">Legal Firms</h4>
-                    <div class="doc-answer">
+                <div class="doc-card doc-question-item collapsed">
+                    <div class="doc-question-header doc-question-toggle">
+                        <h4 class="doc-question">Legal Firms</h4>
+                        <span class="doc-question-chevron">▶</span>
+                    </div>
+                    <div class="doc-question-content">
+                        <div class="doc-answer">
                         <h5 style="color: #0B1221; font-size: 1rem; margin: 0 0 0.75rem; font-weight: 600;">ROI Justification: The Production Floor Economics</h5>
                         <p>For a 50+ person law firm, the <strong>$850,000+ Annual Production Value</strong> is not a hypothetical number—it is a direct calculation of recovered labor costs and increased throughput within your Junior and Admin tiers.</p>
                         
@@ -255,6 +303,7 @@
                         
                         <h5 style="color: #0B1221; font-size: 1rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">4. Zero "SaaS Tax"</h5>
                         <p>Unlike typical legal tech that charges per-user, per-month, The Curam-Ai Protocol is a one-time implementation into your own cloud. There are no recurring user fees, meaning your ROI actually increases in Year 2 and beyond as your matter volume grows.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -262,7 +311,7 @@
     </div>
     
     <script>
-        // Accordion functionality for documentation categories
+        // Accordion functionality for documentation categories and questions
         document.addEventListener('DOMContentLoaded', function() {
             // Collapse all categories initially
             const categorySections = document.querySelectorAll('.doc-category-section');
@@ -289,6 +338,34 @@
                         section.classList.remove('collapsed');
                     } else {
                         section.classList.add('collapsed');
+                    }
+                });
+            });
+            
+            // Toggle questions when question header is clicked
+            const questionToggles = document.querySelectorAll('.doc-question-toggle');
+            questionToggles.forEach(toggle => {
+                toggle.addEventListener('click', function(e) {
+                    e.stopPropagation(); // Prevent category toggle from firing
+                    const questionItem = this.closest('.doc-question-item');
+                    const isCollapsed = questionItem.classList.contains('collapsed');
+                    
+                    // Close all other questions in the same category (only one open at a time)
+                    const categoryContent = questionItem.closest('.doc-category-content');
+                    if (categoryContent) {
+                        const allQuestions = categoryContent.querySelectorAll('.doc-question-item');
+                        allQuestions.forEach(q => {
+                            if (q !== questionItem) {
+                                q.classList.add('collapsed');
+                            }
+                        });
+                    }
+                    
+                    // Toggle current question
+                    if (isCollapsed) {
+                        questionItem.classList.remove('collapsed');
+                    } else {
+                        questionItem.classList.add('collapsed');
                     }
                 });
             });
