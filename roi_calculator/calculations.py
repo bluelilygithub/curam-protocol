@@ -257,6 +257,11 @@ def calculate_conservative_roi(total_staff, industry_config):
     tier_2_potential = min(weighted_potential + 0.25, 0.70)  # More conservative
     tier_2_savings = total_weekly_hours * tier_2_potential * typical_doc_rate * 48
     
+    # Apply Industry Variance Multiplier (accounts for industry fit to P1 model)
+    industry_variance_multiplier = industry_config.get('industry_variance_multiplier', 1.0)
+    adjusted_tier_1_savings = total_proven_savings * industry_variance_multiplier
+    adjusted_tier_2_savings = tier_2_savings * industry_variance_multiplier
+    
     # Determine firm size category for display
     if total_staff < 20:
         firm_size_category = "Small"
@@ -288,13 +293,16 @@ def calculate_conservative_roi(total_staff, industry_config):
         "total_recoverable_hours": total_recoverable_hours,
         "weighted_potential": weighted_potential,
         "proven_tier_1_savings": total_proven_savings,
+        "industry_variance_multiplier": industry_variance_multiplier,
+        "adjusted_tier_1_savings": adjusted_tier_1_savings,
         "tier_2_potential": tier_2_potential,
         "tier_2_savings": tier_2_savings,
+        "adjusted_tier_2_savings": adjusted_tier_2_savings,
         "capacity_hours": total_recoverable_hours * 48,
-        "potential_revenue": total_proven_savings,
+        "potential_revenue": adjusted_tier_1_savings,
         # Legacy fields for backward compatibility
         "annual_burn": annual_cost,
-        "tier_1_savings": total_proven_savings
+        "tier_1_savings": adjusted_tier_1_savings
     }
 
 
@@ -358,6 +366,11 @@ def calculate_metrics_v3(staff_count, avg_rate, industry_config):
     tier_2_recoverable_hours = total_weekly_hours * tier_2_potential
     tier_2_savings = tier_2_recoverable_hours * avg_rate * 48
     
+    # Apply Industry Variance Multiplier (accounts for industry fit to P1 model)
+    industry_variance_multiplier = industry_config.get('industry_variance_multiplier', 1.0)
+    adjusted_tier_1_savings = tier_1_savings * industry_variance_multiplier
+    adjusted_tier_2_savings = tier_2_savings * industry_variance_multiplier
+    
     return {
         "mode": "weighted_analysis",
         "hours_per_staff_per_week": hours_per_staff,
@@ -367,11 +380,14 @@ def calculate_metrics_v3(staff_count, avg_rate, industry_config):
         "total_recoverable_hours_per_week": total_recoverable_hours,
         "weighted_automation_potential": weighted_automation_potential,
         "tier_1_savings": tier_1_savings,
+        "industry_variance_multiplier": industry_variance_multiplier,
+        "adjusted_tier_1_savings": adjusted_tier_1_savings,
         "tier_2_potential": tier_2_potential,
         "tier_2_savings": tier_2_savings,
-        "tier_2_cost": annual_burn - tier_2_savings,
+        "adjusted_tier_2_savings": adjusted_tier_2_savings,
+        "tier_2_cost": annual_burn - adjusted_tier_2_savings,
         "capacity_hours": total_recoverable_hours * 48,
-        "potential_revenue": tier_1_savings
+        "potential_revenue": adjusted_tier_1_savings
     }
 
 
@@ -412,6 +428,11 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
     # Calculate recoverable hours
     total_recoverable_hours = total_weekly_hours * automation_potential
     
+    # Apply Industry Variance Multiplier (accounts for industry fit to P1 model)
+    industry_variance_multiplier = industry_config.get('industry_variance_multiplier', 1.0)
+    adjusted_tier_1_savings = tier_1_savings * industry_variance_multiplier
+    adjusted_tier_2_savings = tier_2_savings * industry_variance_multiplier
+    
     return {
         "mode": "simple_fallback",
         "total_staff": staff_count,
@@ -430,11 +451,14 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
         "total_recoverable_hours": total_recoverable_hours,
         "weighted_potential": automation_potential,
         "proven_tier_1_savings": tier_1_savings,
-        "tier_1_savings": tier_1_savings,
+        "industry_variance_multiplier": industry_variance_multiplier,
+        "adjusted_tier_1_savings": adjusted_tier_1_savings,
+        "tier_1_savings": adjusted_tier_1_savings,
         "tier_2_potential": tier_2_potential,
         "tier_2_savings": tier_2_savings,
+        "adjusted_tier_2_savings": adjusted_tier_2_savings,
         "capacity_hours": total_recoverable_hours * 48,
-        "potential_revenue": tier_1_savings
+        "potential_revenue": adjusted_tier_1_savings
     }
 
 

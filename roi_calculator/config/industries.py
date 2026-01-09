@@ -9,6 +9,8 @@ INDUSTRIES = {
         "doc_staff_percentage_base": 0.75,  # Base percentage (medium firm) - will be scaled
         "doc_staff_hours_per_week": 5.0,
         "doc_staff_typical_rate": 130,
+        # Industry Variance Multiplier (Medium-Reliability: Semi-structured documents)
+        "industry_variance_multiplier": 0.75,
         "proven_tasks": {
             "transmittals": 0.25,
             "specifications": 0.20,
@@ -132,6 +134,8 @@ INDUSTRIES = {
     },
     "Accounting & Advisory": {
         "context": "Australian accounting firms (15-100 staff)",
+        # Industry Variance Multiplier (High-Reliability: Structured data)
+        "industry_variance_multiplier": 0.90,
         "pain_point_question": "What's your biggest manual processing pain point?",
         "pain_point_options": [
             {
@@ -174,6 +178,8 @@ INDUSTRIES = {
     },
     "Legal Services": {
         "context": "Legal practices and law firms (10-100 staff)",
+        # Industry Variance Multiplier (Medium-Reliability: Semi-structured, firm size dependent)
+        "industry_variance_multiplier": 0.75,
         "pain_point_question": "What's your biggest administrative bottleneck?",
         "pain_point_options": [
             {
@@ -216,6 +222,8 @@ INDUSTRIES = {
     },
     "Construction": {
         "context": "Civil engineering and construction firms (15-100 staff)",
+        # Industry Variance Multiplier (Medium-Reliability: Semi-structured documents)
+        "industry_variance_multiplier": 0.75,
         "pain_point_question": "What's your biggest documentation bottleneck?",
         "pain_point_options": [
             {
@@ -258,6 +266,8 @@ INDUSTRIES = {
     },
     "Mining Services": {
         "context": "Mining services and Bowen Basin operations (15-100 staff)",
+        # Industry Variance Multiplier (Medium-Reliability: Semi-structured documents)
+        "industry_variance_multiplier": 0.75,
         "pain_point_question": "What's your biggest operational documentation bottleneck?",
         "pain_point_options": [
             {
@@ -300,6 +310,8 @@ INDUSTRIES = {
     },
     "Property Management": {
         "context": "Property management agencies (10-100 staff)",
+        # Industry Variance Multiplier (Medium-Reliability: Semi-structured documents)
+        "industry_variance_multiplier": 0.75,
         "pain_point_question": "What's your biggest administrative bottleneck?",
         "pain_point_options": [
             {
@@ -342,6 +354,8 @@ INDUSTRIES = {
     },
     "Logistics & Freight": {
         "context": "Logistics and freight forwarding firms (10-100 staff)",
+        # Industry Variance Multiplier (High-Reliability: Structured data)
+        "industry_variance_multiplier": 0.90,
         "pain_point_question": "What's your biggest operational bottleneck?",
         "pain_point_options": [
             {
@@ -384,6 +398,8 @@ INDUSTRIES = {
     },
     "Healthcare Admin": {
         "context": "Healthcare administration and practice management (10-100 staff)",
+        # Industry Variance Multiplier (Medium-Reliability: Semi-structured documents)
+        "industry_variance_multiplier": 0.75,
         "pain_point_question": "What's your biggest administrative bottleneck?",
         "pain_point_options": [
             {
@@ -426,6 +442,8 @@ INDUSTRIES = {
     },
     "Government Contractors": {
         "context": "Government contractors and service providers (10-100 staff)",
+        # Industry Variance Multiplier (Medium-Reliability: Semi-structured documents)
+        "industry_variance_multiplier": 0.75,
         "pain_point_question": "What's your biggest compliance documentation bottleneck?",
         "pain_point_options": [
             {
@@ -468,6 +486,8 @@ INDUSTRIES = {
     },
     "Wealth Management": {
         "context": "Wealth management and financial advisory firms (10-100 staff)",
+        # Industry Variance Multiplier (High-Reliability: Structured data)
+        "industry_variance_multiplier": 0.90,
         "pain_point_question": "What's your biggest administrative bottleneck?",
         "pain_point_options": [
             {
@@ -510,6 +530,8 @@ INDUSTRIES = {
     },
     "Insurance Underwriting": {
         "context": "Insurance underwriting and risk assessment firms (10-100 staff)",
+        # Industry Variance Multiplier (High-Reliability: Structured data)
+        "industry_variance_multiplier": 0.90,
         "pain_point_question": "What's your biggest operational bottleneck?",
         "pain_point_options": [
             {
