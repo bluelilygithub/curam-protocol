@@ -2629,11 +2629,72 @@ HTML_TEMPLATE = """
             </div>
         </div>
         
+        <!-- THREE SCENARIOS: OPTIMISTIC, PROBABLE, CONSERVATIVE -->
+        <div style="background: white; border: 2px solid #E5E7EB; border-radius: 12px; padding: 2rem; margin: 2rem 0;">
+            <h2 style="color: #0B1221; font-size: 1.75rem; margin-bottom: 1.5rem; text-align: center;">Savings Scenarios: Optimistic, Probable, Conservative</h2>
+            <p style="color: #6B7280; text-align: center; margin-bottom: 2rem; font-size: 0.95rem;">
+                Based on industry averages and implementation factors. Your actual results will depend on your specific documents and workflows.
+            </p>
+            
+            {% set annual_cost = calculations.get('annual_cost', calculations.get('annual_burn', 0)) %}
+            {% set base_rate = calculations.get('weighted_potential', 0.35) %}
+            {% set variance_mult = calculations.get('industry_variance_multiplier', 1.0) %}
+            
+            {# Conservative = Current adjusted value (base rate * variance multiplier) #}
+            {% set conservative_rate = base_rate * variance_mult %}
+            {% set conservative_savings = annual_cost * conservative_rate %}
+            
+            {# Probable = 15% above conservative #}
+            {% set probable_rate = conservative_rate * 1.15 %}
+            {% set probable_savings = annual_cost * probable_rate %}
+            
+            {# Optimistic = 35% above conservative #}
+            {% set optimistic_rate = conservative_rate * 1.35 %}
+            {% set optimistic_savings = annual_cost * optimistic_rate %}
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 2rem;">
+                <!-- OPTIMISTIC -->
+                <div style="background: linear-gradient(to bottom, #F0FDF4, white); border: 2px solid #10B981; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Optimistic</div>
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">${{ "{:,.0f}".format(optimistic_savings) }}</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">{{ (optimistic_rate * 100)|round(1)|int }}% automation</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        Best-case: Ideal document formats, high staff adoption, minimal change management delays.
+                    </p>
+                </div>
+                
+                <!-- PROBABLE (Most Likely) -->
+                <div style="background: linear-gradient(to bottom, #FFFBF0, white); border: 3px solid #D4AF37; border-radius: 8px; padding: 1.5rem; text-align: center; box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #D4AF37; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Probable ⭐</div>
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">${{ "{:,.0f}".format(probable_savings) }}</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">{{ (probable_rate * 100)|round(1)|int }}% automation</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        <strong>Most likely scenario</strong> based on industry averages and proven implementations (15% above conservative baseline).
+                    </p>
+                </div>
+                
+                <!-- CONSERVATIVE (Current Adjusted Value) -->
+                <div style="background: linear-gradient(to bottom, #FEF3C7, white); border: 2px solid #F59E0B; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #F59E0B; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Conservative</div>
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">${{ "{:,.0f}".format(conservative_savings) }}</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">{{ (conservative_rate * 100)|round(1)|int }}% automation</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        Baseline scenario using proven automation rates with industry variance multiplier applied{% if variance_mult < 1.0 %} ({{ (variance_mult * 100)|round(0)|int }}% industry fit){% endif %}.
+                    </p>
+                </div>
+            </div>
+            
+            <div style="background: #F8F9FA; border-left: 4px solid #6B7280; padding: 1rem 1.5rem; border-radius: 4px; margin-top: 2rem; font-size: 0.875rem; color: #4B5563;">
+                <strong>Note:</strong> These scenarios are based on industry averages. Phase 1 Feasibility Sprint ($1,500) will provide YOUR actual numbers using your real documents.
+            </div>
+        </div>
+        
         <div class="tier-2-note">
             <h4>📈 Tier 2 Opportunity: ${{ "{:,.0f}".format(calculations.get('adjusted_tier_2_savings', calculations.get('tier_2_savings', 0))) }}</h4>
             <p>With expanded automation and workflow optimization (typically 12-18 months), firms achieve {{ (calculations.get('tier_2_potential', 0.70) * 100)|round(0)|int }}% efficiency gains. <strong>But let's prove Phase 1 first.</strong></p>
         </div>
         
+        {% if calculations.get('task_analysis') and calculations.task_analysis|length > 0 %}
         <div class="complexity-legend">
             <h3>What do the complexity scores mean?</h3>
             <div class="legend-grid">
@@ -2655,6 +2716,7 @@ HTML_TEMPLATE = """
             </div>
             <p><em>Higher complexity scores indicate better targets for automation—these are your Phase 1 priorities.</em></p>
         </div>
+        {% endif %}
         
         <!-- REALITY CHECK BOX -->
         <div class="reality-check-box" style="background: linear-gradient(135deg, rgba(255, 165, 0, 0.1), rgba(255, 165, 0, 0.05)); border: 2px solid rgba(255, 165, 0, 0.4); border-radius: 12px; padding: 2rem; margin: 2rem 0;">
@@ -2691,31 +2753,10 @@ HTML_TEMPLATE = """
         </div>
         
         <!-- Utilization Disclaimer -->
-        <p class="disclaimer" style="font-size: 0.9em; color: #cbd5e1; margin-bottom: 20px; padding: 1rem; background: rgba(203, 213, 225, 0.1); border-left: 3px solid #cbd5e1; border-radius: 6px;">
+        <p class="disclaimer" style="font-size: 0.9em; color: #6B7280; margin-bottom: 20px; padding: 1rem; background: rgba(107, 114, 128, 0.1); border-left: 3px solid #6B7280; border-radius: 6px;">
             *Assumes 70% of recovered time converts to billable work. Actual results depend on 
             firm capacity and client demand.
         </p>
-        
-        <hr>
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <div class="metric-value">{{ format_currency(calculations.annual_burn) }}</div>
-                <div class="metric-label">Annual Revenue Leakage</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">{{ format_currency(calculations.tier_1_savings) }}</div>
-                <div class="metric-label">Tier 1 Opportunity</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">{{ "{:,.0f}".format(calculations.capacity_hours) }}</div>
-                <div class="metric-label">Capacity Hours</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">{{ format_currency(calculations.potential_revenue) }}</div>
-                <div class="metric-label">Revenue Opportunity</div>
-            </div>
-        </div>
-        <hr>
         {% if industry == "Accounting & Advisory" %}
         <!-- Phase 1 Proof → Year 1 Revenue for Accounting -->
         <h2 class="section-headline">Phase 1 Proof → Year 1 Revenue</h2>
@@ -2828,27 +2869,20 @@ HTML_TEMPLATE = """
             </div>
         </div>
         
-        <h3>Your Cost Reduction Roadmap</h3>
+        <h3>Cost Reduction Roadmap</h3>
         <p style="color: #6B7280; font-size: 0.95rem; margin-bottom: 1rem;">
             Annual documentation costs after each automation phase (bars show remaining cost):
         </p>
         <div class="chart-container">
             <div id="chart"></div>
         </div>
-        <h3>Analysis</h3>
-        {% if analysis_text|length > 0 %}
-        <div class="analysis-row">
-            {% for analysis in analysis_text %}
-            <div class="analysis-box">{{ analysis|safe }}</div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        <hr>
         
-        <!-- AI Opportunity Heatmap -->
+        {% if ai_opportunities and ai_opportunities|length > 0 %}
+        <hr>
+        <!-- AI Opportunity Heatmap (only show if we have opportunities) -->
         <div class="heatmap-container">
-            <h3>🎯 Your AI Automation Opportunities</h3>
-            <p style="color: #4B5563; margin-bottom: 1rem;">Specific tasks in your industry with high automation potential:</p>
+            <h3>🎯 AI Automation Opportunities for Your Industry</h3>
+            <p style="color: #4B5563; margin-bottom: 1rem;">Specific tasks with automation potential:</p>
             <table class="heatmap-table">
                 <thead>
                     <tr>
@@ -2877,36 +2911,9 @@ HTML_TEMPLATE = """
                     {% endfor %}
                 </tbody>
             </table>
-            <p style="margin-top: 1rem; color: #4B5563; font-size: 0.9rem;"><strong>💡 High-potential tasks</strong> = Best ROI for automation investment</p>
+            <p style="margin-top: 1rem; color: #4B5563; font-size: 0.9rem;"><strong>💡 High-potential tasks</strong> = Best ROI for automation investment. Phase 1 will validate which tasks are suitable for YOUR documents.</p>
         </div>
-        <hr>
-        
-        <!-- Custom Automation Roadmap -->
-        <div class="roadmap-container">
-            <h3>🚀 Your Recommended Automation Roadmap</h3>
-            {% for phase in roadmap %}
-            <div class="roadmap-phase">
-                <h4>{{ phase.name }} ({{ phase.weeks }})</h4>
-                <ul>
-                    <li><strong>Automate:</strong> {{ phase.task }}</li>
-                    <li><strong>Time Saved:</strong> {{ "{:,.0f}".format(phase.hours_per_year) }} hours/year</li>
-                    <li><strong>Revenue Reclaimed:</strong> {{ format_currency(phase.revenue_reclaimed) }}/year</li>
-                    {% if phase.phase == 1 %}
-                    <li><strong>Payback:</strong> {{ phase.payback }}</li>
-                    {% else %}
-                    <li><strong>Cumulative Savings:</strong> {{ format_currency(phase.cumulative_savings) }}/year</li>
-                    {% endif %}
-                </ul>
-            </div>
-            {% endfor %}
-            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #E5E7EB;">
-                <p style="color: #4B5563; margin-bottom: 1rem;"><strong>💡 Most firms see ROI by end of Phase 1</strong></p>
-                <div class="btn-group">
-                    <a href="{{ booking_url }}" class="btn">📞 Book Consultation Call</a>
-                </div>
-            </div>
-        </div>
-        <hr>
+        {% endif %}
         <div class="explanation-box">
             <h4>How These Numbers Are Calculated</h4>
             <p><strong>Annual Revenue Leakage (Efficiency Loss):</strong></p>
