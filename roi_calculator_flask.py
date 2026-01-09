@@ -2689,6 +2689,54 @@ HTML_TEMPLATE = """
             </div>
         </div>
         
+        <!-- STAFF ADOPTION SENSITIVITY -->
+        <div style="background: white; border: 2px solid #E5E7EB; border-radius: 12px; padding: 2rem; margin: 2rem 0;">
+            <h2 style="color: #0B1221; font-size: 1.75rem; margin-bottom: 0.5rem;">Staff Adoption Impact</h2>
+            <p style="color: #6B7280; margin-bottom: 1.5rem; font-size: 0.95rem;">
+                Even with perfect automation, actual savings depend on how many staff adopt the new system. This shows the impact on your <strong>Probable scenario</strong>.
+            </p>
+            
+            {% set high_adoption = probable_savings * 0.80 %}
+            {% set expected_adoption = probable_savings * 0.60 %}
+            {% set low_adoption = probable_savings * 0.40 %}
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 1.5rem;">
+                <!-- HIGH ADOPTION -->
+                <div style="background: linear-gradient(to bottom, #DCFCE7, white); border: 2px solid #10B981; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">High Adoption</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">${{ "{:,.0f}".format(high_adoption) }}</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">80% of staff use system</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        Strong change management, comprehensive training, and executive sponsorship.
+                    </p>
+                </div>
+                
+                <!-- EXPECTED ADOPTION -->
+                <div style="background: linear-gradient(to bottom, #FEF3C7, white); border: 3px solid #F59E0B; border-radius: 8px; padding: 1.5rem; text-align: center; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #F59E0B; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Expected Adoption ⭐</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">${{ "{:,.0f}".format(expected_adoption) }}</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">60% of staff use system</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        <strong>Most likely outcome</strong> with standard training and support. Typical for mid-sized firms.
+                    </p>
+                </div>
+                
+                <!-- LOW ADOPTION -->
+                <div style="background: linear-gradient(to bottom, #FEE2E2, white); border: 2px solid #DC2626; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #DC2626; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Low Adoption</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">${{ "{:,.0f}".format(low_adoption) }}</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">40% of staff use system</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        Minimal training, resistance to change, or lack of executive support. Still delivers value.
+                    </p>
+                </div>
+            </div>
+            
+            <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 1rem 1.5rem; border-radius: 4px; margin-top: 2rem; font-size: 0.875rem; color: #1E40AF;">
+                <strong>💡 Mitigation Strategy:</strong> Phase 2-4 includes SOP videos, 30-day support channels, and change management protocols to maximize adoption rates. Most firms achieve 60%+ adoption within 90 days.
+            </div>
+        </div>
+        
         <div class="tier-2-note">
             <h4>📈 Tier 2 Opportunity: ${{ "{:,.0f}".format(calculations.get('adjusted_tier_2_savings', calculations.get('tier_2_savings', 0))) }}</h4>
             <p>With expanded automation and workflow optimization (typically 12-18 months), firms achieve {{ (calculations.get('tier_2_potential', 0.70) * 100)|round(0)|int }}% efficiency gains. <strong>But let's prove Phase 1 first.</strong></p>
