@@ -219,18 +219,94 @@ def get_active_prompts(doc_type, sector_slug=None):
             }
             doc_type_values = REVERSE_MAP.get(doc_type, [doc_type])
             
-            # Build SQL with proper parameter binding
-            placeholders = ', '.join([f':val{i}' for i in range(len(doc_type_values))])
-            doctype_query = text(f"""
-                SELECT prompt_text, priority, name, 'document_type' as scope
-                FROM prompt_templates
-                WHERE scope = 'document_type' 
-                AND doc_type IN ({placeholders})
-                AND is_active = true
-                ORDER BY priority ASC
-            """)
-            params = {f'val{i}': val for i, val in enumerate(doc_type_values)}
-            doctype = conn.execute(doctype_query, params).fetchall()
+            print(f"🔍 [get_active_prompts] Searching for doc_type={doc_type} with values: {doc_type_values}")
+            
+            # Use proper parameter binding for PostgreSQL
+            # Build query with proper IN clause using SQLAlchemy text() with multiple parameters
+            if len(doc_type_values) == 1:
+                # Single value - simpler query
+                doctype_query = text("""
+                    SELECT prompt_text, priority, name, 'document_type' as scope
+                    FROM prompt_templates
+                    WHERE scope = 'document_type' 
+                    AND doc_type = :doc_type
+                    AND is_active = true
+                    ORDER BY priority ASC
+                """)
+                doctype = conn.execute(doctype_query, {"doc_type": doc_type_values[0]}).fetchall()
+            elif len(doc_type_values) == 2:
+                # Two values - use explicit parameters
+                doctype_query = text("""
+                    SELECT prompt_text, priority, name, 'document_type' as scope
+                    FROM prompt_templates
+                    WHERE scope = 'document_type' 
+                    AND (doc_type = :val0 OR doc_type = :val1)
+                    AND is_active = true
+                    ORDER BY priority ASC
+                """)
+                doctype = conn.execute(doctype_query, {"val0": doc_type_values[0], "val1": doc_type_values[1]}).fetchall()
+            else:
+                # Multiple values - use array parameter (PostgreSQL array syntax)
+                doctype_query = text("""
+                    SELECT prompt_text, priority, name, 'document_type' as scope
+                    FROM prompt_templates
+                    WHERE scope = 'document_type' 
+                    AND doc_type = ANY(CAST(:doc_types AS VARCHAR[]))
+                    AND is_active = true
+                    ORDER BY priority ASC
+                """)
+                doctype = conn.execute(doctype_query, {"doc_types": doc_type_values}).fetchall()
+            
+            # FALLBACK: If no results found by doc_type, try searching by name pattern (for logistics)
+            if not doctype and doc_type == 'fta-list':
+                print(f"⚠️ [get_active_prompts] No prompts found with doc_type IN {doc_type_values}")
+                print(f"   Trying fallback: searching by name pattern for logistics...")
+                
+                # Fallback query: Find logistics prompt by name if doc_type match failed
+                fallback_query = text("""
+                    SELECT prompt_text, priority, name, 'document_type' as scope
+                    FROM prompt_templates
+                    WHERE scope = 'document_type' 
+                    AND is_active = true
+                    AND (name ILIKE '%logistics%' OR name ILIKE '%trade%' OR name ILIKE '%fta%')
+                    ORDER BY priority ASC
+                    LIMIT 1
+                """)
+                fallback_results = conn.execute(fallback_query).fetchall()
+                if fallback_results:
+                    print(f"   ✓ Found logistics prompt by name fallback: '{fallback_results[0][2]}'")
+                    doctype = fallback_results
+                else:
+                    print(f"   ❌ Fallback by name also failed - no logistics prompt found")
+                    
+                    # Full diagnostic: Check what actually exists in database
+                    print(f"   Checking all document_type prompts in database...")
+                    debug_query = text("""
+                        SELECT name, scope, doc_type, is_active, LENGTH(prompt_text) as len
+                        FROM prompt_templates
+                        WHERE scope = 'document_type'
+                        ORDER BY doc_type, name
+                    """)
+                    all_doctype = conn.execute(debug_query).fetchall()
+                    if all_doctype:
+                        print(f"   Found {len(all_doctype)} document_type prompt(s) in database:")
+                        for row in all_doctype:
+                            print(f"     - Name: '{row[0]}', DocType: '{row[2] if row[2] else 'NULL'}', Active: {row[3]}, Length: {row[4]}")
+                    else:
+                        print(f"   ❌ No document_type prompts found in database at all!")
+                        
+                    # Also check for any logistics-related prompts regardless of scope
+                    logistics_check = text("""
+                        SELECT name, scope, doc_type, is_active
+                        FROM prompt_templates
+                        WHERE (name ILIKE '%logistics%' OR name ILIKE '%fta%' OR name ILIKE '%trade%')
+                        ORDER BY scope, doc_type
+                    """)
+                    logistics_results = conn.execute(logistics_check).fetchall()
+                    if logistics_results:
+                        print(f"   Found {len(logistics_results)} logistics-related prompt(s) (any scope):")
+                        for row in logistics_results:
+                            print(f"     - Name: '{row[0]}', Scope: '{row[1]}', DocType: '{row[2] if row[2] else 'NULL'}', Active: {row[3]}")
             
             # Step 3: Get sector prompts (OPTIONAL, comes THIRD if present)
             sector = []
@@ -318,8 +394,37 @@ def build_combined_prompt(doc_type, sector_slug, text):
     if not universal_prompts:
         print(f"⚠️ WARNING: No universal prompts found! This may cause extraction errors.")
     
+    # CRITICAL: Document-type prompts are REQUIRED for proper extraction
     if not doctype_prompts:
-        print(f"⚠️ WARNING: No document-type prompts found for doc_type={doc_type}! This may cause extraction errors.")
+        print(f"❌ ERROR: No document-type prompts found for doc_type={doc_type}!")
+        print(f"   Checking database for what prompts exist...")
+        # Debug: Check what prompts actually exist in database
+        try:
+            with engine.connect() as conn:
+                debug_query = text("""
+                    SELECT name, scope, doc_type, is_active, LENGTH(prompt_text) as len
+                    FROM prompt_templates
+                    WHERE (doc_type = :doc_type OR doc_type = :alt_type OR name LIKE :name_pattern)
+                    ORDER BY scope, doc_type, name
+                """)
+                alt_type = 'logistics' if doc_type == 'fta-list' else None
+                debug_results = conn.execute(debug_query, {
+                    "doc_type": doc_type,
+                    "alt_type": alt_type or doc_type,
+                    "name_pattern": f"%{doc_type}%"
+                }).fetchall()
+                
+                if debug_results:
+                    print(f"   Found {len(debug_results)} prompt(s) matching search:")
+                    for row in debug_results:
+                        print(f"     - Name: {row[0]}, Scope: {row[1]}, DocType: {row[2]}, Active: {row[3]}, Length: {row[4]}")
+                else:
+                    print(f"   ❌ No prompts found in database for doc_type={doc_type} or name pattern")
+        except Exception as debug_e:
+            print(f"   Error checking database: {debug_e}")
+        
+        print(f"   This will cause extraction to fail. The system needs BOTH universal AND document-type prompts.")
+        return None  # Return None so build_prompt can use fallback
     
     # Build combined prompt with LOG markers and correct order
     parts = []
@@ -330,17 +435,17 @@ def build_combined_prompt(doc_type, sector_slug, text):
         parts.append(f"[LOG: Using universal prompt]\n{universal_text}")
     
     # Step 2: Document-specific prompts (SECOND) - with LOG marker
-    if doctype_prompts:
-        doctype_text = "\n\n---\n\n".join([p["text"] for p in doctype_prompts])
-        # Map db doc_type back to friendly name for logging
-        doc_type_names = {
-            'beam-schedule': 'engineering',
-            'drawing-register': 'transmittal',
-            'fta-list': 'logistics',
-            'vendor-invoice': 'finance'
-        }
-        friendly_name = doc_type_names.get(doc_type, doc_type)
-        parts.append(f"[LOG: Using {friendly_name} prompt]\n{doctype_text}")
+    # We know doctype_prompts exists because we checked above
+    doctype_text = "\n\n---\n\n".join([p["text"] for p in doctype_prompts])
+    # Map db doc_type back to friendly name for logging
+    doc_type_names = {
+        'beam-schedule': 'engineering',
+        'drawing-register': 'transmittal',
+        'fta-list': 'logistics',
+        'vendor-invoice': 'finance'
+    }
+    friendly_name = doc_type_names.get(doc_type, doc_type)
+    parts.append(f"[LOG: Using {friendly_name} prompt]\n{doctype_text}")
     
     # Step 3: Sector prompts (THIRD - optional) - with LOG marker
     if sector_prompts:

@@ -157,7 +157,7 @@ def get_transmittal_template():
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Connections" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Connections to CSV</a>
+                <a href="/export_transmittal_csv?category=Connections" class="btn btn-export" style="text-decoration: none;">Export Connections to CSV</a>
             </div>
         </div>
         {% endif %}
@@ -244,7 +244,7 @@ def get_transmittal_template():
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=VOSFlags" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export V.O.S. Flags to CSV</a>
+                <a href="/export_transmittal_csv?category=VOSFlags" class="btn btn-export" style="text-decoration: none;">Export V.O.S. Flags to CSV</a>
             </div>
         </div>
         {% endif %}

@@ -21,12 +21,13 @@ Created: Phase 3.3c - Gemini Service Complete (FIXED)
 
 # Import prompts from separate modules
 try:
-    from services.prompts.finance_prompt import get_finance_prompt
-    from services.prompts.engineering_prompt import get_engineering_prompt
-    from services.prompts.transmittal_prompt import get_transmittal_prompt
-    from services.prompts.logistics_prompt import get_logistics_prompt
-except ImportError:
+    from services.xprompts.xfinance_prompt import get_finance_prompt
+    from services.xprompts.xengineering_prompt import get_engineering_prompt
+    from services.xprompts.xtransmittal_prompt import get_transmittal_prompt
+    from services.xprompts.xlogistics_prompt import get_logistics_prompt
+except ImportError as e:
     # Fallback if prompts module not available
+    print(f"⚠️ WARNING: Failed to import hardcoded prompts: {e}")
     get_finance_prompt = None
     get_engineering_prompt = None
     get_transmittal_prompt = None
