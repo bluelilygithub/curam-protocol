@@ -135,17 +135,26 @@ def get_available_models():
 
 def build_prompt(text, doc_type, sector_slug=None):
     """Build a prompt tailored to the selected department."""
+    # Map code doc_type values to database doc_type values
+    DOC_TYPE_MAP = {
+        'engineering': 'beam-schedule',
+        'transmittal': 'drawing-register',
+        'logistics': 'fta-list',
+        'finance': 'vendor-invoice'
+    }
+    db_doc_type = DOC_TYPE_MAP.get(doc_type, doc_type)
+    
     # Try database first
     try:
         from database import build_combined_prompt
-        db_prompt = build_combined_prompt(doc_type, sector_slug, text)
+        db_prompt = build_combined_prompt(db_doc_type, sector_slug, text)
         if db_prompt:
-            print(f"Using database prompt for {doc_type}")
+            print(f"✓ Using database prompt for {doc_type} (db: {db_doc_type})")
             return db_prompt
     except Exception as e:
-        print(f"Database failed: {e}")
+        print(f"⚠ Database prompt lookup failed for {doc_type}: {e}")
     
-    print(f"Using hardcoded fallback for {doc_type}")
+    print(f"→ Using hardcoded fallback for {doc_type}")
     
     if doc_type == "engineering":
         # Use modular engineering prompt
