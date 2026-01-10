@@ -424,7 +424,7 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
     if prompt_text:
         action_log.append(f"Document text length: {len(prompt_text)} chars (doc_type: {doc_type})")
     else:
-        action_log.append(f"⚠️ WARNING: Empty text provided for {doc_type} document")
+        action_log.append(f"[WARNING] Empty text provided for {doc_type} document")
     
     prompt = build_prompt(prompt_text, doc_type, sector_slug)
     if prompt_limit:
@@ -458,7 +458,7 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                     if not image_file.exists():
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Image file not found: {image_path}"
-                        action_log.append(f"âœ— Image file not found: {image_path}")
+                        action_log.append(f"[ERROR] Image file not found: {image_path}")
                         continue
                     
                     # ENHANCED: Table-optimized image preprocessing
@@ -467,7 +467,7 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                         
                         # Process image: enhance for tables, assess quality
                         enhanced_path, ocr_text, quality = process_image_for_extraction(image_path)
-                        action_log.append(f"ðŸ“Š Image quality: {quality['quality_level']} (sharpness: {quality['sharpness']:.1f})")
+                        action_log.append(f"[IMAGE] Image quality: {quality['quality_level']} (sharpness: {quality['sharpness']:.1f})")
                         
                         # Use enhanced image
                         img = Image.open(enhanced_path)
@@ -512,7 +512,7 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                     except Exception as img_error:
                         attempt_detail["status"] = "error"
                         attempt_detail["message"] = f"Failed to process image: {img_error}"
-                        action_log.append(f"âœ— Failed to process image: {img_error}")
+                        action_log.append(f"[ERROR] Failed to process image: {img_error}")
                         continue
                 else:
                     # Regular text-based processing
@@ -611,7 +611,7 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                             if detected_type != 'unknown':
                                 action_log.append(f"Auto-detected logistics document type: {detected_type} from field names")
                             else:
-                                action_log.append(f"⚠️ Could not auto-detect logistics document type. Fields: {list(first_entry.keys())}")
+                                action_log.append(f"[WARNING] Could not auto-detect logistics document type. Fields: {list(first_entry.keys())}")
                 else:
                     entries = parsed if isinstance(parsed, list) else [parsed] if isinstance(parsed, dict) else []
 
@@ -658,7 +658,7 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                             validation_report = validate_schedule(entries, schedule_type)
                             
                             # Log validation results
-                            action_log.append(f"ðŸ“‹ Validation: {validation_report['valid_rows']}/{validation_report['total_rows']} rows valid")
+                            action_log.append(f"[VALIDATION] Validation: {validation_report['valid_rows']}/{validation_report['total_rows']} rows valid")
                             
                             if validation_report['rows_with_corrections'] > 0:
                                 action_log.append(f"Applied {validation_report['rows_with_corrections']} auto-correction(s)")
@@ -670,7 +670,7 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                                     if row_val['corrections']:
                                         mark = row_val['corrected_row'].get('Mark', f"Row {row_val['row_index']}")
                                         for correction in row_val['corrections']:
-                                            action_log.append(f"  â€¢ {mark}: {correction}")
+                                            action_log.append(f"  - {mark}: {correction}")
                             
                             if validation_report['rows_with_errors'] > 0:
                                 action_log.append(f"{validation_report['rows_with_errors']} row(s) have errors requiring manual review")
