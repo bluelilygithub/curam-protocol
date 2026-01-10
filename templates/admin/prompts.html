@@ -9,10 +9,17 @@
         <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Manage AI prompts for document extraction</p>
     </div>
     <div class="admin-header-actions">
-        {% if inactive_migrated_count and inactive_migrated_count > 0 %}
-        <form method="POST" action="{{ url_for('admin.prompts_activate_all') }}" style="display: inline;">
-            <button type="submit" class="btn-admin" onclick="return confirm('Activate all {{ inactive_migrated_count }} migrated prompt(s)? This will enable database prompts for use.');">
-                ✓ Activate All Migrated Prompts ({{ inactive_migrated_count }})
+        {% if total_inactive_count and total_inactive_count > 0 %}
+        <form method="POST" action="{{ url_for('admin.prompts_activate_all_inactive') }}" style="display: inline;">
+            <button type="submit" class="btn-admin" onclick="return confirm('Activate all {{ total_inactive_count }} inactive prompt(s)? This will enable them for use by the system.');">
+                ✓ Activate All Inactive Prompts ({{ total_inactive_count }})
+            </button>
+        </form>
+        {% endif %}
+        {% if inactive_migrated_count and inactive_migrated_count > 0 and inactive_migrated_count != total_inactive_count %}
+        <form method="POST" action="{{ url_for('admin.prompts_activate_all') }}" style="display: inline; margin-left: 0.5rem;">
+            <button type="submit" class="btn-admin btn-admin-secondary" onclick="return confirm('Activate {{ inactive_migrated_count }} migrated prompt(s) only?');">
+                Activate Migrated Only ({{ inactive_migrated_count }})
             </button>
         </form>
         {% endif %}

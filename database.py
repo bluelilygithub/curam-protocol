@@ -199,13 +199,29 @@ def get_active_prompts(doc_type, sector_slug=None):
             """)
             universal = conn.execute(universal_query).fetchall()
             
-            doctype_query = text("""
+            # Query for document_type prompts - check both the mapped value and code values
+            # This supports both old prompts (engineering, finance) and new mapped values (beam-schedule, vendor-invoice)
+            REVERSE_MAP = {
+                'beam-schedule': ['beam-schedule', 'engineering'],
+                'drawing-register': ['drawing-register', 'transmittal'],
+                'fta-list': ['fta-list', 'logistics'],
+                'vendor-invoice': ['vendor-invoice', 'finance']
+            }
+            # Get all possible doc_type values for this mapped type
+            doc_type_values = REVERSE_MAP.get(doc_type, [doc_type])
+            
+            # Build SQL with proper parameter binding
+            placeholders = ', '.join([f':val{i}' for i in range(len(doc_type_values))])
+            doctype_query = text(f"""
                 SELECT prompt_text, priority, name
                 FROM prompt_templates
-                WHERE scope = 'document_type' AND doc_type = :doc_type AND is_active = true
+                WHERE scope = 'document_type' 
+                AND doc_type IN ({placeholders})
+                AND is_active = true
                 ORDER BY priority ASC
             """)
-            doctype = conn.execute(doctype_query, {"doc_type": doc_type}).fetchall()
+            params = {f'val{i}': val for i, val in enumerate(doc_type_values)}
+            doctype = conn.execute(doctype_query, params).fetchall()
             
             sector = []
             if sector_slug:

@@ -607,15 +607,18 @@ def prompts():
     """List all prompt templates"""
     try:
         prompts_list = get_all_prompts()
-        # Count inactive migrated prompts
+        # Count inactive migrated prompts (with "Hardcoded Migration" in name)
         inactive_migrated = sum(1 for p in prompts_list 
-                               if p.get('name', '').find('Hardcoded Migration') >= 0 
+                               if 'Hardcoded Migration' in p.get('name', '') 
                                and not p.get('is_active', False))
         
         # Also count active migrated prompts
         active_migrated = sum(1 for p in prompts_list 
-                             if p.get('name', '').find('Hardcoded Migration') >= 0 
+                             if 'Hardcoded Migration' in p.get('name', '') 
                              and p.get('is_active', False))
+        
+        # Count total inactive prompts (all prompts, not just migrated)
+        total_inactive = sum(1 for p in prompts_list if not p.get('is_active', False))
         
         # Check if table exists and has any prompts
         from sqlalchemy import text
@@ -644,6 +647,7 @@ def prompts():
                              prompts=prompts_list,
                              inactive_migrated_count=inactive_migrated,
                              active_migrated_count=active_migrated,
+                             total_inactive_count=total_inactive,
                              table_exists=table_exists,
                              total_prompts_count=total_count)
     except Exception as e:
@@ -730,6 +734,7 @@ def prompt_toggle(prompt_id):
 def prompts_activate_all():
     """Activate all migrated prompts (bulk operation)"""
     from sqlalchemy import text
+    from database import engine
     
     if not engine:
         flash('Database connection not available', 'error')
@@ -737,7 +742,7 @@ def prompts_activate_all():
     
     try:
         with engine.connect() as conn:
-            # First count how many will be activated
+            # First count how many will be activated (migrated prompts only)
             count_query = text("""
                 SELECT COUNT(*) as count
                 FROM prompt_templates
@@ -760,6 +765,49 @@ def prompts_activate_all():
             conn.commit()
             
             flash(f'Successfully activated {inactive_count} migrated prompt(s)', 'success')
+    except Exception as e:
+        print(f"Error activating prompts: {e}")
+        flash(f'Failed to activate prompts: {str(e)}', 'error')
+    
+    return redirect(url_for('admin.prompts'))
+
+
+@admin_bp.route('/prompts/activate-all-inactive', methods=['POST'])
+@require_admin
+def prompts_activate_all_inactive():
+    """Activate ALL inactive prompts (not just migrated ones)"""
+    from sqlalchemy import text
+    from database import engine
+    
+    if not engine:
+        flash('Database connection not available', 'error')
+        return redirect(url_for('admin.prompts'))
+    
+    try:
+        with engine.connect() as conn:
+            # First count how many will be activated
+            count_query = text("""
+                SELECT COUNT(*) as count
+                FROM prompt_templates
+                WHERE is_active = false
+            """)
+            count_result = conn.execute(count_query)
+            inactive_count = count_result.fetchone()[0]
+            
+            if inactive_count == 0:
+                flash('No inactive prompts to activate', 'info')
+                return redirect(url_for('admin.prompts'))
+            
+            # Activate all inactive prompts
+            query = text("""
+                UPDATE prompt_templates 
+                SET is_active = true, updated_at = CURRENT_TIMESTAMP
+                WHERE is_active = false
+            """)
+            conn.execute(query)
+            conn.commit()
+            
+            flash(f'Successfully activated {inactive_count} inactive prompt(s)', 'success')
     except Exception as e:
         print(f"Error activating prompts: {e}")
         flash(f'Failed to activate prompts: {str(e)}', 'error')
