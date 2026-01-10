@@ -237,6 +237,130 @@
         .hero p {
             color: rgba(255, 255, 255, 0.9) !important;
         }
+        
+        .blog-search-prompt {
+            background: linear-gradient(135deg, #F8F9FA 0%, #E9ECEF 100%);
+            border: 2px solid var(--color-gold);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            margin-top: var(--spacing-xl);
+            margin-bottom: var(--spacing-lg);
+            text-align: center;
+            color: #1f2937;
+        }
+        
+        .blog-search-prompt h3 {
+            color: var(--color-navy) !important;
+            margin-bottom: var(--spacing-md);
+            font-size: 1.125rem;
+        }
+        
+        .blog-search-prompt p {
+            color: #4b5563 !important;
+            margin-bottom: var(--spacing-md);
+            line-height: 1.6;
+        }
+        
+        .blog-search-toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-md);
+            flex-wrap: wrap;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: var(--color-gold);
+        }
+        
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        .toggle-switch input:focus + .toggle-slider {
+            box-shadow: 0 0 1px var(--color-gold);
+        }
+        
+        .blog-search-button {
+            background: var(--color-gold);
+            color: var(--color-navy);
+            border: none;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-radius: var(--border-radius);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 1rem;
+        }
+        
+        .blog-search-button:hover {
+            background: #d4a520;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .blog-search-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .blog-searching-prompt {
+            background: #F8F9FA;
+            border: 1px solid #E5E7EB;
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            margin-top: var(--spacing-lg);
+            text-align: center;
+            color: #1f2937;
+        }
+        
+        .blog-searching-prompt .spinner {
+            margin: 0 auto var(--spacing-md);
+        }
+        
+        .blog-searching-prompt p {
+            color: #4b5563 !important;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -316,59 +440,9 @@
                 
                 displayResults(data.answer, data.sources, false, query);
                 
-                if (data.searching_blog) {
-                    const message = data.message || '🔍 Searching 800+ blog articles for additional information...';
-                    
-                    // Show message ABOVE results (existing div)
-                    blogSearching.innerHTML = '<div class="searching-content"><span class="searching-spinner"></span><span>' + message + '</span></div>';
-                    blogSearching.style.display = 'block';
-                    
-                    // Show message BELOW results (insert new div after container)
-                    blogSearchingBelow = document.createElement('div');
-                    blogSearchingBelow.id = 'blog-searching-below';
-                    blogSearchingBelow.className = 'blog-searching';
-                    blogSearchingBelow.innerHTML = '<div class="searching-content"><span class="searching-spinner"></span><span>' + message + '</span></div>';
-                    blogSearchingBelow.style.display = 'block';
-                    container.parentNode.insertBefore(blogSearchingBelow, container.nextSibling);
-                    
-                    // PHASE 2: Complete search
-                    fetch('/api/search-blog-complete', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ query: query })
-                    })
-                    .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
-                    .then(d => {
-                        // Hide and remove BOTH messages when complete results arrive
-                        blogSearching.style.display = 'none';
-                        if (blogSearchingBelow) {
-                            blogSearchingBelow.style.display = 'none';
-                            // Remove from DOM after hiding
-                            if (blogSearchingBelow.parentNode) {
-                                blogSearchingBelow.parentNode.removeChild(blogSearchingBelow);
-                            }
-                            blogSearchingBelow = null;
-                        }
-                        if (!d.error) {
-                            displayResults(d.answer, d.sources, true, query);
-                            updateNotification.textContent = '✨ Enhanced with blog insights';
-                            updateNotification.style.display = 'block';
-                            setTimeout(() => updateNotification.style.display = 'none', 3000);
-                        }
-                    })
-                    .catch(e => { 
-                        console.warn('Blog search failed:', e); 
-                        // Hide and remove BOTH messages on error
-                        blogSearching.style.display = 'none';
-                        if (blogSearchingBelow) {
-                            blogSearchingBelow.style.display = 'none';
-                            // Remove from DOM after hiding
-                            if (blogSearchingBelow.parentNode) {
-                                blogSearchingBelow.parentNode.removeChild(blogSearchingBelow);
-                            }
-                            blogSearchingBelow = null;
-                        }
-                    });
+                // Show prompt asking if user wants to search blog and external documents
+                if (data.blog_search_available) {
+                    showBlogSearchPrompt(query);
                 }
             })
             .catch(e => {
@@ -458,6 +532,132 @@
                     }
                 }
             }
+            
+            function showBlogSearchPrompt(query) {
+                // Remove any existing prompt
+                const existingPrompt = document.getElementById('blog-search-prompt-container');
+                if (existingPrompt) {
+                    existingPrompt.remove();
+                }
+                
+                // Store query in a data attribute to avoid escaping issues
+                const promptContainer = document.createElement('div');
+                promptContainer.id = 'blog-search-prompt-container';
+                promptContainer.className = 'blog-search-prompt';
+                promptContainer.setAttribute('data-query', query);
+                promptContainer.innerHTML = `
+                    <h3>Search Blog and External Documents?</h3>
+                    <p>Would you like to search through our 800+ blog articles and external documents for additional information?</p>
+                    <div class="blog-search-toggle-container">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="blog-search-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span id="toggle-label" style="color: #4b5563; font-weight: 500;">Search blog and external documents</span>
+                        <button class="blog-search-button" id="blog-search-confirm-btn">
+                            Search Now
+                        </button>
+                    </div>
+                `;
+                
+                // Insert after search results container
+                const container = document.getElementById('search-results-container');
+                container.parentNode.insertBefore(promptContainer, container.nextSibling);
+                
+                // Add toggle functionality
+                const toggle = document.getElementById('blog-search-toggle');
+                const toggleLabel = document.getElementById('toggle-label');
+                const confirmBtn = document.getElementById('blog-search-confirm-btn');
+                
+                toggle.addEventListener('change', function() {
+                    if (this.checked) {
+                        toggleLabel.textContent = 'Search blog and external documents (enabled)';
+                        confirmBtn.disabled = false;
+                    } else {
+                        toggleLabel.textContent = 'Search blog and external documents';
+                        confirmBtn.disabled = true;
+                    }
+                });
+                
+                // Add click handler to button (using stored query from data attribute)
+                confirmBtn.addEventListener('click', function() {
+                    const query = promptContainer.getAttribute('data-query');
+                    performBlogSearch(query);
+                });
+                
+                // Initially disable the button
+                confirmBtn.disabled = true;
+            }
+            
+            function performBlogSearch(query) {
+                const toggle = document.getElementById('blog-search-toggle');
+                if (!toggle || !toggle.checked) {
+                    return; // Only proceed if toggle is checked
+                }
+                
+                // Remove the prompt
+                const promptContainer = document.getElementById('blog-search-prompt-container');
+                if (promptContainer) {
+                    promptContainer.remove();
+                }
+                
+                // Show searching message
+                const searchingDiv = document.createElement('div');
+                searchingDiv.id = 'blog-searching-prompt';
+                searchingDiv.className = 'blog-searching-prompt';
+                searchingDiv.innerHTML = `
+                    <div class="spinner"></div>
+                    <p>Searching 800+ blog articles and external documents for additional information...</p>
+                `;
+                
+                const container = document.getElementById('search-results-container');
+                container.parentNode.insertBefore(searchingDiv, container.nextSibling);
+                
+                // Perform blog search
+                fetch('/api/search-blog-complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                })
+                .then(r => r.ok ? r.json() : Promise.reject('HTTP ' + r.status))
+                .then(data => {
+                    // Remove searching message
+                    if (searchingDiv.parentNode) {
+                        searchingDiv.parentNode.removeChild(searchingDiv);
+                    }
+                    
+                    if (data.error) {
+                        console.warn('Blog search error:', data.error);
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'error-state';
+                        errorDiv.innerHTML = `<p><strong>Blog search error:</strong> ${data.error}</p>`;
+                        container.parentNode.insertBefore(errorDiv, container.nextSibling);
+                        return;
+                    }
+                    
+                    // Update results with blog search results
+                    displayResults(data.answer, data.sources, true, query);
+                    updateNotification.textContent = 'Enhanced with blog and external document insights';
+                    updateNotification.style.display = 'block';
+                    setTimeout(() => updateNotification.style.display = 'none', 5000);
+                })
+                .catch(error => {
+                    console.error('Blog search failed:', error);
+                    // Remove searching message
+                    if (searchingDiv.parentNode) {
+                        searchingDiv.parentNode.removeChild(searchingDiv);
+                    }
+                    // Show error
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error-state';
+                    const errorMsg = (error.message || error).toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+                    errorDiv.innerHTML = `<p><strong>Error:</strong> Could not search blog and external documents. ${errorMsg}</p><p>Please try again later.</p>`;
+                    container.parentNode.insertBefore(errorDiv, container.nextSibling);
+                });
+            }
+            
+            // Make performBlogSearch available globally if needed
+            window.performBlogSearch = performBlogSearch;
         });
     </script>
 </body>

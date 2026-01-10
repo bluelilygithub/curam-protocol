@@ -101,12 +101,12 @@ def test_dependencies():
 def search_blog_rag():
     """
     TWO-PHASE RAG Search - Fast initial results with static pages.
-    Returns immediately with website results, then continues searching blog.
+    Returns immediately with website results only.
     
     Client should:
     1. Display initial results from this endpoint
-    2. Show "Searching 800+ blog articles..." message
-    3. Call /api/search-blog-complete for full results with blog posts
+    2. Show prompt asking if user wants to search blog and external documents
+    3. If user confirms, call /api/search-blog-complete for full results with blog posts
     """
     try:
         data = request.get_json()
@@ -152,7 +152,7 @@ Instructions:
 1. Provide a direct answer using the content above
 2. Be thorough but concise
 3. Reference source titles when citing information
-4. Note: This is initial information from our website. We're also searching our 800+ blog articles for more detailed insights.
+4. Note: This is information from our website pages. Additional information may be available in our blog articles and external documents.
 
 Answer:"""
                 
@@ -170,8 +170,8 @@ Answer:"""
             'answer': initial_answer,
             'sources': fast_results['sources'],
             'query': query,
-            'searching_blog': True,
-            'message': '🔍 Searching 800+ blog articles for additional information...'
+            'blog_search_available': True,  # Changed from searching_blog to indicate blog search is available but not started
+            'message': 'Search our 800+ blog articles and external documents for additional information?'
         })
             
     except Exception as e:
