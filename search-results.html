@@ -179,6 +179,11 @@
             padding-top: var(--spacing-lg);
             border-top: 1px solid #E5E7EB;
             text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
         }
         
         .loading-state {
@@ -518,7 +523,12 @@
                     html += '</div>';
                 }
                 
-                html += `<div class="blog-link-section"><a href="https://blog.curam-ai.com.au/?s=${encodeURIComponent(query)}" target="_blank" class="btn btn-secondary" style="margin-right:8px">View all on blog →</a><a href="contact.html" class="btn btn-primary">See How This Works</a></div>
+                // Add placeholder for toggle block only for initial results (not updates)
+                if (!isUpdate) {
+                    html += `<div id="blog-search-toggle-placeholder"></div>`;
+                }
+                
+                html += `<div class="blog-link-section" style="text-align:center;margin-top:30px;"><a href="https://blog.curam-ai.com.au/?s=${encodeURIComponent(query)}" target="_blank" class="btn btn-secondary" style="margin-right:8px">View all on blog →</a><a href="contact.html" class="btn btn-primary">See How This Works</a></div>
                 <div style="background:linear-gradient(135deg,var(--color-navy),#1e3a5f);color:#fff;padding:20px;border-radius:8px;margin-top:30px;text-align:center"><h3 style="color:#fff;margin-bottom:10px">Same AI for Your Documents</h3><p style="color:rgba(255,255,255,0.9);margin-bottom:15px">AI search + document extraction at ≥90% accuracy.</p><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a href="contact.html" class="btn btn-primary" style="background:var(--color-gold);color:var(--color-navy);border:none">Book Diagnostic</a><a href="/feasibility-preview.html" class="btn btn-secondary" style="background:transparent;border:2px solid var(--color-gold);color:var(--color-gold)">Try Demo</a></div></div>`;
                 
                 container.innerHTML = html;
@@ -538,6 +548,21 @@
                 const existingPrompt = document.getElementById('blog-search-prompt-container');
                 if (existingPrompt) {
                     existingPrompt.remove();
+                }
+                
+                // Find the placeholder where we want to insert the toggle
+                const placeholder = document.getElementById('blog-search-toggle-placeholder');
+                let insertTarget = null;
+                
+                if (placeholder) {
+                    insertTarget = placeholder;
+                } else {
+                    // Fallback: find the blog-link-section and insert before it
+                    const container = document.getElementById('search-results-container');
+                    const blogLinkSection = container.querySelector('.blog-link-section');
+                    if (blogLinkSection) {
+                        insertTarget = blogLinkSection;
+                    }
                 }
                 
                 // Store query in a data attribute to avoid escaping issues
@@ -560,9 +585,20 @@
                     </div>
                 `;
                 
-                // Insert after search results container
-                const container = document.getElementById('search-results-container');
-                container.parentNode.insertBefore(promptContainer, container.nextSibling);
+                // Insert at placeholder location (before the "See How This Works" button)
+                if (insertTarget) {
+                    if (insertTarget.id === 'blog-search-toggle-placeholder') {
+                        // Replace placeholder
+                        insertTarget.parentNode.replaceChild(promptContainer, insertTarget);
+                    } else {
+                        // Insert before target element
+                        insertTarget.parentNode.insertBefore(promptContainer, insertTarget);
+                    }
+                } else {
+                    // Fallback: insert after search results container
+                    const container = document.getElementById('search-results-container');
+                    container.parentNode.insertBefore(promptContainer, container.nextSibling);
+                }
                 
                 // Add toggle functionality
                 const toggle = document.getElementById('blog-search-toggle');
