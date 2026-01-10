@@ -8,6 +8,15 @@
         <h2>Prompt Templates</h2>
         <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Manage AI prompts for document extraction</p>
     </div>
+    <div class="admin-header-actions">
+        {% if inactive_migrated_count and inactive_migrated_count > 0 %}
+        <form method="POST" action="{{ url_for('admin.prompts_activate_all') }}" style="display: inline;">
+            <button type="submit" class="btn-admin" onclick="return confirm('Activate all {{ inactive_migrated_count }} migrated prompt(s)? This will enable database prompts for use.');">
+                ✓ Activate All Migrated Prompts ({{ inactive_migrated_count }})
+            </button>
+        </form>
+        {% endif %}
+    </div>
 </div>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
@@ -19,6 +28,29 @@
         {% endfor %}
     {% endif %}
 {% endwith %}
+
+{% if not table_exists %}
+<div class="admin-card" style="background: #FEF3C7; border-left: 3px solid #F59E0B;">
+    <h3 style="margin: 0 0 0.5rem; color: #92400E;">⚠️ Prompt Templates Table Not Found</h3>
+    <p style="margin: 0; color: #92400E;">The <code>prompt_templates</code> table does not exist in your database.</p>
+    <p style="margin: 0.5rem 0 0; color: #92400E;">You need to run the database setup SQL first. Check your database migration files.</p>
+</div>
+{% elif total_prompts_count == 0 %}
+<div class="admin-card" style="background: #FEF3C7; border-left: 3px solid #F59E0B;">
+    <h3 style="margin: 0 0 0.5rem; color: #92400E;">⚠️ No Prompts Found</h3>
+    <p style="margin: 0; color: #92400E;">The <code>prompt_templates</code> table exists but has no prompts.</p>
+    <p style="margin: 0.5rem 0 0; color: #92400E;">
+        <strong>To migrate prompts:</strong><br>
+        1. Run: <code>python extract_prompts_to_sql.py</code> (generates SQL)<br>
+        2. Run <code>prompts_migration_generated.sql</code> in your PostgreSQL database
+    </p>
+</div>
+{% elif active_migrated_count > 0 %}
+<div class="admin-card" style="background: #D1FAE5; border-left: 3px solid #10B981;">
+    <h3 style="margin: 0 0 0.5rem; color: #065F46;">✓ {{ active_migrated_count }} Active Migrated Prompt(s)</h3>
+    <p style="margin: 0; color: #065F46;">Your system is using database prompts! The code will check database prompts first, then fallback to hardcoded if needed.</p>
+</div>
+{% endif %}
 
 <div class="admin-card">
     <h3 style="margin: 0 0 1rem;">All Prompts</h3>

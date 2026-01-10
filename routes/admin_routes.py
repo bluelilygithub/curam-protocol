@@ -605,8 +605,55 @@ def phase1_report_public(report_token):
 @require_admin
 def prompts():
     """List all prompt templates"""
-    prompts_list = get_all_prompts()
-    return render_template('admin/prompts.html', prompts=prompts_list)
+    try:
+        prompts_list = get_all_prompts()
+        # Count inactive migrated prompts
+        inactive_migrated = sum(1 for p in prompts_list 
+                               if p.get('name', '').find('Hardcoded Migration') >= 0 
+                               and not p.get('is_active', False))
+        
+        # Also count active migrated prompts
+        active_migrated = sum(1 for p in prompts_list 
+                             if p.get('name', '').find('Hardcoded Migration') >= 0 
+                             and p.get('is_active', False))
+        
+        # Check if table exists and has any prompts
+        from sqlalchemy import text
+        from database import engine
+        table_exists = False
+        total_count = 0
+        if engine:
+            try:
+                with engine.connect() as conn:
+                    # Check if table exists
+                    check_query = conn.execute(text("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_name = 'prompt_templates'
+                        )
+                    """))
+                    table_exists = check_query.scalar()
+                    
+                    if table_exists:
+                        count_query = conn.execute(text("SELECT COUNT(*) FROM prompt_templates"))
+                        total_count = count_query.scalar()
+            except Exception as e:
+                flash(f'Database error: {str(e)}', 'error')
+        
+        return render_template('admin/prompts.html', 
+                             prompts=prompts_list,
+                             inactive_migrated_count=inactive_migrated,
+                             active_migrated_count=active_migrated,
+                             table_exists=table_exists,
+                             total_prompts_count=total_count)
+    except Exception as e:
+        flash(f'Error loading prompts: {str(e)}', 'error')
+        return render_template('admin/prompts.html', 
+                             prompts=[],
+                             inactive_migrated_count=0,
+                             active_migrated_count=0,
+                             table_exists=False,
+                             total_prompts_count=0)
 
 
 @admin_bp.route('/prompts/<int:prompt_id>')
@@ -674,5 +721,47 @@ def prompt_toggle(prompt_id):
         flash(f'Prompt {status} successfully', 'success')
     else:
         flash('Failed to toggle prompt status', 'error')
+    
+    return redirect(url_for('admin.prompts'))
+
+
+@admin_bp.route('/prompts/activate-all', methods=['POST'])
+@require_admin
+def prompts_activate_all():
+    """Activate all migrated prompts (bulk operation)"""
+    from sqlalchemy import text
+    
+    if not engine:
+        flash('Database connection not available', 'error')
+        return redirect(url_for('admin.prompts'))
+    
+    try:
+        with engine.connect() as conn:
+            # First count how many will be activated
+            count_query = text("""
+                SELECT COUNT(*) as count
+                FROM prompt_templates
+                WHERE name LIKE '%Hardcoded Migration%' AND is_active = false
+            """)
+            count_result = conn.execute(count_query)
+            inactive_count = count_result.fetchone()[0]
+            
+            if inactive_count == 0:
+                flash('No inactive migrated prompts to activate', 'info')
+                return redirect(url_for('admin.prompts'))
+            
+            # Activate all migrated prompts
+            query = text("""
+                UPDATE prompt_templates 
+                SET is_active = true, updated_at = CURRENT_TIMESTAMP
+                WHERE name LIKE '%Hardcoded Migration%' AND is_active = false
+            """)
+            conn.execute(query)
+            conn.commit()
+            
+            flash(f'Successfully activated {inactive_count} migrated prompt(s)', 'success')
+    except Exception as e:
+        print(f"Error activating prompts: {e}")
+        flash(f'Failed to activate prompts: {str(e)}', 'error')
     
     return redirect(url_for('admin.prompts'))
