@@ -205,7 +205,7 @@ def get_transmittal_template():
                 </table>
             </div>
             <div style="padding: 12px 20px; background: #f8f9fa; border-top: 1px solid #e9ecef;">
-                <a href="/export_transmittal_csv?category=Assumptions" class="btn btn-export" style="text-decoration: none;">ðŸ“¥ Export Assumptions to CSV</a>
+                <a href="/export_transmittal_csv?category=Assumptions" class="btn btn-export" style="text-decoration: none;">Export Assumptions to CSV</a>
             </div>
         </div>
         {% endif %}

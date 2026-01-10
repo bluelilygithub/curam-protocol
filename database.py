@@ -277,7 +277,27 @@ def build_combined_prompt(doc_type, sector_slug, text):
     4. Document text (LAST)
     
     Includes LOG markers for Railway logging to verify correct order.
+    
+    Args:
+        doc_type: Database document type (beam-schedule, vendor-invoice, fta-list, drawing-register)
+        sector_slug: Optional sector slug for sector-specific prompts
+        text: Document text to extract from (MUST be provided, cannot be None)
     """
+    # Validate text parameter
+    if text is None:
+        print(f"⚠️ ERROR: build_combined_prompt received None text for doc_type={doc_type}!")
+        text = ""
+    elif not isinstance(text, str):
+        print(f"⚠️ WARNING: build_combined_prompt received non-string text (type: {type(text)}) for doc_type={doc_type}")
+        text = str(text) if text else ""
+    
+    text_length = len(text) if text else 0
+    print(f"🔍 [build_combined_prompt] Called for doc_type={doc_type}, text_length={text_length} chars")
+    if text and text_length > 0:
+        print(f"🔍 [build_combined_prompt] Text preview (first 100 chars): {text[:100]}")
+    else:
+        print(f"⚠️ WARNING: Empty text provided to build_combined_prompt for doc_type={doc_type}")
+    
     prompts = get_active_prompts(doc_type, sector_slug)
     
     if not prompts:
@@ -327,12 +347,28 @@ def build_combined_prompt(doc_type, sector_slug, text):
         sector_text = "\n\n---\n\n".join([p["text"] for p in sector_prompts])
         parts.append(f"[LOG: Using sector prompt ({sector_slug})]\n{sector_text}")
     
-    # Step 4: Document text (LAST)
-    parts.append(f"TEXT: {text}")
+    # Step 4: Document text (LAST) - CRITICAL: Use the actual text parameter passed in
+    # Ensure text is properly formatted (handle empty strings)
+    document_text_section = f"TEXT: {text}" if text else "TEXT: [EMPTY - No document text provided]"
+    parts.append(document_text_section)
     
     # Combine all parts with separators
     combined = "\n\n---\n\n".join(parts)
     combined += "\n\nReturn ONLY valid JSON."
+    
+    # Final validation: Ensure document text is actually in the combined prompt
+    if text and text.strip() and text not in combined:
+        # Check if at least part of the text is present (in case it was truncated)
+        text_preview = text[:200] if len(text) > 200 else text
+        if text_preview not in combined:
+            print(f"⚠️ ERROR: Document text not found in combined prompt! Text length: {len(text)}")
+            print(f"🔍 Text preview: {text_preview[:100]}")
+            print(f"🔍 Combined prompt length: {len(combined)}")
+            print(f"🔍 TEXT: marker position: {combined.find('TEXT:')}")
+        else:
+            print(f"✓ Document text verified in combined prompt (found preview)")
+    elif text and text.strip():
+        print(f"✓ Document text verified in combined prompt (full text found)")
     
     return combined
 

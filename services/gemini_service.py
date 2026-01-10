@@ -134,7 +134,19 @@ def get_available_models():
 
 
 def build_prompt(text, doc_type, sector_slug=None):
-    """Build a prompt tailored to the selected department."""
+    """
+    Build a prompt tailored to the selected department.
+    
+    Args:
+        text: Document text (already processed/truncated if needed)
+        doc_type: Document type (engineering, finance, logistics, transmittal)
+        sector_slug: Optional sector slug for sector-specific prompts
+    """
+    # Validate input text
+    if not text or (isinstance(text, str) and not text.strip()):
+        print(f"⚠️ WARNING: Empty or None text provided to build_prompt for {doc_type}")
+        text = ""
+    
     # Map code doc_type values to database doc_type values
     DOC_TYPE_MAP = {
         'engineering': 'beam-schedule',
@@ -147,9 +159,19 @@ def build_prompt(text, doc_type, sector_slug=None):
     # Try database first
     try:
         from database import build_combined_prompt
-        print(f"🔍 Attempting to load database prompts for doc_type='{doc_type}' -> db_doc_type='{db_doc_type}'")
+        print(f"🔍 [build_prompt] Attempting to load database prompts for doc_type='{doc_type}' -> db_doc_type='{db_doc_type}'")
+        print(f"🔍 [build_prompt] Input text length: {len(text) if text else 0} chars")
         db_prompt = build_combined_prompt(db_doc_type, sector_slug, text)
         if db_prompt:
+            # Verify the document text is actually in the prompt
+            if text and text.strip():
+                if text not in db_prompt and text[:100] not in db_prompt:
+                    print(f"⚠️ WARNING: Document text not found in generated prompt! Text length: {len(text)}")
+                    print(f"🔍 First 100 chars of text: {text[:100]}")
+                    print(f"🔍 Prompt contains text marker: {'TEXT:' in db_prompt}")
+                else:
+                    print(f"✓ Document text verified in prompt (found in prompt)")
+            
             print(f"✓ Using database prompt for {doc_type} (db: {db_doc_type}) - length: {len(db_prompt)} chars")
             # Check if test marker is in the FULL prompt (not just first 500 chars)
             test_markers = ["TEST_MARKER", "admin_test", "TEST INSTRUCTION", "TEST:", "CRITICAL TEST"]
@@ -389,8 +411,20 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
         else TRANSMITTAL_PROMPT_LIMIT if doc_type == "transmittal"
         else None
     )
-    # For images, we still need prompt text (empty string is fine, prompt will be built)
-    prompt_text = prepare_prompt_text(text or "", doc_type, prompt_limit) if text else ""
+    # For logistics and finance, we should NOT truncate or heavily process the text
+    # For engineering and transmittal, we need to limit text length
+    if doc_type in ["engineering", "transmittal"]:
+        prompt_text = prepare_prompt_text(text or "", doc_type, prompt_limit) if text else ""
+    else:
+        # For logistics and finance, use original text (just ensure it's not None)
+        prompt_text = text if text else ""
+    
+    # Log text length for debugging
+    if prompt_text:
+        action_log.append(f"Document text length: {len(prompt_text)} chars (doc_type: {doc_type})")
+    else:
+        action_log.append(f"⚠️ WARNING: Empty text provided for {doc_type} document")
+    
     prompt = build_prompt(prompt_text, doc_type, sector_slug)
     if prompt_limit:
         action_log.append(f"Prompt truncated to {prompt_limit} characters for {doc_type} document")
