@@ -51,9 +51,21 @@
                 <label for="industry" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">
                     Industry
                 </label>
-                <input type="text" id="industry" name="industry"
-                       style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;"
-                       placeholder="Engineering, Accounting, Logistics, etc.">
+                <select id="industry" name="industry"
+                        style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;">
+                    <option value="">Select an industry (optional)</option>
+                    <option value="Accounting & Advisory">Accounting & Advisory</option>
+                    <option value="Architecture & Building Services">Architecture & Building Services</option>
+                    <option value="Civil & Surveying">Civil & Surveying</option>
+                    <option value="Government Contractors">Government Contractors</option>
+                    <option value="Healthcare Admin">Healthcare Admin</option>
+                    <option value="Insurance Underwriting">Insurance Underwriting</option>
+                    <option value="Legal Services">Legal Services</option>
+                    <option value="Logistics & Freight">Logistics & Freight</option>
+                    <option value="Mining Services">Mining Services</option>
+                    <option value="Property Management">Property Management</option>
+                    <option value="Wealth Management">Wealth Management</option>
+                </select>
             </div>
             
             <div style="grid-column: 1 / -1;">
@@ -92,7 +104,7 @@
         <li>A unique trial code will be generated (e.g., "P1-2025-001")</li>
         <li>A secure report token will be created for private report access</li>
         <li>You'll be redirected to the trial detail page to upload documents</li>
-        <li>Upload 15 documents organized into 3 categories (5 documents each)</li>
+        <li>Upload up to 15 documents (PDF format only)</li>
         <li>Process documents to generate extraction results</li>
         <li>Review the Phase 1 report and share the private link with the customer</li>
     </ol>

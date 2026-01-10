@@ -378,18 +378,34 @@ def phase1_trial_upload(trial_id):
     os.makedirs(trial_upload_dir, exist_ok=True)
     
     uploaded_files = request.files.getlist('documents')
-    document_category = request.form.get('category', 'Category 1')
     
     if not uploaded_files or not any(f.filename for f in uploaded_files):
         return jsonify({"success": False, "error": "No files uploaded"}), 400
     
+    # Check current document count and enforce max of 15
+    existing_docs = get_trial_documents(trial_id)
+    current_count = len(existing_docs)
+    max_files = 15
+    
+    if current_count >= max_files:
+        return jsonify({
+            "success": False,
+            "error": f"Maximum of {max_files} files allowed. You already have {current_count} files."
+        }), 400
+    
+    # Calculate how many files we can still upload
+    remaining_slots = max_files - current_count
+    if len(uploaded_files) > remaining_slots:
+        return jsonify({
+            "success": False,
+            "error": f"Maximum of {max_files} files allowed. You have {current_count} files. You can only upload {remaining_slots} more file(s)."
+        }), 400
+    
     uploaded_count = 0
     errors = []
     
-    # Get existing documents in this category to determine document_number
-    existing_docs = get_trial_documents(trial_id)
-    category_docs = [d for d in existing_docs if d.get('document_category') == document_category]
-    next_doc_number = len(category_docs) + 1
+    # Get next document number (sequential, no categories)
+    next_doc_number = current_count + 1
     
     for file_storage in uploaded_files:
         if not file_storage or not file_storage.filename:
@@ -406,10 +422,10 @@ def phase1_trial_upload(trial_id):
             file_storage.save(file_path)
             file_size = os.path.getsize(file_path)
             
-            # Add document to database
+            # Add document to database (no category, just sequential numbering)
             doc_id = add_trial_document(
                 trial_id=trial_id,
-                document_category=document_category,
+                document_category='All Documents',  # Simplified - no categories
                 document_number=next_doc_number,
                 original_filename=original_filename,
                 stored_file_path=file_path,
