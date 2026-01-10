@@ -248,7 +248,12 @@ def build_combined_prompt(doc_type, sector_slug, text):
     prompts = get_active_prompts(doc_type, sector_slug)
     
     if not prompts:
+        print(f"⚠️ No active database prompts found for doc_type={doc_type}, sector_slug={sector_slug}")
         return None
+    
+    print(f"✓ Found {len(prompts)} active database prompt(s) for doc_type={doc_type}")
+    for i, p in enumerate(prompts, 1):
+        print(f"  {i}. {p.get('name', 'Unknown')} (priority: {p.get('priority', 0)})")
     
     combined = "\n\n---\n\n".join([p["text"] for p in prompts])
     combined += f"\n\n---\n\nTEXT: {text}\n\nReturn ONLY valid JSON."

@@ -147,12 +147,20 @@ def build_prompt(text, doc_type, sector_slug=None):
     # Try database first
     try:
         from database import build_combined_prompt
+        print(f"🔍 Attempting to load database prompts for doc_type='{doc_type}' -> db_doc_type='{db_doc_type}'")
         db_prompt = build_combined_prompt(db_doc_type, sector_slug, text)
         if db_prompt:
-            print(f"✓ Using database prompt for {doc_type} (db: {db_doc_type})")
+            print(f"✓ Using database prompt for {doc_type} (db: {db_doc_type}) - length: {len(db_prompt)} chars")
+            # Check if test marker is in the prompt (first 500 chars)
+            if "TEST_MARKER" in db_prompt[:500] or "admin_test" in db_prompt[:500] or "TEST INSTRUCTION" in db_prompt[:500]:
+                print(f"✅ TEST MARKER FOUND IN DATABASE PROMPT!")
             return db_prompt
+        else:
+            print(f"⚠️ Database prompt lookup returned None for {doc_type} (db: {db_doc_type})")
     except Exception as e:
         print(f"⚠ Database prompt lookup failed for {doc_type}: {e}")
+        import traceback
+        traceback.print_exc()
     
     print(f"→ Using hardcoded fallback for {doc_type}")
     
