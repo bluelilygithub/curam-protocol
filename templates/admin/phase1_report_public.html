@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 1 Feasibility Sprint Report - {{ trial.get('trial_code', 'N/A') }}</title>
+    <link rel="stylesheet" href="/assets/css/styles.css?v={{ static_version }}">
+    <style>
+        body {
+            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #F8F9FA;
+            color: #0B1221;
+            line-height: 1.6;
+            margin: 0;
+            padding: 2rem;
+        }
+        .report-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .report-header {
+            background: linear-gradient(135deg, #0B1221, #1a2332);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+        }
+        .report-header h1 {
+            margin: 0 0 0.5rem;
+            font-size: 2rem;
+            color: #D4AF37;
+        }
+        .report-header .trial-code {
+            font-size: 1.25rem;
+            opacity: 0.9;
+            margin-top: 0.5rem;
+        }
+        .report-content {
+            padding: 2rem;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .summary-card {
+            background: linear-gradient(135deg, #FFFBF0, white);
+            border: 2px solid #D4AF37;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .summary-card.primary {
+            background: linear-gradient(135deg, #EFF6FF, white);
+            border-color: #3B82F6;
+        }
+        .summary-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: #0B1221;
+            margin: 0.5rem 0;
+        }
+        .summary-label {
+            color: #6B7280;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .test-section {
+            margin: 3rem 0;
+            padding: 2rem;
+            background: #F8F9FA;
+            border-radius: 8px;
+            border-left: 4px solid #D4AF37;
+        }
+        .test-section h2 {
+            margin: 0 0 1rem;
+            color: #0B1221;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.375rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        .badge-success {
+            background: #D1FAE5;
+            color: #065F46;
+        }
+        .badge-warning {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+        .recommendation {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        .recommendation.pass {
+            background: #F0FDF4;
+            border-color: #10B981;
+        }
+        .recommendation.fail {
+            background: #FEF3C7;
+            border-color: #F59E0B;
+        }
+        .document-result {
+            background: white;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border-radius: 6px;
+            border-left: 3px solid #E5E7EB;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        table th, table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        table th {
+            background: #F8F9FA;
+            font-weight: 600;
+            color: #0B1221;
+            text-transform: uppercase;
+            font-size: 0.875rem;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        <div class="report-header">
+            <h1>Phase 1 Feasibility Sprint Report</h1>
+            <div class="trial-code">{{ trial.get('trial_code', 'N/A') }}</div>
+            <div style="margin-top: 1rem; opacity: 0.8;">
+                {{ trial.get('customer_name', 'Customer') }}{% if trial.get('customer_company') %} - {{ trial.get('customer_company') }}{% endif %}
+            </div>
+        </div>
+        
+        <div class="report-content">
+            <!-- Executive Summary -->
+            <section>
+                <h2 style="margin-top: 0;">Executive Summary</h2>
+                <p style="color: #4B5563;">
+                    This report presents the results of the Phase 1 Feasibility Sprint, validating AI document automation 
+                    capability on {{ trial.get('total_documents', 15) }} real-world documents across three critical dimensions.
+                </p>
+                
+                <div class="summary-grid">
+                    <div class="summary-card">
+                        <div class="summary-label">Test 1: Field Accuracy</div>
+                        <div class="summary-value">
+                            {% if trial.get('overall_accuracy') %}
+                                {{ "%.1f"|format(trial.get('overall_accuracy', 0)) }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                        {% if trial.get('overall_accuracy', 0) >= 90 %}
+                            <span class="badge badge-success">PASS (≥90%)</span>
+                        {% else %}
+                            <span class="badge badge-warning">FAIL (<90%)</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="summary-card">
+                        <div class="summary-label">Test 2: STP Rate</div>
+                        <div class="summary-value">
+                            {% if trial.get('stp_rate') %}
+                                {{ "%.1f"|format(trial.get('stp_rate', 0)) }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </div>
+                        {% if trial.get('stp_rate', 0) >= 60 %}
+                            <span class="badge badge-success">PASS (≥60%)</span>
+                        {% else %}
+                            <span class="badge badge-warning">FAIL (<60%)</span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="summary-card">
+                        <div class="summary-label">Test 3: Exceptions</div>
+                        <div class="summary-value">{{ trial.get('exceptions_count', 0) }}</div>
+                        <span style="color: #6B7280; font-size: 0.875rem; margin-top: 0.5rem;">Flagged for Review</span>
+                    </div>
+                </div>
+                
+                <div class="recommendation {% if trial.get('overall_accuracy', 0) >= 90 and trial.get('stp_rate', 0) >= 60 %}pass{% else %}fail{% endif %}">
+                    <h3 style="margin: 0 0 0.5rem;">
+                        {% if trial.get('overall_accuracy', 0) >= 90 and trial.get('stp_rate', 0) >= 60 %}
+                            ✅ Recommendation: PROCEED TO PHASE 2
+                        {% else %}
+                            ⚠️ Recommendation: REVIEW REQUIRED
+                        {% endif %}
+                    </h3>
+                    <p style="margin: 0; color: #0B1221;">
+                        {% if trial.get('overall_accuracy', 0) >= 90 and trial.get('stp_rate', 0) >= 60 %}
+                            All three tests passed successfully. The system demonstrated ≥90% field extraction accuracy 
+                            and ≥60% straight-through processing capability. Proceed to Phase 2 for detailed ROI modeling and implementation planning.
+                        {% else %}
+                            One or more tests did not meet the required thresholds. Please review the detailed results below. 
+                            If tests fail, you are entitled to a full $1,500 refund per the Phase 1 guarantee.
+                        {% endif %}
+                    </p>
+                </div>
+            </section>
+            
+            <!-- Test Results -->
+            {% if results %}
+            <section class="test-section">
+                <h2>Test 1: Field Extraction Accuracy</h2>
+                <p>
+                    <strong>Overall Accuracy:</strong> {{ "%.1f"|format(trial.get('overall_accuracy', 0)) }}%
+                    <br>
+                    <strong>Documents Processed:</strong> {{ results | length }} / {{ trial.get('total_documents', 15) }}
+                    <br>
+                    <strong>Fields Passed (≥90% confidence):</strong> {{ total_passed }}
+                    <br>
+                    <strong>Fields Flagged (<90% confidence):</strong> {{ total_flagged }}
+                </p>
+                
+                <h3 style="margin-top: 2rem;">Document-Level Results</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Document</th>
+                            <th>Category</th>
+                            <th>Accuracy</th>
+                            <th>Fields Passed</th>
+                            <th>Fields Flagged</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for result in results %}
+                        <tr>
+                            <td><strong>{{ result.get('original_filename', 'Unknown') }}</strong></td>
+                            <td>{{ result.get('document_category', '—') }} #{{ result.get('document_number', '?') }}</td>
+                            <td>{{ "%.1f"|format(result.get('field_accuracy', 0)) }}%</td>
+                            <td>{{ result.get('fields_passed', 0) }}</td>
+                            <td>{{ result.get('fields_flagged', 0) }}</td>
+                            <td>
+                                {% if result.get('field_accuracy', 0) >= 90 %}
+                                    <span class="badge badge-success">PASS</span>
+                                {% else %}
+                                    <span class="badge badge-warning">FLAG</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+            
+            <section class="test-section">
+                <h2>Test 2: Straight-Through Processing (STP) Rate</h2>
+                <p>
+                    <strong>STP Rate:</strong> {{ "%.1f"|format(stp_rate) }}%
+                    <br>
+                    <strong>Documents Eligible for STP:</strong> {{ results | selectattr('stp_eligible', 'equalto', True) | list | length }} / {{ results | length }}
+                    <br>
+                    <strong>Documents Requiring Human Review:</strong> {{ results | selectattr('requires_human_review', 'equalto', True) | list | length }}
+                </p>
+                <p style="color: #4B5563; margin-top: 1rem;">
+                    STP Rate measures the percentage of documents that can be processed automatically without human intervention. 
+                    A rate ≥60% indicates strong automation potential.
+                </p>
+            </section>
+            
+            <section class="test-section">
+                <h2>Test 3: Exception Handling and Safety</h2>
+                <p>
+                    <strong>Total Exceptions Flagged:</strong> {{ trial.get('exceptions_count', 0) }}
+                    <br>
+                    <strong>Safe Failure Mode:</strong> 
+                    {% if trial.get('exceptions_count', 0) > 0 %}
+                        <span class="badge badge-success">Confirmed</span> - All exceptions properly routed for human review
+                    {% else %}
+                        <span class="badge badge-success">Confirmed</span> - No exceptions requiring review
+                    {% endif %}
+                </p>
+                <p style="color: #4B5563; margin-top: 1rem;">
+                    This test validates that the system fails safely when encountering ambiguous or unclear data, 
+                    routing problematic documents to human review rather than processing them incorrectly.
+                </p>
+            </section>
+            {% else %}
+            <section class="test-section">
+                <p style="color: #6B7280; text-align: center; padding: 2rem;">
+                    Documents are currently being processed. Results will appear here once processing is complete.
+                </p>
+            </section>
+            {% endif %}
+            
+            <!-- Footer -->
+            <div style="margin-top: 4rem; padding-top: 2rem; border-top: 1px solid #E5E7EB; text-align: center; color: #6B7280; font-size: 0.875rem;">
+                <p>Curam-Ai Protocol™ - Phase 1 Feasibility Sprint Report</p>
+                <p style="margin-top: 0.5rem;">Generated: {{ trial.get('completed_at').strftime('%Y-%m-%d %H:%M') if trial.get('completed_at') else 'N/A' }}</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

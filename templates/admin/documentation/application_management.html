@@ -1,0 +1,784 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Application Management Documentation{% endblock %}
+
+{% block extra_head %}
+    <style>
+        .doc-section {
+            margin-bottom: 2rem;
+        }
+        
+        .doc-category-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            background: #0B1221;
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-bottom: 0.5rem;
+        }
+        
+        .doc-category-header:hover {
+            background: #1a2332;
+        }
+        
+        .doc-category-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 0;
+            color: #D4AF37;
+        }
+        
+        .doc-category-chevron {
+            font-size: 0.875rem;
+            color: #D4AF37;
+            transition: transform 0.3s ease;
+        }
+        
+        .doc-category-section:not(.collapsed) .doc-category-chevron {
+            transform: rotate(90deg);
+        }
+        
+        .doc-category-content {
+            max-height: 5000px;
+            overflow: hidden;
+            transition: max-height 0.4s ease, opacity 0.3s ease, margin-top 0.4s ease;
+            opacity: 1;
+            margin-top: 0.5rem;
+        }
+        
+        .doc-category-section.collapsed .doc-category-content {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        
+        .doc-card {
+            background: #fff;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .doc-question-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            background: #F8F9FA;
+            border-bottom: 1px solid #E5E7EB;
+            transition: background-color 0.2s;
+        }
+        
+        .doc-question-header:hover {
+            background: #F1F3F5;
+        }
+        
+        .doc-question {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #0B1221;
+            margin: 0;
+        }
+        
+        .doc-question-chevron {
+            font-size: 0.875rem;
+            color: #D4AF37;
+            transition: transform 0.3s ease;
+            margin-left: 1rem;
+        }
+        
+        .doc-question-item:not(.collapsed) .doc-question-chevron {
+            transform: rotate(90deg);
+        }
+        
+        .doc-question-content {
+            max-height: 5000px;
+            overflow: hidden;
+            transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.4s ease;
+            opacity: 1;
+            padding: 1.5rem;
+        }
+        
+        .doc-question-item.collapsed .doc-question-content {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        
+        .doc-answer {
+            color: #4B5563;
+            line-height: 1.7;
+        }
+        
+        .doc-answer p {
+            margin-bottom: 1rem;
+        }
+        
+        .doc-answer p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .doc-answer ul, .doc-answer ol {
+            margin: 1rem 0;
+            padding-left: 2rem;
+        }
+        
+        .doc-answer li {
+            margin-bottom: 0.75rem;
+        }
+        
+        .doc-answer strong {
+            color: #0B1221;
+            font-weight: 600;
+        }
+        
+        .doc-answer code {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #E5E7EB;
+            font-size: 0.9em;
+        }
+        
+        .code-block {
+            background: #0B1221;
+            color: #D4AF37;
+            padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+        
+        .highlight-box {
+            background: #FEF3C7;
+            border-left: 4px solid #D4AF37;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+        
+        .info-box {
+            background: #EFF6FF;
+            border-left: 4px solid #3B82F6;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+        
+        .success-box {
+            background: #F0FDF4;
+            border-left: 4px solid #10B981;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+        
+        .warning-box {
+            background: #FEF3C7;
+            border-left: 4px solid #F59E0B;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 1.5rem;
+            color: #D4AF37;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+        
+        .back-link:hover {
+            color: #B8941F;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+        
+        table th, table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        
+        table th {
+            background: #F8F9FA;
+            font-weight: 600;
+            color: #0B1221;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="admin-header">
+        <div>
+            <a href="{{ url_for('admin.documentation_index') }}" class="back-link">← Back to Documentation</a>
+            <h2>Application Management</h2>
+        </div>
+    </div>
+
+    <div class="doc-section">
+        <div class="doc-category-section">
+            <div class="doc-category-header doc-category-toggle">
+                <h3 class="doc-category-title">
+                    <span>Phase 1</span>
+                    <span class="doc-category-count" style="color: rgba(255,255,255,0.7); font-size: 0.875rem; font-weight: 400;">(15)</span>
+                </h3>
+                <span class="doc-category-chevron">▶</span>
+            </div>
+            <div class="doc-category-content">
+                
+                <!-- How To Section -->
+                <div class="doc-card">
+                    <div class="doc-question-header doc-question-toggle">
+                        <h4 class="doc-question">How To</h4>
+                        <span class="doc-question-chevron">▶</span>
+                    </div>
+                    <div class="doc-question-content">
+                        <div class="doc-answer">
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I create a new Phase 1 trial?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>To create a new Phase 1 trial:</p>
+                                        <ol>
+                                            <li>Log into the admin dashboard at <code>/admin</code></li>
+                                            <li>Navigate to <strong>"Phase 1 Trials"</strong> in the sidebar</li>
+                                            <li>Click <strong>"+ Create New Trial"</strong></li>
+                                            <li>Fill in the customer information:
+                                                <ul>
+                                                    <li><strong>Customer Name</strong> (required)</li>
+                                                    <li><strong>Customer Email</strong> (optional, but recommended)</li>
+                                                    <li><strong>Company Name</strong> (optional)</li>
+                                                    <li><strong>Industry</strong> (e.g., "Engineering", "Accounting", "Logistics")</li>
+                                                    <li><strong>Sector</strong> (select from dropdown - links to database sectors)</li>
+                                                    <li><strong>Notes</strong> (internal notes about the trial)</li>
+                                                </ul>
+                                            </li>
+                                            <li>Click <strong>"Create Trial"</strong></li>
+                                        </ol>
+                                        <div class="info-box">
+                                            <p style="margin: 0;"><strong>What happens:</strong> The system automatically generates a unique trial code (e.g., "P1-2025-001") and a secure 64-character report token. You'll be redirected to the trial detail page where you can upload documents.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I upload customer documents?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>To upload documents for a Phase 1 trial:</p>
+                                        <ol>
+                                            <li>Go to the trial detail page (<code>/admin/phase1-trials/&lt;trial_id&gt;</code>)</li>
+                                            <li>You'll see three upload sections: <strong>Category 1</strong>, <strong>Category 2</strong>, and <strong>Category 3</strong></li>
+                                            <li>For each category, upload 5 documents (15 total):
+                                                <ul>
+                                                    <li>Click <strong>"Click to Upload or Drag & Drop"</strong></li>
+                                                    <li>Select up to 5 PDF files at once (or drag and drop them)</li>
+                                                    <li>Click <strong>"Upload Selected Files"</strong> when ready</li>
+                                                </ul>
+                                            </li>
+                                            <li>Repeat for all three categories until you have 15 documents total</li>
+                                        </ol>
+                                        <div class="warning-box">
+                                            <p style="margin: 0;"><strong>Important:</strong> Documents should represent "worst-case" scenarios from the customer, not cherry-picked clean examples. This ensures accurate Phase 1 validation.</p>
+                                        </div>
+                                        <p><strong>File Storage:</strong> Files are automatically saved to <code>uploads/phase1_trials/&lt;trial_id&gt;/</code> with timestamped filenames to prevent conflicts.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I process documents and generate results?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>Once all 15 documents are uploaded:</p>
+                                        <ol>
+                                            <li>On the trial detail page, scroll to the bottom</li>
+                                            <li>You'll see a notification: <strong>"Ready to Process"</strong> with a count of uploaded documents</li>
+                                            <li>Click <strong>"🚀 Process All Documents"</strong></li>
+                                            <li>The system will:
+                                                <ul>
+                                                    <li>Extract text from each PDF using <code>pdf_service.py</code></li>
+                                                    <li>Run AI analysis using <code>gemini_service.py</code></li>
+                                                    <li>Calculate confidence scores for each field</li>
+                                                    <li>Validate fields and determine STP eligibility</li>
+                                                    <li>Save results to the database</li>
+                                                </ul>
+                                            </li>
+                                            <li>After processing completes, the trial status updates to <strong>"completed"</strong></li>
+                                        </ol>
+                                        <div class="info-box">
+                                            <p style="margin: 0;"><strong>Note:</strong> The processing route (<code>/admin/phase1-trials/&lt;id&gt;/process</code>) needs to be integrated with your existing extraction pipeline. See Database Infrastructure section for technical details.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I share the private report with a customer?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>Once processing is complete, the trial detail page shows a <strong>"Share Private Report"</strong> section:</p>
+                                        <ol>
+                                            <li>Copy the <strong>Private Report URL</strong> shown in the text box</li>
+                                            <li>The URL format is: <code>https://yourdomain.com/phase1-report/&lt;64-character-token&gt;</code></li>
+                                            <li>Share this link with the customer via:
+                                                <ul>
+                                                    <li>Click the <strong>"Copy URL"</strong> button</li>
+                                                    <li>Or click <strong>"Email Link"</strong> (requires customer email to be set)</li>
+                                                    <li>Or manually copy and send via email/message</li>
+                                                </ul>
+                                            </li>
+                                        </ol>
+                                        <div class="success-box">
+                                            <p style="margin: 0;"><strong>Security:</strong> The report token provides private, secure access. No login is required for the customer - the token itself grants access. Tokens are 64-character random hex strings that cannot be guessed.</p>
+                                        </div>
+                                        <p><strong>Customer Experience:</strong> When the customer clicks the link, they see a professional report showing:</p>
+                                        <ul>
+                                            <li>Executive summary with overall metrics</li>
+                                            <li>Test 1: Field Extraction Accuracy results</li>
+                                            <li>Test 2: STP Rate analysis</li>
+                                            <li>Test 3: Exception Handling assessment</li>
+                                            <li>Document-level detailed results</li>
+                                            <li>Go/No-Go recommendation</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I interpret Phase 1 test results?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>The Phase 1 trial runs three critical tests:</p>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Test 1: Field Extraction Accuracy</h6>
+                                        <ul>
+                                            <li><strong>Target:</strong> ≥90% overall accuracy</li>
+                                            <li><strong>What it means:</strong> The system can reliably extract required fields from the customer's documents</li>
+                                            <li><strong>PASS:</strong> Proceed with confidence. Technical feasibility validated.</li>
+                                            <li><strong>FAIL:</strong> System cannot reliably extract from these document types. Provide refund.</li>
+                                        </ul>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Test 2: Straight-Through Processing (STP) Rate</h6>
+                                        <ul>
+                                            <li><strong>Target:</strong> ≥60% STP rate</li>
+                                            <li><strong>What it means:</strong> Percentage of documents that can be processed fully automatically without human intervention</li>
+                                            <li><strong>PASS (≥60%):</strong> Strong automation potential. Sufficient efficiency to justify Phase 2.</li>
+                                            <li><strong>MARGINAL (40-60%):</strong> May require optimization or hybrid workflows in Phase 2.</li>
+                                            <li><strong>FAIL (<40%):</strong> Low automation efficiency. Consider manual process improvements first.</li>
+                                        </ul>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Test 3: Exception Handling and Safety</h6>
+                                        <ul>
+                                            <li><strong>What it means:</strong> Validates that the system fails safely when encountering ambiguous or problematic data</li>
+                                            <li><strong>PASS:</strong> Exceptions are properly identified and routed to human review. Safe failure mode confirmed.</li>
+                                            <li><strong>FAIL:</strong> System may introduce errors through incorrect assumptions. Safety concerns.</li>
+                                        </ul>
+                                        
+                                        <div class="highlight-box">
+                                            <p style="margin: 0;"><strong>Overall Recommendation:</strong></p>
+                                            <ul style="margin: 0.5rem 0 0;">
+                                                <li><strong>All tests PASS:</strong> Proceed to Phase 2. The system has validated technical feasibility and operational efficiency.</li>
+                                                <li><strong>Any test FAILS:</strong> Provide full $1,500 refund per the Phase 1 guarantee. Detailed technical report explains why automation isn't viable.</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Database Infrastructure Section -->
+                <div class="doc-card">
+                    <div class="doc-question-header doc-question-toggle">
+                        <h4 class="doc-question">Database Infrastructure</h4>
+                        <span class="doc-question-chevron">▶</span>
+                    </div>
+                    <div class="doc-question-content">
+                        <div class="doc-answer">
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">What database tables are used for Phase 1 trials?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>The Phase 1 trial system uses three main tables:</p>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">1. `phase1_trials`</h6>
+                                        <p>Stores trial/project information:</p>
+                                        <ul>
+                                            <li><code>id</code> - Primary key</li>
+                                            <li><code>trial_code</code> - Unique code (e.g., "P1-2025-001")</li>
+                                            <li><code>customer_name</code>, <code>customer_email</code>, <code>customer_company</code></li>
+                                            <li><code>industry</code>, <code>sector_slug</code></li>
+                                            <li><code>status</code> - pending/processing/completed/failed</li>
+                                            <li><code>total_documents</code>, <code>documents_processed</code></li>
+                                            <li><code>overall_accuracy</code> - Test 1 result (percentage)</li>
+                                            <li><code>stp_rate</code> - Test 2 result (percentage)</li>
+                                            <li><code>exceptions_count</code> - Test 3 result (count)</li>
+                                            <li><code>report_token</code> - Secure 64-character token for private access</li>
+                                            <li><code>created_at</code>, <code>updated_at</code>, <code>completed_at</code></li>
+                                        </ul>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">2. `phase1_trial_documents`</h6>
+                                        <p>Stores individual customer documents:</p>
+                                        <ul>
+                                            <li><code>id</code> - Primary key</li>
+                                            <li><code>trial_id</code> - Foreign key to phase1_trials</li>
+                                            <li><code>document_category</code> - "Category 1", "Category 2", or "Category 3"</li>
+                                            <li><code>document_number</code> - 1-5 within category</li>
+                                            <li><code>original_filename</code> - Customer's original filename</li>
+                                            <li><code>stored_file_path</code> - Path where file is saved</li>
+                                            <li><code>document_type_slug</code> - Optional document type identifier</li>
+                                            <li><code>file_size_bytes</code> - File size</li>
+                                            <li><code>status</code> - uploaded/processing/completed/failed</li>
+                                            <li><code>created_at</code>, <code>processing_started_at</code>, <code>processing_completed_at</code></li>
+                                        </ul>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">3. `phase1_trial_results`</h6>
+                                        <p>Stores extraction results for each document:</p>
+                                        <ul>
+                                            <li><code>id</code> - Primary key</li>
+                                            <li><code>trial_id</code> - Foreign key to phase1_trials</li>
+                                            <li><code>document_id</code> - Foreign key to phase1_trial_documents</li>
+                                            <li><code>extracted_data</code> - JSONB: Full extraction results</li>
+                                            <li><code>confidence_scores</code> - JSONB: Per-field confidence percentages</li>
+                                            <li><code>field_accuracy</code> - Overall accuracy for this document</li>
+                                            <li><code>fields_total</code>, <code>fields_passed</code>, <code>fields_flagged</code> - Field counts</li>
+                                            <li><code>validation_errors</code> - JSONB: Array of validation issues</li>
+                                            <li><code>requires_human_review</code> - Boolean</li>
+                                            <li><code>stp_eligible</code> - Boolean (Straight-Through Processing eligible)</li>
+                                            <li><code>processing_time_ms</code> - Performance metric</li>
+                                            <li><code>ground_truth_data</code> - JSONB: Optional manually verified correct values</li>
+                                            <li><code>accuracy_vs_ground_truth</code> - Calculated accuracy vs manual verification</li>
+                                            <li><code>notes</code> - Admin notes</li>
+                                            <li><code>created_at</code></li>
+                                        </ul>
+                                        
+                                        <div class="info-box">
+                                            <p style="margin: 0;"><strong>Schema File:</strong> See <code>database_setup_phase1_trials.sql</code> for complete table definitions, indexes, and helper functions.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I set up the database schema?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>To set up the Phase 1 trial database schema:</p>
+                                        <ol>
+                                            <li>Connect to your PostgreSQL database (via Railway CLI or Dashboard)</li>
+                                            <li>Run the SQL script:
+                                                <div class="code-block">
+railway run psql &lt; database_setup_phase1_trials.sql
+                                                </div>
+                                                <p>OR via Railway Dashboard:</p>
+                                                <ol>
+                                                    <li>Go to PostgreSQL service</li>
+                                                    <li>Click "Query" tab</li>
+                                                    <li>Copy/paste contents of <code>database_setup_phase1_trials.sql</code></li>
+                                                    <li>Click "Execute"</li>
+                                                </ol>
+                                            </li>
+                                        </ol>
+                                        <p><strong>What gets created:</strong></p>
+                                        <ul>
+                                            <li>Three main tables: <code>phase1_trials</code>, <code>phase1_trial_documents</code>, <code>phase1_trial_results</code></li>
+                                            <li>Indexes for performance on frequently queried columns</li>
+                                            <li>Helper functions: <code>generate_trial_code()</code>, <code>generate_report_token()</code></li>
+                                        </ul>
+                                        <div class="success-box">
+                                            <p style="margin: 0;"><strong>Verification:</strong> After running the script, verify tables exist by querying: <code>SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'phase1%';</code></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">What database functions are available for Phase 1 trials?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>All Phase 1 trial database functions are in <code>database.py</code>:</p>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Trial Management:</h6>
+                                        <ul>
+                                            <li><code>create_phase1_trial(...)</code> - Create new trial, returns trial dict with trial_code and report_token</li>
+                                            <li><code>get_phase1_trial(trial_id=None, trial_code=None, report_token=None)</code> - Get trial by ID, code, or token</li>
+                                            <li><code>get_all_phase1_trials(limit=50, offset=0, status_filter=None)</code> - List all trials with pagination</li>
+                                        </ul>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Document Management:</h6>
+                                        <ul>
+                                            <li><code>add_trial_document(trial_id, document_category, document_number, original_filename, stored_file_path, ...)</code> - Add document to trial</li>
+                                            <li><code>get_trial_documents(trial_id)</code> - Get all documents for a trial</li>
+                                        </ul>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Results Management:</h6>
+                                        <ul>
+                                            <li><code>save_trial_result(trial_id, document_id, extracted_data, confidence_scores, ...)</code> - Save extraction results</li>
+                                            <li><code>get_trial_results(trial_id)</code> - Get all results for a trial</li>
+                                        </ul>
+                                        
+                                        <div class="info-box">
+                                            <p style="margin: 0;"><strong>Auto-calculation:</strong> When you save a trial result using <code>save_trial_result()</code>, it automatically updates the trial's overall metrics (accuracy, STP rate, exception count) and changes the trial status to "completed" when all documents are processed.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How are metrics calculated automatically?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>When <code>save_trial_result()</code> is called, it automatically calculates and updates trial-level metrics:</p>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Test 1: Overall Field Accuracy</h6>
+                                        <div class="code-block">
+overall_accuracy = AVG(field_accuracy) FROM phase1_trial_results
+WHERE trial_id = :trial_id
+                                        </div>
+                                        <p>Calculates the average of all document-level accuracy scores across the 15 documents.</p>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Test 2: STP Rate</h6>
+                                        <div class="code-block">
+stp_rate = (COUNT(*) FILTER (WHERE stp_eligible = true) * 100.0 / COUNT(*))
+FROM phase1_trial_results WHERE trial_id = :trial_id
+                                        </div>
+                                        <p>Calculates the percentage of documents where <code>stp_eligible = true</code>.</p>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Test 3: Exception Count</h6>
+                                        <div class="code-block">
+exceptions_count = COUNT(*) FROM phase1_trial_results
+WHERE trial_id = :trial_id AND requires_human_review = true
+                                        </div>
+                                        <p>Counts how many documents were flagged for human review.</p>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Status Updates</h6>
+                                        <p>The trial status is automatically updated:</p>
+                                        <ul>
+                                            <li><code>pending</code> → Initial state after creation</li>
+                                            <li><code>processing</code> → Documents are being processed</li>
+                                            <li><code>completed</code> → All documents have been processed (when <code>documents_processed = total_documents</code>)</li>
+                                            <li><code>failed</code> → Processing errors occurred (manual update required)</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Troubleshooting Section -->
+                <div class="doc-card">
+                    <div class="doc-question-header doc-question-toggle">
+                        <h4 class="doc-question">Troubleshooting</h4>
+                        <span class="doc-question-chevron">▶</span>
+                    </div>
+                    <div class="doc-question-content">
+                        <div class="doc-answer">
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">Trial creation fails - what should I check?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>If trial creation fails, check these items:</p>
+                                        <ol>
+                                            <li><strong>Database connection:</strong> Verify database connection works using <code>database.test_connection()</code></li>
+                                            <li><strong>Table exists:</strong> Verify <code>phase1_trials</code> table exists:
+                                                <div class="code-block">
+SELECT table_name FROM information_schema.tables 
+WHERE table_schema = 'public' AND table_name = 'phase1_trials';
+                                                </div>
+                                            </li>
+                                            <li><strong>Function exists:</strong> Verify <code>generate_trial_code()</code> function exists:
+                                                <div class="code-block">
+SELECT routine_name FROM information_schema.routines 
+WHERE routine_schema = 'public' AND routine_name = 'generate_trial_code';
+                                                </div>
+                                            </li>
+                                            <li><strong>Check logs:</strong> Look for error messages in application logs for specific database errors</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">File upload fails - how do I fix it?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>If file uploads fail, check:</p>
+                                        <ol>
+                                            <li><strong>Directory exists:</strong> Ensure <code>uploads/phase1_trials/</code> directory exists and is writable:
+                                                <div class="code-block">
+mkdir -p uploads/phase1_trials
+chmod 755 uploads/phase1_trials
+                                                </div>
+                                            </li>
+                                            <li><strong>File size limits:</strong> Check Flask's <code>MAX_CONTENT_LENGTH</code> setting (default is 16MB)</li>
+                                            <li><strong>File type:</strong> Only PDF files are accepted. Verify file has <code>.pdf</code> extension</li>
+                                            <li><strong>Permissions:</strong> Ensure the web server user has write permissions to the uploads directory</li>
+                                            <li><strong>Disk space:</strong> Check available disk space on the server</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">Report token doesn't work - what's wrong?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>If the report token URL doesn't work:</p>
+                                        <ol>
+                                            <li><strong>Verify token in database:</strong>
+                                                <div class="code-block">
+SELECT trial_code, report_token FROM phase1_trials WHERE id = &lt;trial_id&gt;;
+                                                </div>
+                                                <p>Compare the token in the database with the URL token</p>
+                                            </li>
+                                            <li><strong>Check route registration:</strong> Ensure <code>/phase1-report/&lt;token&gt;</code> route is registered and doesn't have <code>@require_admin</code> decorator</li>
+                                            <li><strong>URL format:</strong> Verify the URL format is exactly: <code>/phase1-report/&lt;64-character-hex-token&gt;</code></li>
+                                            <li><strong>Token regeneration:</strong> Check if token was regenerated (not currently supported, but check for future updates)</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">Document processing fails - where do I look?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>If document processing fails:</p>
+                                        <ol>
+                                            <li><strong>Check Gemini API key:</strong> Verify <code>GEMINI_API_KEY</code> environment variable is set and valid</li>
+                                            <li><strong>Verify file paths:</strong> Check that <code>stored_file_path</code> in database points to actual files:
+                                                <div class="code-block">
+SELECT id, original_filename, stored_file_path 
+FROM phase1_trial_documents 
+WHERE trial_id = &lt;trial_id&gt; AND status = 'processing';
+                                                </div>
+                                            </li>
+                                            <li><strong>Check extraction service logs:</strong> Look for errors in:
+                                                <ul>
+                                                    <li><code>services/pdf_service.py</code> - PDF text extraction errors</li>
+                                                    <li><code>services/gemini_service.py</code> - AI analysis errors</li>
+                                                    <li><code>services/validation_service.py</code> - Validation errors</li>
+                                                </ul>
+                                            </li>
+                                            <li><strong>Verify integration:</strong> Ensure the processing route actually calls the extraction services (see Database Infrastructure for implementation details)</li>
+                                            <li><strong>Check database table:</strong> Verify <code>phase1_trial_results</code> table exists and is accessible</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Category toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Category sections
+            const categoryToggles = document.querySelectorAll('.doc-category-toggle');
+            categoryToggles.forEach(toggle => {
+                toggle.addEventListener('click', function() {
+                    const section = this.closest('.doc-category-section');
+                    section.classList.toggle('collapsed');
+                });
+            });
+            
+            // Question items
+            const questionToggles = document.querySelectorAll('.doc-question-toggle');
+            questionToggles.forEach(toggle => {
+                toggle.addEventListener('click', function() {
+                    const item = this.closest('.doc-question-item');
+                    if (item) {
+                        item.classList.toggle('collapsed');
+                    }
+                    const category = this.closest('.doc-category-section');
+                    if (category && !category.classList.contains('collapsed')) {
+                        category.classList.remove('collapsed');
+                    }
+                });
+            });
+            
+            // Expand the Phase 1 category by default
+            const phase1Section = document.querySelector('.doc-category-section');
+            if (phase1Section) {
+                phase1Section.classList.remove('collapsed');
+            }
+        });
+    </script>
+{% endblock %}

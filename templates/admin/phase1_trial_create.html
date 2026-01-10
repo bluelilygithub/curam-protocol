@@ -1,0 +1,100 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Create Phase 1 Trial{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <a href="{{ url_for('admin.phase1_trials') }}" style="color: #D4AF37; text-decoration: none; font-weight: 600; margin-bottom: 0.5rem; display: inline-block;">← Back to Phase 1 Trials</a>
+        <h2>Create New Phase 1 Trial</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Set up a new Phase 1 feasibility sprint for a customer</p>
+    </div>
+</div>
+
+<div class="admin-card">
+    {% if error %}
+    <div style="background: #FEE2E2; border-left: 4px solid #DC2626; padding: 1rem; margin-bottom: 1.5rem; border-radius: 4px;">
+        <strong style="color: #991B1B;">Error:</strong> <span style="color: #7F1D1D;">{{ error }}</span>
+    </div>
+    {% endif %}
+    
+    <form method="POST" action="{{ url_for('admin.phase1_trial_create') }}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+            <div>
+                <label for="customer_name" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">
+                    Customer Name <span style="color: #DC2626;">*</span>
+                </label>
+                <input type="text" id="customer_name" name="customer_name" required
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;"
+                       placeholder="John Smith">
+            </div>
+            
+            <div>
+                <label for="customer_email" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">
+                    Customer Email
+                </label>
+                <input type="email" id="customer_email" name="customer_email"
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;"
+                       placeholder="john@company.com">
+            </div>
+            
+            <div>
+                <label for="customer_company" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">
+                    Company Name
+                </label>
+                <input type="text" id="customer_company" name="customer_company"
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;"
+                       placeholder="Acme Engineering">
+            </div>
+            
+            <div>
+                <label for="industry" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">
+                    Industry
+                </label>
+                <input type="text" id="industry" name="industry"
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;"
+                       placeholder="Engineering, Accounting, Logistics, etc.">
+            </div>
+            
+            <div style="grid-column: 1 / -1;">
+                <label for="sector_slug" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">
+                    Sector
+                </label>
+                <select id="sector_slug" name="sector_slug"
+                        style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;">
+                    <option value="">Select a sector (optional)</option>
+                    {% for sector in sectors %}
+                    <option value="{{ sector.get('slug') }}">{{ sector.get('name') }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div style="grid-column: 1 / -1;">
+                <label for="notes" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">
+                    Notes (Internal)
+                </label>
+                <textarea id="notes" name="notes" rows="4"
+                          style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem; font-family: inherit;"
+                          placeholder="Internal notes about this trial..."></textarea>
+            </div>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; padding-top: 1.5rem; border-top: 1px solid #E5E7EB;">
+            <a href="{{ url_for('admin.phase1_trials') }}" class="btn-admin btn-admin-secondary" style="text-decoration: none;">Cancel</a>
+            <button type="submit" class="btn-admin">Create Trial</button>
+        </div>
+    </form>
+</div>
+
+<div class="admin-card" style="background: #F8F9FA; border-left: 4px solid #D4AF37;">
+    <h4 style="margin: 0 0 0.75rem; color: #0B1221; font-size: 1rem;">📋 What Happens Next</h4>
+    <ol style="margin: 0; padding-left: 1.5rem; color: #4B5563; line-height: 1.8;">
+        <li>A unique trial code will be generated (e.g., "P1-2025-001")</li>
+        <li>A secure report token will be created for private report access</li>
+        <li>You'll be redirected to the trial detail page to upload documents</li>
+        <li>Upload 15 documents organized into 3 categories (5 documents each)</li>
+        <li>Process documents to generate extraction results</li>
+        <li>Review the Phase 1 report and share the private link with the customer</li>
+    </ol>
+</div>
+{% endblock %}

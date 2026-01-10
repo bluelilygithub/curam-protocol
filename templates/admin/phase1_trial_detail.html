@@ -1,0 +1,525 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Phase 1 Trial: {{ trial.get('trial_code', 'N/A') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .trial-header-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .trial-info-item {
+        background: #F8F9FA;
+        padding: 1rem;
+        border-radius: 6px;
+        border-left: 3px solid #D4AF37;
+    }
+    
+    .trial-info-label {
+        font-size: 0.875rem;
+        color: #6B7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.25rem;
+    }
+    
+    .trial-info-value {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: #0B1221;
+    }
+    
+    .upload-section {
+        background: #fff;
+        border: 2px dashed #E5E7EB;
+        border-radius: 8px;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        text-align: center;
+        transition: all 0.2s;
+    }
+    
+    .upload-section:hover {
+        border-color: #D4AF37;
+        background: #FFFBF0;
+    }
+    
+    .upload-section.drag-over {
+        border-color: #D4AF37;
+        background: #FFFBF0;
+    }
+    
+    .document-list {
+        display: grid;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .document-item {
+        background: #F8F9FA;
+        padding: 1rem;
+        border-radius: 6px;
+        border-left: 3px solid #E5E7EB;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .document-item.uploaded {
+        border-left-color: #10B981;
+    }
+    
+    .document-item.processing {
+        border-left-color: #F59E0B;
+    }
+    
+    .document-item.completed {
+        border-left-color: #3B82F6;
+    }
+    
+    .results-summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin: 1.5rem 0;
+    }
+    
+    .result-card {
+        background: white;
+        border: 2px solid #E5E7EB;
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .result-card.primary {
+        border-color: #D4AF37;
+        background: linear-gradient(135deg, #FFFBF0, white);
+    }
+    
+    .result-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #0B1221;
+        margin: 0.5rem 0;
+    }
+    
+    .result-label {
+        color: #6B7280;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <a href="{{ url_for('admin.phase1_trials') }}" style="color: #D4AF37; text-decoration: none; font-weight: 600; margin-bottom: 0.5rem; display: inline-block;">← Back to Phase 1 Trials</a>
+        <h2>Phase 1 Trial: {{ trial.get('trial_code', 'N/A') }}</h2>
+        <div class="trial-header-info">
+            <div class="trial-info-item">
+                <div class="trial-info-label">Customer</div>
+                <div class="trial-info-value">{{ trial.get('customer_name', 'N/A') }}</div>
+            </div>
+            <div class="trial-info-item">
+                <div class="trial-info-label">Company</div>
+                <div class="trial-info-value">{{ trial.get('customer_company', '—') }}</div>
+            </div>
+            <div class="trial-info-item">
+                <div class="trial-info-label">Industry</div>
+                <div class="trial-info-value">{{ trial.get('industry', '—') }}</div>
+            </div>
+            <div class="trial-info-item">
+                <div class="trial-info-label">Status</div>
+                <div class="trial-info-value">
+                    {% if trial.get('status') == 'completed' %}
+                        <span class="badge badge-success">Completed</span>
+                    {% elif trial.get('status') == 'processing' %}
+                        <span class="badge badge-warning">Processing</span>
+                    {% elif trial.get('status') == 'failed' %}
+                        <span class="badge badge-error">Failed</span>
+                    {% else %}
+                        <span class="badge badge-info">Pending</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="admin-header-actions">
+        {% if trial.get('status') == 'completed' %}
+        <a href="{{ url_for('admin.phase1_trial_report', trial_id=trial.get('id')) }}" class="btn-admin" style="text-decoration: none; margin-right: 0.5rem;">View Report</a>
+        {% endif %}
+        {% if trial.get('report_token') %}
+        <a href="{{ url_for('admin.phase1_report_public', report_token=trial.get('report_token')) }}" target="_blank" class="btn-admin btn-admin-secondary" style="text-decoration: none;">Public Report Link</a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Trial Metrics Summary -->
+{% if trial.get('overall_accuracy') %}
+<div class="admin-card">
+    <h3>Phase 1 Test Results Summary</h3>
+    <div class="results-summary">
+        <div class="result-card {% if trial.get('overall_accuracy', 0) >= 90 %}primary{% endif %}">
+            <div class="result-label">Test 1: Field Accuracy</div>
+            <div class="result-value">{{ "%.1f"|format(trial.get('overall_accuracy', 0)) }}%</div>
+            {% if trial.get('overall_accuracy', 0) >= 90 %}
+                <span class="badge badge-success" style="margin-top: 0.5rem;">PASS</span>
+            {% else %}
+                <span class="badge badge-error" style="margin-top: 0.5rem;">FAIL</span>
+            {% endif %}
+        </div>
+        <div class="result-card {% if trial.get('stp_rate', 0) >= 60 %}primary{% endif %}">
+            <div class="result-label">Test 2: STP Rate</div>
+            <div class="result-value">{{ "%.1f"|format(trial.get('stp_rate', 0)) }}%</div>
+            {% if trial.get('stp_rate', 0) >= 60 %}
+                <span class="badge badge-success" style="margin-top: 0.5rem;">PASS</span>
+            {% else %}
+                <span class="badge badge-error" style="margin-top: 0.5rem;">FAIL</span>
+            {% endif %}
+        </div>
+        <div class="result-card {% if trial.get('exceptions_count', 0) < 8 %}primary{% endif %}">
+            <div class="result-label">Test 3: Exceptions</div>
+            <div class="result-value">{{ trial.get('exceptions_count', 0) }}</div>
+            <span style="color: #6B7280; font-size: 0.875rem; margin-top: 0.5rem;">Flagged for Review</span>
+        </div>
+    </div>
+    
+    <div style="margin-top: 1.5rem; padding: 1rem; background: {% if trial.get('overall_accuracy', 0) >= 90 and trial.get('stp_rate', 0) >= 60 %}#F0FDF4{% else %}#FEF3C7{% endif %}; border-left: 4px solid {% if trial.get('overall_accuracy', 0) >= 90 and trial.get('stp_rate', 0) >= 60 %}#10B981{% else %}#F59E0B{% endif %}; border-radius: 4px;">
+        <strong style="color: #0B1221;">Recommendation:</strong>
+        {% if trial.get('overall_accuracy', 0) >= 90 and trial.get('stp_rate', 0) >= 60 %}
+            <span style="color: #065F46;">✅ All tests passed. Proceed to Phase 2.</span>
+        {% else %}
+            <span style="color: #92400E;">⚠️ Tests did not meet thresholds. Review results below or provide refund.</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Document Upload Section -->
+<div class="admin-card">
+    <h3>Upload Customer Documents</h3>
+    <p style="color: #6B7280; margin-bottom: 1.5rem;">
+        Upload 15 documents organized into 3 categories (5 documents per category). 
+        Documents should be PDF format and represent your "worst-case" scenarios, not cherry-picked clean examples.
+    </p>
+    
+    {% for category_num in [1, 2, 3] %}
+    {% set category_name = 'Category ' ~ category_num %}
+    {% set category_docs = documents | selectattr('document_category', 'equalto', category_name) | list %}
+    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #F8F9FA; border-radius: 8px;">
+        <h4 style="margin: 0 0 1rem; color: #0B1221;">{{ category_name }} ({{ category_docs | length }}/5 documents)</h4>
+        
+        <form class="document-upload-form" data-category="{{ category_name }}" data-trial-id="{{ trial.get('id') }}" enctype="multipart/form-data" style="margin-bottom: 1rem;">
+            <div class="upload-section" data-category="{{ category_name }}">
+                <input type="file" id="upload-{{ category_num }}" name="documents" 
+                       accept=".pdf" multiple 
+                       style="display: none;"
+                       data-category="{{ category_name }}">
+                <label for="upload-{{ category_num }}" style="cursor: pointer; display: block;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; color: #D4AF37;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">Click to Upload or Drag & Drop</div>
+                    <div style="color: #6B7280; font-size: 0.875rem;">PDF files only (up to 5 files at once)</div>
+                </label>
+            </div>
+            <input type="hidden" name="category" value="{{ category_name }}">
+            <button type="submit" class="btn-admin" style="display: none;" id="submit-{{ category_num }}">Upload Selected Files</button>
+        </form>
+        
+        {% if category_docs %}
+        <div class="document-list">
+            {% for doc in category_docs %}
+            <div class="document-item {{ doc.get('status', 'uploaded') }}">
+                <div>
+                    <strong style="color: #0B1221;">{{ doc.get('original_filename', 'Unknown') }}</strong>
+                    <div style="color: #6B7280; font-size: 0.875rem; margin-top: 0.25rem;">
+                        Document #{{ doc.get('document_number', '?') }} • 
+                        {% if doc.get('file_size_bytes') %}
+                            {{ "%.1f"|format(doc.get('file_size_bytes', 0) / 1024) }} KB
+                        {% endif %}
+                        {% if doc.get('status') == 'completed' %}
+                            • Processed
+                        {% elif doc.get('status') == 'processing' %}
+                            • Processing...
+                        {% endif %}
+                    </div>
+                </div>
+                <div>
+                    {% if doc.get('status') == 'uploaded' %}
+                        <span class="badge badge-info">Ready</span>
+                    {% elif doc.get('status') == 'processing' %}
+                        <span class="badge badge-warning">Processing</span>
+                    {% elif doc.get('status') == 'completed' %}
+                        <span class="badge badge-success">Completed</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    {% if trial.get('total_documents', 0) >= 15 %}
+    <div style="margin-top: 2rem; padding: 1.5rem; background: #EFF6FF; border-left: 4px solid #3B82F6; border-radius: 4px;">
+        <strong style="color: #1E40AF;">Ready to Process:</strong>
+        <p style="color: #1E3A8A; margin: 0.5rem 0 0;">You have {{ trial.get('total_documents', 0) }} documents uploaded. Click below to process all documents and generate the Phase 1 report.</p>
+        <form method="POST" action="{{ url_for('admin.phase1_trial_process', trial_id=trial.get('id')) }}" style="margin-top: 1rem;">
+            <button type="submit" class="btn-admin">🚀 Process All Documents</button>
+        </form>
+    </div>
+    {% else %}
+    <div style="margin-top: 2rem; padding: 1rem; background: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 4px;">
+        <strong style="color: #92400E;">Upload Progress:</strong>
+        <span style="color: #78350F;">{{ trial.get('total_documents', 0) }}/15 documents uploaded. Upload {{ 15 - trial.get('total_documents', 0) }} more to proceed.</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Results Section (if documents processed) -->
+{% if results %}
+<div class="admin-card">
+    <h3>Extraction Results</h3>
+    <p style="color: #6B7280; margin-bottom: 1.5rem;">
+        Detailed extraction results for all 15 documents. Review field-level accuracy and confidence scores.
+    </p>
+    
+    {% for result in results %}
+    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid {% if result.get('field_accuracy', 0) >= 90 %}#10B981{% else %}#F59E0B{% endif %};">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+            <div>
+                <h4 style="margin: 0 0 0.5rem; color: #0B1221;">
+                    {{ result.get('original_filename', 'Unknown') }}
+                    <span style="font-weight: normal; color: #6B7280; font-size: 0.875rem;">
+                        ({{ result.get('document_category', 'Unknown') }} - Doc #{{ result.get('document_number', '?') }})
+                    </span>
+                </h4>
+                <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+                    <span class="badge {% if result.get('field_accuracy', 0) >= 90 %}badge-success{% else %}badge-warning{% endif %}">
+                        Accuracy: {{ "%.1f"|format(result.get('field_accuracy', 0)) }}%
+                    </span>
+                    {% if result.get('stp_eligible') %}
+                        <span class="badge badge-success">STP Eligible</span>
+                    {% else %}
+                        <span class="badge badge-warning">Requires Review</span>
+                    {% endif %}
+                    {% if result.get('requires_human_review') %}
+                        <span class="badge badge-error">Exception Flagged</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1rem;">
+            <div>
+                <div style="font-size: 0.875rem; color: #6B7280;">Fields Total</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #0B1221;">{{ result.get('fields_total', 0) }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.875rem; color: #6B7280;">Fields Passed</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #10B981;">{{ result.get('fields_passed', 0) }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.875rem; color: #6B7280;">Fields Flagged</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #F59E0B;">{{ result.get('fields_flagged', 0) }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.875rem; color: #6B7280;">Processing Time</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #0B1221;">
+                    {% if result.get('processing_time_ms') %}
+                        {{ "%.2f"|format(result.get('processing_time_ms', 0) / 1000) }}s
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        {% if result.get('confidence_scores') %}
+        <details style="margin-top: 1rem;">
+            <summary style="cursor: pointer; color: #0B1221; font-weight: 600; padding: 0.5rem; background: white; border-radius: 4px;">
+                View Field-Level Confidence Scores
+            </summary>
+            <div style="margin-top: 1rem; padding: 1rem; background: white; border-radius: 4px;">
+                <table style="width: 100%; font-size: 0.875rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid #E5E7EB;">
+                            <th style="text-align: left; padding: 0.5rem;">Field</th>
+                            <th style="text-align: left; padding: 0.5rem;">Confidence</th>
+                            <th style="text-align: left; padding: 0.5rem;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for field, confidence in result.get('confidence_scores', {}).items() %}
+                        <tr style="border-bottom: 1px solid #F3F4F6;">
+                            <td style="padding: 0.5rem;"><strong>{{ field }}</strong></td>
+                            <td style="padding: 0.5rem;">{{ "%.1f"|format(confidence) }}%</td>
+                            <td style="padding: 0.5rem;">
+                                {% if confidence >= 90 %}
+                                    <span class="badge badge-success">PASS</span>
+                                {% else %}
+                                    <span class="badge badge-warning">FLAG</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+        {% endif %}
+        
+        {% if result.get('validation_errors') %}
+        <div style="margin-top: 1rem; padding: 1rem; background: #FEF3C7; border-left: 3px solid #F59E0B; border-radius: 4px;">
+            <strong style="color: #92400E;">Validation Errors:</strong>
+            <ul style="margin: 0.5rem 0 0; padding-left: 1.5rem; color: #78350F;">
+                {% for error in result.get('validation_errors', []) %}
+                <li>{{ error }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Private Report Link Section -->
+{% if trial.get('report_token') and trial.get('status') == 'completed' %}
+<div class="admin-card" style="background: linear-gradient(135deg, #FFFBF0, white); border: 2px solid #D4AF37;">
+    <h3 style="color: #0B1221; margin-bottom: 1rem;">🔗 Share Private Report with Customer</h3>
+    <p style="color: #4B5563; margin-bottom: 1rem;">
+        This secure link allows the customer to view their Phase 1 report without requiring a login. 
+        The token provides private access to this specific trial's results.
+    </p>
+    <div style="background: white; padding: 1rem; border-radius: 6px; border: 1px solid #E5E7EB; margin-bottom: 1rem;">
+        <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px;">Private Report URL</div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <input type="text" id="report-url" 
+                   value="{{ request.host_url }}phase1-report/{{ trial.get('report_token') }}"
+                   readonly
+                   style="flex: 1; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; background: #F8F9FA;">
+            <button onclick="copyReportUrl()" class="btn-admin" style="white-space: nowrap;">Copy URL</button>
+        </div>
+    </div>
+    <div style="display: flex; gap: 0.5rem;">
+        <a href="{{ url_for('admin.phase1_report_public', report_token=trial.get('report_token')) }}" target="_blank" class="btn-admin" style="text-decoration: none;">Preview Report</a>
+        <a href="mailto:{{ trial.get('customer_email', '') }}?subject=Phase%201%20Feasibility%20Report&body=Please%20find%20your%20Phase%201%20report%20at:%20{{ request.host_url }}phase1-report/{{ trial.get('report_token') }}" 
+           class="btn-admin btn-admin-secondary" 
+           style="text-decoration: none;"
+           {% if not trial.get('customer_email') %}onclick="alert('Customer email not set'); return false;"{% endif %}>Email Link</a>
+    </div>
+</div>
+{% endif %}
+
+<script>
+// File upload handling
+document.querySelectorAll('.document-upload-form').forEach(form => {
+    const input = form.querySelector('input[type="file"]');
+    const uploadSection = form.querySelector('.upload-section');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const category = form.dataset.category;
+    const trialId = form.dataset.trialId;
+    
+    // Show submit button when files selected
+    input.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            submitBtn.style.display = 'inline-block';
+            uploadSection.querySelector('div').textContent = `${this.files.length} file(s) selected. Click "Upload Selected Files" to upload.`;
+        } else {
+            submitBtn.style.display = 'none';
+        }
+    });
+    
+    // Handle form submission
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        if (!input.files.length) {
+            alert('Please select at least one file to upload');
+            return;
+        }
+        
+        const formData = new FormData();
+        for (let file of input.files) {
+            formData.append('documents', file);
+        }
+        formData.append('category', category);
+        
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Uploading...';
+        
+        try {
+            const response = await fetch(`/admin/phase1-trials/${trialId}/upload`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert(`Successfully uploaded ${data.uploaded} document(s)`);
+                location.reload(); // Refresh page to show new documents
+            } else {
+                alert(`Upload failed: ${data.error || data.errors?.join(', ') || 'Unknown error'}`);
+            }
+        } catch (error) {
+            alert('Upload failed: ' + error.message);
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Upload Selected Files';
+            input.value = '';
+            submitBtn.style.display = 'none';
+        }
+    });
+    
+    // Drag and drop
+    uploadSection.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('drag-over');
+    });
+    
+    uploadSection.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        this.classList.remove('drag-over');
+    });
+    
+    uploadSection.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('drag-over');
+        
+        const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+        if (files.length === 0) {
+            alert('Please drop PDF files only');
+            return;
+        }
+        
+        // Create a new FileList-like object
+        const dt = new DataTransfer();
+        files.forEach(file => dt.items.add(file));
+        input.files = dt.files;
+        
+        // Trigger change event
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+});
+
+// Copy report URL to clipboard
+function copyReportUrl() {
+    const urlInput = document.getElementById('report-url');
+    urlInput.select();
+    urlInput.setSelectionRange(0, 99999); // For mobile devices
+    document.execCommand('copy');
+    alert('Report URL copied to clipboard!');
+}
+</script>
+{% endblock %}

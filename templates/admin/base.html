@@ -273,6 +273,11 @@
                         </a>
                     </li>
                     <li class="admin-nav-item">
+                        <a href="{{ url_for('admin.phase1_trials') }}" class="admin-nav-link {% if 'phase1' in request.endpoint %}active{% endif %}">
+                            Phase 1 Trials
+                        </a>
+                    </li>
+                    <li class="admin-nav-item">
                         <a href="{{ url_for('admin.documentation_index') }}" class="admin-nav-link {% if 'documentation' in request.endpoint %}active{% endif %}">
                             Documentation
                         </a>

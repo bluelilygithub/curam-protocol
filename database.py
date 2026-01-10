@@ -988,6 +988,423 @@ def update_user_last_login(username):
         return False
 
 
+# ============================================================================
+# PHASE 1 TRIALS - Customer trial management for Phase 1 reports
+# ============================================================================
+
+def create_phase1_trial(customer_name, customer_email=None, customer_company=None,
+                        industry=None, sector_slug=None, created_by=None, notes=None):
+    """
+    Create a new Phase 1 trial (project) for a customer.
+    
+    Args:
+        customer_name: Customer's name
+        customer_email: Customer's email
+        customer_company: Company name
+        industry: Industry name (e.g., "Engineering")
+        sector_slug: Sector slug (e.g., "built-environment")
+        created_by: Admin user ID who created this trial
+        notes: Optional notes about the trial
+    
+    Returns:
+        dict: Created trial record with trial_code and report_token, or None if failed
+    """
+    if not engine:
+        print("❌ Database engine not initialized for Phase 1 trial creation")
+        return None
+    
+    try:
+        import secrets
+        import json
+        
+        with engine.connect() as conn:
+            # Generate trial code using database function
+            trial_code_result = conn.execute(text("SELECT generate_trial_code()"))
+            trial_code = trial_code_result.scalar()
+            
+            # Generate secure report token
+            token_result = conn.execute(text("SELECT generate_report_token()"))
+            report_token = token_result.scalar()
+            
+            # Insert trial
+            result = conn.execute(text("""
+                INSERT INTO phase1_trials (
+                    trial_code, customer_name, customer_email, customer_company,
+                    industry, sector_slug, created_by, notes, report_token, status
+                ) VALUES (
+                    :trial_code, :customer_name, :customer_email, :customer_company,
+                    :industry, :sector_slug, :created_by, :notes, :report_token, 'pending'
+                )
+                RETURNING id, trial_code, report_token, created_at
+            """), {
+                "trial_code": trial_code,
+                "customer_name": customer_name,
+                "customer_email": customer_email,
+                "customer_company": customer_company,
+                "industry": industry,
+                "sector_slug": sector_slug,
+                "created_by": created_by,
+                "notes": notes,
+                "report_token": report_token
+            })
+            conn.commit()
+            
+            row = result.fetchone()
+            if row:
+                trial = dict(row._mapping)
+                print(f"✅ Phase 1 trial created: {trial_code} (ID: {trial['id']})")
+                return trial
+            return None
+            
+    except Exception as e:
+        print(f"❌ Error creating Phase 1 trial: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_phase1_trial(trial_id=None, trial_code=None, report_token=None):
+    """
+    Get Phase 1 trial by ID, trial code, or report token.
+    
+    Args:
+        trial_id: Trial database ID
+        trial_code: Trial code (e.g., "P1-2025-001")
+        report_token: Secure report token for private access
+    
+    Returns:
+        dict: Trial record or None if not found
+    """
+    if not engine:
+        return None
+    
+    try:
+        with engine.connect() as conn:
+            query = "SELECT * FROM phase1_trials WHERE "
+            params = {}
+            
+            if trial_id:
+                query += "id = :trial_id"
+                params["trial_id"] = trial_id
+            elif trial_code:
+                query += "trial_code = :trial_code"
+                params["trial_code"] = trial_code
+            elif report_token:
+                query += "report_token = :report_token"
+                params["report_token"] = report_token
+            else:
+                return None
+            
+            result = conn.execute(text(query), params)
+            row = result.fetchone()
+            return dict(row._mapping) if row else None
+            
+    except Exception as e:
+        print(f"❌ Error fetching Phase 1 trial: {e}")
+        return None
+
+
+def get_all_phase1_trials(limit=50, offset=0, status_filter=None):
+    """
+    Get all Phase 1 trials with pagination and optional status filter.
+    
+    Args:
+        limit: Maximum number of trials to return
+        offset: Pagination offset
+        status_filter: Optional status filter (e.g., 'pending', 'completed')
+    
+    Returns:
+        list: List of trial dictionaries
+    """
+    if not engine:
+        return []
+    
+    try:
+        with engine.connect() as conn:
+            query = "SELECT * FROM phase1_trials"
+            params = {"limit": limit, "offset": offset}
+            
+            if status_filter:
+                query += " WHERE status = :status"
+                params["status"] = status_filter
+            
+            query += " ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+            
+            result = conn.execute(text(query), params)
+            return [dict(row._mapping) for row in result]
+            
+    except Exception as e:
+        print(f"❌ Error fetching Phase 1 trials: {e}")
+        return []
+
+
+def add_trial_document(trial_id, document_category, document_number, original_filename,
+                      stored_file_path, document_type_slug=None, file_size_bytes=None):
+    """
+    Add a document to a Phase 1 trial.
+    
+    Args:
+        trial_id: Trial database ID
+        document_category: Category (1, 2, or 3)
+        document_number: Number within category (1-5)
+        original_filename: Original uploaded filename
+        stored_file_path: Path where file is stored
+        document_type_slug: Document type slug (optional)
+        file_size_bytes: File size in bytes (optional)
+    
+    Returns:
+        int: Document ID or None if failed
+    """
+    if not engine:
+        return None
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                INSERT INTO phase1_trial_documents (
+                    trial_id, document_category, document_number, original_filename,
+                    stored_file_path, document_type_slug, file_size_bytes, status
+                ) VALUES (
+                    :trial_id, :document_category, :document_number, :original_filename,
+                    :stored_file_path, :document_type_slug, :file_size_bytes, 'uploaded'
+                )
+                RETURNING id
+            """), {
+                "trial_id": trial_id,
+                "document_category": document_category,
+                "document_number": document_number,
+                "original_filename": original_filename,
+                "stored_file_path": stored_file_path,
+                "document_type_slug": document_type_slug,
+                "file_size_bytes": file_size_bytes
+            })
+            conn.commit()
+            
+            doc_id = result.scalar()
+            
+            # Update trial document count
+            conn.execute(text("""
+                UPDATE phase1_trials
+                SET total_documents = (
+                    SELECT COUNT(*) FROM phase1_trial_documents WHERE trial_id = :trial_id
+                ), updated_at = NOW()
+                WHERE id = :trial_id
+            """), {"trial_id": trial_id})
+            conn.commit()
+            
+            print(f"✅ Trial document added: {original_filename} (ID: {doc_id})")
+            return doc_id
+            
+    except Exception as e:
+        print(f"❌ Error adding trial document: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_trial_documents(trial_id):
+    """
+    Get all documents for a Phase 1 trial.
+    
+    Args:
+        trial_id: Trial database ID
+    
+    Returns:
+        list: List of document dictionaries
+    """
+    if not engine:
+        return []
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT * FROM phase1_trial_documents
+                WHERE trial_id = :trial_id
+                ORDER BY document_category, document_number
+            """), {"trial_id": trial_id})
+            return [dict(row._mapping) for row in result]
+            
+    except Exception as e:
+        print(f"❌ Error fetching trial documents: {e}")
+        return []
+
+
+def save_trial_result(trial_id, document_id, extracted_data, confidence_scores,
+                     field_accuracy, fields_total, fields_passed, fields_flagged,
+                     validation_errors=None, requires_human_review=False,
+                     stp_eligible=False, processing_time_ms=None,
+                     ground_truth_data=None, accuracy_vs_ground_truth=None, notes=None):
+    """
+    Save extraction result for a trial document.
+    
+    Args:
+        trial_id: Trial database ID
+        document_id: Document database ID
+        extracted_data: Full extraction results (JSONB dict)
+        confidence_scores: Per-field confidence scores (JSONB dict)
+        field_accuracy: Overall accuracy percentage
+        fields_total: Total fields extracted
+        fields_passed: Fields with ≥90% confidence
+        fields_flagged: Fields with <90% confidence
+        validation_errors: Array of validation issues (optional)
+        requires_human_review: Boolean - needs human review
+        stp_eligible: Boolean - can process without human
+        processing_time_ms: Processing time in milliseconds (optional)
+        ground_truth_data: Manually verified correct values (optional)
+        accuracy_vs_ground_truth: Calculated accuracy vs ground truth (optional)
+        notes: Admin notes (optional)
+    
+    Returns:
+        int: Result ID or None if failed
+    """
+    if not engine:
+        return None
+    
+    try:
+        import json
+        
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                INSERT INTO phase1_trial_results (
+                    trial_id, document_id, extracted_data, confidence_scores,
+                    field_accuracy, fields_total, fields_passed, fields_flagged,
+                    validation_errors, requires_human_review, stp_eligible,
+                    processing_time_ms, ground_truth_data, accuracy_vs_ground_truth, notes
+                ) VALUES (
+                    :trial_id, :document_id, :extracted_data, :confidence_scores,
+                    :field_accuracy, :fields_total, :fields_passed, :fields_flagged,
+                    :validation_errors, :requires_human_review, :stp_eligible,
+                    :processing_time_ms, :ground_truth_data, :accuracy_vs_ground_truth, :notes
+                )
+                RETURNING id
+            """), {
+                "trial_id": trial_id,
+                "document_id": document_id,
+                "extracted_data": json.dumps(extracted_data) if extracted_data else None,
+                "confidence_scores": json.dumps(confidence_scores) if confidence_scores else None,
+                "field_accuracy": field_accuracy,
+                "fields_total": fields_total,
+                "fields_passed": fields_passed,
+                "fields_flagged": fields_flagged,
+                "validation_errors": json.dumps(validation_errors) if validation_errors else None,
+                "requires_human_review": requires_human_review,
+                "stp_eligible": stp_eligible,
+                "processing_time_ms": processing_time_ms,
+                "ground_truth_data": json.dumps(ground_truth_data) if ground_truth_data else None,
+                "accuracy_vs_ground_truth": accuracy_vs_ground_truth,
+                "notes": notes
+            })
+            conn.commit()
+            
+            result_id = result.scalar()
+            
+            # Update document status
+            conn.execute(text("""
+                UPDATE phase1_trial_documents
+                SET status = 'completed', processing_completed_at = NOW()
+                WHERE id = :document_id
+            """), {"document_id": document_id})
+            
+            # Update trial metrics
+            conn.execute(text("""
+                UPDATE phase1_trials
+                SET documents_processed = (
+                    SELECT COUNT(*) FROM phase1_trial_documents 
+                    WHERE trial_id = :trial_id AND status = 'completed'
+                ),
+                overall_accuracy = (
+                    SELECT AVG(field_accuracy) FROM phase1_trial_results
+                    WHERE trial_id = :trial_id
+                ),
+                stp_rate = (
+                    SELECT (COUNT(*) FILTER (WHERE stp_eligible = true) * 100.0 / COUNT(*))
+                    FROM phase1_trial_results WHERE trial_id = :trial_id
+                ),
+                exceptions_count = (
+                    SELECT COUNT(*) FROM phase1_trial_results
+                    WHERE trial_id = :trial_id AND requires_human_review = true
+                ),
+                status = CASE
+                    WHEN (SELECT COUNT(*) FROM phase1_trial_documents WHERE trial_id = :trial_id) = 
+                         (SELECT COUNT(*) FROM phase1_trial_documents WHERE trial_id = :trial_id AND status = 'completed')
+                    THEN 'completed'
+                    ELSE 'processing'
+                END,
+                updated_at = NOW(),
+                completed_at = CASE
+                    WHEN (SELECT COUNT(*) FROM phase1_trial_documents WHERE trial_id = :trial_id) = 
+                         (SELECT COUNT(*) FROM phase1_trial_documents WHERE trial_id = :trial_id AND status = 'completed')
+                    THEN NOW()
+                    ELSE completed_at
+                END
+                WHERE id = :trial_id
+            """), {"trial_id": trial_id})
+            conn.commit()
+            
+            print(f"✅ Trial result saved: Document {document_id} (Result ID: {result_id})")
+            return result_id
+            
+    except Exception as e:
+        print(f"❌ Error saving trial result: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_trial_results(trial_id):
+    """
+    Get all results for a Phase 1 trial.
+    
+    Args:
+        trial_id: Trial database ID
+    
+    Returns:
+        list: List of result dictionaries with document info
+    """
+    if not engine:
+        return []
+    
+    try:
+        import json
+        
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT 
+                    tr.*,
+                    td.document_category,
+                    td.document_number,
+                    td.original_filename,
+                    td.stored_file_path
+                FROM phase1_trial_results tr
+                JOIN phase1_trial_documents td ON tr.document_id = td.id
+                WHERE tr.trial_id = :trial_id
+                ORDER BY td.document_category, td.document_number
+            """), {"trial_id": trial_id})
+            
+            rows = result.fetchall()
+            results = []
+            for row in rows:
+                result_dict = dict(row._mapping)
+                # Parse JSONB fields
+                if result_dict.get('extracted_data'):
+                    result_dict['extracted_data'] = json.loads(result_dict['extracted_data'])
+                if result_dict.get('confidence_scores'):
+                    result_dict['confidence_scores'] = json.loads(result_dict['confidence_scores'])
+                if result_dict.get('validation_errors'):
+                    result_dict['validation_errors'] = json.loads(result_dict['validation_errors'])
+                if result_dict.get('ground_truth_data'):
+                    result_dict['ground_truth_data'] = json.loads(result_dict['ground_truth_data'])
+                results.append(result_dict)
+            
+            return results
+            
+    except Exception as e:
+        print(f"❌ Error fetching trial results: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+
 def create_admin_user(username, password, email=None, full_name=None):
     """Create a new admin user (helper function for initial setup)"""
     if not engine:

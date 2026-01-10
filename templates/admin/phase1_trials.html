@@ -1,0 +1,100 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Phase 1 Trials{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h2>Phase 1 Trials</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Manage customer Phase 1 feasibility sprints</p>
+    </div>
+    <div class="admin-header-actions">
+        <a href="{{ url_for('admin.phase1_trial_create') }}" class="btn-admin">+ Create New Trial</a>
+    </div>
+</div>
+
+<div class="admin-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0;">All Trials</h3>
+        <div style="display: flex; gap: 0.5rem;">
+            <a href="{{ url_for('admin.phase1_trials') }}" class="btn-admin btn-admin-secondary {% if not status_filter %}active{% endif %}" style="text-decoration: none; padding: 0.5rem 1rem;">All</a>
+            <a href="{{ url_for('admin.phase1_trials', status='pending') }}" class="btn-admin btn-admin-secondary {% if status_filter == 'pending' %}active{% endif %}" style="text-decoration: none; padding: 0.5rem 1rem;">Pending</a>
+            <a href="{{ url_for('admin.phase1_trials', status='processing') }}" class="btn-admin btn-admin-secondary {% if status_filter == 'processing' %}active{% endif %}" style="text-decoration: none; padding: 0.5rem 1rem;">Processing</a>
+            <a href="{{ url_for('admin.phase1_trials', status='completed') }}" class="btn-admin btn-admin-secondary {% if status_filter == 'completed' %}active{% endif %}" style="text-decoration: none; padding: 0.5rem 1rem;">Completed</a>
+        </div>
+    </div>
+    
+    {% if trials %}
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Trial Code</th>
+                <th>Customer</th>
+                <th>Company</th>
+                <th>Industry</th>
+                <th>Status</th>
+                <th>Documents</th>
+                <th>Accuracy</th>
+                <th>STP Rate</th>
+                <th>Created</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for trial in trials %}
+            <tr>
+                <td><strong>{{ trial.get('trial_code', 'N/A') }}</strong></td>
+                <td>{{ trial.get('customer_name', 'N/A') }}</td>
+                <td>{{ trial.get('customer_company', '—') }}</td>
+                <td>{{ trial.get('industry', '—') }}</td>
+                <td>
+                    {% if trial.get('status') == 'completed' %}
+                        <span class="badge badge-success">Completed</span>
+                    {% elif trial.get('status') == 'processing' %}
+                        <span class="badge badge-warning">Processing</span>
+                    {% elif trial.get('status') == 'failed' %}
+                        <span class="badge badge-error">Failed</span>
+                    {% else %}
+                        <span class="badge badge-info">Pending</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {{ trial.get('documents_processed', 0) }}/{{ trial.get('total_documents', 0) }}
+                </td>
+                <td>
+                    {% if trial.get('overall_accuracy') %}
+                        {{ "%.1f"|format(trial.get('overall_accuracy', 0)) }}%
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    {% if trial.get('stp_rate') %}
+                        {{ "%.1f"|format(trial.get('stp_rate', 0)) }}%
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    {% if trial.get('created_at') %}
+                        {{ trial.get('created_at').strftime('%Y-%m-%d') if trial.get('created_at') else 'N/A' }}
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('admin.phase1_trial_detail', trial_id=trial.get('id')) }}" class="btn-admin" style="text-decoration: none; padding: 0.375rem 0.75rem; font-size: 0.875rem;">View</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #6B7280; padding: 2rem; text-align: center;">
+        No Phase 1 trials found{% if status_filter %} with status "{{ status_filter }}"{% endif %}.
+        <br>
+        <a href="{{ url_for('admin.phase1_trial_create') }}" class="btn-admin" style="margin-top: 1rem; text-decoration: none;">Create Your First Trial</a>
+    </p>
+    {% endif %}
+</div>
+{% endblock %}
