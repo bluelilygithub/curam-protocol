@@ -1,0 +1,802 @@
+{
+  "website_name": "Curam-Ai Protocol",
+  "last_updated": "2025-01-10",
+  "navigation": {
+    "top_menu": {
+      "logo": {
+        "label": "Curam-Ai",
+        "target": "/homepage.html",
+        "location": "navbar-brand"
+      },
+      "primary_links": [
+        {
+          "label": "About",
+          "target": "/about.html",
+          "location": "top-menu-main"
+        },
+        {
+          "label": "Target Markets",
+          "target": "/target-markets.html",
+          "location": "top-menu-dropdown-parent",
+          "dropdown_items": [
+            {
+              "label": "Target Markets",
+              "target": "/target-markets.html",
+              "location": "dropdown-parent-link"
+            },
+            {
+              "label": "Professional Services",
+              "target": "/professional-services.html",
+              "location": "dropdown-item"
+            },
+            {
+              "label": "Logistics & Compliance",
+              "target": "/logistics-compliance.html",
+              "location": "dropdown-item"
+            },
+            {
+              "label": "Built Environment",
+              "target": "/built-environment.html",
+              "location": "dropdown-item"
+            }
+          ]
+        },
+        {
+          "label": "The Protocol",
+          "target": "/curam-ai-protocol.html",
+          "location": "top-menu-dropdown-parent",
+          "dropdown_items": [
+            {
+              "label": "The Protocol",
+              "target": "/curam-ai-protocol.html",
+              "location": "dropdown-parent-link"
+            },
+            {
+              "label": "Phase 1: Feasibility Sprint",
+              "target": "/phase-1-feasibility.html",
+              "location": "dropdown-item"
+            },
+            {
+              "label": "Phase 2: The Roadmap",
+              "target": "/phase-2-roadmap.html",
+              "location": "dropdown-item"
+            },
+            {
+              "label": "Phase 3: Compliance Shield",
+              "target": "/phase-3-compliance.html",
+              "location": "dropdown-item"
+            },
+            {
+              "label": "Phase 4: Implementation",
+              "target": "/phase-4-implementation.html",
+              "location": "dropdown-item"
+            }
+          ]
+        },
+        {
+          "label": "FAQ",
+          "target": "/faq.html",
+          "location": "top-menu-main"
+        },
+        {
+          "label": "Contact",
+          "target": "/contact.html",
+          "location": "top-menu-main-cta",
+          "class": "btn-nav"
+        }
+      ],
+      "secondary_dropdown": {
+        "label": "Resources",
+        "location": "top-menu-dropdown",
+        "dropdown_items": [
+          {
+            "label": "ROI Calculator",
+            "target": "/roi.html",
+            "location": "dropdown-item"
+          },
+          {
+            "label": "Try Live Demo",
+            "target": "/feasibility-preview.html",
+            "location": "dropdown-item"
+          },
+          {
+            "label": "Engineering Case Study",
+            "target": "/case-study.html",
+            "location": "dropdown-item"
+          },
+          {
+            "label": "Phase 1 Sample Report",
+            "target": "/feasibility-sprint-report.html",
+            "location": "dropdown-item"
+          },
+          {
+            "label": "Blog",
+            "target": "/blog.html",
+            "location": "dropdown-item"
+          }
+        ]
+      }
+    },
+    "footer": {
+      "protocol_section": {
+        "label": "The Protocol",
+        "links": [
+          {
+            "label": "Phase 1: Feasibility",
+            "target": "/phase-1-feasibility.html"
+          },
+          {
+            "label": "Phase 2: Roadmap",
+            "target": "/phase-2-roadmap.html"
+          },
+          {
+            "label": "Phase 3: Compliance",
+            "target": "/phase-3-compliance.html"
+          },
+          {
+            "label": "Phase 4: Deployment",
+            "target": "/phase-4-implementation.html"
+          }
+        ]
+      },
+      "learn_section": {
+        "label": "Learn",
+        "links": [
+          {
+            "label": "Blog",
+            "target": "/blog.html"
+          },
+          {
+            "label": "How It Works",
+            "target": "/how-it-works.html"
+          },
+          {
+            "label": "FAQ",
+            "target": "/faq.html"
+          },
+          {
+            "label": "About",
+            "target": "/about.html"
+          },
+          {
+            "label": "Contact",
+            "target": "/contact.html"
+          },
+          {
+            "label": "Sitemap",
+            "target": "/sitemap.html"
+          }
+        ]
+      },
+      "sectors_section": {
+        "label": "Sectors",
+        "links": [
+          {
+            "label": "Professional Services",
+            "target": "/professional-services.html"
+          },
+          {
+            "label": "Built Environment",
+            "target": "/built-environment.html"
+          },
+          {
+            "label": "Logistics & Compliance",
+            "target": "/logistics-compliance.html"
+          }
+        ]
+      },
+      "cta_section": {
+        "label": "Act Now",
+        "links": [
+          {
+            "label": "Book Phase 1",
+            "target": "/contact.html?option=phase-1",
+            "class": "btn btn-primary"
+          },
+          {
+            "label": "Diagnostic Call",
+            "target": "/contact.html?option=diagnostic",
+            "class": "btn btn-secondary"
+          }
+        ]
+      },
+      "footer_bottom": {
+        "privacy_policy": {
+          "label": "Privacy Policy",
+          "target": "/privacy-policy.html"
+        }
+      }
+    }
+  },
+  "pages": {
+    "homepage.html": {
+      "internal_links": [
+        {
+          "label": "Calculate Industry Savings",
+          "target": "roi.html",
+          "location": "hero-cta"
+        },
+        {
+          "label": "See It In Action",
+          "target": "feasibility-preview.html",
+          "location": "hero-cta"
+        },
+        {
+          "label": "See Sample Report",
+          "target": "feasibility-sprint-report.html",
+          "location": "protocol-section"
+        },
+        {
+          "label": "Read More →",
+          "target": "phase-2-roadmap.html",
+          "location": "phase-card"
+        },
+        {
+          "label": "Read More →",
+          "target": "phase-3-compliance.html",
+          "location": "phase-card"
+        },
+        {
+          "label": "Read More →",
+          "target": "phase-4-implementation.html",
+          "location": "phase-card"
+        },
+        {
+          "label": "Book a 15-minute diagnostic call",
+          "target": "contact.html?option=general",
+          "location": "memory-hook"
+        },
+        {
+          "label": "Phase 1 Validation",
+          "target": "phase-1-validation.html",
+          "location": "content-link"
+        }
+      ]
+    },
+    "about.html": {
+      "internal_links": [
+        {
+          "label": "Blue Lily Studios",
+          "target": "https://www.bluelily.com.au",
+          "location": "content-link",
+          "external": true
+        },
+        {
+          "label": "Blog",
+          "target": "https://www.curam-ai.com.au/blog.html",
+          "location": "cta-button",
+          "external": true
+        },
+        {
+          "label": "Blog",
+          "target": "https://blog.curam-ai.com.au/",
+          "location": "cta-button",
+          "external": true
+        },
+        {
+          "label": "Explore Target Markets",
+          "target": "target-markets.html",
+          "location": "cta-button"
+        },
+        {
+          "label": "Try Feasibility Preview",
+          "target": "feasibility-preview.html",
+          "location": "cta-button"
+        },
+        {
+          "label": "See Sample Report",
+          "target": "feasibility-sprint-report.html",
+          "location": "cta-button"
+        }
+      ]
+    },
+    "contact.html": {
+      "internal_links": [
+        {
+          "label": "Apply to form",
+          "target": "#",
+          "location": "dynamic-link",
+          "note": "JavaScript onclick handler"
+        }
+      ],
+      "external_links": [
+        {
+          "label": "Source Links (dynamic)",
+          "target": "[dynamic]",
+          "location": "chat-results",
+          "note": "Generated from RAG search results"
+        }
+      ]
+    },
+    "phase-1-feasibility.html": {
+      "internal_links": [
+        {
+          "label": "Book Feasibility Sprint – $1,500",
+          "target": "contact.html",
+          "location": "hero-cta"
+        },
+        {
+          "label": "View Sample Capacity Report",
+          "target": "feasibility-sprint-report.html",
+          "location": "hero-cta"
+        },
+        {
+          "label": "View Sample Report",
+          "target": "feasibility-sprint-report.html",
+          "location": "content-cta"
+        }
+      ]
+    },
+    "curam-ai-protocol.html": {
+      "internal_links": [
+        {
+          "label": "Book Diagnostic Call",
+          "target": "contact.html",
+          "location": "hero-cta"
+        },
+        {
+          "label": "Deep Dive: Phase 1 Details",
+          "target": "phase-1-feasibility.html",
+          "location": "phase-section"
+        },
+        {
+          "label": "Request More Info",
+          "target": "contact.html",
+          "location": "phase-section"
+        },
+        {
+          "label": "View Sample Report →",
+          "target": "feasibility-sprint-report.html",
+          "location": "phase-section"
+        },
+        {
+          "label": "Deep Dive: Phase 2 Details",
+          "target": "phase-2-roadmap.html",
+          "location": "phase-section"
+        },
+        {
+          "label": "Try ROI Calculator →",
+          "target": "/roi.html",
+          "location": "phase-section"
+        },
+        {
+          "label": "Deep Dive: Phase 3 Details",
+          "target": "phase-3-compliance.html",
+          "location": "phase-section"
+        },
+        {
+          "label": "View Sample Reports →",
+          "target": "risk-audit-report.html",
+          "location": "phase-section"
+        },
+        {
+          "label": "Deep Dive: Phase 4 Details",
+          "target": "phase-4-implementation.html",
+          "location": "phase-section"
+        },
+        {
+          "label": "View Case Study →",
+          "target": "case-study.html",
+          "location": "phase-section"
+        },
+        {
+          "label": "See Sample Report →",
+          "target": "feasibility-sprint-report.html",
+          "location": "cta-section"
+        },
+        {
+          "label": "Try ROI Calculator →",
+          "target": "/roi.html",
+          "location": "cta-section"
+        },
+        {
+          "label": "View Sample Pack →",
+          "target": "risk-audit-report.html",
+          "location": "cta-section"
+        },
+        {
+          "label": "Book Kickoff Call →",
+          "target": "contact.html",
+          "location": "cta-section"
+        }
+      ]
+    },
+    "feasibility-sprint-report.html": {
+      "internal_links": [
+        {
+          "label": "Book Phase 1",
+          "target": "contact.html?option=phase-1",
+          "location": "cta-button"
+        },
+        {
+          "label": "Pre-Screen Call",
+          "target": "contact.html?option=pre-screen",
+          "location": "cta-button"
+        }
+      ],
+      "note": "Multiple instances of same CTAs across different sector sections"
+    },
+    "phase-2-roadmap.html": {
+      "internal_links": [
+        {
+          "label": "Start Roadmap – $7,500",
+          "target": "contact.html",
+          "location": "hero-cta"
+        },
+        {
+          "label": "View Sample Board Pack",
+          "target": "Curam-Ai_Phase_2_Sample_Report.pdf",
+          "location": "hero-cta",
+          "type": "pdf"
+        }
+      ]
+    },
+    "target-markets.html": {
+      "internal_links": [
+        {
+          "label": "Calculate Reclaimed Capacity →",
+          "target": "roi.html",
+          "location": "hero-cta"
+        },
+        {
+          "label": "Talk to an Engineer",
+          "target": "contact.html",
+          "location": "hero-cta"
+        },
+        {
+          "label": "Engineering",
+          "target": "feasibility-sprint-report.html?industrysector=engineering",
+          "location": "industry-card"
+        },
+        {
+          "label": "Accounting",
+          "target": "feasibility-sprint-report.html?industrysector=accounting",
+          "location": "industry-card"
+        },
+        {
+          "label": "Logistics",
+          "target": "feasibility-sprint-report.html?industrysector=logistics",
+          "location": "industry-card"
+        }
+      ]
+    },
+    "roi.html": {
+      "internal_links": [
+        {
+          "label": "See It In Action",
+          "target": "contact.html?option=phase-1",
+          "location": "hero-cta"
+        },
+        {
+          "label": "Request Information",
+          "target": "feasibility-preview.html",
+          "location": "hero-cta"
+        },
+        {
+          "label": "Calculate ROI →",
+          "target": "roi.html?industry={industry.id}",
+          "location": "industry-card",
+          "note": "Dynamic industry ID parameter"
+        }
+      ]
+    },
+    "case-study.html": {
+      "internal_links": [
+        {
+          "label": "Book a Diagnostic",
+          "target": "contact.html",
+          "location": "cta-section"
+        },
+        {
+          "label": "Try the Preview",
+          "target": "feasibility-preview.html",
+          "location": "cta-section"
+        }
+      ]
+    },
+    "how-it-works.html": {
+      "note": "Navigation and footer links only, no specific content links found"
+    }
+  },
+  "admin_panel": {
+    "navigation": [
+      {
+        "label": "Dashboard",
+        "target": "/admin",
+        "route": "admin.dashboard"
+      },
+      {
+        "label": "Extractions",
+        "target": "/admin/extractions",
+        "route": "admin.extractions"
+      },
+      {
+        "label": "Document Types",
+        "target": "/admin/document-types",
+        "route": "admin.document_types"
+      },
+      {
+        "label": "Analytics",
+        "target": "/admin/analytics",
+        "route": "admin.analytics"
+      },
+      {
+        "label": "Phase 1 Trials",
+        "target": "/admin/phase1-trials",
+        "route": "admin.phase1_trials"
+      },
+      {
+        "label": "Documentation",
+        "target": "/admin/documentation",
+        "route": "admin.documentation_index"
+      },
+      {
+        "label": "Change Password",
+        "target": "/admin/change-password",
+        "route": "admin.change_password"
+      },
+      {
+        "label": "Logout",
+        "target": "/admin/logout",
+        "route": "admin.logout"
+      }
+    ]
+  },
+  "sitemap_pages": {
+    "main_pages": [
+      {
+        "label": "Home",
+        "target": "homepage.html"
+      },
+      {
+        "label": "About Us",
+        "target": "about.html"
+      },
+      {
+        "label": "Contact",
+        "target": "contact.html"
+      },
+      {
+        "label": "The Protocol",
+        "target": "curam-ai-protocol.html"
+      },
+      {
+        "label": "Phase 1: Feasibility Sprint",
+        "target": "phase-1-feasibility.html"
+      },
+      {
+        "label": "Phase 2: The Roadmap",
+        "target": "phase-2-roadmap.html"
+      },
+      {
+        "label": "Phase 3: Compliance Shield",
+        "target": "phase-3-compliance.html"
+      },
+      {
+        "label": "Phase 4: Implementation",
+        "target": "phase-4-implementation.html"
+      },
+      {
+        "label": "How It Works",
+        "target": "how-it-works.html"
+      },
+      {
+        "label": "Target Markets",
+        "target": "target-markets.html"
+      }
+    ],
+    "target_markets": [
+      {
+        "label": "Accounting",
+        "target": "industries/accounting.html"
+      },
+      {
+        "label": "Legal Services",
+        "target": "industries/legal-services.html"
+      },
+      {
+        "label": "Wealth Management",
+        "target": "industries/wealth-management.html"
+      },
+      {
+        "label": "Insurance Underwriting",
+        "target": "industries/insurance-underwriting.html"
+      },
+      {
+        "label": "Professional Services",
+        "target": "professional-services.html"
+      },
+      {
+        "label": "Logistics & Compliance",
+        "target": "logistics-compliance.html"
+      },
+      {
+        "label": "Logistics & Freight",
+        "target": "industries/logistics-freight.html"
+      },
+      {
+        "label": "Healthcare Admin",
+        "target": "industries/healthcare-admin.html"
+      },
+      {
+        "label": "Government Contractors",
+        "target": "industries/government-contractors.html"
+      },
+      {
+        "label": "Built Environment",
+        "target": "built-environment.html"
+      },
+      {
+        "label": "Engineering & Construction",
+        "target": "industries/construction.html"
+      },
+      {
+        "label": "Engineering & Construction",
+        "target": "industries/engineering.html"
+      },
+      {
+        "label": "Architecture",
+        "target": "industries/architecture.html"
+      },
+      {
+        "label": "Mining Services",
+        "target": "industries/mining-services.html"
+      },
+      {
+        "label": "Property Management",
+        "target": "industries/property-management.html"
+      }
+    ],
+    "resources": [
+      {
+        "label": "ROI Calculator",
+        "target": "roi.html"
+      },
+      {
+        "label": "Feasibility Preview",
+        "target": "feasibility-preview.html"
+      },
+      {
+        "label": "Frequently Asked Questions",
+        "target": "faq.html"
+      },
+      {
+        "label": "Case Study",
+        "target": "case-study.html"
+      },
+      {
+        "label": "Commercial Guarantee",
+        "target": "commercial-guarantee.html"
+      }
+    ],
+    "blog_content": [
+      {
+        "label": "Blog",
+        "target": "blog.html"
+      },
+      {
+        "label": "Search Results",
+        "target": "search-results.html"
+      }
+    ],
+    "reports_assessments": [
+      {
+        "label": "Feasibility Sprint Report",
+        "target": "feasibility-sprint-report.html"
+      },
+      {
+        "label": "Risk Audit Report",
+        "target": "risk-audit-report.html"
+      },
+      {
+        "label": "Tier One Feasibility Report",
+        "target": "tier-one-feasibility-report.html"
+      },
+      {
+        "label": "Tier 2 Report",
+        "target": "tier2-report.html"
+      },
+      {
+        "label": "Gate 2 Sample Report",
+        "target": "gate2-sample-report.html"
+      },
+      {
+        "label": "Phase 2 Discovery Baseline Report",
+        "target": "phase-2-discovery-baseline-report.html"
+      },
+      {
+        "label": "Phase 2 Executive Summary",
+        "target": "phase-2-exec-summary.html"
+      },
+      {
+        "label": "Phase 2 Metric Agreement",
+        "target": "phase-2-metric-agreement.html"
+      },
+      {
+        "label": "Phase 2 Reports",
+        "target": "phase-2-reports.html"
+      },
+      {
+        "label": "Tier 2 Strategic Assessment",
+        "target": "Curam-Ai-Redacted-Tier-2-Strategic-Assessment.html"
+      }
+    ]
+  },
+  "external_links": [
+    {
+      "label": "Blue Lily Studios",
+      "target": "https://www.bluelily.com.au",
+      "location": "about.html",
+      "external": true,
+      "rel": "noopener"
+    },
+    {
+      "label": "Blog (curam-ai.com.au)",
+      "target": "https://www.curam-ai.com.au/blog.html",
+      "location": "about.html",
+      "external": true
+    },
+    {
+      "label": "Blog (blog.curam-ai.com.au)",
+      "target": "https://blog.curam-ai.com.au/",
+      "location": "about.html",
+      "external": true
+    }
+  ],
+  "query_parameters": {
+    "contact.html": [
+      {
+        "option": "phase-1",
+        "description": "Pre-fills form for Phase 1 booking"
+      },
+      {
+        "option": "pre-screen",
+        "description": "Pre-fills form for pre-screen call"
+      },
+      {
+        "option": "diagnostic",
+        "description": "Pre-fills form for diagnostic call"
+      },
+      {
+        "option": "general",
+        "description": "General contact inquiry"
+      }
+    ],
+    "feasibility-sprint-report.html": [
+      {
+        "industrysector": "engineering",
+        "description": "Shows engineering sector report"
+      },
+      {
+        "industrysector": "accounting",
+        "description": "Shows accounting sector report"
+      },
+      {
+        "industrysector": "logistics",
+        "description": "Shows logistics sector report"
+      }
+    ],
+    "roi.html": [
+      {
+        "industry": "{industry.id}",
+        "description": "Dynamic industry ID parameter for direct ROI calculation"
+      }
+    ]
+  },
+  "downloads": [
+    {
+      "label": "View Sample Board Pack",
+      "target": "Curam-Ai_Phase_2_Sample_Report.pdf",
+      "location": "phase-2-roadmap.html",
+      "type": "pdf"
+    }
+  ],
+  "notes": [
+    "All paths are relative unless specified as absolute (starting with /)",
+    "Admin panel routes use Flask url_for() templates, shown as route names",
+    "Query parameters are documented for pages that accept them",
+    "Some links are dynamically generated via JavaScript (noted in description)",
+    "External links marked with external: true and include rel attributes where specified",
+    "Sitemap also references sitemap.xml file for search engines"
+  ]
+}

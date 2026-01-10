@@ -1,12 +1,26 @@
-# Curam-Ai Protocol: Technical Overview
+# Curam-Ai Protocol: Technical Guide
 
 **Last Updated:** January 2025  
-**Status:** Production (Railway)  
-**Tech Stack:** Python 3.11, Flask, PostgreSQL, Google Gemini 2.5 Flash
+**Purpose:** Technical architecture, implementation details, and development reference
 
 ---
 
-## What This System Does
+## Table of Contents
+
+1. [System Overview](#system-overview)
+2. [Architecture](#architecture)
+3. [PDF Extraction Pipeline](#pdf-extraction-pipeline)
+4. [AI Extraction System](#ai-extraction-system)
+5. [Data Processing](#data-processing)
+6. [Validation & Quality](#validation--quality)
+7. [Performance Optimization](#performance-optimization)
+8. [Error Handling](#error-handling)
+9. [Admin Dashboard](#admin-dashboard)
+10. [ROI Calculation System](#roi-calculation-system)
+
+---
+
+## System Overview
 
 Curam-Ai Protocol™ extracts structured data from unstructured PDF documents using Google Gemini AI. It serves three core workflows:
 
@@ -14,9 +28,16 @@ Curam-Ai Protocol™ extracts structured data from unstructured PDF documents us
 2. **Engineering** - Structural beam/column schedule extraction (93% accuracy)
 3. **Transmittal** - Drawing register extraction (95%+ accuracy)
 
+**Tech Stack:**
+- Python 3.11, Flask
+- PostgreSQL (Railway managed)
+- Google Gemini 2.5 Flash
+- pdfplumber, PyMuPDF (dual extraction)
+- Gunicorn (production WSGI server)
+
 ---
 
-## Core Architecture
+## Architecture
 
 ### High-Level Flow
 
@@ -39,7 +60,7 @@ PDF Upload
 ### File Structure
 
 ```
-main.py                          # Flask application (1,627 lines)
+main.py                          # Flask application
 ├── routes/
 │   ├── static_pages.py          # Marketing page routes
 │   └── admin_routes.py          # Admin dashboard blueprint (/admin)
@@ -240,9 +261,11 @@ if not isinstance(parsed, list):
 
 **Result:** Clean UTF-8 throughout entire pipeline
 
-### Validation & Auto-Correction
+---
 
-**File:** `services/validation_service.py`
+## Validation & Quality
+
+### Validation Pipeline
 
 **Pattern:** Validate → Auto-Correct → Flag Errors
 
@@ -470,45 +493,6 @@ for model_name in fallback_models:
 
 ---
 
-## Critical Files Reference
-
-**Core Services:**
-- `services/gemini_service.py` - AI extraction (40K+ char prompts)
-- `services/pdf_service.py` - PDF text extraction
-- `services/validation_service.py` - Data validation
-- `services/image_preprocessing.py` - Image enhancement
-
-**Utilities:**
-- `utils/encoding_fix.py` - UTF-8 sanitization
-- `utils/formatting.py` - Output formatting
-
-**Configuration:**
-- `models/department_config.py` - Document schemas
-- `config.py` - Department field definitions
-
----
-
-## Summary
-
-**Core Principles:**
-1. **Resilience** - Multiple fallbacks, never crash
-2. **Sanitization** - Clean data at every layer
-3. **Validation** - Auto-correct when possible, flag when not
-4. **Transparency** - Log everything, show corrections
-5. **Testing** - Unit + integration tests recommended
-
-**Proven Patterns:**
-- Dual extraction (pdfplumber + PyMuPDF)
-- Model fallback (4 Gemini models)
-- Quality assessment (image preprocessing)
-- Structured prompts (rules + examples)
-- Aggressive parsing (clean → parse → sanitize)
-- Post-processing validation
-
-**Result:** 93% accuracy on real-world documents
-
----
-
 ## Admin Dashboard
 
 ### Architecture
@@ -554,7 +538,14 @@ for model_name in fallback_models:
 - Sector groupings
 - FAQ-style collapsible content
 
-**7. User Management**
+**7. Phase 1 Trial Management (`/admin/phase1-trials`)**
+- Create and manage Phase 1 customer trials
+- Per-category extraction configuration
+- Document upload (3 categories × 5 documents)
+- Process documents and generate reports
+- Share private token-based reports
+
+**8. User Management**
 - Password change (`/admin/change-password`)
 - User authentication via `users` table
 
@@ -565,6 +556,9 @@ for model_name in fallback_models:
 - `extraction_results` - Extraction history and analytics
 - `sectors` - Industry sectors
 - `document_types` - Document type configurations
+- `phase1_trials` - Phase 1 trial records
+- `phase1_trial_documents` - Trial document uploads
+- `phase1_trial_results` - Trial extraction results
 
 **Key Functions (in `database.py`):**
 - `get_user_by_username()` - User lookup
@@ -572,6 +566,10 @@ for model_name in fallback_models:
 - `update_user_password()` - Password updates
 - `get_extraction_results()` - Extraction history
 - `get_extraction_analytics()` - Performance metrics
+- `create_phase1_trial()` - Create Phase 1 trial
+- `get_phase1_trial()` - Get trial by ID/code/token
+- `update_phase1_trial_extraction_config()` - Update extraction config
+- `save_trial_result()` - Save extraction results
 
 ---
 
@@ -645,3 +643,52 @@ Adjusted Annual Production Value = Base Savings × Industry Variance Multiplier
 - `roi_calculator/calculations.py` - Core calculation logic
 - `roi_calculator_flask.py` - Flask routes and template rendering
 - `templates/admin/documentation/roi.html` - ROI documentation
+
+---
+
+## Critical Files Reference
+
+**Core Services:**
+- `services/gemini_service.py` - AI extraction (40K+ char prompts)
+- `services/pdf_service.py` - PDF text extraction
+- `services/validation_service.py` - Data validation
+- `services/image_preprocessing.py` - Image enhancement
+
+**Utilities:**
+- `utils/encoding_fix.py` - UTF-8 sanitization
+- `utils/formatting.py` - Output formatting
+
+**Configuration:**
+- `models/department_config.py` - Document schemas
+- `config.py` - Department field definitions
+
+**Database:**
+- `database.py` - All database functions and connections
+- `database_setup_phase1_trials.sql` - Phase 1 trial schema
+- `database_migration_add_extraction_config.sql` - Migration for category configs
+
+---
+
+## Summary
+
+**Core Principles:**
+1. **Resilience** - Multiple fallbacks, never crash
+2. **Sanitization** - Clean data at every layer
+3. **Validation** - Auto-correct when possible, flag when not
+4. **Transparency** - Log everything, show corrections
+5. **Testing** - Unit + integration tests recommended
+
+**Proven Patterns:**
+- Dual extraction (pdfplumber + PyMuPDF)
+- Model fallback (4 Gemini models)
+- Quality assessment (image preprocessing)
+- Structured prompts (rules + examples)
+- Aggressive parsing (clean → parse → sanitize)
+- Post-processing validation
+
+**Result:** 93% accuracy on real-world documents
+
+---
+
+**Document Version:** 2.0  
+**Last Updated:** January 2025
