@@ -114,6 +114,13 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
+    
+    /* Responsive 2-column layout */
+    @media (max-width: 1024px) {
+        .config-upload-grid {
+            grid-template-columns: 1fr !important;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -202,105 +209,14 @@
 </div>
 {% endif %}
 
-<!-- Extraction Configuration Section - Per Category -->
+<!-- Configuration & Upload Section - 2 Column Layout -->
 <div class="admin-card">
-    <h3>Expected Extraction Fields & Output Format (Per Category)</h3>
+    <h3>Document Configuration & Upload</h3>
     <p style="color: #6B7280; margin-bottom: 1.5rem; font-size: 0.875rem;">
-        Configure extraction settings for each category. Each category may contain different document types requiring different fields. This ensures accurate extraction results for each test scenario.
+        Configure extraction settings for each category and upload documents. Each category may contain different document types requiring different fields.
     </p>
     
     {% set category_configs = trial.get('category_configs', {}) or {} %}
-    
-    <!-- Category 1 Configuration -->
-    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid #3B82F6;">
-        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 1 Configuration</h4>
-        <p style="color: #6B7280; font-size: 0.875rem; margin-bottom: 1rem;">
-            Define what fields should be extracted from Category 1 documents (e.g., Finance: Vendor, Date, InvoiceNum, Cost, GST, FinalAmount).
-        </p>
-        
-        <div style="margin-bottom: 1rem;">
-            <label for="category1-fields" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
-                Expected Fields to Extract (comma-separated):
-            </label>
-            <textarea id="category1-fields" name="category1_fields" rows="3" 
-                      placeholder='e.g., Vendor, Date, InvoiceNum, Cost, GST, FinalAmount, LineItems'
-                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 1', {}).get('fields') %}{{ category_configs['Category 1']['fields'] | join(', ') }}{% endif %}</textarea>
-        </div>
-        
-        <div style="margin-bottom: 1rem;">
-            <label for="category1-format" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
-                Expected Output Format (JSON structure or description):
-            </label>
-            <textarea id="category1-format" name="category1_format" rows="4" 
-                      placeholder='e.g., {"type": "invoice", "structure": "flat_with_lineitems"} or JSON object with Vendor, Date, InvoiceNum, etc.'
-                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 1', {}).get('output_format') %}{% if category_configs['Category 1']['output_format'] is string %}{{ category_configs['Category 1']['output_format'] }}{% else %}{{ category_configs['Category 1']['output_format'] | tojson(indent=2) }}{% endif %}{% endif %}</textarea>
-        </div>
-    </div>
-    
-    <!-- Category 2 Configuration -->
-    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid #10B981;">
-        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 2 Configuration</h4>
-        <p style="color: #6B7280; font-size: 0.875rem; margin-bottom: 1rem;">
-            Define what fields should be extracted from Category 2 documents (e.g., Engineering: Mark, Size, Qty, Length, Grade, PaintSystem).
-        </p>
-        
-        <div style="margin-bottom: 1rem;">
-            <label for="category2-fields" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
-                Expected Fields to Extract (comma-separated):
-            </label>
-            <textarea id="category2-fields" name="category2_fields" rows="3" 
-                      placeholder='e.g., Mark, Size, Qty, Length, Grade, PaintSystem, Comments'
-                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 2', {}).get('fields') %}{{ category_configs['Category 2']['fields'] | join(', ') }}{% endif %}</textarea>
-        </div>
-        
-        <div style="margin-bottom: 1rem;">
-            <label for="category2-format" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
-                Expected Output Format (JSON structure or description):
-            </label>
-            <textarea id="category2-format" name="category2_format" rows="4" 
-                      placeholder='e.g., {"type": "engineering_schedule", "structure": "tabular"} or Structured tabular data with rows'
-                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 2', {}).get('output_format') %}{% if category_configs['Category 2']['output_format'] is string %}{{ category_configs['Category 2']['output_format'] }}{% else %}{{ category_configs['Category 2']['output_format'] | tojson(indent=2) }}{% endif %}{% endif %}</textarea>
-        </div>
-    </div>
-    
-    <!-- Category 3 Configuration -->
-    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid #F59E0B;">
-        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 3 Configuration</h4>
-        <p style="color: #6B7280; font-size: 0.875rem; margin-bottom: 1rem;">
-            Define what fields should be extracted from Category 3 documents (e.g., Logistics: ShipmentRef, CountryOfOrigin, FTAAgreement, TariffCode).
-        </p>
-        
-        <div style="margin-bottom: 1rem;">
-            <label for="category3-fields" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
-                Expected Fields to Extract (comma-separated):
-            </label>
-            <textarea id="category3-fields" name="category3_fields" rows="3" 
-                      placeholder='e.g., ShipmentRef, InvoiceNumber, CountryOfOrigin, FTAAgreement, TariffCode, Notes'
-                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 3', {}).get('fields') %}{{ category_configs['Category 3']['fields'] | join(', ') }}{% endif %}</textarea>
-        </div>
-        
-        <div style="margin-bottom: 1rem;">
-            <label for="category3-format" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
-                Expected Output Format (JSON structure or description):
-            </label>
-            <textarea id="category3-format" name="category3_format" rows="4" 
-                      placeholder='e.g., {"type": "logistics", "structure": "flat"} or Flat structure with trade document fields'
-                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 3', {}).get('output_format') %}{% if category_configs['Category 3']['output_format'] is string %}{{ category_configs['Category 3']['output_format'] }}{% else %}{{ category_configs['Category 3']['output_format'] | tojson(indent=2) }}{% endif %}{% endif %}</textarea>
-        </div>
-    </div>
-    
-    <form id="extraction-config-form" data-trial-id="{{ trial.get('id') }}">
-        <button type="submit" class="btn-admin">💾 Save All Category Configurations</button>
-    </form>
-</div>
-
-<!-- Document Upload Section -->
-<div class="admin-card">
-    <h3>Upload Customer Documents</h3>
-    <p style="color: #6B7280; margin-bottom: 1rem; font-size: 0.875rem;">
-        Upload 15 documents organized into 3 categories (5 documents per category). Documents should represent "worst-case" scenarios, not cherry-picked clean examples.
-    </p>
-    
     {% set total_docs = trial.get('total_documents', 0) %}
     {% set category_counts = {'Category 1': 0, 'Category 2': 0, 'Category 3': 0} %}
     {% for doc in documents %}
@@ -310,89 +226,173 @@
         {% endif %}
     {% endfor %}
     
-    <div style="background: #F0FDF4; border-left: 3px solid #10B981; padding: 0.75rem; margin-bottom: 1.5rem; border-radius: 4px; font-size: 0.875rem;">
-        <strong>Upload Progress:</strong> <span style="color: #065F46;">{{ total_docs }}/15 documents uploaded</span>
-        <div style="margin-top: 0.5rem; display: flex; gap: 1rem;">
-            <span>Category 1: <strong>{{ category_counts['Category 1'] }}/5</strong></span>
-            <span>Category 2: <strong>{{ category_counts['Category 2'] }}/5</strong></span>
-            <span>Category 3: <strong>{{ category_counts['Category 3'] }}/5</strong></span>
+    <!-- 2 Column Layout -->
+    <div class="config-upload-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
+        
+        <!-- Column 1: Configuration -->
+        <div>
+            <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem; border-bottom: 2px solid #E5E7EB; padding-bottom: 0.5rem;">Extraction Configuration</h4>
+            
+            <!-- Category 1 Configuration -->
+            <div style="margin-bottom: 1.5rem; padding: 1rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid #3B82F6;">
+                <h5 style="margin-bottom: 0.75rem; color: #0B1221; font-size: 0.875rem; font-weight: 600;">Category 1</h5>
+                <div style="margin-bottom: 0.75rem;">
+                    <label for="category1-fields" style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">
+                        Fields (comma-separated):
+                    </label>
+                    <textarea id="category1-fields" name="category1_fields" rows="2" 
+                              placeholder='e.g., Vendor, Date, InvoiceNum, Cost, GST'
+                              style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-family: monospace; font-size: 0.75rem; resize: vertical;">{% if category_configs.get('Category 1', {}).get('fields') %}{{ category_configs['Category 1']['fields'] | join(', ') }}{% endif %}</textarea>
+                </div>
+                <div>
+                    <label for="category1-format" style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">
+                        Output Format:
+                    </label>
+                    <textarea id="category1-format" name="category1_format" rows="2" 
+                              placeholder='e.g., {"type": "invoice", "structure": "flat"}'
+                              style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-family: monospace; font-size: 0.75rem; resize: vertical;">{% if category_configs.get('Category 1', {}).get('output_format') %}{% if category_configs['Category 1']['output_format'] is string %}{{ category_configs['Category 1']['output_format'] }}{% else %}{{ category_configs['Category 1']['output_format'] | tojson }}{% endif %}{% endif %}</textarea>
+                </div>
+            </div>
+            
+            <!-- Category 2 Configuration -->
+            <div style="margin-bottom: 1.5rem; padding: 1rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid #10B981;">
+                <h5 style="margin-bottom: 0.75rem; color: #0B1221; font-size: 0.875rem; font-weight: 600;">Category 2</h5>
+                <div style="margin-bottom: 0.75rem;">
+                    <label for="category2-fields" style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">
+                        Fields (comma-separated):
+                    </label>
+                    <textarea id="category2-fields" name="category2_fields" rows="2" 
+                              placeholder='e.g., Mark, Size, Qty, Length, Grade'
+                              style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-family: monospace; font-size: 0.75rem; resize: vertical;">{% if category_configs.get('Category 2', {}).get('fields') %}{{ category_configs['Category 2']['fields'] | join(', ') }}{% endif %}</textarea>
+                </div>
+                <div>
+                    <label for="category2-format" style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">
+                        Output Format:
+                    </label>
+                    <textarea id="category2-format" name="category2_format" rows="2" 
+                              placeholder='e.g., {"type": "engineering", "structure": "tabular"}'
+                              style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-family: monospace; font-size: 0.75rem; resize: vertical;">{% if category_configs.get('Category 2', {}).get('output_format') %}{% if category_configs['Category 2']['output_format'] is string %}{{ category_configs['Category 2']['output_format'] }}{% else %}{{ category_configs['Category 2']['output_format'] | tojson }}{% endif %}{% endif %}</textarea>
+                </div>
+            </div>
+            
+            <!-- Category 3 Configuration -->
+            <div style="margin-bottom: 1.5rem; padding: 1rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid #F59E0B;">
+                <h5 style="margin-bottom: 0.75rem; color: #0B1221; font-size: 0.875rem; font-weight: 600;">Category 3</h5>
+                <div style="margin-bottom: 0.75rem;">
+                    <label for="category3-fields" style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">
+                        Fields (comma-separated):
+                    </label>
+                    <textarea id="category3-fields" name="category3_fields" rows="2" 
+                              placeholder='e.g., ShipmentRef, CountryOfOrigin, FTAAgreement'
+                              style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-family: monospace; font-size: 0.75rem; resize: vertical;">{% if category_configs.get('Category 3', {}).get('fields') %}{{ category_configs['Category 3']['fields'] | join(', ') }}{% endif %}</textarea>
+                </div>
+                <div>
+                    <label for="category3-format" style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">
+                        Output Format:
+                    </label>
+                    <textarea id="category3-format" name="category3_format" rows="2" 
+                              placeholder='e.g., {"type": "logistics", "structure": "flat"}'
+                              style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-family: monospace; font-size: 0.75rem; resize: vertical;">{% if category_configs.get('Category 3', {}).get('output_format') %}{% if category_configs['Category 3']['output_format'] is string %}{{ category_configs['Category 3']['output_format'] }}{% else %}{{ category_configs['Category 3']['output_format'] | tojson }}{% endif %}{% endif %}</textarea>
+                </div>
+            </div>
+            
+            <form id="extraction-config-form" data-trial-id="{{ trial.get('id') }}">
+                <button type="submit" class="btn-admin" style="width: 100%;">💾 Save Configurations</button>
+            </form>
+        </div>
+        
+        <!-- Column 2: File Uploads -->
+        <div>
+            <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem; border-bottom: 2px solid #E5E7EB; padding-bottom: 0.5rem;">Document Upload</h4>
+            
+            <div style="background: #F0FDF4; border-left: 3px solid #10B981; padding: 0.75rem; margin-bottom: 1rem; border-radius: 4px; font-size: 0.75rem;">
+                <strong>Progress:</strong> <span style="color: #065F46;">{{ total_docs }}/15 documents</span>
+                <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                    <span style="font-size: 0.7rem;">Cat 1: <strong>{{ category_counts['Category 1'] }}/5</strong></span>
+                    <span style="font-size: 0.7rem;">Cat 2: <strong>{{ category_counts['Category 2'] }}/5</strong></span>
+                    <span style="font-size: 0.7rem;">Cat 3: <strong>{{ category_counts['Category 3'] }}/5</strong></span>
+                </div>
+            </div>
+    
+            <!-- Category 1 Upload -->
+            <div style="margin-bottom: 1.5rem;">
+                <h5 style="margin-bottom: 0.75rem; color: #0B1221; font-size: 0.875rem; font-weight: 600;">Category 1 ({{ category_counts['Category 1'] }}/5)</h5>
+                <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" data-category="Category 1" enctype="multipart/form-data" style="margin-bottom: 0.5rem;">
+                    <div class="upload-section" style="padding: 1rem;">
+                        <input type="file" id="upload-category1" name="documents" 
+                               accept=".pdf" multiple 
+                               style="display: none;"
+                               data-max-files="5"
+                               data-category="Category 1">
+                        <label for="upload-category1" style="cursor: pointer; display: block;">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 0.5rem; color: #D4AF37;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.25rem; font-size: 0.75rem;">Click or Drag & Drop</div>
+                            <div style="color: #6B7280; font-size: 0.7rem;">PDF only (max 5)</div>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-admin" style="display: none; width: 100%; font-size: 0.75rem; padding: 0.5rem;" data-submit-category="Category 1">Upload</button>
+                </form>
+            </div>
+            
+            <!-- Category 2 Upload -->
+            <div style="margin-bottom: 1.5rem;">
+                <h5 style="margin-bottom: 0.75rem; color: #0B1221; font-size: 0.875rem; font-weight: 600;">Category 2 ({{ category_counts['Category 2'] }}/5)</h5>
+                <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" data-category="Category 2" enctype="multipart/form-data" style="margin-bottom: 0.5rem;">
+                    <div class="upload-section" style="padding: 1rem;">
+                        <input type="file" id="upload-category2" name="documents" 
+                               accept=".pdf" multiple 
+                               style="display: none;"
+                               data-max-files="5"
+                               data-category="Category 2">
+                        <label for="upload-category2" style="cursor: pointer; display: block;">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 0.5rem; color: #D4AF37;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.25rem; font-size: 0.75rem;">Click or Drag & Drop</div>
+                            <div style="color: #6B7280; font-size: 0.7rem;">PDF only (max 5)</div>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-admin" style="display: none; width: 100%; font-size: 0.75rem; padding: 0.5rem;" data-submit-category="Category 2">Upload</button>
+                </form>
+            </div>
+            
+            <!-- Category 3 Upload -->
+            <div style="margin-bottom: 1.5rem;">
+                <h5 style="margin-bottom: 0.75rem; color: #0B1221; font-size: 0.875rem; font-weight: 600;">Category 3 ({{ category_counts['Category 3'] }}/5)</h5>
+                <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" data-category="Category 3" enctype="multipart/form-data" style="margin-bottom: 0.5rem;">
+                    <div class="upload-section" style="padding: 1rem;">
+                        <input type="file" id="upload-category3" name="documents" 
+                               accept=".pdf" multiple 
+                               style="display: none;"
+                               data-max-files="5"
+                               data-category="Category 3">
+                        <label for="upload-category3" style="cursor: pointer; display: block;">
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 0.5rem; color: #D4AF37;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.25rem; font-size: 0.75rem;">Click or Drag & Drop</div>
+                            <div style="color: #6B7280; font-size: 0.7rem;">PDF only (max 5)</div>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-admin" style="display: none; width: 100%; font-size: 0.75rem; padding: 0.5rem;" data-submit-category="Category 3">Upload</button>
+                </form>
+            </div>
         </div>
     </div>
     
-    <!-- Category 1 Upload -->
-    <div style="margin-bottom: 2rem;">
-        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 1 ({{ category_counts['Category 1'] }}/5 documents)</h4>
-        <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" data-category="Category 1" enctype="multipart/form-data" style="margin-bottom: 1rem;">
-            <div class="upload-section">
-                <input type="file" id="upload-category1" name="documents" 
-                       accept=".pdf" multiple 
-                       style="display: none;"
-                       data-max-files="5"
-                       data-category="Category 1">
-                <label for="upload-category1" style="cursor: pointer; display: block;">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; color: #D4AF37;">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">Click to Upload or Drag & Drop</div>
-                    <div style="color: #6B7280; font-size: 0.875rem;">PDF files only (up to 5 files for Category 1)</div>
-                </label>
-            </div>
-            <button type="submit" class="btn-admin" style="display: none;" data-submit-category="Category 1">Upload Category 1 Files</button>
-        </form>
-    </div>
-    
-    <!-- Category 2 Upload -->
-    <div style="margin-bottom: 2rem;">
-        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 2 ({{ category_counts['Category 2'] }}/5 documents)</h4>
-        <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" data-category="Category 2" enctype="multipart/form-data" style="margin-bottom: 1rem;">
-            <div class="upload-section">
-                <input type="file" id="upload-category2" name="documents" 
-                       accept=".pdf" multiple 
-                       style="display: none;"
-                       data-max-files="5"
-                       data-category="Category 2">
-                <label for="upload-category2" style="cursor: pointer; display: block;">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; color: #D4AF37;">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">Click to Upload or Drag & Drop</div>
-                    <div style="color: #6B7280; font-size: 0.875rem;">PDF files only (up to 5 files for Category 2)</div>
-                </label>
-            </div>
-            <button type="submit" class="btn-admin" style="display: none;" data-submit-category="Category 2">Upload Category 2 Files</button>
-        </form>
-    </div>
-    
-    <!-- Category 3 Upload -->
-    <div style="margin-bottom: 2rem;">
-        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 3 ({{ category_counts['Category 3'] }}/5 documents)</h4>
-        <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" data-category="Category 3" enctype="multipart/form-data" style="margin-bottom: 1rem;">
-            <div class="upload-section">
-                <input type="file" id="upload-category3" name="documents" 
-                       accept=".pdf" multiple 
-                       style="display: none;"
-                       data-max-files="5"
-                       data-category="Category 3">
-                <label for="upload-category3" style="cursor: pointer; display: block;">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; color: #D4AF37;">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">Click to Upload or Drag & Drop</div>
-                    <div style="color: #6B7280; font-size: 0.875rem;">PDF files only (up to 5 files for Category 3)</div>
-                </label>
-            </div>
-            <button type="submit" class="btn-admin" style="display: none;" data-submit-category="Category 3">Upload Category 3 Files</button>
-        </form>
-    </div>
-    
+    <!-- Document Lists & Processing Button (Full Width Below) -->
     {% if documents %}
-    <h4 style="margin: 2rem 0 1rem; color: #0B1221; font-size: 1rem;">Uploaded Documents by Category</h4>
+    <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid #E5E7EB;">
+        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Uploaded Documents by Category</h4>
+    
     
     {% for category_name in ['Category 1', 'Category 2', 'Category 3'] %}
         {% set category_docs = documents | selectattr('document_category', 'equalto', category_name) | list %}
@@ -641,7 +641,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (this.files.length > 0) {
                         submitBtn.style.display = 'inline-block';
                         const labelText1 = uploadSection.querySelector('label > div:last-child');
-                        if (labelText1) labelText1.textContent = `${this.files.length} PDF file(s) selected. Click to upload.`;
+                        if (labelText1) labelText1.textContent = `${this.files.length} file(s) selected`;
                     }
                     return;
                 }
@@ -656,7 +656,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (this.files.length > 0) {
                         submitBtn.style.display = 'inline-block';
                         const labelText1 = uploadSection.querySelector('label > div:last-child');
-                        if (labelText1) labelText1.textContent = `${this.files.length} PDF file(s) selected. Click to upload.`;
+                        if (labelText1) labelText1.textContent = `${this.files.length} file(s) selected`;
                     }
                     return;
                 }
@@ -664,12 +664,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.style.display = 'inline-block';
                 const labelText = uploadSection.querySelector('label > div:last-child');
                 if (labelText) {
-                    labelText.textContent = `${pdfFiles.length} PDF file(s) selected. Click to upload.`;
+                    labelText.textContent = `${pdfFiles.length} file(s) selected`;
                 }
             } else {
                 submitBtn.style.display = 'none';
                 const labelText3 = uploadSection.querySelector('label > div:last-child');
-                if (labelText3) labelText3.textContent = `PDF files only (up to 5 files for ${category})`;
+                if (labelText3) labelText3.textContent = 'PDF only (max 5)';
             }
         });
         
@@ -722,12 +722,12 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (error) {
                 alert('Upload failed: ' + error.message);
             } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = `Upload ${category} Files`;
-                input.value = '';
-                submitBtn.style.display = 'none';
-                const labelText4 = uploadSection.querySelector('label > div:last-child');
-                if (labelText4) labelText4.textContent = `PDF files only (up to 5 files for ${category})`;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Upload';
+            input.value = '';
+            submitBtn.style.display = 'none';
+            const labelText4 = uploadSection.querySelector('label > div:last-child');
+            if (labelText4) labelText4.textContent = 'PDF only (max 5)';
             }
         });
         
