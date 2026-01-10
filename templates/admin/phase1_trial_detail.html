@@ -202,88 +202,198 @@
 </div>
 {% endif %}
 
+<!-- Extraction Configuration Section -->
+<div class="admin-card">
+    <h3>Expected Extraction Fields & Output Format</h3>
+    <p style="color: #6B7280; margin-bottom: 1.5rem; font-size: 0.875rem;">
+        Configure what fields the system should extract and what output format is expected. This helps ensure accurate extraction results.
+    </p>
+    
+    <form id="extraction-config-form" data-trial-id="{{ trial.get('id') }}" style="margin-bottom: 1.5rem;">
+        <div style="margin-bottom: 1.5rem;">
+            <label for="extraction-fields" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
+                Expected Fields to Extract (comma-separated):
+            </label>
+            <textarea id="extraction-fields" name="extraction_fields" rows="3" 
+                      placeholder='e.g., Vendor, Date, InvoiceNum, Cost, GST, FinalAmount, LineItems&#10;Or: Mark, Size, Qty, Length, Grade, PaintSystem'
+                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if trial.get('extraction_fields') %}{% if trial.get('extraction_fields') is string %}{{ trial.get('extraction_fields') }}{% else %}{{ trial.get('extraction_fields') | join(', ') }}{% endif %}{% endif %}</textarea>
+            <p style="color: #6B7280; font-size: 0.75rem; margin-top: 0.5rem;">
+                List all fields that should be extracted from the documents. Separate multiple fields with commas.
+            </p>
+        </div>
+        
+        <div style="margin-bottom: 1.5rem;">
+            <label for="output-format" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
+                Expected Output Format (JSON structure or description):
+            </label>
+            <textarea id="output-format" name="output_format" rows="5" 
+                      placeholder='e.g., JSON object with fields: {&quot;Vendor&quot;: &quot;string&quot;, &quot;Date&quot;: &quot;YYYY-MM-DD&quot;, &quot;LineItems&quot;: [&quot;array of objects&quot;]}&#10;Or: Structured data with nested arrays for line items'
+                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if trial.get('output_format') %}{% if trial.get('output_format') is string %}{{ trial.get('output_format') }}{% else %}{{ trial.get('output_format') | tojson(indent=2) }}{% endif %}{% endif %}</textarea>
+            <p style="color: #6B7280; font-size: 0.75rem; margin-top: 0.5rem;">
+                Describe the expected output structure or provide a JSON schema example.
+            </p>
+        </div>
+        
+        <button type="submit" class="btn-admin" style="margin-top: 1rem;">💾 Save Extraction Configuration</button>
+    </form>
+</div>
+
 <!-- Document Upload Section -->
 <div class="admin-card">
     <h3>Upload Customer Documents</h3>
     <p style="color: #6B7280; margin-bottom: 1rem; font-size: 0.875rem;">
-        Upload up to 15 documents (PDF format only). Documents should represent "worst-case" scenarios, not cherry-picked clean examples.
+        Upload 15 documents organized into 3 categories (5 documents per category). Documents should represent "worst-case" scenarios, not cherry-picked clean examples.
     </p>
     
     {% set total_docs = trial.get('total_documents', 0) %}
+    {% set category_counts = {'Category 1': 0, 'Category 2': 0, 'Category 3': 0} %}
+    {% for doc in documents %}
+        {% set cat = doc.get('document_category', 'Category 1') %}
+        {% if cat in category_counts %}
+            {% set _ = category_counts.update({cat: category_counts[cat] + 1}) %}
+        {% endif %}
+    {% endfor %}
+    
     <div style="background: #F0FDF4; border-left: 3px solid #10B981; padding: 0.75rem; margin-bottom: 1.5rem; border-radius: 4px; font-size: 0.875rem;">
         <strong>Upload Progress:</strong> <span style="color: #065F46;">{{ total_docs }}/15 documents uploaded</span>
+        <div style="margin-top: 0.5rem; display: flex; gap: 1rem;">
+            <span>Category 1: <strong>{{ category_counts['Category 1'] }}/5</strong></span>
+            <span>Category 2: <strong>{{ category_counts['Category 2'] }}/5</strong></span>
+            <span>Category 3: <strong>{{ category_counts['Category 3'] }}/5</strong></span>
+        </div>
     </div>
     
-    <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" enctype="multipart/form-data" style="margin-bottom: 1.5rem;">
-        <div class="upload-section">
-            <input type="file" id="upload-documents" name="documents" 
-                   accept=".pdf" multiple 
-                   style="display: none;"
-                   data-max-files="15">
-            <label for="upload-documents" style="cursor: pointer; display: block;">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; color: #D4AF37;">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">Click to Upload or Drag & Drop</div>
-                <div style="color: #6B7280; font-size: 0.875rem;">PDF files only (max 15 files total, up to 15 at once)</div>
-            </label>
-        </div>
-        <input type="hidden" name="category" value="All Documents">
-        <button type="submit" class="btn-admin" style="display: none;" id="submit-upload">Upload Selected Files</button>
-    </form>
+    <!-- Category 1 Upload -->
+    <div style="margin-bottom: 2rem;">
+        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 1 ({{ category_counts['Category 1'] }}/5 documents)</h4>
+        <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" data-category="Category 1" enctype="multipart/form-data" style="margin-bottom: 1rem;">
+            <div class="upload-section">
+                <input type="file" id="upload-category1" name="documents" 
+                       accept=".pdf" multiple 
+                       style="display: none;"
+                       data-max-files="5"
+                       data-category="Category 1">
+                <label for="upload-category1" style="cursor: pointer; display: block;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; color: #D4AF37;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">Click to Upload or Drag & Drop</div>
+                    <div style="color: #6B7280; font-size: 0.875rem;">PDF files only (up to 5 files for Category 1)</div>
+                </label>
+            </div>
+            <button type="submit" class="btn-admin" style="display: none;" data-submit-category="Category 1">Upload Category 1 Files</button>
+        </form>
+    </div>
+    
+    <!-- Category 2 Upload -->
+    <div style="margin-bottom: 2rem;">
+        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 2 ({{ category_counts['Category 2'] }}/5 documents)</h4>
+        <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" data-category="Category 2" enctype="multipart/form-data" style="margin-bottom: 1rem;">
+            <div class="upload-section">
+                <input type="file" id="upload-category2" name="documents" 
+                       accept=".pdf" multiple 
+                       style="display: none;"
+                       data-max-files="5"
+                       data-category="Category 2">
+                <label for="upload-category2" style="cursor: pointer; display: block;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; color: #D4AF37;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">Click to Upload or Drag & Drop</div>
+                    <div style="color: #6B7280; font-size: 0.875rem;">PDF files only (up to 5 files for Category 2)</div>
+                </label>
+            </div>
+            <button type="submit" class="btn-admin" style="display: none;" data-submit-category="Category 2">Upload Category 2 Files</button>
+        </form>
+    </div>
+    
+    <!-- Category 3 Upload -->
+    <div style="margin-bottom: 2rem;">
+        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 3 ({{ category_counts['Category 3'] }}/5 documents)</h4>
+        <form class="document-upload-form" data-trial-id="{{ trial.get('id') }}" data-category="Category 3" enctype="multipart/form-data" style="margin-bottom: 1rem;">
+            <div class="upload-section">
+                <input type="file" id="upload-category3" name="documents" 
+                       accept=".pdf" multiple 
+                       style="display: none;"
+                       data-max-files="5"
+                       data-category="Category 3">
+                <label for="upload-category3" style="cursor: pointer; display: block;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; color: #D4AF37;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <div style="font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">Click to Upload or Drag & Drop</div>
+                    <div style="color: #6B7280; font-size: 0.875rem;">PDF files only (up to 5 files for Category 3)</div>
+                </label>
+            </div>
+            <button type="submit" class="btn-admin" style="display: none;" data-submit-category="Category 3">Upload Category 3 Files</button>
+        </form>
+    </div>
     
     {% if documents %}
-    <h4 style="margin: 1.5rem 0 1rem; color: #0B1221; font-size: 1rem;">Uploaded Documents ({{ documents | length }})</h4>
-    <div class="document-list">
-        {% for doc in documents %}
-        <div class="document-item {{ doc.get('status', 'uploaded') }}">
-            <div>
-                <strong style="color: #0B1221;">{{ doc.get('original_filename', 'Unknown') }}</strong>
-                <div style="color: #6B7280; font-size: 0.875rem; margin-top: 0.25rem;">
-                    {% if doc.get('document_category') %}{{ doc.get('document_category') }} • {% endif %}
-                    {% if doc.get('file_size_bytes') %}
-                        {{ "%.1f"|format(doc.get('file_size_bytes', 0) / 1024) }} KB
-                    {% endif %}
-                    {% if doc.get('status') == 'completed' %}
-                        • Processed
-                    {% elif doc.get('status') == 'processing' %}
-                        • Processing...
-                    {% endif %}
+    <h4 style="margin: 2rem 0 1rem; color: #0B1221; font-size: 1rem;">Uploaded Documents by Category</h4>
+    
+    {% for category_name in ['Category 1', 'Category 2', 'Category 3'] %}
+        {% set category_docs = documents | selectattr('document_category', 'equalto', category_name) | list %}
+        {% if category_docs %}
+        <div style="margin-bottom: 1.5rem;">
+            <h5 style="margin-bottom: 0.75rem; color: #6B7280; font-size: 0.875rem; font-weight: 600;">{{ category_name }}</h5>
+            <div class="document-list">
+                {% for doc in category_docs %}
+                <div class="document-item {{ doc.get('status', 'uploaded') }}">
+                    <div>
+                        <strong style="color: #0B1221;">{{ doc.get('original_filename', 'Unknown') }}</strong>
+                        <div style="color: #6B7280; font-size: 0.875rem; margin-top: 0.25rem;">
+                            Doc #{{ doc.get('document_number', '?') }} • 
+                            {% if doc.get('file_size_bytes') %}
+                                {{ "%.1f"|format(doc.get('file_size_bytes', 0) / 1024) }} KB
+                            {% endif %}
+                            {% if doc.get('status') == 'completed' %}
+                                • Processed
+                            {% elif doc.get('status') == 'processing' %}
+                                • Processing...
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        {% if doc.get('status') == 'uploaded' %}
+                            <span class="badge badge-info">Ready</span>
+                        {% elif doc.get('status') == 'processing' %}
+                            <span class="badge badge-warning">Processing</span>
+                        {% elif doc.get('status') == 'completed' %}
+                            <span class="badge badge-success">Completed</span>
+                        {% endif %}
+                    </div>
                 </div>
-            </div>
-            <div>
-                {% if doc.get('status') == 'uploaded' %}
-                    <span class="badge badge-info">Ready</span>
-                {% elif doc.get('status') == 'processing' %}
-                    <span class="badge badge-warning">Processing</span>
-                {% elif doc.get('status') == 'completed' %}
-                    <span class="badge badge-success">Completed</span>
-                {% endif %}
+                {% endfor %}
             </div>
         </div>
-        {% endfor %}
-    </div>
+        {% endif %}
+    {% endfor %}
     {% endif %}
     
-    {% if total_docs > 0 and total_docs <= 15 %}
+    {% if total_docs >= 15 %}
     <div style="margin-top: 1.5rem; padding: 1rem; background: #EFF6FF; border-left: 3px solid #3B82F6; border-radius: 4px; font-size: 0.875rem;">
         <strong style="color: #1E40AF;">Ready to Process:</strong>
-        <span style="color: #1E3A8A;">You have {{ total_docs }} document(s) uploaded. {% if total_docs < 15 %}Upload more documents if needed, or{% else %}When ready,{% endif %} click below to process all documents and generate the Phase 1 report.</span>
+        <span style="color: #1E3A8A;">You have {{ total_docs }} documents (15 required). When ready, click below to process all documents and generate the Phase 1 report.</span>
         <form method="POST" action="{{ url_for('admin.phase1_trial_process', trial_id=trial.get('id')) }}" style="margin-top: 1rem;">
             <button type="submit" class="btn-admin">🚀 Process All Documents</button>
         </form>
     </div>
-    {% elif total_docs > 15 %}
-    <div style="margin-top: 1.5rem; padding: 1rem; background: #FEF3C7; border-left: 3px solid #F59E0B; border-radius: 4px;">
-        <strong style="color: #92400E;">Maximum Files Reached:</strong>
-        <span style="color: #78350F;">You have {{ total_docs }} documents. The maximum is 15. Please remove excess documents before processing.</span>
+    {% elif total_docs > 0 %}
+    <div style="margin-top: 1.5rem; padding: 1rem; background: #FEF3C7; border-left: 3px solid #F59E0B; border-radius: 4px; font-size: 0.875rem;">
+        <strong style="color: #92400E;">Upload In Progress:</strong>
+        <span style="color: #78350F;">You have {{ total_docs }}/15 documents uploaded. Please upload documents to all 3 categories (5 per category) before processing.</span>
     </div>
     {% else %}
     <div style="margin-top: 1.5rem; padding: 1rem; background: #FEF3C7; border-left: 3px solid #F59E0B; border-radius: 4px; font-size: 0.875rem;">
         <strong style="color: #92400E;">No Documents Yet:</strong>
-        <span style="color: #78350F;">Upload documents above to get started. You can upload up to 15 PDF files.</span>
+        <span style="color: #78350F;">Upload documents to each category above to get started. You need 5 documents per category (15 total).</span>
     </div>
     {% endif %}
 </div>
@@ -425,148 +535,243 @@
 {% endif %}
 
 <script>
-// File upload handling
+// File upload handling for multiple categories
 document.addEventListener('DOMContentLoaded', function() {
-    const form = document.querySelector('.document-upload-form');
-    if (!form) return;
+    const forms = document.querySelectorAll('.document-upload-form');
+    if (forms.length === 0) return;
     
-    const input = form.querySelector('input[type="file"]');
-    const uploadSection = form.querySelector('.upload-section');
-    const submitBtn = form.querySelector('button[type="submit"]');
-    const trialId = form.dataset.trialId;
-    const maxFiles = parseInt(input.dataset.maxFiles) || 15;
+    const trialId = forms[0].dataset.trialId;
+    const totalMaxFiles = 15;
+    const categoryMaxFiles = 5;
+    let currentDocCount = parseInt('{{ trial.get("total_documents", 0) }}') || 0;
     
-    // Get current document count from the page
-    const currentDocCount = parseInt('{{ trial.get("total_documents", 0) }}') || 0;
+    // Category document counts (for per-category limits)
+    const categoryCounts = {
+        'Category 1': parseInt('{{ category_counts["Category 1"] }}') || 0,
+        'Category 2': parseInt('{{ category_counts["Category 2"] }}') || 0,
+        'Category 3': parseInt('{{ category_counts["Category 3"] }}') || 0
+    };
     
-    // Show submit button when files selected
-    input.addEventListener('change', function() {
-        const files = Array.from(this.files);
-        const pdfFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
-        const nonPdfFiles = files.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
-        
-        // Filter out non-PDF files
-        if (nonPdfFiles.length > 0) {
-            alert('Only PDF files are allowed. ' + nonPdfFiles.length + ' non-PDF file(s) will be ignored.');
-            const dt = new DataTransfer();
-            pdfFiles.forEach(file => dt.items.add(file));
-            this.files = dt.files;
-        }
-        
-        if (pdfFiles.length > 0) {
-            // Check total file count
-            const totalAfterUpload = currentDocCount + pdfFiles.length;
-            if (totalAfterUpload > maxFiles) {
-                alert(`Maximum of ${maxFiles} files allowed. You currently have ${currentDocCount} files. You can only upload ${maxFiles - currentDocCount} more file(s).`);
+    // Setup each category form
+    forms.forEach(form => {
+        const input = form.querySelector('input[type="file"]');
+        const uploadSection = form.querySelector('.upload-section');
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const category = form.dataset.category || 'Category 1';
+        const categoryCount = categoryCounts[category] || 0;
+    
+        // Show submit button when files selected
+        input.addEventListener('change', function() {
+            const files = Array.from(this.files);
+            const pdfFiles = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+            const nonPdfFiles = files.filter(f => !f.name.toLowerCase().endsWith('.pdf'));
+            
+            // Filter out non-PDF files
+            if (nonPdfFiles.length > 0) {
+                alert('Only PDF files are allowed. ' + nonPdfFiles.length + ' non-PDF file(s) will be ignored.');
                 const dt = new DataTransfer();
-                pdfFiles.slice(0, maxFiles - currentDocCount).forEach(file => dt.items.add(file));
+                pdfFiles.forEach(file => dt.items.add(file));
                 this.files = dt.files;
+            }
+            
+            if (pdfFiles.length > 0) {
+                // Check category limit (5 per category)
+                const categoryAfterUpload = categoryCount + pdfFiles.length;
+                if (categoryAfterUpload > categoryMaxFiles) {
+                    alert(`${category} can only have ${categoryMaxFiles} files. You currently have ${categoryCount}. You can only upload ${categoryMaxFiles - categoryCount} more file(s).`);
+                    const dt = new DataTransfer();
+                    pdfFiles.slice(0, categoryMaxFiles - categoryCount).forEach(file => dt.items.add(file));
+                    this.files = dt.files;
+                    if (this.files.length > 0) {
+                        submitBtn.style.display = 'inline-block';
+                        const labelText1 = uploadSection.querySelector('label > div:last-child');
+                        if (labelText1) labelText1.textContent = `${this.files.length} PDF file(s) selected. Click to upload.`;
+                    }
+                    return;
+                }
+                
+                // Check total limit (15 across all categories)
+                const totalAfterUpload = currentDocCount + pdfFiles.length;
+                if (totalAfterUpload > totalMaxFiles) {
+                    alert(`Maximum of ${totalMaxFiles} files allowed across all categories. You currently have ${currentDocCount} files. You can only upload ${totalMaxFiles - currentDocCount} more file(s).`);
+                    const dt = new DataTransfer();
+                    pdfFiles.slice(0, totalMaxFiles - currentDocCount).forEach(file => dt.items.add(file));
+                    this.files = dt.files;
+                    if (this.files.length > 0) {
+                        submitBtn.style.display = 'inline-block';
+                        const labelText1 = uploadSection.querySelector('label > div:last-child');
+                        if (labelText1) labelText1.textContent = `${this.files.length} PDF file(s) selected. Click to upload.`;
+                    }
+                    return;
+                }
+                
                 submitBtn.style.display = 'inline-block';
-                const labelText1 = uploadSection.querySelector('label > div:last-child');
-                if (labelText1) labelText1.textContent = `${this.files.length} PDF file(s) selected. Click "Upload Selected Files" to upload.`;
+                const labelText = uploadSection.querySelector('label > div:last-child');
+                if (labelText) {
+                    labelText.textContent = `${pdfFiles.length} PDF file(s) selected. Click to upload.`;
+                }
+            } else {
+                submitBtn.style.display = 'none';
+                const labelText3 = uploadSection.querySelector('label > div:last-child');
+                if (labelText3) labelText3.textContent = `PDF files only (up to 5 files for ${category})`;
+            }
+        });
+        
+        // Handle form submission
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const files = Array.from(input.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+            if (files.length === 0) {
+                alert('Please select at least one PDF file to upload');
                 return;
             }
             
-            submitBtn.style.display = 'inline-block';
-            const labelText = uploadSection.querySelector('label > div:last-child');
-            if (labelText) {
-                labelText.textContent = `${pdfFiles.length} PDF file(s) selected. Click "Upload Selected Files" to upload.`;
+            // Check limits again
+            const catCount = categoryCounts[category] || 0;
+            if (catCount + files.length > categoryMaxFiles) {
+                alert(`${category} can only have ${categoryMaxFiles} files. You currently have ${catCount}.`);
+                return;
             }
-        } else {
-            submitBtn.style.display = 'none';
-            const labelText3 = uploadSection.querySelector('label > div:last-child');
-            if (labelText3) labelText3.textContent = 'PDF files only (max 15 files total, up to 15 at once)';
-        }
-    });
-    
-    // Handle form submission
-    form.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const files = Array.from(input.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
-        if (files.length === 0) {
-            alert('Please select at least one PDF file to upload');
-            return;
-        }
-        
-        // Check total count again
-        const totalAfterUpload = currentDocCount + files.length;
-        if (totalAfterUpload > maxFiles) {
-            alert(`Maximum of ${maxFiles} files allowed. You currently have ${currentDocCount} files. You can only upload ${maxFiles - currentDocCount} more file(s).`);
-            return;
-        }
-        
-        const formData = new FormData();
-        files.forEach(file => {
-            formData.append('documents', file);
-        });
-        formData.append('category', 'All Documents');
-        
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Uploading...';
-        
-        try {
-            const response = await fetch(`/admin/phase1-trials/${trialId}/upload`, {
-                method: 'POST',
-                body: formData
+            
+            const totalAfterUpload = currentDocCount + files.length;
+            if (totalAfterUpload > totalMaxFiles) {
+                alert(`Maximum of ${totalMaxFiles} files allowed. You currently have ${currentDocCount} files.`);
+                return;
+            }
+            
+            const formData = new FormData();
+            files.forEach(file => {
+                formData.append('documents', file);
             });
+            formData.append('category', category);
             
-            const data = await response.json();
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Uploading...';
             
-            if (data.success) {
-                alert(`Successfully uploaded ${data.uploaded} document(s)`);
-                location.reload(); // Refresh page to show new documents
-            } else {
-                alert(`Upload failed: ${data.error || data.errors?.join(', ') || 'Unknown error'}`);
+            try {
+                const response = await fetch(`/admin/phase1-trials/${trialId}/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert(`Successfully uploaded ${data.uploaded} document(s) to ${category}`);
+                    location.reload(); // Refresh page to show new documents
+                } else {
+                    alert(`Upload failed: ${data.error || data.errors?.join(', ') || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert('Upload failed: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = `Upload ${category} Files`;
+                input.value = '';
+                submitBtn.style.display = 'none';
+                const labelText4 = uploadSection.querySelector('label > div:last-child');
+                if (labelText4) labelText4.textContent = `PDF files only (up to 5 files for ${category})`;
             }
-        } catch (error) {
-            alert('Upload failed: ' + error.message);
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Upload Selected Files';
-            input.value = '';
-            submitBtn.style.display = 'none';
-            const labelText4 = uploadSection.querySelector('label > div:last-child');
-            if (labelText4) labelText4.textContent = 'PDF files only (max 15 files total, up to 15 at once)';
-        }
+        });
+        
+        // Drag and drop
+        uploadSection.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('drag-over');
+        });
+        
+        uploadSection.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+        });
+        
+        uploadSection.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            
+            const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+            if (files.length === 0) {
+                alert('Please drop PDF files only');
+                return;
+            }
+            
+            // Check limits
+            const catCount = categoryCounts[category] || 0;
+            const allowedForCategory = Math.min(files.length, categoryMaxFiles - catCount);
+            const allowedTotal = Math.min(allowedForCategory, totalMaxFiles - currentDocCount);
+            
+            if (allowedTotal < files.length) {
+                alert(`Only ${allowedTotal} file(s) can be dropped (category limit: ${categoryMaxFiles - catCount}, total limit: ${totalMaxFiles - currentDocCount})`);
+                files.splice(allowedTotal);
+            }
+            
+            if (files.length === 0) return;
+            
+            // Create a new FileList-like object
+            const dt = new DataTransfer();
+            files.forEach(file => dt.items.add(file));
+            input.files = dt.files;
+            
+            // Trigger change event
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
     });
     
-    // Drag and drop
-    uploadSection.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        this.classList.add('drag-over');
-    });
-    
-    uploadSection.addEventListener('dragleave', function(e) {
-        e.preventDefault();
-        this.classList.remove('drag-over');
-    });
-    
-    uploadSection.addEventListener('drop', function(e) {
-        e.preventDefault();
-        this.classList.remove('drag-over');
-        
-        const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
-        if (files.length === 0) {
-            alert('Please drop PDF files only');
-            return;
-        }
-        
-        // Check total count
-        const totalAfterUpload = currentDocCount + files.length;
-        if (totalAfterUpload > maxFiles) {
-            alert(`Maximum of ${maxFiles} files allowed. You currently have ${currentDocCount} files. You can only drop ${maxFiles - currentDocCount} more file(s).`);
-            files.splice(maxFiles - currentDocCount);
-        }
-        
-        // Create a new FileList-like object
-        const dt = new DataTransfer();
-        files.forEach(file => dt.items.add(file));
-        input.files = dt.files;
-        
-        // Trigger change event
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    // Extraction configuration form handling
+    const extractionForm = document.getElementById('extraction-config-form');
+    if (extractionForm) {
+        extractionForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const trialId = this.dataset.trialId;
+            const extractionFields = document.getElementById('extraction-fields').value.trim();
+            const outputFormat = document.getElementById('output-format').value.trim();
+            
+            // Parse extraction fields from comma-separated string
+            const fieldsArray = extractionFields ? extractionFields.split(',').map(f => f.trim()).filter(f => f.length > 0) : null;
+            
+            // Parse output format (try JSON, otherwise store as string)
+            let outputFormatObj = null;
+            if (outputFormat) {
+                try {
+                    outputFormatObj = JSON.parse(outputFormat);
+                } catch {
+                    outputFormatObj = outputFormat; // Store as string if not valid JSON
+                }
+            }
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+            
+            try {
+                const response = await fetch(`/admin/phase1-trials/${trialId}/config`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        extraction_fields: fieldsArray,
+                        output_format: outputFormatObj
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Extraction configuration saved successfully!');
+                } else {
+                    alert(`Failed to save configuration: ${data.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert('Failed to save configuration: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '💾 Save Extraction Configuration';
+            }
+        });
+    }
 });
 
 // Copy report URL to clipboard

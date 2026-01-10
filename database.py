@@ -993,7 +993,8 @@ def update_user_last_login(username):
 # ============================================================================
 
 def create_phase1_trial(customer_name, customer_email=None, customer_company=None,
-                        industry=None, sector_slug=None, created_by=None, notes=None):
+                        industry=None, sector_slug=None, created_by=None, notes=None,
+                        extraction_fields=None, output_format=None):
     """
     Create a new Phase 1 trial (project) for a customer.
     
@@ -1005,6 +1006,8 @@ def create_phase1_trial(customer_name, customer_email=None, customer_company=Non
         sector_slug: Sector slug (e.g., "built-environment")
         created_by: Admin user ID who created this trial
         notes: Optional notes about the trial
+        extraction_fields: JSONB array of expected field names to extract
+        output_format: JSONB configuration for expected output format
     
     Returns:
         dict: Created trial record with trial_code and report_token, or None if failed
@@ -1026,14 +1029,20 @@ def create_phase1_trial(customer_name, customer_email=None, customer_company=Non
             token_result = conn.execute(text("SELECT generate_report_token()"))
             report_token = token_result.scalar()
             
+            # Convert extraction_fields and output_format to JSON strings if provided
+            extraction_fields_json = json.dumps(extraction_fields) if extraction_fields else None
+            output_format_json = json.dumps(output_format) if output_format else None
+            
             # Insert trial
             result = conn.execute(text("""
                 INSERT INTO phase1_trials (
                     trial_code, customer_name, customer_email, customer_company,
-                    industry, sector_slug, created_by, notes, report_token, status
+                    industry, sector_slug, created_by, notes, report_token, status,
+                    extraction_fields, output_format
                 ) VALUES (
                     :trial_code, :customer_name, :customer_email, :customer_company,
-                    :industry, :sector_slug, :created_by, :notes, :report_token, 'pending'
+                    :industry, :sector_slug, :created_by, :notes, :report_token, 'pending',
+                    :extraction_fields::jsonb, :output_format::jsonb
                 )
                 RETURNING id, trial_code, report_token, created_at
             """), {
@@ -1045,7 +1054,9 @@ def create_phase1_trial(customer_name, customer_email=None, customer_company=Non
                 "sector_slug": sector_slug,
                 "created_by": created_by,
                 "notes": notes,
-                "report_token": report_token
+                "report_token": report_token,
+                "extraction_fields": extraction_fields_json,
+                "output_format": output_format_json
             })
             conn.commit()
             
@@ -1102,6 +1113,64 @@ def get_phase1_trial(trial_id=None, trial_code=None, report_token=None):
     except Exception as e:
         print(f"❌ Error fetching Phase 1 trial: {e}")
         return None
+
+
+def update_phase1_trial_extraction_config(trial_id, extraction_fields=None, output_format=None):
+    """
+    Update extraction fields and output format configuration for a Phase 1 trial.
+    
+    Args:
+        trial_id: Trial database ID
+        extraction_fields: JSONB array of expected field names to extract (or dict)
+        output_format: JSONB configuration for expected output format (or dict)
+    
+    Returns:
+        bool: True if updated successfully, False otherwise
+    """
+    if not engine:
+        return False
+    
+    try:
+        import json
+        
+        with engine.connect() as conn:
+            updates = []
+            params = {"trial_id": trial_id}
+            
+            if extraction_fields is not None:
+                extraction_fields_json = json.dumps(extraction_fields) if isinstance(extraction_fields, (list, dict)) else extraction_fields
+                updates.append("extraction_fields = :extraction_fields::jsonb")
+                params["extraction_fields"] = extraction_fields_json
+            
+            if output_format is not None:
+                output_format_json = json.dumps(output_format) if isinstance(output_format, dict) else output_format
+                updates.append("output_format = :output_format::jsonb")
+                params["output_format"] = output_format_json
+            
+            if not updates:
+                return False
+            
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            
+            query = f"""
+                UPDATE phase1_trials
+                SET {', '.join(updates)}
+                WHERE id = :trial_id
+            """
+            
+            result = conn.execute(text(query), params)
+            conn.commit()
+            
+            if result.rowcount > 0:
+                print(f"✅ Updated extraction config for trial ID {trial_id}")
+                return True
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error updating Phase 1 trial extraction config: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 def get_all_phase1_trials(limit=50, offset=0, status_filter=None):

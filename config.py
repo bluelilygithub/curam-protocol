@@ -8,7 +8,12 @@ import os
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # --- UPLOAD DIRECTORIES ---
-FINANCE_UPLOAD_DIR = os.path.join('uploads', 'finance')
+# Base upload directory - can be overridden with UPLOAD_BASE_DIR environment variable
+# For Railway persistent storage, set UPLOAD_BASE_DIR to mounted volume path (e.g., /data/uploads)
+UPLOAD_BASE_DIR = os.environ.get('UPLOAD_BASE_DIR', 'uploads')
+
+FINANCE_UPLOAD_DIR = os.path.join(UPLOAD_BASE_DIR, 'finance')
+PHASE1_TRIALS_UPLOAD_DIR = os.path.join(UPLOAD_BASE_DIR, 'phase1_trials')
 
 # --- DEPARTMENT CONFIG ---
 DEFAULT_DEPARTMENT = "finance"

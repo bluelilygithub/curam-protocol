@@ -373,39 +373,62 @@ def phase1_trial_upload(trial_id):
     if not trial:
         return jsonify({"success": False, "error": "Trial not found"}), 404
     
+    # Import config for upload directory
+    from config import PHASE1_TRIALS_UPLOAD_DIR
+    
     # Create upload directory for this trial
-    trial_upload_dir = os.path.join('uploads', 'phase1_trials', str(trial_id))
+    trial_upload_dir = os.path.join(PHASE1_TRIALS_UPLOAD_DIR, str(trial_id))
     os.makedirs(trial_upload_dir, exist_ok=True)
     
     uploaded_files = request.files.getlist('documents')
+    category = request.form.get('category', 'Category 1')  # Default to Category 1
     
     if not uploaded_files or not any(f.filename for f in uploaded_files):
         return jsonify({"success": False, "error": "No files uploaded"}), 400
     
-    # Check current document count and enforce max of 15
+    # Validate category
+    valid_categories = ['Category 1', 'Category 2', 'Category 3']
+    if category not in valid_categories:
+        category = 'Category 1'  # Default fallback
+    
+    # Check current document count and enforce max of 15 total
     existing_docs = get_trial_documents(trial_id)
     current_count = len(existing_docs)
     max_files = 15
     
+    # Check category-specific count (5 per category)
+    category_docs = [d for d in existing_docs if d.get('document_category') == category]
+    category_count = len(category_docs)
+    max_per_category = 5
+    
+    if category_count >= max_per_category:
+        return jsonify({
+            "success": False,
+            "error": f"{category} already has {category_count} files (maximum 5 per category)."
+        }), 400
+    
     if current_count >= max_files:
         return jsonify({
             "success": False,
-            "error": f"Maximum of {max_files} files allowed. You already have {current_count} files."
+            "error": f"Maximum of {max_files} files allowed across all categories. You already have {current_count} files."
         }), 400
     
-    # Calculate how many files we can still upload
-    remaining_slots = max_files - current_count
+    # Calculate how many files we can still upload in this category
+    remaining_category_slots = max_per_category - category_count
+    remaining_total_slots = max_files - current_count
+    remaining_slots = min(remaining_category_slots, remaining_total_slots)
+    
     if len(uploaded_files) > remaining_slots:
         return jsonify({
             "success": False,
-            "error": f"Maximum of {max_files} files allowed. You have {current_count} files. You can only upload {remaining_slots} more file(s)."
+            "error": f"Can only upload {remaining_slots} more file(s) to {category} (category limit: {remaining_category_slots}, total limit: {remaining_total_slots})."
         }), 400
     
     uploaded_count = 0
     errors = []
     
-    # Get next document number (sequential, no categories)
-    next_doc_number = current_count + 1
+    # Get the next document number for this category (1-5 within category)
+    next_doc_number = category_count + 1
     
     for file_storage in uploaded_files:
         if not file_storage or not file_storage.filename:
@@ -422,10 +445,10 @@ def phase1_trial_upload(trial_id):
             file_storage.save(file_path)
             file_size = os.path.getsize(file_path)
             
-            # Add document to database (no category, just sequential numbering)
+            # Add document to database with category and document number
             doc_id = add_trial_document(
                 trial_id=trial_id,
-                document_category='All Documents',  # Simplified - no categories
+                document_category=category,
                 document_number=next_doc_number,
                 original_filename=original_filename,
                 stored_file_path=file_path,
@@ -457,6 +480,35 @@ def phase1_trial_upload(trial_id):
             "errors": errors,
             "error": "Failed to upload documents"
         }), 400
+
+
+@admin_bp.route('/phase1-trials/<int:trial_id>/config', methods=['POST'])
+@require_admin
+def phase1_trial_config(trial_id):
+    """Update extraction fields and output format configuration for a Phase 1 trial"""
+    from database import update_phase1_trial_extraction_config
+    
+    trial = get_phase1_trial(trial_id=trial_id)
+    if not trial:
+        return jsonify({"success": False, "error": "Trial not found"}), 404
+    
+    data = request.get_json()
+    extraction_fields = data.get('extraction_fields')
+    output_format = data.get('output_format')
+    
+    if extraction_fields is None and output_format is None:
+        return jsonify({"success": False, "error": "No configuration provided"}), 400
+    
+    success = update_phase1_trial_extraction_config(
+        trial_id=trial_id,
+        extraction_fields=extraction_fields,
+        output_format=output_format
+    )
+    
+    if success:
+        return jsonify({"success": True, "message": "Extraction configuration updated successfully"})
+    else:
+        return jsonify({"success": False, "error": "Failed to update configuration"}), 500
 
 
 @admin_bp.route('/phase1-trials/<int:trial_id>/process', methods=['POST'])
