@@ -30,6 +30,9 @@ def get_finance_template():
                     <th class="currency">GST</th>
                     <th class="currency">Final Amount</th>
                 <th>Summary</th>
+                {% if file_results[0].get('admin_test') %}
+                <th>Admin Test</th>
+                {% endif %}
                 {% if file_results[0].get('POReference') and file_results[0].POReference != 'N/A' %}
                 <th>PO Ref</th>
                 {% endif %}
@@ -52,6 +55,9 @@ def get_finance_template():
                     <td class="currency">{{ row.GSTFormatted if row.GSTFormatted and row.GSTFormatted != 'N/A' else (row.GST or 'N/A') }}</td>
                     <td class="currency">{{ row.FinalAmountFormatted or row.TotalFormatted or row.FinalAmount or row.Total or 'N/A' }}</td>
                 <td>{{ row.Summary }}</td>
+                {% if file_results[0].get('admin_test') %}
+                <td style="background: #D1FAE5; color: #065F46; font-weight: 600;">{{ row.admin_test or 'N/A' }}</td>
+                {% endif %}
                 {% if file_results[0].get('POReference') and file_results[0].POReference != 'N/A' %}
                 <td>{{ row.POReference or 'N/A' }}</td>
                 {% endif %}

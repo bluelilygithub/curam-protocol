@@ -301,6 +301,12 @@ def index_automater():
                                     entry['GST'] = gst_value if gst_value not in ("", None) else "N/A"
                                     entry['GSTFormatted'] = format_currency(gst_value) if gst_value not in ("", None, "N/A") else "N/A"
                                     entry['FinalAmountFormatted'] = format_currency(final_value) if final_value not in ("", None, "N/A") else (final_value or "N/A")
+                                    
+                                    # Debug: Log if admin_test field is present (for prompt testing)
+                                    if 'admin_test' in entry:
+                                        print(f"✅ admin_test FIELD FOUND IN EXTRACTED JSON: {entry.get('admin_test')}")
+                                    else:
+                                        print(f"⚠️ admin_test field NOT found in extracted JSON. Available fields: {list(entry.keys())}")
                                 else:
                                     entry['TotalFormatted'] = format_currency(entry.get('Total', ''))
                                     # Add confidence indicators, validation, and CORRECTION for engineering fields
