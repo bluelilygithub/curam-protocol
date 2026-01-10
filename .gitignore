@@ -47,3 +47,8 @@ logs/
 temp/
 tmp/
 
+# Upload directories (customer documents - never commit to git)
+uploads/
+uploads/**
+!/uploads/.gitkeep
+

@@ -84,17 +84,27 @@ def generate_update_sql(prompt_type, config, prompt_text):
     # Generate a unique dollar-quote tag
     tag = f"{prompt_type.upper()}_PROMPT_{hash(prompt_text) % 100000}"
     
+    # Map prompt names as they appear in the admin panel
+    name_mapping = {
+        'engineering': 'engineering_extraction_rules',
+        'finance': 'finance_extraction_rules',
+        'logistics': 'logistics_extraction_rules',
+        'transmittal': 'transmittal_extraction_rules'
+    }
+    prompt_name = name_mapping.get(prompt_type, f'{prompt_type}_extraction_rules')
+    
     sql = f"""-- ============================================================================
 -- UPDATE {prompt_type.upper()} PROMPT WITH FULL CONTENT
 -- Source: {config['path']} -> {config['function']}()
 -- Prompt Length: {len(prompt_text):,} characters
+-- Updates prompt by name: {prompt_name}
 -- ============================================================================
 
 UPDATE prompt_templates
 SET 
     prompt_text = ${tag}${prompt_text}${tag}$,
     updated_at = CURRENT_TIMESTAMP
-WHERE doc_type = '{config['doc_type']}' 
+WHERE name = '{prompt_name}'
   AND scope = 'document_type';
 
 -- Verify the update
@@ -105,7 +115,7 @@ SELECT
     is_active,
     updated_at
 FROM prompt_templates
-WHERE doc_type = '{config['doc_type']}' 
+WHERE name = '{prompt_name}'
   AND scope = 'document_type';
 
 """
