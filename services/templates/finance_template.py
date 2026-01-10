@@ -74,10 +74,17 @@ def get_finance_template():
             </div>
             {# Display Business Context Information #}
             {% for row in file_results %}
-            {% if row.get('ABN') or row.get('VesselVoyage') or row.get('BillOfLading') or (row.get('Flags') and row.Flags|length > 0) %}
+            {% if row.get('ABN') or row.get('VesselVoyage') or row.get('BillOfLading') or (row.get('Flags') and row.Flags|length > 0) or row.get('admin_test') %}
             <div style="padding: 15px 20px; border-top: 1px solid #e0e0e0; background: #f9f9f9;">
                 <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #2c3e50;">Additional Information</h4>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 13px;">
+                    {% if row.get('admin_test') %}
+                    <div style="background: #D1FAE5; padding: 8px; border-radius: 4px; border-left: 3px solid #10B981;">
+                        <strong style="color: #065F46;">✅ Admin Test (Database Prompt Test):</strong>
+                        <div style="color: #065F46; font-weight: 600; margin-top: 4px;">{{ row.admin_test }}</div>
+                        <small style="color: #047857;">This field confirms database prompts are working!</small>
+                    </div>
+                    {% endif %}
                     {% if row.ABN and row.ABN != 'N/A' %}
                     <div><strong>ABN:</strong> {{ row.ABN }}</div>
                     {% endif %}

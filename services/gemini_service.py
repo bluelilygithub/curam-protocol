@@ -509,7 +509,7 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                     # Transmittal returns a single object with multiple arrays
                     entries = [parsed] if isinstance(parsed, dict) else parsed if isinstance(parsed, list) else []
                 elif doc_type == "logistics":
-                    # Logistics returns {document_type: "...", rows: [...]}
+                    # Logistics returns {document_type: "...", rows: [...]} OR flat array
                     if isinstance(parsed, dict) and "rows" in parsed:
                         entries = parsed["rows"]
                         # Add document_type to each row for display purposes
@@ -519,8 +519,64 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                                 entry['_document_type'] = document_type
                         action_log.append(f"Detected logistics document type: {document_type}")
                     else:
-                        # Fallback: treat as regular array
+                        # Fallback: treat as regular array and detect document type from fields
                         entries = parsed if isinstance(parsed, list) else [parsed] if isinstance(parsed, dict) else []
+                        # Auto-detect document type from field names for backward compatibility
+                        if entries and isinstance(entries[0], dict):
+                            first_entry = entries[0]
+                            detected_type = 'unknown'
+                            
+                            # Normalize field names: convert snake_case to PascalCase where needed
+                            # Also detect document type from field presence
+                            
+                            # Check for Bill of Lading fields (snake_case or PascalCase)
+                            bol_fields = ['bol_number', 'BLNumber', 'waybill_type', 'shipper', 'Shipper', 'consignee', 'Consignee', 
+                                         'vessel', 'Vessel', 'container_number', 'ContainerNumber', 'cargo_description']
+                            if any(field in first_entry for field in bol_fields):
+                                detected_type = 'bill_of_lading'
+                                # Normalize field names to PascalCase for template compatibility
+                                field_mapping = {
+                                    'bol_number': 'BLNumber',
+                                    'waybill_type': 'WaybillType',
+                                    'shipper': 'Shipper',
+                                    'consignee': 'Consignee',
+                                    'vessel': 'Vessel',
+                                    'container_number': 'ContainerNumber',
+                                    'seal_number': 'SealNumber',
+                                    'cargo_description': 'CargoDescription',
+                                    'gross_weight_kg': 'GrossWeight',
+                                    'net_weight_kg': 'NetWeight',
+                                    'package_count': 'PackageCount',
+                                    'package_type': 'PackageType',
+                                    'port_of_loading': 'PortOfLoading',
+                                    'port_of_discharge': 'PortOfDischarge'
+                                }
+                                for entry in entries:
+                                    if isinstance(entry, dict):
+                                        # Create normalized copy of fields
+                                        for old_key, new_key in field_mapping.items():
+                                            if old_key in entry and new_key not in entry:
+                                                entry[new_key] = entry[old_key]
+                            
+                            # Check for FTA List fields
+                            elif any(field in first_entry for field in ['FTAAgreement', 'fta_agreement', 'CountryOfOrigin', 'country_of_origin', 
+                                                                        'ShipmentRef', 'shipment_ref', 'ItemDescription', 'item_description']):
+                                detected_type = 'fta_list'
+                            
+                            # Check for Packing List fields
+                            elif any(field in first_entry for field in ['CartonNumber', 'carton_number', 'PONumber', 'po_number', 
+                                                                        'Dimensions', 'dimensions', 'Volume', 'volume']):
+                                detected_type = 'packing_list'
+                            
+                            # Set _document_type for all entries
+                            for entry in entries:
+                                if isinstance(entry, dict):
+                                    entry['_document_type'] = detected_type
+                            
+                            if detected_type != 'unknown':
+                                action_log.append(f"Auto-detected logistics document type: {detected_type} from field names")
+                            else:
+                                action_log.append(f"⚠️ Could not auto-detect logistics document type. Fields: {list(first_entry.keys())}")
                 else:
                     entries = parsed if isinstance(parsed, list) else [parsed] if isinstance(parsed, dict) else []
 
