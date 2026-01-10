@@ -1115,14 +1115,15 @@ def get_phase1_trial(trial_id=None, trial_code=None, report_token=None):
         return None
 
 
-def update_phase1_trial_extraction_config(trial_id, extraction_fields=None, output_format=None):
+def update_phase1_trial_extraction_config(trial_id, extraction_fields=None, output_format=None, category_configs=None):
     """
     Update extraction fields and output format configuration for a Phase 1 trial.
     
     Args:
         trial_id: Trial database ID
-        extraction_fields: JSONB array of expected field names to extract (or dict)
-        output_format: JSONB configuration for expected output format (or dict)
+        extraction_fields: JSONB array of expected field names to extract (or dict) - DEPRECATED: use category_configs
+        output_format: JSONB configuration for expected output format (or dict) - DEPRECATED: use category_configs
+        category_configs: JSONB dict with per-category config: {"Category 1": {"fields": [...], "output_format": {...}}, ...}
     
     Returns:
         bool: True if updated successfully, False otherwise
@@ -1137,6 +1138,13 @@ def update_phase1_trial_extraction_config(trial_id, extraction_fields=None, outp
             updates = []
             params = {"trial_id": trial_id}
             
+            # Preferred: category_configs (per-category configuration)
+            if category_configs is not None:
+                category_configs_json = json.dumps(category_configs) if isinstance(category_configs, dict) else category_configs
+                updates.append("category_configs = :category_configs::jsonb")
+                params["category_configs"] = category_configs_json
+            
+            # Legacy: extraction_fields and output_format (trial-wide, deprecated)
             if extraction_fields is not None:
                 extraction_fields_json = json.dumps(extraction_fields) if isinstance(extraction_fields, (list, dict)) else extraction_fields
                 updates.append("extraction_fields = :extraction_fields::jsonb")

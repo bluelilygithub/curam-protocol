@@ -202,39 +202,95 @@
 </div>
 {% endif %}
 
-<!-- Extraction Configuration Section -->
+<!-- Extraction Configuration Section - Per Category -->
 <div class="admin-card">
-    <h3>Expected Extraction Fields & Output Format</h3>
+    <h3>Expected Extraction Fields & Output Format (Per Category)</h3>
     <p style="color: #6B7280; margin-bottom: 1.5rem; font-size: 0.875rem;">
-        Configure what fields the system should extract and what output format is expected. This helps ensure accurate extraction results.
+        Configure extraction settings for each category. Each category may contain different document types requiring different fields. This ensures accurate extraction results for each test scenario.
     </p>
     
-    <form id="extraction-config-form" data-trial-id="{{ trial.get('id') }}" style="margin-bottom: 1.5rem;">
-        <div style="margin-bottom: 1.5rem;">
-            <label for="extraction-fields" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
+    {% set category_configs = trial.get('category_configs', {}) or {} %}
+    
+    <!-- Category 1 Configuration -->
+    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid #3B82F6;">
+        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 1 Configuration</h4>
+        <p style="color: #6B7280; font-size: 0.875rem; margin-bottom: 1rem;">
+            Define what fields should be extracted from Category 1 documents (e.g., Finance: Vendor, Date, InvoiceNum, Cost, GST, FinalAmount).
+        </p>
+        
+        <div style="margin-bottom: 1rem;">
+            <label for="category1-fields" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
                 Expected Fields to Extract (comma-separated):
             </label>
-            <textarea id="extraction-fields" name="extraction_fields" rows="3" 
-                      placeholder='e.g., Vendor, Date, InvoiceNum, Cost, GST, FinalAmount, LineItems&#10;Or: Mark, Size, Qty, Length, Grade, PaintSystem'
-                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if trial.get('extraction_fields') %}{% if trial.get('extraction_fields') is string %}{{ trial.get('extraction_fields') }}{% else %}{{ trial.get('extraction_fields') | join(', ') }}{% endif %}{% endif %}</textarea>
-            <p style="color: #6B7280; font-size: 0.75rem; margin-top: 0.5rem;">
-                List all fields that should be extracted from the documents. Separate multiple fields with commas.
-            </p>
+            <textarea id="category1-fields" name="category1_fields" rows="3" 
+                      placeholder='e.g., Vendor, Date, InvoiceNum, Cost, GST, FinalAmount, LineItems'
+                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 1', {}).get('fields') %}{{ category_configs['Category 1']['fields'] | join(', ') }}{% endif %}</textarea>
         </div>
         
-        <div style="margin-bottom: 1.5rem;">
-            <label for="output-format" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
+        <div style="margin-bottom: 1rem;">
+            <label for="category1-format" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
                 Expected Output Format (JSON structure or description):
             </label>
-            <textarea id="output-format" name="output_format" rows="5" 
-                      placeholder='e.g., JSON object with fields: {&quot;Vendor&quot;: &quot;string&quot;, &quot;Date&quot;: &quot;YYYY-MM-DD&quot;, &quot;LineItems&quot;: [&quot;array of objects&quot;]}&#10;Or: Structured data with nested arrays for line items'
-                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if trial.get('output_format') %}{% if trial.get('output_format') is string %}{{ trial.get('output_format') }}{% else %}{{ trial.get('output_format') | tojson(indent=2) }}{% endif %}{% endif %}</textarea>
-            <p style="color: #6B7280; font-size: 0.75rem; margin-top: 0.5rem;">
-                Describe the expected output structure or provide a JSON schema example.
-            </p>
+            <textarea id="category1-format" name="category1_format" rows="4" 
+                      placeholder='e.g., {"type": "invoice", "structure": "flat_with_lineitems"} or JSON object with Vendor, Date, InvoiceNum, etc.'
+                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 1', {}).get('output_format') %}{% if category_configs['Category 1']['output_format'] is string %}{{ category_configs['Category 1']['output_format'] }}{% else %}{{ category_configs['Category 1']['output_format'] | tojson(indent=2) }}{% endif %}{% endif %}</textarea>
+        </div>
+    </div>
+    
+    <!-- Category 2 Configuration -->
+    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid #10B981;">
+        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 2 Configuration</h4>
+        <p style="color: #6B7280; font-size: 0.875rem; margin-bottom: 1rem;">
+            Define what fields should be extracted from Category 2 documents (e.g., Engineering: Mark, Size, Qty, Length, Grade, PaintSystem).
+        </p>
+        
+        <div style="margin-bottom: 1rem;">
+            <label for="category2-fields" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
+                Expected Fields to Extract (comma-separated):
+            </label>
+            <textarea id="category2-fields" name="category2_fields" rows="3" 
+                      placeholder='e.g., Mark, Size, Qty, Length, Grade, PaintSystem, Comments'
+                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 2', {}).get('fields') %}{{ category_configs['Category 2']['fields'] | join(', ') }}{% endif %}</textarea>
         </div>
         
-        <button type="submit" class="btn-admin" style="margin-top: 1rem;">💾 Save Extraction Configuration</button>
+        <div style="margin-bottom: 1rem;">
+            <label for="category2-format" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
+                Expected Output Format (JSON structure or description):
+            </label>
+            <textarea id="category2-format" name="category2_format" rows="4" 
+                      placeholder='e.g., {"type": "engineering_schedule", "structure": "tabular"} or Structured tabular data with rows'
+                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 2', {}).get('output_format') %}{% if category_configs['Category 2']['output_format'] is string %}{{ category_configs['Category 2']['output_format'] }}{% else %}{{ category_configs['Category 2']['output_format'] | tojson(indent=2) }}{% endif %}{% endif %}</textarea>
+        </div>
+    </div>
+    
+    <!-- Category 3 Configuration -->
+    <div style="margin-bottom: 2rem; padding: 1.5rem; background: #F8F9FA; border-radius: 8px; border-left: 3px solid #F59E0B;">
+        <h4 style="margin-bottom: 1rem; color: #0B1221; font-size: 1rem;">Category 3 Configuration</h4>
+        <p style="color: #6B7280; font-size: 0.875rem; margin-bottom: 1rem;">
+            Define what fields should be extracted from Category 3 documents (e.g., Logistics: ShipmentRef, CountryOfOrigin, FTAAgreement, TariffCode).
+        </p>
+        
+        <div style="margin-bottom: 1rem;">
+            <label for="category3-fields" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
+                Expected Fields to Extract (comma-separated):
+            </label>
+            <textarea id="category3-fields" name="category3_fields" rows="3" 
+                      placeholder='e.g., ShipmentRef, InvoiceNumber, CountryOfOrigin, FTAAgreement, TariffCode, Notes'
+                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 3', {}).get('fields') %}{{ category_configs['Category 3']['fields'] | join(', ') }}{% endif %}</textarea>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <label for="category3-format" style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #0B1221; font-size: 0.875rem;">
+                Expected Output Format (JSON structure or description):
+            </label>
+            <textarea id="category3-format" name="category3_format" rows="4" 
+                      placeholder='e.g., {"type": "logistics", "structure": "flat"} or Flat structure with trade document fields'
+                      style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;">{% if category_configs.get('Category 3', {}).get('output_format') %}{% if category_configs['Category 3']['output_format'] is string %}{{ category_configs['Category 3']['output_format'] }}{% else %}{{ category_configs['Category 3']['output_format'] | tojson(indent=2) }}{% endif %}{% endif %}</textarea>
+        </div>
+    </div>
+    
+    <form id="extraction-config-form" data-trial-id="{{ trial.get('id') }}">
+        <button type="submit" class="btn-admin">💾 Save All Category Configurations</button>
     </form>
 </div>
 
@@ -718,26 +774,69 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Extraction configuration form handling
+    // Extraction configuration form handling (per-category)
     const extractionForm = document.getElementById('extraction-config-form');
     if (extractionForm) {
         extractionForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const trialId = this.dataset.trialId;
-            const extractionFields = document.getElementById('extraction-fields').value.trim();
-            const outputFormat = document.getElementById('output-format').value.trim();
             
-            // Parse extraction fields from comma-separated string
-            const fieldsArray = extractionFields ? extractionFields.split(',').map(f => f.trim()).filter(f => f.length > 0) : null;
+            // Helper function to parse fields from comma-separated string
+            function parseFields(fieldsStr) {
+                if (!fieldsStr || !fieldsStr.trim()) return null;
+                return fieldsStr.split(',').map(f => f.trim()).filter(f => f.length > 0);
+            }
             
-            // Parse output format (try JSON, otherwise store as string)
-            let outputFormatObj = null;
-            if (outputFormat) {
+            // Helper function to parse output format (try JSON, otherwise store as string)
+            function parseOutputFormat(formatStr) {
+                if (!formatStr || !formatStr.trim()) return null;
                 try {
-                    outputFormatObj = JSON.parse(outputFormat);
+                    return JSON.parse(formatStr);
                 } catch {
-                    outputFormatObj = outputFormat; // Store as string if not valid JSON
+                    return formatStr; // Store as string if not valid JSON
+                }
+            }
+            
+            // Build category_configs object from all three category forms
+            const categoryConfigs = {};
+            
+            // Category 1
+            const cat1Fields = document.getElementById('category1-fields')?.value.trim();
+            const cat1Format = document.getElementById('category1-format')?.value.trim();
+            if (cat1Fields || cat1Format) {
+                categoryConfigs['Category 1'] = {};
+                if (cat1Fields) {
+                    categoryConfigs['Category 1'].fields = parseFields(cat1Fields);
+                }
+                if (cat1Format) {
+                    categoryConfigs['Category 1'].output_format = parseOutputFormat(cat1Format);
+                }
+            }
+            
+            // Category 2
+            const cat2Fields = document.getElementById('category2-fields')?.value.trim();
+            const cat2Format = document.getElementById('category2-format')?.value.trim();
+            if (cat2Fields || cat2Format) {
+                categoryConfigs['Category 2'] = {};
+                if (cat2Fields) {
+                    categoryConfigs['Category 2'].fields = parseFields(cat2Fields);
+                }
+                if (cat2Format) {
+                    categoryConfigs['Category 2'].output_format = parseOutputFormat(cat2Format);
+                }
+            }
+            
+            // Category 3
+            const cat3Fields = document.getElementById('category3-fields')?.value.trim();
+            const cat3Format = document.getElementById('category3-format')?.value.trim();
+            if (cat3Fields || cat3Format) {
+                categoryConfigs['Category 3'] = {};
+                if (cat3Fields) {
+                    categoryConfigs['Category 3'].fields = parseFields(cat3Fields);
+                }
+                if (cat3Format) {
+                    categoryConfigs['Category 3'].output_format = parseOutputFormat(cat3Format);
                 }
             }
             
@@ -752,15 +851,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        extraction_fields: fieldsArray,
-                        output_format: outputFormatObj
+                        category_configs: categoryConfigs
                     })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    alert('Extraction configuration saved successfully!');
+                    alert('Category extraction configurations saved successfully!');
+                    // Optional: reload to show saved data (or just show success message)
+                    // location.reload();
                 } else {
                     alert(`Failed to save configuration: ${data.error || 'Unknown error'}`);
                 }
@@ -768,7 +868,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Failed to save configuration: ' + error.message);
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.textContent = '💾 Save Extraction Configuration';
+                submitBtn.textContent = '💾 Save All Category Configurations';
             }
         });
     }

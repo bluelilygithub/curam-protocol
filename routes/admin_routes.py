@@ -493,14 +493,20 @@ def phase1_trial_config(trial_id):
         return jsonify({"success": False, "error": "Trial not found"}), 404
     
     data = request.get_json()
+    
+    # Preferred: category_configs (per-category configuration)
+    category_configs = data.get('category_configs')
+    
+    # Legacy support: extraction_fields and output_format (trial-wide, deprecated)
     extraction_fields = data.get('extraction_fields')
     output_format = data.get('output_format')
     
-    if extraction_fields is None and output_format is None:
+    if category_configs is None and extraction_fields is None and output_format is None:
         return jsonify({"success": False, "error": "No configuration provided"}), 400
     
     success = update_phase1_trial_extraction_config(
         trial_id=trial_id,
+        category_configs=category_configs,
         extraction_fields=extraction_fields,
         output_format=output_format
     )
