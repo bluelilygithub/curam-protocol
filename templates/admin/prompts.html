@@ -1,0 +1,100 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Prompt Templates{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h2>Prompt Templates</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Manage AI prompts for document extraction</p>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="admin-card" style="background: {% if category == 'success' %}#D1FAE5{% elif category == 'error' %}#FEE2E2{% else %}#DBEAFE{% endif %}; border-left: 3px solid {% if category == 'success' %}#10B981{% elif category == 'error' %}#EF4444{% else %}#3B82F6{% endif %};">
+                <p style="margin: 0; color: {% if category == 'success' %}#065F46{% elif category == 'error' %}#991B1B{% else %}#1E40AF{% endif %};">{{ message }}</p>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="admin-card">
+    <h3 style="margin: 0 0 1rem;">All Prompts</h3>
+    
+    {% if prompts %}
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Scope</th>
+                <th>Document Type</th>
+                <th>Sector</th>
+                <th>Priority</th>
+                <th>Length</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for prompt in prompts %}
+            <tr>
+                <td><strong>{{ prompt.get('name', 'N/A') }}</strong></td>
+                <td>
+                    <span class="badge badge-info">{{ prompt.get('scope', 'N/A') }}</span>
+                </td>
+                <td>{{ prompt.get('doc_type', '—') or '—' }}</td>
+                <td>{{ prompt.get('sector_slug', '—') or '—' }}</td>
+                <td>{{ prompt.get('priority', 0) }}</td>
+                <td>{{ "{:,}".format(prompt.get('prompt_length', 0)) }} chars</td>
+                <td>
+                    {% if prompt.get('is_active') %}
+                        <span class="badge badge-success">Active</span>
+                    {% else %}
+                        <span class="badge badge-warning">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if prompt.get('updated_at') %}
+                        {{ prompt.get('updated_at').strftime('%Y-%m-%d') if prompt.get('updated_at') else 'N/A' }}
+                    {% else %}
+                        {{ prompt.get('created_at').strftime('%Y-%m-%d') if prompt.get('created_at') else 'N/A' }}
+                    {% endif %}
+                </td>
+                <td>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <a href="{{ url_for('admin.prompt_edit', prompt_id=prompt.get('id')) }}" class="btn-admin" style="text-decoration: none; padding: 0.375rem 0.75rem; font-size: 0.875rem;">Edit</a>
+                        <form method="POST" action="{{ url_for('admin.prompt_toggle', prompt_id=prompt.get('id')) }}" style="display: inline;">
+                            <button type="submit" class="btn-admin btn-admin-secondary" style="padding: 0.375rem 0.75rem; font-size: 0.875rem; cursor: pointer;">
+                                {% if prompt.get('is_active') %}Deactivate{% else %}Activate{% endif %}
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #6B7280; padding: 2rem; text-align: center;">
+        No prompt templates found.
+    </p>
+    {% endif %}
+</div>
+
+<div class="admin-card">
+    <h3 style="margin: 0 0 1rem;">About Prompt Management</h3>
+    <div style="color: #6B7280; line-height: 1.6;">
+        <p><strong>Scope Types:</strong></p>
+        <ul style="margin: 0.5rem 0;">
+            <li><strong>universal</strong> - Applied to all document types</li>
+            <li><strong>document_type</strong> - Applied to specific document types (e.g., vendor-invoice, beam-schedule)</li>
+            <li><strong>sector</strong> - Applied to specific sectors (e.g., professional-services, built-environment)</li>
+        </ul>
+        <p style="margin-top: 1rem;"><strong>Priority:</strong> Lower numbers are applied first. Prompts are combined in priority order.</p>
+        <p><strong>Active Status:</strong> Only active prompts are used. Inactive prompts are ignored but preserved for reference.</p>
+    </div>
+</div>
+{% endblock %}

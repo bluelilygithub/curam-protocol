@@ -1,0 +1,243 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Edit Prompt: {{ prompt.get('name', 'N/A') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #0B1221;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .form-input,
+    .form-select,
+    .form-textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #E5E7EB;
+        border-radius: 6px;
+        font-size: 1rem;
+        font-family: inherit;
+        transition: border-color 0.2s;
+    }
+    
+    .form-input:focus,
+    .form-select:focus,
+    .form-textarea:focus {
+        outline: none;
+        border-color: #D4AF37;
+    }
+    
+    .form-textarea {
+        min-height: 400px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.875rem;
+        line-height: 1.6;
+    }
+    
+    .form-textarea.prompt-text {
+        min-height: 600px;
+    }
+    
+    .form-help {
+        font-size: 0.875rem;
+        color: #6B7280;
+        margin-top: 0.25rem;
+    }
+    
+    .form-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .form-checkbox input[type="checkbox"] {
+        width: 1.25rem;
+        height: 1.25rem;
+        cursor: pointer;
+    }
+    
+    .form-row {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    .prompt-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .stat-item {
+        background: #F8F9FA;
+        padding: 1rem;
+        border-radius: 6px;
+        border-left: 3px solid #D4AF37;
+    }
+    
+    .stat-label {
+        font-size: 0.75rem;
+        color: #6B7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.25rem;
+    }
+    
+    .stat-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #0B1221;
+    }
+    
+    @media (max-width: 768px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+        
+        .prompt-stats {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h2>Edit Prompt Template</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">ID: {{ prompt.get('id') }}</p>
+    </div>
+    <div class="admin-header-actions">
+        <a href="{{ url_for('admin.prompts') }}" class="btn-admin btn-admin-secondary">← Back to Prompts</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="admin-card" style="background: {% if category == 'success' %}#D1FAE5{% elif category == 'error' %}#FEE2E2{% else %}#DBEAFE{% endif %}; border-left: 3px solid {% if category == 'success' %}#10B981{% elif category == 'error' %}#EF4444{% else %}#3B82F6{% endif %};">
+                <p style="margin: 0; color: {% if category == 'success' %}#065F46{% elif category == 'error' %}#991B1B{% else %}#1E40AF{% endif %};">{{ message }}</p>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="admin-card">
+    <div class="prompt-stats">
+        <div class="stat-item">
+            <div class="stat-label">Status</div>
+            <div class="stat-value">
+                {% if prompt.get('is_active') %}
+                    <span class="badge badge-success">Active</span>
+                {% else %}
+                    <span class="badge badge-warning">Inactive</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">Scope</div>
+            <div class="stat-value">{{ prompt.get('scope', 'N/A') }}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">Priority</div>
+            <div class="stat-value">{{ prompt.get('priority', 0) }}</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">Length</div>
+            <div class="stat-value">{{ "{:,}".format(prompt.get('prompt_text', '')|length) }} chars</div>
+        </div>
+    </div>
+    
+    <form method="POST" action="{{ url_for('admin.prompt_update', prompt_id=prompt.get('id')) }}">
+        <div class="form-row">
+            <div class="form-group">
+                <label for="name" class="form-label">Name *</label>
+                <input type="text" id="name" name="name" class="form-input" value="{{ prompt.get('name', '') }}" required>
+                <p class="form-help">Display name for this prompt template</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="scope" class="form-label">Scope *</label>
+                <select id="scope" name="scope" class="form-select" required>
+                    <option value="universal" {% if prompt.get('scope') == 'universal' %}selected{% endif %}>Universal</option>
+                    <option value="document_type" {% if prompt.get('scope') == 'document_type' %}selected{% endif %}>Document Type</option>
+                    <option value="sector" {% if prompt.get('scope') == 'sector' %}selected{% endif %}>Sector</option>
+                </select>
+                <p class="form-help">When this prompt should be applied</p>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="doc_type" class="form-label">Document Type</label>
+                <input type="text" id="doc_type" name="doc_type" class="form-input" value="{{ prompt.get('doc_type', '') or '' }}" placeholder="e.g., vendor-invoice, beam-schedule">
+                <p class="form-help">Required if scope is 'document_type' (use code value: vendor-invoice, beam-schedule, drawing-register, fta-list)</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="sector_slug" class="form-label">Sector Slug</label>
+                <input type="text" id="sector_slug" name="sector_slug" class="form-input" value="{{ prompt.get('sector_slug', '') or '' }}" placeholder="e.g., professional-services, built-environment">
+                <p class="form-help">Required if scope is 'sector'</p>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="priority" class="form-label">Priority</label>
+                <input type="number" id="priority" name="priority" class="form-input" value="{{ prompt.get('priority', 1) }}" min="1" max="100">
+                <p class="form-help">Lower numbers are applied first (1 = highest priority)</p>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Status</label>
+                <div class="form-checkbox">
+                    <input type="checkbox" id="is_active" name="is_active" {% if prompt.get('is_active') %}checked{% endif %}>
+                    <label for="is_active" style="margin: 0; cursor: pointer;">Active (prompt will be used)</label>
+                </div>
+                <p class="form-help">Only active prompts are used by the system</p>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="prompt_text" class="form-label">Prompt Text *</label>
+            <textarea id="prompt_text" name="prompt_text" class="form-textarea prompt-text" required>{{ prompt.get('prompt_text', '') }}</textarea>
+            <p class="form-help">The actual prompt text that will be sent to the AI model. Use {text} placeholder for document content.</p>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid #E5E7EB;">
+            <button type="submit" class="btn-admin">Save Changes</button>
+            <a href="{{ url_for('admin.prompts') }}" class="btn-admin btn-admin-secondary" style="text-decoration: none;">Cancel</a>
+            <form method="POST" action="{{ url_for('admin.prompt_toggle', prompt_id=prompt.get('id')) }}" style="display: inline; margin-left: auto;">
+                <button type="submit" class="btn-admin btn-admin-secondary">
+                    {% if prompt.get('is_active') %}Deactivate{% else %}Activate{% endif %}
+                </button>
+            </form>
+        </div>
+    </form>
+</div>
+
+<div class="admin-card">
+    <h3 style="margin: 0 0 1rem;">Document Type Mapping</h3>
+    <div style="color: #6B7280; line-height: 1.6; font-size: 0.875rem;">
+        <p>Code uses these doc_type values, but database stores:</p>
+        <ul style="margin: 0.5rem 0;">
+            <li><strong>finance</strong> → <code>vendor-invoice</code></li>
+            <li><strong>engineering</strong> → <code>beam-schedule</code></li>
+            <li><strong>transmittal</strong> → <code>drawing-register</code></li>
+            <li><strong>logistics</strong> → <code>fta-list</code></li>
+        </ul>
+        <p style="margin-top: 1rem;">When editing prompts, use the database values (vendor-invoice, beam-schedule, etc.) in the Document Type field.</p>
+    </div>
+</div>
+{% endblock %}

@@ -278,6 +278,11 @@
                         </a>
                     </li>
                     <li class="admin-nav-item">
+                        <a href="{{ url_for('admin.prompts') }}" class="admin-nav-link {% if 'prompt' in request.endpoint %}active{% endif %}">
+                            Prompts
+                        </a>
+                    </li>
+                    <li class="admin-nav-item">
                         <a href="{{ url_for('admin.documentation_index') }}" class="admin-nav-link {% if 'documentation' in request.endpoint %}active{% endif %}">
                             Documentation
                         </a>

@@ -240,6 +240,134 @@ def build_combined_prompt(doc_type, sector_slug, text):
     return combined
 
 
+def get_all_prompts():
+    """Get all prompt templates"""
+    if not engine:
+        return []
+    
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                SELECT id, name, scope, doc_type, sector_slug, 
+                       LENGTH(prompt_text) as prompt_length,
+                       priority, is_active, created_at, updated_at
+                FROM prompt_templates
+                ORDER BY scope, doc_type, priority, name
+            """)
+            result = conn.execute(query)
+            return [dict(row._mapping) for row in result]
+    except Exception as e:
+        print(f"Error loading all prompts: {e}")
+        return []
+
+
+def get_prompt_by_id(prompt_id):
+    """Get a single prompt template by ID"""
+    if not engine:
+        return None
+    
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                SELECT id, name, scope, doc_type, sector_slug, prompt_text,
+                       priority, is_active, created_at, updated_at
+                FROM prompt_templates
+                WHERE id = :prompt_id
+            """)
+            result = conn.execute(query, {"prompt_id": prompt_id})
+            row = result.fetchone()
+            if row:
+                return dict(row._mapping)
+            return None
+    except Exception as e:
+        print(f"Error loading prompt {prompt_id}: {e}")
+        return None
+
+
+def update_prompt(prompt_id, name=None, scope=None, doc_type=None, sector_slug=None,
+                  prompt_text=None, priority=None, is_active=None):
+    """Update a prompt template"""
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            # Build dynamic UPDATE query
+            updates = []
+            params = {"prompt_id": prompt_id}
+            
+            if name is not None:
+                updates.append("name = :name")
+                params["name"] = name
+            if scope is not None:
+                updates.append("scope = :scope")
+                params["scope"] = scope
+            if doc_type is not None:
+                if doc_type == "":
+                    updates.append("doc_type = NULL")
+                else:
+                    updates.append("doc_type = :doc_type")
+                    params["doc_type"] = doc_type
+            if sector_slug is not None:
+                if sector_slug == "":
+                    updates.append("sector_slug = NULL")
+                else:
+                    updates.append("sector_slug = :sector_slug")
+                    params["sector_slug"] = sector_slug
+            if prompt_text is not None:
+                updates.append("prompt_text = :prompt_text")
+                params["prompt_text"] = prompt_text
+            if priority is not None:
+                updates.append("priority = :priority")
+                params["priority"] = priority
+            if is_active is not None:
+                updates.append("is_active = :is_active")
+                params["is_active"] = is_active
+            
+            if not updates:
+                return False  # No updates provided
+            
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            
+            query = text(f"""
+                UPDATE prompt_templates
+                SET {', '.join(updates)}
+                WHERE id = :prompt_id
+                RETURNING id
+            """)
+            result = conn.execute(query, params)
+            conn.commit()
+            return result.fetchone() is not None
+    except Exception as e:
+        print(f"Error updating prompt {prompt_id}: {e}")
+        return False
+
+
+def toggle_prompt_active(prompt_id):
+    """Toggle the active status of a prompt"""
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                UPDATE prompt_templates
+                SET is_active = NOT is_active,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :prompt_id
+                RETURNING id, is_active
+            """)
+            result = conn.execute(query, {"prompt_id": prompt_id})
+            conn.commit()
+            row = result.fetchone()
+            if row:
+                return dict(row._mapping)
+            return None
+    except Exception as e:
+        print(f"Error toggling prompt {prompt_id}: {e}")
+        return None
+
+
 # ============================================================================
 # SEARCH LOGS - Track RAG search queries
 # ============================================================================

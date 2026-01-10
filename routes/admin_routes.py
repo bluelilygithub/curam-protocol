@@ -30,7 +30,11 @@ from database import (
     add_trial_document,
     get_trial_documents,
     save_trial_result,
-    get_trial_results
+    get_trial_results,
+    get_all_prompts,
+    get_prompt_by_id,
+    update_prompt,
+    toggle_prompt_active
 )
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -591,3 +595,84 @@ def phase1_report_public(report_token):
                          total_passed=total_passed,
                          total_flagged=total_flagged,
                          stp_rate=round(stp_rate, 1))
+
+
+# ============================================================================
+# PROMPT MANAGEMENT ROUTES
+# ============================================================================
+
+@admin_bp.route('/prompts')
+@require_admin
+def prompts():
+    """List all prompt templates"""
+    prompts_list = get_all_prompts()
+    return render_template('admin/prompts.html', prompts=prompts_list)
+
+
+@admin_bp.route('/prompts/<int:prompt_id>')
+@require_admin
+def prompt_edit(prompt_id):
+    """View and edit a single prompt template"""
+    prompt = get_prompt_by_id(prompt_id)
+    if not prompt:
+        flash('Prompt not found', 'error')
+        return redirect(url_for('admin.prompts'))
+    
+    return render_template('admin/prompt_edit.html', prompt=prompt)
+
+
+@admin_bp.route('/prompts/<int:prompt_id>', methods=['POST'])
+@require_admin
+def prompt_update(prompt_id):
+    """Update a prompt template"""
+    prompt = get_prompt_by_id(prompt_id)
+    if not prompt:
+        flash('Prompt not found', 'error')
+        return redirect(url_for('admin.prompts'))
+    
+    # Get form data
+    name = request.form.get('name', '').strip()
+    scope = request.form.get('scope', '').strip()
+    doc_type = request.form.get('doc_type', '').strip() or None
+    sector_slug = request.form.get('sector_slug', '').strip() or None
+    prompt_text = request.form.get('prompt_text', '').strip()
+    priority = request.form.get('priority', type=int)
+    is_active = request.form.get('is_active') == 'on'
+    
+    # Validate required fields
+    if not name or not scope or not prompt_text:
+        flash('Name, scope, and prompt text are required', 'error')
+        return redirect(url_for('admin.prompt_edit', prompt_id=prompt_id))
+    
+    # Update prompt
+    success = update_prompt(
+        prompt_id=prompt_id,
+        name=name,
+        scope=scope,
+        doc_type=doc_type,
+        sector_slug=sector_slug,
+        prompt_text=prompt_text,
+        priority=priority,
+        is_active=is_active
+    )
+    
+    if success:
+        flash('Prompt updated successfully', 'success')
+    else:
+        flash('Failed to update prompt', 'error')
+    
+    return redirect(url_for('admin.prompt_edit', prompt_id=prompt_id))
+
+
+@admin_bp.route('/prompts/<int:prompt_id>/toggle', methods=['POST'])
+@require_admin
+def prompt_toggle(prompt_id):
+    """Toggle the active status of a prompt"""
+    result = toggle_prompt_active(prompt_id)
+    if result:
+        status = 'activated' if result.get('is_active') else 'deactivated'
+        flash(f'Prompt {status} successfully', 'success')
+    else:
+        flash('Failed to toggle prompt status', 'error')
+    
+    return redirect(url_for('admin.prompts'))
