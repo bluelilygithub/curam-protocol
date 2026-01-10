@@ -151,9 +151,18 @@ def build_prompt(text, doc_type, sector_slug=None):
         db_prompt = build_combined_prompt(db_doc_type, sector_slug, text)
         if db_prompt:
             print(f"✓ Using database prompt for {doc_type} (db: {db_doc_type}) - length: {len(db_prompt)} chars")
-            # Check if test marker is in the prompt (first 500 chars)
-            if "TEST_MARKER" in db_prompt[:500] or "admin_test" in db_prompt[:500] or "TEST INSTRUCTION" in db_prompt[:500]:
-                print(f"✅ TEST MARKER FOUND IN DATABASE PROMPT!")
+            # Check if test marker is in the FULL prompt (not just first 500 chars)
+            test_markers = ["TEST_MARKER", "admin_test", "TEST INSTRUCTION", "TEST:", "CRITICAL TEST"]
+            found_markers = [m for m in test_markers if m in db_prompt]
+            if found_markers:
+                print(f"✅ TEST MARKER(S) FOUND IN DATABASE PROMPT: {', '.join(found_markers)}")
+                # Also show first 200 chars of each prompt section
+                prompt_sections = db_prompt.split("\n\n---\n\n")
+                for i, section in enumerate(prompt_sections[:3], 1):  # First 3 sections
+                    if any(m in section for m in test_markers):
+                        print(f"  → Test marker found in section {i}: {section[:200]}...")
+            else:
+                print(f"⚠️ No test markers found in combined prompt (searched for: {', '.join(test_markers)})")
             return db_prompt
         else:
             print(f"⚠️ Database prompt lookup returned None for {doc_type} (db: {db_doc_type})")
