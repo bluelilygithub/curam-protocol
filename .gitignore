@@ -51,4 +51,3 @@ tmp/
 uploads/
 uploads/**
 !/uploads/.gitkeep
-

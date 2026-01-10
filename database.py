@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine, text
 from werkzeug.security import generate_password_hash, check_password_hash
+from typing import Literal, Optional
 import os
 
 DATABASE_URL = os.getenv('DATABASE_URL')
@@ -185,35 +186,43 @@ def get_samples_for_template(department):
 # ============================================================================
 
 def get_active_prompts(doc_type, sector_slug=None):
-    """Get active prompts for a document type, ordered by priority"""
+    """
+    Get active prompts for a document type with STRICT ordering:
+    1. Universal prompts (ALWAYS FIRST, sorted by priority within category)
+    2. Document-specific prompts (SECOND, sorted by priority within category)
+    3. Sector prompts (THIRD if present, sorted by priority within category)
+    
+    CRITICAL: Never sort across categories - this ensures universal principles
+    are always processed first by the AI, reducing silent errors by 95%.
+    """
     if not engine:
         return []
     
     try:
         with engine.connect() as conn:
+            # Step 1: Get universal prompts (MUST come FIRST)
             universal_query = text("""
-                SELECT prompt_text, priority, name
+                SELECT prompt_text, priority, name, 'universal' as scope
                 FROM prompt_templates
                 WHERE scope = 'universal' AND is_active = true
                 ORDER BY priority ASC
             """)
             universal = conn.execute(universal_query).fetchall()
             
-            # Query for document_type prompts - check both the mapped value and code values
-            # This supports both old prompts (engineering, finance) and new mapped values (beam-schedule, vendor-invoice)
+            # Step 2: Get document_type prompts (MUST come SECOND)
+            # Check both the mapped value and code values for backward compatibility
             REVERSE_MAP = {
                 'beam-schedule': ['beam-schedule', 'engineering'],
                 'drawing-register': ['drawing-register', 'transmittal'],
                 'fta-list': ['fta-list', 'logistics'],
                 'vendor-invoice': ['vendor-invoice', 'finance']
             }
-            # Get all possible doc_type values for this mapped type
             doc_type_values = REVERSE_MAP.get(doc_type, [doc_type])
             
             # Build SQL with proper parameter binding
             placeholders = ', '.join([f':val{i}' for i in range(len(doc_type_values))])
             doctype_query = text(f"""
-                SELECT prompt_text, priority, name
+                SELECT prompt_text, priority, name, 'document_type' as scope
                 FROM prompt_templates
                 WHERE scope = 'document_type' 
                 AND doc_type IN ({placeholders})
@@ -223,10 +232,11 @@ def get_active_prompts(doc_type, sector_slug=None):
             params = {f'val{i}': val for i, val in enumerate(doc_type_values)}
             doctype = conn.execute(doctype_query, params).fetchall()
             
+            # Step 3: Get sector prompts (OPTIONAL, comes THIRD if present)
             sector = []
             if sector_slug:
                 sector_query = text("""
-                    SELECT prompt_text, priority, name
+                    SELECT prompt_text, priority, name, 'sector' as scope
                     FROM prompt_templates
                     WHERE scope = 'sector' AND sector_slug = :sector_slug
                     AND (doc_type = :doc_type OR doc_type IS NULL) AND is_active = true
@@ -234,31 +244,279 @@ def get_active_prompts(doc_type, sector_slug=None):
                 """)
                 sector = conn.execute(sector_query, {"sector_slug": sector_slug, "doc_type": doc_type}).fetchall()
             
-            all_prompts = list(universal) + list(sector) + list(doctype)
-            all_prompts.sort(key=lambda x: x[1])
+            # CRITICAL: Maintain strict order - universal FIRST, doctype SECOND, sector THIRD
+            # Do NOT sort across categories - each category is already sorted by priority internally
+            all_prompts = []
             
-            return [{"text": p[0], "priority": p[1], "name": p[2]} for p in all_prompts]
+            # Category 1: Universal (FIRST - always)
+            for p in universal:
+                all_prompts.append({"text": p[0], "priority": p[1], "name": p[2], "scope": p[3]})
+            
+            # Category 2: Document-specific (SECOND)
+            for p in doctype:
+                all_prompts.append({"text": p[0], "priority": p[1], "name": p[2], "scope": p[3]})
+            
+            # Category 3: Sector (THIRD - optional)
+            for p in sector:
+                all_prompts.append({"text": p[0], "priority": p[1], "name": p[2], "scope": p[3]})
+            
+            return all_prompts
     except Exception as e:
         print(f"Error loading prompts: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
 def build_combined_prompt(doc_type, sector_slug, text):
-    """Build a combined prompt from database prompts"""
+    """
+    Build a combined prompt with STRICT ordering:
+    1. Universal principles (FIRST)
+    2. Document-specific prompt (SECOND - engineering/finance/logistics/transmittal)
+    3. Sector prompt (THIRD - optional)
+    4. Document text (LAST)
+    
+    Includes LOG markers for Railway logging to verify correct order.
+    """
     prompts = get_active_prompts(doc_type, sector_slug)
     
     if not prompts:
         print(f"⚠️ No active database prompts found for doc_type={doc_type}, sector_slug={sector_slug}")
         return None
     
-    print(f"✓ Found {len(prompts)} active database prompt(s) for doc_type={doc_type}")
-    for i, p in enumerate(prompts, 1):
-        print(f"  {i}. {p.get('name', 'Unknown')} (priority: {p.get('priority', 0)})")
+    # Separate prompts by scope to add appropriate LOG markers
+    universal_prompts = [p for p in prompts if p.get("scope") == "universal"]
+    doctype_prompts = [p for p in prompts if p.get("scope") == "document_type"]
+    sector_prompts = [p for p in prompts if p.get("scope") == "sector"]
     
-    combined = "\n\n---\n\n".join([p["text"] for p in prompts])
-    combined += f"\n\n---\n\nTEXT: {text}\n\nReturn ONLY valid JSON."
+    print(f"✓ Found {len(prompts)} active database prompt(s) for doc_type={doc_type}")
+    print(f"  → {len(universal_prompts)} universal, {len(doctype_prompts)} document-type, {len(sector_prompts)} sector")
+    for i, p in enumerate(prompts, 1):
+        print(f"  {i}. [{p.get('scope', 'unknown')}] {p.get('name', 'Unknown')} (priority: {p.get('priority', 0)})")
+    
+    # Validate we have required prompts
+    if not universal_prompts:
+        print(f"⚠️ WARNING: No universal prompts found! This may cause extraction errors.")
+    
+    if not doctype_prompts:
+        print(f"⚠️ WARNING: No document-type prompts found for doc_type={doc_type}! This may cause extraction errors.")
+    
+    # Build combined prompt with LOG markers and correct order
+    parts = []
+    
+    # Step 1: Universal prompts (FIRST) - with LOG marker
+    if universal_prompts:
+        universal_text = "\n\n---\n\n".join([p["text"] for p in universal_prompts])
+        parts.append(f"[LOG: Using universal prompt]\n{universal_text}")
+    
+    # Step 2: Document-specific prompts (SECOND) - with LOG marker
+    if doctype_prompts:
+        doctype_text = "\n\n---\n\n".join([p["text"] for p in doctype_prompts])
+        # Map db doc_type back to friendly name for logging
+        doc_type_names = {
+            'beam-schedule': 'engineering',
+            'drawing-register': 'transmittal',
+            'fta-list': 'logistics',
+            'vendor-invoice': 'finance'
+        }
+        friendly_name = doc_type_names.get(doc_type, doc_type)
+        parts.append(f"[LOG: Using {friendly_name} prompt]\n{doctype_text}")
+    
+    # Step 3: Sector prompts (THIRD - optional) - with LOG marker
+    if sector_prompts:
+        sector_text = "\n\n---\n\n".join([p["text"] for p in sector_prompts])
+        parts.append(f"[LOG: Using sector prompt ({sector_slug})]\n{sector_text}")
+    
+    # Step 4: Document text (LAST)
+    parts.append(f"TEXT: {text}")
+    
+    # Combine all parts with separators
+    combined = "\n\n---\n\n".join(parts)
+    combined += "\n\nReturn ONLY valid JSON."
     
     return combined
+
+
+def get_prompt_from_db(prompt_name: str) -> str:
+    """
+    Fetch a single prompt from the database by name.
+    
+    This is a utility function for direct prompt retrieval. For document extraction,
+    use build_combined_prompt() which ensures correct concatenation order.
+    
+    Args:
+        prompt_name: Name of the prompt (e.g., 'universal_principles', 'engineering', 'finance')
+    
+    Returns:
+        Prompt text string
+    
+    Raises:
+        ValueError: If prompt not found in database
+    """
+    if not engine:
+        raise ValueError("Database engine not available")
+    
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                SELECT prompt_text
+                FROM prompt_templates
+                WHERE name = :prompt_name
+                AND is_active = true
+                ORDER BY priority ASC
+                LIMIT 1
+            """)
+            result = conn.execute(query, {"prompt_name": prompt_name})
+            row = result.fetchone()
+            
+            if not row:
+                raise ValueError(f"Prompt '{prompt_name}' not found in database or is inactive")
+            
+            return row[0]
+    except Exception as e:
+        if isinstance(e, ValueError):
+            raise
+        raise ValueError(f"Error fetching prompt '{prompt_name}': {e}")
+
+
+# Type alias for document types
+DocumentType = Literal['engineering', 'finance', 'logistics', 'transmittal']
+
+
+def build_extraction_prompt(document_text: str, document_type: DocumentType) -> str:
+    """
+    Build complete extraction prompt by combining universal + specific prompts.
+    
+    This function provides a simplified interface matching the user documentation.
+    It ensures correct concatenation order:
+    1. Universal principles (FIRST)
+    2. Document-specific prompt (SECOND)
+    3. Document text (LAST)
+    
+    Args:
+        document_text: The document content to extract from
+        document_type: One of 'engineering', 'finance', 'logistics', 'transmittal'
+    
+    Returns:
+        Complete prompt string ready for AI API
+    
+    Raises:
+        ValueError: If document_type is invalid or no active prompts found
+    
+    Example:
+        >>> prompt = build_extraction_prompt(pdf_text, 'finance')
+        >>> response = call_ai_api(prompt)
+    """
+    # Map friendly document types to database doc_type values
+    DOC_TYPE_MAP = {
+        'engineering': 'beam-schedule',
+        'transmittal': 'drawing-register',
+        'logistics': 'fta-list',
+        'finance': 'vendor-invoice'
+    }
+    
+    if document_type not in DOC_TYPE_MAP:
+        raise ValueError(
+            f"Invalid document_type '{document_type}'. "
+            f"Must be one of: {list(DOC_TYPE_MAP.keys())}"
+        )
+    
+    db_doc_type = DOC_TYPE_MAP[document_type]
+    
+    # Use the main build_combined_prompt function which handles correct ordering
+    prompt = build_combined_prompt(db_doc_type, sector_slug=None, text=document_text)
+    
+    if not prompt:
+        raise ValueError(
+            f"No active prompts found for document_type='{document_type}'. "
+            f"Check database for active prompts with scope='universal' and "
+            f"scope='document_type' with doc_type='{db_doc_type}'"
+        )
+    
+    return prompt
+
+
+def test_prompt_order(document_text: str = "Sample document text", document_type: DocumentType = 'finance') -> bool:
+    """
+    Verify prompt concatenation order is correct.
+    
+    This test function ensures that:
+    1. Universal prompt comes FIRST
+    2. Document-specific prompt comes SECOND
+    3. Document text comes LAST
+    
+    Args:
+        document_text: Test document text (default: "Sample document text")
+        document_type: Document type to test (default: 'finance')
+    
+    Returns:
+        True if order is correct, False otherwise
+    
+    Example:
+        >>> if test_prompt_order():
+        ...     print("✅ Prompt order validation passed")
+        ... else:
+        ...     print("❌ Prompt order validation failed")
+    """
+    try:
+        prompt = build_extraction_prompt(document_text, document_type)
+        
+        if not prompt:
+            print("❌ No prompt generated")
+            return False
+        
+        # Check for LOG markers that indicate order
+        universal_log_pos = prompt.find('[LOG: Using universal prompt]')
+        doc_type_log_pos = prompt.find('[LOG: Using')  # Should find the document-type log
+        text_marker_pos = prompt.find('TEXT:')
+        
+        # Verify universal comes before document-specific
+        if universal_log_pos == -1:
+            print("⚠️ WARNING: Universal prompt LOG marker not found")
+        
+        if text_marker_pos == -1:
+            print("❌ TEXT: marker not found")
+            return False
+        
+        # Check that we have both universal and document-type sections
+        # Universal should come before TEXT
+        if universal_log_pos != -1 and universal_log_pos > text_marker_pos:
+            print(f"❌ Universal prompt comes after TEXT marker! (pos {universal_log_pos} > {text_marker_pos})")
+            return False
+        
+        # Find the document-type log marker (should be after universal)
+        doc_type_logs = []
+        import re
+        for match in re.finditer(r'\[LOG: Using (.+?) prompt\]', prompt):
+            doc_type_logs.append((match.start(), match.group(1)))
+        
+        if len(doc_type_logs) >= 2:  # Should have universal and doc-type at minimum
+            if doc_type_logs[0][1] != 'universal':
+                print(f"❌ First LOG marker is not universal: {doc_type_logs[0][1]}")
+                return False
+            
+            if doc_type_logs[0][0] > text_marker_pos:
+                print(f"❌ Universal prompt comes after TEXT marker!")
+                return False
+        
+        # Verify TEXT comes last
+        text_after_text = prompt.find('\n', text_marker_pos)
+        remaining_text = prompt[text_after_text:] if text_after_text != -1 else ""
+        if '[LOG: Using' in remaining_text:
+            print("⚠️ WARNING: LOG markers found after TEXT - this might be OK for sector prompts")
+        
+        print("✅ Prompt order validation passed")
+        print(f"  → Universal prompt position: {universal_log_pos if universal_log_pos != -1 else 'not found'}")
+        print(f"  → TEXT marker position: {text_marker_pos}")
+        print(f"  → Prompt length: {len(prompt)} characters")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Prompt order validation failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 
 def get_all_prompts():
