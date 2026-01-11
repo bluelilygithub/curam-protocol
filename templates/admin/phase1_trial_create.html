@@ -19,6 +19,7 @@
     {% endif %}
     
     <form method="POST" action="{{ url_for('admin.phase1_trial_create') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
             <div>
                 <label for="customer_name" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">

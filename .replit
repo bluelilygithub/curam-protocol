@@ -34,3 +34,8 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+SECRET_KEY = "369f370063b674d77fb528f1f879c67f86da537250fc6c075ceb4b9c65a3aeca"

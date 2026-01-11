@@ -39,9 +39,39 @@ from database import (
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
-# Fallback authentication using environment variables (if users table doesn't exist)
-ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
-ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'changeme123')
+# Rate limiting for login attempts
+LOGIN_ATTEMPTS = {}
+MAX_LOGIN_ATTEMPTS = 5
+LOCKOUT_DURATION = 900  # 15 minutes in seconds
+
+def is_locked_out(ip_address):
+    """Check if IP is locked out due to too many failed attempts"""
+    if ip_address not in LOGIN_ATTEMPTS:
+        return False
+    attempts, lockout_time = LOGIN_ATTEMPTS[ip_address]
+    if lockout_time and time.time() < lockout_time:
+        return True
+    if lockout_time and time.time() >= lockout_time:
+        del LOGIN_ATTEMPTS[ip_address]
+        return False
+    return False
+
+def record_failed_attempt(ip_address):
+    """Record a failed login attempt"""
+    if ip_address not in LOGIN_ATTEMPTS:
+        LOGIN_ATTEMPTS[ip_address] = [1, None]
+    else:
+        attempts, _ = LOGIN_ATTEMPTS[ip_address]
+        attempts += 1
+        if attempts >= MAX_LOGIN_ATTEMPTS:
+            LOGIN_ATTEMPTS[ip_address] = [attempts, time.time() + LOCKOUT_DURATION]
+        else:
+            LOGIN_ATTEMPTS[ip_address] = [attempts, None]
+
+def clear_failed_attempts(ip_address):
+    """Clear failed attempts after successful login"""
+    if ip_address in LOGIN_ATTEMPTS:
+        del LOGIN_ATTEMPTS[ip_address]
 
 def require_admin(f):
     """Decorator to require admin authentication"""
@@ -57,21 +87,26 @@ def require_admin(f):
 def login():
     """Admin login page"""
     if request.method == 'POST':
+        ip_address = request.remote_addr
+        
+        # Check for lockout
+        if is_locked_out(ip_address):
+            remaining = int(LOGIN_ATTEMPTS[ip_address][1] - time.time())
+            minutes = remaining // 60
+            return render_template('admin/login.html', error=f'Too many failed attempts. Try again in {minutes + 1} minutes.')
+        
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
         
-        # Try database authentication first
+        # Database authentication only - no fallback credentials
         if verify_user_password(username, password):
             session['admin_authenticated'] = True
             session['admin_username'] = username
             update_user_last_login(username)
-            return redirect(url_for('admin.dashboard'))
-        # Fallback to environment variable authentication
-        elif username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-            session['admin_authenticated'] = True
-            session['admin_username'] = username
+            clear_failed_attempts(ip_address)
             return redirect(url_for('admin.dashboard'))
         else:
+            record_failed_attempt(ip_address)
             return render_template('admin/login.html', error='Invalid credentials')
     
     # If already authenticated, redirect to dashboard
@@ -258,11 +293,9 @@ def change_password():
         if len(new_password) < 8:
             return render_template('admin/change_password.html', error='New password must be at least 8 characters long.')
         
-        # Verify current password
+        # Verify current password - database only
         if not verify_user_password(username, current_password):
-            # Try fallback to environment variable
-            if username != ADMIN_USERNAME or current_password != ADMIN_PASSWORD:
-                return render_template('admin/change_password.html', error='Current password is incorrect.')
+            return render_template('admin/change_password.html', error='Current password is incorrect.')
         
         # Update password in database
         if update_user_password(username, new_password):

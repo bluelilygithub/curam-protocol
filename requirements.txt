@@ -34,3 +34,4 @@ requests
 SQLAlchemy
 streamlit
 werkzeug
+flask-wtf

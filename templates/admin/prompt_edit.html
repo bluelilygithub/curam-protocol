@@ -160,6 +160,7 @@
     </div>
     
     <form method="POST" action="{{ url_for('admin.prompt_update', prompt_id=prompt.get('id')) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="form-row">
             <div class="form-group">
                 <label for="name" class="form-label">Name *</label>
@@ -219,6 +220,7 @@
             <button type="submit" class="btn-admin">Save Changes</button>
             <a href="{{ url_for('admin.prompts') }}" class="btn-admin btn-admin-secondary" style="text-decoration: none;">Cancel</a>
             <form method="POST" action="{{ url_for('admin.prompt_toggle', prompt_id=prompt.get('id')) }}" style="display: inline; margin-left: auto;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn-admin btn-admin-secondary">
                     {% if prompt.get('is_active') %}Deactivate{% else %}Activate{% endif %}
                 </button>

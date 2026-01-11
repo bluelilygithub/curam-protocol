@@ -1,6 +1,7 @@
 import os
 from flask import Flask, request, render_template, send_file, abort, redirect
 from flask_compress import Compress
+from flask_wtf.csrf import CSRFProtect
 import google.generativeai as genai
 
 # Phase 4.1: Static Pages Blueprint
@@ -29,6 +30,9 @@ from utils.sample_loader import get_allowed_sample_paths
 
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
 app.secret_key = SECRET_KEY
+
+# Security: Enable CSRF protection
+csrf = CSRFProtect(app)
 
 # Performance: Enable Gzip/Brotli compression
 Compress(app)
@@ -82,6 +86,9 @@ app.register_blueprint(automater_bp)
 app.register_blueprint(export_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(admin_bp)  # Admin panel (separate, doesn't modify existing code)
+
+# Exempt API routes from CSRF (they're used by external clients/AJAX)
+csrf.exempt(api_bp)
 
 # Configure UTF-8 encoding sanitization for corrupt characters
 from utils.encoding_fix import create_safe_template_filter

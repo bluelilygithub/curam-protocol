@@ -21,6 +21,7 @@ import time
 import hashlib
 import requests
 from flask import Blueprint, request, session, jsonify, current_app
+from flask_wtf.csrf import CSRFProtect
 from functools import wraps
 
 # Import Google Generative AI
@@ -38,6 +39,8 @@ api_key = os.environ.get("GEMINI_API_KEY")
 
 # Create blueprint
 api_bp = Blueprint('api', __name__)
+
+# Note: API routes are exempted from CSRF in main.py since they're used by external clients
 
 # Simple in-memory cache for WordPress API responses
 # Cache structure: {cache_key: (data, timestamp)}

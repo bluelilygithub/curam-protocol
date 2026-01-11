@@ -5,7 +5,9 @@ Extracted from main.py to improve maintainability
 import os
 
 # --- FLASK CONFIGURATION ---
-SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY environment variable is required. Set a strong random key in your environment.")
 
 # --- UPLOAD DIRECTORIES ---
 # Base upload directory - can be overridden with UPLOAD_BASE_DIR environment variable

@@ -438,6 +438,7 @@
         <strong style="color: #1E40AF;">Ready to Process:</strong>
         <span style="color: #1E3A8A;">You have {{ total_docs }} documents (15 required). When ready, click below to process all documents and generate the Phase 1 report.</span>
         <form method="POST" action="{{ url_for('admin.phase1_trial_process', trial_id=trial.get('id')) }}" style="margin-top: 1rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-admin">🚀 Process All Documents</button>
         </form>
     </div>
