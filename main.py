@@ -93,8 +93,10 @@ app.register_blueprint(export_bp)
 app.register_blueprint(api_bp)
 app.register_blueprint(admin_bp)  # Admin panel (separate, doesn't modify existing code)
 
-# Exempt API routes from CSRF (they're used by external clients/AJAX)
+# Exempt routes from CSRF (they're used by external clients/AJAX/file uploads)
 csrf.exempt(api_bp)
+csrf.exempt(automater_bp)
+csrf.exempt(export_bp)
 
 # Configure UTF-8 encoding sanitization for corrupt characters
 from utils.encoding_fix import create_safe_template_filter
