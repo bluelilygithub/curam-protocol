@@ -42,5 +42,5 @@ SECRET_KEY = "369f370063b674d77fb528f1f879c67f86da537250fc6c075ceb4b9c65a3aeca"
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["gunicorn", "--config", "gunicorn.conf.py", "main:app"]
+run = ["gunicorn", "--bind=0.0.0.0:5000", "--workers=4", "--timeout=300", "--keep-alive=5", "main:app"]
 build = ["pip", "install", "-r", "requirements.txt"]
