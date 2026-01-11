@@ -90,6 +90,23 @@
                           style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem; font-family: inherit;"
                           placeholder="Internal notes about this trial..."></textarea>
             </div>
+            
+            <div>
+                <label for="retention_days" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem;">
+                    Document Retention Period
+                </label>
+                <select id="retention_days" name="retention_days"
+                        style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem;">
+                    <option value="7">7 days</option>
+                    <option value="14">14 days</option>
+                    <option value="30" selected>30 days (recommended)</option>
+                    <option value="60">60 days</option>
+                    <option value="90">90 days</option>
+                </select>
+                <p style="font-size: 0.75rem; color: #6B7280; margin-top: 0.5rem;">
+                    Customer documents will be automatically deleted after this period. Extraction results are kept.
+                </p>
+            </div>
         </div>
         
         <div style="display: flex; gap: 1rem; justify-content: flex-end; padding-top: 1.5rem; border-top: 1px solid #E5E7EB;">

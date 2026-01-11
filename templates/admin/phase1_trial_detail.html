@@ -168,6 +168,65 @@
     </div>
 </div>
 
+<!-- Document Retention & Privacy Section -->
+<div class="admin-card" style="background: #FEF3C7; border-left: 4px solid #F59E0B;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h4 style="margin: 0 0 0.5rem; color: #92400E; font-size: 1rem;">🔒 Document Retention Policy</h4>
+            {% if trial.get('documents_deleted_at') %}
+                <p style="color: #78350F; margin: 0; font-size: 0.875rem;">
+                    Documents were deleted on {{ trial.get('documents_deleted_at').strftime('%d %b %Y') if trial.get('documents_deleted_at') else 'N/A' }}.
+                    Extraction results are still available.
+                </p>
+            {% else %}
+                <p style="color: #78350F; margin: 0; font-size: 0.875rem;">
+                    Retention period: <strong>{{ trial.get('retention_days', 30) }} days</strong> from creation.
+                    Documents will be automatically deleted after this period. Extraction results are kept.
+                </p>
+                {% set created = trial.get('created_at') %}
+                {% set retention = trial.get('retention_days', 30) %}
+                {% if created %}
+                <p style="color: #92400E; margin: 0.5rem 0 0; font-size: 0.75rem;">
+                    Created: {{ created.strftime('%d %b %Y') }} | Auto-delete scheduled after {{ retention }} days
+                </p>
+                {% endif %}
+            {% endif %}
+        </div>
+        {% if not trial.get('documents_deleted_at') and trial.get('total_documents', 0) > 0 %}
+        <button onclick="deleteDocuments()" class="btn-admin" style="background: #DC2626; border-color: #DC2626;">
+            🗑️ Delete Documents Now
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function deleteDocuments() {
+    if (!confirm('Are you sure you want to permanently delete all uploaded documents for this trial?\n\nThis action cannot be undone. Extraction results will be preserved.')) {
+        return;
+    }
+    
+    fetch('/admin/phase1-trials/{{ trial.get("id") }}/delete-documents', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to delete documents'));
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error.message);
+    });
+}
+</script>
+
 <!-- Trial Metrics Summary -->
 {% if trial.get('overall_accuracy') %}
 <div class="admin-card">

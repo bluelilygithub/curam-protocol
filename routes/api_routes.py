@@ -1610,3 +1610,34 @@ def get_task_status_endpoint(task_id):
             'success': False,
             'error': str(e)
         }), 500
+
+
+@api_bp.route('/api/system/cleanup-documents', methods=['POST'])
+def cleanup_expired_documents():
+    """Run document cleanup for trials with expired retention periods"""
+    try:
+        from database import run_document_cleanup, get_trials_for_document_cleanup
+        
+        pending = get_trials_for_document_cleanup()
+        
+        if not pending:
+            return jsonify({
+                'success': True,
+                'message': 'No trials with expired retention found',
+                'trials_cleaned': 0,
+                'documents_deleted': 0
+            })
+        
+        result = run_document_cleanup()
+        
+        return jsonify({
+            'success': True,
+            'trials_cleaned': result['trials_cleaned'],
+            'documents_deleted': result['documents_deleted'],
+            'errors': result['errors'] if result['errors'] else None
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

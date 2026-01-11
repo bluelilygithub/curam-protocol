@@ -355,6 +355,16 @@ def phase1_trial_create():
         industry = request.form.get('industry', '').strip()
         sector_slug = request.form.get('sector_slug', '').strip()
         notes = request.form.get('notes', '').strip()
+        retention_days = request.form.get('retention_days', '30')
+        
+        try:
+            retention_days = int(retention_days)
+            if retention_days < 7:
+                retention_days = 7
+            elif retention_days > 90:
+                retention_days = 90
+        except ValueError:
+            retention_days = 30
         
         if not customer_name:
             return render_template('admin/phase1_trial_create.html',
@@ -369,7 +379,8 @@ def phase1_trial_create():
             industry=industry if industry else None,
             sector_slug=sector_slug if sector_slug else None,
             created_by=None,  # TODO: Get actual user ID
-            notes=notes if notes else None
+            notes=notes if notes else None,
+            retention_days=retention_days
         )
         
         if trial:
@@ -565,6 +576,38 @@ def phase1_trial_process(trial_id):
         "message": "Document processing started. Results will be available shortly.",
         "note": "This endpoint needs to be implemented to integrate with extraction services"
     })
+
+
+@admin_bp.route('/phase1-trials/<int:trial_id>/delete-documents', methods=['POST'])
+@require_admin
+def phase1_trial_delete_documents(trial_id):
+    """Manually delete all documents for a Phase 1 trial"""
+    from database import delete_trial_documents, get_phase1_trial
+    
+    trial = get_phase1_trial(trial_id=trial_id)
+    if not trial:
+        return jsonify({"success": False, "error": "Trial not found"}), 404
+    
+    if trial.get('documents_deleted_at'):
+        return jsonify({
+            "success": False, 
+            "error": "Documents have already been deleted"
+        }), 400
+    
+    result = delete_trial_documents(trial_id, mark_deleted=True)
+    
+    if result['success']:
+        return jsonify({
+            "success": True,
+            "message": f"Successfully deleted {result['deleted_count']} document(s)",
+            "deleted_count": result['deleted_count']
+        })
+    else:
+        return jsonify({
+            "success": False,
+            "error": "Some documents could not be deleted",
+            "errors": result['errors']
+        }), 500
 
 
 @admin_bp.route('/phase1-trials/<int:trial_id>/report')
