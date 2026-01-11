@@ -389,12 +389,12 @@ function deleteDocuments() {
     {% if trial.get('staff_count') and trial.get('weekly_doc_volume') and trial.get('blended_hourly_rate') %}
     <div style="margin-top: 1.5rem; padding: 1rem; background: linear-gradient(135deg, #FFFBF0, white); border: 2px solid #D4AF37; border-radius: 8px;">
         <h4 style="margin: 0 0 0.75rem 0; color: #0B1221; font-size: 0.875rem;">Indicative Value Assessment</h4>
-        {% set annual_docs = trial.get('weekly_doc_volume', 0) * 52 %}
-        {% set manual_hours = annual_docs * (trial.get('manual_process_minutes', 12) / 60) %}
-        {% set manual_cost = manual_hours * trial.get('blended_hourly_rate', 55) %}
-        {% set stp_rate = (trial.get('target_stp_rate', 75) / 100) %}
+        {% set annual_docs = (trial.get('weekly_doc_volume', 0)|float) * 52 %}
+        {% set manual_hours = annual_docs * ((trial.get('manual_process_minutes', 12)|float) / 60) %}
+        {% set manual_cost = manual_hours * (trial.get('blended_hourly_rate', 55)|float) %}
+        {% set stp_rate = ((trial.get('target_stp_rate', 75)|float) / 100) %}
         {% set tier1_savings = manual_cost * stp_rate %}
-        {% set tier2_savings = annual_docs * (trial.get('current_error_rate', 4) / 100) * 0.03 * trial.get('error_correction_cost', 85) %}
+        {% set tier2_savings = annual_docs * ((trial.get('current_error_rate', 4)|float) / 100) * 0.03 * (trial.get('error_correction_cost', 85)|float) %}
         {% set total_value = tier1_savings + tier2_savings %}
         <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center;">
             <div>
