@@ -102,7 +102,12 @@ from utils.encoding_fix import create_safe_template_filter
 # Add Jinja2 filter for automatic sanitization in templates
 app.jinja_env.filters['sanitize'] = create_safe_template_filter()
 
-# Error handler for debugging
+# Error handlers
+@app.errorhandler(404)
+def page_not_found(error):
+    """Custom 404 error page"""
+    return render_template('404.html'), 404
+
 @app.errorhandler(500)
 def internal_error(error):
     """Show detailed error message for debugging"""
