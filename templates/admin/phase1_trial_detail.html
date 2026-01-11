@@ -3,6 +3,7 @@
 {% block title %}Phase 1 Trial: {{ trial.get('trial_code', 'N/A') }}{% endblock %}
 
 {% block extra_head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <style>
     .trial-header-info {
         display: grid;
@@ -756,6 +757,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 formData.append('documents', file);
             });
             formData.append('category', category);
+            
+            // Add CSRF token
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            if (csrfToken) {
+                formData.append('csrf_token', csrfToken);
+            }
             
             submitBtn.disabled = true;
             submitBtn.textContent = 'Uploading...';
