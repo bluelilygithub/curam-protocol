@@ -27,7 +27,14 @@ from config import (
 # Import sample loader utility
 from utils.sample_loader import get_allowed_sample_paths
 
+# Database seeding
+from database import engine
+from services.db_seeder import run_seeder
+
 app = Flask(__name__, static_folder='assets', static_url_path='/assets')
+
+# Seed database on startup if tables are empty
+run_seeder(engine)
 app.secret_key = SECRET_KEY
 
 # Security: Enable CSRF protection

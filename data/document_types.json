@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "sector_id": 1,
+    "name": "Vendor Invoice Processing",
+    "slug": "vendor-invoice"
+  },
+  {
+    "id": 2,
+    "sector_id": 2,
+    "name": "Structural Beam Schedule",
+    "slug": "beam-schedule"
+  },
+  {
+    "id": 3,
+    "sector_id": 2,
+    "name": "Drawing Register / Transmittal",
+    "slug": "drawing-register"
+  },
+  {
+    "id": 4,
+    "sector_id": 1,
+    "name": "Legal Contract Analysis",
+    "slug": "legal-contract"
+  },
+  {
+    "id": 5,
+    "sector_id": 1,
+    "name": "Expense Receipt Processing",
+    "slug": "expense-receipt"
+  },
+  {
+    "id": 6,
+    "sector_id": 3,
+    "name": "Bill of Lading Processing",
+    "slug": "bill-of-lading"
+  },
+  {
+    "id": 7,
+    "sector_id": 3,
+    "name": "Shipping & Logistics Documents",
+    "slug": "shipping-documents"
+  }
+]

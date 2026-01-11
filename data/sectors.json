@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "name": "Professional Services",
+    "slug": "professional-services"
+  },
+  {
+    "id": 2,
+    "name": "Built Environment",
+    "slug": "built-environment"
+  },
+  {
+    "id": 3,
+    "name": "Logistics & Compliance",
+    "slug": "logistics-compliance"
+  }
+]
