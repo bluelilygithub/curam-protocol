@@ -24,8 +24,8 @@ from flask import Blueprint, request, session, jsonify, current_app
 from flask_wtf.csrf import CSRFProtect
 from functools import wraps
 
-# Import Google Generative AI
-import google.generativeai as genai
+# Import Google Generative AI (new unified SDK)
+from google import genai
 
 # Import services
 from services.rag_service import perform_rag_search, perform_rag_search_fast
@@ -36,6 +36,16 @@ from database import capture_email_request, mark_email_sent, log_search_query
 
 # Get API key from environment
 api_key = os.environ.get("GEMINI_API_KEY")
+
+# Create a Gemini client (cached)
+_client = None
+
+def get_gemini_client():
+    """Get or create the Gemini client"""
+    global _client
+    if _client is None and api_key:
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 # Create blueprint
 api_bp = Blueprint('api', __name__)
@@ -140,7 +150,7 @@ def search_blog_rag():
         initial_answer = ""
         if fast_results['context']:
             try:
-                model = genai.GenerativeModel('gemini-2.0-flash-exp')
+                client = get_gemini_client()
                 
                 prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service.
 
@@ -159,7 +169,7 @@ Instructions:
 
 Answer:"""
                 
-                response = model.generate_content(prompt)
+                response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
                 initial_answer = response.text if response.text else "Searching for information..."
                 
             except Exception as e:
@@ -237,7 +247,7 @@ def search_blog_complete():
         
         # Use Gemini to generate comprehensive answer
         try:
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            client = get_gemini_client()
             
             prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
 
@@ -261,7 +271,7 @@ Instructions:
 
 Answer the question comprehensively:"""
             
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
             answer = response.text if response.text else "I couldn't generate an answer. Please visit blog.curam-ai.com.au for more information."
             
             return jsonify({
@@ -353,9 +363,9 @@ Use paragraphs (\n\n)."""
             conversation.append({"role": role, "parts": [item.get('content', '')]})
         conversation.append({"role": "user", "parts": [message]})
         
-        # Get AI response
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        response = model.generate_content(conversation)
+        # Get AI response using new client API
+        client = get_gemini_client()
+        response = client.models.generate_content(model='gemini-2.0-flash', contents=conversation)
         text = response.text if response.text else "How can I help?"
         
         # Convert quoted titles to links
@@ -448,8 +458,8 @@ What industries benefit most from RAG
 Can this work with handwritten documents"""
                 
                 print(f"DEBUG: Generating follow-up questions...")
-                fq_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-                fq_response = fq_model.generate_content(followup_prompt)
+                fq_client = get_gemini_client()
+                fq_response = fq_client.models.generate_content(model='gemini-2.0-flash', contents=followup_prompt)
                 if fq_response.text:
                     questions = [q.strip().rstrip('?').strip() for q in fq_response.text.strip().split('\n') if q.strip()]
                     followup_questions = questions[:3]  # Take first 3
@@ -533,7 +543,7 @@ def check_message_relevance():
         
         # Use Gemini to check relevance
         try:
-            model = genai.GenerativeModel('gemini-2.0-flash-exp')
+            client = get_gemini_client()
             
             prompt = f"""You are analyzing a contact form message to determine if it's relevant to Curam-Ai Protocol™ services.
 
@@ -563,7 +573,7 @@ Respond in JSON format:
 
 Only respond with the JSON object, no other text."""
             
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
             response_text = response.text.strip() if response.text else ""
             
             # Try to extract JSON from response

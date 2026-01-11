@@ -1,6 +1,7 @@
 flask
 flask-compress>=1.14
-google-generativeai
+flask-wtf
+google-genai
 pdfplumber
 pandas
 openpyxl
@@ -10,29 +11,13 @@ reportlab>=4.0.0
 requests
 psycopg2-binary
 SQLAlchemy
+werkzeug
 
-# Image preprocessing dependencies (Phase 1)
+# Image preprocessing dependencies
 pillow>=10.0.0
 opencv-python-headless>=4.8.0
 pytesseract>=0.3.10
 numpy>=1.24.0
-flask
-flask-compress
-google-generativeai
-gunicorn
-numpy
-opencv-python-headless
-openpyxl
-pandas
-pdfplumber
-pillow
-plotly
-psycopg2-binary
-pytesseract
-reportlab
-requests
-SQLAlchemy
+
+# Optional: Streamlit for admin tools
 streamlit
-werkzeug
-flask-wtf
-google-genai

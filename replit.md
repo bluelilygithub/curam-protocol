@@ -62,10 +62,12 @@ Preferred communication style: Simple, everyday language.
 
 ### Authentication
 
-- Admin dashboard uses session-based authentication
-- Environment variables `ADMIN_USERNAME` and `ADMIN_PASSWORD` for basic auth fallback
+- Admin dashboard uses session-based authentication with CSRF protection (Flask-WTF)
+- Admin accounts must be created in database with hashed passwords (no default credentials)
+- Login rate limiting: 5 attempts max, 15-minute lockout per IP
 - Password hashing via Werkzeug security functions
 - Phase 1 trial reports use secure token-based access (no login required for customers)
+- SECRET_KEY required (no startup without it)
 
 ### File Storage
 
@@ -84,7 +86,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Python Dependencies (Key)
 
-- `google-generativeai` - Gemini API client
+- `google-genai` - Gemini API client (unified SDK, replaced deprecated google-generativeai Jan 2026)
 - `pdfplumber` + `PyMuPDF` - PDF text extraction
 - `pillow`, `opencv-python-headless`, `pytesseract` - Image preprocessing for scanned documents
 - `pandas`, `openpyxl` - Excel export

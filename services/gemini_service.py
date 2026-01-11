@@ -35,7 +35,8 @@ except ImportError:
 import os
 import json
 import time
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # Try to import grpc
 try:
@@ -65,10 +66,16 @@ from config import (
     ERROR_FIELD
 )
 
-# Configure Gemini API
+# Configure Gemini API - using new google-genai client-based API
 api_key = os.environ.get("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
+_client = None
+
+def get_client():
+    """Get or create the Gemini client"""
+    global _client
+    if _client is None and api_key:
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 # Global cache for available models
 _available_models = None
@@ -80,43 +87,34 @@ def get_available_models():
     if _available_models is not None:
         return _available_models
     
-    if not api_key:
+    client = get_client()
+    if not client:
         return []
     
     _available_models = []
     try:
-        models = genai.list_models()
-        models_list = list(models)  # Convert to list once
+        models = client.models.list()
+        models_list = list(models)
         print(f"Found {len(models_list)} total models")
         
-        # Extract model names, removing 'models/' prefix
         for m in models_list:
             try:
                 model_name = m.name
                 if model_name.startswith('models/'):
                     model_name = model_name.replace('models/', '')
                 
-                # Check if model supports generateContent
-                supported_methods = getattr(m, 'supported_generation_methods', [])
-                if hasattr(supported_methods, '__iter__'):
-                    methods = list(supported_methods)
-                else:
-                    methods = [str(supported_methods)] if supported_methods else []
-                
-                if 'generateContent' in methods or len(methods) == 0:
-                    _available_models.append(model_name)
-                    print(f"  - {model_name} (methods: {methods})")
+                _available_models.append(model_name)
+                print(f"  - {model_name}")
             except Exception as e:
                 print(f"Error processing model {m}: {e}")
                 continue
         
-        print(f"Available models for generateContent: {_available_models}")
+        print(f"Available models: {_available_models}")
         return _available_models if _available_models else None
     except Exception as e:
         print(f"Error listing models: {type(e).__name__}: {e}")
         import traceback
         traceback.print_exc()
-        # Return None to use fallback
         return None
 
 
@@ -403,6 +401,10 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
     resolved_model = None
     attempt_log = []
 
+    client = get_client()
+    if not client:
+        return [error_entry("MISSING API KEY")], "MISSING API KEY", None, [], [], None
+
     for model_name in model_names:
         for attempt in range(3):
             attempt_detail = {
@@ -414,11 +416,8 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
             action_log.append(f"Trying {model_name} (Attempt {attempt + 1})")
             try:
                 print(f"Trying model: {model_name}")
-                model = genai.GenerativeModel(model_name)
-                # Use longer timeout for engineering (large PDFs), shorter for others
-                timeout_seconds = 60 if doc_type == "engineering" else 30
                 
-# Prepare content for Gemini
+                # Prepare content for Gemini
                 if image_path:
                     # Use Gemini vision API for images with table-optimized preprocessing
                     import pathlib
@@ -448,7 +447,7 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
 CRITICAL - COLUMN MAPPING:
 Look at the table carefully. Identify these columns by their headers:
 1. Mark (member ID like "B1", "NB-01", "C1")
-2. Size/Section (CRITICAL - formats like "310UC158", "250UB37.2", "WB1220Ã—6.0")
+2. Size/Section (CRITICAL - formats like "310UC158", "250UB37.2", "WB1220x6.0")
 3. Qty (quantity - numbers)
 4. Length (in mm)
 5. Grade (steel grade like "300", "300PLUS", "350L0")
@@ -457,7 +456,7 @@ Look at the table carefully. Identify these columns by their headers:
 
 THE SIZE COLUMN IS CRITICAL:
 - Never mark Size as "N/A" unless the cell is truly empty
-- Common patterns: "310UC158", "250UB37.2", "200PFC", "WB1220Ã—6.0"
+- Common patterns: "310UC158", "250UB37.2", "200PFC", "WB1220x6.0"
 - Extract EXACTLY what you see in each Size cell
 - The Size column is usually the 2nd column after Mark
 
@@ -468,7 +467,10 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                             # Use regular prompt for other document types
                             content_parts = [img, prompt]
                         
-                        response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=content_parts
+                        )
                         action_log.append(f"Vision API (table-optimized) succeeded with {model_name}")
                         
                     except ImportError:
@@ -476,7 +478,10 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                         action_log.append("Image preprocessing unavailable - using original")
                         img = Image.open(image_path)
                         content_parts = [img, prompt]
-                        response = model.generate_content(content_parts, request_options={"timeout": timeout_seconds})
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=content_parts
+                        )
                         action_log.append(f"Vision API call succeeded with {model_name}")
                     except Exception as img_error:
                         attempt_detail["status"] = "error"
@@ -484,8 +489,11 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                         action_log.append(f"[ERROR] Failed to process image: {img_error}")
                         continue
                 else:
-                    # Regular text-based processing
-                    response = model.generate_content(prompt, request_options={"timeout": timeout_seconds})
+                    # Regular text-based processing using new client API
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt
+                    )
                     action_log.append(f"API call succeeded with {model_name}")
                 
                 resolved_model = model_name

@@ -2,7 +2,6 @@ import os
 from flask import Flask, request, render_template, send_file, abort, redirect
 from flask_compress import Compress
 from flask_wtf.csrf import CSRFProtect
-import google.generativeai as genai
 
 # Phase 4.1: Static Pages Blueprint
 from routes.static_pages import static_pages_bp
@@ -106,11 +105,6 @@ def internal_error(error):
     if app.debug:
         return f"<pre>Internal Server Error:\n\n{trace}</pre>", 500
     return "Internal Server Error. Please check the logs.", 500
-
-# Configure Gemini API
-api_key = os.environ.get("GEMINI_API_KEY")
-if api_key:
-    genai.configure(api_key=api_key)
 
 # Create upload directories
 os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
