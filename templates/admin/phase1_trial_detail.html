@@ -775,14 +775,46 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 const data = await response.json();
                 
+                // Create or get message element
+                let msgEl = uploadSection.querySelector('.upload-message');
+                if (!msgEl) {
+                    msgEl = document.createElement('div');
+                    msgEl.className = 'upload-message';
+                    msgEl.style.marginTop = '0.75rem';
+                    msgEl.style.padding = '0.5rem 0.75rem';
+                    msgEl.style.borderRadius = '4px';
+                    msgEl.style.fontSize = '0.875rem';
+                    uploadSection.appendChild(msgEl);
+                }
+                
                 if (data.success) {
-                    alert(`Successfully uploaded ${data.uploaded} document(s) to ${category}`);
-                    location.reload(); // Refresh page to show new documents
+                    msgEl.style.background = '#D1FAE5';
+                    msgEl.style.color = '#065F46';
+                    msgEl.style.borderLeft = '3px solid #10B981';
+                    msgEl.textContent = `Successfully uploaded ${data.uploaded} document(s)`;
+                    // Reload page after brief delay to show message
+                    setTimeout(() => location.reload(), 1500);
                 } else {
-                    alert(`Upload failed: ${data.error || data.errors?.join(', ') || 'Unknown error'}`);
+                    msgEl.style.background = '#FEE2E2';
+                    msgEl.style.color = '#991B1B';
+                    msgEl.style.borderLeft = '3px solid #EF4444';
+                    msgEl.textContent = `Upload failed: ${data.error || data.errors?.join(', ') || 'Unknown error'}`;
                 }
             } catch (error) {
-                alert('Upload failed: ' + error.message);
+                let msgEl = uploadSection.querySelector('.upload-message');
+                if (!msgEl) {
+                    msgEl = document.createElement('div');
+                    msgEl.className = 'upload-message';
+                    msgEl.style.marginTop = '0.75rem';
+                    msgEl.style.padding = '0.5rem 0.75rem';
+                    msgEl.style.borderRadius = '4px';
+                    msgEl.style.fontSize = '0.875rem';
+                    uploadSection.appendChild(msgEl);
+                }
+                msgEl.style.background = '#FEE2E2';
+                msgEl.style.color = '#991B1B';
+                msgEl.style.borderLeft = '3px solid #EF4444';
+                msgEl.textContent = 'Upload failed: ' + error.message;
             } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = 'Upload';

@@ -611,7 +611,7 @@ def phase1_trial_process(trial_id):
     
     for doc in documents:
         doc_id = doc['id']
-        file_path = doc.get('file_path')
+        file_path = doc.get('stored_file_path') or doc.get('file_path')
         
         doc_type_slug = doc.get('document_type_slug', '')
         doc_type = doctype_slug_to_gemini.get(doc_type_slug, default_doc_type)
