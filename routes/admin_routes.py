@@ -633,6 +633,84 @@ def phase1_document_details(doc_id):
         return jsonify({"success": False, "error": "Failed to update document details"}), 500
 
 
+@admin_bp.route('/phase1-trials/<int:trial_id>/business-profile', methods=['POST'])
+@require_admin
+def phase1_trial_business_profile(trial_id):
+    """Update business profile fields for ROI calculations and report generation"""
+    from database import update_phase1_trial_business_profile
+    
+    data = request.get_json()
+    
+    def safe_int(val):
+        try:
+            return int(val) if val not in [None, ''] else None
+        except (ValueError, TypeError):
+            return None
+    
+    def safe_float(val):
+        try:
+            return float(val) if val not in [None, ''] else None
+        except (ValueError, TypeError):
+            return None
+    
+    success = update_phase1_trial_business_profile(
+        trial_id=trial_id,
+        staff_count=safe_int(data.get('staff_count')),
+        doc_staff_count=safe_int(data.get('doc_staff_count')),
+        blended_hourly_rate=safe_float(data.get('blended_hourly_rate')),
+        weekly_doc_volume=safe_int(data.get('weekly_doc_volume')),
+        manual_process_minutes=safe_int(data.get('manual_process_minutes')),
+        current_error_rate=safe_float(data.get('current_error_rate')),
+        error_correction_cost=safe_float(data.get('error_correction_cost')),
+        infrastructure_type=data.get('infrastructure_type', '').strip() or None,
+        infrastructure_notes=data.get('infrastructure_notes', '').strip() or None,
+        limitations_notes=data.get('limitations_notes', '').strip() or None,
+        target_stp_rate=safe_float(data.get('target_stp_rate'))
+    )
+    
+    if success:
+        return jsonify({"success": True, "message": "Business profile updated"})
+    else:
+        return jsonify({"success": False, "error": "Failed to update business profile"}), 500
+
+
+@admin_bp.route('/phase1-trials/documents/<int:doc_id>/metrics', methods=['POST'])
+@require_admin
+def phase1_document_metrics(doc_id):
+    """Update extraction metrics for a document"""
+    from database import update_phase1_document_metrics
+    
+    data = request.get_json()
+    
+    def safe_int(val):
+        try:
+            return int(val) if val not in [None, ''] else None
+        except (ValueError, TypeError):
+            return None
+    
+    def safe_float(val):
+        try:
+            return float(val) if val not in [None, ''] else None
+        except (ValueError, TypeError):
+            return None
+    
+    success = update_phase1_document_metrics(
+        doc_id=doc_id,
+        fields_extracted=safe_int(data.get('fields_extracted')),
+        fields_correct=safe_int(data.get('fields_correct')),
+        fields_flagged=safe_int(data.get('fields_flagged')),
+        false_positives=safe_int(data.get('false_positives')),
+        processing_time_seconds=safe_float(data.get('processing_time_seconds')),
+        is_edge_case=data.get('is_edge_case'),
+        document_category=data.get('document_category', '').strip() or None
+    )
+    
+    if success:
+        return jsonify({"success": True, "message": "Document metrics updated"})
+    else:
+        return jsonify({"success": False, "error": "Failed to update document metrics"}), 500
+
+
 @admin_bp.route('/phase1-trials/<int:trial_id>/process', methods=['POST'])
 @require_admin
 def phase1_trial_process(trial_id):

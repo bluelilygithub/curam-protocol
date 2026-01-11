@@ -275,6 +275,206 @@ function deleteDocuments() {
 </div>
 {% endif %}
 
+<!-- Business Profile Section for ROI Calculations -->
+<div class="admin-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h3 style="margin: 0;">Client Business Profile</h3>
+        <button type="button" onclick="toggleBusinessProfile()" class="btn-admin btn-secondary" style="font-size: 0.75rem; padding: 0.5rem 0.75rem;">
+            <span id="business-profile-toggle-text">Edit Profile</span>
+        </button>
+    </div>
+    <p style="color: #6B7280; margin-bottom: 1rem; font-size: 0.875rem;">
+        These values are used to calculate ROI and generate the feasibility report. All fields are optional but improve accuracy.
+    </p>
+    
+    <div id="business-profile-display" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
+        <div class="trial-info-item">
+            <div class="trial-info-label">Total Staff</div>
+            <div class="trial-info-value">{{ trial.get('staff_count') or '—' }}</div>
+        </div>
+        <div class="trial-info-item">
+            <div class="trial-info-label">Doc Staff</div>
+            <div class="trial-info-value">{{ trial.get('doc_staff_count') or '—' }}</div>
+        </div>
+        <div class="trial-info-item">
+            <div class="trial-info-label">Hourly Rate</div>
+            <div class="trial-info-value">{% if trial.get('blended_hourly_rate') %}${{ "%.0f"|format(trial.get('blended_hourly_rate')) }}{% else %}—{% endif %}</div>
+        </div>
+        <div class="trial-info-item">
+            <div class="trial-info-label">Docs/Week</div>
+            <div class="trial-info-value">{{ trial.get('weekly_doc_volume') or '—' }}</div>
+        </div>
+        <div class="trial-info-item">
+            <div class="trial-info-label">Manual Time</div>
+            <div class="trial-info-value">{% if trial.get('manual_process_minutes') %}{{ trial.get('manual_process_minutes') }} min{% else %}12 min{% endif %}</div>
+        </div>
+        <div class="trial-info-item">
+            <div class="trial-info-label">Error Rate</div>
+            <div class="trial-info-value">{{ trial.get('current_error_rate') or '4' }}%</div>
+        </div>
+        <div class="trial-info-item">
+            <div class="trial-info-label">Error Cost</div>
+            <div class="trial-info-value">${{ trial.get('error_correction_cost') or '85' }}</div>
+        </div>
+        <div class="trial-info-item">
+            <div class="trial-info-label">Target STP</div>
+            <div class="trial-info-value">{{ trial.get('target_stp_rate') or '75' }}%</div>
+        </div>
+    </div>
+    
+    <div id="business-profile-form" style="display: none;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Total Staff</label>
+                <input type="number" id="bp-staff-count" value="{{ trial.get('staff_count') or '' }}" placeholder="e.g., 50" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Doc Staff</label>
+                <input type="number" id="bp-doc-staff-count" value="{{ trial.get('doc_staff_count') or '' }}" placeholder="e.g., 35" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Hourly Rate ($)</label>
+                <input type="number" id="bp-hourly-rate" value="{{ trial.get('blended_hourly_rate') or '' }}" placeholder="e.g., 55" step="0.01" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Docs/Week</label>
+                <input type="number" id="bp-weekly-volume" value="{{ trial.get('weekly_doc_volume') or '' }}" placeholder="e.g., 100" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Manual Time (min)</label>
+                <input type="number" id="bp-manual-minutes" value="{{ trial.get('manual_process_minutes') or '12' }}" placeholder="12" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Error Rate (%)</label>
+                <input type="number" id="bp-error-rate" value="{{ trial.get('current_error_rate') or '4' }}" placeholder="4" step="0.1" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Error Cost ($)</label>
+                <input type="number" id="bp-error-cost" value="{{ trial.get('error_correction_cost') or '85' }}" placeholder="85" step="0.01" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Target STP (%)</label>
+                <input type="number" id="bp-target-stp" value="{{ trial.get('target_stp_rate') or '75' }}" placeholder="75" step="0.1" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Infrastructure Type</label>
+                <select id="bp-infrastructure-type" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+                    <option value="">Select...</option>
+                    <option value="M365 E3" {% if trial.get('infrastructure_type') == 'M365 E3' %}selected{% endif %}>Microsoft 365 E3</option>
+                    <option value="M365 E5" {% if trial.get('infrastructure_type') == 'M365 E5' %}selected{% endif %}>Microsoft 365 E5</option>
+                    <option value="Google Workspace" {% if trial.get('infrastructure_type') == 'Google Workspace' %}selected{% endif %}>Google Workspace</option>
+                    <option value="On-Premise" {% if trial.get('infrastructure_type') == 'On-Premise' %}selected{% endif %}>On-Premise</option>
+                    <option value="Hybrid" {% if trial.get('infrastructure_type') == 'Hybrid' %}selected{% endif %}>Hybrid</option>
+                    <option value="Other" {% if trial.get('infrastructure_type') == 'Other' %}selected{% endif %}>Other</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Infrastructure Notes</label>
+                <input type="text" id="bp-infrastructure-notes" value="{{ trial.get('infrastructure_notes') or '' }}" placeholder="e.g., SharePoint, Active Azure tenant" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+        </div>
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Limitations & Assumptions</label>
+            <textarea id="bp-limitations-notes" rows="2" placeholder="Custom limitations or assumptions for this client..." style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">{{ trial.get('limitations_notes') or '' }}</textarea>
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+            <button type="button" onclick="saveBusinessProfile()" class="btn-admin">Save Profile</button>
+            <button type="button" onclick="toggleBusinessProfile()" class="btn-admin btn-secondary">Cancel</button>
+        </div>
+    </div>
+    
+    {% if trial.get('staff_count') and trial.get('weekly_doc_volume') and trial.get('blended_hourly_rate') %}
+    <div style="margin-top: 1.5rem; padding: 1rem; background: linear-gradient(135deg, #FFFBF0, white); border: 2px solid #D4AF37; border-radius: 8px;">
+        <h4 style="margin: 0 0 0.75rem 0; color: #0B1221; font-size: 0.875rem;">Indicative Value Assessment</h4>
+        {% set annual_docs = trial.get('weekly_doc_volume', 0) * 52 %}
+        {% set manual_hours = annual_docs * (trial.get('manual_process_minutes', 12) / 60) %}
+        {% set manual_cost = manual_hours * trial.get('blended_hourly_rate', 55) %}
+        {% set stp_rate = (trial.get('target_stp_rate', 75) / 100) %}
+        {% set tier1_savings = manual_cost * stp_rate %}
+        {% set tier2_savings = annual_docs * (trial.get('current_error_rate', 4) / 100) * 0.03 * trial.get('error_correction_cost', 85) %}
+        {% set total_value = tier1_savings + tier2_savings %}
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center;">
+            <div>
+                <div style="font-size: 0.75rem; color: #6B7280; text-transform: uppercase;">Tier 1: Time Savings</div>
+                <div style="font-size: 1.5rem; font-weight: 800; color: #0B1221;">${{ "{:,.0f}".format(tier1_savings) }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.75rem; color: #6B7280; text-transform: uppercase;">Tier 2: Error Reduction</div>
+                <div style="font-size: 1.5rem; font-weight: 800; color: #0B1221;">${{ "{:,.0f}".format(tier2_savings) }}</div>
+            </div>
+            <div>
+                <div style="font-size: 0.75rem; color: #6B7280; text-transform: uppercase;">Total Indicative Value</div>
+                <div style="font-size: 1.5rem; font-weight: 800; color: #D4AF37;">${{ "{:,.0f}".format(total_value) }}/yr</div>
+            </div>
+        </div>
+        <p style="margin: 0.75rem 0 0 0; font-size: 0.75rem; color: #6B7280; text-align: center; font-style: italic;">
+            Based on {{ annual_docs }} docs/year, {{ trial.get('manual_process_minutes', 12) }} min manual processing, {{ trial.get('target_stp_rate', 75) }}% STP target
+        </p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function toggleBusinessProfile() {
+    const display = document.getElementById('business-profile-display');
+    const form = document.getElementById('business-profile-form');
+    const toggleText = document.getElementById('business-profile-toggle-text');
+    
+    if (form.style.display === 'none') {
+        display.style.display = 'none';
+        form.style.display = 'block';
+        toggleText.textContent = 'Cancel';
+    } else {
+        display.style.display = 'grid';
+        form.style.display = 'none';
+        toggleText.textContent = 'Edit Profile';
+    }
+}
+
+async function saveBusinessProfile() {
+    const trialId = {{ trial.get('id') }};
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    
+    const data = {
+        staff_count: document.getElementById('bp-staff-count').value,
+        doc_staff_count: document.getElementById('bp-doc-staff-count').value,
+        blended_hourly_rate: document.getElementById('bp-hourly-rate').value,
+        weekly_doc_volume: document.getElementById('bp-weekly-volume').value,
+        manual_process_minutes: document.getElementById('bp-manual-minutes').value,
+        current_error_rate: document.getElementById('bp-error-rate').value,
+        error_correction_cost: document.getElementById('bp-error-cost').value,
+        target_stp_rate: document.getElementById('bp-target-stp').value,
+        infrastructure_type: document.getElementById('bp-infrastructure-type').value,
+        infrastructure_notes: document.getElementById('bp-infrastructure-notes').value,
+        limitations_notes: document.getElementById('bp-limitations-notes').value
+    };
+    
+    try {
+        const response = await fetch(`/admin/phase1-trials/${trialId}/business-profile`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('Business profile saved successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + (result.error || 'Failed to save profile'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+</script>
+
 <!-- Configuration & Upload Section - 2 Column Layout -->
 <div class="admin-card">
     <h3>Document Configuration & Upload</h3>
