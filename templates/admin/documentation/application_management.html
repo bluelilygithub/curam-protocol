@@ -244,7 +244,7 @@
             <div class="doc-category-header doc-category-toggle">
                 <h3 class="doc-category-title">
                     <span>Phase 1</span>
-                    <span class="doc-category-count" style="color: rgba(255,255,255,0.7); font-size: 0.875rem; font-weight: 400;">(15)</span>
+                    <span class="doc-category-count" style="color: rgba(255,255,255,0.7); font-size: 0.875rem; font-weight: 400;">(27)</span>
                 </h3>
                 <span class="doc-category-chevron">▶</span>
             </div>
@@ -735,6 +735,442 @@ WHERE trial_id = &lt;trial_id&gt; AND status = 'processing';
                                             <li><strong>Verify integration:</strong> Ensure the processing route actually calls the extraction services (see Database Infrastructure for implementation details)</li>
                                             <li><strong>Check database table:</strong> Verify <code>phase1_trial_results</code> table exists and is accessible</li>
                                         </ol>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sprint Feasibility Tests Section -->
+                <div class="doc-card">
+                    <div class="doc-question-header doc-question-toggle">
+                        <h4 class="doc-question">Sprint Feasibility Tests</h4>
+                        <span class="doc-question-chevron">▶</span>
+                    </div>
+                    <div class="doc-question-content">
+                        <div class="doc-answer">
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">What is a Sprint Feasibility Test?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>A Sprint Feasibility Test (also called Phase 1 Trial) is a fixed-price $1,500 validation engagement where we test whether our AI extraction technology can reliably process a client's specific document types.</p>
+                                        <p>The test validates three critical success factors:</p>
+                                        <ol>
+                                            <li><strong>Field Extraction Accuracy</strong> - Can the AI extract the required data fields correctly?</li>
+                                            <li><strong>Straight-Through Processing (STP) Rate</strong> - What percentage of documents can be processed automatically without human intervention?</li>
+                                            <li><strong>Exception Handling</strong> - Does the system safely identify documents that need human review?</li>
+                                        </ol>
+                                        <div class="highlight-box">
+                                            <p style="margin: 0;"><strong>Money-Back Guarantee:</strong> If the system fails any of the three tests, the client receives a full refund. This protects clients from investing in technology that won't work for their specific documents.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How many documents are required for a Sprint Test?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>Each Sprint Feasibility Test requires <strong>15 documents total</strong>, organized into three categories:</p>
+                                        <ul>
+                                            <li><strong>Category 1:</strong> 5 documents (primary document type)</li>
+                                            <li><strong>Category 2:</strong> 5 documents (secondary document type or variation)</li>
+                                            <li><strong>Category 3:</strong> 5 documents (tertiary type or edge cases)</li>
+                                        </ul>
+                                        <div class="warning-box">
+                                            <p style="margin: 0;"><strong>Critical Requirement:</strong> Documents should represent "worst-case" scenarios from the client's actual workflow - not cherry-picked clean examples. This includes handwritten annotations, poor scans, unusual layouts, and multi-format variations.</p>
+                                        </div>
+                                        <p>The 15-document sample size provides statistical validity while keeping the engagement fast and affordable.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">What are the pass/fail thresholds for each test?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>Each of the three tests has specific pass/fail criteria:</p>
+                                        
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Test</th>
+                                                    <th>Metric</th>
+                                                    <th>Pass Threshold</th>
+                                                    <th>Fail Threshold</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td><strong>Test 1:</strong> Field Accuracy</td>
+                                                    <td>Average extraction accuracy across all fields</td>
+                                                    <td>≥90%</td>
+                                                    <td>&lt;90%</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Test 2:</strong> STP Rate</td>
+                                                    <td>Percentage of documents processed without human review</td>
+                                                    <td>≥60%</td>
+                                                    <td>&lt;60%</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Test 3:</strong> Exception Handling</td>
+                                                    <td>Documents requiring human review</td>
+                                                    <td>&lt;8 documents</td>
+                                                    <td>≥8 documents</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        
+                                        <div class="info-box">
+                                            <p style="margin: 0;"><strong>All Three Must Pass:</strong> The overall trial only passes if ALL three tests pass. A failure in any single test results in a full refund and a detailed technical report explaining why automation isn't viable for these document types.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I update extraction metrics manually?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>After documents are processed, you can manually adjust extraction metrics if needed:</p>
+                                        <ol>
+                                            <li>Go to the trial detail page (<code>/admin/phase1-trials/&lt;trial_id&gt;</code>)</li>
+                                            <li>Find the document you want to update in the document list</li>
+                                            <li>Click the <strong>"Edit Metrics"</strong> button for that document</li>
+                                            <li>Update the following fields:
+                                                <ul>
+                                                    <li><strong>Field Accuracy (%)</strong> - Percentage of correctly extracted fields</li>
+                                                    <li><strong>STP Eligible</strong> - Yes/No toggle for straight-through processing</li>
+                                                    <li><strong>Flagged Fields</strong> - Number of fields that require human review</li>
+                                                    <li><strong>Requires Human Review</strong> - Yes/No toggle for exception status</li>
+                                                </ul>
+                                            </li>
+                                            <li>Click <strong>"Save Changes"</strong></li>
+                                        </ol>
+                                        <div class="success-box">
+                                            <p style="margin: 0;"><strong>Auto-Recalculation:</strong> When you save updated metrics, the trial's overall scores (accuracy, STP rate, exception count) are automatically recalculated and the pass/fail status is updated accordingly.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I add extraction hints for difficult documents?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>For documents where the AI needs additional guidance, you can provide extraction hints:</p>
+                                        <ol>
+                                            <li>On the trial detail page, find the document in question</li>
+                                            <li>Click the <strong>"Edit Details"</strong> button</li>
+                                            <li>Fill in the guidance fields:
+                                                <ul>
+                                                    <li><strong>Extraction Context:</strong> Describe what type of document this is (e.g., "This is a structural engineer's beam schedule from a renovation project")</li>
+                                                    <li><strong>Extraction Hints:</strong> Tips for finding specific fields (e.g., "The project number is in the title block at top right. Beam sizes are in the 'SIZE' column, not 'DESIGNATION'.")</li>
+                                                    <li><strong>Expected Fields:</strong> Comma-separated list of fields to extract (e.g., "beam_id, size, length, location, material_grade")</li>
+                                                    <li><strong>Notes:</strong> Any additional context (e.g., "Client uses non-standard abbreviations: 'UB' means Universal Beam")</li>
+                                                </ul>
+                                            </li>
+                                            <li>Click <strong>"Save"</strong></li>
+                                            <li>Re-process the document to apply the new guidance</li>
+                                        </ol>
+                                        <div class="info-box">
+                                            <p style="margin: 0;"><strong>Cache Bypass:</strong> When document-level guidance is provided, the system automatically bypasses the cache and performs fresh AI extraction to ensure the hints are applied.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">What information goes in the Business Profile?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>The Business Profile captures client operational data used for ROI calculations in the final report. Gather this information during the initial sales conversation:</p>
+                                        
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Field</th>
+                                                    <th>Description</th>
+                                                    <th>Used For</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td><strong>Staff Count</strong></td>
+                                                    <td>Number of employees processing documents</td>
+                                                    <td>Labour cost calculations</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Hourly Rate ($)</strong></td>
+                                                    <td>Fully-loaded cost per hour of document processing staff</td>
+                                                    <td>Time savings ROI</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Weekly Document Volume</strong></td>
+                                                    <td>Average number of documents processed per week</td>
+                                                    <td>Annual volume projections</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Manual Processing Time (mins)</strong></td>
+                                                    <td>Average time to manually process one document</td>
+                                                    <td>Time savings calculations</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Current Error Rate (%)</strong></td>
+                                                    <td>Estimated percentage of documents with manual errors</td>
+                                                    <td>Error reduction savings</td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Error Correction Cost ($)</strong></td>
+                                                    <td>Average cost to fix a single error (rework, delays, penalties)</td>
+                                                    <td>Error cost avoidance ROI</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        
+                                        <div class="highlight-box">
+                                            <p style="margin: 0;"><strong>ROI Formula:</strong><br>
+                                            Tier 1 (Time Savings) = annual_docs × (manual_minutes/60) × hourly_rate × stp_rate<br>
+                                            Tier 2 (Error Reduction) = annual_docs × error_rate × 0.03 × correction_cost</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I generate the PDF Feasibility Report?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>To generate and download the PDF Feasibility Report:</p>
+                                        <ol>
+                                            <li>Ensure all 15 documents have been processed and metrics are finalized</li>
+                                            <li>Ensure the Business Profile is complete (required for ROI calculations)</li>
+                                            <li>Go to the trial detail page</li>
+                                            <li>Click the <strong>"Generate PDF Report"</strong> button</li>
+                                            <li>The PDF will download automatically</li>
+                                        </ol>
+                                        <p>The generated report includes 8 sections:</p>
+                                        <ol>
+                                            <li>Executive Summary with pass/fail recommendation</li>
+                                            <li>Test 1: Field Extraction Accuracy results</li>
+                                            <li>Test 2: STP Rate analysis</li>
+                                            <li>Test 3: Exception Handling assessment</li>
+                                            <li>Document-by-document detailed results</li>
+                                            <li>ROI Projections based on business profile</li>
+                                            <li>Technical Recommendations</li>
+                                            <li>Next Steps (Phase 2 proposal or refund notice)</li>
+                                        </ol>
+                                        <div class="info-box">
+                                            <p style="margin: 0;"><strong>Tip:</strong> Review the web preview first before generating the PDF. The web preview shows the same data and allows for easier corrections before producing the final deliverable.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How long should a Sprint Feasibility Test take?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>Target turnaround times for a Sprint Feasibility Test:</p>
+                                        
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Phase</th>
+                                                    <th>Duration</th>
+                                                    <th>Activities</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <td>Document Collection</td>
+                                                    <td>1-3 days</td>
+                                                    <td>Client gathers and submits 15 sample documents</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Initial Processing</td>
+                                                    <td>Same day</td>
+                                                    <td>Upload documents, run AI extraction (15-30 minutes)</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Quality Review</td>
+                                                    <td>1-2 hours</td>
+                                                    <td>Review extraction results, adjust metrics if needed</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Report Generation</td>
+                                                    <td>30 minutes</td>
+                                                    <td>Complete business profile, generate PDF</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Client Delivery</td>
+                                                    <td>Same day</td>
+                                                    <td>Share private report link, schedule review call</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                        
+                                        <div class="success-box">
+                                            <p style="margin: 0;"><strong>Total Target:</strong> 3-5 business days from payment to report delivery. Most of the time is waiting for client document submission.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">What happens when a trial fails?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>When any of the three tests fails:</p>
+                                        <ol>
+                                            <li><strong>Update trial status:</strong> Set the trial status to "failed" in the admin panel</li>
+                                            <li><strong>Generate the report:</strong> The PDF report will show detailed failure analysis explaining exactly why each test failed</li>
+                                            <li><strong>Share with client:</strong> Send the private report link - transparency builds trust even in failure</li>
+                                            <li><strong>Process refund:</strong> Initiate the full $1,500 refund as per the money-back guarantee</li>
+                                            <li><strong>Document lessons:</strong> Add notes to the trial record explaining what document characteristics caused the failure</li>
+                                        </ol>
+                                        <div class="warning-box">
+                                            <p style="margin: 0;"><strong>Common Failure Causes:</strong></p>
+                                            <ul style="margin: 0.5rem 0 0;">
+                                                <li>Handwritten documents (OCR limitations)</li>
+                                                <li>Highly variable layouts across same document type</li>
+                                                <li>Unusual file formats or corrupted PDFs</li>
+                                                <li>Missing critical data fields in source documents</li>
+                                                <li>Industry-specific terminology not in training data</li>
+                                            </ul>
+                                        </div>
+                                        <p>A failed trial is valuable market research - document what didn't work to improve future success rates.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I manage document retention and privacy?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>Client documents are subject to Australian Privacy Act requirements. The system provides configurable retention controls:</p>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Setting Retention Period</h6>
+                                        <ol>
+                                            <li>On the trial detail page, find the <strong>"Document Retention"</strong> section</li>
+                                            <li>Set the retention period (default: 30 days, range: 7-90 days)</li>
+                                            <li>The system calculates the expiry date from trial creation</li>
+                                        </ol>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Manual Document Deletion</h6>
+                                        <ol>
+                                            <li>Click <strong>"Delete Documents Now"</strong> to immediately purge all original PDFs</li>
+                                            <li>Confirm the deletion when prompted</li>
+                                            <li>Extraction results and metrics are preserved (only source files deleted)</li>
+                                        </ol>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Automatic Cleanup</h6>
+                                        <p>The API endpoint <code>/api/system/cleanup-documents</code> automatically purges expired documents. This can be triggered by a scheduled job or manual API call with admin authentication.</p>
+                                        
+                                        <div class="info-box">
+                                            <p style="margin: 0;"><strong>File Location:</strong> Documents are stored in <code>uploads/phase1_trials/&lt;trial_id&gt;/</code>. When deleted, the <code>documents_deleted_at</code> timestamp is recorded in the database.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">Can I re-run extraction on a single document?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>Yes, you can re-process individual documents without re-running the entire trial:</p>
+                                        <ol>
+                                            <li>Navigate to the trial detail page</li>
+                                            <li>Find the document you want to re-process</li>
+                                            <li>Click the <strong>"Re-process"</strong> button for that document</li>
+                                            <li>The system will:
+                                                <ul>
+                                                    <li>Re-extract text from the PDF</li>
+                                                    <li>Apply any document-level guidance (hints, context)</li>
+                                                    <li>Run fresh AI analysis (bypassing cache)</li>
+                                                    <li>Update the document's metrics</li>
+                                                    <li>Recalculate overall trial scores</li>
+                                                </ul>
+                                            </li>
+                                        </ol>
+                                        <div class="success-box">
+                                            <p style="margin: 0;"><strong>Use Case:</strong> This is especially useful after adding extraction hints or when testing prompt improvements on specific problem documents.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="doc-card doc-question-item collapsed" style="margin-bottom: 1rem;">
+                                <div class="doc-question-header doc-question-toggle">
+                                    <h5 class="doc-question" style="font-size: 1rem;">How do I track trial status across multiple clients?</h5>
+                                    <span class="doc-question-chevron">▶</span>
+                                </div>
+                                <div class="doc-question-content">
+                                    <div class="doc-answer">
+                                        <p>The Phase 1 Trials list page (<code>/admin/phase1-trials</code>) provides an overview of all trials:</p>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Status Indicators</h6>
+                                        <ul>
+                                            <li><span style="color: #6B7280;">●</span> <strong>Pending:</strong> Trial created, awaiting document upload</li>
+                                            <li><span style="color: #3B82F6;">●</span> <strong>Processing:</strong> Documents uploaded, extraction in progress</li>
+                                            <li><span style="color: #10B981;">●</span> <strong>Completed:</strong> All processing done, report ready</li>
+                                            <li><span style="color: #EF4444;">●</span> <strong>Failed:</strong> Trial did not meet pass thresholds</li>
+                                        </ul>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Filtering Options</h6>
+                                        <p>Use the filter dropdown to view trials by status:</p>
+                                        <ul>
+                                            <li><strong>All Trials:</strong> Complete list with pagination</li>
+                                            <li><strong>Pending:</strong> Trials waiting for documents</li>
+                                            <li><strong>Completed:</strong> Ready for client delivery</li>
+                                            <li><strong>Failed:</strong> Requires refund processing</li>
+                                        </ul>
+                                        
+                                        <h6 style="color: #0B1221; font-size: 0.9375rem; margin: 1.5rem 0 0.75rem; font-weight: 600;">Quick Actions</h6>
+                                        <p>From the list view, you can quickly:</p>
+                                        <ul>
+                                            <li>Click trial code to view details</li>
+                                            <li>See document count (e.g., "12/15 uploaded")</li>
+                                            <li>View overall accuracy and STP rate at a glance</li>
+                                            <li>Check creation date and last activity</li>
+                                        </ul>
                                     </div>
                                 </div>
                             </div>
