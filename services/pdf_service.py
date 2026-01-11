@@ -4,7 +4,7 @@ PDF Service - Optimized PDF text extraction and processing
 Performance optimizations:
 - PyMuPDF (fitz) as primary extractor (faster than pdfplumber)
 - pdfplumber as fallback for complex layouts
-- Parallel page processing for multi-page documents
+- Sequential page processing (PyMuPDF pages are not thread-safe)
 
 Functions:
 - extract_text(): Extract text from PDF files or detect image files
@@ -15,8 +15,7 @@ Created: Phase 3.2 - PDF Service Extraction (optimized)
 """
 
 import os
-import concurrent.futures
-from typing import Optional, List, Tuple
+from typing import Optional, Tuple
 
 ENGINEERING_PROMPT_LIMIT = 10000
 ENGINEERING_PROMPT_LIMIT_SHORT = 3200
@@ -59,29 +58,14 @@ def prepare_prompt_text(text, doc_type, limit=None):
     return cleaned
 
 
-def _extract_page_pymupdf(page) -> str:
-    """Extract text from a single PyMuPDF page"""
-    try:
-        return page.get_text("text") or ""
-    except Exception:
-        return ""
-
-
-def _extract_page_pdfplumber(page) -> str:
-    """Extract text from a single pdfplumber page"""
-    try:
-        return page.extract_text() or ""
-    except Exception:
-        return ""
-
-
-def extract_text_fast(file_path: str, use_parallel: bool = True) -> Tuple[str, str]:
+def extract_text_fast(file_path: str) -> Tuple[str, str]:
     """
     Fast PDF text extraction using PyMuPDF with pdfplumber fallback.
     
+    Note: PyMuPDF page objects are not thread-safe, so we process sequentially.
+    
     Args:
         file_path: Path to PDF file
-        use_parallel: Use parallel processing for multi-page docs (default True)
     
     Returns:
         Tuple of (extracted_text, extraction_method)
@@ -95,16 +79,15 @@ def extract_text_fast(file_path: str, use_parallel: bool = True) -> Tuple[str, s
     if PYMUPDF_AVAILABLE:
         try:
             doc = fitz.open(file_path)
-            pages = list(doc)
+            page_texts = []
             
-            if use_parallel and len(pages) > 3:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                    page_texts = list(executor.map(_extract_page_pymupdf, pages))
-            else:
-                page_texts = [_extract_page_pymupdf(page) for page in pages]
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                text = page.get_text("text") or ""
+                page_texts.append(text)
             
-            text = "\n".join(page_texts)
             doc.close()
+            text = "\n".join(page_texts)
             
             if text.strip():
                 return sanitize_text(text), 'pymupdf'
@@ -114,13 +97,11 @@ def extract_text_fast(file_path: str, use_parallel: bool = True) -> Tuple[str, s
     if PDFPLUMBER_AVAILABLE:
         try:
             with pdfplumber.open(file_path) as pdf:
-                pages = pdf.pages
+                page_texts = []
                 
-                if use_parallel and len(pages) > 3:
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-                        page_texts = list(executor.map(_extract_page_pdfplumber, pages))
-                else:
-                    page_texts = [_extract_page_pdfplumber(page) for page in pages]
+                for page in pdf.pages:
+                    text = page.extract_text() or ""
+                    page_texts.append(text)
                 
                 text = "\n".join(page_texts)
                 
@@ -202,8 +183,10 @@ def get_pdf_info(file_path: str) -> dict:
         try:
             doc = fitz.open(file_path)
             info['page_count'] = len(doc)
-            first_page_text = doc[0].get_text("text") if len(doc) > 0 else ""
-            info['has_text'] = bool(first_page_text.strip())
+            if len(doc) > 0:
+                first_page = doc.load_page(0)
+                first_page_text = first_page.get_text("text")
+                info['has_text'] = bool(first_page_text and first_page_text.strip())
             info['extraction_method'] = 'pymupdf'
             doc.close()
             return info
@@ -214,8 +197,9 @@ def get_pdf_info(file_path: str) -> dict:
         try:
             with pdfplumber.open(file_path) as pdf:
                 info['page_count'] = len(pdf.pages)
-                first_page_text = pdf.pages[0].extract_text() if pdf.pages else ""
-                info['has_text'] = bool(first_page_text and first_page_text.strip())
+                if pdf.pages:
+                    first_page_text = pdf.pages[0].extract_text()
+                    info['has_text'] = bool(first_page_text and first_page_text.strip())
                 info['extraction_method'] = 'pdfplumber'
         except Exception:
             pass
