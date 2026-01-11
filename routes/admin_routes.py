@@ -565,6 +565,33 @@ def phase1_trial_config(trial_id):
         return jsonify({"success": False, "error": "Failed to update configuration"}), 500
 
 
+@admin_bp.route('/phase1-trials/<int:trial_id>/update', methods=['POST'])
+@require_admin
+def phase1_trial_update(trial_id):
+    """Update trial meta details (customer, company, industry, status)"""
+    from database import update_phase1_trial_meta
+    
+    data = request.get_json()
+    
+    customer_name = data.get('customer_name', '').strip()
+    customer_company = data.get('customer_company', '').strip()
+    industry = data.get('industry', '').strip()
+    status = data.get('status', '').strip()
+    
+    success = update_phase1_trial_meta(
+        trial_id=trial_id,
+        customer_name=customer_name or None,
+        customer_company=customer_company or None,
+        industry=industry or None,
+        status=status or None
+    )
+    
+    if success:
+        return jsonify({"success": True, "message": "Trial details updated"})
+    else:
+        return jsonify({"success": False, "error": "Failed to update trial details"}), 500
+
+
 @admin_bp.route('/phase1-trials/documents/<int:doc_id>/details', methods=['POST'])
 @require_admin
 def phase1_document_details(doc_id):

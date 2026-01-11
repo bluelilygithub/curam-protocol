@@ -1903,6 +1903,49 @@ def get_trial_documents(trial_id):
         return []
 
 
+def update_phase1_trial_meta(trial_id, customer_name=None, customer_company=None,
+                              industry=None, status=None):
+    """
+    Update trial meta details (customer, company, industry, status).
+    
+    Args:
+        trial_id: Trial database ID
+        customer_name: Customer name
+        customer_company: Company name
+        industry: Industry type
+        status: Trial status
+    
+    Returns:
+        bool: True if updated successfully
+    """
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE phase1_trials
+                SET customer_name = COALESCE(:customer_name, customer_name),
+                    customer_company = COALESCE(:customer_company, customer_company),
+                    industry = COALESCE(:industry, industry),
+                    status = COALESCE(:status, status)
+                WHERE id = :trial_id
+            """), {
+                "trial_id": trial_id,
+                "customer_name": customer_name,
+                "customer_company": customer_company,
+                "industry": industry,
+                "status": status
+            })
+            conn.commit()
+            print(f"✅ Trial {trial_id} meta details updated")
+            return True
+            
+    except Exception as e:
+        print(f"❌ Error updating trial meta: {e}")
+        return False
+
+
 def update_trial_document_details(doc_id, extraction_context=None, extraction_hints=None,
                                    expected_fields=None, notes=None):
     """

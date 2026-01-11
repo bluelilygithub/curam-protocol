@@ -157,6 +157,12 @@
                     {% endif %}
                 </div>
             </div>
+            <div class="trial-info-item">
+                <button type="button" onclick="openTrialEditModal()" 
+                    style="padding: 0.25rem 0.75rem; font-size: 0.75rem; background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 4px; color: #4338CA; cursor: pointer;">
+                    Edit
+                </button>
+            </div>
         </div>
     </div>
     <div class="admin-header-actions">
@@ -1018,6 +1024,17 @@ function closeDocEditModal() {
     if (modal) modal.style.display = 'none';
 }
 
+// Trial Edit Modal
+function openTrialEditModal() {
+    const modal = document.getElementById('edit-trial-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeTrialEditModal() {
+    const modal = document.getElementById('edit-trial-modal');
+    if (modal) modal.style.display = 'none';
+}
+
 // Handle form submission
 document.addEventListener('DOMContentLoaded', function() {
     const editDocForm = document.getElementById('edit-doc-form');
@@ -1072,6 +1089,63 @@ document.addEventListener('DOMContentLoaded', function() {
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Save Details';
+            }
+        });
+    }
+    
+    // Trial edit form handler
+    const editTrialForm = document.getElementById('edit-trial-form');
+    const editTrialModal = document.getElementById('edit-trial-modal');
+    
+    if (editTrialModal) {
+        editTrialModal.addEventListener('click', function(e) {
+            if (e.target === editTrialModal) {
+                closeTrialEditModal();
+            }
+        });
+    }
+    
+    if (editTrialForm) {
+        editTrialForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const trialId = {{ trial.get('id') }};
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            
+            const formData = {
+                customer_name: document.getElementById('edit-trial-customer').value,
+                customer_company: document.getElementById('edit-trial-company').value,
+                industry: document.getElementById('edit-trial-industry').value,
+                status: document.getElementById('edit-trial-status').value
+            };
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+            
+            try {
+                const response = await fetch(`/admin/phase1-trials/${trialId}/update`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    closeTrialEditModal();
+                    location.reload();
+                } else {
+                    alert('Failed to save: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Failed to save: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Save Changes';
             }
         });
     }
@@ -1134,6 +1208,71 @@ document.addEventListener('DOMContentLoaded', function() {
                 </button>
                 <button type="submit" class="btn-admin" style="padding: 0.75rem 1.5rem;">
                     Save Details
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Trial Edit Modal -->
+<div id="edit-trial-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 12px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+        <div style="padding: 1.5rem; border-bottom: 1px solid #E5E7EB;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #0B1221;">Edit Trial Details</h3>
+                <button type="button" onclick="closeTrialEditModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6B7280;">&times;</button>
+            </div>
+        </div>
+        
+        <form id="edit-trial-form" style="padding: 1.5rem;">
+            <div style="margin-bottom: 1.25rem;">
+                <label for="edit-trial-customer" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                    Customer Name
+                </label>
+                <input type="text" id="edit-trial-customer" value="{{ trial.get('customer_name', '') }}"
+                    style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-size: 0.875rem;">
+            </div>
+            
+            <div style="margin-bottom: 1.25rem;">
+                <label for="edit-trial-company" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                    Company
+                </label>
+                <input type="text" id="edit-trial-company" value="{{ trial.get('customer_company', '') }}"
+                    style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-size: 0.875rem;">
+            </div>
+            
+            <div style="margin-bottom: 1.25rem;">
+                <label for="edit-trial-industry" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                    Industry
+                </label>
+                <select id="edit-trial-industry" style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-size: 0.875rem; background: white;">
+                    <option value="Engineering" {% if trial.get('industry') == 'Engineering' %}selected{% endif %}>Engineering</option>
+                    <option value="Finance" {% if trial.get('industry') == 'Finance' %}selected{% endif %}>Finance</option>
+                    <option value="Logistics" {% if trial.get('industry') == 'Logistics' %}selected{% endif %}>Logistics</option>
+                    <option value="Construction" {% if trial.get('industry') == 'Construction' %}selected{% endif %}>Construction</option>
+                    <option value="Professional Services" {% if trial.get('industry') == 'Professional Services' %}selected{% endif %}>Professional Services</option>
+                </select>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label for="edit-trial-status" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                    Status
+                </label>
+                <select id="edit-trial-status" style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-size: 0.875rem; background: white;">
+                    <option value="pending" {% if trial.get('status') == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="processing" {% if trial.get('status') == 'processing' %}selected{% endif %}>Processing</option>
+                    <option value="completed" {% if trial.get('status') == 'completed' %}selected{% endif %}>Completed</option>
+                    <option value="failed" {% if trial.get('status') == 'failed' %}selected{% endif %}>Failed</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" onclick="closeTrialEditModal()" 
+                    style="padding: 0.75rem 1.5rem; background: #F3F4F6; border: none; border-radius: 6px; cursor: pointer; color: #374151; font-weight: 500;">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-admin" style="padding: 0.75rem 1.5rem;">
+                    Save Changes
                 </button>
             </div>
         </form>
