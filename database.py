@@ -1683,6 +1683,34 @@ def get_phase1_trial(trial_id=None, trial_code=None, report_token=None):
         return None
 
 
+def update_phase1_trial_status(trial_id, status):
+    """
+    Update the status of a Phase 1 trial.
+    
+    Args:
+        trial_id: Trial database ID
+        status: New status (pending, processing, completed, failed)
+    
+    Returns:
+        bool: True if updated successfully
+    """
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE phase1_trials
+                SET status = :status, updated_at = NOW()
+                WHERE id = :trial_id
+            """), {"trial_id": trial_id, "status": status})
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Error updating trial status: {e}")
+        return False
+
+
 def update_phase1_trial_extraction_config(trial_id, extraction_fields=None, output_format=None, category_configs=None):
     """
     Update extraction fields and output format configuration for a Phase 1 trial.

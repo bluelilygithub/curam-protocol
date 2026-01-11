@@ -569,12 +569,142 @@ def phase1_trial_config(trial_id):
 @require_admin
 def phase1_trial_process(trial_id):
     """Process documents in a Phase 1 trial (run extraction)"""
-    # This would integrate with your existing extraction services
-    # For now, return a placeholder response
+    import time
+    from database import (
+        get_phase1_trial, get_trial_documents, save_trial_result,
+        update_phase1_trial_status
+    )
+    from services.gemini_service import analyze_gemini
+    from services.pdf_service import extract_text
+    
+    trial = get_phase1_trial(trial_id=trial_id)
+    if not trial:
+        return jsonify({"success": False, "error": "Trial not found"}), 404
+    
+    documents = get_trial_documents(trial_id)
+    if not documents:
+        return jsonify({"success": False, "error": "No documents to process"}), 400
+    
+    update_phase1_trial_status(trial_id, 'processing')
+    
+    sector_slug = trial.get('sector_slug', 'professional-services')
+    
+    doctype_slug_to_gemini = {
+        'beam-schedule': 'engineering',
+        'drawing-register': 'transmittal',
+        'bill-of-lading': 'logistics',
+        'shipping-documents': 'logistics',
+        'vendor-invoice': 'finance',
+        'expense-receipt': 'finance',
+        'legal-contract': 'finance',
+    }
+    
+    sector_to_doctype = {
+        'built-environment': 'engineering',
+        'logistics-compliance': 'logistics',
+        'professional-services': 'finance',
+    }
+    default_doc_type = sector_to_doctype.get(sector_slug, 'finance')
+    
+    results_summary = []
+    errors = []
+    
+    for doc in documents:
+        doc_id = doc['id']
+        file_path = doc.get('file_path')
+        
+        doc_type_slug = doc.get('document_type_slug', '')
+        doc_type = doctype_slug_to_gemini.get(doc_type_slug, default_doc_type)
+        
+        if not file_path or not os.path.exists(file_path):
+            errors.append(f"Document {doc_id}: File not found at {file_path}")
+            continue
+        
+        try:
+            start_time = time.time()
+            
+            text, method = extract_text(file_path)
+            
+            if not text or len(text.strip()) < 50:
+                errors.append(f"Document {doc_id}: Could not extract text")
+                continue
+            
+            entries, error, model, attempt_log, action_log, schedule_type = analyze_gemini(
+                text, doc_type, sector_slug=sector_slug
+            )
+            
+            processing_time_ms = int((time.time() - start_time) * 1000)
+            
+            if error:
+                errors.append(f"Document {doc_id}: {error}")
+                continue
+            
+            if not entries:
+                errors.append(f"Document {doc_id}: No data extracted")
+                continue
+            
+            fields_total = 0
+            fields_passed = 0
+            fields_flagged = 0
+            confidence_scores = {}
+            
+            if isinstance(entries, list) and len(entries) > 0:
+                for entry in entries:
+                    if isinstance(entry, dict):
+                        for key, value in entry.items():
+                            if key.startswith('_') or key in ['row_index']:
+                                continue
+                            fields_total += 1
+                            confidence = 0.95 if value and str(value).strip() else 0.5
+                            confidence_scores[key] = confidence
+                            if confidence >= 0.9:
+                                fields_passed += 1
+                            else:
+                                fields_flagged += 1
+            
+            field_accuracy = (fields_passed / fields_total * 100) if fields_total > 0 else 0
+            stp_eligible = field_accuracy >= 90 and fields_flagged == 0
+            requires_review = fields_flagged > 0 or field_accuracy < 90
+            
+            result_id = save_trial_result(
+                trial_id=trial_id,
+                document_id=doc_id,
+                extracted_data={'entries': entries, 'model': model, 'schedule_type': schedule_type},
+                confidence_scores=confidence_scores,
+                field_accuracy=round(field_accuracy, 2),
+                fields_total=fields_total,
+                fields_passed=fields_passed,
+                fields_flagged=fields_flagged,
+                validation_errors=None,
+                requires_human_review=requires_review,
+                stp_eligible=stp_eligible,
+                processing_time_ms=processing_time_ms
+            )
+            
+            results_summary.append({
+                'document_id': doc_id,
+                'result_id': result_id,
+                'accuracy': round(field_accuracy, 2),
+                'fields_extracted': fields_total,
+                'stp_eligible': stp_eligible
+            })
+            
+        except Exception as e:
+            errors.append(f"Document {doc_id}: {str(e)}")
+            continue
+    
+    if len(results_summary) == len(documents):
+        update_phase1_trial_status(trial_id, 'completed')
+    elif len(results_summary) > 0:
+        update_phase1_trial_status(trial_id, 'completed')
+    else:
+        update_phase1_trial_status(trial_id, 'failed')
+    
     return jsonify({
         "success": True,
-        "message": "Document processing started. Results will be available shortly.",
-        "note": "This endpoint needs to be implemented to integrate with extraction services"
+        "message": f"Processed {len(results_summary)} of {len(documents)} documents",
+        "results": results_summary,
+        "errors": errors if errors else None
     })
 
 

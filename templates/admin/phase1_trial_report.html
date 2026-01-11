@@ -1,0 +1,298 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Phase 1 Report: {{ trial.get('trial_code', 'N/A') }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .report-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+    
+    .report-header {
+        text-align: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 3px solid #D4AF37;
+    }
+    
+    .report-logo {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #0B1221;
+        margin-bottom: 0.5rem;
+    }
+    
+    .report-title {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #0B1221;
+        margin: 1rem 0;
+    }
+    
+    .report-subtitle {
+        font-size: 1.125rem;
+        color: #6B7280;
+    }
+    
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin: 2rem 0;
+    }
+    
+    .metric-card {
+        background: #F8F9FA;
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+        border: 2px solid #E5E7EB;
+    }
+    
+    .metric-card.pass {
+        border-color: #10B981;
+        background: linear-gradient(135deg, #F0FDF4, white);
+    }
+    
+    .metric-card.fail {
+        border-color: #EF4444;
+        background: linear-gradient(135deg, #FEF2F2, white);
+    }
+    
+    .metric-card.primary {
+        border-color: #D4AF37;
+        background: linear-gradient(135deg, #FFFBF0, white);
+    }
+    
+    .metric-value {
+        font-size: 3rem;
+        font-weight: 800;
+        color: #0B1221;
+    }
+    
+    .metric-label {
+        font-size: 0.875rem;
+        color: #6B7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-top: 0.5rem;
+    }
+    
+    .metric-status {
+        margin-top: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .status-pass { color: #059669; }
+    .status-fail { color: #DC2626; }
+    
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #0B1221;
+        margin: 2rem 0 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #E5E7EB;
+    }
+    
+    .results-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+    }
+    
+    .results-table th,
+    .results-table td {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid #E5E7EB;
+    }
+    
+    .results-table th {
+        background: #F8F9FA;
+        font-weight: 600;
+        color: #0B1221;
+    }
+    
+    .results-table tr:hover {
+        background: #FFFBF0;
+    }
+    
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .badge-success { background: #D1FAE5; color: #065F46; }
+    .badge-warning { background: #FEF3C7; color: #92400E; }
+    .badge-error { background: #FEE2E2; color: #991B1B; }
+    
+    .recommendation-box {
+        margin: 2rem 0;
+        padding: 1.5rem;
+        border-radius: 8px;
+        border-left: 4px solid;
+    }
+    
+    .recommendation-box.pass {
+        background: #F0FDF4;
+        border-color: #10B981;
+    }
+    
+    .recommendation-box.fail {
+        background: #FEF3C7;
+        border-color: #F59E0B;
+    }
+    
+    .extracted-data {
+        background: #F8F9FA;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 0.5rem;
+        font-family: monospace;
+        font-size: 0.875rem;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    
+    .print-btn {
+        background: #0B1221;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    
+    .print-btn:hover {
+        background: #1F2937;
+    }
+    
+    @media print {
+        .no-print { display: none !important; }
+        .report-container { max-width: 100%; padding: 0; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="no-print" style="margin-bottom: 1rem;">
+    <a href="{{ url_for('admin.phase1_trial_detail', trial_id=trial.get('id')) }}" style="color: #D4AF37; text-decoration: none; font-weight: 600;">← Back to Trial</a>
+    <button onclick="window.print()" class="print-btn" style="float: right;">Print Report</button>
+</div>
+
+<div class="report-container">
+    <div class="report-header">
+        <div class="report-logo">Curam-Ai Protocol™</div>
+        <h1 class="report-title">Phase 1 Feasibility Report</h1>
+        <p class="report-subtitle">{{ trial.get('customer_company', trial.get('customer_name', 'N/A')) }}</p>
+        <p style="color: #9CA3AF; font-size: 0.875rem;">Report ID: {{ trial.get('trial_code', 'N/A') }} | Generated: {{ trial.get('completed_at', trial.get('updated_at')).strftime('%d %B %Y') if trial.get('completed_at') or trial.get('updated_at') else 'N/A' }}</p>
+    </div>
+    
+    <div class="metrics-grid">
+        <div class="metric-card {% if trial.get('overall_accuracy', 0) >= 90 %}pass{% else %}fail{% endif %}">
+            <div class="metric-value">{{ "%.1f"|format(trial.get('overall_accuracy', 0)) }}%</div>
+            <div class="metric-label">Field Accuracy</div>
+            <div class="metric-status {% if trial.get('overall_accuracy', 0) >= 90 %}status-pass{% else %}status-fail{% endif %}">
+                {% if trial.get('overall_accuracy', 0) >= 90 %}PASS{% else %}NEEDS REVIEW{% endif %}
+            </div>
+        </div>
+        
+        <div class="metric-card {% if stp_rate >= 60 %}pass{% else %}fail{% endif %}">
+            <div class="metric-value">{{ stp_rate }}%</div>
+            <div class="metric-label">STP Rate</div>
+            <div class="metric-status {% if stp_rate >= 60 %}status-pass{% else %}status-fail{% endif %}">
+                {% if stp_rate >= 60 %}PASS{% else %}NEEDS REVIEW{% endif %}
+            </div>
+        </div>
+        
+        <div class="metric-card primary">
+            <div class="metric-value">{{ total_flagged }}</div>
+            <div class="metric-label">Fields Flagged</div>
+            <div class="metric-status" style="color: #6B7280;">
+                For Human Review
+            </div>
+        </div>
+    </div>
+    
+    <div class="recommendation-box {% if trial.get('overall_accuracy', 0) >= 90 and stp_rate >= 60 %}pass{% else %}fail{% endif %}">
+        <strong>Recommendation:</strong>
+        {% if trial.get('overall_accuracy', 0) >= 90 and stp_rate >= 60 %}
+            All tests passed. This document type is suitable for AI automation. Proceed to Phase 2 implementation.
+        {% else %}
+            Tests did not meet all thresholds. Review flagged fields and consider document format improvements before proceeding.
+        {% endif %}
+    </div>
+    
+    <h3 class="section-title">Document Results</h3>
+    
+    {% if results %}
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th>Document</th>
+                <th>Accuracy</th>
+                <th>Fields</th>
+                <th>STP Eligible</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
+            <tr>
+                <td>
+                    {% set doc = documents | selectattr('id', 'equalto', result.get('document_id')) | first %}
+                    {{ doc.get('original_filename', 'Document ' ~ loop.index) if doc else 'Document ' ~ loop.index }}
+                </td>
+                <td>{{ "%.1f"|format(result.get('field_accuracy', 0)) }}%</td>
+                <td>{{ result.get('fields_passed', 0) }}/{{ result.get('fields_total', 0) }}</td>
+                <td>
+                    {% if result.get('stp_eligible') %}
+                        <span class="badge badge-success">Yes</span>
+                    {% else %}
+                        <span class="badge badge-warning">No</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if result.get('field_accuracy', 0) >= 90 %}
+                        <span class="badge badge-success">Pass</span>
+                    {% else %}
+                        <span class="badge badge-warning">Review</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #6B7280; text-align: center; padding: 2rem;">No extraction results available yet.</p>
+    {% endif %}
+    
+    <h3 class="section-title">Extracted Data Preview</h3>
+    
+    {% if results %}
+    {% for result in results %}
+    <div style="margin-bottom: 1.5rem;">
+        <strong>
+            {% set doc = documents | selectattr('id', 'equalto', result.get('document_id')) | first %}
+            {{ doc.get('original_filename', 'Document ' ~ loop.index) if doc else 'Document ' ~ loop.index }}
+        </strong>
+        <div class="extracted-data">
+            <pre>{{ result.get('extracted_data', {}) | tojson(indent=2) }}</pre>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+    
+    <div style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #E5E7EB; text-align: center; color: #9CA3AF; font-size: 0.875rem;">
+        <p>Curam-Ai Protocol™ | AI-Powered Document Automation</p>
+        <p>www.curam-ai.com.au</p>
+    </div>
+</div>
+{% endblock %}
