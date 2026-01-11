@@ -592,6 +592,20 @@ def phase1_trial_update(trial_id):
         return jsonify({"success": False, "error": "Failed to update trial details"}), 500
 
 
+@admin_bp.route('/phase1-trials/documents/<int:doc_id>/delete', methods=['POST'])
+@require_admin
+def phase1_document_delete(doc_id):
+    """Delete a document from a Phase 1 trial"""
+    from database import delete_trial_document
+    
+    success, error = delete_trial_document(doc_id)
+    
+    if success:
+        return jsonify({"success": True, "message": "Document deleted"})
+    else:
+        return jsonify({"success": False, "error": error or "Failed to delete document"}), 500
+
+
 @admin_bp.route('/phase1-trials/documents/<int:doc_id>/details', methods=['POST'])
 @require_admin
 def phase1_document_details(doc_id):

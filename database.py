@@ -1946,6 +1946,64 @@ def update_phase1_trial_meta(trial_id, customer_name=None, customer_company=None
         return False
 
 
+def delete_trial_document(doc_id):
+    """
+    Delete a document from a Phase 1 trial.
+    
+    Args:
+        doc_id: Document database ID
+    
+    Returns:
+        tuple: (success: bool, error: str or None)
+    """
+    if not engine:
+        return False, "Database not available"
+    
+    try:
+        with engine.connect() as conn:
+            # Get the file path first
+            result = conn.execute(text("""
+                SELECT stored_file_path, trial_id FROM phase1_trial_documents
+                WHERE id = :doc_id
+            """), {"doc_id": doc_id})
+            row = result.fetchone()
+            
+            if not row:
+                return False, "Document not found"
+            
+            file_path = row[0]
+            trial_id = row[1]
+            
+            # Delete any extraction results for this document
+            conn.execute(text("""
+                DELETE FROM phase1_trial_results WHERE document_id = :doc_id
+            """), {"doc_id": doc_id})
+            
+            # Delete the document record
+            conn.execute(text("""
+                DELETE FROM phase1_trial_documents WHERE id = :doc_id
+            """), {"doc_id": doc_id})
+            
+            conn.commit()
+            
+            # Delete the actual file
+            if file_path:
+                import os
+                try:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        print(f"✅ Deleted file: {file_path}")
+                except Exception as e:
+                    print(f"⚠️ Could not delete file {file_path}: {e}")
+            
+            print(f"✅ Document {doc_id} deleted from trial {trial_id}")
+            return True, None
+            
+    except Exception as e:
+        print(f"❌ Error deleting document: {e}")
+        return False, str(e)
+
+
 def update_trial_document_details(doc_id, extraction_context=None, extraction_hints=None,
                                    expected_fields=None, notes=None):
     """

@@ -494,7 +494,12 @@ function deleteDocuments() {
                             <button type="button" 
                                     onclick="openDocEditModal('{{ doc.get('id') }}', '{{ doc.get('original_filename', '') | e }}', '{{ (doc.get('extraction_context', '') or '') | e }}', '{{ (doc.get('extraction_hints', '') or '') | e }}', '{{ (doc.get('expected_fields', '') or '') | e }}', '{{ (doc.get('notes', '') or '') | e }}')"
                                     style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 4px; color: #4338CA; cursor: pointer;">
-                                Edit Details
+                                Edit
+                            </button>
+                            <button type="button" 
+                                    onclick="deleteDocument('{{ doc.get('id') }}', '{{ doc.get('original_filename', '') | e }}')"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #FEE2E2; border: 1px solid #FECACA; border-radius: 4px; color: #DC2626; cursor: pointer;">
+                                Delete
                             </button>
                         </div>
                     </div>
@@ -1033,6 +1038,35 @@ function openTrialEditModal() {
 function closeTrialEditModal() {
     const modal = document.getElementById('edit-trial-modal');
     if (modal) modal.style.display = 'none';
+}
+
+// Delete document
+async function deleteDocument(docId, docName) {
+    if (!confirm(`Are you sure you want to delete "${docName}"?\n\nThis will permanently remove the file and any extraction results.`)) {
+        return;
+    }
+    
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    
+    try {
+        const response = await fetch(`/admin/phase1-trials/documents/${docId}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Failed to delete: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Failed to delete: ' + error.message);
+    }
 }
 
 // Handle form submission
