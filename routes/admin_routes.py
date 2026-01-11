@@ -41,6 +41,7 @@ from database import (
 from sqlalchemy import text
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+admin_bp.strict_slashes = False
 
 # Rate limiting for login attempts
 LOGIN_ATTEMPTS = {}
