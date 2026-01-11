@@ -118,6 +118,21 @@
             padding-bottom: 0;
         }
         
+        .doc-card.collapsed > .doc-question-content {
+            max-height: 0;
+            opacity: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        
+        .doc-card:not(.collapsed) > .doc-question-header > .doc-question-chevron {
+            transform: rotate(90deg);
+        }
+        
+        .doc-card.collapsed > .doc-question-header {
+            border-bottom: none;
+        }
+        
         .doc-answer {
             color: #4B5563;
             line-height: 1.7;
@@ -1184,9 +1199,8 @@ WHERE trial_id = &lt;trial_id&gt; AND status = 'processing';
     </div>
 
     <script>
-        // Category toggle functionality
         document.addEventListener('DOMContentLoaded', function() {
-            // Category sections
+            // Category sections toggle
             const categoryToggles = document.querySelectorAll('.doc-category-toggle');
             categoryToggles.forEach(toggle => {
                 toggle.addEventListener('click', function() {
@@ -1195,19 +1209,45 @@ WHERE trial_id = &lt;trial_id&gt; AND status = 'processing';
                 });
             });
             
-            // Question items
-            const questionToggles = document.querySelectorAll('.doc-question-toggle');
-            questionToggles.forEach(toggle => {
-                toggle.addEventListener('click', function() {
-                    const item = this.closest('.doc-question-item');
-                    if (item) {
+            // Get all main sub-group cards (direct children of doc-category-content)
+            const subGroups = document.querySelectorAll('.doc-category-content > .doc-card');
+            
+            // Start all sub-groups collapsed
+            subGroups.forEach(subGroup => {
+                subGroup.classList.add('collapsed');
+            });
+            
+            // Sub-group accordion behavior (only one open at a time)
+            subGroups.forEach(subGroup => {
+                const header = subGroup.querySelector(':scope > .doc-question-header');
+                if (header) {
+                    header.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        const isCollapsed = subGroup.classList.contains('collapsed');
+                        
+                        // Close all other sub-groups first
+                        subGroups.forEach(sg => {
+                            sg.classList.add('collapsed');
+                        });
+                        
+                        // Toggle this sub-group
+                        if (isCollapsed) {
+                            subGroup.classList.remove('collapsed');
+                        }
+                    });
+                }
+            });
+            
+            // Nested question items (can open independently within their sub-group)
+            const nestedQuestions = document.querySelectorAll('.doc-card .doc-card.doc-question-item');
+            nestedQuestions.forEach(item => {
+                const header = item.querySelector(':scope > .doc-question-header');
+                if (header) {
+                    header.addEventListener('click', function(e) {
+                        e.stopPropagation();
                         item.classList.toggle('collapsed');
-                    }
-                    const category = this.closest('.doc-category-section');
-                    if (category && !category.classList.contains('collapsed')) {
-                        category.classList.remove('collapsed');
-                    }
-                });
+                    });
+                }
             });
             
             // Expand the Phase 1 category by default
