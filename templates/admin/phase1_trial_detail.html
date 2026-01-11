@@ -485,12 +485,8 @@ function deleteDocuments() {
                             {% elif doc.get('status') == 'completed' %}
                                 <span class="badge badge-success">Completed</span>
                             {% endif %}
-                            <button type="button" class="btn-edit-doc" data-doc-id="{{ doc.get('id') }}" 
-                                    data-doc-name="{{ doc.get('original_filename', '') }}"
-                                    data-context="{{ doc.get('extraction_context', '') or '' }}"
-                                    data-hints="{{ doc.get('extraction_hints', '') or '' }}"
-                                    data-expected="{{ doc.get('expected_fields', '') or '' }}"
-                                    data-notes="{{ doc.get('notes', '') or '' }}"
+                            <button type="button" 
+                                    onclick="openDocEditModal('{{ doc.get('id') }}', '{{ doc.get('original_filename', '') | e }}', '{{ (doc.get('extraction_context', '') or '') | e }}', '{{ (doc.get('extraction_hints', '') or '') | e }}', '{{ (doc.get('expected_fields', '') or '') | e }}', '{{ (doc.get('notes', '') or '') | e }}')"
                                     style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 4px; color: #4338CA; cursor: pointer;">
                                 Edit Details
                             </button>
@@ -999,80 +995,85 @@ function copyReportUrl() {
     alert('Report URL copied to clipboard!');
 }
 
-// Document Details Modal
-const editDocModal = document.getElementById('edit-doc-modal');
-const editDocForm = document.getElementById('edit-doc-form');
-
-document.querySelectorAll('.btn-edit-doc').forEach(btn => {
-    btn.addEventListener('click', function() {
-        const docId = this.dataset.docId;
-        const docName = this.dataset.docName;
-        const context = this.dataset.context || '';
-        const hints = this.dataset.hints || '';
-        const expected = this.dataset.expected || '';
-        const notes = this.dataset.notes || '';
-        
-        document.getElementById('edit-doc-id').value = docId;
-        document.getElementById('edit-doc-name').textContent = docName;
-        document.getElementById('edit-doc-context').value = context;
-        document.getElementById('edit-doc-hints').value = hints;
-        document.getElementById('edit-doc-expected').value = expected;
-        document.getElementById('edit-doc-notes').value = notes;
-        
-        editDocModal.style.display = 'flex';
-    });
-});
-
-document.getElementById('close-doc-modal')?.addEventListener('click', () => {
-    editDocModal.style.display = 'none';
-});
-
-editDocModal?.addEventListener('click', (e) => {
-    if (e.target === editDocModal) {
-        editDocModal.style.display = 'none';
+// Document Details Modal - use function to open
+function openDocEditModal(docId, docName, context, hints, expected, notes) {
+    const modal = document.getElementById('edit-doc-modal');
+    if (!modal) {
+        console.error('Modal not found');
+        return;
     }
-});
+    
+    document.getElementById('edit-doc-id').value = docId;
+    document.getElementById('edit-doc-name').textContent = docName;
+    document.getElementById('edit-doc-context').value = context || '';
+    document.getElementById('edit-doc-hints').value = hints || '';
+    document.getElementById('edit-doc-expected').value = expected || '';
+    document.getElementById('edit-doc-notes').value = notes || '';
+    
+    modal.style.display = 'flex';
+}
 
-editDocForm?.addEventListener('submit', async function(e) {
-    e.preventDefault();
+function closeDocEditModal() {
+    const modal = document.getElementById('edit-doc-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+// Handle form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const editDocForm = document.getElementById('edit-doc-form');
+    const editDocModal = document.getElementById('edit-doc-modal');
     
-    const docId = document.getElementById('edit-doc-id').value;
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
-    
-    const formData = {
-        extraction_context: document.getElementById('edit-doc-context').value,
-        extraction_hints: document.getElementById('edit-doc-hints').value,
-        expected_fields: document.getElementById('edit-doc-expected').value,
-        notes: document.getElementById('edit-doc-notes').value
-    };
-    
-    const submitBtn = this.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Saving...';
-    
-    try {
-        const response = await fetch(`/admin/phase1-trials/documents/${docId}/details`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify(formData)
+    if (editDocModal) {
+        editDocModal.addEventListener('click', function(e) {
+            if (e.target === editDocModal) {
+                closeDocEditModal();
+            }
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            editDocModal.style.display = 'none';
-            location.reload();
-        } else {
-            alert('Failed to save: ' + (data.error || 'Unknown error'));
-        }
-    } catch (error) {
-        alert('Failed to save: ' + error.message);
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Save Details';
+    }
+    
+    if (editDocForm) {
+        editDocForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const docId = document.getElementById('edit-doc-id').value;
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+            
+            const formData = {
+                extraction_context: document.getElementById('edit-doc-context').value,
+                extraction_hints: document.getElementById('edit-doc-hints').value,
+                expected_fields: document.getElementById('edit-doc-expected').value,
+                notes: document.getElementById('edit-doc-notes').value
+            };
+            
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Saving...';
+            
+            try {
+                const response = await fetch(`/admin/phase1-trials/documents/${docId}/details`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    closeDocEditModal();
+                    location.reload();
+                } else {
+                    alert('Failed to save: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Failed to save: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Save Details';
+            }
+        });
     }
 });
 </script>
@@ -1083,7 +1084,7 @@ editDocForm?.addEventListener('submit', async function(e) {
         <div style="padding: 1.5rem; border-bottom: 1px solid #E5E7EB;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="margin: 0; color: #0B1221;">Edit Document Details</h3>
-                <button type="button" id="close-doc-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6B7280;">&times;</button>
+                <button type="button" onclick="closeDocEditModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6B7280;">&times;</button>
             </div>
             <p id="edit-doc-name" style="margin: 0.5rem 0 0; color: #6B7280; font-size: 0.875rem;"></p>
         </div>
@@ -1127,7 +1128,7 @@ editDocForm?.addEventListener('submit', async function(e) {
             </div>
             
             <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                <button type="button" onclick="document.getElementById('edit-doc-modal').style.display='none'" 
+                <button type="button" onclick="closeDocEditModal()" 
                     style="padding: 0.75rem 1.5rem; background: #F3F4F6; border: none; border-radius: 6px; cursor: pointer; color: #374151; font-weight: 500;">
                     Cancel
                 </button>
