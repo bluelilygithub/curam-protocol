@@ -406,6 +406,140 @@ def get_base_template():
             margin: 8px 0;
             font-size: 13px;
         }
+        
+        /* MOBILE RESPONSIVE STYLES */
+        @media (max-width: 768px) {
+            body {
+                margin: 10px auto;
+                padding: 10px;
+                font-size: 13px;
+                overflow-x: hidden;
+            }
+            
+            .container {
+                padding: 15px;
+                border-radius: 6px;
+            }
+            
+            h1 {
+                font-size: 18px;
+                padding-bottom: 8px;
+            }
+            
+            h3 {
+                font-size: 14px;
+                margin: 15px 0 8px;
+            }
+            
+            .toggle-group {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .toggle-group label {
+                font-size: 13px;
+                padding: 8px 12px;
+                background: #f0f0f0;
+                border-radius: 4px;
+            }
+            
+            .sample-group {
+                padding: 10px;
+            }
+            
+            .sample-group label {
+                font-size: 13px;
+                padding: 6px 0;
+            }
+            
+            /* Table horizontal scroll */
+            .table-wrapper {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                margin: 15px -10px;
+                padding: 0 10px;
+            }
+            
+            table {
+                min-width: 600px;
+                font-size: 11px;
+                margin-top: 15px;
+            }
+            
+            th, td {
+                padding: 6px 4px;
+            }
+            
+            th {
+                font-size: 10px;
+            }
+            
+            td {
+                font-size: 11px;
+            }
+            
+            .btn {
+                padding: 10px 16px;
+                font-size: 13px;
+                width: 100%;
+                text-align: center;
+                margin-bottom: 8px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .upload-wrapper {
+                margin-top: 8px;
+            }
+            
+            .file-label {
+                font-size: 12px;
+                padding: 10px 15px;
+            }
+            
+            .info {
+                font-size: 11px;
+            }
+            
+            .error {
+                font-size: 12px;
+            }
+            
+            /* Prevent horizontal overflow */
+            * {
+                max-width: 100%;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                margin: 5px;
+                padding: 5px;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+            
+            h1 {
+                font-size: 16px;
+            }
+            
+            h3 {
+                font-size: 13px;
+            }
+            
+            table {
+                font-size: 10px;
+            }
+            
+            th {
+                font-size: 9px;
+            }
+        }
     </style>
 </head>
 <body>
