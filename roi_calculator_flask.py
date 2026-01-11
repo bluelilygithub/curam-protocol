@@ -2269,6 +2269,149 @@ HTML_TEMPLATE = """
             border-color: #D4AF37 !important;
             color: #D4AF37 !important;
         }
+        
+        /* MOBILE RESPONSIVE STYLES */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+                max-width: 100%;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+                line-height: 1.3;
+            }
+            
+            h2 {
+                font-size: 1.25rem;
+                margin-top: 1.5rem;
+            }
+            
+            h3 {
+                font-size: 1.1rem;
+                margin-top: 1rem;
+            }
+            
+            h4 {
+                font-size: 1rem;
+            }
+            
+            .step-indicator {
+                padding: 1rem 0.5rem;
+                gap: 0.5rem;
+            }
+            
+            .step {
+                width: 32px;
+                height: 32px;
+                font-size: 0.9rem;
+            }
+            
+            .step.active {
+                width: 38px !important;
+                height: 38px !important;
+                font-size: 1rem !important;
+            }
+            
+            .heatmap-container {
+                padding: 1rem;
+                overflow-x: auto;
+            }
+            
+            .heatmap-table {
+                min-width: 500px;
+                font-size: 0.85rem;
+            }
+            
+            .heatmap-table th,
+            .heatmap-table td {
+                padding: 0.5rem;
+            }
+            
+            .industry-grid {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+            
+            .industry-card {
+                padding: 1rem;
+            }
+            
+            .industry-card h3 {
+                font-size: 1rem;
+            }
+            
+            .explanation-box,
+            .important-notice,
+            .reality-check-box,
+            .roadmap-container {
+                padding: 1rem;
+                margin: 1rem 0;
+            }
+            
+            .roadmap-phase {
+                padding: 0.75rem 1rem;
+            }
+            
+            .btn {
+                padding: 0.75rem 1.25rem;
+                font-size: 0.9rem;
+                width: 100%;
+                text-align: center;
+            }
+            
+            .cta-grid {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            
+            .scroll-indicator {
+                width: 40px;
+                height: 40px;
+                bottom: 1rem;
+                right: 1rem;
+            }
+            
+            /* Prevent horizontal overflow */
+            body {
+                overflow-x: hidden;
+            }
+            
+            * {
+                max-width: 100%;
+            }
+            
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 0.75rem;
+            }
+            
+            h1 {
+                font-size: 1.3rem;
+            }
+            
+            h2 {
+                font-size: 1.1rem;
+            }
+            
+            .step {
+                width: 28px;
+                height: 28px;
+                font-size: 0.8rem;
+            }
+            
+            .step.active {
+                width: 34px !important;
+                height: 34px !important;
+            }
+        }
     </style>
 </head>
 <body>
