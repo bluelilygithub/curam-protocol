@@ -19,20 +19,6 @@ Usage:
 Created: Phase 3.3c - Gemini Service Complete (FIXED)
 """
 
-# Import prompts from separate modules
-try:
-    from services.xprompts.xfinance_prompt import get_finance_prompt
-    from services.xprompts.xengineering_prompt import get_engineering_prompt
-    from services.xprompts.xtransmittal_prompt import get_transmittal_prompt
-    from services.xprompts.xlogistics_prompt import get_logistics_prompt
-except ImportError as e:
-    # Fallback if prompts module not available
-    print(f"⚠️ WARNING: Failed to import hardcoded prompts: {e}")
-    get_finance_prompt = None
-    get_engineering_prompt = None
-    get_transmittal_prompt = None
-    get_logistics_prompt = None
-
 # Import template sections from separate modules
 try:
     from services.templates.logistics_template import get_logistics_template
@@ -194,32 +180,15 @@ def build_prompt(text, doc_type, sector_slug=None):
         import traceback
         traceback.print_exc()
     
-    print(f"→ Using hardcoded fallback for {doc_type}")
+    print(f"→ Using basic fallback for {doc_type}")
     
-    if doc_type == "engineering":
-        # Use modular engineering prompt
-        if get_engineering_prompt:
-            return get_engineering_prompt(text)
-        # Fallback to basic prompt if module not available
-        return f"Extract engineering schedule data from: {text}"
-    elif doc_type == "transmittal":
-        # Use modular transmittal prompt
-        if get_transmittal_prompt:
-            return get_transmittal_prompt(text)
-        # Fallback to basic prompt if module not available
-        return f"Extract drawing register data from: {text}"
-    elif doc_type == "logistics":
-        # Use modular logistics prompt
-        if get_logistics_prompt:
-            return get_logistics_prompt(text)
-        # Fallback to basic prompt if module not available
-        return f"Extract Bill of Lading data from: {text}"
-    else:
-        # Use modular finance prompt
-        if get_finance_prompt:
-            return get_finance_prompt(text)
-        # Fallback to basic prompt if module not available
-        return f"Extract invoice data from: {text}"
+    fallback_prompts = {
+        "engineering": f"Extract engineering schedule data from: {text}",
+        "transmittal": f"Extract drawing register data from: {text}",
+        "logistics": f"Extract Bill of Lading data from: {text}",
+        "finance": f"Extract invoice data from: {text}"
+    }
+    return fallback_prompts.get(doc_type, f"Extract data from: {text}")
 
 
 # --- HTML TEMPLATE ---

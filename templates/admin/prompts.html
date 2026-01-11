@@ -46,16 +46,12 @@
 <div class="admin-card" style="background: #FEF3C7; border-left: 3px solid #F59E0B;">
     <h3 style="margin: 0 0 0.5rem; color: #92400E;">⚠️ No Prompts Found</h3>
     <p style="margin: 0; color: #92400E;">The <code>prompt_templates</code> table exists but has no prompts.</p>
-    <p style="margin: 0.5rem 0 0; color: #92400E;">
-        <strong>To migrate prompts:</strong><br>
-        1. Run: <code>python extract_prompts_to_sql.py</code> (generates SQL)<br>
-        2. Run <code>prompts_migration_generated.sql</code> in your PostgreSQL database
-    </p>
+    <p style="margin: 0.5rem 0 0; color: #92400E;">Add prompts via the database to enable AI extraction features.</p>
 </div>
 {% elif active_migrated_count > 0 %}
 <div class="admin-card" style="background: #D1FAE5; border-left: 3px solid #10B981;">
-    <h3 style="margin: 0 0 0.5rem; color: #065F46;">✓ {{ active_migrated_count }} Active Migrated Prompt(s)</h3>
-    <p style="margin: 0; color: #065F46;">Your system is using database prompts! The code will check database prompts first, then fallback to hardcoded if needed.</p>
+    <h3 style="margin: 0 0 0.5rem; color: #065F46;">✓ {{ active_migrated_count }} Active Prompt(s)</h3>
+    <p style="margin: 0; color: #065F46;">Your system is using database prompts for AI extraction.</p>
 </div>
 {% endif %}
 
