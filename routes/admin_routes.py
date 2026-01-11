@@ -623,7 +623,8 @@ def phase1_trial_process(trial_id):
         try:
             start_time = time.time()
             
-            text, method = extract_text(file_path)
+            text = extract_text(file_path)
+            method = 'auto'
             
             if not text or len(text.strip()) < 50:
                 errors.append(f"Document {doc_id}: Could not extract text")
