@@ -127,7 +127,8 @@ def get_available_models():
         return None
 
 
-def build_prompt(text, doc_type, sector_slug=None):
+def build_prompt(text, doc_type, sector_slug=None, extraction_context=None,
+                 extraction_hints=None, expected_fields=None):
     """
     Build a prompt tailored to the selected department.
     
@@ -135,6 +136,9 @@ def build_prompt(text, doc_type, sector_slug=None):
         text: Document text (already processed/truncated if needed)
         doc_type: Document type (engineering, finance, logistics, transmittal)
         sector_slug: Optional sector slug for sector-specific prompts
+        extraction_context: User-provided document context
+        extraction_hints: User-provided hints for locating fields
+        expected_fields: User-provided comma-separated list of expected fields
     """
     # Validate input text
     if not text or (isinstance(text, str) and not text.strip()):
@@ -179,6 +183,21 @@ def build_prompt(text, doc_type, sector_slug=None):
                         print(f"  → Test marker found in section {i}: {section[:200]}...")
             else:
                 print(f"⚠️ No test markers found in combined prompt (searched for: {', '.join(test_markers)})")
+            
+            # Append user-provided document context if available
+            context_additions = []
+            if extraction_context:
+                context_additions.append(f"DOCUMENT CONTEXT: {extraction_context}")
+            if extraction_hints:
+                context_additions.append(f"EXTRACTION HINTS: {extraction_hints}")
+            if expected_fields:
+                context_additions.append(f"EXPECTED FIELDS TO EXTRACT: {expected_fields}")
+            
+            if context_additions:
+                context_section = "\n\n--- USER-PROVIDED GUIDANCE ---\n" + "\n".join(context_additions) + "\n--- END USER GUIDANCE ---\n"
+                db_prompt = db_prompt + context_section
+                print(f"✓ Added user-provided context to prompt ({len(context_additions)} items)")
+            
             return db_prompt
         else:
             print(f"⚠️ Database prompt lookup returned None for {doc_type} (db: {db_doc_type})")
@@ -195,7 +214,23 @@ def build_prompt(text, doc_type, sector_slug=None):
         "logistics": f"Extract Bill of Lading data from: {text}",
         "finance": f"Extract invoice data from: {text}"
     }
-    return fallback_prompts.get(doc_type, f"Extract data from: {text}")
+    fallback_prompt = fallback_prompts.get(doc_type, f"Extract data from: {text}")
+    
+    # Append user-provided document context to fallback prompts too
+    context_additions = []
+    if extraction_context:
+        context_additions.append(f"DOCUMENT CONTEXT: {extraction_context}")
+    if extraction_hints:
+        context_additions.append(f"EXTRACTION HINTS: {extraction_hints}")
+    if expected_fields:
+        context_additions.append(f"EXPECTED FIELDS TO EXTRACT: {expected_fields}")
+    
+    if context_additions:
+        context_section = "\n\n--- USER-PROVIDED GUIDANCE ---\n" + "\n".join(context_additions) + "\n--- END USER GUIDANCE ---\n"
+        fallback_prompt = fallback_prompt + context_section
+        print(f"✓ Added user-provided context to fallback prompt ({len(context_additions)} items)")
+    
+    return fallback_prompt
 
 
 # --- HTML TEMPLATE ---
@@ -309,13 +344,18 @@ for dept in ['transmittal', 'engineering', 'finance', 'logistics']:
         HTML_TEMPLATE = replace_template_section(HTML_TEMPLATE, dept, _template_sections[dept])
 
 # --- HELPER FUNCTIONS ---
-def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
+def analyze_gemini(text, doc_type, image_path=None, sector_slug=None,
+                   extraction_context=None, extraction_hints=None, expected_fields=None):
     """Call Gemini with a doc-type-specific prompt and return entries, error, model used, attempt log, action log, and schedule_type.
     
     Args:
         text: Text content or [IMAGE_FILE:path] marker
         doc_type: Document type (engineering, finance, transmittal)
         image_path: Optional path to image file for vision processing
+        sector_slug: Industry sector slug for context
+        extraction_context: User-provided document context (e.g., what type of document this is)
+        extraction_hints: User-provided hints for locating fields
+        expected_fields: User-provided comma-separated list of expected fields
     """
     # For engineering, we'll detect schedule type from returned data
     if doc_type == "engineering":
@@ -348,7 +388,10 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
 
     action_log = []
     
-    if CACHING_ENABLED and document_cache and text:
+    # Bypass cache if user-provided guidance is present (context/hints/expected_fields)
+    has_user_guidance = bool(extraction_context or extraction_hints or expected_fields)
+    
+    if CACHING_ENABLED and document_cache and text and not has_user_guidance:
         fingerprint = get_document_fingerprint(text)
         cached = document_cache.get(fingerprint, doc_type)
         if cached:
@@ -363,6 +406,9 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
                 cached.get('schedule_type')
             )
         action_log.append(f"[CACHE MISS] No cached result for fingerprint {fingerprint[:16]}...")
+    elif has_user_guidance:
+        fingerprint = None
+        action_log.append(f"[CACHE BYPASS] User-provided guidance present - forcing fresh extraction")
     else:
         fingerprint = None
 
@@ -421,7 +467,10 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
     else:
         action_log.append(f"[WARNING] Empty text provided for {doc_type} document")
     
-    prompt = build_prompt(prompt_text, doc_type, sector_slug)
+    prompt = build_prompt(prompt_text, doc_type, sector_slug,
+                          extraction_context=extraction_context,
+                          extraction_hints=extraction_hints,
+                          expected_fields=expected_fields)
     if prompt_limit:
         action_log.append(f"Prompt truncated to {prompt_limit} characters for {doc_type} document")
     last_error = None
@@ -730,7 +779,10 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                     # First attempt timeout - shorten prompt and retry once
                     prompt_limit = ENGINEERING_PROMPT_LIMIT_SHORT
                     prompt_text = prepare_prompt_text(text, doc_type, prompt_limit)
-                    prompt = build_prompt(prompt_text, doc_type, sector_slug)
+                    prompt = build_prompt(prompt_text, doc_type, sector_slug,
+                                          extraction_context=extraction_context,
+                                          extraction_hints=extraction_hints,
+                                          expected_fields=expected_fields)
                     action_log.append(f"Timeout detected - shortening prompt to {prompt_limit} chars and retrying {model_name}")
                     time.sleep(2)  # Brief delay before retry
                     continue

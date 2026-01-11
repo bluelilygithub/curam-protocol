@@ -657,8 +657,16 @@ def phase1_trial_process(trial_id):
                 errors.append(f"Document {doc_id}: Could not extract text")
                 continue
             
+            # Get document context for improved extraction
+            doc_context = doc.get('extraction_context', '')
+            doc_hints = doc.get('extraction_hints', '')
+            doc_expected_fields = doc.get('expected_fields', '')
+            
             entries, error, model, attempt_log, action_log, schedule_type = analyze_gemini(
-                text, doc_type, sector_slug=sector_slug
+                text, doc_type, sector_slug=sector_slug,
+                extraction_context=doc_context,
+                extraction_hints=doc_hints,
+                expected_fields=doc_expected_fields
             )
             
             processing_time_ms = int((time.time() - start_time) * 1000)
