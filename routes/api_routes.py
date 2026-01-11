@@ -924,7 +924,12 @@ User Agent: {request.headers.get('User-Agent', 'Unknown')}
         
         # Send notification email
         mailchannels_url = 'https://api.mailchannels.net/tx/v1/send'
+        print(f"📧 Sending contact form email via MailChannels...")
+        print(f"   API Key present: {bool(mailchannels_api_key)}")
+        print(f"   From: {from_email}")
+        
         response = requests.post(mailchannels_url, json=email_data, headers=headers, timeout=30)
+        print(f"   Response: {response.status_code} - {response.text[:200] if response.text else 'No body'}")
         
         if response.status_code == 202:
             # Mark email as sent successfully
