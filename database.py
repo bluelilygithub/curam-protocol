@@ -1560,7 +1560,7 @@ def update_user_last_login(username):
 
 def create_phase1_trial(customer_name, customer_email=None, customer_company=None,
                         industry=None, sector_slug=None, created_by=None, notes=None,
-                        extraction_fields=None, output_format=None):
+                        extraction_fields=None, output_format=None, retention_days=30):
     """
     Create a new Phase 1 trial (project) for a customer.
     
@@ -1574,6 +1574,7 @@ def create_phase1_trial(customer_name, customer_email=None, customer_company=Non
         notes: Optional notes about the trial
         extraction_fields: JSONB array of expected field names to extract
         output_format: JSONB configuration for expected output format
+        retention_days: Number of days to keep documents before auto-deletion (default: 30)
     
     Returns:
         dict: Created trial record with trial_code and report_token, or None if failed
@@ -1604,13 +1605,13 @@ def create_phase1_trial(customer_name, customer_email=None, customer_company=Non
                 INSERT INTO phase1_trials (
                     trial_code, customer_name, customer_email, customer_company,
                     industry, sector_slug, created_by, notes, report_token, status,
-                    extraction_fields, output_format
+                    extraction_fields, output_format, retention_days
                 ) VALUES (
                     :trial_code, :customer_name, :customer_email, :customer_company,
                     :industry, :sector_slug, :created_by, :notes, :report_token, 'pending',
-                    :extraction_fields::jsonb, :output_format::jsonb
+                    :extraction_fields::jsonb, :output_format::jsonb, :retention_days
                 )
-                RETURNING id, trial_code, report_token, created_at
+                RETURNING id, trial_code, report_token, created_at, retention_days
             """), {
                 "trial_code": trial_code,
                 "customer_name": customer_name,
@@ -1622,7 +1623,8 @@ def create_phase1_trial(customer_name, customer_email=None, customer_company=Non
                 "notes": notes,
                 "report_token": report_token,
                 "extraction_fields": extraction_fields_json,
-                "output_format": output_format_json
+                "output_format": output_format_json,
+                "retention_days": retention_days or 30
             })
             conn.commit()
             
@@ -2073,4 +2075,170 @@ def create_admin_user(username, password, email=None, full_name=None):
         print(f"❌ Error creating user: {e}")
         import traceback
         traceback.print_exc()
+        return False
+
+
+# ============================================================================
+# DOCUMENT RETENTION & CLEANUP
+# ============================================================================
+
+def get_trials_for_document_cleanup():
+    """
+    Get trials where documents should be deleted based on retention policy.
+    
+    Returns:
+        list: Trials with expired retention periods that still have documents
+    """
+    if not engine:
+        return []
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT t.id, t.trial_code, t.customer_name, t.retention_days,
+                       t.created_at, t.documents_deleted_at, t.total_documents
+                FROM phase1_trials t
+                WHERE t.documents_deleted_at IS NULL
+                AND t.total_documents > 0
+                AND t.created_at + (t.retention_days || ' days')::interval < NOW()
+                ORDER BY t.created_at ASC
+            """))
+            return [dict(row._mapping) for row in result]
+    except Exception as e:
+        print(f"❌ Error getting trials for cleanup: {e}")
+        return []
+
+
+def delete_trial_documents(trial_id, mark_deleted=True):
+    """
+    Delete all document files for a trial and optionally mark as deleted in database.
+    
+    Args:
+        trial_id: Trial database ID
+        mark_deleted: Whether to update the documents_deleted_at timestamp
+    
+    Returns:
+        dict: {"success": bool, "deleted_count": int, "errors": list}
+    """
+    import os
+    from config import PHASE1_TRIALS_UPLOAD_DIR
+    
+    if not engine:
+        return {"success": False, "deleted_count": 0, "errors": ["Database not available"]}
+    
+    errors = []
+    deleted_count = 0
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT id, stored_file_path, original_filename
+                FROM phase1_trial_documents
+                WHERE trial_id = :trial_id
+            """), {"trial_id": trial_id})
+            documents = [dict(row._mapping) for row in result]
+            
+            for doc in documents:
+                file_path = doc.get('stored_file_path')
+                if file_path and os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        deleted_count += 1
+                        print(f"🗑️ Deleted: {doc.get('original_filename')}")
+                    except Exception as e:
+                        errors.append(f"Failed to delete {doc.get('original_filename')}: {e}")
+                else:
+                    deleted_count += 1
+            
+            conn.execute(text("""
+                UPDATE phase1_trial_documents
+                SET stored_file_path = NULL
+                WHERE trial_id = :trial_id
+            """), {"trial_id": trial_id})
+            
+            if mark_deleted:
+                conn.execute(text("""
+                    UPDATE phase1_trials
+                    SET documents_deleted_at = NOW()
+                    WHERE id = :trial_id
+                """), {"trial_id": trial_id})
+            
+            conn.commit()
+            
+            trial_dir = os.path.join(PHASE1_TRIALS_UPLOAD_DIR, str(trial_id))
+            if os.path.exists(trial_dir):
+                try:
+                    import shutil
+                    shutil.rmtree(trial_dir)
+                    print(f"🗑️ Removed trial directory: {trial_dir}")
+                except Exception as e:
+                    errors.append(f"Failed to remove directory: {e}")
+            
+            return {
+                "success": len(errors) == 0,
+                "deleted_count": deleted_count,
+                "errors": errors
+            }
+            
+    except Exception as e:
+        print(f"❌ Error deleting trial documents: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"success": False, "deleted_count": 0, "errors": [str(e)]}
+
+
+def run_document_cleanup():
+    """
+    Run automatic document cleanup for all trials with expired retention.
+    
+    Returns:
+        dict: {"trials_cleaned": int, "documents_deleted": int, "errors": list}
+    """
+    trials = get_trials_for_document_cleanup()
+    
+    trials_cleaned = 0
+    total_deleted = 0
+    all_errors = []
+    
+    for trial in trials:
+        result = delete_trial_documents(trial['id'])
+        if result['success']:
+            trials_cleaned += 1
+            total_deleted += result['deleted_count']
+            print(f"✅ Cleaned trial {trial['trial_code']}: {result['deleted_count']} documents")
+        else:
+            all_errors.extend(result['errors'])
+    
+    return {
+        "trials_cleaned": trials_cleaned,
+        "documents_deleted": total_deleted,
+        "errors": all_errors
+    }
+
+
+def update_trial_retention(trial_id, retention_days):
+    """
+    Update the retention period for a trial.
+    
+    Args:
+        trial_id: Trial database ID
+        retention_days: New retention period in days
+    
+    Returns:
+        bool: Success status
+    """
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE phase1_trials
+                SET retention_days = :retention_days
+                WHERE id = :trial_id
+            """), {"trial_id": trial_id, "retention_days": retention_days})
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"❌ Error updating retention: {e}")
         return False
