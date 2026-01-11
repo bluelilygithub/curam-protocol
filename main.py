@@ -197,6 +197,7 @@ try:
     from roi_calculator_flask import roi_app as roi_calculator_app
     # Mount ROI calculator at /roi-calculator (with trailing slash support)
     app.register_blueprint(roi_calculator_app, url_prefix='/roi-calculator')
+    csrf.exempt(roi_calculator_app)  # Exempt from CSRF (uses AJAX)
     print("ROI Calculator blueprint registered successfully at /roi-calculator")
 except ImportError as e:
     print(f"Warning: Could not import ROI calculator: {e}")
