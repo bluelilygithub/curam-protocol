@@ -86,43 +86,26 @@ def require_admin(f):
     return decorated_function
 
 
-@admin_bp.route('/setup', methods=['GET', 'POST'])
-def setup():
-    """One-time admin setup - creates admin user if none exists"""
-    # Check if any admin users exist
-    admin_exists = False
+def ensure_admin_exists():
+    """Create admin user from environment variables if none exists"""
+    admin_username = os.environ.get('ADMIN_USERNAME', 'admin')
+    admin_password = os.environ.get('ADMIN_PASSWORD')
+    
+    if not admin_password:
+        return
+    
     try:
         if engine:
             with engine.connect() as conn:
                 result = conn.execute(text("SELECT COUNT(*) FROM users WHERE is_admin = true"))
                 count = result.scalar()
-                admin_exists = count > 0
+                if count == 0:
+                    create_admin_user(admin_username, admin_password)
+                    print(f"Created admin user: {admin_username}")
     except Exception as e:
-        return render_template('admin/setup.html', error=f'Database error: {str(e)}')
-    
-    if admin_exists:
-        return redirect(url_for('admin.login'))
-    
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip() or 'admin'
-        password = request.form.get('password', '').strip()
-        confirm_password = request.form.get('confirm_password', '').strip()
-        
-        if not password:
-            return render_template('admin/setup.html', error='Password is required')
-        if len(password) < 8:
-            return render_template('admin/setup.html', error='Password must be at least 8 characters')
-        if password != confirm_password:
-            return render_template('admin/setup.html', error='Passwords do not match')
-        
-        if create_admin_user(username, password):
-            session['admin_authenticated'] = True
-            session['admin_username'] = username
-            return redirect(url_for('admin.dashboard'))
-        else:
-            return render_template('admin/setup.html', error='Failed to create admin user')
-    
-    return render_template('admin/setup.html')
+        print(f"Error checking/creating admin user: {e}")
+
+ensure_admin_exists()
 
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
