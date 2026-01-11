@@ -1509,3 +1509,104 @@ def get_blog_post(post_id):
             'error': f'Server error: {str(e)}',
             'post': None
         }), 500
+
+
+@api_bp.route('/api/system/performance', methods=['GET'])
+def get_performance_stats():
+    """
+    Get system performance statistics including cache stats and queue info.
+    Useful for monitoring and debugging.
+    """
+    stats = {
+        'cache': {},
+        'background_tasks': {},
+        'database': {},
+        'pdf_extraction': {}
+    }
+    
+    try:
+        from services.cache_service import get_cache_stats, document_cache
+        stats['cache'] = get_cache_stats()
+        stats['cache']['db_backed'] = document_cache._use_db if document_cache else False
+    except Exception as e:
+        stats['cache'] = {'error': str(e)}
+    
+    try:
+        from services.background_tasks import get_queue_stats
+        stats['background_tasks'] = get_queue_stats()
+    except Exception as e:
+        stats['background_tasks'] = {'error': str(e)}
+    
+    try:
+        from database import engine
+        if engine:
+            pool = engine.pool
+            stats['database'] = {
+                'pool_size': pool.size() if hasattr(pool, 'size') else 'N/A',
+                'checked_in': pool.checkedin() if hasattr(pool, 'checkedin') else 'N/A',
+                'checked_out': pool.checkedout() if hasattr(pool, 'checkedout') else 'N/A',
+                'overflow': pool.overflow() if hasattr(pool, 'overflow') else 'N/A',
+                'connected': True
+            }
+        else:
+            stats['database'] = {'connected': False}
+    except Exception as e:
+        stats['database'] = {'error': str(e)}
+    
+    try:
+        from services.pdf_service import PYMUPDF_AVAILABLE, PDFPLUMBER_AVAILABLE
+        stats['pdf_extraction'] = {
+            'pymupdf_available': PYMUPDF_AVAILABLE,
+            'pdfplumber_available': PDFPLUMBER_AVAILABLE,
+            'primary_extractor': 'pymupdf' if PYMUPDF_AVAILABLE else 'pdfplumber' if PDFPLUMBER_AVAILABLE else 'none'
+        }
+    except Exception as e:
+        stats['pdf_extraction'] = {'error': str(e)}
+    
+    return jsonify(stats)
+
+
+@api_bp.route('/api/system/cache/clear', methods=['POST'])
+def clear_cache():
+    """Clear the document extraction cache"""
+    try:
+        from services.cache_service import clear_cache as do_clear_cache
+        count = do_clear_cache()
+        return jsonify({
+            'success': True,
+            'cleared_entries': count
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api_bp.route('/api/task/<task_id>/status', methods=['GET'])
+def get_task_status_endpoint(task_id):
+    """Get status of a background task"""
+    try:
+        from services.background_tasks import get_task_status, TaskStatus
+        
+        task = get_task_status(task_id)
+        
+        if not task:
+            return jsonify({
+                'success': False,
+                'error': 'Task not found'
+            }), 404
+        
+        return jsonify({
+            'success': True,
+            'task_id': task.task_id,
+            'status': task.status.value,
+            'result': task.result if task.status == TaskStatus.COMPLETED else None,
+            'error': task.error if task.status == TaskStatus.FAILED else None,
+            'progress': task.progress
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

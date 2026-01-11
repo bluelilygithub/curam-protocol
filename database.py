@@ -1,10 +1,28 @@
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import QueuePool
 from werkzeug.security import generate_password_hash, check_password_hash
 from typing import Literal, Optional
 import os
 
 DATABASE_URL = os.getenv('DATABASE_URL')
-engine = create_engine(DATABASE_URL) if DATABASE_URL else None
+
+def create_optimized_engine():
+    """Create database engine with connection pooling for better performance"""
+    if not DATABASE_URL:
+        return None
+    
+    return create_engine(
+        DATABASE_URL,
+        poolclass=QueuePool,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=30,
+        pool_recycle=1800,
+        pool_pre_ping=True,
+        echo=False
+    )
+
+engine = create_optimized_engine()
 
 def test_connection():
     """Test database connection"""

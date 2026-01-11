@@ -2,7 +2,7 @@ modules = ["python-3.11", "postgresql-16"]
 
 [nix]
 channel = "stable-25_05"
-packages = ["freetype", "glibcLocales", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "openjpeg", "tcl", "tesseract", "tk", "zlib"]
+packages = ["freetype", "glibcLocales", "gumbo", "harfbuzz", "jbig2dec", "lcms2", "libimagequant", "libjpeg", "libjpeg_turbo", "libtiff", "libwebp", "libxcrypt", "mupdf", "openjpeg", "swig", "tcl", "tesseract", "tk", "xcbuild", "zlib"]
 
 [agent]
 expertMode = true
@@ -39,3 +39,8 @@ externalPort = 80
 
 [userenv.shared]
 SECRET_KEY = "369f370063b674d77fb528f1f879c67f86da537250fc6c075ceb4b9c65a3aeca"
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["gunicorn", "--config", "gunicorn.conf.py", "main:app"]
+build = ["pip", "install", "-r", "requirements.txt"]

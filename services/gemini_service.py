@@ -35,8 +35,17 @@ except ImportError:
 import os
 import json
 import time
+import hashlib
 from google import genai
 from google.genai import types
+
+try:
+    from services.cache_service import document_cache, get_document_fingerprint
+    CACHING_ENABLED = True
+except ImportError:
+    CACHING_ENABLED = False
+    document_cache = None
+    get_document_fingerprint = None
 
 # Try to import grpc
 try:
@@ -337,10 +346,29 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None):
     if text and text.startswith("Error:"):
         return [error_entry(f"Text extraction failed: {text}")], f"Text extraction failed: {text}", None, [], [], None
 
+    action_log = []
+    
+    if CACHING_ENABLED and document_cache and text:
+        fingerprint = get_document_fingerprint(text)
+        cached = document_cache.get(fingerprint, doc_type)
+        if cached:
+            action_log.append(f"[CACHE HIT] Returning cached result for fingerprint {fingerprint[:16]}...")
+            print(f"[CACHE HIT] Skipping Gemini API call - using cached result")
+            return (
+                cached.get('entries', []),
+                cached.get('error'),
+                cached.get('model', 'cached'),
+                cached.get('attempt_log', []),
+                action_log + ['Result served from cache'],
+                cached.get('schedule_type')
+            )
+        action_log.append(f"[CACHE MISS] No cached result for fingerprint {fingerprint[:16]}...")
+    else:
+        fingerprint = None
+
     available_models = get_available_models()
     stable_preferred = ['gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-pro-latest']
     model_names = []
-    action_log = []
     
     action_log.append(f"Model selection: Checking {len(available_models) if available_models else 0} available models")
     action_log.append(f"Preferred order: {', '.join(stable_preferred)}")
@@ -659,6 +687,16 @@ Extract ALL visible rows. Return JSON array only, no markdown.
                             action_log.append("Engineering validator unavailable - skipping validation")
                         except Exception as val_error:
                             action_log.append(f"Validation error: {val_error}")
+                    
+                    if CACHING_ENABLED and document_cache and fingerprint:
+                        document_cache.set(fingerprint, doc_type, {
+                            'entries': entries,
+                            'error': None,
+                            'model': resolved_model,
+                            'attempt_log': attempt_log,
+                            'schedule_type': schedule_type
+                        })
+                        action_log.append(f"[CACHE SAVED] Result cached for fingerprint {fingerprint[:16]}...")
                     
                     return entries, None, resolved_model, attempt_log, action_log, schedule_type
 

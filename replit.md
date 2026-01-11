@@ -87,12 +87,52 @@ Preferred communication style: Simple, everyday language.
 ### Python Dependencies (Key)
 
 - `google-genai` - Gemini API client (unified SDK, replaced deprecated google-generativeai Jan 2026)
-- `pdfplumber` + `PyMuPDF` - PDF text extraction
+- `PyMuPDF` + `pdfplumber` - PDF text extraction (PyMuPDF primary, pdfplumber fallback)
 - `pillow`, `opencv-python-headless`, `pytesseract` - Image preprocessing for scanned documents
 - `pandas`, `openpyxl` - Excel export
 - `reportlab` - PDF report generation
 - `plotly` - ROI calculator visualizations
-- `psycopg2-binary`, `SQLAlchemy` - PostgreSQL connectivity
+- `psycopg2-binary`, `SQLAlchemy` - PostgreSQL connectivity (with connection pooling)
+
+## Performance Optimizations
+
+### Document Fingerprinting & AI Caching
+- SHA256 fingerprinting of document content
+- Cached AI results skip expensive Gemini API calls for duplicate documents
+- 7-day cache expiry (database-backed when available)
+- `services/cache_service.py` - Document cache implementation
+
+### PDF Extraction
+- PyMuPDF as primary extractor (faster than pdfplumber)
+- Parallel page processing for multi-page documents
+- Automatic fallback to pdfplumber for complex layouts
+
+### Database Connection Pooling
+- SQLAlchemy QueuePool with 5 connections (10 overflow)
+- Connection recycling every 30 minutes
+- Pre-ping enabled for connection health checks
+
+### Background Task Processing
+- Async document processing via threading
+- Non-blocking web requests during AI extraction
+- `services/background_tasks.py` - Task queue implementation
+
+### Production Server (Gunicorn)
+- 4 workers for concurrent request handling
+- 5-second keep-alive for connection reuse
+- 5-minute timeout for AI API calls
+- Worker recycling every 1000 requests
+
+### Static Asset Caching
+- CSS/JS: 1 year cache with immutable flag
+- Images: 6 months cache
+- Fonts: 1 year cache with immutable flag
+- Version-based cache busting via template variable
+
+### API Endpoints
+- `GET /api/system/performance` - System stats (cache, pool, queue)
+- `POST /api/system/cache/clear` - Clear document cache
+- `GET /api/task/<task_id>/status` - Background task status
 
 ### Required Environment Variables
 

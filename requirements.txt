@@ -3,6 +3,7 @@ flask-compress>=1.14
 flask-wtf
 google-genai
 pdfplumber
+PyMuPDF>=1.23.0
 pandas
 openpyxl
 gunicorn
@@ -21,3 +22,4 @@ numpy>=1.24.0
 
 # Optional: Streamlit for admin tools
 streamlit
+PyMuPDF
