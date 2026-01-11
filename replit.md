@@ -56,7 +56,7 @@ Preferred communication style: Simple, everyday language.
 - `sectors` - Industry categories (finance, engineering, logistics, transmittal)
 - `document_types` - Specific document types per sector with demo settings
 - `prompt_templates` - AI extraction prompts organized by scope/document type
-- `phase1_trials` - Customer trial management with token-based report access
+- `phase1_trials` - Customer trial management with token-based report access, business profile fields (staff_count, hourly_rate, weekly_doc_volume, etc.)
 - `extraction_logs` - Processing history and performance tracking
 - `users` - Admin authentication with password hashing
 
@@ -140,11 +140,21 @@ Preferred communication style: Simple, everyday language.
 - Fonts: 1 year cache with immutable flag
 - Version-based cache busting via template variable
 
+### Phase 1 Report Generation
+- `services/report_service.py` - PDF report generation using ReportLab
+- Generates comprehensive 8-section feasibility reports
+- ROI calculations based on business profile data:
+  - Tier 1: Time savings from STP (annual_docs × manual_minutes/60 × hourly_rate × stp_rate)
+  - Tier 2: Error reduction savings (annual_docs × error_rate × 0.03 × correction_cost)
+- Admin route: `GET /admin/phase1-trials/<id>/generate-report` - Downloads PDF
+
 ### API Endpoints
 - `GET /api/system/performance` - System stats (cache, pool, queue)
 - `POST /api/system/cache/clear` - Clear document cache
 - `GET /api/task/<task_id>/status` - Background task status
 - `POST /api/system/cleanup-documents` - Auto-cleanup expired trial documents (requires admin or CLEANUP_API_KEY)
+- `POST /admin/phase1-trials/<id>/business-profile` - Update client business profile
+- `POST /admin/phase1-trials/documents/<id>/metrics` - Update document extraction metrics
 
 ### Document Retention & Privacy (Australian Privacy Act Compliance)
 - Configurable retention periods: 7-90 days (default 30)
