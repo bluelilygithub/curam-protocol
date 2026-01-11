@@ -461,30 +461,51 @@ function deleteDocuments() {
             <h5 style="margin-bottom: 0.75rem; color: #6B7280; font-size: 0.875rem; font-weight: 600;">{{ category_name }}</h5>
             <div class="document-list">
                 {% for doc in category_docs %}
-                <div class="document-item {{ doc.get('status', 'uploaded') }}">
-                    <div>
-                        <strong style="color: #0B1221;">{{ doc.get('original_filename', 'Unknown') }}</strong>
-                        <div style="color: #6B7280; font-size: 0.875rem; margin-top: 0.25rem;">
-                            Doc #{{ doc.get('document_number', '?') }} • 
-                            {% if doc.get('file_size_bytes') %}
-                                {{ "%.1f"|format(doc.get('file_size_bytes', 0) / 1024) }} KB
-                            {% endif %}
-                            {% if doc.get('status') == 'completed' %}
-                                • Processed
+                <div class="document-item {{ doc.get('status', 'uploaded') }}" style="flex-direction: column; align-items: stretch;">
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <strong style="color: #0B1221;">{{ doc.get('original_filename', 'Unknown') }}</strong>
+                            <div style="color: #6B7280; font-size: 0.875rem; margin-top: 0.25rem;">
+                                Doc #{{ doc.get('document_number', '?') }} • 
+                                {% if doc.get('file_size_bytes') %}
+                                    {{ "%.1f"|format(doc.get('file_size_bytes', 0) / 1024) }} KB
+                                {% endif %}
+                                {% if doc.get('status') == 'completed' %}
+                                    • Processed
+                                {% elif doc.get('status') == 'processing' %}
+                                    • Processing...
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; align-items: center;">
+                            {% if doc.get('status') == 'uploaded' %}
+                                <span class="badge badge-info">Ready</span>
                             {% elif doc.get('status') == 'processing' %}
-                                • Processing...
+                                <span class="badge badge-warning">Processing</span>
+                            {% elif doc.get('status') == 'completed' %}
+                                <span class="badge badge-success">Completed</span>
                             {% endif %}
+                            <button type="button" class="btn-edit-doc" data-doc-id="{{ doc.get('id') }}" 
+                                    data-doc-name="{{ doc.get('original_filename', '') }}"
+                                    data-context="{{ doc.get('extraction_context', '') or '' }}"
+                                    data-hints="{{ doc.get('extraction_hints', '') or '' }}"
+                                    data-expected="{{ doc.get('expected_fields', '') or '' }}"
+                                    data-notes="{{ doc.get('notes', '') or '' }}"
+                                    style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 4px; color: #4338CA; cursor: pointer;">
+                                Edit Details
+                            </button>
                         </div>
                     </div>
-                    <div>
-                        {% if doc.get('status') == 'uploaded' %}
-                            <span class="badge badge-info">Ready</span>
-                        {% elif doc.get('status') == 'processing' %}
-                            <span class="badge badge-warning">Processing</span>
-                        {% elif doc.get('status') == 'completed' %}
-                            <span class="badge badge-success">Completed</span>
+                    {% if doc.get('extraction_context') or doc.get('extraction_hints') or doc.get('expected_fields') %}
+                    <div style="margin-top: 0.5rem; padding: 0.5rem; background: #F0FDF4; border-radius: 4px; font-size: 0.75rem;">
+                        {% if doc.get('extraction_context') %}
+                        <div style="margin-bottom: 0.25rem;"><strong>Context:</strong> {{ doc.get('extraction_context')[:100] }}{% if doc.get('extraction_context')|length > 100 %}...{% endif %}</div>
+                        {% endif %}
+                        {% if doc.get('expected_fields') %}
+                        <div><strong>Expected Fields:</strong> {{ doc.get('expected_fields')[:80] }}{% if doc.get('expected_fields')|length > 80 %}...{% endif %}</div>
                         {% endif %}
                     </div>
+                    {% endif %}
                 </div>
                 {% endfor %}
             </div>
@@ -977,5 +998,144 @@ function copyReportUrl() {
     document.execCommand('copy');
     alert('Report URL copied to clipboard!');
 }
+
+// Document Details Modal
+const editDocModal = document.getElementById('edit-doc-modal');
+const editDocForm = document.getElementById('edit-doc-form');
+
+document.querySelectorAll('.btn-edit-doc').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const docId = this.dataset.docId;
+        const docName = this.dataset.docName;
+        const context = this.dataset.context || '';
+        const hints = this.dataset.hints || '';
+        const expected = this.dataset.expected || '';
+        const notes = this.dataset.notes || '';
+        
+        document.getElementById('edit-doc-id').value = docId;
+        document.getElementById('edit-doc-name').textContent = docName;
+        document.getElementById('edit-doc-context').value = context;
+        document.getElementById('edit-doc-hints').value = hints;
+        document.getElementById('edit-doc-expected').value = expected;
+        document.getElementById('edit-doc-notes').value = notes;
+        
+        editDocModal.style.display = 'flex';
+    });
+});
+
+document.getElementById('close-doc-modal')?.addEventListener('click', () => {
+    editDocModal.style.display = 'none';
+});
+
+editDocModal?.addEventListener('click', (e) => {
+    if (e.target === editDocModal) {
+        editDocModal.style.display = 'none';
+    }
+});
+
+editDocForm?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const docId = document.getElementById('edit-doc-id').value;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+    
+    const formData = {
+        extraction_context: document.getElementById('edit-doc-context').value,
+        extraction_hints: document.getElementById('edit-doc-hints').value,
+        expected_fields: document.getElementById('edit-doc-expected').value,
+        notes: document.getElementById('edit-doc-notes').value
+    };
+    
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
+    
+    try {
+        const response = await fetch(`/admin/phase1-trials/documents/${docId}/details`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            editDocModal.style.display = 'none';
+            location.reload();
+        } else {
+            alert('Failed to save: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Failed to save: ' + error.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save Details';
+    }
+});
 </script>
+
+<!-- Document Details Modal -->
+<div id="edit-doc-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;">
+    <div style="background: white; border-radius: 12px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+        <div style="padding: 1.5rem; border-bottom: 1px solid #E5E7EB;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; color: #0B1221;">Edit Document Details</h3>
+                <button type="button" id="close-doc-modal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6B7280;">&times;</button>
+            </div>
+            <p id="edit-doc-name" style="margin: 0.5rem 0 0; color: #6B7280; font-size: 0.875rem;"></p>
+        </div>
+        
+        <form id="edit-doc-form" style="padding: 1.5rem;">
+            <input type="hidden" id="edit-doc-id">
+            
+            <div style="margin-bottom: 1.25rem;">
+                <label for="edit-doc-context" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                    Document Context
+                </label>
+                <textarea id="edit-doc-context" rows="3" placeholder="Describe what this document is: e.g., 'Commercial invoice from John Deere for construction equipment parts shipped to Brisbane warehouse'"
+                    style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-size: 0.875rem; resize: vertical;"></textarea>
+                <p style="margin: 0.25rem 0 0; color: #6B7280; font-size: 0.75rem;">Help the AI understand what type of document this is.</p>
+            </div>
+            
+            <div style="margin-bottom: 1.25rem;">
+                <label for="edit-doc-expected" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                    Expected Fields
+                </label>
+                <textarea id="edit-doc-expected" rows="2" placeholder="e.g., InvoiceNumber, VendorName, Date, LineItems, Total, GST, Currency"
+                    style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-family: monospace; font-size: 0.875rem; resize: vertical;"></textarea>
+                <p style="margin: 0.25rem 0 0; color: #6B7280; font-size: 0.75rem;">Comma-separated list of fields you expect to extract.</p>
+            </div>
+            
+            <div style="margin-bottom: 1.25rem;">
+                <label for="edit-doc-hints" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                    Extraction Hints
+                </label>
+                <textarea id="edit-doc-hints" rows="3" placeholder="e.g., 'Invoice number is in top-right corner. Line items are in the table on page 2. GST is listed separately at bottom.'"
+                    style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-size: 0.875rem; resize: vertical;"></textarea>
+                <p style="margin: 0.25rem 0 0; color: #6B7280; font-size: 0.75rem;">Tips to help locate specific fields in the document.</p>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label for="edit-doc-notes" style="display: block; font-weight: 600; color: #0B1221; margin-bottom: 0.5rem; font-size: 0.875rem;">
+                    Additional Notes
+                </label>
+                <textarea id="edit-doc-notes" rows="2" placeholder="Any other relevant information..."
+                    style="width: 100%; padding: 0.75rem; border: 2px solid #E5E7EB; border-radius: 6px; font-size: 0.875rem; resize: vertical;"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button type="button" onclick="document.getElementById('edit-doc-modal').style.display='none'" 
+                    style="padding: 0.75rem 1.5rem; background: #F3F4F6; border: none; border-radius: 6px; cursor: pointer; color: #374151; font-weight: 500;">
+                    Cancel
+                </button>
+                <button type="submit" class="btn-admin" style="padding: 0.75rem 1.5rem;">
+                    Save Details
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}

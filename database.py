@@ -1903,6 +1903,49 @@ def get_trial_documents(trial_id):
         return []
 
 
+def update_trial_document_details(doc_id, extraction_context=None, extraction_hints=None,
+                                   expected_fields=None, notes=None):
+    """
+    Update document-level extraction context, hints, and expected fields.
+    
+    Args:
+        doc_id: Document database ID
+        extraction_context: Description of document type/content
+        extraction_hints: Tips for locating specific fields
+        expected_fields: Comma-separated list of expected fields
+        notes: Additional notes
+    
+    Returns:
+        bool: True if updated successfully
+    """
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE phase1_trial_documents
+                SET extraction_context = :extraction_context,
+                    extraction_hints = :extraction_hints,
+                    expected_fields = :expected_fields,
+                    notes = :notes
+                WHERE id = :doc_id
+            """), {
+                "doc_id": doc_id,
+                "extraction_context": extraction_context,
+                "extraction_hints": extraction_hints,
+                "expected_fields": expected_fields,
+                "notes": notes
+            })
+            conn.commit()
+            print(f"✅ Document {doc_id} details updated")
+            return True
+            
+    except Exception as e:
+        print(f"❌ Error updating document details: {e}")
+        return False
+
+
 def save_trial_result(trial_id, document_id, extracted_data, confidence_scores,
                      field_accuracy, fields_total, fields_passed, fields_flagged,
                      validation_errors=None, requires_human_review=False,

@@ -565,6 +565,33 @@ def phase1_trial_config(trial_id):
         return jsonify({"success": False, "error": "Failed to update configuration"}), 500
 
 
+@admin_bp.route('/phase1-trials/documents/<int:doc_id>/details', methods=['POST'])
+@require_admin
+def phase1_document_details(doc_id):
+    """Update document-level extraction context, hints, and expected fields"""
+    from database import update_trial_document_details
+    
+    data = request.get_json()
+    
+    extraction_context = data.get('extraction_context', '').strip()
+    extraction_hints = data.get('extraction_hints', '').strip()
+    expected_fields = data.get('expected_fields', '').strip()
+    notes = data.get('notes', '').strip()
+    
+    success = update_trial_document_details(
+        doc_id=doc_id,
+        extraction_context=extraction_context or None,
+        extraction_hints=extraction_hints or None,
+        expected_fields=expected_fields or None,
+        notes=notes or None
+    )
+    
+    if success:
+        return jsonify({"success": True, "message": "Document details updated"})
+    else:
+        return jsonify({"success": False, "error": "Failed to update document details"}), 500
+
+
 @admin_bp.route('/phase1-trials/<int:trial_id>/process', methods=['POST'])
 @require_admin
 def phase1_trial_process(trial_id):
