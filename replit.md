@@ -96,10 +96,21 @@ Preferred communication style: Simple, everyday language.
 
 ## Performance Optimizations
 
+### Document Context & Extraction Hints (Per-Document)
+- Each uploaded document can have user-provided guidance fields:
+  - `extraction_context`: Description of what the document is
+  - `extraction_hints`: Tips for locating specific fields
+  - `expected_fields`: Comma-separated list of fields to extract
+  - `notes`: Additional notes
+- "Edit Details" button on trial detail page opens modal for each document
+- User guidance is appended to AI prompts to improve extraction accuracy
+- Cache is bypassed when user guidance is present to ensure fresh extraction
+
 ### Document Fingerprinting & AI Caching
 - SHA256 fingerprinting of document content
 - Cached AI results skip expensive Gemini API calls for duplicate documents
 - 7-day cache expiry (database-backed when available)
+- Cache bypassed when document-level guidance is provided
 - `services/cache_service.py` - Document cache implementation
 
 ### PDF Extraction
