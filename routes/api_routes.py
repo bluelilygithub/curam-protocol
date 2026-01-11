@@ -1614,7 +1614,23 @@ def get_task_status_endpoint(task_id):
 
 @api_bp.route('/api/system/cleanup-documents', methods=['POST'])
 def cleanup_expired_documents():
-    """Run document cleanup for trials with expired retention periods"""
+    """Run document cleanup for trials with expired retention periods.
+    
+    Requires either admin session or valid API key for automation.
+    """
+    import os
+    from flask import session
+    
+    api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+    expected_key = os.environ.get('CLEANUP_API_KEY')
+    is_admin = session.get('admin_authenticated', False)
+    
+    if not is_admin and (not expected_key or api_key != expected_key):
+        return jsonify({
+            'success': False,
+            'error': 'Unauthorized. Requires admin session or valid API key.'
+        }), 401
+    
     try:
         from database import run_document_cleanup, get_trials_for_document_cleanup
         

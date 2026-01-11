@@ -192,7 +192,7 @@
                 {% endif %}
             {% endif %}
         </div>
-        {% if not trial.get('documents_deleted_at') and trial.get('total_documents', 0) > 0 %}
+        {% if not trial.get('documents_deleted_at') and documents and documents|length > 0 %}
         <button onclick="deleteDocuments()" class="btn-admin" style="background: #DC2626; border-color: #DC2626;">
             🗑️ Delete Documents Now
         </button>
