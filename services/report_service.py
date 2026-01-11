@@ -259,7 +259,7 @@ class ReportGenerator:
         ))
         
         styles.add(ParagraphStyle(
-            'BodyText',
+            'ReportBody',
             parent=styles['Normal'],
             fontSize=11,
             textColor=black,
@@ -371,7 +371,7 @@ class ReportGenerator:
         {self.trial.get('customer_company', 'the client')} to validate AI-powered document extraction 
         accuracy and straight-through processing rates.
         """
-        elements.append(Paragraph(summary_text, self.styles['BodyText']))
+        elements.append(Paragraph(summary_text, self.styles['ReportBody']))
         elements.append(Spacer(1, 5*mm))
         
         results_data = [
@@ -428,7 +428,7 @@ class ReportGenerator:
         else:
             rec_text = "<b>Recommendation:</b> Results require review. Consider document quality improvements before Phase 2."
         
-        elements.append(Paragraph(rec_text, self.styles['BodyText']))
+        elements.append(Paragraph(rec_text, self.styles['ReportBody']))
         
         return elements
     
@@ -446,7 +446,7 @@ class ReportGenerator:
         processed through the Curam-Ai extraction pipeline using Google Gemini 2.5 Flash for text extraction 
         and structured data parsing.
         """
-        elements.append(Paragraph(methodology, self.styles['BodyText']))
+        elements.append(Paragraph(methodology, self.styles['ReportBody']))
         elements.append(Spacer(1, 3*mm))
         
         elements.append(Paragraph("2.2 Accuracy Criteria", self.styles['SubsectionTitle']))
@@ -456,7 +456,7 @@ class ReportGenerator:
             "Exception Threshold: < 8 documents requiring manual review"
         ]
         for c in criteria:
-            elements.append(Paragraph(f"• {c}", self.styles['BodyText']))
+            elements.append(Paragraph(f"• {c}", self.styles['ReportBody']))
         
         elements.append(Spacer(1, 3*mm))
         
@@ -467,7 +467,7 @@ class ReportGenerator:
         Flagged for Review: {self.metrics['flagged_fields']}<br/>
         False Positives: {self.metrics['false_positives']}
         """
-        elements.append(Paragraph(results_text, self.styles['BodyText']))
+        elements.append(Paragraph(results_text, self.styles['ReportBody']))
         
         return elements
     
@@ -512,14 +512,14 @@ class ReportGenerator:
             elements.append(Paragraph("3.1 Edge Cases Identified", self.styles['SubsectionTitle']))
             elements.append(Paragraph(
                 f"{len(self.metrics['edge_cases'])} documents were flagged as edge cases requiring special handling:",
-                self.styles['BodyText']
+                self.styles['ReportBody']
             ))
             
             for ec in self.metrics['edge_cases']:
                 ec_text = f"• <b>{ec['filename']}</b> ({ec['category']})"
                 if ec.get('notes'):
                     ec_text += f" - {ec['notes']}"
-                elements.append(Paragraph(ec_text, self.styles['BodyText']))
+                elements.append(Paragraph(ec_text, self.styles['ReportBody']))
         
         return elements
     
@@ -567,7 +567,7 @@ class ReportGenerator:
         Annual documents ({bp['annual_docs']:,}) × Manual time ({bp['manual_minutes']} min) × Hourly rate (${bp['hourly_rate']:.0f}/hr) × STP rate ({bp['target_stp']:.0f}%)<br/>
         = <b>${va['tier1_savings']:,.0f}</b> annual savings
         """
-        elements.append(Paragraph(tier1_text, self.styles['BodyText']))
+        elements.append(Paragraph(tier1_text, self.styles['ReportBody']))
         elements.append(Spacer(1, 3*mm))
         
         tier2_text = f"""
@@ -575,13 +575,13 @@ class ReportGenerator:
         Annual documents ({bp['annual_docs']:,}) × Error rate ({bp['error_rate']:.1f}%) × Error reduction (3%) × Correction cost (${bp.get('error_cost', 85):.0f})<br/>
         = <b>${va['tier2_savings']:,.0f}</b> annual savings
         """
-        elements.append(Paragraph(tier2_text, self.styles['BodyText']))
+        elements.append(Paragraph(tier2_text, self.styles['ReportBody']))
         elements.append(Spacer(1, 5*mm))
         
         total_text = f"""
         <b>Total Indicative Annual Value: ${va['total_value']:,.0f}</b>
         """
-        elements.append(Paragraph(total_text, self.styles['BodyText']))
+        elements.append(Paragraph(total_text, self.styles['ReportBody']))
         
         return elements
     
@@ -594,7 +594,7 @@ class ReportGenerator:
         
         limitations = get_limitations_text(self.trial, self.metrics)
         for i, limitation in enumerate(limitations, 1):
-            elements.append(Paragraph(f"{i}. {limitation}", self.styles['BodyText']))
+            elements.append(Paragraph(f"{i}. {limitation}", self.styles['ReportBody']))
         
         return elements
     
@@ -609,12 +609,12 @@ class ReportGenerator:
         The following questions will be addressed in the Phase 2 deep-dive analysis to develop 
         a board-ready business case and implementation roadmap:
         """
-        elements.append(Paragraph(intro, self.styles['BodyText']))
+        elements.append(Paragraph(intro, self.styles['ReportBody']))
         elements.append(Spacer(1, 3*mm))
         
         questions = get_phase2_questions(self.trial, self.metrics)
         for i, question in enumerate(questions, 1):
-            elements.append(Paragraph(f"{i}. {question}", self.styles['BodyText']))
+            elements.append(Paragraph(f"{i}. {question}", self.styles['ReportBody']))
         
         return elements
     
@@ -648,10 +648,10 @@ class ReportGenerator:
             could focus on the document types that achieved the highest accuracy.
             """
         
-        elements.append(Paragraph(conclusion, self.styles['BodyText']))
+        elements.append(Paragraph(conclusion, self.styles['ReportBody']))
         elements.append(Spacer(1, 8*mm))
         
-        elements.append(Paragraph("<b>Next Steps:</b>", self.styles['BodyText']))
+        elements.append(Paragraph("<b>Next Steps:</b>", self.styles['ReportBody']))
         next_steps = [
             "Schedule Phase 2 discovery call to review detailed requirements",
             "Provide additional sample documents for any new document types",
@@ -659,13 +659,13 @@ class ReportGenerator:
             "Review integration requirements with IT/operations teams"
         ]
         for step in next_steps:
-            elements.append(Paragraph(f"• {step}", self.styles['BodyText']))
+            elements.append(Paragraph(f"• {step}", self.styles['ReportBody']))
         
         elements.append(Spacer(1, 15*mm))
         
-        elements.append(Paragraph("For questions about this report:", self.styles['BodyText']))
-        elements.append(Paragraph("<b>Curam-Ai Protocol</b>", self.styles['BodyText']))
-        elements.append(Paragraph("www.curam-ai.com.au", self.styles['BodyText']))
+        elements.append(Paragraph("For questions about this report:", self.styles['ReportBody']))
+        elements.append(Paragraph("<b>Curam-Ai Protocol</b>", self.styles['ReportBody']))
+        elements.append(Paragraph("www.curam-ai.com.au", self.styles['ReportBody']))
         
         return elements
 
