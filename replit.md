@@ -133,6 +133,16 @@ Preferred communication style: Simple, everyday language.
 - `GET /api/system/performance` - System stats (cache, pool, queue)
 - `POST /api/system/cache/clear` - Clear document cache
 - `GET /api/task/<task_id>/status` - Background task status
+- `POST /api/system/cleanup-documents` - Auto-cleanup expired trial documents (requires admin or CLEANUP_API_KEY)
+
+### Document Retention & Privacy (Australian Privacy Act Compliance)
+- Configurable retention periods: 7-90 days (default 30)
+- `phase1_trials.retention_days` - Per-trial retention setting
+- `phase1_trials.documents_deleted_at` - Timestamp when documents were purged
+- Manual deletion via admin "Delete Documents Now" button
+- Automatic cleanup via `/api/system/cleanup-documents` (secured with API key or admin session)
+- Original PDFs deleted after retention; extraction results preserved for reporting
+- Files stored in `uploads/phase1_trials/{trial_id}/`
 
 ### Required Environment Variables
 
