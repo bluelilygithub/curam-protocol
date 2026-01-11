@@ -1778,6 +1778,186 @@ def update_phase1_trial_extraction_config(trial_id, extraction_fields=None, outp
         return False
 
 
+def update_phase1_trial_business_profile(trial_id, staff_count=None, doc_staff_count=None,
+                                          blended_hourly_rate=None, weekly_doc_volume=None,
+                                          manual_process_minutes=None, current_error_rate=None,
+                                          error_correction_cost=None, infrastructure_type=None,
+                                          infrastructure_notes=None, limitations_notes=None,
+                                          target_stp_rate=None):
+    """
+    Update business profile fields for a Phase 1 trial.
+    These fields are used to calculate ROI and generate the feasibility report.
+    
+    Args:
+        trial_id: Trial database ID
+        staff_count: Total staff count at the client
+        doc_staff_count: Staff doing documentation work
+        blended_hourly_rate: Average hourly rate for documentation staff
+        weekly_doc_volume: Estimated documents processed per week
+        manual_process_minutes: Time to manually process one document
+        current_error_rate: Current error rate percentage
+        error_correction_cost: Cost to correct one error
+        infrastructure_type: Infrastructure type (M365, Google Workspace, etc.)
+        infrastructure_notes: Notes about infrastructure compatibility
+        limitations_notes: Custom limitations and assumptions
+        target_stp_rate: Target straight-through processing rate
+    
+    Returns:
+        bool: True if updated successfully
+    """
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            updates = []
+            params = {"trial_id": trial_id}
+            
+            if staff_count is not None:
+                updates.append("staff_count = :staff_count")
+                params["staff_count"] = staff_count
+            
+            if doc_staff_count is not None:
+                updates.append("doc_staff_count = :doc_staff_count")
+                params["doc_staff_count"] = doc_staff_count
+            
+            if blended_hourly_rate is not None:
+                updates.append("blended_hourly_rate = :blended_hourly_rate")
+                params["blended_hourly_rate"] = blended_hourly_rate
+            
+            if weekly_doc_volume is not None:
+                updates.append("weekly_doc_volume = :weekly_doc_volume")
+                params["weekly_doc_volume"] = weekly_doc_volume
+            
+            if manual_process_minutes is not None:
+                updates.append("manual_process_minutes = :manual_process_minutes")
+                params["manual_process_minutes"] = manual_process_minutes
+            
+            if current_error_rate is not None:
+                updates.append("current_error_rate = :current_error_rate")
+                params["current_error_rate"] = current_error_rate
+            
+            if error_correction_cost is not None:
+                updates.append("error_correction_cost = :error_correction_cost")
+                params["error_correction_cost"] = error_correction_cost
+            
+            if infrastructure_type is not None:
+                updates.append("infrastructure_type = :infrastructure_type")
+                params["infrastructure_type"] = infrastructure_type
+            
+            if infrastructure_notes is not None:
+                updates.append("infrastructure_notes = :infrastructure_notes")
+                params["infrastructure_notes"] = infrastructure_notes
+            
+            if limitations_notes is not None:
+                updates.append("limitations_notes = :limitations_notes")
+                params["limitations_notes"] = limitations_notes
+            
+            if target_stp_rate is not None:
+                updates.append("target_stp_rate = :target_stp_rate")
+                params["target_stp_rate"] = target_stp_rate
+            
+            if not updates:
+                return False
+            
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            
+            query = f"""
+                UPDATE phase1_trials
+                SET {', '.join(updates)}
+                WHERE id = :trial_id
+            """
+            
+            result = conn.execute(text(query), params)
+            conn.commit()
+            
+            if result.rowcount > 0:
+                print(f"✅ Updated business profile for trial ID {trial_id}")
+                return True
+            return False
+            
+    except Exception as e:
+        print(f"❌ Error updating Phase 1 trial business profile: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def update_phase1_document_metrics(doc_id, fields_extracted=None, fields_correct=None,
+                                    fields_flagged=None, false_positives=None,
+                                    processing_time_seconds=None, is_edge_case=None,
+                                    document_category=None):
+    """
+    Update extraction metrics for a Phase 1 trial document.
+    
+    Args:
+        doc_id: Document database ID
+        fields_extracted: Total fields extracted
+        fields_correct: Fields correctly extracted
+        fields_flagged: Fields flagged for review
+        false_positives: Count of false positive extractions
+        processing_time_seconds: Time to process the document
+        is_edge_case: Whether this is an edge case/complex test document
+        document_category: Category for grouping (e.g., "Invoices", "Engineering Drawings")
+    
+    Returns:
+        bool: True if updated successfully
+    """
+    if not engine:
+        return False
+    
+    try:
+        with engine.connect() as conn:
+            updates = []
+            params = {"doc_id": doc_id}
+            
+            if fields_extracted is not None:
+                updates.append("fields_extracted = :fields_extracted")
+                params["fields_extracted"] = fields_extracted
+            
+            if fields_correct is not None:
+                updates.append("fields_correct = :fields_correct")
+                params["fields_correct"] = fields_correct
+            
+            if fields_flagged is not None:
+                updates.append("fields_flagged = :fields_flagged")
+                params["fields_flagged"] = fields_flagged
+            
+            if false_positives is not None:
+                updates.append("false_positives = :false_positives")
+                params["false_positives"] = false_positives
+            
+            if processing_time_seconds is not None:
+                updates.append("processing_time_seconds = :processing_time_seconds")
+                params["processing_time_seconds"] = processing_time_seconds
+            
+            if is_edge_case is not None:
+                updates.append("is_edge_case = :is_edge_case")
+                params["is_edge_case"] = is_edge_case
+            
+            if document_category is not None:
+                updates.append("document_category = :document_category")
+                params["document_category"] = document_category
+            
+            if not updates:
+                return False
+            
+            query = f"""
+                UPDATE phase1_trial_documents
+                SET {', '.join(updates)}
+                WHERE id = :doc_id
+            """
+            
+            result = conn.execute(text(query), params)
+            conn.commit()
+            
+            return result.rowcount > 0
+            
+    except Exception as e:
+        print(f"❌ Error updating document metrics: {e}")
+        return False
+
+
 def get_all_phase1_trials(limit=50, offset=0, status_filter=None):
     """
     Get all Phase 1 trials with pagination and optional status filter.
