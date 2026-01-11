@@ -389,7 +389,7 @@ function deleteDocuments() {
     {% if trial.get('staff_count') and trial.get('weekly_doc_volume') and trial.get('blended_hourly_rate') %}
     <div style="margin-top: 1.5rem; padding: 1rem; background: linear-gradient(135deg, #FFFBF0, white); border: 2px solid #D4AF37; border-radius: 8px;">
         <h4 style="margin: 0 0 0.75rem 0; color: #0B1221; font-size: 0.875rem;">Indicative Value Assessment</h4>
-        {% set annual_docs = (trial.get('weekly_doc_volume', 0)|float) * 52 %}
+        {% set annual_docs = (trial.get('weekly_doc_volume', 0)|float) * 48 %}
         {% set manual_hours = annual_docs * ((trial.get('manual_process_minutes', 12)|float) / 60) %}
         {% set manual_cost = manual_hours * (trial.get('blended_hourly_rate', 55)|float) %}
         {% set stp_rate = ((trial.get('target_stp_rate', 75)|float) / 100) %}
@@ -411,7 +411,7 @@ function deleteDocuments() {
             </div>
         </div>
         <p style="margin: 0.75rem 0 0 0; font-size: 0.75rem; color: #6B7280; text-align: center; font-style: italic;">
-            Based on {{ annual_docs }} docs/year, {{ trial.get('manual_process_minutes', 12) }} min manual processing, {{ trial.get('target_stp_rate', 75) }}% STP target
+            Based on {{ "{:,.0f}".format(annual_docs) }} docs/year (48 working weeks), {{ trial.get('manual_process_minutes', 12) }} min manual processing, {{ trial.get('target_stp_rate', 75) }}% STP target
         </p>
     </div>
     {% endif %}
