@@ -34,8 +34,11 @@ from database import (
     get_all_prompts,
     get_prompt_by_id,
     update_prompt,
-    toggle_prompt_active
+    toggle_prompt_active,
+    create_admin_user,
+    engine
 )
+from sqlalchemy import text
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -81,6 +84,45 @@ def require_admin(f):
             return redirect(url_for('admin.login'))
         return f(*args, **kwargs)
     return decorated_function
+
+
+@admin_bp.route('/setup', methods=['GET', 'POST'])
+def setup():
+    """One-time admin setup - creates admin user if none exists"""
+    # Check if any admin users exist
+    admin_exists = False
+    try:
+        if engine:
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT COUNT(*) FROM users WHERE is_admin = true"))
+                count = result.scalar()
+                admin_exists = count > 0
+    except Exception as e:
+        return render_template('admin/setup.html', error=f'Database error: {str(e)}')
+    
+    if admin_exists:
+        return redirect(url_for('admin.login'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip() or 'admin'
+        password = request.form.get('password', '').strip()
+        confirm_password = request.form.get('confirm_password', '').strip()
+        
+        if not password:
+            return render_template('admin/setup.html', error='Password is required')
+        if len(password) < 8:
+            return render_template('admin/setup.html', error='Password must be at least 8 characters')
+        if password != confirm_password:
+            return render_template('admin/setup.html', error='Passwords do not match')
+        
+        if create_admin_user(username, password):
+            session['admin_authenticated'] = True
+            session['admin_username'] = username
+            return redirect(url_for('admin.dashboard'))
+        else:
+            return render_template('admin/setup.html', error='Failed to create admin user')
+    
+    return render_template('admin/setup.html')
 
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
