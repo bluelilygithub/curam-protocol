@@ -35,3 +35,4 @@ SQLAlchemy
 streamlit
 werkzeug
 flask-wtf
+google-genai
