@@ -1174,3 +1174,35 @@ def prompts_activate_all_inactive():
         flash(f'Failed to activate prompts: {str(e)}', 'error')
     
     return redirect(url_for('admin.prompts'))
+
+
+@admin_bp.route('/phase1-trials/<int:trial_id>/generate-report', methods=['GET'])
+@require_admin
+def phase1_trial_generate_report(trial_id):
+    """Generate and download a Phase 1 feasibility sprint PDF report"""
+    from services.report_service import generate_phase1_report
+    from database import get_phase1_trial
+    
+    trial = get_phase1_trial(trial_id=trial_id)
+    if not trial:
+        return "Trial not found", 404
+    
+    try:
+        pdf_buffer = generate_phase1_report(trial_id)
+        if not pdf_buffer:
+            return "Failed to generate report", 500
+        
+        company = trial.get('customer_company', 'Client').replace(' ', '-')
+        trial_code = trial.get('trial_code', 'TRIAL')
+        filename = f"Phase1-Feasibility-Report-{company}-{trial_code}.pdf"
+        
+        from flask import send_file
+        return send_file(
+            pdf_buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+    except Exception as e:
+        print(f"Error generating report: {e}")
+        return f"Error generating report: {str(e)}", 500

@@ -168,6 +168,7 @@
     <div class="admin-header-actions">
         {% if trial.get('status') == 'completed' %}
         <a href="{{ url_for('admin.phase1_trial_report', trial_id=trial.get('id')) }}" class="btn-admin" style="text-decoration: none; margin-right: 0.5rem;">View Report</a>
+        <a href="{{ url_for('admin.phase1_trial_generate_report', trial_id=trial.get('id')) }}" class="btn-admin" style="text-decoration: none; margin-right: 0.5rem; background: #D4AF37; border-color: #D4AF37;">Download PDF Report</a>
         {% endif %}
         {% if trial.get('report_token') %}
         <a href="{{ url_for('admin.phase1_report_public', report_token=trial.get('report_token')) }}" target="_blank" class="btn-admin btn-admin-secondary" style="text-decoration: none;">Public Report Link</a>
