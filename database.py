@@ -1443,6 +1443,7 @@ def get_extraction_analytics(date_from=None, date_to=None):
             avg_processing_time = time_result.scalar() or 0
             
             # Extractions by document type
+            where_clause_er = where_clause.replace("created_at", "er.created_at") if where_clause else ""
             type_result = conn.execute(text(f"""
                 SELECT 
                     dt.slug,
@@ -1450,7 +1451,7 @@ def get_extraction_analytics(date_from=None, date_to=None):
                     COUNT(*) as count
                 FROM extraction_results er
                 LEFT JOIN document_types dt ON er.document_type_id = dt.id
-                {where_clause}
+                {where_clause_er}
                 GROUP BY dt.id, dt.slug, dt.name
                 ORDER BY count DESC
             """), params)

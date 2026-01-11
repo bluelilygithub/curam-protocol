@@ -492,19 +492,14 @@ function deleteDocuments() {
     {% endfor %}
     {% endif %}
     
-    {% if total_docs >= 15 %}
+    {% if total_docs > 0 %}
     <div style="margin-top: 1.5rem; padding: 1rem; background: #EFF6FF; border-left: 3px solid #3B82F6; border-radius: 4px; font-size: 0.875rem;">
         <strong style="color: #1E40AF;">Ready to Process:</strong>
-        <span style="color: #1E3A8A;">You have {{ total_docs }} documents (15 required). When ready, click below to process all documents and generate the Phase 1 report.</span>
+        <span style="color: #1E3A8A;">You have {{ total_docs }} document(s) uploaded. Click below to process and generate the Phase 1 report.</span>
         <form method="POST" action="{{ url_for('admin.phase1_trial_process', trial_id=trial.get('id')) }}" style="margin-top: 1rem;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn-admin">🚀 Process All Documents</button>
+            <button type="submit" class="btn-admin">Process All Documents</button>
         </form>
-    </div>
-    {% elif total_docs > 0 %}
-    <div style="margin-top: 1.5rem; padding: 1rem; background: #FEF3C7; border-left: 3px solid #F59E0B; border-radius: 4px; font-size: 0.875rem;">
-        <strong style="color: #92400E;">Upload In Progress:</strong>
-        <span style="color: #78350F;">You have {{ total_docs }}/15 documents uploaded. Please upload documents to all 3 categories (5 per category) before processing.</span>
     </div>
     {% else %}
     <div style="margin-top: 1.5rem; padding: 1rem; background: #FEF3C7; border-left: 3px solid #F59E0B; border-radius: 4px; font-size: 0.875rem;">
