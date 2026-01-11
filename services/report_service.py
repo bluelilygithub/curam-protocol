@@ -92,23 +92,40 @@ def calculate_trial_metrics(trial: Dict, documents: List[Dict], results: List[Di
     
     staff_count = trial.get('staff_count', 50)
     doc_staff_count = trial.get('doc_staff_count', staff_count)
-    hourly_rate = trial.get('blended_hourly_rate', 55)
-    weekly_volume = trial.get('weekly_doc_volume', 100)
-    manual_minutes = trial.get('manual_process_minutes', 12)
-    error_rate = trial.get('current_error_rate', 4) / 100
-    error_cost = trial.get('error_correction_cost', 85)
-    target_stp = (trial.get('target_stp_rate', 75) or 75) / 100
+    hourly_rate = float(trial.get('blended_hourly_rate', 85) or 85)
+    weekly_doc_hours = float(trial.get('weekly_doc_hours', 4) or 4)
     
-    annual_docs = weekly_volume * 52
-    manual_hours = annual_docs * (manual_minutes / 60)
-    manual_cost = manual_hours * hourly_rate
+    annual_documentation_cost = doc_staff_count * weekly_doc_hours * hourly_rate * 48
     
-    tier1_savings = manual_cost * target_stp
+    if overall_accuracy >= 95 and stp_rate >= 80:
+        automation_potential_conservative = 0.45
+        automation_potential_probable = 0.55
+        automation_potential_optimistic = 0.65
+        achievability = "High"
+    elif overall_accuracy >= 90 and stp_rate >= 60:
+        automation_potential_conservative = 0.35
+        automation_potential_probable = 0.45
+        automation_potential_optimistic = 0.55
+        achievability = "Moderate"
+    else:
+        automation_potential_conservative = 0.25
+        automation_potential_probable = 0.35
+        automation_potential_optimistic = 0.45
+        achievability = "Requires Improvement"
     
-    error_reduction = 0.03
-    tier2_savings = annual_docs * error_rate * error_reduction * error_cost
+    staff_acceptance_conservative = 0.50
+    staff_acceptance_probable = 0.75
+    staff_acceptance_optimistic = 0.95
     
-    total_value = tier1_savings + tier2_savings
+    tier1_conservative = annual_documentation_cost * automation_potential_conservative * staff_acceptance_conservative
+    tier1_probable = annual_documentation_cost * automation_potential_probable * staff_acceptance_probable
+    tier1_optimistic = annual_documentation_cost * automation_potential_optimistic * staff_acceptance_optimistic
+    
+    weekly_volume = trial.get('weekly_doc_volume', 100) or 100
+    error_rate = (trial.get('current_error_rate', 4) or 4) / 100
+    error_cost = trial.get('error_correction_cost', 85) or 85
+    annual_docs = weekly_volume * 48
+    tier2_savings = annual_docs * error_rate * 0.03 * error_cost
     
     return {
         'total_documents': total_docs,
@@ -126,19 +143,32 @@ def calculate_trial_metrics(trial: Dict, documents: List[Dict], results: List[Di
             'staff_count': staff_count,
             'doc_staff_count': doc_staff_count,
             'hourly_rate': hourly_rate,
+            'weekly_doc_hours': weekly_doc_hours,
             'weekly_volume': weekly_volume,
             'annual_docs': annual_docs,
-            'manual_minutes': manual_minutes,
             'error_rate': error_rate * 100,
-            'error_cost': error_cost,
-            'target_stp': target_stp * 100
+            'error_cost': error_cost
         },
         'value_assessment': {
-            'tier1_savings': tier1_savings,
+            'annual_documentation_cost': annual_documentation_cost,
+            'achievability': achievability,
+            'automation_potential': {
+                'conservative': automation_potential_conservative,
+                'probable': automation_potential_probable,
+                'optimistic': automation_potential_optimistic
+            },
+            'staff_acceptance': {
+                'conservative': staff_acceptance_conservative,
+                'probable': staff_acceptance_probable,
+                'optimistic': staff_acceptance_optimistic
+            },
+            'tier1_conservative': tier1_conservative,
+            'tier1_probable': tier1_probable,
+            'tier1_optimistic': tier1_optimistic,
             'tier2_savings': tier2_savings,
-            'total_value': total_value,
-            'manual_hours': manual_hours,
-            'manual_cost': manual_cost
+            'total_conservative': tier1_conservative + tier2_savings,
+            'total_probable': tier1_probable + tier2_savings,
+            'total_optimistic': tier1_optimistic + tier2_savings
         },
         'test_results': {
             'accuracy_pass': overall_accuracy >= 90,
@@ -191,11 +221,12 @@ def get_limitations_text(trial: Dict, metrics: Dict) -> List[str]:
         limitations.append(f"High edge-case ratio ({metrics['edge_case_count']}/{metrics['total_documents']} documents) suggests additional document preprocessing may be required.")
     
     bp = metrics['business_profile']
+    va = metrics['value_assessment']
     limitations.extend([
-        f"ROI calculations assume {bp['weekly_volume']} documents/week at current volume; actual savings scale with volume changes.",
+        f"ROI calculations based on {bp['doc_staff_count']} documentation staff spending {bp['weekly_doc_hours']:.1f} hours/week at ${bp['hourly_rate']:.0f}/hr over 48 working weeks.",
         f"Blended hourly rate of ${bp['hourly_rate']:.0f}/hr includes on-costs; validate this aligns with internal cost models.",
-        f"Error reduction projections assume 3% of flagged documents prevent costly downstream errors; adjust based on actual error impact.",
-        f"Target STP rate of {bp['target_stp']:.0f}% is achievable with current document quality; may require improvement for edge cases."
+        f"Automation potential ({int(va['automation_potential']['probable']*100)}% probable) derived from validation results; actual implementation may vary.",
+        f"Staff acceptance rates (50%/75%/95%) based on industry benchmarks; change management efforts can improve adoption."
     ])
     
     custom_limitations = trial.get('limitations_notes', '')
@@ -364,7 +395,7 @@ class ReportGenerator:
         metrics = self.metrics
         accuracy = metrics['overall_accuracy']
         stp = metrics['stp_rate']
-        total_value = metrics['value_assessment']['total_value']
+        va = metrics['value_assessment']
         
         summary_text = f"""
         This feasibility sprint tested {metrics['total_documents']} documents from 
@@ -378,7 +409,8 @@ class ReportGenerator:
             ['Metric', 'Result', 'Threshold', 'Status'],
             ['Field Accuracy', f"{accuracy:.1f}%", '≥ 90%', 'PASS' if accuracy >= 90 else 'FAIL'],
             ['STP Rate', f"{stp:.1f}%", '≥ 60%', 'PASS' if stp >= 60 else 'FAIL'],
-            ['Exceptions', str(metrics['exception_docs']), '< 8', 'PASS' if metrics['exception_docs'] < 8 else 'REVIEW']
+            ['Exceptions', str(metrics['exception_docs']), '< 8', 'PASS' if metrics['exception_docs'] < 8 else 'REVIEW'],
+            ['Achievability', va['achievability'], 'High/Moderate', 'PASS' if va['achievability'] in ['High', 'Moderate'] else 'REVIEW']
         ]
         
         results_table = Table(results_data, colWidths=[80*mm, 35*mm, 30*mm, 25*mm])
@@ -397,13 +429,13 @@ class ReportGenerator:
         elements.append(results_table)
         elements.append(Spacer(1, 8*mm))
         
-        elements.append(Paragraph("Indicative Value Assessment", self.styles['SubsectionTitle']))
+        elements.append(Paragraph("Probable Annual Value (based on validation results)", self.styles['SubsectionTitle']))
         
         value_data = [
             ['Tier 1: Time Savings', 'Tier 2: Error Reduction', 'Total Annual Value'],
-            [f"${metrics['value_assessment']['tier1_savings']:,.0f}", 
-             f"${metrics['value_assessment']['tier2_savings']:,.0f}",
-             f"${total_value:,.0f}"]
+            [f"${va['tier1_probable']:,.0f}", 
+             f"${va['tier2_savings']:,.0f}",
+             f"${va['total_probable']:,.0f}"]
         ]
         
         value_table = Table(value_data, colWidths=[60*mm, 60*mm, 60*mm])
@@ -524,7 +556,7 @@ class ReportGenerator:
         return elements
     
     def _build_value_assessment(self) -> List:
-        """Build value assessment section"""
+        """Build value assessment section with ROI calculator methodology"""
         elements = []
         
         elements.append(Paragraph("4. Value Assessment", self.styles['SectionTitle']))
@@ -539,14 +571,11 @@ class ReportGenerator:
             ['Total Staff', str(bp['staff_count']), 'Firm headcount'],
             ['Documentation Staff', str(bp['doc_staff_count']), 'Staff handling documents'],
             ['Blended Hourly Rate', f"${bp['hourly_rate']:.0f}", 'Including on-costs'],
-            ['Weekly Document Volume', str(bp['weekly_volume']), 'Documents per week'],
-            ['Annual Volume', f"{bp['annual_docs']:,}", 'Projected annual throughput'],
-            ['Manual Processing Time', f"{bp['manual_minutes']} min", 'Per document'],
-            ['Current Error Rate', f"{bp['error_rate']:.1f}%", 'Estimated baseline'],
-            ['Target STP Rate', f"{bp['target_stp']:.0f}%", 'Automation target']
+            ['Weekly Doc Hours/Staff', f"{bp['weekly_doc_hours']:.1f} hrs", 'Hours per staff member'],
+            ['Annual Documentation Cost', f"${va['annual_documentation_cost']:,.0f}", f"{bp['doc_staff_count']} staff × {bp['weekly_doc_hours']:.1f} hrs × ${bp['hourly_rate']:.0f} × 48 wks"]
         ]
         
-        profile_table = Table(profile_data, colWidths=[60*mm, 40*mm, 70*mm])
+        profile_table = Table(profile_data, colWidths=[55*mm, 45*mm, 70*mm])
         profile_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), BRAND_NAVY),
             ('TEXTCOLOR', (0, 0), (-1, 0), white),
@@ -560,28 +589,79 @@ class ReportGenerator:
         elements.append(profile_table)
         elements.append(Spacer(1, 8*mm))
         
-        elements.append(Paragraph("4.2 ROI Calculation", self.styles['SubsectionTitle']))
+        elements.append(Paragraph("4.2 Validation-Informed Automation Potential", self.styles['SubsectionTitle']))
         
-        tier1_text = f"""
-        <b>Tier 1: Time Savings from Straight-Through Processing</b><br/>
-        Annual documents ({bp['annual_docs']:,}) × Manual time ({bp['manual_minutes']} min) × Hourly rate (${bp['hourly_rate']:.0f}/hr) × STP rate ({bp['target_stp']:.0f}%)<br/>
-        = <b>${va['tier1_savings']:,.0f}</b> annual savings
+        achievability_text = f"""
+        Based on your document validation results ({self.metrics['overall_accuracy']:.1f}% accuracy, {self.metrics['stp_rate']:.1f}% STP rate), 
+        the <b>achievability rating is: {va['achievability']}</b>.
         """
-        elements.append(Paragraph(tier1_text, self.styles['ReportBody']))
+        elements.append(Paragraph(achievability_text, self.styles['ReportBody']))
         elements.append(Spacer(1, 3*mm))
         
-        tier2_text = f"""
-        <b>Tier 2: Error Reduction Savings</b><br/>
-        Annual documents ({bp['annual_docs']:,}) × Error rate ({bp['error_rate']:.1f}%) × Error reduction (3%) × Correction cost (${bp.get('error_cost', 85):.0f})<br/>
-        = <b>${va['tier2_savings']:,.0f}</b> annual savings
+        automation_text = f"""
+        This validation performance indicates automation potential of:
+        <br/>• Conservative: {int(va['automation_potential']['conservative']*100)}%
+        <br/>• Probable: {int(va['automation_potential']['probable']*100)}%
+        <br/>• Optimistic: {int(va['automation_potential']['optimistic']*100)}%
         """
-        elements.append(Paragraph(tier2_text, self.styles['ReportBody']))
+        elements.append(Paragraph(automation_text, self.styles['ReportBody']))
+        elements.append(Spacer(1, 8*mm))
+        
+        elements.append(Paragraph("4.3 ROI Scenarios", self.styles['SubsectionTitle']))
+        
+        methodology_text = f"""
+        <b>Methodology:</b> Annual Documentation Cost × Automation Potential × Staff Acceptance Rate
+        <br/><br/>
+        Staff acceptance rates account for organizational adoption: 50% (conservative), 75% (probable), 95% (optimistic).
+        """
+        elements.append(Paragraph(methodology_text, self.styles['ReportBody']))
         elements.append(Spacer(1, 5*mm))
         
-        total_text = f"""
-        <b>Total Indicative Annual Value: ${va['total_value']:,.0f}</b>
+        scenario_data = [
+            ['Scenario', 'Automation', 'Acceptance', 'Tier 1 Savings', 'Tier 2', 'Total Annual'],
+            ['Conservative', 
+             f"{int(va['automation_potential']['conservative']*100)}%",
+             f"{int(va['staff_acceptance']['conservative']*100)}%",
+             f"${va['tier1_conservative']:,.0f}",
+             f"${va['tier2_savings']:,.0f}",
+             f"${va['total_conservative']:,.0f}"],
+            ['Probable', 
+             f"{int(va['automation_potential']['probable']*100)}%",
+             f"{int(va['staff_acceptance']['probable']*100)}%",
+             f"${va['tier1_probable']:,.0f}",
+             f"${va['tier2_savings']:,.0f}",
+             f"${va['total_probable']:,.0f}"],
+            ['Optimistic', 
+             f"{int(va['automation_potential']['optimistic']*100)}%",
+             f"{int(va['staff_acceptance']['optimistic']*100)}%",
+             f"${va['tier1_optimistic']:,.0f}",
+             f"${va['tier2_savings']:,.0f}",
+             f"${va['total_optimistic']:,.0f}"]
+        ]
+        
+        scenario_table = Table(scenario_data, colWidths=[30*mm, 25*mm, 25*mm, 35*mm, 25*mm, 35*mm])
+        scenario_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), BRAND_NAVY),
+            ('TEXTCOLOR', (0, 0), (-1, 0), white),
+            ('BACKGROUND', (0, 2), (-1, 2), BRAND_LIGHT_GOLD),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 2), (-1, 2), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, BRAND_GRAY)
+        ]))
+        elements.append(scenario_table)
+        elements.append(Spacer(1, 5*mm))
+        
+        highlight_text = f"""
+        <b>Probable Annual Value: ${va['total_probable']:,.0f}</b> (highlighted scenario)
+        <br/><br/>
+        <b>Tier 2: Error Reduction</b> adds ${va['tier2_savings']:,.0f}/year from preventing downstream errors 
+        (based on {bp['error_rate']:.1f}% error rate, 3% of flagged docs preventing costly errors).
         """
-        elements.append(Paragraph(total_text, self.styles['ReportBody']))
+        elements.append(Paragraph(highlight_text, self.styles['ReportBody']))
         
         return elements
     
@@ -626,14 +706,16 @@ class ReportGenerator:
         elements.append(Spacer(1, 5*mm))
         
         if self.metrics['recommendation'] == 'proceed':
+            va = self.metrics['value_assessment']
             conclusion = f"""
             Based on the feasibility sprint results, <b>{self.trial.get('customer_company', 'the client')}</b> 
             has achieved the required accuracy thresholds for AI-powered document automation. 
             With {self.metrics['overall_accuracy']:.1f}% field accuracy and {self.metrics['stp_rate']:.1f}% 
             straight-through processing rate, the technology is ready for Phase 2 implementation planning.
             <br/><br/>
-            The indicative annual value of <b>${self.metrics['value_assessment']['total_value']:,.0f}</b> 
-            represents conservative estimates based on the business profile provided. Phase 2 will 
+            The probable annual value of <b>${va['total_probable']:,.0f}</b> 
+            (range: ${va['total_conservative']:,.0f} - ${va['total_optimistic']:,.0f}) 
+            is based on validation results and staff adoption factors. Phase 2 will 
             refine these calculations with detailed process mapping and integration requirements.
             """
         else:

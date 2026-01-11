@@ -338,6 +338,10 @@ function deleteDocuments() {
                 <input type="number" id="bp-hourly-rate" value="{{ trial.get('blended_hourly_rate') or '' }}" placeholder="e.g., 55" step="0.01" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
             </div>
             <div>
+                <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Doc Hrs/Week</label>
+                <input type="number" id="bp-weekly-doc-hours" value="{{ trial.get('weekly_doc_hours') or '4' }}" placeholder="4" step="0.5" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
+            </div>
+            <div>
                 <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; color: #0B1221; font-size: 0.75rem;">Docs/Week</label>
                 <input type="number" id="bp-weekly-volume" value="{{ trial.get('weekly_doc_volume') or '' }}" placeholder="e.g., 100" style="width: 100%; padding: 0.5rem; border: 2px solid #E5E7EB; border-radius: 4px; font-size: 0.875rem;">
             </div>
@@ -413,6 +417,7 @@ async function saveBusinessProfile() {
         staff_count: document.getElementById('bp-staff-count').value,
         doc_staff_count: document.getElementById('bp-doc-staff-count').value,
         blended_hourly_rate: document.getElementById('bp-hourly-rate').value,
+        weekly_doc_hours: document.getElementById('bp-weekly-doc-hours').value,
         weekly_doc_volume: document.getElementById('bp-weekly-volume').value,
         manual_process_minutes: document.getElementById('bp-manual-minutes').value,
         current_error_rate: document.getElementById('bp-error-rate').value,

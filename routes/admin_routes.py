@@ -684,6 +684,7 @@ def phase1_trial_business_profile(trial_id):
         staff_count=safe_int(data.get('staff_count')),
         doc_staff_count=safe_int(data.get('doc_staff_count')),
         blended_hourly_rate=safe_float(data.get('blended_hourly_rate')),
+        weekly_doc_hours=safe_float(data.get('weekly_doc_hours')),
         weekly_doc_volume=safe_int(data.get('weekly_doc_volume')),
         manual_process_minutes=safe_int(data.get('manual_process_minutes')),
         current_error_rate=safe_float(data.get('current_error_rate')),

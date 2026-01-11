@@ -1779,11 +1779,11 @@ def update_phase1_trial_extraction_config(trial_id, extraction_fields=None, outp
 
 
 def update_phase1_trial_business_profile(trial_id, staff_count=None, doc_staff_count=None,
-                                          blended_hourly_rate=None, weekly_doc_volume=None,
-                                          manual_process_minutes=None, current_error_rate=None,
-                                          error_correction_cost=None, infrastructure_type=None,
-                                          infrastructure_notes=None, limitations_notes=None,
-                                          target_stp_rate=None):
+                                          blended_hourly_rate=None, weekly_doc_hours=None,
+                                          weekly_doc_volume=None, manual_process_minutes=None,
+                                          current_error_rate=None, error_correction_cost=None,
+                                          infrastructure_type=None, infrastructure_notes=None,
+                                          limitations_notes=None, target_stp_rate=None):
     """
     Update business profile fields for a Phase 1 trial.
     These fields are used to calculate ROI and generate the feasibility report.
@@ -1824,6 +1824,10 @@ def update_phase1_trial_business_profile(trial_id, staff_count=None, doc_staff_c
             if blended_hourly_rate is not None:
                 updates.append("blended_hourly_rate = :blended_hourly_rate")
                 params["blended_hourly_rate"] = blended_hourly_rate
+            
+            if weekly_doc_hours is not None:
+                updates.append("weekly_doc_hours = :weekly_doc_hours")
+                params["weekly_doc_hours"] = weekly_doc_hours
             
             if weekly_doc_volume is not None:
                 updates.append("weekly_doc_volume = :weekly_doc_volume")
