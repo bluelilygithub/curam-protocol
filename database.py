@@ -1610,7 +1610,7 @@ def create_phase1_trial(customer_name, customer_email=None, customer_company=Non
                 ) VALUES (
                     :trial_code, :customer_name, :customer_email, :customer_company,
                     :industry, :sector_slug, :created_by, :notes, :report_token, 'pending',
-                    :extraction_fields::jsonb, :output_format::jsonb, :retention_days
+                    CAST(:extraction_fields AS jsonb), CAST(:output_format AS jsonb), :retention_days
                 )
                 RETURNING id, trial_code, report_token, created_at, retention_days
             """), {
