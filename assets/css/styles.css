@@ -12734,8 +12734,9 @@ p.hero-description {
 }
 
 .case-study-results {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: var(--spacing-xl);
   margin-top: var(--spacing-xl);
 }
