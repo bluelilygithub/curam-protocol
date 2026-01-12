@@ -355,17 +355,19 @@ Services: Phase 1 ($1,500), Phase 2 ($7,500), Phase 3 ($8-12k), Phase 4 ($20-30k
 
 Use paragraphs (\n\n)."""
         
-        # Build conversation
-        conversation = [{"role": "user", "parts": [system_prompt]}]
+        # Build conversation as a single prompt (new SDK format)
+        full_prompt = system_prompt + "\n\n"
         recent = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
         for item in recent:
-            role = "user" if item.get('role') == 'user' else "model"
-            conversation.append({"role": role, "parts": [item.get('content', '')]})
-        conversation.append({"role": "user", "parts": [message]})
+            role = "User" if item.get('role') == 'user' else "Assistant"
+            full_prompt += f"{role}: {item.get('content', '')}\n\n"
+        full_prompt += f"User: {message}\n\nAssistant:"
         
         # Get AI response using new client API
         client = get_gemini_client()
-        response = client.models.generate_content(model='gemini-2.0-flash', contents=conversation)
+        if not client:
+            return jsonify({'error': 'AI service unavailable'}), 500
+        response = client.models.generate_content(model='gemini-2.0-flash', contents=full_prompt)
         text = response.text if response.text else "How can I help?"
         
         # Convert quoted titles to links

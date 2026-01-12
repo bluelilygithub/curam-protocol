@@ -978,10 +978,7 @@
           // Add to conversation history (store original content)
           conversationHistory.push({ role, content });
 
-          // Play sound when assistant responds
-          if (role === 'assistant') {
-              playNotificationSound();
-          }
+          // Sound removed per user request
       }
       
       function formatTextToHtml(text) {
