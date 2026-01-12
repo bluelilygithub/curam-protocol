@@ -67,6 +67,7 @@ Preferred communication style: Simple, everyday language.
 - Login rate limiting: 5 attempts max, 15-minute lockout per IP
 - Password hashing via Werkzeug security functions
 - Phase 1 trial reports use secure token-based access (no login required for customers)
+- Customer results page (/results/<token>) shows only aggregate metrics (record counts, field counts, accuracy) - raw extracted data is never exposed to protect PII
 - SECRET_KEY required (no startup without it)
 
 ### File Storage
