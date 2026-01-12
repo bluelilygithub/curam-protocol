@@ -151,8 +151,10 @@ def search_blog_rag():
         if fast_results['context']:
             try:
                 client = get_gemini_client()
-                
-                prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service.
+                if not client:
+                    initial_answer = "Found relevant pages. Searching for more information..."
+                else:
+                    prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service.
 
 The user asked: "{query}"
 
@@ -169,8 +171,8 @@ Instructions:
 
 Answer:"""
                 
-                response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
-                initial_answer = response.text if response.text else "Searching for information..."
+                    response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
+                    initial_answer = response.text if response.text else "Searching for information..."
                 
             except Exception as e:
                 print(f"Error generating initial answer: {e}")
@@ -248,6 +250,8 @@ def search_blog_complete():
         # Use Gemini to generate comprehensive answer
         try:
             client = get_gemini_client()
+            if not client:
+                return jsonify({'error': 'AI service unavailable'}), 500
             
             prompt = f"""You are a helpful assistant for Curam-Ai Protocol™, an AI document automation service for engineering firms.
 
@@ -461,13 +465,16 @@ Can this work with handwritten documents"""
                 
                 print(f"DEBUG: Generating follow-up questions...")
                 fq_client = get_gemini_client()
-                fq_response = fq_client.models.generate_content(model='gemini-2.0-flash', contents=followup_prompt)
-                if fq_response.text:
-                    questions = [q.strip().rstrip('?').strip() for q in fq_response.text.strip().split('\n') if q.strip()]
-                    followup_questions = questions[:3]  # Take first 3
-                    print(f"DEBUG: Generated {len(followup_questions)} follow-up questions: {followup_questions}")
+                if not fq_client:
+                    print("DEBUG: Gemini client not available for follow-up questions")
                 else:
-                    print("DEBUG: fq_response.text is empty")
+                    fq_response = fq_client.models.generate_content(model='gemini-2.0-flash', contents=followup_prompt)
+                    if fq_response.text:
+                        questions = [q.strip().rstrip('?').strip() for q in fq_response.text.strip().split('\n') if q.strip()]
+                        followup_questions = questions[:3]  # Take first 3
+                        print(f"DEBUG: Generated {len(followup_questions)} follow-up questions: {followup_questions}")
+                    else:
+                        print("DEBUG: fq_response.text is empty")
             except Exception as e:
                 print(f"Follow-up generation failed: {e}")
                 import traceback
@@ -546,6 +553,8 @@ def check_message_relevance():
         # Use Gemini to check relevance
         try:
             client = get_gemini_client()
+            if not client:
+                return jsonify({'is_relevant': True, 'confidence': 0.5, 'reason': 'AI unavailable'}), 200
             
             prompt = f"""You are analyzing a contact form message to determine if it's relevant to Curam-Ai Protocol™ services.
 
