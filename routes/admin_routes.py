@@ -1203,6 +1203,30 @@ def prompts_activate_all_inactive():
     return redirect(url_for('admin.prompts'))
 
 
+@admin_bp.route('/phase1-trials/documents/<int:doc_id>/view', methods=['GET'])
+@require_admin
+def phase1_document_view(doc_id):
+    """View/download an uploaded PDF document"""
+    from database import get_trial_document
+    
+    doc = get_trial_document(doc_id)
+    if not doc:
+        return "Document not found", 404
+    
+    file_path = doc.get('stored_file_path') or doc.get('file_path')
+    if not file_path or not os.path.exists(file_path):
+        return "File not found on server", 404
+    
+    filename = doc.get('original_filename', 'document.pdf')
+    
+    return send_file(
+        file_path,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=filename
+    )
+
+
 @admin_bp.route('/phase1-trials/<int:trial_id>/generate-report', methods=['GET'])
 @require_admin
 def phase1_trial_generate_report(trial_id):

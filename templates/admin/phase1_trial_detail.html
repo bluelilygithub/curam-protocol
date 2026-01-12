@@ -668,6 +668,11 @@ async function saveBusinessProfile() {
                             {% elif doc.get('status') == 'completed' %}
                                 <span class="badge badge-success">Completed</span>
                             {% endif %}
+                            <a href="{{ url_for('admin.phase1_document_view', doc_id=doc.get('id')) }}" 
+                               target="_blank"
+                               style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #F0FDF4; border: 1px solid #86EFAC; border-radius: 4px; color: #166534; text-decoration: none; cursor: pointer;">
+                                View PDF
+                            </a>
                             <button type="button" 
                                     onclick="openDocEditModal('{{ doc.get('id') }}', '{{ doc.get('original_filename', '') | e }}', '{{ (doc.get('extraction_context', '') or '') | e }}', '{{ (doc.get('extraction_hints', '') or '') | e }}', '{{ (doc.get('expected_fields', '') or '') | e }}', '{{ (doc.get('notes', '') or '') | e }}')"
                                     style="padding: 0.25rem 0.5rem; font-size: 0.7rem; background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 4px; color: #4338CA; cursor: pointer;">

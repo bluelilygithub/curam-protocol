@@ -2087,6 +2087,33 @@ def get_trial_documents(trial_id):
         return []
 
 
+def get_trial_document(doc_id):
+    """
+    Get a single document by ID.
+    
+    Args:
+        doc_id: Document database ID
+    
+    Returns:
+        dict: Document dictionary or None if not found
+    """
+    if not engine:
+        return None
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT * FROM phase1_trial_documents
+                WHERE id = :doc_id
+            """), {"doc_id": doc_id})
+            row = result.fetchone()
+            return dict(row._mapping) if row else None
+            
+    except Exception as e:
+        print(f"❌ Error fetching trial document: {e}")
+        return None
+
+
 def update_phase1_trial_meta(trial_id, customer_name=None, customer_company=None,
                               industry=None, status=None):
     """
