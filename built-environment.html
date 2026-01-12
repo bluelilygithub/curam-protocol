@@ -30,6 +30,9 @@
             text-decoration: underline;
             font-weight: 600;
         }
+        .protocol-inline-link:hover {
+            color: var(--color-gold);
+        }
     </style>
 </head>
 <body class="built-environment-page">
@@ -38,8 +41,11 @@
             <path d="M12 5v14M19 12l-7 7-7-7"/>
         </svg>
     </button>
+    
     <div id="navbar-placeholder"></div>
     <script src="assets/js/navbar-loader.js"></script>
+
+    <!-- HERO SECTION -->
     <section class="hero services-hero">
         <div class="hero-background">
             <div class="hero-gradient"></div>
@@ -64,13 +70,14 @@
                     We bridge the gap between messy project documents and your core systems. Automate tender extraction, drawing register metadata, and compliance logs—converting high-friction admin into billable engineering capacity.
                 </p>
                 <div class="hero-cta-group">
-                    <a href="/roi.html" class="btn btn-primary btn-large">Check Industry ROI</a>
-                    <a href="/feasibility-sprint-report.html?industrysector=engineering" class="btn btn-secondary">Preview Sector Report</a>
+                    <a href="roi.html" class="btn btn-primary btn-large">Check Industry ROI</a>
+                    <a href="feasibility-sprint-report.html?industrysector=engineering" class="btn btn-secondary">Preview Sector Report</a>
                 </div>
             </div>
         </div>
     </section>
 
+    <!-- IDEAL FIRM PROFILE SECTION -->
     <section class="section section-alt">
         <div class="container">
             <h2 class="section-headline">Built for Queensland's Project-Heavy Firms</h2>
@@ -108,7 +115,8 @@
                             </svg>
                         </div>
                         <h3>What We Automate</h3>
-                        <p class="deliverable-subtitle">Common Pain Points</p>                    </div>
+                        <p class="deliverable-subtitle">Common Pain Points</p>
+                    </div>
                     <ul class="deliverable-list">
                         <li><strong>Tender specifications:</strong> Extracting requirements from large-scale tender packs</li>
                         <li><strong>Drawing Metadata:</strong> Extracting schedules and revision data from CAD/Revit prints</li>
@@ -118,16 +126,18 @@
                     </ul>
                 </div>
             </div>
+
+            <!-- INFOGRAPHIC: Built Environment Sector -->
+            <div style="text-align: center; margin-top: 4rem; margin-bottom: 3rem;">
+                <img src="assets/images/built-environment-automation.jpeg" 
+                     alt="Built Environment AI Automation: Technical documentation bridge for Engineering, Architecture, Mining Services, and Property Management. From CAD exports and tender specs to structured project data with 90%+ accuracy." 
+                     style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+            </div>
         </div>
     </section>
+
+    <!-- BUILT ENVIRONMENT INDUSTRIES SECTION -->
     <section id="group-2" class="section">
-        <div class="container">
-        <div style="text-align: center; margin-top: 3rem; margin-bottom: 3rem;">
-            <img src="assets/images/built-environment-automation.jpeg" 
-                 alt="Built Environment AI Automation: Technical documentation bridge for Engineering, Architecture, Mining, and Property Management" 
-                 style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
-        </div>
-        </div>
         <div class="container">
             <h2 class="section-headline">
                 Built Environment Industries<br>
@@ -135,7 +145,7 @@
             </h2>
             <p class="section-subhead">
                 <strong>Total Addressable Market: 1,600+ Queensland firms</strong><br>
-                High fit—where <a href="/protocol.html" class="protocol-inline-link">The Protocol™</a> frees technical teams for higher-value work.
+                High fit—where <a href="curam-ai-protocol.html" class="protocol-inline-link">The Protocol™</a> frees technical teams for higher-value work.
             </p>
             <div class="methodology-grid">
                 <div class="methodology-card methodology-card-clickable" onclick="window.location.href='industries/engineering.html'">
@@ -199,7 +209,7 @@
                             Property Management
                         </h3>
                         <p class="methodology-desc"><strong>Key Pain Points:</strong> Lease document extraction and maintenance order matching.</p>
-                        <p class="methodology-desc"><strong>Typical Savings:</strong> 12+ hours/week on lease administration and compliance tracking.</p>
+                        <p class="methodology-desc" style="margin-top: 10px;"><strong>Typical Savings:</strong> 12+ hours/week on lease administration and compliance tracking.</p>
                         <p class="methodology-link">
                             <a href="industries/property-management.html">View Property Solutions →</a>
                         </p>
@@ -208,6 +218,8 @@
             </div>
         </div>
     </section>
+
+    <!-- WHAT THESE INDUSTRIES SHARE SECTION -->
     <section class="section section-alt">
         <div class="container">
             <h2 class="section-headline">What These Industries Share</h2>
@@ -227,7 +239,7 @@
                         <p class="deliverable-subtitle">Proven Accuracy Targets</p>
                     </div>
                     <ul class="deliverable-list">
-                        <li>Validating 90% accuracy on complex technical text</li>
+                        <li>Validating 90%+ accuracy on complex technical text</li>
                         <li>Extracting metadata from CAD/Revit PDF exports</li>
                         <li>Human-in-the-loop review for field documentation</li>
                         <li>Bridge messy source docs to structured JSON/CSV</li>
@@ -241,14 +253,14 @@
                                 <polyline points="12 6 12 12 16 14"/>
                             </svg>
                         </div>
-                        <h3>Online Operations</h3>
-                        <p class="deliverable-subtitle">Real-Time Data Processing</p>
+                        <h3>Real-Time Operations</h3>
+                        <p class="deliverable-subtitle">Cloud-Based Processing</p>
                     </div>
                     <ul class="deliverable-list">
                         <li>Cloud-based solution for real-time office/field sync</li>
                         <li>Seamless data hand-off via Zapier or API</li>
                         <li>Automated alerts for missing site documentation</li>
-                        <li>Engineers trapped in admin instead of design work</li>
+                        <li>Native integration with existing project management tools</li>
                     </ul>
                 </div>
             </div>
@@ -285,17 +297,35 @@
                         <li>Full Phase 4 implementations typically $50K+</li>
                         <li>Need validated ROI before board approval</li>
                         <li>Fixed budgets, not open-ended consulting</li>
-                        <li>3-9 month payback requirement</li>
+                        <li>3-9 month payback requirement typical</li>
                     </ul>
                 </div>
             </div>
         </div>
     </section>
-    <section class="section cta-section" style="opacity: 1; transform: translateY(0px); transition: opacity 0.6s, transform 0.6s;">
+
+    <!-- CTA SECTION -->
+    <section class="section cta-section">
         <div class="container">
             <div class="cta-content">
                 <h2 class="section-headline">Ready to Validate Your Documents?</h2>
                 <p class="cta-text" style="max-width: 700px; margin: 0 auto var(--spacing-2xl);">
-                    Don't guess—get the proof. We will validate 90%+ accuracy on 15 of your most complex documents in 48 hours.                     If we miss the target, you get a full refund. No open-ended consulting, just a fixed-price Feasibility Report.                </p>                                <a href="contact.html?option=phase-1" class="btn btn-primary btn-large">                    Get the Feasibility Report — $1,500 <span class="btn-arrow">→</span>                </a>                                                                <p class="cta-footer-note" style="margin-top: var(--spacing-xl); font-size: 0.875rem; color: var(--text-secondary);">                    Validated accuracy for 1,650+ mid-market firms • 15-200 staff sweet spot • Data stays in your cloud.                </p>            </div>        </div>    </section>
-    <div id="footer-placeholder"></div>    <script src="assets/js/footer-loader.js"></script>
-    <script src="assets/js/scripts.js"></script>    <script src="assets/js/main.js"></script></body></html>
+                    Don't guess—get the proof. We will validate 90%+ accuracy on 15 of your most complex documents in 48 hours. 
+                    If we miss the target, you get a full refund. No open-ended consulting, just a fixed-price Feasibility Report.
+                </p>
+                <a href="contact.html?option=phase-1" class="btn btn-primary btn-large">
+                    Get the Feasibility Report — $1,500 <span class="btn-arrow">→</span>
+                </a>
+                <p class="cta-footer-note" style="margin-top: var(--spacing-xl); font-size: 0.875rem; color: var(--text-secondary);">
+                    Validated accuracy for 1,600+ Queensland firms • 15-200 staff sweet spot • Data stays in your cloud.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <div id="footer-placeholder"></div>
+    <script src="assets/js/footer-loader.js"></script>
+    <script src="assets/js/scripts.js"></script>
+    <script src="assets/js/main.js"></script>
+</body>
+</html>
