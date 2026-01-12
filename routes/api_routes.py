@@ -1201,22 +1201,33 @@ def get_blog_posts():
         wp_api_url = None
         
         # Test which blog URL is accessible
+        headers = {
+            'User-Agent': 'Curam-AI/1.0 (https://www.curam-ai.com.au; blog integration)',
+            'Accept': 'application/json'
+        }
+        connection_errors = []
         for test_url in blog_urls:
             try:
                 test_response = requests.get(f'{test_url}/wp-json/wp/v2/posts', 
                                             params={'per_page': 1}, 
-                                            timeout=10)  # Increased timeout
+                                            headers=headers,
+                                            timeout=15)
                 if test_response.status_code == 200:
                     blog_url = test_url
                     wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
                     break
-            except requests.RequestException:
+                else:
+                    connection_errors.append(f'{test_url}: HTTP {test_response.status_code}')
+            except requests.RequestException as e:
+                connection_errors.append(f'{test_url}: {str(e)[:100]}')
                 continue
         
         if not blog_url:
+            print(f"Blog API connection errors: {connection_errors}")
             return jsonify({
                 'success': False,
                 'error': 'Unable to reach blog API',
+                'debug': connection_errors[:2] if os.getenv('FLASK_ENV') == 'development' else None,
                 'posts': [],
                 'pagination': {}
             }), 503
@@ -1242,6 +1253,7 @@ def get_blog_posts():
                 cat_response = requests.get(
                     f'{blog_url}/wp-json/wp/v2/categories',
                     params={'slug': category, 'per_page': 1},
+                    headers=headers,
                     timeout=5
                 )
                 if cat_response.status_code == 200:
@@ -1262,7 +1274,7 @@ def get_blog_posts():
             total_pages = cached_data['total_pages']
         else:
             # Fetch posts from API
-            response = requests.get(wp_api_url, params=api_params, timeout=20)
+            response = requests.get(wp_api_url, params=api_params, headers=headers, timeout=20)
             
             if response.status_code != 200:
                 return jsonify({
