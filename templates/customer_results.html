@@ -1,0 +1,296 @@
+{% extends "base.html" %}
+
+{% block title %}Phase 1 Results - {{ trial.get('customer_company', 'Your Company') }} | Curam-Ai Protocol{% endblock %}
+{% block description %}View your Phase 1 Feasibility Sprint extraction results from Curam-Ai Protocol.{% endblock %}
+
+{% block extra_head %}
+<style>
+    .results-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+    
+    .results-header {
+        background: linear-gradient(135deg, #0B1221 0%, #1a2744 100%);
+        color: white;
+        padding: 3rem 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+    
+    .results-header h1 {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .results-header .trial-code {
+        color: #D4AF37;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .metric-card {
+        background: white;
+        border: 1px solid #E5E7EB;
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #0B1221;
+    }
+    
+    .metric-value.success { color: #10B981; }
+    .metric-value.warning { color: #F59E0B; }
+    
+    .metric-label {
+        color: #6B7280;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+    }
+    
+    .documents-section {
+        background: white;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+    
+    .section-header {
+        background: #F9FAFB;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #E5E7EB;
+        font-weight: 600;
+        color: #0B1221;
+    }
+    
+    .document-item {
+        border-bottom: 1px solid #E5E7EB;
+        padding: 1.5rem;
+    }
+    
+    .document-item:last-child {
+        border-bottom: none;
+    }
+    
+    .document-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+    
+    .document-name {
+        font-weight: 600;
+        color: #0B1221;
+    }
+    
+    .document-category {
+        font-size: 0.875rem;
+        color: #6B7280;
+    }
+    
+    .accuracy-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .accuracy-badge.pass {
+        background: #D1FAE5;
+        color: #065F46;
+    }
+    
+    .accuracy-badge.review {
+        background: #FEF3C7;
+        color: #92400E;
+    }
+    
+    .extracted-data {
+        background: #F9FAFB;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .extracted-data h4 {
+        font-size: 0.875rem;
+        color: #374151;
+        margin-bottom: 0.75rem;
+    }
+    
+    .data-table {
+        width: 100%;
+        font-size: 0.8rem;
+        border-collapse: collapse;
+    }
+    
+    .data-table th {
+        background: #E5E7EB;
+        padding: 0.5rem;
+        text-align: left;
+        font-weight: 600;
+    }
+    
+    .data-table td {
+        padding: 0.5rem;
+        border-bottom: 1px solid #E5E7EB;
+    }
+    
+    .data-table tr:nth-child(even) {
+        background: #F3F4F6;
+    }
+    
+    .data-table tr:hover {
+        background: #EFF6FF;
+    }
+    
+    .expand-btn {
+        background: #EEF2FF;
+        border: 1px solid #C7D2FE;
+        color: #4338CA;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+    }
+    
+    .expand-btn:hover {
+        background: #E0E7FF;
+    }
+    
+    .hidden-rows {
+        display: none;
+    }
+    
+    .hidden-rows.show {
+        display: table-row-group;
+    }
+    
+    .footer-note {
+        text-align: center;
+        padding: 2rem;
+        color: #6B7280;
+        font-size: 0.875rem;
+    }
+    
+    .no-data {
+        color: #9CA3AF;
+        font-style: italic;
+        padding: 1rem;
+    }
+    
+    @media (max-width: 768px) {
+        .results-container {
+            padding: 1rem;
+        }
+        
+        .document-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.5rem;
+        }
+        
+        .data-table {
+            font-size: 0.7rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="results-container" style="margin-top: 100px;">
+    <div class="results-header">
+        <h1>Phase 1 Feasibility Sprint Results</h1>
+        <div class="trial-code">{{ trial.get('trial_code', 'Trial') }}</div>
+        <p>{{ trial.get('customer_company', 'Your Company') }}</p>
+    </div>
+    
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-value">{{ total_documents }}</div>
+            <div class="metric-label">Documents Processed</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value {% if overall_accuracy >= 90 %}success{% elif overall_accuracy >= 80 %}warning{% endif %}">
+                {{ "%.1f"|format(overall_accuracy) }}%
+            </div>
+            <div class="metric-label">Overall Accuracy</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">{{ trial.get('industry', 'Professional Services') }}</div>
+            <div class="metric-label">Industry</div>
+        </div>
+    </div>
+    
+    <div class="documents-section">
+        <div class="section-header">
+            Extraction Results by Document
+        </div>
+        
+        {% for doc in documents %}
+        <div class="document-item">
+            <div class="document-header">
+                <div>
+                    <div class="document-name">{{ doc.get('original_filename', 'Unknown') }}</div>
+                    <div class="document-category">{{ doc.get('document_category', 'Uncategorized') }}</div>
+                </div>
+                {% set fields = doc.get('fields_extracted', 0) or 0 %}
+                {% set correct = doc.get('fields_correct', 0) or 0 %}
+                {% set accuracy = (correct / fields * 100) if fields > 0 else 0 %}
+                <span class="accuracy-badge {% if accuracy >= 90 %}pass{% else %}review{% endif %}">
+                    {{ "%.0f"|format(accuracy) }}% Accuracy ({{ correct }}/{{ fields }} fields)
+                </span>
+            </div>
+            
+            {% if doc.get('result') and doc.result.get('extracted_data') %}
+                {% set extracted = doc.result.extracted_data %}
+                {% set entries = extracted.get('entries', []) %}
+                
+                {% if entries and entries|length > 0 %}
+                <div class="extracted-data">
+                    <h4>Extraction Summary</h4>
+                    <p style="margin: 0; color: #374151;">
+                        <strong>{{ entries|length }}</strong> {% if entries|length == 1 %}record{% else %}records{% endif %} extracted successfully.
+                        {% set field_count = entries[0].keys()|list|length if entries[0] is mapping else 0 %}
+                        {% if field_count > 0 %}
+                        Each record contains <strong>{{ field_count }}</strong> fields.
+                        {% endif %}
+                    </p>
+                    <p style="margin-top: 0.5rem; color: #6B7280; font-size: 0.8rem;">
+                        Full extraction details available in your Phase 1 PDF report.
+                    </p>
+                </div>
+                {% else %}
+                <div class="no-data">No structured data entries extracted</div>
+                {% endif %}
+            {% else %}
+            <div class="no-data">Extraction pending or no data available</div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="footer-note">
+        <p>This report was generated as part of your Phase 1 Feasibility Sprint with Curam-Ai Protocol.</p>
+        <p>Questions? Contact us at <a href="mailto:hello@curam-ai.com.au">hello@curam-ai.com.au</a></p>
+    </div>
+</div>
+
+{% endblock %}

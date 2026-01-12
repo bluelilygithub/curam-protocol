@@ -345,6 +345,9 @@ class ReportGenerator:
         story.extend(self._build_accuracy_by_category())
         story.append(PageBreak())
         
+        story.extend(self._build_extraction_summary())
+        story.append(PageBreak())
+        
         story.extend(self._build_value_assessment())
         story.append(PageBreak())
         
@@ -555,11 +558,111 @@ class ReportGenerator:
         
         return elements
     
+    def _build_extraction_summary(self) -> List:
+        """Build extraction summary section showing document-by-document results"""
+        elements = []
+        
+        elements.append(Paragraph("4. Extraction Results Summary", self.styles['SectionTitle']))
+        elements.append(Spacer(1, 5*mm))
+        
+        intro_text = """
+        The following table shows what was extracted from each of your documents. This provides 
+        evidence that the AI actually processed your specific files and demonstrates the quality 
+        of extraction achieved.
+        """
+        elements.append(Paragraph(intro_text, self.styles['ReportBody']))
+        elements.append(Spacer(1, 5*mm))
+        
+        doc_data = [['Document', 'Category', 'Fields', 'Accuracy', 'Sample Extracted Values']]
+        
+        results_by_doc = {}
+        for result in self.results:
+            doc_id = result.get('document_id')
+            if doc_id:
+                results_by_doc[doc_id] = result
+        
+        for doc in self.documents:
+            doc_id = doc.get('id')
+            filename = doc.get('original_filename', 'Unknown')
+            if len(filename) > 25:
+                filename = filename[:22] + '...'
+            
+            category = doc.get('document_category', 'N/A')
+            if len(category) > 15:
+                category = category[:12] + '...'
+            
+            fields_extracted = doc.get('fields_extracted', 0) or 0
+            fields_correct = doc.get('fields_correct', 0) or 0
+            accuracy = (fields_correct / fields_extracted * 100) if fields_extracted > 0 else 0
+            
+            sample_values = ""
+            result = results_by_doc.get(doc_id)
+            if result and result.get('extracted_data'):
+                try:
+                    extracted = result['extracted_data']
+                    if isinstance(extracted, str):
+                        extracted = json.loads(extracted)
+                    
+                    entries = extracted.get('entries', [])
+                    if entries and isinstance(entries, list) and len(entries) > 0:
+                        first_entry = entries[0]
+                        if isinstance(first_entry, dict):
+                            key_fields = []
+                            for key in ['Description', 'vendor', 'Vendor', 'total', 'Total', 'Part No', 'Mark', 'invoice_number']:
+                                if key in first_entry and first_entry[key]:
+                                    val = str(first_entry[key])[:20]
+                                    key_fields.append(f"{key}: {val}")
+                                    if len(key_fields) >= 2:
+                                        break
+                            sample_values = "; ".join(key_fields) if key_fields else f"{len(entries)} entries"
+                except Exception:
+                    sample_values = "Data extracted"
+            
+            if not sample_values:
+                sample_values = f"{fields_extracted} fields" if fields_extracted > 0 else "Pending"
+            
+            doc_data.append([
+                filename,
+                category,
+                str(fields_extracted),
+                f"{accuracy:.0f}%",
+                sample_values
+            ])
+        
+        doc_table = Table(doc_data, colWidths=[45*mm, 30*mm, 18*mm, 20*mm, 57*mm])
+        doc_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), BRAND_NAVY),
+            ('TEXTCOLOR', (0, 0), (-1, 0), white),
+            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (-1, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('GRID', (0, 0), (-1, -1), 0.5, BRAND_GRAY),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [white, BRAND_LIGHT_GRAY])
+        ]))
+        
+        elements.append(doc_table)
+        elements.append(Spacer(1, 8*mm))
+        
+        trial_code = self.trial.get('trial_code', '')
+        report_token = self.trial.get('report_token', '')
+        if report_token:
+            portal_note = f"""
+            <b>Full Extraction Details:</b> Complete extraction results for all documents are available 
+            in the online portal. Access your results at: www.curam-ai.com.au/results/{report_token}
+            """
+            elements.append(Paragraph(portal_note, self.styles['ReportBody']))
+        
+        return elements
+    
     def _build_value_assessment(self) -> List:
         """Build value assessment section with ROI calculator methodology"""
         elements = []
         
-        elements.append(Paragraph("4. Value Assessment", self.styles['SectionTitle']))
+        elements.append(Paragraph("5. Value Assessment", self.styles['SectionTitle']))
         elements.append(Spacer(1, 5*mm))
         
         bp = self.metrics['business_profile']
@@ -669,7 +772,7 @@ class ReportGenerator:
         """Build limitations section"""
         elements = []
         
-        elements.append(Paragraph("5. Limitations & Assumptions", self.styles['SectionTitle']))
+        elements.append(Paragraph("6. Limitations & Assumptions", self.styles['SectionTitle']))
         elements.append(Spacer(1, 5*mm))
         
         limitations = get_limitations_text(self.trial, self.metrics)
@@ -682,7 +785,7 @@ class ReportGenerator:
         """Build Phase 2 questions section"""
         elements = []
         
-        elements.append(Paragraph("6. Phase 2 Discovery Questions", self.styles['SectionTitle']))
+        elements.append(Paragraph("7. Phase 2 Discovery Questions", self.styles['SectionTitle']))
         elements.append(Spacer(1, 5*mm))
         
         intro = """
@@ -702,7 +805,7 @@ class ReportGenerator:
         """Build conclusion section"""
         elements = []
         
-        elements.append(Paragraph("7. Conclusion & Next Steps", self.styles['SectionTitle']))
+        elements.append(Paragraph("8. Conclusion & Next Steps", self.styles['SectionTitle']))
         elements.append(Spacer(1, 5*mm))
         
         if self.metrics['recommendation'] == 'proceed':

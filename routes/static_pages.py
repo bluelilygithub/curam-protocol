@@ -542,6 +542,61 @@ def sitemap_xml():
 
 
 # =============================================================================
+# CUSTOMER RESULTS PAGE (Token-based access)
+# =============================================================================
+
+@static_pages_bp.route('/results/<token>')
+def customer_results(token):
+    """
+    Customer-facing results page for Phase 1 trials.
+    Accessed via secure token - no login required.
+    Shows extraction results for their documents.
+    """
+    from database import get_phase1_trial, get_trial_documents, get_trial_results
+    
+    trial = get_phase1_trial(report_token=token)
+    if not trial:
+        return render_template('errors/404.html', message="Results not found or link has expired."), 404
+    
+    documents = get_trial_documents(trial['id'])
+    results = get_trial_results(trial['id'])
+    
+    results_by_doc = {}
+    for result in results:
+        doc_id = result.get('document_id')
+        if doc_id:
+            import json
+            extracted = result.get('extracted_data')
+            if isinstance(extracted, str):
+                try:
+                    extracted = json.loads(extracted)
+                except:
+                    extracted = {}
+            results_by_doc[doc_id] = {
+                'extracted_data': extracted,
+                'fields_total': result.get('fields_total', 0),
+                'fields_passed': result.get('fields_passed', 0),
+                'stp_eligible': result.get('stp_eligible', False)
+            }
+    
+    for doc in documents:
+        doc_id = doc.get('id')
+        if doc_id in results_by_doc:
+            doc['result'] = results_by_doc[doc_id]
+    
+    total_fields = sum(d.get('fields_extracted', 0) or 0 for d in documents)
+    correct_fields = sum(d.get('fields_correct', 0) or 0 for d in documents)
+    overall_accuracy = (correct_fields / total_fields * 100) if total_fields > 0 else 0
+    
+    return render_template('customer_results.html',
+        trial=trial,
+        documents=documents,
+        overall_accuracy=overall_accuracy,
+        total_documents=len(documents)
+    )
+
+
+# =============================================================================
 # ROOT ROUTE
 # =============================================================================
 
