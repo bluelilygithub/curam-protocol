@@ -1,16 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Automation for Accounting & Advisory Firms | Curam-Ai Protocol</title>
-    <meta name="description" content="Automate invoice processing, trust account reconciliation, and inter-entity transactions for Australian accounting firms. Free senior accountants from manual work.">
-    <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
-    <link rel="stylesheet" href="assets/css/styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
-    
+{% extends "base.html" %}
+
+{% block title %}AI Automation for Accounting & Advisory Firms | Curam-Ai Protocol{% endblock %}
+{% block description %}Automate invoice processing, trust account reconciliation, and inter-entity transactions for Australian accounting firms. Free senior accountants from manual work.{% endblock %}
+
+{% block extra_head %}
     <style>
         /* ============================================
            CAPACITY DEPLOYMENT INFOGRAPHIC STYLES
@@ -230,18 +223,9 @@
               - Maintain color scheme from main stylesheet
            ============================================ */
     </style>
-</head>
-<body>
-    <button class="scroll-down-btn" aria-label="Scroll down">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 5v14M19 12l-7 7-7-7"/>
-        </svg>
-    </button>
+{% endblock %}
 
-    <div id="navbar-placeholder"></div>
-    <script src="assets/js/navbar-loader.js"></script>
-
-    
+{% block content %}
 <section class="hero services-hero">
     <div class="hero-background">
         <div class="hero-gradient"></div>
@@ -878,9 +862,5 @@
 </section>
 
 
-    <div id="footer-placeholder"></div>
-    <script src="assets/js/footer-loader.js"></script>
-    <script src="assets/js/main.js"></script>
-    
-</body>
-</html>
+
+{% endblock %}
