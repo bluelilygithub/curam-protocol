@@ -12,21 +12,31 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
     
     <style>
-        /* Capacity Deployment Infographic Styles */
+        /* ============================================
+           CAPACITY DEPLOYMENT INFOGRAPHIC STYLES
+           Updated: Reduced visual dominance while maintaining clarity
+           ============================================ */
+        
         .capacity-deployment-wrapper {
             margin: 3rem auto;
-            max-width: 1200px;
+            max-width: 1000px;
+            padding: 0 2rem;
         }
 
         .capacity-deployment-img {
             width: 100%;
+            max-width: 880px;
             height: auto;
             display: block;
             margin: 0 auto;
             border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
 
-        /* ROI Methodology Note */
+        /* ============================================
+           ROI METHODOLOGY NOTE
+           ============================================ */
+        
         .roi-methodology-note {
             max-width: 900px;
             margin: 3rem auto 2rem;
@@ -47,6 +57,7 @@
             color: var(--text-secondary);
             margin-bottom: 1.5rem;
             font-size: 1rem;
+            line-height: 1.6;
         }
 
         .methodology-list {
@@ -57,9 +68,9 @@
         }
 
         .methodology-list li {
-            margin-bottom: 0.75rem;
+            margin-bottom: 1rem;
             font-size: 1rem;
-            line-height: 1.6;
+            line-height: 1.7;
             padding-left: 0.5rem;
         }
 
@@ -71,16 +82,18 @@
 
         .methodology-breakdown p {
             color: var(--text-secondary);
-            margin-bottom: 0.75rem;
+            margin-bottom: 1rem;
+            line-height: 1.6;
         }
 
         .calculation-formula {
             font-family: 'Courier New', monospace;
             background: rgba(0, 0, 0, 0.3);
-            padding: 1rem;
+            padding: 1.5rem;
             border-radius: 4px;
-            line-height: 1.8;
+            line-height: 2;
             color: var(--text-secondary);
+            margin-top: 1rem;
         }
 
         .calculation-formula strong {
@@ -88,7 +101,10 @@
             font-weight: 700;
         }
 
-        /* ROI CTA Box */
+        /* ============================================
+           ROI CTA BOX
+           ============================================ */
+        
         .roi-cta-box {
             max-width: 700px;
             margin: 3rem auto 0;
@@ -109,13 +125,26 @@
             color: var(--text-secondary);
             margin-bottom: 1.5rem;
             font-size: 1rem;
+            line-height: 1.6;
         }
 
-        /* Responsive adjustments */
+        /* ============================================
+           RESPONSIVE ADJUSTMENTS
+           Guidelines for future industry pages:
+           - Maintain readability on all devices
+           - Infographic should never dominate mobile view
+           - Text spacing increases for mobile comfort
+           ============================================ */
+        
         @media (max-width: 768px) {
             .capacity-deployment-wrapper {
                 margin: 2rem auto;
                 padding: 0 1rem;
+            }
+
+            .capacity-deployment-img {
+                max-width: 100%;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
             }
 
             .roi-methodology-note {
@@ -127,13 +156,19 @@
                 font-size: 1.25rem;
             }
 
+            .methodology-intro {
+                font-size: 0.95rem;
+            }
+
             .methodology-list li {
                 font-size: 0.9rem;
+                margin-bottom: 0.85rem;
             }
 
             .calculation-formula {
                 font-size: 0.85rem;
-                padding: 0.75rem;
+                padding: 1rem;
+                line-height: 1.8;
             }
 
             .roi-cta-box {
@@ -144,21 +179,56 @@
             .roi-cta-box h3 {
                 font-size: 1.25rem;
             }
+
+            .roi-cta-box p {
+                font-size: 0.95rem;
+            }
         }
 
         @media (max-width: 480px) {
             .capacity-deployment-wrapper {
                 padding: 0 0.5rem;
+                margin: 1.5rem auto;
             }
 
             .roi-methodology-note {
                 padding: 1rem;
+                margin: 1.5rem 0.5rem;
             }
 
             .methodology-list li {
                 font-size: 0.85rem;
             }
+
+            .calculation-formula {
+                padding: 0.75rem;
+                font-size: 0.8rem;
+            }
         }
+
+        /* ============================================
+           DESIGN NOTES FOR FUTURE PAGES:
+           
+           1. INFOGRAPHIC SIZING
+              - Desktop: max-width 880px (allows breathing room)
+              - Tablet: max-width 100% (fills container)
+              - Mobile: Always 100% with reduced padding
+           
+           2. VISUAL HIERARCHY
+              - Infographic should support, not dominate
+              - Methodology note provides credibility
+              - CTA box creates clear next action
+           
+           3. WHITESPACE STRATEGY
+              - Container padding creates visual "frame"
+              - Margin between sections maintains rhythm
+              - Box-shadow adds subtle depth without distraction
+           
+           4. CONSISTENCY ACROSS INDUSTRIES
+              - Use same max-widths for methodology notes (900px)
+              - Use same padding values for mobile (1rem/1.5rem)
+              - Maintain color scheme from main stylesheet
+           ============================================ */
     </style>
 </head>
 <body>
@@ -605,6 +675,7 @@
             Based on 50+ accounting firm implementations. Your Phase 1 trial validates these assumptions using YOUR actual documents.
         </p>
         
+        <!-- ROI Results Grid -->
         <div class="roi-results-grid">
             <div class="roi-result-card">
                 <div class="roi-result-stat">205 hrs/wk</div>
@@ -631,7 +702,7 @@
             </div>
         </div>
         
-        <!-- NEW: Capacity Deployment Infographic -->
+        <!-- Capacity Deployment Infographic - UPDATED STYLING -->
         <div class="capacity-deployment-wrapper">
             <img 
                 src="/assets/images/accounting-capacity-deployment-infographic.jpg" 
@@ -643,7 +714,7 @@
             />
         </div>
 
-        <!-- Conservative Assumptions -->
+        <!-- ROI Methodology Note -->
         <div class="roi-methodology-note">
             <h3 class="methodology-title">How These Numbers Are Calculated</h3>
             <p class="methodology-intro">Conservative assumptions based on 50+ accounting firm implementations:</p>
@@ -657,14 +728,11 @@
             
             <div class="methodology-breakdown">
                 <p><strong>Calculation:</strong></p>
-                <p class="calculation-formula">
-                    25 Accountants × 5 hrs/wk × $100/hr × 48 weeks = $600,000<br>
-                    + 10 Admin × 8 hrs/wk × $50/hr × 48 weeks = $192,000<br>
-                    = $792,000 × Industry adjustment = <strong>$700,000</strong>
-                </p>
+                <div class="calculation-formula">25 Accountants × 5 hrs/wk × $100/hr × 48 weeks = $600,000<br>+ 10 Admin × 8 hrs/wk × $50/hr × 48 weeks = $192,000<br>= $792,000 × Industry adjustment = <strong>$700,000</strong></div>
             </div>
         </div>
 
+        <!-- Warning Callout -->
         <div class="warning-callout">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"/>
@@ -674,6 +742,7 @@
             <p><strong>Your Firm's Actual Numbers:</strong> These are industry benchmarks for a 50-person accounting firm. Your <strong>Phase 1 trial ($1,500)</strong> validates these assumptions against YOUR actual documents and workflows, producing YOUR firm-specific ROI model.</p>
         </div>
 
+        <!-- ROI CTA Box -->
         <div class="roi-cta-box">
             <h3>Ready to Validate Your Numbers?</h3>
             <p>Phase 1 tests YOUR documents with YOUR workflows. 90%+ accuracy or full refund.</p>
