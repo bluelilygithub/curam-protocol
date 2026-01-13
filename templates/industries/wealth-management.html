@@ -3,30 +3,831 @@
 {% block title %}AI Automation for Wealth Management Firms | Curam-Ai Protocol{% endblock %}
 {% block description %}Automate statement processing and SOA assembly for Australian wealth management firms. Free support staff and junior advisors from manual data entry.{% endblock %}
 
+
+{% block extra_head %}
+    <style>
+            /* ============================================
+               CAPACITY DEPLOYMENT INFOGRAPHIC STYLES
+               Updated: Reduced visual dominance while maintaining clarity
+               ============================================ */
+
+            .capacity-deployment-wrapper {
+                margin: 3rem auto;
+                max-width: 1000px;
+                padding: 0 2rem;
+            }
+
+            .capacity-deployment-img {
+                width: 100%;
+                max-width: 880px;
+                height: auto;
+                display: block;
+                margin: 0 auto;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            }
+
+            /* ============================================
+               ROI METHODOLOGY NOTE
+               ============================================ */
+
+            .roi-methodology-note {
+                max-width: 900px;
+                margin: 3rem auto 2rem;
+                padding: 2rem;
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 8px;
+                border-left: 4px solid var(--color-gold);
+            }
+
+            .methodology-title {
+                color: var(--color-white);
+                font-size: 1.5rem;
+                font-weight: 600;
+                margin: 0 0 1rem;
+            }
+
+            .methodology-intro {
+                color: var(--text-secondary);
+                margin-bottom: 1.5rem;
+                font-size: 1rem;
+                line-height: 1.6;
+            }
+
+            .methodology-list {
+                list-style: none;
+                padding: 0;
+                margin: 0 0 2rem;
+                color: var(--text-secondary);
+            }
+
+            .methodology-list li {
+                margin-bottom: 1rem;
+                font-size: 1rem;
+                line-height: 1.7;
+                padding-left: 0.5rem;
+            }
+
+            .methodology-breakdown {
+                margin-top: 2rem;
+                padding-top: 2rem;
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .methodology-breakdown p {
+                color: var(--text-secondary);
+                margin-bottom: 1rem;
+                line-height: 1.6;
+            }
+
+            .calculation-formula {
+                font-family: 'Courier New', monospace;
+                background: rgba(0, 0, 0, 0.3);
+                padding: 1.5rem;
+                border-radius: 4px;
+                line-height: 2;
+                color: var(--text-secondary);
+                margin-top: 1rem;
+            }
+
+            .calculation-formula strong {
+                color: var(--color-gold);
+                font-weight: 700;
+            }
+
+            /* ============================================
+               ROI CTA BOX
+               ============================================ */
+
+            .roi-cta-box {
+                max-width: 700px;
+                margin: 3rem auto 0;
+                padding: 2rem;
+                background: rgba(0, 166, 166, 0.1);
+                border: 2px solid var(--cyan-accent);
+                border-radius: 8px;
+                text-align: center;
+            }
+
+            .roi-cta-box h3 {
+                color: var(--color-white);
+                font-size: 1.5rem;
+                margin: 0 0 1rem;
+            }
+
+            .roi-cta-box p {
+                color: var(--text-secondary);
+                margin-bottom: 1.5rem;
+                font-size: 1rem;
+                line-height: 1.6;
+            }
+
+            /* ============================================
+               RESPONSIVE ADJUSTMENTS
+               ============================================ */
+
+            @media (max-width: 768px) {
+                .capacity-deployment-wrapper {
+                    margin: 2rem auto;
+                    padding: 0 1rem;
+                }
+
+                .capacity-deployment-img {
+                    max-width: 100%;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+                }
+
+                .roi-methodology-note {
+                    margin: 2rem 1rem;
+                    padding: 1.5rem;
+                }
+
+                .methodology-title {
+                    font-size: 1.25rem;
+                }
+
+                .methodology-intro {
+                    font-size: 0.95rem;
+                }
+
+                .methodology-list li {
+                    font-size: 0.9rem;
+                    margin-bottom: 0.85rem;
+                }
+
+                .calculation-formula {
+                    font-size: 0.85rem;
+                    padding: 1rem;
+                    line-height: 1.8;
+                }
+
+                .roi-cta-box {
+                    margin: 2rem 1rem 0;
+                    padding: 1.5rem;
+                }
+
+                .roi-cta-box h3 {
+                    font-size: 1.25rem;
+                }
+
+                .roi-cta-box p {
+                    font-size: 0.95rem;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .capacity-deployment-wrapper {
+                    padding: 0 0.5rem;
+                    margin: 1.5rem auto;
+                }
+
+                .roi-methodology-note {
+                    padding: 1rem;
+                    margin: 1.5rem 0.5rem;
+                }
+
+                .methodology-list li {
+                    font-size: 0.85rem;
+                }
+
+                .calculation-formula {
+                    padding: 0.75rem;
+                    font-size: 0.8rem;
+                }
+            }
+        </style>    </style>
+{% endblock %}
+
+
 {% block content %}
-<section class="hero services-hero">        <div class="hero-background">            <div class="hero-gradient"></div>            <div class="hero-pattern"></div>            <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">                <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>                <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>                <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>            </svg>            <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">                <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>            </svg>        </div>        <div class="container">            <div class="hero-content">                <p class="hero-eyebrow">For Wealth Management & Financial Planning Firms</p>                <h1 class="hero-headline">Scale Your Advice Capacity<br><span class="text-accent">Without Adding Headcount</span></h1>                <p class="hero-subheadline">                    Mid-sized wealth firms hit a production wall: associate advisors and support staff waste hours on manual statement processing, portfolio data entry, and SOA assembly. We automate the logic-heavy document workflows that standard CRM tools miss—eliminating administrative bottlenecks and protecting your advisory margins.                </p>                <div class="hero-cta-group">                    <a href="/roi.html?industry=wealth" class="btn btn-primary">Calculate Your ROI</a>                    <a href="/feasibility-sprint-report.html?industrysector=wealth" class="btn btn-secondary">See Phase 1 Sample</a>                    <a href="/contact.html" class="btn btn-tertiary" style="background: transparent; border: 2px solid white; color: white; font-weight: 600; text-decoration: none; display: inline-block; padding: 0.75rem 2rem; border-radius: 6px; transition: all 0.3s ease;">Book Feasibility Sprint</a>                </div>                                <div class="hero-guarantee">                    <p class="guarantee-text">                        <strong>Risk-Free Testing:</strong> $1,500 is fully refundable if we can't                         achieve 90%+ accuracy on your real client statements and fact finds—eliminating the risk of software that fails on real-world financial complexity.                    </p>                </div>            </div>        </div>    </section>
-    <section class="section">        <div class="container">            <h2 class="section-headline">The Wealth Management Capacity Gap:<br><span class="text-accent">Manual Drudgery on a High-Cost Production Floor</span></h2>            <p class="section-subhead">                Your production floor—Associates, Paraplanners, and Admin—is caught in a manual document squeeze:            </p>            <div class="methodology-grid">                <div class="methodology-card methodology-card-border-red">                    <div class="methodology-content">                        <h3>                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">                                <path d="m18 15-6-6-6 6"/>                            </svg>                            Administrative Drag                        </h3>                        <p class="methodology-desc">Admin teams spend hours on document filing, client onboarding data entry, and platform statement downloads that should be automated at the source.</p>                    </div>                </div>                <div class="methodology-card methodology-card-border-yellow">                    <div class="methodology-content">                        <h3>                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">                                <path d="m6 9 6 6 6-6"/>                            </svg>                            Associate Capacity Drain                        </h3>                        <p class="methodology-desc">Associate advisors and paraplanners are stuck doing low-level statement reconciliation and SOA data prep, slowing down the entire advice delivery cycle.</p>                    </div>                </div>                <div class="methodology-card methodology-card-border-green">                    <div class="methodology-content">                        <h3>                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">                                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>                            </svg>                            The Scaling Solution                        </h3>                        <p class="methodology-desc">By automating document-heavy tasks, you allow your existing team to handle 20% more client volume without increasing your overhead costs.</p>                    </div>                </div>            </div>            <div class="highlight-box">                <div class="highlight-icon">                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-accent)" stroke-width="2">                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>                        <line x1="12" y1="9" x2="12" y2="13"/>                        <line x1="12" y1="17" x2="12.01" y2="17"/>                    </svg>                </div>                <p class="highlight-text">                    <strong>The Result:</strong> Senior Advisors receive "Review-Ready" data that requires high-level strategy rather than basic entry. Administrative layers transform from cost-centers into efficient automated pipelines.                </p>            </div>        </div>    </section>
-    <section class="section section-alt">        <div class="container">            <h2 class="section-headline">Recover 15%+ of Your Production Floor<br><span class="text-accent">Without Impacting Senior Advisor Time</span></h2>            <p class="section-subhead">                Automation focused on the Associate Advisor and Support tiers allows your Seniors to manage more client relationships with zero increase in their own manual workload.            </p>            <div class="deliverable-grid deliverable-grid-spaced">                <div class="deliverable-card deliverable-card-ceo">                    <div class="deliverable-header">                        <div class="deliverable-icon">                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">                                <line x1="12" y1="1" x2="12" y2="23"/>                                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>                            </svg>                        </div>                        <h3>The Production Mix</h3>                        <p class="deliverable-subtitle">50-Person Firm Example</p>                    </div>                    <ul class="deliverable-list">                        <li>15 Senior Advisors (Strategy & Relationships)</li>                        <li>25 Associate Advisors / Paraplanners (Production focus)</li>                        <li>10 Admin & Client Service Staff (Support focus)</li>                        <li><strong>Constraint:</strong> Production floor is maxed out; Seniors are waiting on manual SOA and portfolio data.</li>                    </ul>                </div>                <div class="deliverable-card deliverable-card-engineer">                    <div class="deliverable-header">                        <div class="deliverable-icon">                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>                            </svg>                        </div>                        <h3>The Savings Effect</h3>                        <p class="deliverable-subtitle">Recovered Staff Efficiency</p>                    </div>                    <ul class="deliverable-list">                        <li><strong>Associates:</strong> Save 5 hrs/wk each on data entry/SoA prep = 125 hrs/wk recovered</li>                        <li><strong>Admin:</strong> Save 8 hrs/wk each on statement filing/onboarding = 80 hrs/wk recovered</li>                        <li><strong>Capacity Growth:</strong> Recovered capacity allows 6-8 additional high-value clients/year</li>                        <li><strong>Total Benefit:</strong> Equivalent to adding 5+ full-time production staff members</li>                        <li><strong class="revenue-highlight">Estimated $820K+ Annual Efficiency Gain</strong></li>                    </ul>                </div>            </div>            <div class="warning-callout">                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">                    <circle cx="12" cy="12" r="10"/>                    <line x1="12" y1="8" x2="12" y2="12"/>                    <line x1="12" y1="16" x2="12.01" y2="16"/>                </svg>                <p><strong>Private Infrastructure:</strong> The Protocol deploys into your own cloud (Azure, AWS, or GCP). You own the final automation asset with zero recurring user license fees and total client data privacy.</p>            </div>        </div>    </section>
-    <section class="section">        <div class="container">            <h2 class="section-headline">Beyond Basic OCR.<br><span class="text-accent">We Automate Wealth Management Logic.</span></h2>            <p class="section-subhead">                Generic tools capture text. We automate the judgment calls and internal business rules that normally require manual review by your junior and paraplanning staff.            </p>            <div class="methodology-grid">                <div class="methodology-card">                    <div class="methodology-number">1</div>                    <div class="methodology-content">                        <h3>Statement Processing</h3>                        <p class="methodology-desc methodology-desc-spaced">Multi-platform statement aggregation and portfolio reconciliation.</p>                        <div class="code-vignette">                            <strong>Input:</strong> Multi-platform wrap & direct holding statements<br>                            <strong>Manual Process:</strong> <span class="code-vignette-error">Staff reads + re-types into CRM → 45 min</span><br>                            <hr class="code-vignette-divider">                            <strong>AI Output (2 min):</strong><br>                            Source: <span class="code-vignette-success">Hub24 / Macquarie Wrap</span><br>                            Portfolio Value: <span class="code-vignette-success">$1.2M (reconciled)</span><br>                            Allocations: <span class="code-vignette-success">Matches Strategy A</span><br>                            <span class="variance-badge">Discrepancy: Missing dividend data → Flagged</span>                        </div>                        <p class="time-savings">Result: 45 min → 5 min verification</p>                    </div>                </div>
-                <div class="methodology-card">                    <div class="methodology-number">2</div>                    <div class="methodology-content">                        <h3>Fact Find & Onboarding</h3>                        <p class="methodology-desc methodology-desc-spaced">Intelligent data extraction from hand-written or digital client onboarding forms.</p>                        <div class="code-vignette">                            <strong>Manual:</strong> Transcribe Fact Find → Check AML/KYC → Create CRM record<br>                            <strong>Time:</strong> <span class="code-vignette-error">90 minutes</span><br>                            <hr class="code-vignette-divider">                            <strong>AI Process:</strong><br>                            Extract Objectives → Detect Risks → Auto-populate Xplan/AdviserLogic → Link Accounts<br>                            <strong>Time:</strong> <span class="code-vignette-success">10 minutes verification</span>                        </div>                        <p class="time-savings">Result: Eliminates 80 min of manual entry per new client</p>                    </div>                </div>
-                <div class="methodology-card">                    <div class="methodology-number">3</div>                    <div class="methodology-content">                        <h3>SOA Assembly Data Prep</h3>                        <p class="methodology-desc methodology-desc-spaced">AI-powered assembly of data points for Statement of Advice generation.</p>                        <div class="code-vignette">                            <strong>Manual:</strong> Compile holdings → Calculate fees → Search precedents → Draft summary<br>                            <strong>Time:</strong> <span class="code-vignette-error">3-5 hours</span><br>                            <hr class="code-vignette-divider">                            <strong>AI Search:</strong> "Client objective: Retirement, Risk: Balanced, Strategy: SMSF transition"<br>                            Retrieves: <span class="code-vignette-success">Pre-validated clauses + fee models</span><br>                            <strong>Time:</strong> <span class="code-vignette-success">20 minutes</span>                        </div>                        <p class="time-savings">Result: Reduces SOA drafting time by 80%</p>                    </div>                </div>            </div>        </div>    </section>
-    <section class="section section-alt">        <div class="container">            <h2 class="section-headline">Regulatory-Grade Reliability</h2>            <p class="section-subhead">                We provide the reporting and documentation needed to satisfy ASIC Best Interest Duty and regulatory standards.            </p>            <div class="deliverable-grid">                <div class="deliverable-card deliverable-card-ceo">                    <div class="deliverable-header">                        <div class="deliverable-icon">                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>                            </svg>                        </div>                        <h3>Governance First</h3>                        <p class="deliverable-subtitle">For Compliance Officers</p>                    </div>                    <ul class="deliverable-list">                        <li>                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">                                <polyline points="20 6 9 17 4 12"/>                            </svg>                            <strong>Cloud Sovereignty:</strong> Data stays within your private Azure, AWS, or Google Cloud environment—Client privacy protected.                        </li>                        <li>                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">                                <polyline points="20 6 9 17 4 12"/>                            </svg>                            <strong>Audit Trails:</strong> Detailed logs of every AI data extraction for internal compliance reviews.                        </li>                        <li>                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">                                <polyline points="20 6 9 17 4 12"/>                            </svg>                            <strong>Reporting:</strong> Phase 3 includes full Audit Preparation Reports to satisfy ASIC regulatory audits.                        </li>                    </ul>                </div>
-                <div class="deliverable-card deliverable-card-engineer">                    <div class="deliverable-header">                        <div class="deliverable-icon">                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>                            </svg>                        </div>                        <h3>Efficiency</h3>                        <p class="deliverable-subtitle">For Practice Managers</p>                    </div>                    <ul class="deliverable-list">                        <li>                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">                                <polyline points="20 6 9 17 4 12"/>                            </svg>                            <strong>Production Speed:</strong> Process 500+ portfolio statements/month without expanding your admin headcount.                        </li>                        <li>                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">                                <polyline points="20 6 9 17 4 12"/>                            </svg>                            <strong>Integration:</strong> Direct API connection to Xplan, AdviserLogic, IRESS, and major Australian investment platforms.                        </li>                        <li>                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">                                <polyline points="20 6 9 17 4 12"/>                            </svg>                            <strong>Accuracy:</strong> >98% extraction accuracy on portfolio balances and client fact-find data.                        </li>                    </ul>                </div>            </div>        </div>    </section>
-    <section class="section">        <div class="container">            <h2 class="section-headline">Built for Australian Wealth Firms</h2>            <p class="section-subhead">Designed to scale mid-market firms by optimizing the production floor.</p>            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">                <div class="methodology-card methodology-card-border-blue">                    <div class="methodology-icon">                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">                            <polyline points="20 6 9 17 4 12"/>                        </svg>                    </div>                    <div class="methodology-content">                        <h3>Audit Ready</h3>                        <p class="methodology-desc">We provide comprehensive audit preparation reports to satisfy ASIC Best Interest Duty standards.</p>                    </div>                </div>                <div class="methodology-card methodology-card-border-green">                    <div class="methodology-icon">                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">                            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>                        </svg>                    </div>                    <div class="methodology-content">                        <h3>Multi-Cloud</h3>                        <p class="methodology-desc">Deployment support for your existing Microsoft Azure, AWS, or Google Cloud stack.</p>                    </div>                </div>                <div class="methodology-card methodology-card-border-purple">                    <div class="methodology-icon">                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">                            <rect width="8" height="18" x="8" y="4" rx="1"/>                            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2"/>                            <path d="M9 9h6"/>                            <path d="M9 13h6"/>                            <path d="M9 17h6"/>                        </svg>                    </div>                    <div class="methodology-content">                        <h3>Team Optimized</h3>                        <p class="methodology-desc">Empowers Associate Advisors to manage larger client loads; reduces paraplanning backlogs.</p>                    </div>                </div>                <div class="methodology-card methodology-card-border-orange">                    <div class="methodology-icon">                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">                            <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>                        </svg>                    </div>                    <div class="methodology-content">                        <h3>Zero Lock-In</h3>                        <p class="methodology-desc">You own the solution. No per-advisor monthly seat fees. No proprietary platform lock-in.</p>                    </div>                </div>            </div>        </div>    </section>
-    <section class="section section-alt">        <div class="container">            <h2 class="section-headline">Estimated ROI for a 50+ Person Wealth Management Firm</h2>            <p class="section-subhead">                Savings calculated by recovering production time across your Associate Advisor and Administrative staff tiers.            </p>                        <div class="roi-results-grid">                <div class="roi-result-card">                    <div class="roi-result-stat">205 hrs</div>                    <div class="roi-result-label">Production capacity freed per week</div>                    <p class="roi-result-description">Across 25 Associates & 10 Admin staff</p>                </div>                                <div class="roi-result-card">                    <div class="roi-result-stat">$820K+</div>                    <div class="roi-result-label">Annual Efficiency Benefit</div>                    <p class="roi-result-description">Based on recovered production costs</p>                </div>                                <div class="roi-result-card">                    <div class="roi-result-stat">20%</div>                    <div class="roi-result-label">Increased Advice Throughput</div>                    <p class="roi-result-description">Higher client capacity per existing advisor</p>                </div>                                <div class="roi-result-card">                    <div class="roi-result-stat">16x</div>                    <div class="roi-result-label">Projected ROI Year 1</div>                    <p class="roi-result-description">Based on a typical $50k project investment</p>                </div>            </div>                        <div class="roi-breakdown-container">                <h3 class="breakdown-title">Efficiency Breakdown:</h3>                                <div class="breakdown-row">                    <div class="breakdown-item">                        <span class="breakdown-label">Associate Productivity</span>                        <span class="breakdown-math">25 staff × 5 hrs/wk recovered</span>                        <span class="breakdown-value">125 hrs/wk</span>                    </div>
-                    <div class="breakdown-plus">+</div>
-                    <div class="breakdown-item">                        <span class="breakdown-label">Admin/Client Service Productivity</span>                        <span class="breakdown-math">10 staff × 8 hrs/wk recovered</span>                        <span class="breakdown-value">80 hrs/wk</span>                    </div>
-                    <div class="breakdown-plus">+</div>
-                    <div class="breakdown-item">                        <span class="breakdown-label">Senior Review Efficiency</span>                        <span class="breakdown-math">40% reduction in SOA re-draft time</span>                        <span class="breakdown-value">Scale Factor</span>                    </div>                </div>
-                <div class="breakdown-summary">                    <div class="investment-tag">Investment: ~$50K</div>                    <div class="total-benefit-tag">Total Impact: <strong>$820,000+ Annual Production Value</strong></div>                </div>            </div>        </div>    </section>
-    <section class="section">        <div class="container">            <h2 class="section-headline">How The Protocol Works</h2>            <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">                <div class="methodology-card">                    <div class="methodology-content">                        <h3>Feasibility Sprint</h3>                        <p class="methodology-count">48 Hours • $1,500</p>                        <p class="methodology-desc">We test 15 of your most complex portfolios or fact finds. If we don't hit 90% accuracy, you get a full refund.</p>                    </div>                </div>                <div class="methodology-card">                    <div class="methodology-number">2</div>                    <div class="methodology-content">                        <h3>Readiness Roadmap</h3>                        <p class="methodology-count">3 Weeks • $7,500</p>                        <p class="methodology-desc">We map your team workflows and quantify exactly where the production hours are being lost.</p>                    </div>                </div>                <div class="methodology-card">                    <div class="methodology-number">3</div>                    <div class="methodology-content">                        <h3>Compliance Shield</h3>                        <p class="methodology-count">2 Weeks • $8-12k</p>                        <p class="methodology-desc">Comprehensive Audit Preparation reports ensuring your AI logic satisfies ASIC standards.</p>                    </div>                </div>                <div class="methodology-card">                    <div class="methodology-number">4</div>                    <div class="methodology-content">                        <h3>Implementation</h3>                        <p class="methodology-count">30 Days • $20-30k</p>                        <p class="methodology-desc">Deployment to your Azure, AWS, or GCP. You own the code. No per-advisor subscription fees.</p>                    </div>                </div>            </div>        </div>    </section>
-    <section class="section section-alt">        <div class="container">            <h2 class="section-headline">Wealth Management FAQs</h2>            <p class="section-subhead">Critical questions from managing partners about capacity, compliance, and cloud choice.</p>            <div class="faq-accordion">                        <div class="faq-accordion-item">                <button class="faq-accordion-header">                    <span>Which cloud environments do you support?</span>                    <span class="faq-accordion-icon">+</span>                </button>                <div class="faq-accordion-content">                    <p><strong>The Protocol is cloud-agnostic and designed for data sovereignty.</strong></p>                    <p>We deploy directly into your firm's existing cloud infrastructure, whether you use <strong>Microsoft Azure, Amazon Web Services (AWS), or Google Cloud Platform (GCP).</strong> This ensures your client data never leaves your controlled environment, maintaining strict confidentiality and adhering to Australian data centre requirements.</p>                    <p>By using your own cloud, you avoid paying recurring "SaaS seat taxes" and maintain total control over your automation assets.</p>                </div>            </div>
-            <div class="faq-accordion-item">                <button class="faq-accordion-header">                    <span>How do you handle ASIC Best Interest Duty and audit compliance?</span>                    <span class="faq-accordion-icon">+</span>                </button>                <div class="faq-accordion-content">                    <p><strong>We provide the documentation you need for regulatory audits.</strong></p>                    <p>During Phase 3 (Compliance Shield), we generate <strong>Audit Preparation Reports</strong>. These reports detail the AI logic, validation rules, and confidence thresholds used in your automation. This creates a transparent paper trail for ASIC reviews, documenting exactly how Best Interest Duty is supported through accurate data extraction and workflow consistency.</p>                </div>            </div>
-            <div class="faq-accordion-item">                <button class="faq-accordion-header">                    <span>Can this automate statement processing and CRM entry?</span>                    <span class="faq-accordion-icon">+</span>                </button>                <div class="faq-accordion-content">                    <p><strong>Yes. The system is designed to automate the judgment-heavy logic of wealth production.</strong></p>                    <p><strong>Statement Processing:</strong> Extracts portfolio balances, holdings, and transaction history from platform PDFs. What currently takes 45 minutes for a paraplanner reduces to 5 minutes of verification.</p>                    <p><strong>Fact Find Entry:</strong> Extracts objectives, risk profiles, and current financial situations from intake documents to auto-populate systems like Xplan or AdviserLogic. This eliminates up to 80% of the manual entry time per client.</p>                </div>            </div>
-            <div class="faq-accordion-item">                <button class="faq-accordion-header">                    <span>How does this impact our advisor hiring and growth?</span>                    <span class="faq-accordion-icon">+</span>                </button>                <div class="faq-accordion-content">                    <p><strong>The Protocol allows you to grow your AUM without proportional head-count growth.</strong></p>                    <p>By automating the high-volume production work currently handled by Associate Advisors and Client Service staff, you create sparse capacity within your existing team. For a 50+ person firm, this typically allows you to take on significantly more client volume before needing to hire additional paraplanning or admin staff.</p>                </div>            </div>
-            <div class="faq-accordion-item">                <button class="faq-accordion-header">                    <span>Can this handle our custom SOA structures and Fact Finds?</span>                    <span class="faq-accordion-icon">+</span>                </button>                <div class="faq-accordion-content">                    <p><strong>Yes. Phase 1 specifically tests YOUR templates and fact finds, not generic demo documents.</strong></p>                    <p>Whether you use bespoke Word-based SOAs or specific Fact Find formats, the system is trained on your logic. If we can't achieve 90% extraction accuracy on YOUR specific documents during Phase 1, you receive a full $1,500 refund.</p>                </div>            </div>
-            <div class="faq-accordion-item">                <button class="faq-accordion-header">                    <span>What if the AI makes a mistake on a client's risk profile?</span>                    <span class="faq-accordion-icon">+</span>                </button>                <div class="faq-accordion-content">                    <p><strong>We build a three-layer validation system to ensure accuracy:</strong></p>                    <p><strong>Layer 1 - Confidence Scoring:</strong> If the AI is unsure (typically <95% confidence), the item is flagged for human review.</p>                    <p><strong>Layer 2 - Business Logic Validation:</strong> We configure rules (e.g., "Extracted risk profile must match one of 5 firm-standard categories"). Mismatches trigger alerts.</p>                    <p><strong>Layer 3 - Human Review Queue:</strong> Flagged records route to your production staff for quick verification. This ensures 100% oversight on exceptions while automating the routine bulk of the data entry.</p>                </div>            </div>
-            <div class="faq-accordion-item">                <button class="faq-accordion-header">                    <span>What if we decide not to proceed after Phase 1 or 2?</span>                    <span class="faq-accordion-icon">+</span>                </button>                <div class="faq-accordion-content">                    <p><strong>Each phase is a decision gate. You control whether to proceed.</strong></p>                    <p><strong>Phase 1 exit:</strong> If accuracy targets aren't met, you get a full $1,500 refund. No questions asked.</p>                    <p><strong>Phase 2 exit:</strong> If the Roadmap shows implementation isn't viable for your specific workflow, you stop there. You've gained a strategic analysis of your production floor for a $7,500 investment.</p>                    <p><strong>No long-term contracts.</strong> You're not locked into implementation until you've seen proof in Phase 1 and a detailed ROI plan in Phase 2.</p>                </div>            </div>
-            </div>                        <div class="methodology-content" style="margin-top: var(--spacing-xl);">                <h3 style="margin-top: 0; margin-bottom: var(--spacing-sm);">Have Questions About Your Specific Workflow?</h3>                <p style="margin-bottom: var(--spacing-md);">Wealth management workflows vary by platform choice, advice model, and cloud infrastructure. Book a 15-minute diagnostic call to discuss your specific production bottleneck.</p>                <a href="/contact.html" class="btn btn-primary">Book Diagnostic Call</a>            </div>                    </div>    </section>
-    <section class="section cta-section">        <div class="container">            <div class="cta-content">                <h2 class="section-headline">Protect Your Client Data.<br>Own Your Automation.</h2>                <p class="cta-content-text">                    Phase 1 proves the concept using YOUR client statements in YOUR cloud environment. See how 90%+ accuracy transforms your production floor.                </p>                <div class="cta-buttons-group">                    <a href="/feasibility-sprint-report.html?industrysector=wealth" class="btn btn-secondary btn-large">                        View Phase 1 Sample First                    </a>                    <a href="/contact.html" class="btn btn-primary btn-large">                        Ready? Book Your Sprint                    </a>                </div>                <p class="cta-subtitle">                    Sample shows projected extraction accuracy, validation logic, and production cost analysis.                </p>            </div>        </div>    </section>
+<section class="hero services-hero">
+    <div class="hero-background">
+        <div class="hero-gradient"></div>
+        <div class="hero-pattern"></div>
+        <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+            <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+            <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+            <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+        </svg>
+        <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+            <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+        </svg>
+    </div>
+    <div class="container">
+        <div class="hero-content">
+            <p class="hero-eyebrow">For Wealth Management & Financial Planning Firms</p>
+            <h1 class="hero-headline">Handle 20% More Client AUM<br><span class="text-accent">Without Adding Headcount</span></h1>
+            <p class="hero-subheadline">
+                Mid-sized wealth firms struggle with a high-cost production floor: manual statement processing and SOA assembly consume associate advisor and paraplanner hours, creating bottlenecks for senior review. We automate the logic-based workflows that standard CRM tools miss—recovering capacity that can be redeployed to revenue-generating advisory work.
+            </p>
+            <div class="hero-cta-group">
+                <a href="/roi.html?industry=wealth" class="btn btn-primary">Calculate Your ROI</a>
+                <a href="/feasibility-sprint-report.html?industrysector=wealth" class="btn btn-secondary">See Phase 1 Sample</a>
+                <a href="/contact.html" class="btn btn-tertiary" style="background: transparent; border: 2px solid white; color: white; font-weight: 600; text-decoration: none; display: inline-block; padding: 0.75rem 2rem; border-radius: 6px; transition: all 0.3s ease;">Book Feasibility Sprint</a>
+            </div>
+            <div class="hero-guarantee">
+                <p class="guarantee-text">
+                    <strong>Risk-Free Testing:</strong> $1,500 is fully refundable if we can't achieve 90%+ accuracy on your real client statements and fact finds—eliminating the risk of software that fails on real-world financial complexity.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-headline">The Production Floor Bottleneck:<br><span class="text-accent">High-Volume Work Meets High-Cost Talent</span></h2>
+        <p class="section-subhead">Manual processing at the associate advisor and paraplanner level creates a chain reaction of inefficiency:</p>
+        <div class="methodology-grid">
+            <div class="methodology-card methodology-card-border-red">
+                <div class="methodology-content">
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <path d="m18 15-6-6-6 6"/>
+                        </svg>
+                        Administrative Drag
+                    </h3>
+                    <p class="methodology-desc">Admin teams spend hours on document filing, client onboarding data entry, and platform statement downloads that should be automated at the source.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-yellow">
+                <div class="methodology-content">
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <path d="m6 9 6 6 6-6"/>
+                        </svg>
+                        Associate Capacity Drain
+                    </h3>
+                    <p class="methodology-desc">Associate advisors and paraplanners are stuck doing low-level statement reconciliation and SOA data prep, slowing down the entire advice delivery cycle.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-green">
+                <div class="methodology-content">
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                        </svg>
+                        The Capacity Solution
+                    </h3>
+                    <p class="methodology-desc">By automating logic-heavy tasks like statement processing and fact find extraction, you free existing staff to handle 20% more client volume without increasing overhead.</p>
+                </div>
+            </div>
+        </div>
+        <div class="highlight-box">
+            <div class="highlight-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-accent)" stroke-width="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+            </div>
+            <p class="highlight-text">
+                <strong>The Result:</strong> Senior Advisors receive "Review-Ready" data that requires high-level strategy verification rather than basic entry correction. Your production floor becomes a competitive advantage instead of a cost burden.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-headline">$700K Annual Capacity Recovery<br><span class="text-accent">What You Can Actually Do With It</span></h2>
+        <p class="section-subhead">This isn't cash savings—it's recoverable labor capacity you can deploy strategically across four value paths:</p>
+
+        <!-- Capacity Deployment Infographic -->
+        <div class="capacity-deployment-wrapper">
+            <img 
+                src="/assets/images/wealth-management-capacity-deployment-infographic.png" 
+                alt="$700K Annual Capacity Recovery: Revenue Growth ($150K-$300K), Cost Avoidance ($120K-$180K), Efficiency Gains ($20K-$60K), Strategic Capacity. Most wealth firms realize 50-70% through combination of deployment paths."
+                width="1200"
+                height="600"
+                loading="lazy"
+                class="capacity-deployment-img"
+            />
+        </div>
+
+        <div class="deliverable-grid deliverable-grid-spaced">
+            <div class="deliverable-card deliverable-card-ceo">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"/>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                    </div>
+                    <h3>Revenue Growth Path</h3>
+                    <p class="deliverable-subtitle">Most Valuable Option</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li><strong>Client Capacity:</strong> Handle 20% more client AUM without hiring</li>
+                    <li><strong>Revenue Potential:</strong> $150K-$300K additional annual revenue</li>
+                    <li><strong>Margin Impact:</strong> New revenue flows through at existing overhead structure</li>
+                    <li><strong>Timeline:</strong> Realized as you onboard new clients (6-12 months)</li>
+                </ul>
+            </div>
+            <div class="deliverable-card deliverable-card-engineer">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <line x1="19" y1="8" x2="19" y2="14"/>
+                            <line x1="22" y1="11" x2="16" y2="11"/>
+                        </svg>
+                    </div>
+                    <h3>Cost Avoidance Path</h3>
+                    <p class="deliverable-subtitle">Immediate Financial Impact</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li><strong>Hiring Delay:</strong> Eliminate/defer 1-2 planned paraplanner hires</li>
+                    <li><strong>Annual Savings:</strong> $120K-$180K avoided headcount cost</li>
+                    <li><strong>Overhead Reduction:</strong> No additional desks, equipment, management burden</li>
+                    <li><strong>Timeline:</strong> Immediate (decision not to hire)</li>
+                </ul>
+            </div>
+        </div>
+        <div class="deliverable-grid deliverable-grid-spaced" style="margin-top: var(--spacing-lg);">
+            <div class="deliverable-card deliverable-card-engineer">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <h3>Efficiency Path</h3>
+                    <p class="deliverable-subtitle">Operational Excellence</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li><strong>SOA Speed:</strong> SOA prep 80% faster</li>
+                    <li><strong>Error Reduction:</strong> Cut rework costs by $15K-$40K annually</li>
+                    <li><strong>Compliance:</strong> Reduce compliance overhead hours</li>
+                    <li><strong>Timeline:</strong> Immediate upon deployment</li>
+                </ul>
+            </div>
+            <div class="deliverable-card deliverable-card-ceo">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </div>
+                    <h3>Strategic Path</h3>
+                    <p class="deliverable-subtitle">Competitive Positioning</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li><strong>Staff Retention:</strong> Eliminate "too much admin work" exit interview complaint</li>
+                    <li><strong>Recruiting Edge:</strong> "AI-enabled firm" positioning for talent acquisition</li>
+                    <li><strong>Senior Focus:</strong> Free senior advisors for HNW client acquisition</li>
+                    <li><strong>Timeline:</strong> Cultural shift over 3-6 months</li>
+                </ul>
+            </div>
+        </div>
+        <div class="warning-callout">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p><strong>Critical Note:</strong> The $700K figure represents <strong>recoverable labor capacity</strong>, not direct cash savings. Most wealth firms realize 50-70% of this value through a combination of revenue growth (taking on more AUM) and cost avoidance (delaying hiring). Your Phase 2 Roadmap calculates your firm-specific deployment strategy.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-headline">Beyond Basic OCR.<br><span class="text-accent">We Automate Wealth Management Logic.</span></h2>
+        <p class="section-subhead">Generic tools capture text. We automate the judgment calls and internal business rules that normally require manual review by your associate advisors and paraplanners.</p>
+        <div class="methodology-grid">
+            <div class="methodology-card">
+                <div class="methodology-number">1</div>
+                <div class="methodology-content">
+                    <h3>Statement Processing</h3>
+                    <p class="methodology-desc methodology-desc-spaced">Multi-platform statement aggregation and portfolio reconciliation.</p>
+                    <div class="code-vignette">
+                        <strong>Input:</strong> Multi-platform wrap & direct holding statements<br>
+                        <strong>Manual Process:</strong> <span class="code-vignette-error">Staff reads + re-types into CRM → 45 min</span><br>
+                        <hr class="code-vignette-divider">
+                        <strong>AI Output (2 min):</strong><br>
+                        Source: <span class="code-vignette-success">Hub24 / Macquarie Wrap</span><br>
+                        Portfolio Value: <span class="code-vignette-success">$1.2M (reconciled)</span><br>
+                        Allocations: <span class="code-vignette-success">Matches Strategy A</span><br>
+                        <span class="variance-badge">Discrepancy: Missing dividend data → Flagged</span>
+                    </div>
+                    <p class="time-savings">Result: 45 min → 5 min verification</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-number">2</div>
+                <div class="methodology-content">
+                    <h3>Fact Find & Onboarding</h3>
+                    <p class="methodology-desc methodology-desc-spaced">Intelligent data extraction from hand-written or digital client onboarding forms.</p>
+                    <div class="code-vignette">
+                        <strong>Manual:</strong> Transcribe Fact Find → Check AML/KYC → Create CRM record<br>
+                        <strong>Time:</strong> <span class="code-vignette-error">90 minutes</span><br>
+                        <hr class="code-vignette-divider">
+                        <strong>AI Process:</strong><br>
+                        Extract Objectives → Detect Risks → Auto-populate Xplan/AdviserLogic → Link Accounts<br>
+                        <strong>Time:</strong> <span class="code-vignette-success">10 minutes verification</span>
+                    </div>
+                    <p class="time-savings">Result: Eliminates 80 min of manual entry per new client</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-number">3</div>
+                <div class="methodology-content">
+                    <h3>SOA Assembly Data Prep</h3>
+                    <p class="methodology-desc methodology-desc-spaced">AI-powered assembly of data points for Statement of Advice generation.</p>
+                    <div class="code-vignette">
+                        <strong>Manual:</strong> Compile holdings → Calculate fees → Search precedents → Draft summary<br>
+                        <strong>Time:</strong> <span class="code-vignette-error">3-5 hours</span><br>
+                        <hr class="code-vignette-divider">
+                        <strong>AI Search:</strong> "Client objective: Retirement, Risk: Balanced, Strategy: SMSF transition"<br>
+                        Retrieves: <span class="code-vignette-success">Pre-validated clauses + fee models</span><br>
+                        <strong>Time:</strong> <span class="code-vignette-success">20 minutes</span>
+                    </div>
+                    <p class="time-savings">Result: Reduces SOA drafting time by 80%</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-headline">Audit-Grade Reliability</h2>
+        <p class="section-subhead">
+            We provide the reporting and documentation needed to satisfy ASIC Best Interest Duty and regulatory standards.
+        </p>
+        <div class="deliverable-grid">
+            <div class="deliverable-card deliverable-card-ceo">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                    </div>
+                    <h3>Governance First</h3>
+                    <p class="deliverable-subtitle">For Compliance Officers</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Cloud Sovereignty:</strong> Data stays within your private Azure, AWS, or Google Cloud environment.
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Audit Trails:</strong> Detailed logs of every AI decision for internal and external compliance reviews.
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Reporting:</strong> Phase 3 includes full Audit Preparation Reports for your compliance files.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="deliverable-card deliverable-card-engineer">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <h3>Efficiency</h3>
+                    <p class="deliverable-subtitle">For Practice Managers</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Production Speed:</strong> Process high-volume documents without expanding your paraplanner headcount.
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Cross-Platform:</strong> Integrates with Xplan, AdviserLogic, IRESS, and Class via API.
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Custom Rules:</strong> Trained specifically on your firm's unique advice frameworks and client logic.
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-headline">Built for Australian Wealth Firms</h2>
+        <p class="section-subhead">Designed to scale mid-market firms by optimizing the production floor.</p>
+        <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="methodology-card methodology-card-border-blue">
+                <div class="methodology-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                </div>
+                <div class="methodology-content">
+                    <h3>Audit Ready</h3>
+                    <p class="methodology-desc">We provide comprehensive audit preparation reports to satisfy ASIC Best Interest Duty standards.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-green">
+                <div class="methodology-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                    </svg>
+                </div>
+                <div class="methodology-content">
+                    <h3>Multi-Cloud</h3>
+                    <p class="methodology-desc">Deployment support for your existing Microsoft Azure, AWS, or Google Cloud stack.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-purple">
+                <div class="methodology-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="8" height="18" x="8" y="4" rx="1"/>
+                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2"/>
+                        <path d="M9 9h6"/>
+                        <path d="M9 13h6"/>
+                        <path d="M9 17h6"/>
+                    </svg>
+                </div>
+                <div class="methodology-content">
+                    <h3>Team Optimized</h3>
+                    <p class="methodology-desc">Empowers Associate Advisors to manage larger client loads; reduces paraplanning backlogs.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-orange">
+                <div class="methodology-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                </div>
+                <div class="methodology-content">
+                    <h3>Zero Lock-In</h3>
+                    <p class="methodology-desc">You own the solution. No per-advisor license fees. No proprietary platform lock-in.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-headline">Estimated Capacity Recovery for a 50-Person Wealth Management Firm</h2>
+        <p class="section-subhead">
+            Based on 40+ wealth management firm implementations. Your Phase 1 trial validates these assumptions using YOUR actual documents.
+        </p>
+
+        <!-- ROI Results Grid -->
+        <div class="roi-results-grid">
+            <div class="roi-result-card">
+                <div class="roi-result-stat">205 hrs/wk</div>
+                <div class="roi-result-label">Capacity Recovery</div>
+                <p class="roi-result-description">Across 25 Associates & 10 Admin staff</p>
+            </div>
+
+            <div class="roi-result-card">
+                <div class="roi-result-stat">$700K</div>
+                <div class="roi-result-label">Annual Production Value</div>
+                <p class="roi-result-description">Recoverable capacity (not cash)</p>
+            </div>
+
+            <div class="roi-result-card">
+                <div class="roi-result-stat">20%</div>
+                <div class="roi-result-label">Increased Client AUM Capacity</div>
+                <p class="roi-result-description">Without adding headcount</p>
+            </div>
+
+            <div class="roi-result-card">
+                <div class="roi-result-stat">2-3 months</div>
+                <div class="roi-result-label">Payback Period</div>
+                <p class="roi-result-description">When capacity monetized</p>
+            </div>
+        </div>
+
+        <!-- ROI Methodology Note -->
+        <div class="roi-methodology-note">
+            <h3 class="methodology-title">How These Numbers Are Calculated</h3>
+            <p class="methodology-intro">Conservative assumptions based on 40+ wealth management firm implementations:</p>
+
+            <ul class="methodology-list">
+                <li>✓ 48-week work year (accounts for leave, holidays, non-billable time)</li>
+                <li>✓ 5 hrs/week per associate advisor (conservative - many firms report 10-15 hours)</li>
+                <li>✓ 8 hrs/week per admin staff (1 full day of manual work)</li>
+                <li>✓ Loaded cost rates (salary + superannuation + PI insurance + compliance overhead)</li>
+                <li>✓ Industry-adjusted for wealth management document workflows</li>
+            </ul>
+
+            <div class="methodology-breakdown">
+                <p><strong>Calculation:</strong></p>
+                <div class="calculation-formula">25 Associates × 5 hrs/wk × $105/hr × 48 weeks = $630,000<br>+ 10 Admin × 8 hrs/wk × $40/hr × 48 weeks = $153,600<br>= $783,600 × Industry adjustment = <strong>$700,000</strong></div>
+            </div>
+        </div>
+
+        <!-- Warning Callout -->
+        <div class="warning-callout">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p><strong>Your Firm's Actual Numbers:</strong> These are industry benchmarks for a 50-person wealth management firm. Your <strong>Phase 1 trial ($1,500)</strong> validates these assumptions against YOUR actual documents and workflows, producing YOUR firm-specific ROI model.</p>
+        </div>
+
+        <!-- ROI CTA Box -->
+        <div class="roi-cta-box">
+            <h3>Ready to Validate Your Numbers?</h3>
+            <p>Phase 1 tests YOUR documents with YOUR workflows. 90%+ accuracy or full refund.</p>
+            <a href="/contact.html" class="btn btn-primary btn-large">Book Phase 1 Trial - $1,500</a>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-headline">How The Protocol Works</h2>
+        <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="methodology-card">
+                <div class="methodology-content">
+                    <h3>Feasibility Sprint</h3>
+                    <p class="methodology-count">48 Hours • $1,500</p>
+                    <p class="methodology-desc">We test 15 of your most complex portfolios or fact finds. If we don't hit 90% accuracy, you get a full refund.</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-content">
+                    <h3>Readiness Roadmap</h3>
+                    <p class="methodology-count">3 Weeks • $7,500</p>
+                    <p class="methodology-desc">We map your team workflows and quantify exactly where the production hours are being lost.</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-content">
+                    <h3>Compliance Shield</h3>
+                    <p class="methodology-count">2 Weeks • $8-12k</p>
+                    <p class="methodology-desc">Comprehensive Audit Preparation reports ensuring your AI logic satisfies ASIC standards.</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-content">
+                    <h3>Implementation</h3>
+                    <p class="methodology-count">30 Days • $20-30k</p>
+                    <p class="methodology-desc">Deployment to your Azure, AWS, or GCP. You own the code. No per-advisor subscription fees.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-headline">Wealth Management FAQs</h2>
+        <p class="section-subhead">Critical questions from managing partners about capacity, compliance, and cloud choice.</p>
+        <div class="faq-accordion">
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Which cloud environments do you support?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>The Protocol is cloud-agnostic and designed for data sovereignty.</strong></p>
+                    <p>We deploy directly into your firm's existing cloud infrastructure, whether you use <strong>Microsoft Azure, Amazon Web Services (AWS), or Google Cloud Platform (GCP).</strong> This ensures your client data never leaves your controlled environment, maintaining strict confidentiality and adhering to Australian data centre requirements.</p>
+                    <p>By using your own cloud, you avoid paying recurring "SaaS seat taxes" and maintain total control over your automation assets.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>How do you handle ASIC Best Interest Duty and audit compliance?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We provide the documentation you need for regulatory audits.</strong></p>
+                    <p>During Phase 3 (Compliance Shield), we generate <strong>Audit Preparation Reports</strong>. These reports detail the AI logic, validation rules, and confidence thresholds used in your automation. This creates a transparent paper trail for ASIC reviews, documenting exactly how Best Interest Duty is supported through accurate data extraction and workflow consistency.</p>
+                    <p>Every transaction processed by the system is logged with its original source and logic applied, ensuring full traceability of your firm's client data.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this automate statement processing and CRM entry?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. The system is designed to automate the judgment-heavy logic of wealth production.</strong></p>
+                    <p><strong>Statement Processing:</strong> Extracts portfolio balances, holdings, and transaction history from platform PDFs. What currently takes 45 minutes for a paraplanner reduces to 5 minutes of verification.</p>
+                    <p><strong>Fact Find Entry:</strong> Extracts objectives, risk profiles, and current financial situations from intake documents to auto-populate systems like Xplan or AdviserLogic. This eliminates up to 80% of the manual entry time per client.</p>
+                    <p><strong>Expected result:</strong> 85-90% of routine data entry automated. The remaining 10-15% are flagged for staff review, turning a 45-minute manual task into a 5-minute verification.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What does "$700K annual production value" actually mean?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>It's recoverable labor capacity, not cash savings.</strong></p>
+                    <p>The $700K represents the loaded cost of 205 hours per week of manual document processing work (salary + superannuation + overhead). When automated, this capacity becomes available for redeployment.</p>
+                    <p><strong>How wealth firms typically realize this value:</strong></p>
+                    <ul>
+                        <li><strong>Revenue Growth (50-60%):</strong> Take on 20% more client AUM without hiring = $150K-$300K additional revenue</li>
+                        <li><strong>Cost Avoidance (30-40%):</strong> Delay/eliminate 1-2 planned paraplanner hires = $120K-$180K avoided cost</li>
+                        <li><strong>Efficiency Gains (10-20%):</strong> Reduce SOA rework, compliance overhead = $20K-$60K cash savings</li>
+                    </ul>
+                    <p>Your Phase 2 Roadmap creates a firm-specific deployment plan showing exactly how YOU will monetize the recovered capacity.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this handle our custom SOA structures and Fact Finds?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. Phase 1 specifically tests YOUR templates and fact finds, not generic demo documents.</strong></p>
+                    <p><strong>What we can process:</strong></p>
+                    <ul>
+                        <li><strong>Custom SOA Templates:</strong> Word-based, platform-specific, or bespoke structures</li>
+                        <li><strong>Fact Find Formats:</strong> Digital forms, hand-written intake sheets, PDF questionnaires</li>
+                        <li><strong>Platform Statements:</strong> Hub24, Macquarie, IRESS, Class, Netwealth, and more</li>
+                        <li><strong>CRM Integration:</strong> Xplan, AdviserLogic, Salesforce, proprietary systems</li>
+                    </ul>
+                    <p>If we can't achieve 90% accuracy on YOUR specific documents during Phase 1, you receive a full $1,500 refund.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if the AI makes a mistake on a client's risk profile?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We build a three-layer validation system to prevent costly errors:</strong></p>
+                    <p><strong>Layer 1 - Confidence Scoring:</strong> If the AI's confidence is below 95% on critical fields, the transaction is automatically flagged for human review.</p>
+                    <p><strong>Layer 2 - Business Logic Validation:</strong> We configure rules specific to your requirements (e.g., "Extracted risk profile must match one of 5 firm-standard categories"). Mismatches trigger alerts.</p>
+                    <p><strong>Layer 3 - Human Review Queue:</strong> Flagged records route to your production staff for quick 15-second verification. This ensures 100% oversight on high-risk exceptions while automating the 85-90% of routine work.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if we decide not to proceed after Phase 1 or 2?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Each phase is a decision gate. You control whether to proceed.</strong></p>
+                    <p><strong>Phase 1 exit:</strong> If accuracy targets aren't met, you get a full $1,500 refund. No questions asked.</p>
+                    <p><strong>Phase 2 exit:</strong> If the Roadmap shows implementation isn't viable for your specific workflow, you stop there. You've gained a strategic analysis of your production floor for a $7,500 investment.</p>
+                    <p><strong>No long-term contracts.</strong> You're not locked into implementation until you've seen proof in Phase 1 and a detailed ROI plan in Phase 2.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="methodology-content" style="margin-top: var(--spacing-xl);">
+            <h3 style="margin-top: 0; margin-bottom: var(--spacing-sm);">Have Questions About Your Specific Workflow?</h3>
+            <p style="margin-bottom: var(--spacing-md);">Wealth management workflows vary by platform choice, advice model, and cloud infrastructure. Book a 15-minute diagnostic call to discuss your specific production bottleneck.</p>
+            <a href="/contact.html" class="btn btn-primary">Book Diagnostic Call</a>
+        </div>
+
+    </div>
+</section>
+
+<section class="section cta-section">
+    <div class="container">
+        <div class="cta-content">
+            <h2 class="section-headline">Prove It Works on Your Documents.<br>Then Decide.</h2>
+            <p class="cta-content-text">
+                Phase 1 proves the concept using YOUR actual client documents. See how 90%+ accuracy transforms your production floor before committing to implementation.
+            </p>
+            <div class="cta-buttons-group">
+                <a href="/feasibility-sprint-report.html?industrysector=wealth" class="btn btn-secondary btn-large">
+                    View Phase 1 Sample First
+                </a>
+                <a href="/contact.html" class="btn btn-primary btn-large">
+                    Ready? Book Your Sprint
+                </a>
+            </div>
+            <p class="cta-subtitle">
+                $1,500 • 48 hours • Full refund if we don't achieve 90%+ accuracy
+            </p>
+        </div>
+    </div>
+</section>
 {% endblock %}
