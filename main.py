@@ -43,6 +43,25 @@ csrf = CSRFProtect(app)
 # Performance: Enable Gzip/Brotli compression
 Compress(app)
 
+# Production: Force HTTPS and redirect apex to www
+@app.before_request
+def redirect_and_force_https():
+    """Redirect HTTP to HTTPS and apex domain to www"""
+    # Skip for local development
+    if request.host.startswith('localhost') or request.host.startswith('127.0.0.1'):
+        return None
+    
+    # Force HTTPS
+    if not request.is_secure and request.headers.get('X-Forwarded-Proto') != 'https':
+        url = request.url.replace('http://', 'https://', 1)
+        return redirect(url, code=301)
+    
+    # Redirect apex domain to www
+    if request.host == 'curam-ai.com.au':
+        return redirect('https://www.curam-ai.com.au' + request.full_path, code=301)
+    
+    return None
+
 # Performance: Add caching headers for static assets with versioning
 # Version number - increment when static assets change
 STATIC_ASSETS_VERSION = "1.0.0"
