@@ -117,7 +117,7 @@ ROUTINE_DESCRIPTIONS = {
          <p><strong>The Current Grind:</strong> Paraplanners manually open each client document, re-type holdings, balances, and beneficiary details into CRM or advice software—risking transcription errors on critical compliance data.</p>
          <p><strong>Frequency:</strong> Per client review. A 10-adviser practice may process <strong>50–100 client documents</strong> weekly during review cycles.</p>
          <p><strong>The Saving:</strong><br>Manual: 5–10 minutes per document.<br>AI: 30 seconds.<br><strong>Value:</strong> Eliminates data entry errors in compliance-critical SOA preparation.</p>
-         <p><strong>Demo:</strong> Upload your own PDF client statements, compliance forms, or portfolio documentation to test extraction accuracy.</p>"""),
+         <p><strong>The Demo:</strong> Run the three sample documents provided (Portfolio Investment Strategy, ASIC Compliance Form, Client Portfolio Statement). The AI extracts client names, account balances, asset allocations, AFSL details, and compliance data—handling scanned documents automatically.</p>"""),
     ],
     "insurance": [
         ("Insurance: \"The Claims Processor\"",
