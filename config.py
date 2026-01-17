@@ -37,13 +37,21 @@ DEPARTMENT_SAMPLES = {
         "label": "Financial planning samples",
         "description": "Client statements, compliance forms, portfolio documentation",
         "folder": "samples/financial_planning",
-        "samples": []
+        "samples": [
+            {"path": "samples/financial_planning/Portfolio_Investment_Strategy.pdf", "label": "Portfolio Investment Strategy"},
+            {"path": "samples/financial_planning/ASIC_Compliance_Form.pdf", "label": "ASIC Compliance Form"},
+            {"path": "samples/financial_planning/Client_Portfolio_Statement.pdf", "label": "Client Portfolio Statement"}
+        ]
     },
     "insurance": {
         "label": "Insurance samples",
         "description": "Claims forms, policy documents, risk assessment paperwork",
         "folder": "samples/insurance",
-        "samples": []
+        "samples": [
+            {"path": "samples/insurance/Insurance_Policy_Document.pdf", "label": "Insurance Policy Document"},
+            {"path": "samples/insurance/General_Insurance_Claim.pdf", "label": "General Insurance Claim"},
+            {"path": "samples/insurance/Risk_Assessment_Report.pdf", "label": "Risk Assessment Report"}
+        ]
     },
     "engineering": {
         "label": "Structural drawings",

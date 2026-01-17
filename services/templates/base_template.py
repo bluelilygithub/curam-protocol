@@ -592,7 +592,7 @@ def get_base_template():
                     </div>
                     {% else %}
                     <label>
-                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or ((dept_key == 'engineering' or dept_key == 'finance') and not selected_samples) %}checked{% endif %}>
+                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or ((dept_key in ['engineering', 'finance', 'financial_planning', 'insurance']) and not selected_samples) %}checked{% endif %}>
                         {{ sample.label }}
                         <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">🔗</a>
                     </label>
@@ -602,7 +602,7 @@ def get_base_template():
                     <p class="instruction-text" style="color: #666; font-style: italic;">No sample files available. Please upload your own PDF documents below.</p>
                     {% endif %}
                 </div>
-                {% if dept_key in ['finance', 'financial_planning', 'insurance'] %}
+                {% if dept_key == 'finance' %}
                 <div class="upload-wrapper" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc;">
                     <label class="file-label">
                         📤 Upload Your Own PDF(s)
@@ -1037,13 +1037,10 @@ def get_base_template():
                     });
                 }
             });
-            // Clear upload lists for inactive departments
-            const uploadDepts = ['finance', 'financial_planning', 'insurance'];
-            uploadDepts.forEach(dept => {
-                if (activeDept !== dept) {
-                    updateUploadList(dept, []);
-                }
-            });
+            // Clear upload list for finance department when not active
+            if (activeDept !== 'finance') {
+                updateUploadList('finance', []);
+            }
         }
 
         // Generic upload list handler for all upload-enabled departments
@@ -1103,19 +1100,16 @@ def get_base_template():
             deptRadios.forEach(radio => radio.addEventListener('change', handleDepartmentChange));
             updateSampleVisibility();
             updateRoutineVisibility();
-        // Set up file upload handlers for all upload-enabled departments
-        const uploadDepartments = ['finance', 'financial_planning', 'insurance'];
-        uploadDepartments.forEach(dept => {
-            const uploadInput = document.querySelector(`input[name="${dept}_uploads"]`);
-            if (uploadInput) {
-                uploadInput.addEventListener('change', () => updateUploadList(dept));
-            }
-        });
+        // Set up file upload handler for finance department only
+        const financeUploadInputEl = document.querySelector('input[name="finance_uploads"]');
+        if (financeUploadInputEl) {
+            financeUploadInputEl.addEventListener('change', () => updateUploadList('finance'));
+        }
         
-        // Initialize upload list display for active department
+        // Initialize upload list display for finance if active
         const activeDeptRadio = document.querySelector('input[name="department"]:checked');
-        if (activeDeptRadio && uploadDepartments.includes(activeDeptRadio.value)) {
-            updateUploadList(activeDeptRadio.value);
+        if (activeDeptRadio && activeDeptRadio.value === 'finance') {
+            updateUploadList('finance');
         }
         });
 
