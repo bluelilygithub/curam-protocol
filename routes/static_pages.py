@@ -200,9 +200,11 @@ def legal_services_page():
 
 @static_pages_bp.route('/wealth-management')
 @static_pages_bp.route('/wealth-management.html')
+@static_pages_bp.route('/financial-planning')
+@static_pages_bp.route('/financial-planning.html')
 @static_pages_bp.route('/industries/wealth-management.html')
 def wealth_management_page():
-    """Serve the wealth management industry page"""
+    """Serve the wealth management / financial planning industry page"""
     try:
         return render_template('industries/wealth-management.html')
     except:
@@ -211,9 +213,11 @@ def wealth_management_page():
 
 @static_pages_bp.route('/insurance-underwriting')
 @static_pages_bp.route('/insurance-underwriting.html')
+@static_pages_bp.route('/insurance')
+@static_pages_bp.route('/insurance.html')
 @static_pages_bp.route('/industries/insurance-underwriting.html')
 def insurance_underwriting_page():
-    """Serve the insurance underwriting industry page"""
+    """Serve the insurance industry page"""
     try:
         return render_template('industries/insurance-underwriting.html')
     except:
