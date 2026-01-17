@@ -23,37 +23,9 @@ COMPANY_NAME = "Curam AI"
 from flask import Blueprint
 roi_app = Blueprint('roi_calculator', __name__, template_folder=None)
 
-# Industry-specific AI automation opportunities
+# Industry-specific AI automation opportunities (5 supported industries only)
 AI_OPPORTUNITIES = {
-    "Architecture & Building Services": [
-        {"task": "Drawing Register Compilation", "potential": "HIGH", "hours_per_week": 6, "description": "Automated extraction from title blocks"},
-        {"task": "Specification Writing", "potential": "HIGH", "hours_per_week": 8, "description": "AI-assisted spec generation from templates"},
-        {"task": "Door/Window Schedules", "potential": "MEDIUM", "hours_per_week": 4, "description": "Schedule generation from BIM data"},
-        {"task": "Energy Modelling Data Entry", "potential": "MEDIUM", "hours_per_week": 3, "description": "Automated data transfer to modelling software"},
-        {"task": "Meeting Minutes & Action Items", "potential": "LOW", "hours_per_week": 2, "description": "AI transcription and summarization"}
-    ],
-    "Civil & Surveying": [
-        {"task": "Bore-hole Log Compilation", "potential": "HIGH", "hours_per_week": 7, "description": "Automated extraction from field notes"},
-        {"task": "Lab Report Data Transfer", "potential": "HIGH", "hours_per_week": 6, "description": "PDF to database automation"},
-        {"task": "Site Survey Data Processing", "potential": "MEDIUM", "hours_per_week": 5, "description": "Drone/photogrammetry data integration"},
-        {"task": "Client Report Assembly", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated report generation"},
-        {"task": "Compliance Documentation", "potential": "LOW", "hours_per_week": 2, "description": "Template-based compliance forms"}
-    ],
-    "Manufacturing (Design-to-Order)": [
-        {"task": "RFQ Data Extraction", "potential": "HIGH", "hours_per_week": 8, "description": "PDF RFQ to ERP automation"},
-        {"task": "Quote Generation", "potential": "HIGH", "hours_per_week": 6, "description": "Automated pricing calculations"},
-        {"task": "BOM Compilation", "potential": "MEDIUM", "hours_per_week": 5, "description": "Material list generation"},
-        {"task": "Nesting Optimization", "potential": "MEDIUM", "hours_per_week": 4, "description": "AI-assisted material layout"},
-        {"task": "Order Processing", "potential": "LOW", "hours_per_week": 3, "description": "Order entry automation"}
-    ],
-    "Environmental Consulting": [
-        {"task": "ESG Table Updates", "potential": "HIGH", "hours_per_week": 7, "description": "Automated data pipeline from sources"},
-        {"task": "Compliance Report Generation", "potential": "HIGH", "hours_per_week": 6, "description": "Template-based report automation"},
-        {"task": "Air Quality Data Processing", "potential": "MEDIUM", "hours_per_week": 4, "description": "Sensor data to reports"},
-        {"task": "Quarterly Monitoring Reports", "potential": "MEDIUM", "hours_per_week": 3, "description": "Recurring report automation"},
-        {"task": "Data Verification", "potential": "LOW", "hours_per_week": 2, "description": "Cross-table accuracy checks"}
-    ],
-    "Accounting & Advisory": [
+    "Accounting": [
         {"task": "Trust Account Reconciliations", "potential": "HIGH", "hours_per_week": 8, "description": "Automated transaction matching and exception flagging"},
         {"task": "Inter-Entity Reconciliations", "potential": "HIGH", "hours_per_week": 7, "description": "Cross-entity loan accounts and management fee matching"},
         {"task": "Complex Invoice GL Coding", "potential": "HIGH", "hours_per_week": 6, "description": "Multi-line invoice splitting across cost centers"},
@@ -61,63 +33,28 @@ AI_OPPORTUNITIES = {
         {"task": "Fraud Detection (Bank Details)", "potential": "MEDIUM", "hours_per_week": 3, "description": "BSB/account verification against master records"},
         {"task": "Bank Reconciliation", "potential": "LOW", "hours_per_week": 2, "description": "Automated bank statement matching"}
     ],
-    "Legal Services": [
-        {"task": "Contract Review & Term Extraction", "potential": "HIGH", "hours_per_week": 8, "description": "Automated extraction of key terms, dates, parties, and obligations from contracts"},
-        {"task": "Matter Intake Automation", "potential": "HIGH", "hours_per_week": 7, "description": "Extract client data from intake forms and ID documents, auto-create matter files"},
-        {"task": "Legal Research Indexing", "potential": "MEDIUM", "hours_per_week": 5, "description": "AI-powered search across past matters and research memos"},
-        {"task": "Time Entry Automation", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated time sheet entry from calendar and email data"},
-        {"task": "Document Discovery", "potential": "LOW", "hours_per_week": 3, "description": "Indexing and searching large document sets for discovery"}
+    "Engineering": [
+        {"task": "Drawing Register Compilation", "potential": "HIGH", "hours_per_week": 6, "description": "Automated extraction from title blocks"},
+        {"task": "Specification Writing", "potential": "HIGH", "hours_per_week": 8, "description": "AI-assisted spec generation from templates"},
+        {"task": "Beam/Column Schedule Extraction", "potential": "HIGH", "hours_per_week": 7, "description": "Structural schedule data extraction"},
+        {"task": "Door/Window Schedules", "potential": "MEDIUM", "hours_per_week": 4, "description": "Schedule generation from BIM data"},
+        {"task": "Energy Modelling Data Entry", "potential": "MEDIUM", "hours_per_week": 3, "description": "Automated data transfer to modelling software"}
     ],
-    "Construction": [
-        {"task": "Tender Specification Extraction", "potential": "HIGH", "hours_per_week": 10, "description": "Automated extraction from 500-page tender packs with compliance validation"},
-        {"task": "Site Diary Digitization", "potential": "HIGH", "hours_per_week": 8, "description": "Automated extraction from handwritten site logs with WHS compliance tracking"},
-        {"task": "Subcontractor Compliance Tracking", "potential": "HIGH", "hours_per_week": 6, "description": "Automated certificate monitoring with expiry alerts"},
-        {"task": "SWMS Processing", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated safety method statement extraction and validation"},
-        {"task": "Project Documentation Assembly", "potential": "MEDIUM", "hours_per_week": 3, "description": "Automated compilation of project reports and submissions"}
-    ],
-    "Mining Services": [
-        {"task": "Safety Incident Reporting", "potential": "HIGH", "hours_per_week": 8, "description": "Automated extraction from incident forms with regulatory classification"},
-        {"task": "Shift Handover Log Processing", "potential": "HIGH", "hours_per_week": 7, "description": "Automated extraction from handwritten shift logs with continuity tracking"},
-        {"task": "Equipment Maintenance Tracking", "potential": "HIGH", "hours_per_week": 6, "description": "Automated compliance monitoring with expiry alerts"},
-        {"task": "Environmental Compliance Documentation", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated extraction from environmental monitoring reports"},
-        {"task": "Regulatory Report Generation", "potential": "MEDIUM", "hours_per_week": 3, "description": "Template-based compliance report automation"}
-    ],
-    "Property Management": [
-        {"task": "Lease Document Extraction", "potential": "HIGH", "hours_per_week": 8, "description": "Automated extraction from lease agreements with key date tracking"},
-        {"task": "Maintenance Order Matching", "potential": "HIGH", "hours_per_week": 7, "description": "Automated matching of maintenance requests with invoices and approvals"},
-        {"task": "Compliance Certificate Tracking", "potential": "HIGH", "hours_per_week": 6, "description": "Automated monitoring with expiry alerts"},
-        {"task": "Tenant Application Processing", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated extraction from tenant application forms"},
-        {"task": "Property Condition Reports", "potential": "MEDIUM", "hours_per_week": 3, "description": "Automated compilation of condition report data"}
-    ],
-    "Logistics & Freight": [
+    "Logistics": [
         {"task": "BOL Processing", "potential": "HIGH", "hours_per_week": 10, "description": "Automated extraction from bills of lading with accuracy validation"},
         {"task": "Customs Documentation", "potential": "HIGH", "hours_per_week": 9, "description": "Automated customs entry creation with compliance checking"},
         {"task": "POD Matching", "potential": "HIGH", "hours_per_week": 7, "description": "Automated proof of delivery matching with invoice reconciliation"},
         {"task": "Freight Manifest Processing", "potential": "MEDIUM", "hours_per_week": 5, "description": "Automated extraction from freight manifests"},
         {"task": "Compliance Certificate Tracking", "potential": "MEDIUM", "hours_per_week": 3, "description": "Automated monitoring of transport licenses and insurance"}
     ],
-    "Healthcare Admin": [
-        {"task": "Patient Intake Processing", "potential": "HIGH", "hours_per_week": 8, "description": "Automated extraction from patient intake forms and ID documents"},
-        {"task": "Referral Triage Automation", "potential": "HIGH", "hours_per_week": 7, "description": "Automated extraction from referral letters with priority classification"},
-        {"task": "Medicare/Private Claiming", "potential": "HIGH", "hours_per_week": 6, "description": "Automated claim form generation from consultation notes"},
-        {"task": "Compliance Documentation", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated extraction from compliance certificates and audits"},
-        {"task": "Medical Record Indexing", "potential": "MEDIUM", "hours_per_week": 3, "description": "Automated indexing and search across patient records"}
-    ],
-    "Government Contractors": [
-        {"task": "Grant Acquittal Processing", "potential": "HIGH", "hours_per_week": 9, "description": "Automated extraction from grant reports with compliance validation"},
-        {"task": "Tender Compliance Documentation", "potential": "HIGH", "hours_per_week": 8, "description": "Automated extraction from tender responses with requirement matching"},
-        {"task": "NDIS Audit Trail Generation", "potential": "HIGH", "hours_per_week": 7, "description": "Automated compilation of service delivery evidence with compliance tracking"},
-        {"task": "Contract Compliance Monitoring", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated tracking of contract milestones and deliverables"},
-        {"task": "Regulatory Report Generation", "potential": "MEDIUM", "hours_per_week": 3, "description": "Template-based compliance report automation"}
-    ],
-    "Wealth Management": [
+    "Financial Planning": [
         {"task": "Client Statement Processing", "potential": "HIGH", "hours_per_week": 8, "description": "Automated extraction from client statements with transaction matching"},
         {"task": "SOA Generation", "potential": "HIGH", "hours_per_week": 7, "description": "Automated compilation of Statement of Advice from client data"},
         {"task": "Performance Attribution & Reporting", "potential": "HIGH", "hours_per_week": 6, "description": "Automated calculation and compilation of performance reports"},
         {"task": "Compliance Documentation", "potential": "MEDIUM", "hours_per_week": 4, "description": "Automated extraction from compliance certificates and audits"},
         {"task": "Client Onboarding Processing", "potential": "MEDIUM", "hours_per_week": 3, "description": "Automated extraction from client onboarding forms and ID documents"}
     ],
-    "Insurance Underwriting": [
+    "Insurance": [
         {"task": "Application Data Extraction", "potential": "HIGH", "hours_per_week": 8, "description": "Automated extraction from policy applications with accuracy validation"},
         {"task": "Risk Scoring Automation", "potential": "HIGH", "hours_per_week": 7, "description": "Automated risk assessment from application data"},
         {"task": "Claims Documentation Intelligence", "potential": "HIGH", "hours_per_week": 6, "description": "Automated extraction and analysis from claims documentation"},
@@ -126,136 +63,9 @@ AI_OPPORTUNITIES = {
     ]
 }
 
-# Industry configurations
+# Industry configurations (5 supported industries only)
 INDUSTRIES = {
-    "Architecture & Building Services": {
-        "context": "Architecture and building services firms (10-100 staff)",
-        # Conservative v3.1 fields with firm size scaling
-        "doc_staff_percentage_base": 0.75,  # Base percentage (medium firm) - will be scaled
-        "doc_staff_hours_per_week": 5.0,
-        "doc_staff_typical_rate": 130,
-        "proven_tasks": {
-            "transmittals": 0.25,
-            "specifications": 0.20,
-            "drawing_registers": 0.18,
-            "site_diaries": 0.22,
-            "other": 0.15
-        },
-        "tasks": [
-            {
-                "id": "transmittals",
-                "name": "Document Transmittals",
-                "complexity": 10,
-                "complexity_label": "High (Proven ROI)",
-                "description": "Manual PDF creation, tracking, distribution - highly repetitive",
-                "automation_potential": 0.50,
-                "multiplier": 1.35,
-                "proven_success_rate": 0.90,
-                "is_low_hanging_fruit": True
-            },
-            {
-                "id": "specifications",
-                "name": "Specification Writing",
-                "complexity": 7,
-                "complexity_label": "Medium-High (Proven ROI)",
-                "description": "Template-based spec generation from Masterspec/Natspec",
-                "automation_potential": 0.45,
-                "multiplier": 1.20,
-                "proven_success_rate": 0.85
-            },
-            {
-                "id": "drawing_registers",
-                "name": "Drawing Register Compilation",
-                "complexity": 6,
-                "complexity_label": "Medium (Proven ROI)",
-                "description": "Manual Excel compilation from title blocks and metadata",
-                "automation_potential": 0.40,
-                "multiplier": 1.00,
-                "proven_success_rate": 0.88
-            },
-            {
-                "id": "site_diaries",
-                "name": "Site Diary Digitization",
-                "complexity": 4,
-                "complexity_label": "Medium (Requires Validation)",
-                "description": "Converting handwritten notes to digital - requires judgment",
-                "automation_potential": 0.30,
-                "multiplier": 0.85,
-                "proven_success_rate": 0.75,
-                "requires_phase_1": True
-            },
-            {
-                "id": "other",
-                "name": "Other Documentation",
-                "complexity": 5,
-                "complexity_label": "Medium (Varies)",
-                "description": "Various administrative tasks",
-                "automation_potential": 0.35,
-                "multiplier": 1.00,
-                "proven_success_rate": 0.80
-            }
-        ],
-        # Legacy fields for backward compatibility
-        "hours_per_staff_per_week": 4.0,
-        "task_breakdown": {
-            "transmittals": 0.23,
-            "specifications": 0.18,
-            "drawing_registers": 0.15,
-            "site_diaries": 0.28,
-            "other": 0.16
-        },
-        "demo_documents": "drawing registers, BIM schedules, or document transmittals",
-        "automation_potential": 0.40,
-        "q1_label": "What's your biggest documentation bottleneck?",
-        "q1_options": {
-            "Drawing Registers (Automated BIM export)": 0,
-            "Drawing Registers (Export to Excel, manual formatting)": 5,
-            "Specification Writing (Copy-paste from Masterspec/Natspec)": 7,
-            "Document Transmittals (Manual creation and tracking)": 10
-        },
-        "q2_label": "Total firm-wide hours per week on manual documentation (all staff combined)",
-        "q2_type": "slider",
-        "q2_range": (10, 200)
-    },
-    "Civil & Surveying": {
-        "context": "Bore-hole logs, Lab reports, Drone photogrammetry",
-        "q1_label": "How are bore-hole logs and lab results transferred to client reports?",
-        "q1_options": {
-            "API / Database link (Low pain)": 0,
-            "Copy-pasting from PDF/CSV to Excel (Medium pain)": 5,
-            "Manual re-typing from field notes (High pain)": 10
-        },
-        "q2_label": "Hours per week, per surveyor, spent compiling site data into final reports?",
-        "q2_type": "slider",
-        "q2_range": (0, 20)
-    },
-    "Manufacturing (Design-to-Order)": {
-        "context": "RFQs, Quoting, Nesting, BOMs",
-        "q1_label": "What is your current process for incoming PDF RFQs?",
-        "q1_options": {
-            "Optical Character Recognition (OCR) software (Low pain)": 0,
-            "Estimator measures & types into ERP (High pain)": 10
-        },
-        "q2_label": "Average time to generate a full quote for a complex order?",
-        "q2_type": "dropdown",
-        "q2_options": {
-            "< 1 Hour": 1,
-            "2-4 Hours": 3,
-            "1+ Days": 8
-        }
-    },
-    "Environmental Consulting": {
-        "context": "ESG Tables, Air Quality Reports, Compliance",
-        "q1_label": "How do you update recurring compliance reports (e.g., ISO tables, quarterly monitoring)?",
-        "q1_options": {
-            "Automated data pipeline (Low pain)": 0,
-            "Rolling forward last year's Word Doc & finding/replacing numbers (High pain)": 10
-        },
-        "q2_label": "Hours per week spent verifying data accuracy across tables?",
-        "q2_type": "slider",
-        "q2_range": (0, 20)
-    },
-    "Accounting & Advisory": {
+    "Accounting": {
         "context": "Australian accounting firms (15-100 staff)",
         "pain_point_question": "What's your biggest manual processing pain point?",
         "pain_point_options": [
@@ -297,175 +107,48 @@ INDUSTRIES = {
         "q2_type": "slider",
         "q2_range": (10, 200)
     },
-    "Legal Services": {
-        "context": "Legal practices and law firms (10-100 staff)",
-        "pain_point_question": "What's your biggest administrative bottleneck?",
-        "pain_point_options": [
-            {
-                "value": 3,
-                "label": "Time Entry & Billing (Manual time sheet entry)",
-                "description": "Low-medium pain - tedious but straightforward"
-            },
-            {
-                "value": 6,
-                "label": "Matter File Management (Creating and organizing client files)",
-                "description": "Medium pain - time-consuming setup"
-            },
-            {
-                "value": 8,
-                "label": "Contract Review (Reading and extracting key terms)",
-                "description": "Medium-high pain - requires legal judgment"
-            },
-            {
-                "value": 10,
-                "label": "Document Discovery (Searching and indexing large document sets)",
-                "description": "High pain - extremely time-consuming, paralegal work"
-            }
-        ],
-        "weekly_hours_question": "Total firm-wide hours per week on administrative tasks (all staff combined)",
-        "weekly_hours_range": [10, 150, 50],
-        "weekly_hours_help_text": "Example: 20 staff × 2.5 hours each = 50 hours/week. Include: time entry, file management, document review.",
-        "demo_documents": "contracts, matter files, time sheets, or discovery documents",
-        "automation_potential": 0.35,
-        # Legacy support
-        "q1_label": "What's your biggest administrative bottleneck?",
-        "q1_options": {
-            "Time Entry & Billing (Manual time sheet entry)": 3,
-            "Matter File Management (Creating and organizing client files)": 6,
-            "Contract Review (Reading and extracting key terms)": 8,
-            "Document Discovery (Searching and indexing large document sets)": 10
-        },
-        "q2_label": "Total firm-wide hours per week on administrative tasks (all staff combined)",
-        "q2_type": "slider",
-        "q2_range": (10, 150)
-    },
-    "Construction": {
-        "context": "Civil engineering and construction firms (15-100 staff)",
+    "Engineering": {
+        "context": "Engineering firms (10-100 staff)",
         "pain_point_question": "What's your biggest documentation bottleneck?",
         "pain_point_options": [
             {
                 "value": 3,
-                "label": "Site Diary Entry (Digital forms, minimal typing)",
-                "description": "Low-medium pain - mostly digital"
-            },
-            {
-                "value": 6,
-                "label": "Tender Specification Analysis (Reading and extracting requirements)",
-                "description": "Medium pain - time-consuming but straightforward"
-            },
-            {
-                "value": 8,
-                "label": "Subcontractor Compliance Tracking (Manual cert checks)",
-                "description": "Medium-high pain - critical for WHS, error-prone"
-            },
-            {
-                "value": 10,
-                "label": "Tender Response Assembly (Manual compilation from 500+ page specs)",
-                "description": "High pain - 15-20 hours per tender, competitive disadvantage"
-            }
-        ],
-        "weekly_hours_question": "Total firm-wide hours per week on manual documentation (all staff combined)",
-        "weekly_hours_range": [20, 200, 100],
-        "weekly_hours_help_text": "Example: 30 engineers × 3 hours each = 90 hours/week. Include: tender analysis, site diaries, compliance tracking.",
-        "demo_documents": "tender specifications, site diaries, SWMS, or subcontractor certificates",
-        "automation_potential": 0.40,
-        # Legacy support
-        "q1_label": "What's your biggest documentation bottleneck?",
-        "q1_options": {
-            "Site Diary Entry (Digital forms, minimal typing)": 3,
-            "Tender Specification Analysis (Reading and extracting requirements)": 6,
-            "Subcontractor Compliance Tracking (Manual cert checks)": 8,
-            "Tender Response Assembly (Manual compilation from 500+ page specs)": 10
-        },
-        "q2_label": "Total firm-wide hours per week on manual documentation (all staff combined)",
-        "q2_type": "slider",
-        "q2_range": (20, 200)
-    },
-    "Mining Services": {
-        "context": "Mining services and Bowen Basin operations (15-100 staff)",
-        "pain_point_question": "What's your biggest operational documentation bottleneck?",
-        "pain_point_options": [
-            {
-                "value": 3,
-                "label": "Equipment Logs (Digital systems, minimal manual entry)",
+                "label": "Drawing Registers (Automated BIM export)",
                 "description": "Low-medium pain - mostly automated"
             },
             {
                 "value": 6,
-                "label": "Shift Handover Documentation (Typing handwritten logs)",
-                "description": "Medium pain - time-consuming transcription"
+                "label": "Specification Writing (Copy-paste from Masterspec/Natspec)",
+                "description": "Medium pain - time-consuming but straightforward"
             },
             {
                 "value": 8,
-                "label": "Safety Incident Reporting (Manual form completion and classification)",
-                "description": "Medium-high pain - critical for compliance, time-consuming"
+                "label": "Beam/Column Schedule Extraction (Manual from drawings)",
+                "description": "Medium-high pain - error-prone, requires expertise"
             },
             {
                 "value": 10,
-                "label": "Regulatory Compliance Documentation (Manual compilation for audits)",
-                "description": "High pain - complex, error-prone, audit-critical"
+                "label": "Document Transmittals (Manual creation and tracking)",
+                "description": "High pain - highly repetitive, time-consuming"
             }
         ],
-        "weekly_hours_question": "Total operation-wide hours per week on manual documentation (all staff combined)",
-        "weekly_hours_range": [15, 150, 60],
-        "weekly_hours_help_text": "Example: 20 site supervisors × 3 hours each = 60 hours/week. Include: incident reports, shift logs, compliance docs.",
-        "demo_documents": "safety incident reports, shift handover logs, equipment maintenance records, or regulatory compliance documents",
-        "automation_potential": 0.35,
-        # Legacy support
-        "q1_label": "What's your biggest operational documentation bottleneck?",
-        "q1_options": {
-            "Equipment Logs (Digital systems, minimal manual entry)": 3,
-            "Shift Handover Documentation (Typing handwritten logs)": 6,
-            "Safety Incident Reporting (Manual form completion and classification)": 8,
-            "Regulatory Compliance Documentation (Manual compilation for audits)": 10
-        },
-        "q2_label": "Total operation-wide hours per week on manual documentation (all staff combined)",
-        "q2_type": "slider",
-        "q2_range": (15, 150)
-    },
-    "Property Management": {
-        "context": "Property management agencies (10-100 staff)",
-        "pain_point_question": "What's your biggest administrative bottleneck?",
-        "pain_point_options": [
-            {
-                "value": 3,
-                "label": "Lease Data Entry (Typing basic lease terms into PMS)",
-                "description": "Low-medium pain - straightforward but repetitive"
-            },
-            {
-                "value": 6,
-                "label": "Maintenance Order Processing (Matching requests with invoices)",
-                "description": "Medium pain - time-consuming matching and approval"
-            },
-            {
-                "value": 8,
-                "label": "Lease Document Review (Extracting key dates and terms)",
-                "description": "Medium-high pain - requires property manager judgment"
-            },
-            {
-                "value": 10,
-                "label": "Compliance Certificate Tracking (Manual expiry monitoring across portfolio)",
-                "description": "High pain - critical for compliance, error-prone, portfolio-wide"
-            }
-        ],
-        "weekly_hours_question": "Total agency-wide hours per week on manual processing (all staff combined)",
-        "weekly_hours_range": [10, 120, 45],
-        "weekly_hours_help_text": "Example: 15 property managers × 3 hours each = 45 hours/week. Include: lease processing, maintenance orders, compliance tracking.",
-        "demo_documents": "lease agreements, maintenance invoices, compliance certificates, or tenant applications",
+        "weekly_hours_question": "Total firm-wide hours per week on manual documentation (all staff combined)",
+        "weekly_hours_range": [10, 200, 60],
+        "weekly_hours_help_text": "Example: 15 staff × 4 hours each = 60 hours/week. Include: drawing registers, specifications, transmittals.",
+        "demo_documents": "drawing registers, beam/column schedules, specifications, or transmittals",
         "automation_potential": 0.40,
-        # Legacy support
-        "q1_label": "What's your biggest administrative bottleneck?",
+        "q1_label": "What's your biggest documentation bottleneck?",
         "q1_options": {
-            "Lease Data Entry (Typing basic lease terms into PMS)": 3,
-            "Maintenance Order Processing (Matching requests with invoices)": 6,
-            "Lease Document Review (Extracting key dates and terms)": 8,
-            "Compliance Certificate Tracking (Manual expiry monitoring across portfolio)": 10
+            "Drawing Registers (Automated BIM export)": 3,
+            "Specification Writing (Copy-paste from Masterspec/Natspec)": 6,
+            "Beam/Column Schedule Extraction (Manual from drawings)": 8,
+            "Document Transmittals (Manual creation and tracking)": 10
         },
-        "q2_label": "Total agency-wide hours per week on manual processing (all staff combined)",
+        "q2_label": "Total firm-wide hours per week on manual documentation (all staff combined)",
         "q2_type": "slider",
-        "q2_range": (10, 120)
+        "q2_range": (10, 200)
     },
-    "Logistics & Freight": {
+    "Logistics": {
         "context": "Logistics and freight forwarding firms (10-100 staff)",
         "pain_point_question": "What's your biggest operational bottleneck?",
         "pain_point_options": [
@@ -495,7 +178,6 @@ INDUSTRIES = {
         "weekly_hours_help_text": "Example: 20 operations staff × 3.5 hours each = 70 hours/week. Include: BOL processing, customs entries, POD matching.",
         "demo_documents": "bills of lading, customs declarations, proof of delivery documents, or freight manifests",
         "automation_potential": 0.45,
-        # Legacy support
         "q1_label": "What's your biggest operational bottleneck?",
         "q1_options": {
             "BOL Data Entry (Typing basic shipment details)": 3,
@@ -507,92 +189,8 @@ INDUSTRIES = {
         "q2_type": "slider",
         "q2_range": (15, 150)
     },
-    "Healthcare Admin": {
-        "context": "Healthcare administration and practice management (10-100 staff)",
-        "pain_point_question": "What's your biggest administrative bottleneck?",
-        "pain_point_options": [
-            {
-                "value": 3,
-                "label": "Patient Data Entry (Typing basic patient information)",
-                "description": "Low-medium pain - straightforward but repetitive"
-            },
-            {
-                "value": 6,
-                "label": "Referral Processing (Typing referral details into systems)",
-                "description": "Medium pain - time-consuming data entry"
-            },
-            {
-                "value": 8,
-                "label": "Medicare/Private Claiming (Manual claim form completion)",
-                "description": "Medium-high pain - error-prone, claim rejections costly"
-            },
-            {
-                "value": 10,
-                "label": "Complex Referral Triage (Reading and classifying referral urgency)",
-                "description": "High pain - requires clinical judgment, time-consuming"
-            }
-        ],
-        "weekly_hours_question": "Total practice-wide hours per week on manual processing (all staff combined)",
-        "weekly_hours_range": [10, 120, 50],
-        "weekly_hours_help_text": "Example: 15 admin staff × 3 hours each = 45 hours/week. Include: patient intake, referral processing, claiming.",
-        "demo_documents": "patient intake forms, referral letters, Medicare claim forms, or compliance certificates",
-        "automation_potential": 0.40,
-        # Legacy support
-        "q1_label": "What's your biggest administrative bottleneck?",
-        "q1_options": {
-            "Patient Data Entry (Typing basic patient information)": 3,
-            "Referral Processing (Typing referral details into systems)": 6,
-            "Medicare/Private Claiming (Manual claim form completion)": 8,
-            "Complex Referral Triage (Reading and classifying referral urgency)": 10
-        },
-        "q2_label": "Total practice-wide hours per week on manual processing (all staff combined)",
-        "q2_type": "slider",
-        "q2_range": (10, 120)
-    },
-    "Government Contractors": {
-        "context": "Government contractors and service providers (10-100 staff)",
-        "pain_point_question": "What's your biggest compliance documentation bottleneck?",
-        "pain_point_options": [
-            {
-                "value": 3,
-                "label": "Contract Data Entry (Typing basic contract terms)",
-                "description": "Low-medium pain - straightforward but repetitive"
-            },
-            {
-                "value": 6,
-                "label": "Grant Report Assembly (Compiling data from multiple sources)",
-                "description": "Medium pain - time-consuming compilation"
-            },
-            {
-                "value": 8,
-                "label": "Tender Compliance Documentation (Matching requirements to responses)",
-                "description": "Medium-high pain - critical for winning tenders, error-prone"
-            },
-            {
-                "value": 10,
-                "label": "NDIS Audit Trail Generation (Manual compilation of service delivery evidence)",
-                "description": "High pain - complex, audit-critical, portfolio-wide tracking"
-            }
-        ],
-        "weekly_hours_question": "Total organization-wide hours per week on manual documentation (all staff combined)",
-        "weekly_hours_range": [15, 150, 60],
-        "weekly_hours_help_text": "Example: 20 staff × 3 hours each = 60 hours/week. Include: grant acquittals, tender compliance, audit trails.",
-        "demo_documents": "grant reports, tender responses, NDIS service delivery records, or contract compliance documents",
-        "automation_potential": 0.40,
-        # Legacy support
-        "q1_label": "What's your biggest compliance documentation bottleneck?",
-        "q1_options": {
-            "Contract Data Entry (Typing basic contract terms)": 3,
-            "Grant Report Assembly (Compiling data from multiple sources)": 6,
-            "Tender Compliance Documentation (Matching requirements to responses)": 8,
-            "NDIS Audit Trail Generation (Manual compilation of service delivery evidence)": 10
-        },
-        "q2_label": "Total organization-wide hours per week on manual documentation (all staff combined)",
-        "q2_type": "slider",
-        "q2_range": (15, 150)
-    },
-    "Wealth Management": {
-        "context": "Wealth management and financial advisory firms (10-100 staff)",
+    "Financial Planning": {
+        "context": "Financial planning and advisory firms (10-100 staff)",
         "pain_point_question": "What's your biggest administrative bottleneck?",
         "pain_point_options": [
             {
@@ -621,7 +219,6 @@ INDUSTRIES = {
         "weekly_hours_help_text": "Example: 15 advisors × 3 hours each = 45 hours/week. Include: statement processing, SOA generation, performance reporting.",
         "demo_documents": "client statements, SOA templates, performance reports, or compliance certificates",
         "automation_potential": 0.40,
-        # Legacy support
         "q1_label": "What's your biggest administrative bottleneck?",
         "q1_options": {
             "Client Data Entry (Typing basic client information)": 3,
@@ -633,7 +230,7 @@ INDUSTRIES = {
         "q2_type": "slider",
         "q2_range": (10, 120)
     },
-    "Insurance Underwriting": {
+    "Insurance": {
         "context": "Insurance underwriting and risk assessment firms (10-100 staff)",
         "pain_point_question": "What's your biggest operational bottleneck?",
         "pain_point_options": [
@@ -663,7 +260,6 @@ INDUSTRIES = {
         "weekly_hours_help_text": "Example: 15 underwriters × 3 hours each = 45 hours/week. Include: application processing, risk assessment, claims documentation.",
         "demo_documents": "policy applications, risk assessment forms, claims documentation, or compliance certificates",
         "automation_potential": 0.40,
-        # Legacy support
         "q1_label": "What's your biggest operational bottleneck?",
         "q1_options": {
             "Application Data Entry (Typing basic application information)": 3,

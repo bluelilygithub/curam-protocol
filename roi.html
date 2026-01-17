@@ -323,58 +323,29 @@
         });
     </script>
     <script>
-        // Industry sections and their industries
+        // Supported industries (5 core industries only)
         const industrySections = {
-            'professional-services': {
-                title: 'Group 1: Billable Hour Industries',
-                subtitle: 'Accounting, Legal, Wealth & Insurance',
+            'all': {
+                title: 'Select Your Industry',
+                subtitle: 'Choose from our 5 supported industries',
                 industries: [
-                    { id: 'accounting', name: 'Accounting & Advisory', icon: '💼', description: 'Trust account reconciliations, inter-entity matching, GL coding' },
-                    { id: 'legal', name: 'Legal Services', icon: '⚖️', description: 'Trust account audits, matter cost tracking, billing reconciliation' },
-                    { id: 'wealth', name: 'Wealth Management', icon: '📊', description: 'Client statement processing, performance reporting, SOA generation' },
-                    { id: 'insurance', name: 'Insurance Underwriting', icon: '🛡️', description: 'Risk assessment, policy applications, claims documentation' }
-                ]
-            },
-            'built-environment': {
-                title: 'Group 2: Built World Industries',
-                subtitle: 'Engineering, Construction, Architecture, Mining & Property',
-                industries: [
-                    { id: 'engineering', name: 'Architecture & Building Services', icon: '🏗️', description: 'Specification writing, drawing registers, energy modelling' },
-                    { id: 'civil', name: 'Civil & Surveying', icon: '📐', description: 'Bore-hole logs, lab reports, drone photogrammetry' },
-                    { id: 'mining', name: 'Mining & Resources', icon: '⛏️', description: 'Safety incident reports, environmental compliance docs' },
-                    { id: 'property', name: 'Property & Development', icon: '🏘️', description: 'Lease documentation, tenant applications, maintenance requests' }
-                ]
-            },
-            'logistics-compliance': {
-                title: 'Group 3: Compliance-Heavy Industries',
-                subtitle: 'Logistics, Healthcare Admin & Government Services',
-                industries: [
-                    { id: 'logistics', name: 'Logistics & Freight', icon: '🚛', description: 'Customs documentation, freight manifests, POD processing' },
-                    { id: 'healthcare', name: 'Healthcare Admin', icon: '🏥', description: 'Patient referral processing, Medicare billing, compliance docs' },
-                    { id: 'government', name: 'Government Services', icon: '🏛️', description: 'Tender responses, contract compliance, grant applications' }
+                    { id: 'accounting', name: 'Accounting', icon: '💼', description: 'Invoice processing, expense management, reconciliation' },
+                    { id: 'engineering', name: 'Engineering', icon: '🏗️', description: 'Structural schedules, specifications, technical documentation' },
+                    { id: 'logistics', name: 'Logistics', icon: '🚛', description: 'Bills of lading, customs documentation, freight manifests' },
+                    { id: 'financial-planning', name: 'Financial Planning', icon: '📊', description: 'Client statements, compliance forms, portfolio documentation' },
+                    { id: 'insurance', name: 'Insurance', icon: '🛡️', description: 'Policy documents, claims forms, underwriting paperwork' }
                 ]
             }
         };
 
         // Map URL parameter values to full industry names for calculator
-        // Only includes industries that exist in the ROI calculator
+        // Only includes the 5 supported industries
         const industryMap = {
-            'accounting': 'Accounting & Advisory',
-            'legal': 'Legal Services',
-            'engineering': 'Architecture & Building Services',
-            'architecture': 'Architecture & Building Services',
-            'construction': 'Construction',
-            'mining': 'Mining Services',
-            'property': 'Property Management',
-            'logistics': 'Logistics & Freight',
-            'healthcare': 'Healthcare Admin',
-            'government': 'Government Contractors',
-            'wealth': 'Wealth Management',
-            'insurance': 'Insurance Underwriting',
-            'civil': 'Civil & Surveying',
-            'surveying': 'Civil & Surveying',
-            'manufacturing': 'Manufacturing (Design-to-Order)',
-            'environmental': 'Environmental Consulting'
+            'accounting': 'Accounting',
+            'engineering': 'Engineering',
+            'logistics': 'Logistics',
+            'financial-planning': 'Financial Planning',
+            'insurance': 'Insurance'
         };
 
         (function() {
