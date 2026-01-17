@@ -374,70 +374,184 @@
             <h2 class="section-headline">Who We Work With</h2>
            
             <p class="section-subhead" style="max-width: 900px; margin: 0 auto var(--spacing-3xl);">
-                We specialize in established Australian SMEs (15-200 staff) in professional services, built environment, and logistics sectors
+                We've validated our approach across 5 core industries where document automation delivers proven, measurable ROI.
             </p>
            
-            <!-- Industry Cards -->
-            <div class="industry-cards-grid">
-                <div class="industry-card">
-                    <div class="industry-card-icon">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            <!-- Industry Cards Grid - 5 Industries -->
+            <div class="industry-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--spacing-xl); max-width: 1600px; margin: 0 auto var(--spacing-3xl);">
+                
+                <!-- Accounting -->
+                <div class="industry-card" style="background: var(--navy-deep); padding: var(--spacing-xl); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-top: 4px solid var(--color-gold); display: flex; flex-direction: column; min-height: 400px;">
+                    <div class="industry-card-icon" style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                         </svg>
                     </div>
-                    <h3 class="industry-card-title">Professional Services</h3>
-                    <p class="industry-card-subtitle">Accounting, legal, wealth management, insurance</p>
-                    <ul class="industry-card-list">
-                        <li>Accounting & advisory firms</li>
-                        <li>Legal practices</li>
-                        <li>Wealth management</li>
-                        <li>Insurance brokers</li>
+                    <h3 class="industry-card-title" style="color: var(--text-primary); font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-sm);">Accounting</h3>
+                    <p class="industry-card-subtitle" style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-weight: 500;">Invoice processing, expense management, reconciliation</p>
+                    <ul class="industry-card-list" style="list-style: none; padding: 0; margin: 0 0 var(--spacing-md) 0; flex-grow: 1; color: var(--text-secondary); line-height: 1.8;">
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Vendor invoice extraction
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Multi-line item processing
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Tax calculation verification
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative;">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Duplicate detection
+                        </li>
                     </ul>
+                    <div style="margin-top: auto; padding-top: var(--spacing-md); border-top: 1px solid rgba(255,255,255,0.1);">
+                        <p style="font-size: 0.875rem; color: var(--color-gold); font-weight: 600; margin: 0;">Annual ROI: $700k (50-person firm)</p>
+                    </div>
                 </div>
-               
-                <div class="industry-card">
-                    <div class="industry-card-icon">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+
+                <!-- Engineering -->
+                <div class="industry-card" style="background: var(--navy-deep); padding: var(--spacing-xl); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-top: 4px solid var(--color-gold); display: flex; flex-direction: column; min-height: 400px;">
+                    <div class="industry-card-icon" style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                            <polyline points="2 17 12 22 22 17"></polyline>
+                            <polyline points="2 12 12 17 22 12"></polyline>
                         </svg>
                     </div>
-                    <h3 class="industry-card-title">Built Environment</h3>
-                    <p class="industry-card-subtitle">Engineering, architecture, construction, property</p>
-                    <ul class="industry-card-list">
-                        <li>Engineering consultancies</li>
-                        <li>Architecture firms</li>
-                        <li>Construction companies</li>
-                        <li>Property developers</li>
+                    <h3 class="industry-card-title" style="color: var(--text-primary); font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-sm);">Engineering</h3>
+                    <p class="industry-card-subtitle" style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-weight: 500;">Structural schedules, specifications, technical documentation</p>
+                    <ul class="industry-card-list" style="list-style: none; padding: 0; margin: 0 0 var(--spacing-md) 0; flex-grow: 1; color: var(--text-secondary); line-height: 1.8;">
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Beam/column schedule extraction
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Handwritten annotation detection
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Grade/size validation
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative;">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Multi-page reconciliation
+                        </li>
                     </ul>
+                    <div style="margin-top: auto; padding-top: var(--spacing-md); border-top: 1px solid rgba(255,255,255,0.1);">
+                        <p style="font-size: 0.875rem; color: var(--color-gold); font-weight: 600; margin: 0;">Annual ROI: $650k (50-person firm)</p>
+                    </div>
                 </div>
-               
-                <div class="industry-card">
-                    <div class="industry-card-icon">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+
+                <!-- Logistics -->
+                <div class="industry-card" style="background: var(--navy-deep); padding: var(--spacing-xl); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-top: 4px solid var(--color-gold); display: flex; flex-direction: column; min-height: 400px;">
+                    <div class="industry-card-icon" style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
                             <rect x="1" y="3" width="15" height="13"></rect>
                             <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
                             <circle cx="5.5" cy="18.5" r="2.5"></circle>
                             <circle cx="18.5" cy="18.5" r="2.5"></circle>
                         </svg>
                     </div>
-                    <h3 class="industry-card-title">Logistics & Compliance</h3>
-                    <p class="industry-card-subtitle">Freight, healthcare, NDIS, government contractors</p>
-                    <ul class="industry-card-list">
-                        <li>Freight & logistics</li>
-                        <li>Healthcare administration</li>
-                        <li>NDIS providers</li>
-                        <li>Government contractors</li>
+                    <h3 class="industry-card-title" style="color: var(--text-primary); font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-sm);">Logistics</h3>
+                    <p class="industry-card-subtitle" style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-weight: 500;">Bills of lading, customs documentation, freight manifests</p>
+                    <ul class="industry-card-list" style="list-style: none; padding: 0; margin: 0 0 var(--spacing-md) 0; flex-grow: 1; color: var(--text-secondary); line-height: 1.8;">
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Customs documentation processing
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Shipment tracking extraction
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Compliance verification
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative;">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Multi-format handling
+                        </li>
                     </ul>
+                    <div style="margin-top: auto; padding-top: var(--spacing-md); border-top: 1px solid rgba(255,255,255,0.1);">
+                        <p style="font-size: 0.875rem; color: var(--color-gold); font-weight: 600; margin: 0;">Annual ROI: $700k (50-person firm)</p>
+                    </div>
+                </div>
+
+                <!-- Financial Planning -->
+                <div class="industry-card" style="background: var(--navy-deep); padding: var(--spacing-xl); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-top: 4px solid var(--color-gold); display: flex; flex-direction: column; min-height: 400px;">
+                    <div class="industry-card-icon" style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                    </div>
+                    <h3 class="industry-card-title" style="color: var(--text-primary); font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-sm);">Financial Planning</h3>
+                    <p class="industry-card-subtitle" style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-weight: 500;">Client statements, compliance forms, portfolio documentation</p>
+                    <ul class="industry-card-list" style="list-style: none; padding: 0; margin: 0 0 var(--spacing-md) 0; flex-grow: 1; color: var(--text-secondary); line-height: 1.8;">
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Client statement processing
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Compliance form extraction
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Portfolio data reconciliation
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative;">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Regulatory document handling
+                        </li>
+                    </ul>
+                    <div style="margin-top: auto; padding-top: var(--spacing-md); border-top: 1px solid rgba(255,255,255,0.1);">
+                        <p style="font-size: 0.875rem; color: var(--color-gold); font-weight: 600; margin: 0;">Annual ROI: $700k (50-person firm)</p>
+                    </div>
+                </div>
+
+                <!-- Insurance -->
+                <div class="industry-card" style="background: var(--navy-deep); padding: var(--spacing-xl); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); border-top: 4px solid var(--color-gold); display: flex; flex-direction: column; min-height: 400px;">
+                    <div class="industry-card-icon" style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="industry-card-title" style="color: var(--text-primary); font-size: 1.5rem; font-weight: 700; margin-bottom: var(--spacing-sm);">Insurance</h3>
+                    <p class="industry-card-subtitle" style="color: var(--text-secondary); margin-bottom: var(--spacing-md); font-weight: 500;">Policy documents, claims forms, underwriting paperwork</p>
+                    <ul class="industry-card-list" style="list-style: none; padding: 0; margin: 0 0 var(--spacing-md) 0; flex-grow: 1; color: var(--text-secondary); line-height: 1.8;">
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Claims form processing
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Policy document extraction
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative; margin-bottom: var(--spacing-xs);">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Risk assessment data capture
+                        </li>
+                        <li style="padding-left: var(--spacing-md); position: relative;">
+                            <span style="position: absolute; left: 0; color: var(--color-gold);">✓</span>
+                            Compliance verification
+                        </li>
+                    </ul>
+                    <div style="margin-top: auto; padding-top: var(--spacing-md); border-top: 1px solid rgba(255,255,255,0.1);">
+                        <p style="font-size: 0.875rem; color: var(--color-gold); font-weight: 600; margin: 0;">Annual ROI: $700k (50-person firm)</p>
+                    </div>
                 </div>
             </div>
            
             <div style="text-align: center; margin-top: var(--spacing-3xl);">
                 <a href="target-markets.html" class="btn btn-secondary btn-large">
-                    See Industry-Specific Solutions →
+                    Explore Industry Solutions →
                 </a>
             </div>
         </div>

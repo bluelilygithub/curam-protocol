@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Who We Serve | Document Automation for Australian SMEs | Curam-Ai Protocol™</title>
-    <meta name="description" content="The Curam-Ai Protocol serves document-heavy professional services, built environment, and logistics firms (30-100 staff) across Australia. Reclaim your billable capacity.">
+    <meta name="description" content="The Curam-Ai Protocol serves document-heavy firms in Accounting, Engineering, Logistics, Financial Planning, and Insurance (30-100 staff) across Australia. Reclaim your billable capacity.">
     <link rel="icon" type="image/png" href="assets/images/curam-ai-logo.png">
     <link rel="stylesheet" href="assets/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,6 +79,21 @@
             margin-bottom: 0.5rem;
         }
 
+        /* 5-column grid for industries */
+        .card-grid-5 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-xl);
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        @media (min-width: 1400px) {
+            .card-grid-5 {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
         @media (max-width: 768px) {
             .hero { padding-top: 120px !important; }
         }
@@ -103,7 +118,7 @@
         </div>
         <div class="container">
             <h1>Reclaim 4,000+ Annual Hours from Your <span class="text-accent">Technical Production Line.</span></h1>
-            <p class="hero-subtitle">The Protocol is built for Australian SMEs (35-100 staff) losing billable capacity to manual data bridging.</p>
+            <p class="hero-subtitle">The Protocol is built for Australian SMEs (35-100 staff) losing billable capacity to manual data bridging in Accounting, Engineering, Logistics, Financial Planning, and Insurance.</p>
             
             <div class="qualification-badges">
                 <span class="qual-badge">100+ hrs/month on docs</span>
@@ -136,53 +151,122 @@
 
     <section class="section-alt sector-selection">
         <div class="container">
-            <h2 class="section-headline">Targeted SME Solutions</h2>
-            <p class="section-subhead">We specialize in sectors where technical professionals act as the "Human Bridge" between systems:</p>
+            <h2 class="section-headline">5 Proven Industries</h2>
+            <p class="section-subhead">We've validated our approach where technical professionals act as the "Human Bridge" between systems:</p>
             
-            <div class="card-grid-3">
-                <a href="feasibility-sprint-report.html?industrysector=engineering" class="industry-card">
-                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Built Environment</h3>
+            <div class="card-grid-5">
+                <!-- Accounting -->
+                <div class="industry-card">
+                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Accounting</h3>
                     <ul class="industry-list">
-                        <li>Structural & Civil Engineers</li>
-                        <li>BIM-Heavy Architecture Firms</li>
-                        <li>Tier 2 & 3 Construction Companies</li>
-                        <li>Mining & Resources Services</li>
+                        <li>Multi-partner accounting firms</li>
+                        <li>Invoice processing automation</li>
+                        <li>Trust account reconciliation</li>
+                        <li>Compliance documentation</li>
                     </ul>
                     <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <strong>The Prize:</strong>
-                        <p style="font-size: 0.9375rem;">Automating drawing registers, concrete test reports, and transmittals to keep senior staff billable.</p>
+                        <strong>Annual ROI:</strong>
+                        <p style="font-size: 0.9375rem;">$700k for 50-person firm</p>
                     </div>
-                    <span class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center;">View Feasibility Report →</span>
-                </a>
+                    <a href="roi.html" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">Calculate Your ROI →</a>
+                </div>
 
-                <a href="feasibility-sprint-report.html?industrysector=accounting" class="industry-card">
-                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Professional Services</h3>
+                <!-- Engineering -->
+                <div class="industry-card">
+                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                            <polyline points="2 17 12 22 22 17"></polyline>
+                            <polyline points="2 12 12 17 22 12"></polyline>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Engineering</h3>
                     <ul class="industry-list">
-                        <li>Multi-Partner Accounting Firms</li>
-                        <li>Wealth Management Groups</li>
-                        <li>Insurance Underwriting Agencies</li>
+                        <li>Structural & civil engineers</li>
+                        <li>Beam/column schedule extraction</li>
+                        <li>Drawing register automation</li>
+                        <li>Transmittal processing</li>
                     </ul>
                     <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <strong>The Prize:</strong>
-                        <p style="font-size: 0.9375rem;">Removing manual intervention in trust account reconciliations and ASIC compliance statements.</p>
+                        <strong>Annual ROI:</strong>
+                        <p style="font-size: 0.9375rem;">$650k for 50-person firm</p>
                     </div>
-                    <span class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center;">View Feasibility Report →</span>
-                </a>
+                    <a href="feasibility-sprint-report.html?industrysector=engineering" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">View Sample Report →</a>
+                </div>
 
-                <a href="feasibility-sprint-report.html?industrysector=logistics" class="industry-card">
-                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Logistics & Compliance</h3>
+                <!-- Logistics -->
+                <div class="industry-card">
+                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <rect x="1" y="3" width="15" height="13"></rect>
+                            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Logistics</h3>
                     <ul class="industry-list">
-                        <li>Freight Forwarders & Hubs</li>
-                        <li>Healthcare Administration Units</li>
-                        <li>Government Grant Recipients</li>
-                        <li>Customs & Tariff Brokers</li>
+                        <li>Freight forwarders & hubs</li>
+                        <li>Bills of lading processing</li>
+                        <li>Customs documentation</li>
+                        <li>Manifest automation</li>
                     </ul>
                     <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <strong>The Prize:</strong>
-                        <p style="font-size: 0.9375rem;">Processing 1,000+ manifests per month with zero manual entry and total tariff compliance.</p>
+                        <strong>Annual ROI:</strong>
+                        <p style="font-size: 0.9375rem;">$700k for 50-person firm</p>
                     </div>
-                    <span class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center;">View Feasibility Report →</span>
-                </a>
+                    <a href="feasibility-sprint-report.html?industrysector=logistics" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">View Sample Report →</a>
+                </div>
+
+                <!-- Financial Planning -->
+                <div class="industry-card">
+                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <line x1="18" y1="20" x2="18" y2="10"></line>
+                            <line x1="12" y1="20" x2="12" y2="4"></line>
+                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Financial Planning</h3>
+                    <ul class="industry-list">
+                        <li>Wealth management groups</li>
+                        <li>Client statement processing</li>
+                        <li>Compliance form extraction</li>
+                        <li>Portfolio reconciliation</li>
+                    </ul>
+                    <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
+                        <strong>Annual ROI:</strong>
+                        <p style="font-size: 0.9375rem;">$700k for 50-person firm</p>
+                    </div>
+                    <a href="roi.html" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">Calculate Your ROI →</a>
+                </div>
+
+                <!-- Insurance -->
+                <div class="industry-card">
+                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Insurance</h3>
+                    <ul class="industry-list">
+                        <li>Underwriting agencies</li>
+                        <li>Claims form processing</li>
+                        <li>Policy document extraction</li>
+                        <li>Risk assessment automation</li>
+                    </ul>
+                    <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
+                        <strong>Annual ROI:</strong>
+                        <p style="font-size: 0.9375rem;">$700k for 50-person firm</p>
+                    </div>
+                    <a href="roi.html" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">Calculate Your ROI →</a>
+                </div>
             </div>
         </div>
     </section>
