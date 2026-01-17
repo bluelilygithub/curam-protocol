@@ -250,11 +250,15 @@ try:
     from services.templates.transmittal_template import get_transmittal_template
     from services.templates.engineering_template import get_engineering_template
     from services.templates.finance_template import get_finance_template
+    from services.templates.financial_planning_template import get_financial_planning_template
+    from services.templates.insurance_template import get_insurance_template
     
     _template_sections['logistics'] = get_logistics_template()
     _template_sections['transmittal'] = get_transmittal_template()
     _template_sections['engineering'] = get_engineering_template()
     _template_sections['finance'] = get_finance_template()
+    _template_sections['financial_planning'] = get_financial_planning_template()
+    _template_sections['insurance'] = get_insurance_template()
 except ImportError:
     # Fallback: will use inline templates
     pass
@@ -339,7 +343,7 @@ def replace_template_section(template, section_name, section_template):
     return template
 
 # Replace all department sections (order matters - do transmittal first as it's largest)
-for dept in ['transmittal', 'engineering', 'finance', 'logistics']:
+for dept in ['transmittal', 'engineering', 'finance', 'logistics', 'financial_planning', 'insurance']:
     if dept in _template_sections:
         HTML_TEMPLATE = replace_template_section(HTML_TEMPLATE, dept, _template_sections[dept])
 

@@ -1,0 +1,50 @@
+POST request received. Department from form: 'financial_planning'
+Financial_planning mode: selected_samples from form = ['samples/financial_planning/Portfolio_Investment_Strategy.pdf', 'samples/financial_planning/ASIC_Compliance_Form.pdf', 'samples/financial_planning/Client_Portfolio_Statement.pdf']
+Selected samples: ['samples/financial_planning/Portfolio_Investment_Strategy.pdf', 'samples/financial_planning/ASIC_Compliance_Form.pdf', 'samples/financial_planning/Client_Portfolio_Statement.pdf']
+- samples/financial_planning/Portfolio_Investment_Strategy.pdf: mapped to department 'financial_planning'
+- samples/financial_planning/ASIC_Compliance_Form.pdf: mapped to department 'financial_planning'
+- samples/financial_planning/Client_Portfolio_Statement.pdf: mapped to department 'financial_planning'
+Filtered to department 'financial_planning': ['samples/financial_planning/Portfolio_Investment_Strategy.pdf', 'samples/financial_planning/ASIC_Compliance_Form.pdf', 'samples/financial_planning/Client_Portfolio_Statement.pdf']
+Processing 3 sample file(s)
+Processing file: Portfolio_Investment_Strategy.pdf (path: samples/financial_planning/Portfolio_Investment_Strategy.pdf)
+Extracting text from Portfolio_Investment_Strategy.pdf
+Text extracted successfully (57 characters)
+Analyzing Portfolio_Investment_Strategy.pdf with AI models
+Model selection: Checking 53 available models
+Preferred order: gemini-2.5-flash-lite, gemini-2.5-pro, gemini-2.5-flash, gemini-pro-latest
+Found 4 preferred model(s): gemini-2.5-flash-lite, gemini-2.5-pro, gemini-2.5-flash, gemini-pro-latest
+[WARNING] Empty text provided for financial_planning document
+Trying gemini-2.5-flash-lite (Attempt 1)
+[IMAGE] Image quality: GOOD (sharpness: 1692.5)
+Vision API (table-optimized) succeeded with gemini-2.5-flash-lite
+Success with gemini-2.5-flash-lite: extracted 1 row(s)
+Successfully processed Portfolio_Investment_Strategy.pdf with gemini-2.5-flash-lite
+Extracted 1 row(s) from Portfolio_Investment_Strategy.pdf
+Processing file: ASIC_Compliance_Form.pdf (path: samples/financial_planning/ASIC_Compliance_Form.pdf)
+Extracting text from ASIC_Compliance_Form.pdf
+Text extracted successfully (48 characters)
+Analyzing ASIC_Compliance_Form.pdf with AI models
+Model selection: Checking 53 available models
+Preferred order: gemini-2.5-flash-lite, gemini-2.5-pro, gemini-2.5-flash, gemini-pro-latest
+Found 4 preferred model(s): gemini-2.5-flash-lite, gemini-2.5-pro, gemini-2.5-flash, gemini-pro-latest
+[WARNING] Empty text provided for financial_planning document
+Trying gemini-2.5-flash-lite (Attempt 1)
+[IMAGE] Image quality: GOOD (sharpness: 1504.9)
+Vision API (table-optimized) succeeded with gemini-2.5-flash-lite
+Success with gemini-2.5-flash-lite: extracted 1 row(s)
+Successfully processed ASIC_Compliance_Form.pdf with gemini-2.5-flash-lite
+Extracted 1 row(s) from ASIC_Compliance_Form.pdf
+Processing file: Client_Portfolio_Statement.pdf (path: samples/financial_planning/Client_Portfolio_Statement.pdf)
+Extracting text from Client_Portfolio_Statement.pdf
+Text extracted successfully (54 characters)
+Analyzing Client_Portfolio_Statement.pdf with AI models
+Model selection: Checking 53 available models
+Preferred order: gemini-2.5-flash-lite, gemini-2.5-pro, gemini-2.5-flash, gemini-pro-latest
+Found 4 preferred model(s): gemini-2.5-flash-lite, gemini-2.5-pro, gemini-2.5-flash, gemini-pro-latest
+[WARNING] Empty text provided for financial_planning document
+Trying gemini-2.5-flash-lite (Attempt 1)
+[IMAGE] Image quality: GOOD (sharpness: 1362.3)
+Vision API (table-optimized) succeeded with gemini-2.5-flash-lite
+Success with gemini-2.5-flash-lite: extracted 1 row(s)
+Successfully processed Client_Portfolio_Statement.pdf with gemini-2.5-flash-lite
+Extracted 1 row(s) from Client_Portfolio_Statement.pdf

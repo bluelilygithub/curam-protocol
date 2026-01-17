@@ -518,9 +518,11 @@ def index_automater():
                 if key not in transmittal_data or transmittal_data[key] is None:
                     transmittal_data[key] = []
     
-    # Group engineering and finance results by filename for separate tables
+    # Group results by filename for separate tables (all departments)
     grouped_engineering_results = {}
     grouped_finance_results = {}
+    grouped_financial_planning_results = {}
+    grouped_insurance_results = {}
     if department == 'engineering' and results:
         for row in results:
             filename = row.get('Filename', 'Unknown')
@@ -533,6 +535,18 @@ def index_automater():
             if filename not in grouped_finance_results:
                 grouped_finance_results[filename] = []
             grouped_finance_results[filename].append(row)
+    elif department == 'financial_planning' and results:
+        for row in results:
+            filename = row.get('Filename', 'Unknown')
+            if filename not in grouped_financial_planning_results:
+                grouped_financial_planning_results[filename] = []
+            grouped_financial_planning_results[filename].append(row)
+    elif department == 'insurance' and results:
+        for row in results:
+            filename = row.get('Filename', 'Unknown')
+            if filename not in grouped_insurance_results:
+                grouped_insurance_results[filename] = []
+            grouped_insurance_results[filename].append(row)
     
     # Build sample_files using centralized loader (automatically discovers all departments)
     # NOTE: use_database=False to use config.py paths (database has old paths)
@@ -566,9 +580,11 @@ def index_automater():
     return render_template_string(
         HTML_TEMPLATE,
         results=results if results else [],
-        results_by_file=results_by_file if department == 'logistics' else {},  # File-grouped structure for API
+        results_by_file=results_by_file if department == 'logistics' else {},
         grouped_engineering_results=grouped_engineering_results if department == 'engineering' else {},
         grouped_finance_results=grouped_finance_results if department == 'finance' else {},
+        grouped_financial_planning_results=grouped_financial_planning_results if department == 'financial_planning' else {},
+        grouped_insurance_results=grouped_insurance_results if department == 'insurance' else {},
         department=department,
         selected_samples=selected_samples,
         sample_files=sample_files_merged,

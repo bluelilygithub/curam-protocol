@@ -982,6 +982,14 @@ def get_base_template():
         {# Logistics section will be injected here #}
         {% endif %}
         
+        {% if department == 'financial_planning' %}
+        {# Financial Planning section will be injected here #}
+        {% endif %}
+        
+        {% if department == 'insurance' %}
+        {# Insurance section will be injected here #}
+        {% endif %}
+        
         <div class="summary-card">
             <div><strong>Run Summary</strong></div>
             {% for label, text in routine_summary %}
