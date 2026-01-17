@@ -79,19 +79,174 @@
             margin-bottom: 0.5rem;
         }
 
-        /* 5-column grid for industries */
-        .card-grid-5 {
+        /* 6-column grid for industries (3x2) */
+        .card-grid-6 {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: var(--spacing-xl);
-            max-width: 1600px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            max-width: 1200px;
             margin: 0 auto;
         }
 
-        @media (min-width: 1400px) {
-            .card-grid-5 {
-                grid-template-columns: repeat(5, 1fr);
+        @media (max-width: 1024px) {
+            .card-grid-6 {
+                grid-template-columns: repeat(2, 1fr);
             }
+        }
+
+        @media (max-width: 640px) {
+            .card-grid-6 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Updated industry card style */
+        .industry-card-v2 {
+            background: linear-gradient(180deg, rgba(15, 25, 45, 0.95) 0%, rgba(10, 18, 35, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 1.75rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .industry-card-v2 .card-icon {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(212, 175, 55, 0.12);
+            border-radius: 10px;
+            margin-bottom: 1.25rem;
+        }
+
+        .industry-card-v2 .card-icon svg {
+            width: 24px;
+            height: 24px;
+            stroke: var(--color-gold);
+        }
+
+        .industry-card-v2 h3 {
+            color: #fff;
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .industry-card-v2 .card-subtitle {
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.875rem;
+            margin-bottom: 1.25rem;
+            line-height: 1.5;
+        }
+
+        .industry-card-v2 .card-features {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 1.5rem 0;
+            flex-grow: 1;
+        }
+
+        .industry-card-v2 .card-features li {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+            padding-left: 1.25rem;
+            position: relative;
+            margin-bottom: 0.625rem;
+            line-height: 1.4;
+        }
+
+        .industry-card-v2 .card-features li::before {
+            content: "•";
+            color: var(--color-gold);
+            position: absolute;
+            left: 0;
+            font-weight: 700;
+        }
+
+        .industry-card-v2 .card-roi {
+            margin-top: auto;
+        }
+
+        .industry-card-v2 .card-roi .roi-value {
+            color: var(--color-gold);
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .industry-card-v2 .card-roi .roi-context {
+            color: rgba(255, 255, 255, 0.45);
+            font-size: 0.8rem;
+        }
+
+        /* CTA Card (6th card) */
+        .cta-card-v2 {
+            background: linear-gradient(180deg, rgba(15, 25, 45, 0.95) 0%, rgba(10, 18, 35, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 1.75rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .cta-card-v2 .cta-label {
+            color: var(--color-gold);
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 0.75rem;
+        }
+
+        .cta-card-v2 h3 {
+            color: #fff;
+            font-size: 1.35rem;
+            font-weight: 600;
+            line-height: 1.3;
+            margin-bottom: 1.5rem;
+        }
+
+        .cta-card-v2 .cta-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .cta-card-v2 .btn-cta-primary {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            padding: 0.875rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .cta-card-v2 .btn-cta-primary:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        .cta-card-v2 .btn-cta-secondary {
+            background: var(--color-gold);
+            border: 1px solid var(--color-gold);
+            color: var(--color-navy);
+            padding: 0.875rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .cta-card-v2 .btn-cta-secondary:hover {
+            background: #e5c44a;
         }
 
         @media (max-width: 768px) {
@@ -154,118 +309,127 @@
             <h2 class="section-headline">5 Proven Industries</h2>
             <p class="section-subhead">We've validated our approach where technical professionals act as the "Human Bridge" between systems:</p>
             
-            <div class="card-grid-5">
+            <div class="card-grid-6">
                 <!-- Accounting -->
-                <div class="industry-card">
-                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                <div class="industry-card-v2">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
                             <line x1="12" y1="1" x2="12" y2="23"></line>
                             <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
                         </svg>
                     </div>
-                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Accounting</h3>
-                    <ul class="industry-list">
-                        <li>Multi-partner accounting firms</li>
-                        <li>Invoice processing automation</li>
-                        <li>Trust account reconciliation</li>
-                        <li>Compliance documentation</li>
+                    <h3>Accounting</h3>
+                    <p class="card-subtitle">Invoice processing, expense management, reconciliation</p>
+                    <ul class="card-features">
+                        <li>Vendor invoice extraction</li>
+                        <li>Multi-line item processing</li>
+                        <li>Tax calculation verification</li>
+                        <li>Duplicate detection</li>
                     </ul>
-                    <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <strong>Annual ROI:</strong>
-                        <p style="font-size: 0.9375rem;">$700k for 50-person firm</p>
+                    <div class="card-roi">
+                        <span class="roi-value">Annual ROI: $700k</span><br>
+                        <span class="roi-context">(50-person firm)</span>
                     </div>
-                    <a href="roi.html" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">Calculate Your ROI →</a>
                 </div>
 
                 <!-- Engineering -->
-                <div class="industry-card">
-                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                <div class="industry-card-v2">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
                             <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
                             <polyline points="2 17 12 22 22 17"></polyline>
                             <polyline points="2 12 12 17 22 12"></polyline>
                         </svg>
                     </div>
-                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Engineering</h3>
-                    <ul class="industry-list">
-                        <li>Structural & civil engineers</li>
+                    <h3>Engineering</h3>
+                    <p class="card-subtitle">Structural schedules, specifications, technical documentation</p>
+                    <ul class="card-features">
                         <li>Beam/column schedule extraction</li>
-                        <li>Drawing register automation</li>
-                        <li>Transmittal processing</li>
+                        <li>Handwritten annotation detection</li>
+                        <li>Code/style validation</li>
+                        <li>Multi-page reconciliation</li>
                     </ul>
-                    <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <strong>Annual ROI:</strong>
-                        <p style="font-size: 0.9375rem;">$650k for 50-person firm</p>
+                    <div class="card-roi">
+                        <span class="roi-value">Annual ROI: $850k</span><br>
+                        <span class="roi-context">(50-person firm)</span>
                     </div>
-                    <a href="feasibility-sprint-report.html?industrysector=engineering" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">View Sample Report →</a>
                 </div>
 
                 <!-- Logistics -->
-                <div class="industry-card">
-                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
+                <div class="industry-card-v2">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
                             <rect x="1" y="3" width="15" height="13"></rect>
                             <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
                             <circle cx="5.5" cy="18.5" r="2.5"></circle>
                             <circle cx="18.5" cy="18.5" r="2.5"></circle>
                         </svg>
                     </div>
-                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Logistics</h3>
-                    <ul class="industry-list">
-                        <li>Freight forwarders & hubs</li>
-                        <li>Bills of lading processing</li>
-                        <li>Customs documentation</li>
-                        <li>Manifest automation</li>
+                    <h3>Logistics</h3>
+                    <p class="card-subtitle">Bills of lading, customs documentation, freight manifests</p>
+                    <ul class="card-features">
+                        <li>Customs documentation processing</li>
+                        <li>Shipment tracking extraction</li>
+                        <li>Compliance verification</li>
+                        <li>Multi-format handling</li>
                     </ul>
-                    <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <strong>Annual ROI:</strong>
-                        <p style="font-size: 0.9375rem;">$700k for 50-person firm</p>
+                    <div class="card-roi">
+                        <span class="roi-value">Annual ROI: $700k</span><br>
+                        <span class="roi-context">(50-person firm)</span>
                     </div>
-                    <a href="feasibility-sprint-report.html?industrysector=logistics" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">View Sample Report →</a>
                 </div>
 
                 <!-- Financial Planning -->
-                <div class="industry-card">
-                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
-                            <line x1="18" y1="20" x2="18" y2="10"></line>
-                            <line x1="12" y1="20" x2="12" y2="4"></line>
-                            <line x1="6" y1="20" x2="6" y2="14"></line>
+                <div class="industry-card-v2">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                            <polyline points="17 6 23 6 23 12"></polyline>
                         </svg>
                     </div>
-                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Financial Planning</h3>
-                    <ul class="industry-list">
-                        <li>Wealth management groups</li>
+                    <h3>Financial Planning</h3>
+                    <p class="card-subtitle">Client statements, compliance forms, portfolio documentation</p>
+                    <ul class="card-features">
                         <li>Client statement processing</li>
                         <li>Compliance form extraction</li>
-                        <li>Portfolio reconciliation</li>
+                        <li>Portfolio data reconciliation</li>
+                        <li>Regulatory document handling</li>
                     </ul>
-                    <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <strong>Annual ROI:</strong>
-                        <p style="font-size: 0.9375rem;">$700k for 50-person firm</p>
+                    <div class="card-roi">
+                        <span class="roi-value">Annual ROI: $700k</span><br>
+                        <span class="roi-context">(50-person firm)</span>
                     </div>
-                    <a href="roi.html" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">Calculate Your ROI →</a>
                 </div>
 
                 <!-- Insurance -->
-                <div class="industry-card">
-                    <div style="width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: rgba(212, 175, 55, 0.15); border-radius: 8px; margin-bottom: var(--spacing-md); border: 1px solid rgba(212, 175, 55, 0.4);">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-gold)" stroke-width="2">
-                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <div class="industry-card-v2">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
                         </svg>
                     </div>
-                    <h3 style="color: var(--color-gold); border-bottom: 2px solid var(--color-gold); padding-bottom: var(--spacing-sm); margin-bottom: var(--spacing-lg);">Insurance</h3>
-                    <ul class="industry-list">
-                        <li>Underwriting agencies</li>
+                    <h3>Insurance</h3>
+                    <p class="card-subtitle">Policy documents, claims forms, underwriting paperwork</p>
+                    <ul class="card-features">
                         <li>Claims form processing</li>
                         <li>Policy document extraction</li>
-                        <li>Risk assessment automation</li>
+                        <li>Risk assessment data capture</li>
+                        <li>Compliance verification</li>
                     </ul>
-                    <div class="card-footer" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid rgba(255,255,255,0.1);">
-                        <strong>Annual ROI:</strong>
-                        <p style="font-size: 0.9375rem;">$700k for 50-person firm</p>
+                    <div class="card-roi">
+                        <span class="roi-value">Annual ROI: $700k</span><br>
+                        <span class="roi-context">(50-person firm)</span>
                     </div>
-                    <a href="roi.html" class="card-link" style="display: block; margin-top: var(--spacing-lg); padding: var(--spacing-sm); background: rgba(212, 175, 55, 0.15); border: 1px solid var(--color-gold); border-radius: 4px; color: var(--color-gold); font-weight: 600; text-align: center; text-decoration: none;">Calculate Your ROI →</a>
+                </div>
+
+                <!-- CTA Card -->
+                <div class="cta-card-v2">
+                    <span class="cta-label">Act Now</span>
+                    <h3>Book a free pre-screen or diagnostic call.</h3>
+                    <div class="cta-buttons">
+                        <a href="contact.html" class="btn-cta-primary">Book Phase 1</a>
+                        <a href="contact.html" class="btn-cta-secondary">Diagnostic Call</a>
+                    </div>
                 </div>
             </div>
         </div>
