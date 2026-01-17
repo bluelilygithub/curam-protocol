@@ -131,7 +131,7 @@ ROUTINE_DESCRIPTIONS = {
          <p><strong>The Current Grind:</strong> Claims handlers and underwriters manually read each document, re-type policyholder details, coverage limits, incident descriptions, and assessment findings into claims management systems.</p>
          <p><strong>Frequency:</strong> Daily. A mid-size insurer or broker processes <strong>100–300 documents</strong> weekly across claims and underwriting.</p>
          <p><strong>The Saving:</strong><br>Manual: 6–12 minutes per document.<br>AI: 30–45 seconds.<br><strong>Value:</strong> Faster claims turnaround and reduced errors in coverage verification.</p>
-         <p><strong>Demo:</strong> Upload your own PDF claims forms, policy documents, or risk assessment paperwork to test extraction accuracy.</p>"""),
+         <p><strong>The Demo:</strong> Run the three sample documents provided (Insurance Policy Document, General Insurance Claim, Risk Assessment Report). The AI extracts policy numbers, coverage details, claim amounts, incident descriptions, and property information—handling scanned documents automatically.</p>"""),
     ],
     "engineering": [
         ("Structural Engineer: \"The Schedule Digitiser\"",

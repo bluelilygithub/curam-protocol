@@ -58,9 +58,45 @@ def prepare_prompt_text(text, doc_type, limit=None):
     return cleaned
 
 
+def convert_pdf_to_image(file_path: str) -> Optional[str]:
+    """
+    Convert first page of PDF to image for vision processing.
+    Used when PDF has no extractable text (scanned document).
+    
+    Returns:
+        Path to generated image file, or None if conversion fails
+    """
+    if not PYMUPDF_AVAILABLE:
+        return None
+    
+    try:
+        import tempfile
+        doc = fitz.open(file_path)
+        if len(doc) == 0:
+            doc.close()
+            return None
+        
+        page = doc[0]
+        pix = page.get_pixmap(dpi=150)
+        
+        # Save to temp file
+        base_name = os.path.splitext(os.path.basename(file_path))[0]
+        temp_dir = tempfile.gettempdir()
+        image_path = os.path.join(temp_dir, f"{base_name}_page1.png")
+        pix.save(image_path)
+        
+        doc.close()
+        print(f"Converted scanned PDF to image: {image_path}")
+        return image_path
+    except Exception as e:
+        print(f"PDF to image conversion failed: {e}")
+        return None
+
+
 def extract_text_fast(file_path: str) -> Tuple[str, str]:
     """
     Fast PDF text extraction using PyMuPDF with pdfplumber fallback.
+    For scanned PDFs (no text), converts to image and returns image marker.
     
     Note: PyMuPDF page objects are not thread-safe, so we process sequentially.
     
@@ -69,7 +105,7 @@ def extract_text_fast(file_path: str) -> Tuple[str, str]:
     
     Returns:
         Tuple of (extracted_text, extraction_method)
-        extraction_method is 'pymupdf', 'pdfplumber', or 'error'
+        extraction_method is 'pymupdf', 'pdfplumber', 'image', or 'error'
     """
     try:
         from utils.encoding_fix import sanitize_text
@@ -109,6 +145,12 @@ def extract_text_fast(file_path: str) -> Tuple[str, str]:
                     return sanitize_text(text), 'pdfplumber'
         except Exception as e:
             print(f"pdfplumber extraction failed: {e}")
+    
+    # No text extracted - try converting to image for vision processing
+    print(f"No text found in PDF, attempting image conversion: {file_path}")
+    image_path = convert_pdf_to_image(file_path)
+    if image_path:
+        return f"[IMAGE_FILE:{image_path}]", 'image'
     
     return "Error: No text extracted from PDF", 'error'
 

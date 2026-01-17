@@ -517,7 +517,7 @@ def analyze_gemini(text, doc_type, image_path=None, sector_slug=None,
                         # Use enhanced image
                         img = Image.open(enhanced_path)
                         
-                        # For engineering docs, use focused vision prompt
+                        # Use document-type-specific vision prompts
                         if doc_type == "engineering":
                             vision_prompt = """Extract data from this structural schedule table into JSON.
 
@@ -538,6 +538,57 @@ THE SIZE COLUMN IS CRITICAL:
 - The Size column is usually the 2nd column after Mark
 
 Extract ALL visible rows. Return JSON array only, no markdown.
+"""
+                            content_parts = [img, vision_prompt]
+                        elif doc_type == "financial_planning":
+                            vision_prompt = """Extract financial planning data from this document image into JSON.
+
+Look for and extract:
+- ClientName: Client/investor name(s)
+- AccountNumber: Account or policy number
+- StatementDate: Document date (YYYY-MM-DD format)
+- OpeningBalance: Opening balance (numeric)
+- ClosingBalance: Closing balance (numeric)
+- TotalValue: Total portfolio value (numeric)
+- Holdings: Array of investments with FundName, AssetClass, MarketValue, UnitsHeld, UnitPrice
+- AssetAllocation: Percentage breakdown by asset class (Cash, Equity, Bond, Property, etc.)
+- AFSL: Australian Financial Services License number
+- ABN: Australian Business Number
+- BusinessName: Adviser/licensee firm name
+- Adviser: Financial adviser name
+- Notes: Any important observations
+
+Return a single JSON object with these fields. Use null for missing numeric values, "N/A" for missing strings.
+Return ONLY valid JSON, no markdown or explanation.
+"""
+                            content_parts = [img, vision_prompt]
+                        elif doc_type == "insurance":
+                            vision_prompt = """Extract insurance data from this document image into JSON.
+
+Look for and extract:
+- PolicyNumber: Policy number
+- PolicyholderName: Policyholder name(s)
+- InsuredParty: Name of insured (if different)
+- PolicyType: Type of policy (Home, Motor, Life, etc.)
+- EffectiveDate: Policy start date (YYYY-MM-DD)
+- ExpiryDate: Policy end date (YYYY-MM-DD)
+- PremiumAmount: Premium amount (numeric)
+- SumInsured: Total sum insured (numeric)
+- ExcessAmount: Excess/deductible amount (numeric)
+- CoverageDetails: Array of coverage types with their limits
+- ClaimNumber: Claim reference (if claim form)
+- IncidentDate: Date of incident (YYYY-MM-DD)
+- IncidentDescription: Description of incident
+- ClaimAmount: Amount claimed (numeric)
+- PropertyAddress: Insured property address
+- Insurer: Insurance company name
+- ACN: Australian Company Number
+- WitnessDetails: Witness info if present
+- PoliceReportNumber: Police report number if present
+- Notes: Any important observations
+
+Return a single JSON object with these fields. Use null for missing numeric values, "N/A" for missing strings.
+Return ONLY valid JSON, no markdown or explanation.
 """
                             content_parts = [img, vision_prompt]
                         else:
