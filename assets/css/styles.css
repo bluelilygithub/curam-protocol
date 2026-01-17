@@ -13910,15 +13910,24 @@ p.hero-description {
 
 .card-grid-5 {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
   gap: 1.5rem;
-  max-width: 1400px;
+  width: 100%;
   margin: 0 auto;
+  justify-items: center;
+}
+
+.card-grid-5 .industry-card {
+  width: 100%;
+  max-width: 240px;
 }
 
 @media (max-width: 1200px) {
   .card-grid-5 {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .card-grid-5 .industry-card {
+    max-width: 280px;
   }
 }
 
@@ -13926,11 +13935,17 @@ p.hero-description {
   .card-grid-5 {
     grid-template-columns: repeat(2, 1fr);
   }
+  .card-grid-5 .industry-card {
+    max-width: 320px;
+  }
 }
 
 @media (max-width: 540px) {
   .card-grid-5 {
     grid-template-columns: 1fr;
+  }
+  .card-grid-5 .industry-card {
+    max-width: 100%;
   }
 }
 
