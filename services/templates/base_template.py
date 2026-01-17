@@ -554,23 +554,31 @@ def get_base_template():
             <div class="toggle-group">
                 <label>
                     <input type="radio" name="department" value="finance" {% if department == 'finance' %}checked{% endif %}>
-                    Finance Dept
+                    Accounting
                 </label>
                 <label>
                     <input type="radio" name="department" value="engineering" {% if department == 'engineering' %}checked{% endif %}>
-                    Engineering Dept
+                    Engineering
                 </label>
                 <label>
                     <input type="radio" name="department" value="transmittal" {% if department == 'transmittal' %}checked{% endif %}>
-                    Drafter Transmittal
+                    Transmittal
                 </label>
                 <label>
-                <input type="radio" name="department" value="logistics" {% if department == 'logistics' %}checked{% endif %}>
+                    <input type="radio" name="department" value="logistics" {% if department == 'logistics' %}checked{% endif %}>
                     Logistics
+                </label>
+                <label>
+                    <input type="radio" name="department" value="financial_planning" {% if department == 'financial_planning' %}checked{% endif %}>
+                    Financial Planning
+                </label>
+                <label>
+                    <input type="radio" name="department" value="insurance" {% if department == 'insurance' %}checked{% endif %}>
+                    Insurance
                 </label>
             </div>
 
-            <h3>1. Select Sample Files</h3>
+            <h3>1. Select Sample Files or Upload Your Own</h3>
             {% for dept_key, group in sample_files.items() %}
             <div class="sample-group" data-department="{{ dept_key }}">
                 <strong>{{ group.label }}</strong> · {{ group.description }}
@@ -590,7 +598,28 @@ def get_base_template():
                     </label>
                     {% endif %}
                     {% endfor %}
+                    {% if not group.samples %}
+                    <p class="instruction-text" style="color: #666; font-style: italic;">No sample files available. Please upload your own PDF documents below.</p>
+                    {% endif %}
                 </div>
+                {% if dept_key in ['finance', 'financial_planning', 'insurance'] %}
+                <div class="upload-wrapper" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ccc;">
+                    <label class="file-label">
+                        📤 Upload Your Own PDF(s)
+                        <input type="file" name="{{ dept_key }}_uploads" accept=".pdf" multiple>
+                    </label>
+                    <div id="{{ dept_key }}-upload-list" class="upload-list" style="display: none;"></div>
+                    <p class="instruction-text" style="margin-top: 8px; font-size: 12px; color: #666;">
+                        {% if dept_key == 'finance' %}
+                        Upload vendor invoices, expense receipts, or other accounting documents.
+                        {% elif dept_key == 'financial_planning' %}
+                        Upload client statements, compliance forms, or portfolio documentation.
+                        {% elif dept_key == 'insurance' %}
+                        Upload claims forms, policy documents, or risk assessment paperwork.
+                        {% endif %}
+                    </p>
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
 
@@ -1008,29 +1037,40 @@ def get_base_template():
                     });
                 }
             });
-            if (activeDept !== 'finance') {
-                updateFinanceUploadList([]);
-            }
+            // Clear upload lists for inactive departments
+            const uploadDepts = ['finance', 'financial_planning', 'insurance'];
+            uploadDepts.forEach(dept => {
+                if (activeDept !== dept) {
+                    updateUploadList(dept, []);
+                }
+            });
         }
 
-        const financeUploadInput = document.querySelector('input[name="finance_uploads"]');
-        const financeUploadList = document.getElementById('finance-upload-list');
-
-        function updateFinanceUploadList(filesArray) {
-            if (!financeUploadList) return;
-            const files = filesArray || (financeUploadInput ? Array.from(financeUploadInput.files || []) : []);
-            financeUploadList.innerHTML = '';
+        // Generic upload list handler for all upload-enabled departments
+        function updateUploadList(deptKey, filesArray) {
+            const uploadInput = document.querySelector(`input[name="${deptKey}_uploads"]`);
+            const uploadList = document.getElementById(`${deptKey}-upload-list`);
+            if (!uploadList) return;
+            const files = filesArray || (uploadInput ? Array.from(uploadInput.files || []) : []);
+            uploadList.innerHTML = '';
             if (!files.length) {
-                financeUploadList.style.display = 'none';
+                uploadList.style.display = 'none';
                 return;
             }
-            financeUploadList.style.display = 'flex';
+            uploadList.style.display = 'flex';
             files.forEach(file => {
                 const item = document.createElement('div');
                 item.className = 'upload-item';
                 item.textContent = `📄 ${file.name}`;
-                financeUploadList.appendChild(item);
+                uploadList.appendChild(item);
             });
+        }
+
+        // For backward compatibility
+        const financeUploadInput = document.querySelector('input[name="finance_uploads"]');
+        const financeUploadList = document.getElementById('finance-upload-list');
+        function updateFinanceUploadList(filesArray) {
+            updateUploadList('finance', filesArray);
         }
 
             const resultsSection = document.getElementById('results-section');
@@ -1063,12 +1103,19 @@ def get_base_template():
             deptRadios.forEach(radio => radio.addEventListener('change', handleDepartmentChange));
             updateSampleVisibility();
             updateRoutineVisibility();
-        if (financeUploadInput) {
-            financeUploadInput.addEventListener('change', () => updateFinanceUploadList());
-            const activeDeptRadio = document.querySelector('input[name="department"]:checked');
-            if (activeDeptRadio && activeDeptRadio.value === 'finance') {
-                updateFinanceUploadList();
+        // Set up file upload handlers for all upload-enabled departments
+        const uploadDepartments = ['finance', 'financial_planning', 'insurance'];
+        uploadDepartments.forEach(dept => {
+            const uploadInput = document.querySelector(`input[name="${dept}_uploads"]`);
+            if (uploadInput) {
+                uploadInput.addEventListener('change', () => updateUploadList(dept));
             }
+        });
+        
+        // Initialize upload list display for active department
+        const activeDeptRadio = document.querySelector('input[name="department"]:checked');
+        if (activeDeptRadio && uploadDepartments.includes(activeDeptRadio.value)) {
+            updateUploadList(activeDeptRadio.value);
         }
         });
 

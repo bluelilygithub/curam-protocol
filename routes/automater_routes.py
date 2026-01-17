@@ -98,8 +98,8 @@ def index_automater():
         finance_uploaded_paths = []
         transmittal_defaults = []
 
-        # For engineering and finance (now checkboxes), get list of values; for others handle custom logic
-        if department == 'engineering' or department == 'finance':
+        # For departments with checkboxes, get list of values; for others handle custom logic
+        if department in ('engineering', 'finance', 'financial_planning', 'insurance'):
             selected_samples = request.form.getlist('samples')
             model_actions.append(f"{department.capitalize()} mode: selected_samples from form = {selected_samples}")
         elif department == 'transmittal':
@@ -113,35 +113,41 @@ def index_automater():
             selected_samples = request.form.getlist('samples')
             model_actions.append(f"Non-engineering mode: selected_samples from form = {selected_samples}")
         
-        # Handle finance uploads
-        if department == 'finance':
-            uploaded_files = request.files.getlist('finance_uploads')
+        # Handle file uploads for departments that support it
+        upload_departments = ['finance', 'financial_planning', 'insurance']
+        if department in upload_departments:
+            upload_field_name = f"{department}_uploads"
+            uploaded_files = request.files.getlist(upload_field_name)
             if uploaded_files:
-                model_actions.append(f"Finance mode: {len(uploaded_files)} uploaded file(s) received")
+                model_actions.append(f"{department.replace('_', ' ').title()} mode: {len(uploaded_files)} uploaded file(s) received")
+            uploaded_paths = []
             for file_storage in uploaded_files:
                 if not file_storage or not file_storage.filename:
                     continue
                 filename = secure_filename(file_storage.filename)
                 if not filename.lower().endswith('.pdf'):
-                    error_message = "Only PDF files can be uploaded for Finance."
+                    error_message = f"Only PDF files can be uploaded for {department.replace('_', ' ').title()}."
                     model_actions.append(f"ERROR: {filename} rejected (not a PDF)")
                     break
                 unique_name = f"{int(time.time() * 1000)}_{filename}"
-                file_path = os.path.join(FINANCE_UPLOAD_DIR, unique_name)
+                upload_dir = os.path.join(FINANCE_UPLOAD_DIR, '..', department)
+                os.makedirs(upload_dir, exist_ok=True)
+                file_path = os.path.join(upload_dir, unique_name)
                 file_storage.save(file_path)
-                finance_uploaded_paths.append(file_path)
-                model_actions.append(f"Uploaded invoice saved: {file_path}")
-            selected_samples.extend(finance_uploaded_paths)
+                uploaded_paths.append(file_path)
+                model_actions.append(f"Uploaded document saved: {file_path}")
+            selected_samples.extend(uploaded_paths)
 
         # Filter samples to only those matching the current department (skip for auto-select departments)
         if department == 'transmittal':
             samples = [sample for sample in selected_samples if sample]
         else:
-            # Simple check: path must start with samples/{department}/
+            # Simple check: path must start with samples/{department}/ or uploads/{department}/
             expected_prefix = f"samples/{department}/"
+            upload_prefix = f"uploads/{department}"
             samples = [
                 sample for sample in selected_samples
-                if sample and sample.startswith(expected_prefix)
+                if sample and (sample.startswith(expected_prefix) or upload_prefix in sample)
             ]
         # Log what was selected for debugging
         if selected_samples:

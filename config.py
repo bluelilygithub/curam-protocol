@@ -23,7 +23,7 @@ DEFAULT_DEPARTMENT = "finance"
 DEPARTMENT_SAMPLES = {
     "finance": {
         "label": "Sample invoices",
-        "description": "Finance department samples",
+        "description": "Accounting department samples - vendor invoices, expense receipts",
         "folder": "samples/finance",
         "samples": [
             {"path": "samples/finance/CloudRender.pdf", "label": "CloudRender.pdf"},
@@ -32,6 +32,18 @@ DEPARTMENT_SAMPLES = {
             {"path": "samples/finance/Lenovo Global Logistics Commercial Invoice.pdf", "label": "Lenovo Global Logistics Commercial Invoice.pdf"},
             {"path": "samples/finance/Shenzhen Fast-Circuit Co Commercial Invoice.pdf", "label": "Shenzhen Fast-Circuit Co Commercial Invoice.pdf"}
         ]
+    },
+    "financial_planning": {
+        "label": "Financial planning samples",
+        "description": "Client statements, compliance forms, portfolio documentation",
+        "folder": "samples/financial_planning",
+        "samples": []
+    },
+    "insurance": {
+        "label": "Insurance samples",
+        "description": "Claims forms, policy documents, risk assessment paperwork",
+        "folder": "samples/insurance",
+        "samples": []
     },
     "engineering": {
         "label": "Structural drawings",
@@ -77,13 +89,41 @@ DEPARTMENT_SAMPLES = {
 # --- ROUTINE DESCRIPTIONS (HTML content for UI) ---
 ROUTINE_DESCRIPTIONS = {
     "finance": [
-        ("Finance / Admin: \"The Invoice Gatekeeper\"",
+        ("Accounting: \"The Invoice Gatekeeper\"",
          """<p><strong>What it does:</strong> It acts as an <strong>Intelligent Document Processing (IDP)</strong> engine, translating raw incoming PDF bills (from subcontractors, hardware stores, software subscriptions, etc.) into structured data. It ignores layout variations and reliably extracts the core financial fields required to push the bill into your accounting platform (Xero/MYOB).</p>
          <p><strong>The Current Grind:</strong> The workflow involves excessive manual repetition: an admin staff member opens an email, saves the PDF, manually types the Vendor name, Date, Total, and Invoice ID into the accounting platform, and cross-checks for errors.</p>
          <p><strong>Frequency:</strong> Daily volume for a 70-staff firm is typically <strong>70–100 documents</strong> every week (external vendor invoices alone). We will initially focus the pilot on vendor invoices.</p>
          <p><strong>The Saving (Vendor Invoices Only):</strong><br>Manual: 3 minutes per document × 70 docs = <strong>3.5 hours/week</strong>.<br>AI: Near-instant. Accuracy is the new focus.<br><strong>Value:</strong> This immediate saving frees the Office Manager to focus on strategic tasks like staff culture, cost centre analysis, and debt recovery rather than transactional data entry.</p>
          <hr style="margin: 20px 0;">
          <p><strong>Future Impact: Internal Documents (Phase 2 Upside)</strong><br>The greatest opportunity lies in extending this capability to <strong>internal documents</strong>. By proving the engine on external invoices, the firm gains a validated tool ready to automate staff timesheets, project expense receipts, and internal cost allocations. This dramatically expands efficiency and eliminates manual project coding errors.</p>"""),
+    ],
+    "financial_planning": [
+        ("Financial Planning: \"The Compliance Accelerator\"",
+         """<p><strong>What it does:</strong> It extracts structured data from client statements, compliance forms, and portfolio documentation—turning PDF-locked financial data into actionable records for your advice platform.</p>
+         <p><strong>Document Types Supported:</strong></p>
+         <ul style="margin: 10px 0 10px 20px;">
+             <li><strong>Client Statements:</strong> Bank statements, superannuation statements, investment platform reports</li>
+             <li><strong>Compliance Forms:</strong> Fact-find documents, risk profile questionnaires, authority to proceed forms</li>
+             <li><strong>Portfolio Documentation:</strong> Asset summaries, performance reports, product disclosure statements</li>
+         </ul>
+         <p><strong>The Current Grind:</strong> Paraplanners manually open each client document, re-type holdings, balances, and beneficiary details into CRM or advice software—risking transcription errors on critical compliance data.</p>
+         <p><strong>Frequency:</strong> Per client review. A 10-adviser practice may process <strong>50–100 client documents</strong> weekly during review cycles.</p>
+         <p><strong>The Saving:</strong><br>Manual: 5–10 minutes per document.<br>AI: 30 seconds.<br><strong>Value:</strong> Eliminates data entry errors in compliance-critical SOA preparation.</p>
+         <p><strong>Demo:</strong> Upload your own PDF client statements, compliance forms, or portfolio documentation to test extraction accuracy.</p>"""),
+    ],
+    "insurance": [
+        ("Insurance: \"The Claims Processor\"",
+         """<p><strong>What it does:</strong> It extracts structured data from claims forms, policy documents, and risk assessment paperwork—converting complex insurance documents into clean, actionable data for claims management and underwriting systems.</p>
+         <p><strong>Document Types Supported:</strong></p>
+         <ul style="margin: 10px 0 10px 20px;">
+             <li><strong>Claims Forms:</strong> Motor vehicle claims, property damage claims, liability claim notifications</li>
+             <li><strong>Policy Documents:</strong> Certificates of insurance, policy schedules, endorsements</li>
+             <li><strong>Risk Assessment Paperwork:</strong> Underwriting questionnaires, site inspection reports, loss history summaries</li>
+         </ul>
+         <p><strong>The Current Grind:</strong> Claims handlers and underwriters manually read each document, re-type policyholder details, coverage limits, incident descriptions, and assessment findings into claims management systems.</p>
+         <p><strong>Frequency:</strong> Daily. A mid-size insurer or broker processes <strong>100–300 documents</strong> weekly across claims and underwriting.</p>
+         <p><strong>The Saving:</strong><br>Manual: 6–12 minutes per document.<br>AI: 30–45 seconds.<br><strong>Value:</strong> Faster claims turnaround and reduced errors in coverage verification.</p>
+         <p><strong>Demo:</strong> Upload your own PDF claims forms, policy documents, or risk assessment paperwork to test extraction accuracy.</p>"""),
     ],
     "engineering": [
         ("Structural Engineer: \"The Schedule Digitiser\"",
@@ -117,6 +157,18 @@ ROUTINE_SUMMARY = {
         ("Frequency", "Daily; more realistic volume of <strong>70 documents</strong> per week for a 70-person firm (Vendor Invoices only)."),
         ("Saving", "Manual: 3 min/document × 70 docs = <strong>3.5 hours/week</strong>. AI: Near-instant."),
         ("Value", "Immediate efficiency frees up Office Manager time for strategic tasks (culture, billing), enabling a capacity reallocation upside of up to <strong>$1.44 M</strong> annually (Tier 4).")
+    ],
+    "financial_planning": [
+        ("Grind", "Paraplanner opens client PDF, re-types holdings, balances, and beneficiary details into CRM or advice software."),
+        ("Frequency", "Per client review; <strong>50–100 documents</strong> weekly during review cycles for a 10-adviser practice."),
+        ("Saving", "Manual: 5–10 min/document. AI: 30 seconds."),
+        ("Value", "Eliminates data entry errors in compliance-critical SOA preparation. Faster client reviews.")
+    ],
+    "insurance": [
+        ("Grind", "Claims handler reads each document, re-types policyholder details, coverage limits, and incident descriptions."),
+        ("Frequency", "Daily; <strong>100–300 documents</strong> weekly across claims and underwriting."),
+        ("Saving", "Manual: 6–12 min/document. AI: 30–45 seconds."),
+        ("Value", "Faster claims turnaround and reduced errors in coverage verification.")
     ],
     "engineering": [
         ("Grind", "Engineers read 50 column/beam entries, manually typing 310UC158 into Excel for each."),
@@ -169,16 +221,35 @@ LOGISTICS_FIELDS = [
     "PortOfDischarge"
 ]
 
+FINANCIAL_PLANNING_FIELDS = [
+    "ClientName", "DocumentType", "AccountNumber", "StatementDate", 
+    "OpeningBalance", "ClosingBalance", "Holdings", "AssetClass",
+    "FundName", "UnitsHeld", "UnitPrice", "MarketValue", 
+    "BeneficiaryName", "TFN", "ABN", "RiskProfile", "Notes"
+]
+
+INSURANCE_FIELDS = [
+    "PolicyNumber", "PolicyholderName", "InsuredParty", "PolicyType",
+    "CoverageType", "EffectiveDate", "ExpiryDate", "PremiumAmount",
+    "SumInsured", "ExcessAmount", "ClaimNumber", "IncidentDate",
+    "IncidentDescription", "ClaimAmount", "RiskCategory", 
+    "PropertyAddress", "VehicleDetails", "Notes"
+]
+
 DOC_FIELDS = {
     "finance": FINANCE_FIELDS,
     "engineering": ENGINEERING_BEAM_FIELDS,
     "transmittal": TRANSMITTAL_FIELDS,
-    "logistics": LOGISTICS_FIELDS  # Now includes FTA fields!
+    "logistics": LOGISTICS_FIELDS,
+    "financial_planning": FINANCIAL_PLANNING_FIELDS,
+    "insurance": INSURANCE_FIELDS
 }
 
 ERROR_FIELD = {
     "finance": "Summary",
     "engineering": "Comments",
     "transmittal": "Title",
-    "logistics": "Notes"  # Changed from "Description" to "Notes" to match new fields
+    "logistics": "Notes",
+    "financial_planning": "Notes",
+    "insurance": "Notes"
 }
