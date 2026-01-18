@@ -1212,10 +1212,18 @@ def get_blog_posts():
                                             params={'per_page': 1}, 
                                             headers=headers,
                                             timeout=15)
-                if test_response.status_code == 200:
-                    blog_url = test_url
-                    wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
-                    break
+                # Accept 200 (OK) or 202 (Accepted) - some hosts return 202 initially
+                if test_response.status_code in [200, 202]:
+                    # Verify it's actually JSON, not a challenge page
+                    try:
+                        test_response.json()
+                        blog_url = test_url
+                        wp_api_url = f'{blog_url}/wp-json/wp/v2/posts'
+                        break
+                    except ValueError:
+                        # Response is HTML challenge page, not JSON
+                        connection_errors.append(f'{test_url}: HTTP {test_response.status_code} but response is not JSON (bot challenge?)')
+                        continue
                 else:
                     connection_errors.append(f'{test_url}: HTTP {test_response.status_code}')
             except requests.RequestException as e:
