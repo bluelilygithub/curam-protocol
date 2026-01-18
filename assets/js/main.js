@@ -153,9 +153,14 @@ document.addEventListener('DOMContentLoaded', function() {
         entries.forEach(entry => {
             if (entry.isIntersecting && !entry.target.classList.contains('counted')) {
                 entry.target.classList.add('counted');
-                const target = parseInt(entry.target.textContent.replace(/\D/g, ''));
+                const originalText = entry.target.textContent.trim();
+                const target = parseInt(originalText.replace(/\D/g, ''));
                 if (!isNaN(target) && target > 0) {
-                    animateCounter(entry.target, target);
+                    // Extract prefix (like $) and suffix (like + or %)
+                    const prefix = originalText.match(/^[^\d]*/)[0] || '';
+                    const suffix = originalText.match(/[^\d]*$/)[0] || '';
+                    const useCommas = originalText.includes(',');
+                    animateCounter(entry.target, target, prefix, suffix, useCommas);
                 }
             }
         });
@@ -165,22 +170,25 @@ document.addEventListener('DOMContentLoaded', function() {
         metricsObserver.observe(metric);
     });
 
-    function animateCounter(element, target) {
+    function animateCounter(element, target, prefix = '', suffix = '', useCommas = false) {
         const duration = 2000;
         const increment = target / (duration / 16);
         let current = 0;
         
+        function formatNumber(num, addCommas) {
+            if (addCommas) {
+                return num.toLocaleString('en-US');
+            }
+            return num.toString();
+        }
+        
         const timer = setInterval(() => {
             current += increment;
             if (current >= target) {
-                element.textContent = element.textContent.includes('%') 
-                    ? '100%' 
-                    : target.toString();
+                element.textContent = prefix + formatNumber(target, useCommas) + suffix;
                 clearInterval(timer);
             } else {
-                element.textContent = element.textContent.includes('%')
-                    ? Math.floor(current) + '%'
-                    : Math.floor(current).toString();
+                element.textContent = prefix + formatNumber(Math.floor(current), useCommas) + suffix;
             }
         }, 16);
     }
