@@ -12,9 +12,23 @@ The platform serves as both a customer-facing demo/trial system and an internal 
 - Transmittal: Drawing register extraction (95%+ accuracy)
 - Logistics: FTA lists, Bills of Lading, packing lists
 
+**Target Industries (5 validated):**
+- Accounting ($739k average ROI)
+- Engineering ($437k average ROI)
+- Logistics ($432k average ROI)
+- Financial Planning ($358k average ROI)
+- Insurance ($489k average ROI)
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+
+## Recent Changes (January 2026)
+
+- **ROI Calculator**: Fixed 80% documentation staff rule (20% executives excluded)
+- **Navigation**: Standardized navbar across all pages, removed Resources dropdown
+- **Blog**: Hybrid API approach - server API first, falls back to direct WordPress API
+- **Target Markets**: Updated to 5 validated industries with specific ROI figures
 
 ## System Architecture
 
@@ -25,6 +39,7 @@ Preferred communication style: Simple, everyday language.
 - **PDF Processing:** Dual extraction via pdfplumber and PyMuPDF (fallback strategy)
 - **Production Server:** Gunicorn WSGI
 - **Performance:** Flask-Compress for Gzip/Brotli compression
+- **Domain:** www.curam-ai.com.au
 
 ### Application Structure
 
@@ -38,6 +53,11 @@ Preferred communication style: Simple, everyday language.
 **Service Layer:**
 - `services/gemini_service.py` - AI extraction using database-driven prompts
 - Prompts managed exclusively via `prompt_templates` database table
+
+**ROI Calculator:**
+- `roi_calculator_flask.py` - Main calculator with embedded templates
+- `roi_calculator/calculations.py` - Core calculation logic
+- `roi_calculator/config/industries.py` - Industry configurations
 
 **Configuration:**
 - `config.py` - Centralized settings for upload directories, department configs, sample file mappings
@@ -56,7 +76,7 @@ Preferred communication style: Simple, everyday language.
 - `sectors` - Industry categories (finance, engineering, logistics, transmittal)
 - `document_types` - Specific document types per sector with demo settings
 - `prompt_templates` - AI extraction prompts organized by scope/document type
-- `phase1_trials` - Customer trial management with token-based report access, business profile fields (staff_count, hourly_rate, weekly_doc_volume, etc.)
+- `phase1_trials` - Customer trial management with token-based report access
 - `extraction_logs` - Processing history and performance tracking
 - `users` - Admin authentication with password hashing
 
@@ -67,7 +87,7 @@ Preferred communication style: Simple, everyday language.
 - Login rate limiting: 5 attempts max, 15-minute lockout per IP
 - Password hashing via Werkzeug security functions
 - Phase 1 trial reports use secure token-based access (no login required for customers)
-- Customer results page (/results/<token>) shows only aggregate metrics (record counts, field counts, accuracy) - raw extracted data is never exposed to protect PII
+- Customer results page (/results/<token>) shows only aggregate metrics
 - SECRET_KEY required (no startup without it)
 
 ### File Storage
@@ -76,6 +96,31 @@ Preferred communication style: Simple, everyday language.
 - For Railway persistent storage, mount volume to `/data/uploads`
 - Organized by department: `uploads/finance/`, `uploads/phase1_trials/`
 
+## ROI Calculator
+
+### Documentation Staff Rule (Fixed 80/20)
+- **80%** of total staff are documentation staff who do repetitive work
+- **20%** are executives/senior partners excluded (review/approve only)
+- This is a fixed rule applied across all industries and firm sizes
+
+### Calculation Formula
+```
+Documentation Staff = Total Staff × 0.80
+Total Weekly Hours = Doc Staff × Hours per Staff per Week
+Annual Documentation Cost = Weekly Hours × Hourly Rate × 48 weeks
+Tier 1 Savings = Annual Cost × Automation Potential
+```
+
+### Three Savings Scenarios
+- **Conservative:** Base rate × industry variance multiplier
+- **Probable:** Conservative × 1.15 (15% above conservative)
+- **Optimistic:** Conservative × 1.35 (35% above conservative)
+
+### Staff Adoption Sensitivity
+- **High Adoption (80%):** Strong change management
+- **Expected Adoption (60%):** Standard training (default)
+- **Low Adoption (40%):** Minimal training
+
 ## External Dependencies
 
 ### Third-Party Services
@@ -83,36 +128,25 @@ Preferred communication style: Simple, everyday language.
 | Service | Purpose | Configuration |
 |---------|---------|---------------|
 | Google Gemini AI | Document text extraction and JSON structuring | `GEMINI_API_KEY` env var |
-| Railway PostgreSQL | Managed database hosting | `DATABASE_URL` env var (auto-set in Railway) |
+| Railway PostgreSQL | Managed database hosting | `DATABASE_URL` env var |
+| WordPress Blog | Blog content at blog.curam-ai.com.au | REST API with hybrid fallback |
 
 ### Python Dependencies (Key)
 
-- `google-genai` - Gemini API client (unified SDK, replaced deprecated google-generativeai Jan 2026)
-- `PyMuPDF` + `pdfplumber` - PDF text extraction (PyMuPDF primary, pdfplumber fallback)
-- `pillow`, `opencv-python-headless`, `pytesseract` - Image preprocessing for scanned documents
+- `google-genai` - Gemini API client (unified SDK)
+- `PyMuPDF` + `pdfplumber` - PDF text extraction
+- `pillow`, `opencv-python-headless`, `pytesseract` - Image preprocessing
 - `pandas`, `openpyxl` - Excel export
 - `reportlab` - PDF report generation
 - `plotly` - ROI calculator visualizations
-- `psycopg2-binary`, `SQLAlchemy` - PostgreSQL connectivity (with connection pooling)
+- `psycopg2-binary`, `SQLAlchemy` - PostgreSQL connectivity
 
 ## Performance Optimizations
-
-### Document Context & Extraction Hints (Per-Document)
-- Each uploaded document can have user-provided guidance fields:
-  - `extraction_context`: Description of what the document is
-  - `extraction_hints`: Tips for locating specific fields
-  - `expected_fields`: Comma-separated list of fields to extract
-  - `notes`: Additional notes
-- "Edit Details" button on trial detail page opens modal for each document
-- User guidance is appended to AI prompts to improve extraction accuracy
-- Cache is bypassed when user guidance is present to ensure fresh extraction
 
 ### Document Fingerprinting & AI Caching
 - SHA256 fingerprinting of document content
 - Cached AI results skip expensive Gemini API calls for duplicate documents
 - 7-day cache expiry (database-backed when available)
-- Cache bypassed when document-level guidance is provided
-- `services/cache_service.py` - Document cache implementation
 
 ### PDF Extraction
 - PyMuPDF as primary extractor (faster than pdfplumber)
@@ -124,55 +158,29 @@ Preferred communication style: Simple, everyday language.
 - Connection recycling every 30 minutes
 - Pre-ping enabled for connection health checks
 
-### Background Task Processing
-- Async document processing via threading
-- Non-blocking web requests during AI extraction
-- `services/background_tasks.py` - Task queue implementation
-
 ### Production Server (Gunicorn)
 - 4 workers for concurrent request handling
 - 5-second keep-alive for connection reuse
 - 5-minute timeout for AI API calls
-- Worker recycling every 1000 requests
 
 ### Static Asset Caching
 - CSS/JS: 1 year cache with immutable flag
 - Images: 6 months cache
-- Fonts: 1 year cache with immutable flag
 - Version-based cache busting via template variable
 
-### Phase 1 Report Generation
-- `services/report_service.py` - PDF report generation using ReportLab
-- Generates comprehensive 8-section feasibility reports
-- ROI calculations based on business profile data:
-  - Tier 1: Time savings from STP (annual_docs × manual_minutes/60 × hourly_rate × stp_rate)
-  - Tier 2: Error reduction savings (annual_docs × error_rate × 0.03 × correction_cost)
-- Admin route: `GET /admin/phase1-trials/<id>/generate-report` - Downloads PDF
-
-### API Endpoints
-- `GET /api/system/performance` - System stats (cache, pool, queue)
+## API Endpoints
+- `GET /api/system/performance` - System stats
 - `POST /api/system/cache/clear` - Clear document cache
 - `GET /api/task/<task_id>/status` - Background task status
-- `POST /api/system/cleanup-documents` - Auto-cleanup expired trial documents (requires admin or CLEANUP_API_KEY)
-- `POST /admin/phase1-trials/<id>/business-profile` - Update client business profile
-- `POST /admin/phase1-trials/documents/<id>/metrics` - Update document extraction metrics
+- `POST /api/system/cleanup-documents` - Auto-cleanup expired trial documents
+- `GET /api/blog-posts` - Blog posts with WordPress fallback
 
-### Document Retention & Privacy (Australian Privacy Act Compliance)
-- Configurable retention periods: 7-90 days (default 30)
-- `phase1_trials.retention_days` - Per-trial retention setting
-- `phase1_trials.documents_deleted_at` - Timestamp when documents were purged
-- Manual deletion via admin "Delete Documents Now" button
-- Automatic cleanup via `/api/system/cleanup-documents` (secured with API key or admin session)
-- Original PDFs deleted after retention; extraction results preserved for reporting
-- Files stored in `uploads/phase1_trials/{trial_id}/`
-
-### Required Environment Variables
+## Required Environment Variables
 
 ```
 DATABASE_URL=postgresql://...
 GEMINI_API_KEY=...
 SECRET_KEY=...
-ADMIN_USERNAME=admin (optional)
-ADMIN_PASSWORD=changeme123 (optional)
-UPLOAD_BASE_DIR=/data/uploads (optional, for persistent storage)
+ADMIN_PASSWORD=... (for admin access)
+MAILCHANNELS_API_KEY=... (for email sending)
 ```

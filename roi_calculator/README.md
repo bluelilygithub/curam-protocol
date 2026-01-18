@@ -1,177 +1,118 @@
-# ROI Calculator Module - Refactoring Progress
+# ROI Calculator Module
 
-## Current Status: Partial Refactoring Complete
+**Last Updated:** January 2026
 
-This directory contains the beginning of a refactored ROI calculator module. The original `roi_calculator_flask.py` file (3,262 lines) has been partially modularized.
+## Overview
 
-## Completed
+The ROI Calculator provides industry-specific ROI estimates for document automation. It uses a conservative methodology based on proven automation rates.
 
-✅ **Directory Structure Created**
+## Key Business Rules
+
+### Fixed 80/20 Documentation Staff Rule
+
+**Business Decision:** 20% of staff are executives/senior partners who do NOT do repetitive documentation.
+
+```python
+EXECUTIVE_EXCLUSION_RATE = 0.20
+doc_staff_percentage = 1.0 - EXECUTIVE_EXCLUSION_RATE  # Always 80%
+doc_staff_count = int(total_staff * doc_staff_percentage)
+```
+
+**Example (50-staff firm):**
+- Total staff: 50
+- Documentation staff: 40 (80%)
+- Excluded (executives): 10 (20%)
+
+### Core Calculation Formula
+
+```
+Documentation Staff = Total Staff × 0.80
+Total Weekly Hours = Doc Staff × Hours per Staff per Week
+Annual Documentation Cost = Weekly Hours × Hourly Rate × 48 weeks
+Tier 1 Savings = Annual Cost × Automation Potential × Industry Variance Multiplier
+```
+
+## Supported Industries (5)
+
+| Industry | Average ROI | Variance Multiplier |
+|----------|-------------|---------------------|
+| Accounting | $739k | 0.90 (High) |
+| Engineering | $437k | 0.75 (Medium) |
+| Logistics | $432k | 0.90 (High) |
+| Financial Planning | $358k | 0.90 (High) |
+| Insurance | $489k | 0.90 (High) |
+
+## Three Savings Scenarios
+
+1. **Conservative:** Base calculation with industry variance multiplier
+2. **Probable:** Conservative × 1.15 (15% above conservative)
+3. **Optimistic:** Conservative × 1.35 (35% above conservative)
+
+## Staff Adoption Sensitivity
+
+Applied to Probable scenario:
+- **High Adoption (80%):** Strong change management, comprehensive training
+- **Expected Adoption (60%):** Standard training (default/most likely)
+- **Low Adoption (40%):** Minimal training, resistance to change
+
+## Module Structure
+
 ```
 roi_calculator/
+├── __init__.py
+├── calculations.py      # Core calculation functions
 ├── config/
 │   ├── __init__.py
-│   ├── industries.py      (548 lines extracted)
-│   └── opportunities.py   (137 lines extracted)
-├── calculations.py        (469 lines extracted)
+│   ├── industries.py    # Industry configurations
+│   └── opportunities.py # AI opportunities by industry
 └── README.md
 ```
 
-✅ **Config Module** (`roi_calculator/config/`)
-- `industries.py`: Contains the `INDUSTRIES` dictionary with all industry-specific configurations
-- `opportunities.py`: Contains the `AI_OPPORTUNITIES` dictionary
-- Total: ~685 lines extracted from main file
+## Key Functions
 
-✅ **Calculations Module** (`roi_calculator/calculations.py`)
-- `format_currency()`: Currency formatting utility
-- `generate_automation_roadmap()`: Legacy roadmap generator
-- `generate_automation_roadmap_v3()`: Current roadmap generator  
-- `get_readiness_response()`: Data readiness messaging
-- `get_doc_staff_percentage()`: Staff percentage calculator with firm size scaling
-- `calculate_conservative_roi()`: Conservative ROI calculation
-- `calculate_metrics_v3()`: Current metrics calculator
-- `calculate_metrics()`: Legacy metrics calculator (deprecated)
-- Total: ~469 lines extracted
+### `calculate_conservative_roi(total_staff, industry_config)`
+Main ROI calculation using fixed 80% documentation staff rule.
 
-## Still in Original File
+### `calculate_simple_roi(staff_count, avg_rate, industry_config)`
+Fallback calculation for industries without full task configuration. Also uses 80% rule.
 
-The following remain in `roi_calculator_flask.py`:
+### `has_full_roi_config(industry_config)`
+Checks if industry has proven_tasks and tasks arrays for detailed calculation.
 
-❌ **PDF Generation** (`generate_pdf_report()` function ~105 lines)
-- ReportLab-based PDF generation
-- Should be moved to `roi_calculator/pdf_generator.py`
-
-❌ **HTML Templates** (~2,100 lines of embedded HTML)
-- Currently stored as Python strings in `HTML_TEMPLATE` variable
-- Should be extracted to `roi_calculator/templates/`:
-  - `step1_industry.html`
-  - `step2_input.html`
-  - `step3_results.html`
-  - `step4_pdf.html`
-
-❌ **Route Handlers** (~300 lines)
-- `roi_calculator()`: Main route handler
-- `email_report()`: Email sending route
-- `send_roadmap_email()`: Roadmap email route
-- `generate_roadmap_email_html()`: Email HTML generator
-- `download_pdf()`: PDF download route
-- `test_route()`: Test route
-- Should be moved to `roi_calculator/routes.py`
-
-❌ **Email Service** (~150 lines)
-- Email generation and sending logic
-- Should be moved to `roi_calculator/email_service.py`
-
-## How to Use the Refactored Modules
-
-### Option 1: Import from new modules (recommended for new code)
+## Usage
 
 ```python
-from roi_calculator.config import INDUSTRIES, AI_OPPORTUNITIES
-from roi_calculator.calculations import (
-    calculate_conservative_roi,
-    calculate_metrics_v3,
-    generate_automation_roadmap_v3,
-    format_currency
-)
+from roi_calculator.config import INDUSTRIES
+from roi_calculator.calculations import calculate_conservative_roi, calculate_simple_roi
 
-# Use in your code
-industry_config = INDUSTRIES["Architecture & Building Services"]
-results = calculate_conservative_roi(total_staff=25, industry_config=industry_config)
+# For industries with full configuration
+industry_config = INDUSTRIES["Engineering"]
+results = calculate_conservative_roi(total_staff=50, industry_config=industry_config)
+
+# For industries without full configuration
+results = calculate_simple_roi(staff_count=50, avg_rate=130, industry_config=industry_config)
+
+# Results include:
+# - doc_staff_count: 40 (80% of 50)
+# - doc_staff_percentage: 80.0
+# - total_weekly_hours: 200 (40 × 5 hours)
+# - annual_cost: $1,248,000 (200 × $130 × 48)
+# - tier_1_savings: Calculated based on automation potential
 ```
 
-### Option 2: Keep using original file (current production setup)
+## Main Route File
 
-The original `roi_calculator_flask.py` still works as-is. The refactored modules are independent and don't affect the original file.
+The Flask routes and HTML templates are in `roi_calculator_flask.py` (root directory). This file contains:
+- Blueprint registration
+- Route handlers (step 1-4)
+- Embedded HTML templates
+- PDF generation
+- Email functionality
 
-## Recommended Next Steps
+## Recent Changes (January 2026)
 
-### Phase 1: Complete Basic Refactoring (2-4 hours)
-
-1. **Extract PDF Generator**
-   ```python
-   # Create roi_calculator/pdf_generator.py
-   # Move generate_pdf_report() function
-   ```
-
-2. **Extract Email Service**
-   ```python
-   # Create roi_calculator/email_service.py
-   # Move email-related functions
-   ```
-
-3. **Create Routes Module**
-   ```python
-   # Create roi_calculator/routes.py
-   # Move all @roi_app.route() handlers
-   ```
-
-### Phase 2: Extract Templates (4-6 hours)
-
-1. **Split HTML_TEMPLATE by step**
-   - Extract step 1 (industry selection) → `step1_industry.html`
-   - Extract step 2 (data input) → `step2_input.html`
-   - Extract step 3 (results) → `step3_results.html`
-   - Extract step 4 (PDF) → `step4_pdf.html`
-
-2. **Update route handlers to use `render_template()` instead of `render_template_string()`**
-
-### Phase 3: Create Main Module Init (1 hour)
-
-```python
-# Create roi_calculator/__init__.py
-from flask import Blueprint
-from .routes import register_routes
-from .config import INDUSTRIES, AI_OPPORTUNITIES
-
-def create_blueprint():
-    roi_app = Blueprint('roi_calculator', __name__, 
-                       template_folder='templates')
-    register_routes(roi_app)
-    return roi_app
-
-__all__ = ['create_blueprint', 'INDUSTRIES', 'AI_OPPORTUNITIES']
-```
-
-### Phase 4: Update Main App (1 hour)
-
-```python
-# In your main app.py or __init__.py
-from roi_calculator import create_blueprint
-
-roi_bp = create_blueprint()
-app.register_blueprint(roi_bp, url_prefix='/roi-calculator')
-```
-
-### Phase 5: Testing & Validation (2-3 hours)
-
-1. Test all routes still work
-2. Test PDF generation
-3. Test email sending
-4. Check for any broken imports
-5. Verify static assets load correctly
-
-## Benefits After Full Refactoring
-
-- **Maintainability**: ~500 lines per file vs 3,262 in one file
-- **Testing**: Can test modules independently
-- **Collaboration**: Multiple developers can work without conflicts
-- **Debugging**: Easier to locate issues
-- **Reusability**: Calculations module can be used by other parts of the app
-- **Modern Flask Patterns**: Proper use of blueprints and templates
-
-## Migration Strategy
-
-**LOW RISK**: Keep both versions running during transition
-1. Deploy refactored modules alongside original file
-2. Add feature flag to switch between implementations
-3. Test refactored version in staging
-4. Gradually migrate production traffic
-5. Remove original file once stable
-
-**Total Estimated Time**: 10-16 hours for complete refactoring
-
-## Questions?
-
-This refactoring improves code organization significantly but doesn't change functionality. The original file will continue to work as-is.
-
+- Removed firm size scaling for documentation staff percentage
+- Implemented fixed 80% documentation staff rule across all calculations
+- Updated both `calculate_conservative_roi` and `calculate_simple_roi` functions
+- Updated UI to display "Documentation Staff (80%)" and "Executives/Senior Partners (20%)"
+- Removed "Firm Size Adjustment Applied" section from results
