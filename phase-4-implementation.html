@@ -319,60 +319,156 @@
             <p class="section-subhead" style="text-align: center; max-width: 800px; margin: 0 auto var(--spacing-xl);">
                 Phase 4 is tailored to your sector's specific "Capacity Leak." We prioritize high-volume automation in Wave 1 and complex logic refinement in Wave 2.
             </p>
-            <div class="features-grid-enhanced" style="margin-top: 3rem;">
 
-                <div class="feature-card-enhanced" style="text-align: left;">
-                    <div class="feature-card-body">
-                        <h3 class="feature-card-title">Accounting & Finance</h3>
-                        <p class="feature-card-desc">
-                            <strong style="color: var(--color-gold);">Wave 1:</strong> High-volume invoice extraction & automated Xero/MYOB/ERP matching to eliminate 50% of admin data entry.
-                        </p>
-                        <p class="feature-card-desc" style="margin-top:10px">
-                            <strong style="color: var(--color-gold);">Wave 2:</strong> Complex trust account reconciliation & automated GL coding rules to support higher client volumes.
-                        </p>
-                        <p class="feature-card-desc" style="margin-top:10px; font-style: italic; color: var(--text-secondary); font-size: 0.95rem;">
-                            <strong>UAT Validation (Weeks 6-8):</strong> Staff process 50+ live invoices through Wave 1 to validate accuracy and exception handling before Wave 2 expansion.
-                        </p>
-                        <p class="feature-card-desc" style="color: var(--cyan-accent); font-weight: 600; margin-top: 1rem;">
-                            Outcome: Reclaiming ~2,000 annual admin hours.
-                        </p>
+            <!-- 6-Card Grid Layout -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 3rem;">
+
+                <!-- Card 1: Accounting -->
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 2rem; transition: all 0.3s ease;">
+                    <div style="width: 48px; height: 48px; background: rgba(212, 175, 55, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                        <svg width="24" height="24" fill="none" stroke="var(--color-gold)" stroke-width="2" viewBox="0 0 24 24">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
                     </div>
+                    <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Accounting & Finance</h3>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 1:</strong> High-volume invoice extraction & automated Xero/MYOB/ERP matching to eliminate 50% of admin data entry.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 2:</strong> Complex trust account reconciliation & automated GL coding rules to support higher client volumes.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic; line-height: 1.6; margin-bottom: 1rem;">
+                        <strong>UAT Validation (Weeks 6-8):</strong> Staff process 50+ live invoices through Wave 1 to validate accuracy and exception handling before Wave 2 expansion.
+                    </p>
+
+                    <p style="color: var(--cyan-accent); font-weight: 600; font-size: 0.95rem; margin: 0;">
+                        Outcome: Reclaiming ~2,000 annual admin hours
+                    </p>
                 </div>
 
-               <div class="feature-card-enhanced" style="text-align: left;">
-                    <div class="feature-card-body">
-                        <h3 class="feature-card-title">Engineering & Construction</h3>
-                        <p class="feature-card-desc">
-                            <strong style="color: var(--color-gold);">Wave 1:</strong> Drawing register & transmittal automation, removing the 20% manual documentation burden from junior staff.
-                        </p>
-                        <p class="feature-card-desc" style="margin-top:10px">
-                            <strong style="color: var(--color-gold);">Wave 2:</strong> AI-powered site report & RFI extraction, accelerating the "Technical Production Line" for senior managers.
-                        </p>
-                        <p class="feature-card-desc" style="margin-top:10px; font-style: italic; color: var(--text-secondary); font-size: 0.95rem;">
-                            <strong>UAT Validation (Weeks 6-8):</strong> Engineers test Wave 1 with live transmittals and schedules, tuning AI for handwritten notes and strikethrough text.
-                        </p>
-                        <p class="feature-card-desc" style="color: var(--cyan-accent); font-weight: 600; margin-top: 1rem;">
-                            Outcome: Unlocking ~2,000 annual billable hours.
-                        </p>
+                <!-- Card 2: Engineering -->
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 2rem; transition: all 0.3s ease;">
+                    <div style="width: 48px; height: 48px; background: rgba(212, 175, 55, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                        <svg width="24" height="24" fill="none" stroke="var(--color-gold)" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+                        </svg>
                     </div>
+                    <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Engineering & Construction</h3>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 1:</strong> Drawing register & transmittal automation, removing the 20% manual documentation burden from junior staff.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 2:</strong> AI-powered site report & RFI extraction, accelerating the "Technical Production Line" for senior managers.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic; line-height: 1.6; margin-bottom: 1rem;">
+                        <strong>UAT Validation (Weeks 6-8):</strong> Engineers test Wave 1 with live transmittals and schedules, tuning AI for handwritten notes and strikethrough text.
+                    </p>
+
+                    <p style="color: var(--cyan-accent); font-weight: 600; font-size: 0.95rem; margin: 0;">
+                        Outcome: Unlocking ~2,000 annual billable hours
+                    </p>
                 </div>
 
-                <div class="feature-card-enhanced" style="text-align: left;">
-                    <div class="feature-card-body">
-                        <h3 class="feature-card-title">Logistics & Freight</h3>
-                        <p class="feature-card-desc">
-                            <strong style="color: var(--color-gold);">Wave 1:</strong> Manifest & waybill entry (Direct TMS integration) to handle 1,000+ documents daily with sub-10s processing.
-                        </p>
-                        <p class="feature-card-desc" style="margin-top:10px">
-                            <strong style="color: var(--color-gold);">Wave 2:</strong> Automated customs documentation & hazardous goods verification for guaranteed compliance safety.
-                        </p>
-                        <p class="feature-card-desc" style="margin-top:10px; font-style: italic; color: var(--text-secondary); font-size: 0.95rem;">
-                            <strong>UAT Validation (Weeks 6-8):</strong> Operations team validates Wave 1 manifest processing with live hub data, ensuring carrier-specific format handling.
-                        </p>
-                        <p class="feature-card-desc" style="color: var(--cyan-accent); font-weight: 600; margin-top: 1rem;">
-                            Outcome: 40% reduction in operational overhead.
-                        </p>
+                <!-- Card 3: Logistics -->
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 2rem; transition: all 0.3s ease;">
+                    <div style="width: 48px; height: 48px; background: rgba(212, 175, 55, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                        <svg width="24" height="24" fill="none" stroke="var(--color-gold)" stroke-width="2" viewBox="0 0 24 24">
+                            <rect x="1" y="3" width="15" height="13"></rect>
+                            <path d="M16 8h5l3 3v5h-2"></path>
+                            <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                            <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                        </svg>
                     </div>
+                    <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Logistics & Freight</h3>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 1:</strong> Manifest & waybill entry (Direct TMS integration) to handle 1,000+ documents daily with sub-10s processing.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 2:</strong> Automated customs documentation & hazardous goods verification for guaranteed compliance safety.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic; line-height: 1.6; margin-bottom: 1rem;">
+                        <strong>UAT Validation (Weeks 6-8):</strong> Operations team validates Wave 1 manifest processing with live hub data, ensuring carrier-specific format handling.
+                    </p>
+
+                    <p style="color: var(--cyan-accent); font-weight: 600; font-size: 0.95rem; margin: 0;">
+                        Outcome: 40% reduction in operational overhead
+                    </p>
+                </div>
+
+                <!-- Card 4: Legal Services -->
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 2rem; transition: all 0.3s ease;">
+                    <div style="width: 48px; height: 48px; background: rgba(212, 175, 55, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                        <svg width="24" height="24" fill="none" stroke="var(--color-gold)" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Legal Services</h3>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 1:</strong> Contract metadata extraction & matter file automation to recover 8-12 billable hours per lawyer per week.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 2:</strong> Trust account reconciliation & automated legal precedent tagging for compliance-heavy practices.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic; line-height: 1.6; margin-bottom: 1rem;">
+                        <strong>UAT Validation (Weeks 6-8):</strong> Partners test Wave 1 on live matter files, validating document classification and metadata accuracy.
+                    </p>
+
+                    <p style="color: var(--cyan-accent); font-weight: 600; font-size: 0.95rem; margin: 0;">
+                        Outcome: ~1,800 annual billable hours recovered
+                    </p>
+                </div>
+
+                <!-- Card 5: Insurance -->
+                <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 2rem; transition: all 0.3s ease;">
+                    <div style="width: 48px; height: 48px; background: rgba(212, 175, 55, 0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
+                        <svg width="24" height="24" fill="none" stroke="var(--color-gold)" stroke-width="2" viewBox="0 0 24 24">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            <path d="M9 12l2 2 4-4"></path>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Insurance Underwriting</h3>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 1:</strong> Claims form processing & policy document extraction to handle 500+ submissions daily with automated risk flagging.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+                        <strong style="color: var(--color-gold);">Wave 2:</strong> Automated risk assessment scoring & compliance documentation for PI/PL underwriting workflows.
+                    </p>
+
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic; line-height: 1.6; margin-bottom: 1rem;">
+                        <strong>UAT Validation (Weeks 6-8):</strong> Underwriters validate Wave 1 claims processing accuracy, testing edge cases like pre-existing condition detection.
+                    </p>
+
+                    <p style="color: var(--cyan-accent); font-weight: 600; font-size: 0.95rem; margin: 0;">
+                        Outcome: 35% faster claims processing turnaround
+                    </p>
+                </div>
+
+                <!-- Card 6: CTA Card -->
+                <div style="background: linear-gradient(135deg, rgba(212, 175, 55, 0.1) 0%, rgba(0, 188, 212, 0.1) 100%); border: 2px solid var(--color-gold); border-radius: 12px; padding: 2rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+                    <h3 style="color: var(--text-primary); font-size: 1.3rem; font-weight: 600; margin-bottom: 1rem;">ACT NOW</h3>
+                    <p style="color: var(--text-secondary); font-size: 1.05rem; line-height: 1.6; margin-bottom: 2rem;">
+                        Book a free pre-screen or diagnostic call.
+                    </p>
+                    <a href="contact.html?option=phase-1" class="btn btn-primary" style="margin-bottom: 1rem; width: 100%; text-align: center; display: block;">Book Phase 1</a>
+                    <a href="contact.html?option=diagnostic" class="btn btn-secondary" style="width: 100%; text-align: center; display: block; background: var(--color-gold); color: #0B1221;">Diagnostic Call</a>
                 </div>
 
             </div>
