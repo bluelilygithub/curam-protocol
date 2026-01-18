@@ -38,9 +38,9 @@ DEPARTMENT_SAMPLES = {
         "description": "Client statements, compliance forms, portfolio documentation",
         "folder": "samples/financial_planning",
         "samples": [
-            {"path": "samples/financial_planning/Portfolio_Investment_Strategy.pdf", "label": "Portfolio Investment Strategy"},
-            {"path": "samples/financial_planning/ASIC_Compliance_Form.pdf", "label": "ASIC Compliance Form"},
-            {"path": "samples/financial_planning/Client_Portfolio_Statement.pdf", "label": "Client Portfolio Statement"}
+            {"path": "samples/financial_planning/Portfolio_Investment_Strategy.pdf", "label": "Portfolio Investment Strategy", "preselected": True},
+            {"path": "samples/financial_planning/ASIC_Compliance_Form.pdf", "label": "ASIC Compliance Form", "preselected": True},
+            {"path": "samples/financial_planning/Client_Portfolio_Statement.pdf", "label": "Client Portfolio Statement", "preselected": True}
         ]
     },
     "insurance": {
