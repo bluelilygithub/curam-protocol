@@ -48,9 +48,9 @@ DEPARTMENT_SAMPLES = {
         "description": "Claims forms, policy documents, risk assessment paperwork",
         "folder": "samples/insurance",
         "samples": [
-            {"path": "samples/insurance/Insurance_Policy_Document.pdf", "label": "Insurance Policy Document"},
-            {"path": "samples/insurance/General_Insurance_Claim.pdf", "label": "General Insurance Claim"},
-            {"path": "samples/insurance/Risk_Assessment_Report.pdf", "label": "Risk Assessment Report"}
+            {"path": "samples/insurance/Insurance_Policy_Document.pdf", "label": "Insurance Policy Document", "preselected": True},
+            {"path": "samples/insurance/General_Insurance_Claim.pdf", "label": "General Insurance Claim", "preselected": True},
+            {"path": "samples/insurance/Risk_Assessment_Report.pdf", "label": "Risk Assessment Report", "preselected": True}
         ]
     },
     "engineering": {

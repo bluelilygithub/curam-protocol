@@ -592,7 +592,7 @@ def get_base_template():
                     </div>
                     {% else %}
                     <label>
-                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or ((dept_key in ['engineering', 'finance', 'financial_planning', 'insurance']) and not selected_samples) %}checked{% endif %}>
+                        <input type="checkbox" name="samples" value="{{ sample.path }}" {% if sample.path in selected_samples or sample.get('preselected', False) or ((dept_key in ['engineering', 'finance', 'financial_planning']) and not selected_samples) %}checked{% endif %}>
                         {{ sample.label }}
                         <a href="{{ url_for('view_sample') }}?path={{ sample.path }}" target="_blank" rel="noopener" style="margin-left: 8px; color: #D4AF37;">🔗</a>
                     </label>
