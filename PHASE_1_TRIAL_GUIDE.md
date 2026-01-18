@@ -87,7 +87,7 @@ The admin routes are already added to `routes/admin_routes.py`. Ensure your Flas
    - **Customer Name** (required)
    - **Customer Email** (optional)
    - **Company Name** (optional)
-   - **Industry** (dropdown: 11 industry options)
+   - **Industry** (dropdown: 5 industry options)
    - **Sector** (dropdown from database)
    - **Notes** (optional internal notes)
 4. Click "Create Trial"
