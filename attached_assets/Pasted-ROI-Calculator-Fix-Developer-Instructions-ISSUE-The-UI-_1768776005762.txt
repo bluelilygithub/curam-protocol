@@ -1,0 +1,134 @@
+ROI Calculator Fix - Developer Instructions
+ISSUE
+The UI displays inconsistent staff percentages. The calculator says "Senior staff and partners who only review/approve are excluded" but then shows different numbers.
+BUSINESS DECISION
+20% of staff are executives/senior partners who do NOT do repetitive documentation.
+This is a fixed rule: documentation_staff = total_staff × 0.80
+
+WHAT TO CHANGE
+1. UPDATE calculate_conservative_roi() FUNCTION
+File: roi_calculator/calculations.py (or wherever this function lives)
+Find this code block (around lines 189-196):
+python# Calculate documentation staff with FIRM SIZE SCALING
+base_percentage = industry_config.get('doc_staff_percentage_base', 0.75)
+doc_staff_percentage = get_doc_staff_percentage(total_staff, industry_config)
+doc_staff_count = int(total_staff * doc_staff_percentage)
+
+# Store both base and scaled for transparency
+base_doc_staff = int(total_staff * base_percentage)
+Replace with:
+python# Apply 20% executive exclusion (fixed rule)
+EXECUTIVE_EXCLUSION_RATE = 0.20
+doc_staff_percentage = 1.0 - EXECUTIVE_EXCLUSION_RATE  # Always 80%
+doc_staff_count = int(total_staff * doc_staff_percentage)
+
+# Store original for display
+base_doc_staff = doc_staff_count
+base_percentage = doc_staff_percentage
+2. UPDATE UI DISPLAY
+File: Whatever template file contains the Step 3 results HTML
+Find the Profile Summary section. Replace this:
+html<div class="profile-item">
+    <span class="profile-label">Documentation Staff:</span>
+    <span class="profile-value">{{ calculations.doc_staff_count }} ({{ calculations.doc_staff_percentage|round(0)|int }}%)</span>
+</div>
+<div class="profile-item">
+    <span class="profile-label">Excluded (Senior/Partners):</span>
+    <span class="profile-value">{{ calculations.total_staff - calculations.doc_staff_count }} ({{ (100 - calculations.doc_staff_percentage)|round(0)|int }}%)</span>
+</div>
+With this:
+html<div class="profile-item">
+    <span class="profile-label">Documentation Staff (80%):</span>
+    <span class="profile-value">{{ calculations.doc_staff_count }}</span>
+</div>
+<div class="profile-item">
+    <span class="profile-label">Executives/Senior Partners (20%):</span>
+    <span class="profile-value">{{ calculations.total_staff - calculations.doc_staff_count }} (excluded - review/approve only)</span>
+</div>
+3. UPDATE METHODOLOGY NOTICE
+Find this:
+html<div class="methodology-notice">
+    <p><strong>⚠️ Methodology:</strong> Based on {{ calculations.doc_staff_count }} documentation staff 
+    ({{ calculations.doc_staff_percentage|round(0)|int }}% of your {{ calculations.total_staff }} total staff). 
+    We estimate these junior/mid-level staff spend ~{{ calculations.hours_per_doc_staff }} hours/week on 
+    routine documentation at an average rate of ${{ calculations.typical_doc_rate }}/hr. 
+    <strong>Senior staff and partners who only review/approve are excluded.</strong></p>
+</div>
+Replace with:
+html<div class="methodology-notice">
+    <p><strong>⚠️ Methodology:</strong> Based on {{ calculations.doc_staff_count }} documentation staff 
+    (80% of your {{ calculations.total_staff }} total staff). We exclude the top 20% who are 
+    executives/senior partners that primarily review and approve work rather than handle repetitive 
+    documentation tasks. Average of {{ calculations.hours_per_doc_staff }} hours/week per documentation 
+    staff at ${{ calculations.typical_doc_rate }}/hr loaded cost.</p>
+</div>
+4. REMOVE FIRM SIZE SCALING DISPLAY
+Find and DELETE the entire "Scaling Insight" section:
+html<div class="scaling-insight">
+    <h4>📊 Firm Size Adjustment Applied</h4>
+    ...entire block...
+</div>
+Replace with nothing. The 80/20 rule is simple and doesn't need explanation.
+5. UPDATE THE JAVASCRIPT (Step 2 Page)
+Find the updateStaffCalculation() function. Replace with:
+javascriptfunction updateStaffCalculation(totalStaff) {
+    const EXECUTIVE_EXCLUSION_RATE = 0.20;
+    const docStaffPercentage = 1.0 - EXECUTIVE_EXCLUSION_RATE;  // Always 80%
+    
+    const docStaff = Math.round(totalStaff * docStaffPercentage);
+    const excludedStaff = totalStaff - docStaff;
+    
+    const estimateDiv = document.getElementById('doc-staff-estimate');
+    if (estimateDiv) {
+        estimateDiv.innerHTML = `
+            <strong>Documentation Staff (80%):</strong> ${docStaff} people<br>
+            <strong>Excluded (20%):</strong> ${excludedStaff} executives/senior partners<br>
+            <br>
+            <em>We calculate savings based on the ${docStaff} staff who do repetitive documentation work.</em>
+        `;
+    }
+}
+```
+
+---
+
+## WHAT NOT TO CHANGE
+
+**DO NOT touch:**
+- ✅ `industry_variance_multiplier` logic (lines 369-372, 431-434)
+- ✅ Any calculations that use the multiplier
+- ✅ `hours_per_doc_staff` from industry config
+- ✅ `typical_doc_rate` from industry config
+- ✅ Task analysis logic
+- ✅ Any other calculation formulas
+
+**ONLY change:**
+- The documentation staff percentage (from variable → fixed 80%)
+- The UI text to match the 80/20 rule
+- Remove firm size scaling display
+
+---
+
+## VALIDATION
+
+After changes, test with **50-staff Accounting firm:**
+```
+✅ Total staff: 50
+✅ Documentation staff: 40 (80%)
+✅ Excluded (executives): 10 (20%)
+✅ Hours per week: 5.0 (from industry config)
+✅ Rate: $100/hr (from industry config)
+✅ Total weekly hours: 200 (40 × 5)
+✅ Annual burn: ~$960,000 (200 × $100 × 48)
+✅ Industry multiplier: Still applied as before
+```
+
+Test with **100-staff Engineering firm:**
+```
+✅ Total staff: 100
+✅ Documentation staff: 80 (80%)
+✅ Excluded (executives): 20 (20%)
+
+PRIORITY
+Medium - This makes the calculator internally consistent. The calculation logic already works; we're just fixing the UI to match your business rule (80/20 split) instead of the complex firm-size scaling.
+Test before deploying.
