@@ -1231,27 +1231,11 @@ def get_blog_posts():
                 continue
         
         if not blog_url:
-            # Always log detailed connection errors for debugging
-            import socket
-            server_ip = "unknown"
-            try:
-                server_ip = requests.get('https://api.ipify.org', timeout=5).text
-            except:
-                pass
-            
-            error_details = {
-                'errors': connection_errors,
-                'server_outbound_ip': server_ip,
-                'environment': os.getenv('FLASK_ENV', 'production'),
-                'replit_deployment': os.getenv('REPLIT_DEPLOYMENT', 'unknown')
-            }
-            print(f"Blog API connection FAILED: {error_details}")
-            current_app.logger.error(f"Blog API connection FAILED: {error_details}")
+            print(f"Blog API connection errors (client will use fallback): {connection_errors}")
             
             return jsonify({
                 'success': False,
                 'error': 'Unable to reach blog API',
-                'debug': error_details,  # Always include for now to diagnose
                 'posts': [],
                 'pagination': {}
             }), 503
