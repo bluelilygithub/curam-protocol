@@ -36,7 +36,7 @@ INDUSTRIES = {
                 "complexity": 7,
                 "complexity_label": "Medium-High (Proven ROI)",
                 "description": "Template-based spec generation from Masterspec/Natspec",
-                "automation_potential": 0.45,
+                "automation_potential": 0.50,
                 "multiplier": 1.20,
                 "proven_success_rate": 0.85
             },
@@ -46,7 +46,7 @@ INDUSTRIES = {
                 "complexity": 6,
                 "complexity_label": "Medium (Proven ROI)",
                 "description": "Manual Excel compilation from title blocks and metadata",
-                "automation_potential": 0.40,
+                "automation_potential": 0.50,
                 "multiplier": 1.00,
                 "proven_success_rate": 0.88
             },
@@ -67,7 +67,7 @@ INDUSTRIES = {
                 "complexity": 5,
                 "complexity_label": "Medium (Varies)",
                 "description": "Various administrative tasks",
-                "automation_potential": 0.35,
+                "automation_potential": 0.50,
                 "multiplier": 1.00,
                 "proven_success_rate": 0.80
             }
@@ -82,7 +82,7 @@ INDUSTRIES = {
             "other": 0.16
         },
         "demo_documents": "drawing registers, BIM schedules, or document transmittals",
-        "automation_potential": 0.40,
+        "automation_potential": 0.50,
         "q1_label": "What's your biggest documentation bottleneck?",
         "q1_options": {
             "Drawing Registers (Automated BIM export)": 0,
@@ -163,7 +163,7 @@ INDUSTRIES = {
         "weekly_hours_range": [10, 200, 60],
         "weekly_hours_help_text": "Example: 15 staff × 4 hours each = 60 hours/week. Include: data entry, reconciliations, GL coding, trust account matching.",
         "demo_documents": "invoices, bank statements, trust account transactions, or inter-entity reconciliations",
-        "automation_potential": 0.40,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest manual processing pain point?",
         "q1_options": {
@@ -207,7 +207,7 @@ INDUSTRIES = {
         "weekly_hours_range": [10, 150, 50],
         "weekly_hours_help_text": "Example: 20 staff × 2.5 hours each = 50 hours/week. Include: time entry, file management, document review.",
         "demo_documents": "contracts, matter files, time sheets, or discovery documents",
-        "automation_potential": 0.35,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest administrative bottleneck?",
         "q1_options": {
@@ -251,7 +251,7 @@ INDUSTRIES = {
         "weekly_hours_range": [20, 200, 100],
         "weekly_hours_help_text": "Example: 30 engineers × 3 hours each = 90 hours/week. Include: tender analysis, site diaries, compliance tracking.",
         "demo_documents": "tender specifications, site diaries, SWMS, or subcontractor certificates",
-        "automation_potential": 0.40,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest documentation bottleneck?",
         "q1_options": {
@@ -295,7 +295,7 @@ INDUSTRIES = {
         "weekly_hours_range": [15, 150, 60],
         "weekly_hours_help_text": "Example: 20 site supervisors × 3 hours each = 60 hours/week. Include: incident reports, shift logs, compliance docs.",
         "demo_documents": "safety incident reports, shift handover logs, equipment maintenance records, or regulatory compliance documents",
-        "automation_potential": 0.35,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest operational documentation bottleneck?",
         "q1_options": {
@@ -339,7 +339,7 @@ INDUSTRIES = {
         "weekly_hours_range": [10, 120, 45],
         "weekly_hours_help_text": "Example: 15 property managers × 3 hours each = 45 hours/week. Include: lease processing, maintenance orders, compliance tracking.",
         "demo_documents": "lease agreements, maintenance invoices, compliance certificates, or tenant applications",
-        "automation_potential": 0.40,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest administrative bottleneck?",
         "q1_options": {
@@ -383,7 +383,7 @@ INDUSTRIES = {
         "weekly_hours_range": [15, 150, 70],
         "weekly_hours_help_text": "Example: 20 operations staff × 3.5 hours each = 70 hours/week. Include: BOL processing, customs entries, POD matching.",
         "demo_documents": "bills of lading, customs declarations, proof of delivery documents, or freight manifests",
-        "automation_potential": 0.45,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest operational bottleneck?",
         "q1_options": {
@@ -427,7 +427,7 @@ INDUSTRIES = {
         "weekly_hours_range": [10, 120, 50],
         "weekly_hours_help_text": "Example: 15 admin staff × 3 hours each = 45 hours/week. Include: patient intake, referral processing, claiming.",
         "demo_documents": "patient intake forms, referral letters, Medicare claim forms, or compliance certificates",
-        "automation_potential": 0.40,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest administrative bottleneck?",
         "q1_options": {
@@ -471,7 +471,7 @@ INDUSTRIES = {
         "weekly_hours_range": [15, 150, 60],
         "weekly_hours_help_text": "Example: 20 staff × 3 hours each = 60 hours/week. Include: grant acquittals, tender compliance, audit trails.",
         "demo_documents": "grant reports, tender responses, NDIS service delivery records, or contract compliance documents",
-        "automation_potential": 0.40,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest compliance documentation bottleneck?",
         "q1_options": {
@@ -515,7 +515,7 @@ INDUSTRIES = {
         "weekly_hours_range": [10, 120, 50],
         "weekly_hours_help_text": "Example: 15 advisors × 3 hours each = 45 hours/week. Include: statement processing, SOA generation, performance reporting.",
         "demo_documents": "client statements, SOA templates, performance reports, or compliance certificates",
-        "automation_potential": 0.40,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest administrative bottleneck?",
         "q1_options": {
@@ -559,7 +559,7 @@ INDUSTRIES = {
         "weekly_hours_range": [10, 120, 50],
         "weekly_hours_help_text": "Example: 15 underwriters × 3 hours each = 45 hours/week. Include: application processing, risk assessment, claims documentation.",
         "demo_documents": "policy applications, risk assessment forms, claims documentation, or compliance certificates",
-        "automation_potential": 0.40,
+        "automation_potential": 0.50,
         # Legacy support
         "q1_label": "What's your biggest operational bottleneck?",
         "q1_options": {

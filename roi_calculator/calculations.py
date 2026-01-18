@@ -416,7 +416,7 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
     doc_staff_count = int(staff_count * doc_staff_percentage)
     
     # Use industry-specific automation potential or conservative default
-    automation_potential = industry_config.get('automation_potential', 0.35)
+    automation_potential = industry_config.get('automation_potential', 0.50)
     
     # Use industry-specific hours per staff or default
     hours_per_staff = industry_config.get('hours_per_staff_per_week', 4.0)
@@ -493,7 +493,7 @@ def has_full_roi_config(industry_config):
 # Keep old function for backward compatibility (deprecated)
 def calculate_metrics(staff_count, avg_rate, weekly_waste, pain_point, industry_config):
     """DEPRECATED: Use calculate_metrics_v3() instead"""
-    base_automation_potential = industry_config.get('automation_potential', 0.40)
+    base_automation_potential = industry_config.get('automation_potential', 0.50)
     pain_multipliers = {0: 0.85, 3: 0.90, 5: 1.00, 6: 1.05, 7: 1.15, 8: 1.25, 10: 1.35}
     multiplier = pain_multipliers.get(pain_point, 1.00)
     automation_potential = min(base_automation_potential * multiplier, 0.70)
