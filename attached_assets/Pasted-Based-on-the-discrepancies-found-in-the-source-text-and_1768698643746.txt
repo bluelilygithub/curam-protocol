@@ -1,0 +1,28 @@
+Based on the discrepancies found in the source text and our discussion regarding the confusion between "20-person" and "50-person" firm messaging, the following pages (or sections) require updates to ensure data accuracy and narrative consistency:
+1. The Landing Page / Hero Section (Source)
+• Inaccurate Industry Count: The text currently states "5 Industries Validated". This contradicts the "Validated Protocol Results" section, which claims "11 industries". You must update this to the correct, higher number (11) to maximize credibility.
+• Incorrect Mid-Sized Capacity Range: The text claims mid-sized practices see "650k–700k recoverable capacity". This is factually inconsistent with your detailed industry breakdowns in Source, which list Engineering at 437k∗∗andLogisticsat∗∗432k (both falling well below the $650k floor currently advertised).
+    ◦ Recommendation: Update the range to reflect the actual data in your breakdown (e.g., "$430k – $740k") to avoid over-promising to Engineering/Logistics clients.
+2. The "Validated Protocol Results" Section (Source)
+• ROI Range Consistency: This section cites a validated ROI of "175k–739k" for mid-sized firms. While likely accurate, it clashes with the "$280k" baseline for smaller 20-person firms mentioned in the Hero section.
+    ◦ Recommendation: As discussed, context is needed here so the audience understands why a 50-person firm (175klowend)mightseeminglyachievelessthana20−personfirm(280k). You should specify that the lower end (175k)appliestolower−marginindustries,orstandardizethe"AnnualROIRange"headlineto∗∗175k – $1.4M+** to capture the absolute lowest and highest figures across all firm sizes.
+3. The Industry Breakdown / Case Study Section (Source)
+• Narrative Alignment: This section provides specific figures: Engineering (437k),Accounting(739k), and Logistics ($432k).
+    ◦ Recommendation: Ensure these figures are clearly labeled as "Mid-Sized (50 staff) Benchmarks" to distinguish them from the "20-person" entry-level ROI of $280k mentioned in Source.
+Summary of Critical Data Conflicts to Resolve
+Metric
+Landing Page / Hero
+Results Section &
+Action Required
+Industries
+5 Validated
+11 Validated
+Update to 11.
+Mid-Sized Capacity
+$650k – $700k
+$432k – $739k
+Widen range to 430k–740k.
+Mid-Sized ROI
+Not listed (implied high)
+$175k – $739k
+Clarify low-end (175k)vs.the20−personbaseline(280k).
