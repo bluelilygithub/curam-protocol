@@ -504,18 +504,79 @@
                         // Show skeleton loaders immediately for better UX
                         showSkeletonLoaders(12);
                         
-                        const response = await fetch(`/api/blog-posts?${params.toString()}`);
-                        const data = await response.json();
+                        // Try server API first, fallback to direct WordPress if blocked
+                        let data = null;
+                        try {
+                            const response = await fetch(`/api/blog-posts?${params.toString()}`);
+                            data = await response.json();
+                        } catch (e) {
+                            console.log('Server API failed, will try direct WordPress');
+                            data = { success: false };
+                        }
+
+                        // If server API failed (e.g., Siteground blocking), try WordPress directly
+                        if (!data.success) {
+                            console.log('Falling back to direct WordPress API...');
+                            try {
+                                const wpParams = new URLSearchParams({
+                                    page: page.toString(),
+                                    per_page: '12',
+                                    orderby: 'date',
+                                    order: 'desc',
+                                    _embed: 'wp:featuredmedia'
+                                });
+                                const wpResponse = await fetch(`https://blog.curam-ai.com.au/wp-json/wp/v2/posts?${wpParams.toString()}`);
+                                
+                                if (wpResponse.ok) {
+                                    const wpPosts = await wpResponse.json();
+                                    const totalPosts = parseInt(wpResponse.headers.get('X-WP-Total') || '0');
+                                    const totalPages = parseInt(wpResponse.headers.get('X-WP-TotalPages') || '1');
+                                    
+                                    // Transform WordPress format to our format
+                                    posts = wpPosts.map(post => {
+                                        let featuredImage = null;
+                                        if (post._embedded && post._embedded['wp:featuredmedia'] && post._embedded['wp:featuredmedia'][0]) {
+                                            featuredImage = post._embedded['wp:featuredmedia'][0].source_url;
+                                        }
+                                        return {
+                                            id: post.id,
+                                            title: post.title?.rendered || 'Untitled',
+                                            excerpt: post.excerpt?.rendered?.replace(/<[^>]*>/g, '') || '',
+                                            link: post.link,
+                                            date: new Date(post.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+                                            date_raw: post.date,
+                                            featured_image: featuredImage,
+                                            categories: post.categories || []
+                                        };
+                                    });
+                                    pagination = {
+                                        page: page,
+                                        per_page: 12,
+                                        total: totalPosts,
+                                        total_pages: totalPages,
+                                        has_prev: page > 1,
+                                        has_next: page < totalPages
+                                    };
+                                    data = { success: true };
+                                    console.log('Direct WordPress API succeeded!');
+                                }
+                            } catch (wpError) {
+                                console.error('Direct WordPress API also failed:', wpError);
+                            }
+                        }
 
                         if (!data.success) {
                             blogLoading.style.display = 'none';
                             blogError.style.display = 'block';
-                            blogErrorMessage.textContent = data.error || 'Failed to load articles. Please try again later.';
+                            blogErrorMessage.textContent = 'Failed to load articles. Please try again later.';
                             return;
                         }
 
-                        posts = data.posts;
-                        pagination = data.pagination;
+                        // Use server data if it succeeded
+                        if (data.posts) {
+                            posts = data.posts;
+                            pagination = data.pagination;
+                        }
                     }
 
                     // Hide loading indicator once we have posts
