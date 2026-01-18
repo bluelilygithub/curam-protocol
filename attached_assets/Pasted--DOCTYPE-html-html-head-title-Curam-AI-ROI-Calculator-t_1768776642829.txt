@@ -1,0 +1,1945 @@
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Curam AI - ROI Calculator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #F8F9FA;
+            color: #4B5563;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        h1 {
+            color: #0B1221;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            font-size: 2.5rem;
+        }
+        h2 {
+            color: #0B1221;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        h3 {
+            color: #0B1221;
+            font-weight: 600;
+            margin-top: 1.5rem;
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            padding: 1.5rem 0;
+            gap: 1rem;
+            background: white;
+            border-bottom: 1px solid #E5E7EB;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .step {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            color: white;
+            background-color: #E5E7EB;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+        }
+        .step:hover {
+            transform: scale(1.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .step.active {
+            background-color: #D4AF37;
+            color: #0B1221;
+        }
+        .step.completed {
+            background-color: #0B1221;
+            color: #D4AF37;
+        }
+        .step.completed:hover {
+            background-color: #1a2332;
+        }
+        .important-notice {
+            background: #FFF4E6;
+            border-left: 4px solid #D4AF37;
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 6px;
+        }
+        .important-notice p {
+            color: #4B5563;
+            margin: 0;
+            line-height: 1.6;
+        }
+        .important-notice strong {
+            color: #0B1221;
+        }
+        .explanation-box {
+            background: #FFFBF0;
+            border-left: 4px solid #D4AF37;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 6px;
+        }
+        .explanation-box h4 {
+            color: #0B1221;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        .explanation-box p {
+            color: #4B5563;
+            margin-bottom: 0.75rem;
+            line-height: 1.7;
+        }
+        .explanation-box ul {
+            margin: 0.75rem 0;
+            padding-left: 1.5rem;
+            color: #4B5563;
+        }
+        .explanation-box li {
+            margin-bottom: 0.5rem;
+            line-height: 1.6;
+        }
+        .explanation-box strong {
+            color: #0B1221;
+        }
+        .heatmap-container {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #E5E7EB;
+            margin: 2rem 0;
+        }
+        .heatmap-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        .heatmap-table th {
+            background-color: #0B1221;
+            color: white;
+            padding: 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .heatmap-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        .heatmap-table tr:hover {
+            background-color: #F8F9FA;
+        }
+        .potential-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .potential-high {
+            background-color: #FEE2E2;
+            color: #991B1B;
+        }
+        .potential-medium {
+            background-color: #FEF3C7;
+            color: #92400E;
+        }
+        .potential-low {
+            background-color: #D1FAE5;
+            color: #065F46;
+        }
+        .reality-check-box {
+            background: #FFFBF0;
+            border-left: 4px solid #D4AF37;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 6px;
+        }
+        .reality-check-response {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #E5E7EB;
+        }
+        .roadmap-container {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #E5E7EB;
+            margin: 2rem 0;
+        }
+        .roadmap-phase {
+            border-left: 3px solid #D4AF37;
+            padding: 1rem 1.5rem;
+            margin: 1rem 0;
+            background: #F8F9FA;
+            border-radius: 4px;
+        }
+        .roadmap-phase h4 {
+            color: #0B1221;
+            margin-bottom: 0.5rem;
+        }
+        .roadmap-phase ul {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+            color: #4B5563;
+        }
+        .roadmap-phase li {
+            margin-bottom: 0.25rem;
+        }
+        .scroll-indicator {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: #D4AF37;
+            color: #0B1221;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 100;
+            transition: all 0.3s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .scroll-indicator.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+        .scroll-indicator:hover {
+            background: #B8941F;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+        }
+        .scroll-indicator svg {
+            width: 24px;
+            height: 24px;
+        }
+        .industry-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .industry-card {
+            border: 2px solid #E5E7EB;
+            border-radius: 8px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background-color: white;
+        }
+        .industry-card:hover {
+            border-color: #D4AF37;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);
+        }
+        .industry-card.selected {
+            border-color: #D4AF37;
+            background-color: #FFFBF0;
+        }
+        .form-group {
+            margin: 1.5rem 0;
+        }
+        label {
+            display: block;
+            color: #0B1221;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        input[type="number"], input[type="range"], select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #E5E7EB;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        input[type="radio"] {
+            margin-right: 0.5rem;
+            vertical-align: middle;
+        }
+        .radio-group {
+            margin: 0.5rem 0;
+            display: flex;
+            align-items: center;
+        }
+        .radio-group label {
+            display: inline;
+            font-weight: normal;
+            margin-left: 0.5rem;
+            cursor: pointer;
+        }
+        /* Horizontal radio groups on desktop */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group > label {
+            margin-bottom: 0.75rem;
+        }
+        .form-group .radio-group-container {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        @media (min-width: 768px) {
+            .form-group .radio-group-container {
+                flex-direction: row;
+                gap: 2rem;
+                flex-wrap: wrap;
+            }
+            .form-group .radio-group {
+                margin: 0;
+            }
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .slider-container input[type="range"] {
+            flex: 1;
+        }
+        .slider-container input[type="number"] {
+            width: 100px;
+            flex-shrink: 0;
+        }
+        .slider-container output {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 600;
+            color: #0B1221;
+        }
+        .btn {
+            background-color: #D4AF37;
+            color: #0B1221;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            padding: 0.75rem 2rem;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            background-color: #B8941F;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .btn-secondary {
+            background-color: #0B1221;
+            color: #D4AF37;
+        }
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        .metric-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #E5E7EB;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0B1221;
+        }
+        .metric-label {
+            color: #4B5563;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+        .chart-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            margin: 2rem 0;
+        }
+        .input-summary {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #E5E7EB;
+            margin: 1.5rem 0;
+        }
+        .input-summary h3 {
+            color: #0B1221;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+        @media (max-width: 768px) {
+            .summary-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        .summary-item {
+            color: #4B5563;
+            padding: 0.5rem 0.75rem;
+            background: #F8F9FA;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .summary-item strong {
+            color: #0B1221;
+            display: inline;
+            margin-right: 0.5rem;
+            font-size: 0.85rem;
+        }
+        .analysis-box {
+            background: #FFFBF0;
+            border-left: 4px solid #D4AF37;
+            padding: 1rem;
+            margin: 0;
+            border-radius: 4px;
+            flex: 1;
+        }
+        .analysis-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        hr {
+            border: none;
+            border-top: 1px solid #E5E7EB;
+            margin: 2rem 0;
+        }
+        .section-headline {
+            color: #0B1221;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 2rem;
+            margin-top: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        .section-subhead {
+            color: #4B5563;
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .roi-results-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        @media (max-width: 1024px) {
+            .roi-results-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 640px) {
+            .roi-results-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .roi-result-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            border: 1px solid #E5E7EB;
+            transition: all 0.3s ease;
+        }
+        .roi-result-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+            border-color: #D4AF37;
+        }
+        .roi-result-stat {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #D4AF37, #0B1221);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+        .roi-result-label {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #0B1221;
+            margin-bottom: 0.5rem;
+        }
+        .roi-result-description {
+            font-size: 0.875rem;
+            color: #4B5563;
+            line-height: 1.5;
+            margin: 0;
+        }
+        .highlight-box {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            background: rgba(0, 212, 255, 0.08);
+            border: 1px solid #00D4FF;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            text-align: left;
+        }
+        .highlight-box.footnote {
+            margin-top: 1.5rem;
+            background: #FFFBF0;
+            border-color: #D4AF37;
+        }
+        .highlight-box p {
+            margin: 0;
+            color: #4B5563;
+            line-height: 1.6;
+        }
+        .highlight-box strong {
+            color: #0B1221;
+        }
+        .task-breakdown {
+            display: grid;
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+        .task-card {
+            background: white;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+        .task-card:hover {
+            border-color: #D4AF37;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.1);
+        }
+        .task-card-highlight {
+            border-color: #D4AF37;
+            background: linear-gradient(to bottom, #FFFBF0, white);
+        }
+        .task-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .complexity-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        .complexity-10, .complexity-9, .complexity-8 {
+            background: #10B981;
+            color: white;
+        }
+        .complexity-7, .complexity-6, .complexity-5 {
+            background: #F59E0B;
+            color: white;
+        }
+        .complexity-4, .complexity-3, .complexity-2, .complexity-1 {
+            background: #6B7280;
+            color: white;
+        }
+        .roi-badge {
+            display: inline-block;
+            background: #D4AF37;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .task-details {
+            display: grid;
+            gap: 0.75rem;
+        }
+        .task-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #F3F4F6;
+        }
+        .task-stat:last-child {
+            border-bottom: none;
+        }
+        .stat-label {
+            font-weight: 600;
+            color: #4B5563;
+        }
+        .stat-value {
+            color: #0B1221;
+            text-align: right;
+        }
+        .complexity-legend {
+            background: #F8F9FA;
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+        .legend-grid {
+            display: grid;
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        .legend-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .profile-summary {
+            background: #F8F9FA;
+            border: 1px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0 2rem 0;
+        }
+        .profile-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        .profile-item:last-child {
+            border-bottom: none;
+        }
+        .profile-label {
+            font-weight: 600;
+            color: #4B5563;
+        }
+        .profile-value {
+            color: #0B1221;
+            font-weight: 600;
+        }
+        .conservative-framing-notice {
+            background: linear-gradient(135deg, #FFFBF0, #FFF9E6);
+            border: 2px solid #D4AF37;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+        .conservative-framing-notice h2 {
+            color: #0B1221;
+            margin-bottom: 1rem;
+        }
+        .methodology-notice {
+            background: #F8F9FA;
+            border-left: 4px solid #4B5563;
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+            font-size: 0.9rem;
+            color: #4B5563;
+        }
+        .info-callout {
+            background: #EFF6FF;
+            border: 1px solid #3B82F6;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+        .info-callout h4 {
+            color: #1E40AF;
+            margin-bottom: 0.5rem;
+        }
+        .info-callout ul {
+            margin: 0.5rem 0 0.5rem 1.5rem;
+        }
+        .insight-callout {
+            background: #F0FDF4;
+            border-left: 4px solid #10B981;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+        .conservative-summary-box {
+            background: white;
+            border: 2px solid #E5E7EB;
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+        .conservative-summary-box ul {
+            margin: 0.5rem 0 1rem 1.5rem;
+        }
+        .conservative-summary-box li {
+            margin: 0.5rem 0;
+        }
+        .validation-badge {
+            display: inline-block;
+            background: #F59E0B;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .task-warning {
+            background: #FEF3C7;
+            border: 1px solid #F59E0B;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+        .roi-result-card-primary {
+            border: 3px solid #D4AF37;
+            background: linear-gradient(to bottom, #FFFBF0, white);
+        }
+        .tier-2-note {
+            background: #F3F4F6;
+            border: 1px dashed #9CA3AF;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+        .tier-2-note h4 {
+            color: #4B5563;
+            margin-bottom: 0.5rem;
+        }
+        .scaling-insight {
+            background: #EFF6FF;
+            border-left: 4px solid #3B82F6;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+        .scaling-insight h4 {
+            color: #1E40AF;
+            margin-bottom: 0.75rem;
+        }
+        .scaling-insight p {
+            margin: 0.5rem 0;
+            color: #1E3A8A;
+        }
+        
+        /* ============================================================================
+           CSS-ONLY FIXES FOR IMPROVED UX (Phase 1)
+           Reorder visual hierarchy without changing HTML structure
+           ============================================================================ */
+        
+        /* FIX 1: REORDER VISUAL HIERARCHY WITH CSS */
+        /* Hide the big scary number initially */
+        .annual-burn-section {
+            order: 999 !important;
+            font-size: 0.85rem !important;
+            padding: 1.5rem !important;
+            margin-top: 3rem !important;
+            background: #F8F9FA !important;
+            border: 1px solid #E5E7EB !important;
+        }
+        
+        .annual-burn-section > div:first-child {
+            font-size: 0.85rem !important;
+            color: #6B7280 !important;
+        }
+        
+        .annual-burn-section > div:nth-child(2) {
+            font-size: 1.5rem !important;
+            background: none !important;
+            -webkit-background-clip: unset !important;
+            -webkit-text-fill-color: #4B5563 !important;
+            color: #4B5563 !important;
+        }
+        
+        .annual-burn-section > div:last-child {
+            font-size: 0.8rem !important;
+        }
+        
+        /* Promote the ROI results to hero position */
+        .roi-results-grid {
+            order: -999 !important;
+            margin-top: 0 !important;
+            margin-bottom: 3rem !important;
+        }
+        
+        /* Make the primary card REALLY stand out */
+        .roi-result-card-primary {
+            grid-column: 1 / -1 !important;
+            border: 4px solid #D4AF37 !important;
+            background: linear-gradient(135deg, #0B1221, #1a2332) !important;
+            padding: 3rem 2rem !important;
+            box-shadow: 0 20px 60px rgba(212, 175, 55, 0.3) !important;
+        }
+        
+        .roi-result-card-primary .roi-result-stat {
+            font-size: 5rem !important;
+            background: linear-gradient(135deg, #D4AF37, #FFD700) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+        }
+        
+        .roi-result-card-primary .roi-result-label {
+            color: #D4AF37 !important;
+            font-size: 1.3rem !important;
+            text-transform: uppercase !important;
+            letter-spacing: 2px !important;
+        }
+        
+        .roi-result-card-primary .roi-result-description {
+            color: rgba(255, 255, 255, 0.8) !important;
+            font-size: 1rem !important;
+        }
+        
+        /* Make other cards smaller and supportive */
+        .roi-results-grid .roi-result-card:not(.roi-result-card-primary) {
+            border: 1px solid #E5E7EB !important;
+        }
+        
+        .roi-results-grid .roi-result-card:not(.roi-result-card-primary) .roi-result-stat {
+            font-size: 2rem !important;
+            background: linear-gradient(135deg, #D4AF37, #B8941F) !important;
+        }
+        
+        /* FIX 2: ADD CONTEXT LABEL TO $1,092,000 */
+        /* Removed redundant CONTEXT label */
+        
+        .annual-burn-section > div:first-child {
+            font-size: 0 !important;
+        }
+        
+        .annual-burn-section > div:first-child::after {
+            content: 'Current Documentation Spend';
+            font-size: 0.9rem !important;
+            color: #6B7280 !important;
+            font-weight: 600 !important;
+        }
+        
+        /* FIX 3: REORDER SECTIONS WITH FLEXBOX */
+        .container {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .conservative-framing-notice {
+            order: -998 !important;
+        }
+        
+        .methodology-notice {
+            order: -997 !important;
+        }
+        
+        .profile-summary {
+            /* order removed - stays in natural HTML position */
+        }
+        
+        .scaling-insight {
+            order: 101 !important;
+        }
+        
+        .insight-callout {
+            order: 102 !important;
+        }
+        
+        .task-breakdown {
+            order: 50 !important;
+        }
+        
+        .phase1-explainer {
+            order: 10 !important;
+            border: 4px solid #D4AF37 !important;
+            background: linear-gradient(135deg, rgba(212, 175, 55, 0.15), rgba(212, 175, 55, 0.05)) !important;
+        }
+        
+        .reality-check-box {
+            order: 5 !important;
+        }
+        
+        /* FIX: CTA SECTION AT THE VERY END */
+        .cta-section-end {
+            order: 1000 !important;
+        }
+        
+        .back-button-final {
+            order: 1001 !important;
+        }
+        
+        /* FIX 4: IMPROVE READABILITY & HIERARCHY */
+        .conservative-framing-notice {
+            background: #F8F9FA !important;
+            border: 1px solid #E5E7EB !important;
+            padding: 1rem !important;
+        }
+        
+        .conservative-framing-notice h2 {
+            font-size: 1.2rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        .methodology-notice {
+            background: transparent !important;
+            border-left: 2px solid #E5E7EB !important;
+            padding: 0.75rem 1rem !important;
+            font-size: 0.85rem !important;
+        }
+        
+        /* FIX 5: IMPROVE CTA VISIBILITY */
+        .btn-primary-huge {
+            font-size: 1.5rem !important;
+            padding: 1.5rem 3rem !important;
+            box-shadow: 0 8px 24px rgba(212, 175, 55, 0.4) !important;
+            animation: pulse-cta 2s ease-in-out infinite !important;
+        }
+        
+        @keyframes pulse-cta {
+            0%, 100% {
+                box-shadow: 0 8px 24px rgba(212, 175, 55, 0.4);
+            }
+            50% {
+                box-shadow: 0 12px 32px rgba(212, 175, 55, 0.6);
+            }
+        }
+        
+        .btn-primary-huge:hover {
+            transform: translateY(-3px) !important;
+            box-shadow: 0 16px 40px rgba(212, 175, 55, 0.5) !important;
+        }
+        
+        /* FIX 6: FEATURED TASK HIGHLIGHTING */
+        .task-breakdown .task-card:first-child {
+            border: 3px solid #D4AF37 !important;
+            background: linear-gradient(to bottom, #FFFBF0, white) !important;
+            box-shadow: 0 8px 24px rgba(212, 175, 55, 0.2) !important;
+        }
+        
+        .task-breakdown .task-card:first-child::before {
+            content: '🎯 HIGHEST ROI';
+            display: block;
+            background: #D4AF37;
+            color: #0B1221;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-align: center;
+            padding: 0.5rem;
+            margin: -1.5rem -1.5rem 1rem -1.5rem;
+            border-radius: 10px 10px 0 0;
+        }
+        
+        /* FIX 7: IMPROVE METRIC CARDS */
+        .metrics-grid {
+            order: 998 !important;
+            opacity: 0.6;
+        }
+        
+        .metrics-grid:hover {
+            opacity: 1;
+        }
+        
+        /* FIX 8: MOBILE RESPONSIVENESS */
+        @media (max-width: 768px) {
+            .roi-results-grid {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .roi-result-card-primary .roi-result-stat {
+                font-size: 3rem !important;
+            }
+            
+            .primary-metric {
+                font-size: 3rem !important;
+            }
+            
+            .annual-burn-section > div:nth-child(2) {
+                font-size: 1.2rem !important;
+            }
+            
+            .btn-primary-huge {
+                font-size: 1.2rem !important;
+                padding: 1rem 2rem !important;
+            }
+        }
+        
+        /* FIX 9: ADD SCROLL HINTS */
+        .conservative-framing-notice::after {
+            content: '↓ See your top 3 opportunities below';
+            display: block;
+            text-align: center;
+            margin-top: 1rem;
+            color: #D4AF37;
+            font-weight: 600;
+            font-size: 0.9rem;
+            animation: bounce 2s ease-in-out infinite;
+        }
+        
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+        
+        /* FIX 10: IMPROVE CONSERVATIVE SUMMARY */
+        .conservative-summary-box {
+            background: linear-gradient(to right, #F0FDF4, white) !important;
+            border-left: 4px solid #10B981 !important;
+        }
+        
+        .conservative-summary-box ul {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .conservative-summary-box ul {
+                grid-template-columns: 1fr;
+            }
+            
+            /* CTA Grid Mobile */
+            .cta-grid {
+                grid-template-columns: 1fr !important;
+            }
+        }
+        
+        /* FIX 11: TIER 2 DE-EMPHASIS */
+        .tier-2-note {
+            opacity: 0.8;
+            font-size: 0.9rem !important;
+            background: #F8F9FA;
+        }
+        
+        .tier-2-note h4 {
+            color: #374151;
+            font-weight: 600;
+        }
+        
+        .tier-2-note:hover {
+            opacity: 1;
+        }
+        
+        /* FIX 12: IMPROVE STEP INDICATOR */
+        .step.active {
+            width: 50px !important;
+            height: 50px !important;
+            font-size: 1.2rem !important;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4) !important;
+        }
+        
+        /* FIX 13: IMPROVE BUTTON HIERARCHY */
+        .btn-secondary {
+            opacity: 0.6 !important;
+            font-size: 0.9rem !important;
+        }
+        
+        .btn-secondary:hover {
+            opacity: 1 !important;
+        }
+        
+        /* CTA Section Button Hover Effects */
+        .cta-section-end .cta-grid a.btn:hover {
+            opacity: 0.9;
+            box-shadow: 0 4px 12px rgba(212, 175, 55, 0.3);
+        }
+        
+        .cta-section-end .cta-grid a.btn[style*="transparent"]:hover {
+            background: rgba(255, 255, 255, 0.08) !important;
+            border-color: #D4AF37 !important;
+            color: #D4AF37 !important;
+        }
+        
+        /* MOBILE RESPONSIVE STYLES */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+                max-width: 100%;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+                line-height: 1.3;
+            }
+            
+            h2 {
+                font-size: 1.25rem;
+                margin-top: 1.5rem;
+            }
+            
+            h3 {
+                font-size: 1.1rem;
+                margin-top: 1rem;
+            }
+            
+            h4 {
+                font-size: 1rem;
+            }
+            
+            .step-indicator {
+                padding: 1rem 0.5rem;
+                gap: 0.5rem;
+            }
+            
+            .step {
+                width: 32px;
+                height: 32px;
+                font-size: 0.9rem;
+            }
+            
+            .step.active {
+                width: 38px !important;
+                height: 38px !important;
+                font-size: 1rem !important;
+            }
+            
+            .heatmap-container {
+                padding: 1rem;
+                overflow-x: auto;
+            }
+            
+            .heatmap-table {
+                min-width: 500px;
+                font-size: 0.85rem;
+            }
+            
+            .heatmap-table th,
+            .heatmap-table td {
+                padding: 0.5rem;
+            }
+            
+            .industry-grid {
+                grid-template-columns: 1fr;
+                gap: 0.75rem;
+            }
+            
+            .industry-card {
+                padding: 1rem;
+            }
+            
+            .industry-card h3 {
+                font-size: 1rem;
+            }
+            
+            .explanation-box,
+            .important-notice,
+            .reality-check-box,
+            .roadmap-container {
+                padding: 1rem;
+                margin: 1rem 0;
+            }
+            
+            .roadmap-phase {
+                padding: 0.75rem 1rem;
+            }
+            
+            .btn {
+                padding: 0.75rem 1.25rem;
+                font-size: 0.9rem;
+                width: 100%;
+                text-align: center;
+            }
+            
+            .cta-grid {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            
+            .scroll-indicator {
+                width: 40px;
+                height: 40px;
+                bottom: 1rem;
+                right: 1rem;
+            }
+            
+            /* Prevent horizontal overflow */
+            body {
+                overflow-x: hidden;
+            }
+            
+            * {
+                max-width: 100%;
+            }
+            
+            table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 0.75rem;
+            }
+            
+            h1 {
+                font-size: 1.3rem;
+            }
+            
+            h2 {
+                font-size: 1.1rem;
+            }
+            
+            .step {
+                width: 28px;
+                height: 28px;
+                font-size: 0.8rem;
+            }
+            
+            .step.active {
+                width: 34px !important;
+                height: 34px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    
+    
+    
+    <!-- Step 3 Breadcrumb - Outside Container -->
+    <div class="step-indicator">
+        <a href="/roi-calculator?step=1" class="step completed">1</a>
+        <a href="/roi-calculator?step=2&amp;industry=Accounting" class="step completed">2</a>
+        <span class="step active">3</span>
+        <span class="step">4</span>
+    </div>
+    
+    
+    <div class="container">
+        
+        
+        
+        <div class="conservative-framing-notice">
+            <h2>🎯 Your Low-Hanging Fruit Opportunity</h2>
+            <p><strong>Conservative Estimate:</strong> This analysis shows savings on <strong>proven, repetitive tasks</strong> that we KNOW exist in Accounting firms. This is the minimum opportunity - there may be additional savings once we analyze YOUR specific workflows in Phase 1.</p>
+        </div>
+        
+        <div class="methodology-notice">
+            <p><strong>⚠️ Methodology:</strong> Based on 50 documentation staff (80% of your 50 total staff). We exclude the top 20% who are executives/senior partners that primarily review and approve work rather than handle repetitive documentation tasks. Average of 4.0 hours/week per documentation staff at $130/hr loaded cost.</p>
+        </div>
+        
+        <hr>
+        
+        <h2>Your Documentation Staff Profile</h2>
+        <div class="profile-summary">
+            <div class="profile-item">
+                <span class="profile-label">Total Technical Staff:</span>
+                <span class="profile-value">50</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Firm Size Category:</span>
+                <span class="profile-value">Standard</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Documentation Staff (80%):</span>
+                <span class="profile-value">50</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Executives/Senior Partners (20%):</span>
+                <span class="profile-value">0 (excluded - review/approve only)</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Doc Staff Typical Rate:</span>
+                <span class="profile-value">$130/hour</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Hours/Week per Doc Staff:</span>
+                <span class="profile-value">4.0 hours</span>
+            </div>
+            <div class="profile-item">
+                <span class="profile-label">Total Documentation Time:</span>
+                <span class="profile-value">200 hours/week firm-wide</span>
+            </div>
+        </div>
+        
+        <div class="insight-callout">
+            <h4>💡 Why We Focus on Documentation Staff</h4>
+            <p>Partners and senior staff (0 people in your firm) primarily review and approve work - they don't spend significant time on <strong>repetitive manual tasks</strong> like data entry, formatting, or compilation.</p>
+            <p>The 50 documentation staff (coordinators, junior/mid-level engineers, admin) are where the automation opportunity exists. <strong>These are conservative estimates based on proven implementations.</strong></p>
+        </div>
+        <hr>
+        <!-- BIG SCARY NUMBER -->
+        <div class="annual-burn-section" style="background: linear-gradient(135deg, #0B1221, #1a2332); border-radius: 16px; padding: 3rem 2rem; text-align: center; margin: 2rem 0; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);">
+            <div style="color: #D4AF37; font-size: 1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 1rem;">Estimated Annual Documentation Cost</div>
+            <div style="font-size: 4rem; font-weight: 800; background: linear-gradient(135deg, #D4AF37, #FFD700); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; margin-bottom: 1rem; line-height: 1;">$1,248,000</div>
+            <div style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem; font-style: italic;">Based on your inputs</div>
+        </div>
+        
+        <hr>
+        
+        <h2>Proven Low-Hanging Fruit Tasks</h2>
+        <p class="section-subhead">These are repetitive tasks we KNOW exist in Accounting firms and have proven automation success:</p>
+        
+        <p style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 1rem 1.5rem; border-radius: 0 8px 8px 0; font-weight: 600; color: #1E40AF; margin-bottom: 1.5rem;">
+            💡 We've analyzed all 5 tasks and ranked them by ROI potential. Your #1 quick-win opportunity is highlighted below.
+        </p>
+        
+        <div class="task-breakdown">
+            
+                <p>Task breakdown not available for this industry.</p>
+            
+        </div>
+        
+        <hr>
+        
+        <h2>Conservative Opportunity Summary</h2>
+        
+        <div class="conservative-summary-box">
+            <p><strong>What This Represents:</strong></p>
+            <ul>
+                <li>✅ Proven repetitive tasks (not aspirational)</li>
+                <li>✅ Conservative automation rates (actual success rates applied)</li>
+                <li>✅ Documentation staff only (excludes senior/partners)</li>
+                <li>✅ Low-hanging fruit (quick wins, not total transformation)</li>
+            </ul>
+            <p><strong>What This DOESN'T Include:</strong></p>
+            <ul>
+                <li>❌ Additional tasks we haven't identified yet</li>
+                <li>❌ Workflow improvements beyond automation</li>
+                <li>❌ Time savings for senior staff (review/approval time)</li>
+                <li>❌ Aspirational "maximum potential" scenarios</li>
+            </ul>
+        </div>
+        
+        <div class="roi-result-grid">
+            <div class="roi-result-card">
+                <div class="roi-result-stat">$1,248,000</div>
+                <div class="roi-result-label">Annual Documentation Cost</div>
+                <p class="roi-result-description">50 doc staff × 4.0 hrs/week × $130/hr</p>
+            </div>
+            
+            <div class="roi-result-card roi-result-card-primary">
+                <div class="roi-result-stat">$499,200</div>
+                <div class="roi-result-label">Proven Low-Hanging Fruit (40%)</div>
+                <p class="roi-result-description"><strong>Conservative estimate</strong> on tasks we KNOW we can automate</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">80</div>
+                <div class="roi-result-label">Hours Recoverable per Week</div>
+                <p class="roi-result-description">Time that can be redirected to billable work</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">$499,200</div>
+                <div class="roi-result-label">Revenue Opportunity</div>
+                <p class="roi-result-description">If recovered hours are billed to clients</p>
+            </div>
+        </div>
+        
+        <!-- THREE SCENARIOS: OPTIMISTIC, PROBABLE, CONSERVATIVE -->
+        <div style="background: white; border: 2px solid #E5E7EB; border-radius: 12px; padding: 2rem; margin: 2rem 0;">
+            <h2 style="color: #0B1221; font-size: 1.75rem; margin-bottom: 1.5rem; text-align: center;">Savings Scenarios: Optimistic, Probable, Conservative</h2>
+            <p style="color: #6B7280; text-align: center; margin-bottom: 2rem; font-size: 0.95rem;">
+                Based on industry averages and implementation factors. Your actual results will depend on your specific documents and workflows.
+            </p>
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 2rem;">
+                <!-- OPTIMISTIC -->
+                <div style="background: linear-gradient(to bottom, #F0FDF4, white); border: 2px solid #10B981; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Optimistic</div>
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">$673,920</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">54% automation</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        Best-case: Ideal document formats, high staff adoption, minimal change management delays.
+                    </p>
+                </div>
+                
+                <!-- PROBABLE (Most Likely) -->
+                <div style="background: linear-gradient(to bottom, #FFFBF0, white); border: 3px solid #D4AF37; border-radius: 8px; padding: 1.5rem; text-align: center; box-shadow: 0 4px 12px rgba(212, 175, 55, 0.2);">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #D4AF37; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Probable ⭐</div>
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">$574,080</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">46% automation</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        <strong>Most likely scenario</strong> based on industry averages and proven implementations (15% above conservative baseline).
+                    </p>
+                </div>
+                
+                <!-- CONSERVATIVE (Current Adjusted Value) -->
+                <div style="background: linear-gradient(to bottom, #FEF3C7, white); border: 2px solid #F59E0B; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #F59E0B; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Conservative</div>
+                    <div style="font-size: 2.5rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">$499,200</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">40% automation</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        Baseline scenario using proven automation rates with industry variance multiplier applied.
+                    </p>
+                </div>
+            </div>
+            
+            <div style="background: #F8F9FA; border-left: 4px solid #6B7280; padding: 1rem 1.5rem; border-radius: 4px; margin-top: 2rem; font-size: 0.875rem; color: #4B5563;">
+                <strong>Note:</strong> These scenarios are based on industry averages. Phase 1 Feasibility Sprint ($1,500) will provide YOUR actual numbers using your real documents.
+            </div>
+        </div>
+        
+        <!-- STAFF ADOPTION SENSITIVITY -->
+        <div style="background: white; border: 2px solid #E5E7EB; border-radius: 12px; padding: 2rem; margin: 2rem 0;">
+            <h2 style="color: #0B1221; font-size: 1.75rem; margin-bottom: 0.5rem;">Staff Adoption Impact</h2>
+            <p style="color: #6B7280; margin-bottom: 1.5rem; font-size: 0.95rem;">
+                Even with perfect automation, actual savings depend on how many staff adopt the new system. This shows the impact on your <strong>Probable scenario</strong>.
+            </p>
+            
+            
+            
+            
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 1.5rem;">
+                <!-- HIGH ADOPTION -->
+                <div style="background: linear-gradient(to bottom, #DCFCE7, white); border: 2px solid #10B981; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">High Adoption</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">$459,264</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">80% of staff use system</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        Strong change management, comprehensive training, and executive sponsorship.
+                    </p>
+                </div>
+                
+                <!-- EXPECTED ADOPTION -->
+                <div style="background: linear-gradient(to bottom, #FEF3C7, white); border: 3px solid #F59E0B; border-radius: 8px; padding: 1.5rem; text-align: center; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #F59E0B; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Expected Adoption ⭐</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">$344,448</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">60% of staff use system</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        <strong>Most likely outcome</strong> with standard training and support. Typical for mid-sized firms.
+                    </p>
+                </div>
+                
+                <!-- LOW ADOPTION -->
+                <div style="background: linear-gradient(to bottom, #FEE2E2, white); border: 2px solid #DC2626; border-radius: 8px; padding: 1.5rem; text-align: center;">
+                    <div style="font-size: 0.875rem; font-weight: 600; color: #DC2626; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Low Adoption</div>
+                    <div style="font-size: 2rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">$229,632</div>
+                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">40% of staff use system</div>
+                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
+                        Minimal training, resistance to change, or lack of executive support. Still delivers value.
+                    </p>
+                </div>
+            </div>
+            
+            <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 1rem 1.5rem; border-radius: 4px; margin-top: 2rem; font-size: 0.875rem; color: #1E40AF;">
+                <strong>💡 Mitigation Strategy:</strong> Phase 2-4 includes SOP videos, 30-day support channels, and change management protocols to maximize adoption rates. Most firms achieve 60%+ adoption within 90 days.
+            </div>
+        </div>
+        
+        <div class="tier-2-note">
+            <h4>📈 Tier 2 Opportunity: $811,200</h4>
+            <p>With expanded automation and workflow optimization (typically 12-18 months), firms achieve 65% efficiency gains. <strong>But let's prove Phase 1 first.</strong></p>
+        </div>
+        
+        
+        
+        <!-- REALITY CHECK BOX -->
+        <div class="reality-check-box" style="background: linear-gradient(135deg, rgba(255, 165, 0, 0.1), rgba(255, 165, 0, 0.05)); border: 2px solid rgba(255, 165, 0, 0.4); border-radius: 12px; padding: 2rem; margin: 2rem 0;">
+            <h3 style="color: #FF8C00; font-size: 1.5rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">⚠️ Important: This is an ESTIMATE</h3>
+            <p style="color: #4B5563; font-size: 1rem; line-height: 1.7; margin-bottom: 1rem;">
+                This calculator uses <strong style="color: #0B1221;">industry averages</strong> and 
+                <strong style="color: #0B1221;">generic assumptions</strong>. We don't actually know:
+            </p>
+            <ul style="list-style: none; padding: 0; margin: 1rem 0;">
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    How YOUR firm actually works (your unique workflows and processes)
+                </li>
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    Which of YOUR tasks can realistically be automated (vs require human judgment)
+                </li>
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    Whether YOUR documents are suitable for AI extraction (format, quality, complexity)
+                </li>
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    If YOUR staff will adopt new workflows (change management is the #1 risk)
+                </li>
+                <li style="padding: 0.5rem 0; padding-left: 1.5rem; position: relative; color: #4B5563; line-height: 1.6;">
+                    <span style="position: absolute; left: 0; color: #FF8C00; font-weight: 700;">✗</span>
+                    What YOUR specific baseline efficiency is (you might already be more efficient than average)
+                </li>
+            </ul>
+            <div style="background: white; padding: 1rem; border-radius: 8px; border-left: 4px solid #FF8C00; margin-top: 1rem; font-weight: 600; color: #0B1221;">
+                That's why Phase 1 exists: to replace these guesses with proof using YOUR actual documents.
+            </div>
+        </div>
+        
+        <!-- Utilization Disclaimer -->
+        <p class="disclaimer" style="font-size: 0.9em; color: #6B7280; margin-bottom: 20px; padding: 1rem; background: rgba(107, 114, 128, 0.1); border-left: 3px solid #6B7280; border-radius: 6px;">
+            *Assumes 70% of recovered time converts to billable work. Actual results depend on 
+            firm capacity and client demand.
+        </p>
+        
+        
+        <!-- PHASE 1 EXPLAINER (UNIVERSAL) -->
+        
+        <div class="phase1-explainer" style="background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(212, 175, 55, 0.05)); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 12px; padding: 2.5rem; margin: 3rem 0;">
+            <h2 style="color: #0B1221; font-size: 2rem; margin-bottom: 1.5rem; text-align: center;">Replace This Estimate With Proof: $1,500 Feasibility Sprint</h2>
+            
+            <div class="phase1-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 2rem 0;">
+                <div class="phase1-column" style="background: white; border-radius: 8px; padding: 1.5rem; border: 1px solid #E5E7EB;">
+                    <h4 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">📋 What We'll Test (48 hours):</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            15 of YOUR documents (including 5 receipts, plus invoices, bank statements, trust account transactions, or inter-entity reconciliations)
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            AI extraction accuracy on YOUR specific document formats
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Time savings based on YOUR baseline process (not industry averages)
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Integration feasibility with YOUR systems
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="phase1-column" style="background: white; border-radius: 8px; padding: 1.5rem; border: 1px solid #E5E7EB;">
+                    <h4 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">✅ What You Get:</h4>
+                    <ul style="list-style: none; padding: 0; margin: 0;">
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Accuracy report showing extraction results on your docs
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            ROI calculation using YOUR data (not generic estimates)
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6; border-bottom: 1px solid #F8F9FA;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Feasibility assessment: "Will this work for us?"
+                        </li>
+                        <li style="padding: 0.75rem 0; padding-left: 2rem; position: relative; color: #4B5563; font-size: 0.95rem; line-height: 1.6;">
+                            <span style="position: absolute; left: 0; color: #4CAF50; font-weight: 700;">✓</span>
+                            Decision point: Proceed to Phase 2 or walk away with full refund
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Guarantee Box -->
+            <div class="guarantee-box" style="background: white; border: 2px solid #4CAF50; border-radius: 12px; padding: 2rem; margin: 2rem 0;">
+                <h4 style="color: #4CAF50; font-size: 1.3rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">🛡️ Zero-Risk Guarantee:</h4>
+                <p style="color: #4B5563; font-size: 1rem; line-height: 1.7; margin-bottom: 1rem;">
+                    If we don't achieve <strong style="color: #0B1221;">90%+ accuracy</strong> on your documents, 
+                    you get a <strong style="color: #0B1221;">full refund</strong>. No questions asked. No fine print.
+                </p>
+                <div style="font-size: 0.9rem; color: #6B7280; background: #F8F9FA; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+                    <strong>Only condition:</strong> You provide 30 invoices, bank statements, trust account transactions, or inter-entity reconciliations and respond 
+                    to clarification questions promptly. We can't test if you don't participate.
+                </div>
+            </div>
+            
+            <!-- PRIMARY CTA -->
+            <div class="primary-cta-section" style="text-align: center; margin: 3rem 0; padding: 2rem; background: white; border-radius: 12px; border: 2px solid #D4AF37;">
+                <a href="/contact" class="btn-primary-huge" style="display: inline-block; background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; font-size: 1.3rem; font-weight: 700; padding: 1.25rem 3rem; border-radius: 8px; text-decoration: none; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);">
+                    Book $1,500 Feasibility Test →
+                </a>
+                <p style="margin-top: 1rem; color: #4B5563; font-size: 0.95rem; font-style: italic;">
+                    3 hours of your time. 48-hour turnaround. Full refund if accuracy <90%.
+                </p>
+            </div>
+        </div>
+        
+        <h3>Cost Reduction Roadmap</h3>
+        <p style="color: #6B7280; font-size: 0.95rem; margin-bottom: 1rem;">
+            Annual documentation costs after each automation phase (bars show remaining cost):
+        </p>
+        <div class="chart-container">
+            <div id="chart"></div>
+        </div>
+        
+        
+        <hr>
+        <!-- AI Opportunity Heatmap (only show if we have opportunities) -->
+        <div class="heatmap-container">
+            <h3>🎯 AI Automation Opportunities for Your Industry</h3>
+            <p style="color: #4B5563; margin-bottom: 1rem;">Specific tasks with automation potential:</p>
+            <table class="heatmap-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>AI Potential</th>
+                        <th>Time per Week</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td><strong>Trust Account Reconciliations</strong></td>
+                        <td>
+                            
+                            <span class="potential-badge potential-high">🔥 HIGH</span>
+                            
+                        </td>
+                        <td>8 hrs/week</td>
+                        <td style="color: #4B5563; font-size: 0.9rem;">Automated transaction matching and exception flagging</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Inter-Entity Reconciliations</strong></td>
+                        <td>
+                            
+                            <span class="potential-badge potential-high">🔥 HIGH</span>
+                            
+                        </td>
+                        <td>7 hrs/week</td>
+                        <td style="color: #4B5563; font-size: 0.9rem;">Cross-entity loan accounts and management fee matching</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Complex Invoice GL Coding</strong></td>
+                        <td>
+                            
+                            <span class="potential-badge potential-high">🔥 HIGH</span>
+                            
+                        </td>
+                        <td>6 hrs/week</td>
+                        <td style="color: #4B5563; font-size: 0.9rem;">Multi-line invoice splitting across cost centers</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Three-Way Match (PO/Docket/Invoice)</strong></td>
+                        <td>
+                            
+                            <span class="potential-badge potential-medium">🟡 MEDIUM</span>
+                            
+                        </td>
+                        <td>5 hrs/week</td>
+                        <td style="color: #4B5563; font-size: 0.9rem;">Automated variance detection and approval routing</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Fraud Detection (Bank Details)</strong></td>
+                        <td>
+                            
+                            <span class="potential-badge potential-medium">🟡 MEDIUM</span>
+                            
+                        </td>
+                        <td>3 hrs/week</td>
+                        <td style="color: #4B5563; font-size: 0.9rem;">BSB/account verification against master records</td>
+                    </tr>
+                    
+                    <tr>
+                        <td><strong>Bank Reconciliation</strong></td>
+                        <td>
+                            
+                            <span class="potential-badge potential-low">🟢 LOW</span>
+                            
+                        </td>
+                        <td>2 hrs/week</td>
+                        <td style="color: #4B5563; font-size: 0.9rem;">Automated bank statement matching</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+            <p style="margin-top: 1rem; color: #4B5563; font-size: 0.9rem;"><strong>💡 High-potential tasks</strong> = Best ROI for automation investment. Phase 1 will validate which tasks are suitable for YOUR documents.</p>
+        </div>
+        
+        <div class="explanation-box">
+            <h4>How These Numbers Are Calculated</h4>
+            <p><strong>Annual Revenue Leakage (Efficiency Loss):</strong></p>
+            <p>This represents the total cost of wasted time spent on manual administrative tasks. Calculated as:</p>
+            <ul>
+                <li><strong>Staff Count</strong> × <strong>Weekly Waste Hours</strong> × <strong>Billable Rate</strong> × <strong>48 weeks</strong></li>
+                <li>Example: 50 staff × 5 hours/week × $185/hour × 48 weeks = $2,220,000 annually</li>
+            </ul>
+            <p><strong>Capacity Hours:</strong></p>
+            <p>The total billable hours currently lost to non-billable administrative work:</p>
+            <ul>
+                <li><strong>Staff Count</strong> × <strong>Weekly Waste Hours</strong> × <strong>48 weeks</strong></li>
+                <li>Example: 50 staff × 5 hours/week × 48 weeks = 12,000 hours/year</li>
+            </ul>
+            <p><strong>Potential Revenue Opportunity:</strong></p>
+            <p>If these hours were freed up and could be billed to clients:</p>
+            <ul>
+                <li><strong>Capacity Hours</strong> × <strong>Billable Rate</strong></li>
+                <li>Example: 12,000 hours × $185/hour = $2,220,000 in potential revenue</li>
+            </ul>
+            <p><strong>Tier 1 Opportunity (Immediate Opportunity - 40% Reduction):</strong></p>
+            <p>A conservative estimate assuming 40% reduction in administrative time through Phase 1 automation (e.g., automated data extraction, document processing):</p>
+            <ul>
+                <li><strong>Annual Revenue Leakage</strong> × <strong>40%</strong></li>
+                <li>This represents the "low-hanging fruit" - quick wins that can be implemented in the first 3-6 months</li>
+            </ul>
+            <p><strong>Tier 2 Opportunity (Expanded Automation - 70% Reduction):</strong></p>
+            <p>Further automation and workflow optimization, expanding beyond initial use cases:</p>
+            <ul>
+                <li><strong>Annual Revenue Leakage</strong> × <strong>70%</strong></li>
+                <li>Includes Tier 1 benefits plus advanced automation, process redesign, and integration across systems</li>
+                <li>Typically achieved within 12-18 months of implementation</li>
+            </ul>
+            <p><strong>Why This Matters:</strong></p>
+            <p>These numbers reveal hidden costs in your organization. Every hour spent on manual data entry, document formatting, or repetitive administrative tasks is an hour that could be:</p>
+            <ul>
+                <li><strong>Billed to clients</strong> - directly increasing revenue</li>
+                <li><strong>Spent on strategic work</strong> - improving project quality and client satisfaction</li>
+                <li><strong>Invested in growth</strong> - allowing you to take on more projects without hiring</li>
+            </ul>
+            <p>Automation doesn't just save time—it unlocks capacity that can be redirected to revenue-generating activities, giving you a competitive advantage and improving your bottom line.</p>
+        </div>
+        
+        <!-- NEXT STEPS CTA SECTION -->
+        <div class="cta-section-end" style="background: linear-gradient(135deg, #0B1221, #1a2332); border-radius: 16px; padding: 3rem 2rem; margin: 3rem 0; text-align: center;">
+            <h2 style="color: #D4AF37; font-size: 2rem; margin-bottom: 1rem;">Ready to Prove This Works?</h2>
+            <p style="color: rgba(255, 255, 255, 0.9); font-size: 1.1rem; max-width: 600px; margin: 0 auto 2rem auto; line-height: 1.6;">
+                This calculator shows <strong>$499,200 in potential savings</strong> based on industry averages. 
+                Want to test this on YOUR actual documents?
+            </p>
+            
+            <div class="cta-grid" style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; max-width: 900px; margin: 0 auto;">
+                <!-- Email me the report Button -->
+                <button onclick="emailPhase1Report()" class="btn" style="background: linear-gradient(135deg, #D4AF37, #B8941F); color: #0B1221; padding: 1rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 8px; text-decoration: none; transition: all 0.2s ease; border: 1px solid #D4AF37; cursor: pointer;">
+                    Email me the report
+                </button>
+                
+                <!-- See It In Action Button -->
+                <a href="/contact.html?option=phase-1" class="btn" style="background: transparent; color: rgba(255, 255, 255, 0.9); padding: 1rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 8px; text-decoration: none; transition: all 0.2s ease; border: 2px solid rgba(255, 255, 255, 0.3);">
+                    See It In Action
+                </a>
+                
+                <!-- Request Information Button -->
+                <a href="/feasibility-preview.html" class="btn" style="background: transparent; color: rgba(255, 255, 255, 0.9); padding: 1rem 2rem; font-size: 1rem; font-weight: 600; border-radius: 8px; text-decoration: none; transition: all 0.2s ease; border: 2px solid rgba(255, 255, 255, 0.3);">
+                    Request Information
+                </a>
+            </div>
+            
+            <!-- Email Modal for Phase-1 Report -->
+            <div id="phase1EmailModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+                    <h3 style="color: #0B1221; margin-top: 0; margin-bottom: 0.5rem;">Email Phase-1 Report</h3>
+                    <p style="color: #4B5563; margin-bottom: 1.5rem;">Enter your email address to receive the Phase-1 Feasibility Sprint PDF report.</p>
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label for="phase1EmailInput" style="display: block; color: #0B1221; font-weight: 600; margin-bottom: 0.5rem;">Email Address</label>
+                        <input type="email" id="phase1EmailInput" placeholder="your.email@company.com" style="width: 100%; padding: 0.75rem; border: 1px solid #E5E7EB; border-radius: 6px; font-size: 1rem; box-sizing: border-box;" required>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; justify-content: flex-end;">
+                        <button onclick="closePhase1EmailModal()" style="background: #E5E7EB; color: #4B5563; border: none; border-radius: 6px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                            Cancel
+                        </button>
+                        <button onclick="sendPhase1Email()" style="background: #D4AF37; color: #0B1221; border: none; border-radius: 6px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                            📧 Send Report
+                        </button>
+                    </div>
+                    <div id="phase1EmailError" style="display: none; color: #DC2626; background: #FEE2E2; padding: 0.75rem; border-radius: 6px; margin-top: 1rem; font-size: 0.9rem;"></div>
+                </div>
+            </div>
+            
+            <!-- Success Modal for Phase-1 Report -->
+            <div id="phase1SuccessModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+                <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 450px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.2); text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">✅</div>
+                    <h3 style="color: #0B1221; margin-top: 0; margin-bottom: 0.5rem;">Report Sent Successfully!</h3>
+                    <p id="phase1SuccessMessage" style="color: #4B5563; margin-bottom: 1.5rem;">Check your inbox for the Phase-1 Feasibility Sprint PDF.</p>
+                    <button onclick="closePhase1SuccessModal()" style="background: #D4AF37; color: #0B1221; border: none; border-radius: 6px; padding: 0.75rem 2rem; font-size: 1rem; font-weight: 600; cursor: pointer;">
+                        Got it!
+                    </button>
+                </div>
+            </div>
+            
+            <script>
+            function emailPhase1Report() {
+                document.getElementById('phase1EmailModal').style.display = 'flex';
+                document.getElementById('phase1EmailInput').focus();
+            }
+            
+            function closePhase1EmailModal() {
+                document.getElementById('phase1EmailModal').style.display = 'none';
+                document.getElementById('phase1EmailInput').value = '';
+                document.getElementById('phase1EmailError').style.display = 'none';
+            }
+            
+            function closePhase1SuccessModal() {
+                document.getElementById('phase1SuccessModal').style.display = 'none';
+            }
+            
+            function sendPhase1Email() {
+                const emailInput = document.getElementById('phase1EmailInput');
+                const email = emailInput.value.trim();
+                const errorDiv = document.getElementById('phase1EmailError');
+                const sendBtn = document.querySelector('#phase1EmailModal button[onclick="sendPhase1Email()"]');
+                
+                // Basic validation
+                if (!email) {
+                    errorDiv.textContent = 'Please enter an email address.';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                if (!email.includes('@') || !email.includes('.')) {
+                    errorDiv.textContent = 'Please enter a valid email address.';
+                    errorDiv.style.display = 'block';
+                    return;
+                }
+                
+                // Hide error and disable button
+                errorDiv.style.display = 'none';
+                const originalText = sendBtn.textContent;
+                sendBtn.textContent = 'Sending...';
+                sendBtn.disabled = true;
+                
+                // Send email
+                fetch('/roi-calculator/email-phase1-report', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        email: email
+                    })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        closePhase1EmailModal();
+                        document.getElementById('phase1SuccessMessage').textContent = 'The Phase-1 Feasibility Sprint report has been sent to ' + email;
+                        document.getElementById('phase1SuccessModal').style.display = 'flex';
+                    } else {
+                        errorDiv.textContent = data.error || 'Failed to send email. Please try again.';
+                        errorDiv.style.display = 'block';
+                        sendBtn.textContent = originalText;
+                        sendBtn.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    errorDiv.textContent = 'Network error. Please check your connection and try again.';
+                    errorDiv.style.display = 'block';
+                    sendBtn.textContent = originalText;
+                    sendBtn.disabled = false;
+                });
+            }
+            
+            // Allow Enter key to submit
+            document.addEventListener('DOMContentLoaded', function() {
+                const emailInput = document.getElementById('phase1EmailInput');
+                if (emailInput) {
+                    emailInput.addEventListener('keypress', function(e) {
+                        if (e.key === 'Enter') {
+                            sendPhase1Email();
+                        }
+                    });
+                }
+            });
+            
+            // Close modal on outside click
+            const phase1Modal = document.getElementById('phase1EmailModal');
+            if (phase1Modal) {
+                phase1Modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closePhase1EmailModal();
+                    }
+                });
+            }
+            
+            const phase1SuccessModal = document.getElementById('phase1SuccessModal');
+            if (phase1SuccessModal) {
+                phase1SuccessModal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closePhase1SuccessModal();
+                    }
+                });
+            }
+            </script>
+            
+            <p style="color: rgba(255, 255, 255, 0.7); font-size: 0.9rem; margin-top: 2rem;">
+                90%+ accuracy guarantee • Full refund if we miss the target • 48-hour turnaround
+            </p>
+        </div>
+
+        <!-- Back Button -->
+        <div class="btn-group back-button-final" style="justify-content: center; margin-top: 2rem;">
+            <a href="/roi-calculator?step=2&amp;industry=Accounting" class="btn btn-secondary" style="opacity: 0.6;">← Adjust Your Inputs</a>
+        </div>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <script>
+            var chartData = {"data": [{"x": ["Today's<br>Cost", "After Phase 1<br>(Save $499,200)", "After Phase 2<br>(Save $811,200)"], "y": [1248000.0, 748800.0, 436800.0], "type": "bar", "marker": {"color": ["#0B1221", "#D4AF37", "#B8941F"]}, "text": ["$1,248,000", "$748,800", "$436,800"], "textposition": "outside", "hovertemplate": "%{y:$,.0f}<extra></extra>", "textfont": {"size": 12}}], "layout": {"title": "", "xaxis": {"title": "", "tickangle": 0, "tickfont": {"size": 11}}, "yaxis": {"title": "Annual Cost (AUD)", "tickformat": "$,.0f"}, "showlegend": false, "height": 450, "margin": {"t": 60, "b": 100, "l": 80, "r": 40}, "plot_bgcolor": "white", "paper_bgcolor": "white"}};
+            Plotly.newPlot('chart', chartData.data, chartData.layout);
+            
+            // Scroll indicator functionality
+            function scrollToNext() {
+                window.scrollBy({
+                    top: window.innerHeight * 0.8,
+                    behavior: 'smooth'
+                });
+            }
+            
+            function updateScrollIndicator() {
+                var indicator = document.getElementById('scrollIndicator');
+                if (!indicator) return;
+                
+                var windowHeight = window.innerHeight;
+                var documentHeight = document.documentElement.scrollHeight;
+                var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                
+                // Show indicator if there's more content below and user hasn't scrolled to bottom
+                if (documentHeight > windowHeight && scrollTop < documentHeight - windowHeight - 100) {
+                    indicator.classList.add('visible');
+                } else {
+                    indicator.classList.remove('visible');
+                }
+            }
+            
+            // Update scroll indicator on scroll and load
+            window.addEventListener('scroll', updateScrollIndicator);
+            window.addEventListener('load', updateScrollIndicator);
+            window.addEventListener('resize', updateScrollIndicator);
+            
+        </script>
+        
+        
+    </div>
+</body>
+</html>

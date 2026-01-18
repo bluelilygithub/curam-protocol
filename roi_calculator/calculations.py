@@ -410,12 +410,17 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
     Returns:
         dict: ROI calculation results compatible with calculate_conservative_roi format
     """
+    # Apply 20% executive exclusion (fixed rule)
+    EXECUTIVE_EXCLUSION_RATE = 0.20
+    doc_staff_percentage = 1.0 - EXECUTIVE_EXCLUSION_RATE  # Always 80%
+    doc_staff_count = int(staff_count * doc_staff_percentage)
+    
     # Use industry-specific automation potential or conservative default
     automation_potential = industry_config.get('automation_potential', 0.35)
     
     # Use industry-specific hours per staff or default
     hours_per_staff = industry_config.get('hours_per_staff_per_week', 4.0)
-    total_weekly_hours = staff_count * hours_per_staff
+    total_weekly_hours = doc_staff_count * hours_per_staff
     
     # Calculate basic metrics
     annual_burn = total_weekly_hours * avg_rate * 48
@@ -436,12 +441,12 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
     return {
         "mode": "simple_fallback",
         "total_staff": staff_count,
-        "doc_staff_count": staff_count,  # Assume all staff for simple calc
-        "doc_staff_percentage": 100.0,  # 100% for simple calc
-        "base_doc_staff_percentage": 100.0,
-        "base_doc_staff_count": staff_count,
+        "doc_staff_count": doc_staff_count,
+        "doc_staff_percentage": doc_staff_percentage * 100,  # 80%
+        "base_doc_staff_percentage": doc_staff_percentage * 100,
+        "base_doc_staff_count": doc_staff_count,
         "firm_size_category": "Standard",
-        "scaling_note": "Using industry-specific automation potential",
+        "scaling_note": "80% documentation staff (20% executives excluded)",
         "hours_per_doc_staff": hours_per_staff,
         "typical_doc_rate": avg_rate,
         "total_weekly_hours": total_weekly_hours,
