@@ -670,9 +670,305 @@
                 <div class="swiper-pagination"></div>
             </div>
 
-            <!-- Note: Additional sliders for Logistics, Financial Planning, and Insurance would follow the same pattern -->
-            <!-- For brevity, showing just Engineering and Accounting as examples -->
-            <!-- Each would have correct multipliers: Logistics (0.90), Financial Planning (0.90), Insurance (0.90) -->
+            <!-- LOGISTICS SLIDER (High-Reliability: 0.90 multiplier) -->
+            <div class="report-slider swiper" id="slider-logistics" style="margin-top: 3rem;">
+                <div class="swiper-wrapper">
+                    <div class="swiper-slide report-slide report-slide-dark">
+                        <div class="report-slide-cover">
+                            <div class="report-slide-cover-brand">Curam-Ai</div>
+                            <h1 class="report-slide-cover-title">Curam-Ai Protocol™</h1>
+                            <h2 class="report-slide-cover-subtitle">Phase 1 – Feasibility Sprint</h2>
+                            <p class="report-slide-cover-text">Logistics Sector Report</p>
+                            <p class="report-slide-cover-meta">Generated: January 2025 | Sample Client</p>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Assumed Variables</h2></div>
+                        <div class="report-slide-content">
+                            <table class="report-table">
+                                <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Total Staff</td><td>50</td></tr>
+                                    <tr><td>Documentation Staff (65%)</td><td>33</td></tr>
+                                    <tr><td>Current Process</td><td>Manual / TMS Integration</td></tr>
+                                    <tr><td>Operations Rate (Loaded Cost)</td><td>$85/hr</td></tr>
+                                    <tr><td>Admin Rate (Loaded Cost)</td><td>$50/hr</td></tr>
+                                    <tr><td>Industry Variance</td><td><strong>Applied (High-Reliability)</strong></td></tr>
+                                </tbody>
+                            </table>
+                            <p class="report-text-small">*Logistics documents (BOLs, customs forms, manifests) are highly structured with standardized formats.</p>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Test Results Summary</h2></div>
+                        <div class="report-slide-content">
+                            <div style="display: flex; gap: 20px; margin-bottom: 30px;">
+                                <div style="flex: 1; background: #f0fdf4; padding: 20px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #166534; font-weight: 600;">Test 1: Field Extraction</div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin: 10px 0;">94.8%</div>
+                                    <div style="font-size: 0.85rem; color: #166534;">✅ PASS (Target: ≥90%)</div>
+                                </div>
+                                <div style="flex: 1; background: #f0fdf4; padding: 20px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #166534; font-weight: 600;">Test 2: STP Rate</div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin: 10px 0;">78%</div>
+                                    <div style="font-size: 0.85rem; color: #166534;">✅ PASS (Target: ≥60%)</div>
+                                </div>
+                                <div style="flex: 1; background: #f0fdf4; padding: 20px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #166534; font-weight: 600;">Test 3: Exception Safety</div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin: 10px 0;">PASS</div>
+                                    <div style="font-size: 0.85rem; color: #166534;">✅ 2 exceptions properly flagged</div>
+                                </div>
+                            </div>
+                            <div class="report-slide-callout" style="background: #f0fdf4; border-color: #10b981;">
+                                <strong style="color: #166534;">✅ RECOMMENDATION: PROCEED TO PHASE 2</strong>
+                                <p style="margin: 0.75rem 0 0 0; color: #166534;">All three tests passed. System handles bills of lading, customs forms, and freight manifests effectively.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Preliminary ROI Model</h2></div>
+                        <div class="report-slide-content">
+                            <div style="margin-bottom: 2rem;">
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Labor Cost</h3>
+                                <div class="report-bg-light">
+                                    <table class="report-table report-table-no-margin">
+                                        <tr><td>Operations: 20 staff × 6 hrs/week × $85/hr × 48 weeks</td><td class="report-table-text-right">$489,600</td></tr>
+                                        <tr><td>Admin: 13 staff × 7 hrs/week × $50/hr × 48 weeks</td><td class="report-table-text-right">$218,400</td></tr>
+                                        <tr class="report-table-row-total"><td><strong>Baseline Total</strong></td><td class="report-table-text-right"><strong>$708,000</strong></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Industry-Adjusted Annual Value</h3>
+                                <div class="report-bg-light">
+                                    <table class="report-table report-table-no-margin">
+                                        <tr><td>Industry Variance Multiplier</td><td class="report-table-text-right"><em>Applied (High-Reliability)</em></td></tr>
+                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Adjusted Annual Value</strong></td><td class="report-table-text-right"><strong>~$432k</strong></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Ready to Validate YOUR Documents?</h2></div>
+                        <div class="report-slide-content">
+                            <div style="text-align: center; padding: 2rem;">
+                                <div style="margin-top: 3rem; padding: 2rem; background: rgba(212, 175, 55, 0.1); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 8px;">
+                                    <h3 style="margin: 0 0 1.5rem 0; color: var(--color-navy); font-size: 1.25rem;">Start Your Feasibility Sprint</h3>
+                                    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                                        <a href="contact.html?option=phase-1" class="btn btn-primary">Book Phase 1 — $1,500</a>
+                                        <a href="contact.html?option=pre-screen" class="btn btn-secondary" style="background: #0B1221; border: 2px solid #D4AF37; color: white;">Free Pre-Screen Call</a>
+                                    </div>
+                                    <p style="margin: 0; font-size: 0.85rem; color: #6B7280;"><strong style="color: var(--color-navy);">Money-Back Guarantee:</strong> If we don't hit ≥90% accuracy, full refund.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-pagination"></div>
+            </div>
+
+            <!-- FINANCIAL PLANNING SLIDER (High-Reliability: 0.90 multiplier) -->
+            <div class="report-slider swiper" id="slider-financial-planning" style="margin-top: 3rem;">
+                <div class="swiper-wrapper">
+                    <div class="swiper-slide report-slide report-slide-dark">
+                        <div class="report-slide-cover">
+                            <div class="report-slide-cover-brand">Curam-Ai</div>
+                            <h1 class="report-slide-cover-title">Curam-Ai Protocol™</h1>
+                            <h2 class="report-slide-cover-subtitle">Phase 1 – Feasibility Sprint</h2>
+                            <p class="report-slide-cover-text">Financial Planning Sector Report</p>
+                            <p class="report-slide-cover-meta">Generated: January 2025 | Sample Client</p>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Assumed Variables</h2></div>
+                        <div class="report-slide-content">
+                            <table class="report-table">
+                                <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Total Staff</td><td>50</td></tr>
+                                    <tr><td>Documentation Staff (60%)</td><td>30</td></tr>
+                                    <tr><td>Current Process</td><td>Manual / CRM Integration</td></tr>
+                                    <tr><td>Adviser Rate (Loaded Cost)</td><td>$120/hr</td></tr>
+                                    <tr><td>Paraplanner Rate (Loaded Cost)</td><td>$75/hr</td></tr>
+                                    <tr><td>Industry Variance</td><td><strong>Applied (High-Reliability)</strong></td></tr>
+                                </tbody>
+                            </table>
+                            <p class="report-text-small">*Client statements and compliance forms follow regulatory standards with predictable structures.</p>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Test Results Summary</h2></div>
+                        <div class="report-slide-content">
+                            <div style="display: flex; gap: 20px; margin-bottom: 30px;">
+                                <div style="flex: 1; background: #f0fdf4; padding: 20px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #166534; font-weight: 600;">Test 1: Field Extraction</div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin: 10px 0;">92.3%</div>
+                                    <div style="font-size: 0.85rem; color: #166534;">✅ PASS (Target: ≥90%)</div>
+                                </div>
+                                <div style="flex: 1; background: #f0fdf4; padding: 20px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #166534; font-weight: 600;">Test 2: STP Rate</div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin: 10px 0;">71%</div>
+                                    <div style="font-size: 0.85rem; color: #166534;">✅ PASS (Target: ≥60%)</div>
+                                </div>
+                                <div style="flex: 1; background: #f0fdf4; padding: 20px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #166534; font-weight: 600;">Test 3: Exception Safety</div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin: 10px 0;">PASS</div>
+                                    <div style="font-size: 0.85rem; color: #166534;">✅ 2 exceptions properly flagged</div>
+                                </div>
+                            </div>
+                            <div class="report-slide-callout" style="background: #f0fdf4; border-color: #10b981;">
+                                <strong style="color: #166534;">✅ RECOMMENDATION: PROCEED TO PHASE 2</strong>
+                                <p style="margin: 0.75rem 0 0 0; color: #166534;">All tests passed. System handles SOAs, client statements, and compliance documentation effectively.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Preliminary ROI Model</h2></div>
+                        <div class="report-slide-content">
+                            <div style="margin-bottom: 2rem;">
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Labor Cost</h3>
+                                <div class="report-bg-light">
+                                    <table class="report-table report-table-no-margin">
+                                        <tr><td>Advisers: 15 staff × 4 hrs/week × $120/hr × 48 weeks</td><td class="report-table-text-right">$345,600</td></tr>
+                                        <tr><td>Paraplanners: 15 staff × 6 hrs/week × $75/hr × 48 weeks</td><td class="report-table-text-right">$324,000</td></tr>
+                                        <tr class="report-table-row-total"><td><strong>Baseline Total</strong></td><td class="report-table-text-right"><strong>$669,600</strong></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Industry-Adjusted Annual Value</h3>
+                                <div class="report-bg-light">
+                                    <table class="report-table report-table-no-margin">
+                                        <tr><td>Industry Variance Multiplier</td><td class="report-table-text-right"><em>Applied (High-Reliability)</em></td></tr>
+                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Adjusted Annual Value</strong></td><td class="report-table-text-right"><strong>~$358k</strong></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Ready to Validate YOUR Documents?</h2></div>
+                        <div class="report-slide-content">
+                            <div style="text-align: center; padding: 2rem;">
+                                <div style="margin-top: 3rem; padding: 2rem; background: rgba(212, 175, 55, 0.1); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 8px;">
+                                    <h3 style="margin: 0 0 1.5rem 0; color: var(--color-navy); font-size: 1.25rem;">Start Your Feasibility Sprint</h3>
+                                    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                                        <a href="contact.html?option=phase-1" class="btn btn-primary">Book Phase 1 — $1,500</a>
+                                        <a href="contact.html?option=pre-screen" class="btn btn-secondary" style="background: #0B1221; border: 2px solid #D4AF37; color: white;">Free Pre-Screen Call</a>
+                                    </div>
+                                    <p style="margin: 0; font-size: 0.85rem; color: #6B7280;"><strong style="color: var(--color-navy);">Money-Back Guarantee:</strong> If we don't hit ≥90% accuracy, full refund.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-pagination"></div>
+            </div>
+
+            <!-- INSURANCE SLIDER (High-Reliability: 0.90 multiplier) -->
+            <div class="report-slider swiper" id="slider-insurance" style="margin-top: 3rem;">
+                <div class="swiper-wrapper">
+                    <div class="swiper-slide report-slide report-slide-dark">
+                        <div class="report-slide-cover">
+                            <div class="report-slide-cover-brand">Curam-Ai</div>
+                            <h1 class="report-slide-cover-title">Curam-Ai Protocol™</h1>
+                            <h2 class="report-slide-cover-subtitle">Phase 1 – Feasibility Sprint</h2>
+                            <p class="report-slide-cover-text">Insurance Sector Report</p>
+                            <p class="report-slide-cover-meta">Generated: January 2025 | Sample Client</p>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Assumed Variables</h2></div>
+                        <div class="report-slide-content">
+                            <table class="report-table">
+                                <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Total Staff</td><td>50</td></tr>
+                                    <tr><td>Documentation Staff (70%)</td><td>35</td></tr>
+                                    <tr><td>Current Process</td><td>Manual / Claims System</td></tr>
+                                    <tr><td>Claims Processor Rate (Loaded Cost)</td><td>$80/hr</td></tr>
+                                    <tr><td>Underwriter Rate (Loaded Cost)</td><td>$110/hr</td></tr>
+                                    <tr><td>Industry Variance</td><td><strong>Applied (High-Reliability)</strong></td></tr>
+                                </tbody>
+                            </table>
+                            <p class="report-text-small">*Insurance documents (claims, policies, renewals) follow standardized industry formats.</p>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Test Results Summary</h2></div>
+                        <div class="report-slide-content">
+                            <div style="display: flex; gap: 20px; margin-bottom: 30px;">
+                                <div style="flex: 1; background: #f0fdf4; padding: 20px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #166534; font-weight: 600;">Test 1: Field Extraction</div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin: 10px 0;">95.2%</div>
+                                    <div style="font-size: 0.85rem; color: #166534;">✅ PASS (Target: ≥90%)</div>
+                                </div>
+                                <div style="flex: 1; background: #f0fdf4; padding: 20px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #166534; font-weight: 600;">Test 2: STP Rate</div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin: 10px 0;">82%</div>
+                                    <div style="font-size: 0.85rem; color: #166534;">✅ PASS (Target: ≥60%)</div>
+                                </div>
+                                <div style="flex: 1; background: #f0fdf4; padding: 20px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                    <div style="font-size: 0.8rem; text-transform: uppercase; color: #166534; font-weight: 600;">Test 3: Exception Safety</div>
+                                    <div style="font-size: 2rem; font-weight: 700; color: #10b981; margin: 10px 0;">PASS</div>
+                                    <div style="font-size: 0.85rem; color: #166534;">✅ 1 exception properly flagged</div>
+                                </div>
+                            </div>
+                            <div class="report-slide-callout" style="background: #f0fdf4; border-color: #10b981;">
+                                <strong style="color: #166534;">✅ RECOMMENDATION: PROCEED TO PHASE 2</strong>
+                                <p style="margin: 0.75rem 0 0 0; color: #166534;">All tests passed. System handles claims forms, policy documents, and renewal paperwork effectively.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Preliminary ROI Model</h2></div>
+                        <div class="report-slide-content">
+                            <div style="margin-bottom: 2rem;">
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Labor Cost</h3>
+                                <div class="report-bg-light">
+                                    <table class="report-table report-table-no-margin">
+                                        <tr><td>Claims Processors: 20 staff × 6 hrs/week × $80/hr × 48 weeks</td><td class="report-table-text-right">$460,800</td></tr>
+                                        <tr><td>Underwriters: 15 staff × 4 hrs/week × $110/hr × 48 weeks</td><td class="report-table-text-right">$316,800</td></tr>
+                                        <tr class="report-table-row-total"><td><strong>Baseline Total</strong></td><td class="report-table-text-right"><strong>$777,600</strong></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Industry-Adjusted Annual Value</h3>
+                                <div class="report-bg-light">
+                                    <table class="report-table report-table-no-margin">
+                                        <tr><td>Industry Variance Multiplier</td><td class="report-table-text-right"><em>Applied (High-Reliability)</em></td></tr>
+                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Adjusted Annual Value</strong></td><td class="report-table-text-right"><strong>~$489k</strong></td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="swiper-slide report-slide report-slide-light">
+                        <div class="report-slide-header"><h2>Ready to Validate YOUR Documents?</h2></div>
+                        <div class="report-slide-content">
+                            <div style="text-align: center; padding: 2rem;">
+                                <div style="margin-top: 3rem; padding: 2rem; background: rgba(212, 175, 55, 0.1); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 8px;">
+                                    <h3 style="margin: 0 0 1.5rem 0; color: var(--color-navy); font-size: 1.25rem;">Start Your Feasibility Sprint</h3>
+                                    <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                                        <a href="contact.html?option=phase-1" class="btn btn-primary">Book Phase 1 — $1,500</a>
+                                        <a href="contact.html?option=pre-screen" class="btn btn-secondary" style="background: #0B1221; border: 2px solid #D4AF37; color: white;">Free Pre-Screen Call</a>
+                                    </div>
+                                    <p style="margin: 0; font-size: 0.85rem; color: #6B7280;"><strong style="color: var(--color-navy);">Money-Back Guarantee:</strong> If we don't hit ≥90% accuracy, full refund.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+                <div class="swiper-pagination"></div>
+            </div>
 
         </div>
     </section>
@@ -733,6 +1029,48 @@
             },
             pagination: {
                 el: '#slider-accounting .swiper-pagination',
+                clickable: true,
+            },
+        });
+
+        const logisticsSwiper = new Swiper('#slider-logistics', {
+            loop: false,
+            speed: 500,
+            autoHeight: true,
+            navigation: {
+                nextEl: '#slider-logistics .swiper-button-next',
+                prevEl: '#slider-logistics .swiper-button-prev',
+            },
+            pagination: {
+                el: '#slider-logistics .swiper-pagination',
+                clickable: true,
+            },
+        });
+
+        const financialPlanningSwiper = new Swiper('#slider-financial-planning', {
+            loop: false,
+            speed: 500,
+            autoHeight: true,
+            navigation: {
+                nextEl: '#slider-financial-planning .swiper-button-next',
+                prevEl: '#slider-financial-planning .swiper-button-prev',
+            },
+            pagination: {
+                el: '#slider-financial-planning .swiper-pagination',
+                clickable: true,
+            },
+        });
+
+        const insuranceSwiper = new Swiper('#slider-insurance', {
+            loop: false,
+            speed: 500,
+            autoHeight: true,
+            navigation: {
+                nextEl: '#slider-insurance .swiper-button-next',
+                prevEl: '#slider-insurance .swiper-button-prev',
+            },
+            pagination: {
+                el: '#slider-insurance .swiper-pagination',
                 clickable: true,
             },
         });
