@@ -10304,6 +10304,21 @@ p.hero-description {
     line-height: 1.4;
 }
 
+.roi-context-link {
+    display: inline-block;
+    font-size: 0.85rem;
+    color: var(--color-gold);
+    text-decoration: none;
+    font-weight: 600;
+    transition: var(--transition);
+    margin-top: 0.25rem;
+}
+
+.roi-context-link:hover {
+    color: #FFD700;
+    text-decoration: underline;
+}
+
 /* Utility classes for inline style replacements */
 .methodology-link {
     margin-top: 15px;
