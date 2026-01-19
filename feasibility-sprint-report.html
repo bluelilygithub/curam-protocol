@@ -124,11 +124,11 @@
 
             <div class="mission-stats" style="max-width: 900px; margin: 0 auto;">
                 <div class="mission-stat">
-                    <span class="mission-stat-value" id="stat-efficiency">$594k</span>
+                    <span class="mission-stat-value" id="stat-efficiency">$522k</span>
                     <span class="mission-stat-label">Year-1 Efficiency* (Example)</span>
                 </div>
                 <div class="mission-stat">
-                    <span class="mission-stat-value" id="stat-capacity">$1.01M</span>
+                    <span class="mission-stat-value" id="stat-capacity">$1.31M</span>
                     <span class="mission-stat-label">Capacity Upside* (Example)</span>
                 </div>
                 <div class="mission-stat">
@@ -137,7 +137,7 @@
                 </div>
             </div>
             <p style="text-align: center; color: var(--text-secondary); font-size: 0.9rem; margin-top: 1rem; font-style: italic;">
-                *Example: 50-person engineering firm. Industry variance applied. Your numbers calculated from YOUR data.
+                *Example: 50-person firm at $140/hr. Your numbers calculated from YOUR data.
             </p>
         </div>
     </section>
@@ -241,7 +241,7 @@
     <section class="content-section">
         <div class="container">
             <h2 class="section-headline">Interactive Report Preview</h2>
-            <p class="section-subhead">Select your industry to see sample validation results. Your actual report will use YOUR documents and YOUR configured extraction fields. <strong>Note:</strong> ROI calculations include industry-specific variance adjustments for accuracy—not all industries automate equally well.</p>
+            <p class="section-subhead">Select your industry to see sample validation results. Your actual report will use YOUR documents and YOUR configured extraction fields.</p>
 
             <!-- Sector Selector -->
             <div class="sector-selector">
@@ -292,14 +292,13 @@
                                 </thead>
                                 <tbody>
                                     <tr><td>Total Staff</td><td>50</td></tr>
-                                    <tr><td>Documentation Staff (70%)</td><td>35</td></tr>
+                                    <tr><td>Documentation Staff (85%)</td><td>43</td></tr>
+                                    <tr><td>Hours/Week per Staff</td><td>4.5</td></tr>
+                                    <tr><td>Loaded Cost Rate</td><td>$140/hr</td></tr>
                                     <tr><td>Current Process</td><td>Manual / Email-based</td></tr>
-                                    <tr><td>Engineer Rate (Loaded Cost)</td><td>$110/hr</td></tr>
-                                    <tr><td>Admin Rate (Loaded Cost)</td><td>$55/hr</td></tr>
-                                    <tr><td>Industry Variance</td><td><strong>Applied (Medium-Reliability)</strong></td></tr>
                                 </tbody>
                             </table>
-                            <p class="report-text-small">*Loaded cost includes salary + superannuation + overhead. Industry variance accounts for semi-structured document complexity in engineering sector.</p>
+                            <p class="report-text-small">*Loaded cost includes salary + superannuation + overhead.</p>
                         </div>
                     </div>
 
@@ -352,36 +351,33 @@
                                 <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Baseline Calculation</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Documentation Staff (70% of 50)</td><td class="report-table-text-right">35</td></tr>
-                                        <tr><td><strong>Tier 1:</strong> Engineers (24 @ 5 hrs/week)</td><td class="report-table-text-right">120 hrs/week</td></tr>
-                                        <tr><td><strong>Tier 2:</strong> Admin (11 @ 8 hrs/week)</td><td class="report-table-text-right">88 hrs/week</td></tr>
-                                        <tr class="report-table-row-total"><td><strong>Total Weekly Hours</strong></td><td class="report-table-text-right"><strong>208 hrs</strong></td></tr>
+                                        <tr><td>Documentation Staff (85% of 50)</td><td class="report-table-text-right">43</td></tr>
+                                        <tr><td>Hours per Staff per Week</td><td class="report-table-text-right">4.5</td></tr>
+                                        <tr><td>Total Weekly Hours</td><td class="report-table-text-right">193.5</td></tr>
+                                        <tr><td>Loaded Cost Rate</td><td class="report-table-text-right">$140/hr</td></tr>
+                                        <tr><td>Working Weeks per Year</td><td class="report-table-text-right">48</td></tr>
                                     </table>
                                 </div>
                             </div>
 
                             <div style="margin-bottom: 2rem;">
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Labor Cost (Pre-Variance)</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Documentation Cost</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Engineers: 120 hrs × $110/hr × 48 weeks</td><td class="report-table-text-right">$633,600</td></tr>
-                                        <tr><td>Admin: 88 hrs × $55/hr × 48 weeks</td><td class="report-table-text-right">$232,320</td></tr>
-                                        <tr class="report-table-row-total"><td><strong>Baseline Total</strong></td><td class="report-table-text-right"><strong>$865,920</strong></td></tr>
+                                        <tr><td>193.5 hrs × $140 × 48 weeks</td><td class="report-table-text-right">$1,306,080</td></tr>
                                     </table>
                                 </div>
                             </div>
 
                             <div>
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Industry-Adjusted Annual Production Value</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Conservative Automation Opportunity (40%)</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Baseline Total</td><td class="report-table-text-right">$865,920</td></tr>
-                                        <tr><td>Industry Variance Multiplier</td><td class="report-table-text-right"><em>Applied (Medium-Reliability)</em></td></tr>
-                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Adjusted Annual Value</strong></td><td class="report-table-text-right"><strong>~$594,000</strong></td></tr>
+                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Proven low-hanging fruit tasks</strong></td><td class="report-table-text-right"><strong>$522,432</strong></td></tr>
                                     </table>
                                 </div>
                                 <p class="report-text-small-gray-margin" style="margin-top: 0.75rem;">
-                                    Industry variance accounts for engineering's semi-structured documents (specs, schedules, drawings). Not all industries automate equally—variance reflects proven automation success rates in your sector.
+                                    Note: This baseline uses industry-average assumptions. Phase 1 testing on YOUR documents may reveal higher or lower automation potential based on document complexity and format standardization in your specific practice.
                                 </p>
                             </div>
                         </div>
@@ -542,14 +538,13 @@
                                 </thead>
                                 <tbody>
                                     <tr><td>Total Staff</td><td>50</td></tr>
-                                    <tr><td>Documentation Staff (75%)</td><td>38</td></tr>
+                                    <tr><td>Documentation Staff (85%)</td><td>43</td></tr>
+                                    <tr><td>Hours/Week per Staff</td><td>4.5</td></tr>
+                                    <tr><td>Loaded Cost Rate</td><td>$140/hr</td></tr>
                                     <tr><td>Current Process</td><td>Manual / Practice Management System</td></tr>
-                                    <tr><td>Mid/Junior Rate (Loaded Cost)</td><td>$100/hr</td></tr>
-                                    <tr><td>Admin Rate (Loaded Cost)</td><td>$50/hr</td></tr>
-                                    <tr><td>Industry Variance</td><td><strong>Applied (High-Reliability)</strong></td></tr>
                                 </tbody>
                             </table>
-                            <p class="report-text-small">*Loaded cost includes salary + superannuation + overhead. Industry variance accounts for highly structured invoice/document types in accounting sector.</p>
+                            <p class="report-text-small">*Loaded cost includes salary + superannuation + overhead.</p>
                         </div>
                     </div>
 
@@ -602,36 +597,33 @@
                                 <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Baseline Calculation</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Documentation Staff (75% of 50)</td><td class="report-table-text-right">38</td></tr>
-                                        <tr><td><strong>Tier 1:</strong> Mid/Junior (25 @ 5 hrs/week)</td><td class="report-table-text-right">125 hrs/week</td></tr>
-                                        <tr><td><strong>Tier 2:</strong> Admin (13 @ 8 hrs/week)</td><td class="report-table-text-right">104 hrs/week</td></tr>
-                                        <tr class="report-table-row-total"><td><strong>Total Weekly Hours</strong></td><td class="report-table-text-right"><strong>229 hrs</strong></td></tr>
+                                        <tr><td>Documentation Staff (85% of 50)</td><td class="report-table-text-right">43</td></tr>
+                                        <tr><td>Hours per Staff per Week</td><td class="report-table-text-right">4.5</td></tr>
+                                        <tr><td>Total Weekly Hours</td><td class="report-table-text-right">193.5</td></tr>
+                                        <tr><td>Loaded Cost Rate</td><td class="report-table-text-right">$140/hr</td></tr>
+                                        <tr><td>Working Weeks per Year</td><td class="report-table-text-right">48</td></tr>
                                     </table>
                                 </div>
                             </div>
 
                             <div style="margin-bottom: 2rem;">
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Labor Cost (Pre-Variance)</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Documentation Cost</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Mid/Junior: 125 hrs × $100/hr × 48 weeks</td><td class="report-table-text-right">$600,000</td></tr>
-                                        <tr><td>Admin: 104 hrs × $50/hr × 48 weeks</td><td class="report-table-text-right">$249,600</td></tr>
-                                        <tr class="report-table-row-total"><td><strong>Baseline Total</strong></td><td class="report-table-text-right"><strong>$849,600</strong></td></tr>
+                                        <tr><td>193.5 hrs × $140 × 48 weeks</td><td class="report-table-text-right">$1,306,080</td></tr>
                                     </table>
                                 </div>
                             </div>
 
                             <div>
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Industry-Adjusted Annual Production Value</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Conservative Automation Opportunity (40%)</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Baseline Total</td><td class="report-table-text-right">$849,600</td></tr>
-                                        <tr><td>Industry Variance Multiplier</td><td class="report-table-text-right"><em>Applied (High-Reliability)</em></td></tr>
-                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Adjusted Annual Value</strong></td><td class="report-table-text-right"><strong>~$765,000</strong></td></tr>
+                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Proven low-hanging fruit tasks</strong></td><td class="report-table-text-right"><strong>$522,432</strong></td></tr>
                                     </table>
                                 </div>
                                 <p class="report-text-small-gray-margin" style="margin-top: 0.75rem;">
-                                    Industry variance accounts for accounting's highly structured documents (invoices, receipts, statements). Structured data yields higher automation success rates—variance reflects proven results in your sector.
+                                    Note: This baseline uses industry-average assumptions. Phase 1 testing on YOUR documents may reveal higher or lower automation potential based on document complexity and format standardization in your specific practice.
                                 </p>
                             </div>
                         </div>
@@ -689,14 +681,13 @@
                                 <thead><tr><th>Variable</th><th>Value</th></tr></thead>
                                 <tbody>
                                     <tr><td>Total Staff</td><td>50</td></tr>
-                                    <tr><td>Documentation Staff (65%)</td><td>33</td></tr>
+                                    <tr><td>Documentation Staff (85%)</td><td>43</td></tr>
+                                    <tr><td>Hours/Week per Staff</td><td>4.5</td></tr>
+                                    <tr><td>Loaded Cost Rate</td><td>$140/hr</td></tr>
                                     <tr><td>Current Process</td><td>Manual / TMS Integration</td></tr>
-                                    <tr><td>Operations Rate (Loaded Cost)</td><td>$85/hr</td></tr>
-                                    <tr><td>Admin Rate (Loaded Cost)</td><td>$50/hr</td></tr>
-                                    <tr><td>Industry Variance</td><td><strong>Applied (High-Reliability)</strong></td></tr>
                                 </tbody>
                             </table>
-                            <p class="report-text-small">*Logistics documents (BOLs, customs forms, manifests) are highly structured with standardized formats.</p>
+                            <p class="report-text-small">*Loaded cost includes salary + superannuation + overhead.</p>
                         </div>
                     </div>
                     <div class="swiper-slide report-slide report-slide-light">
@@ -729,23 +720,35 @@
                         <div class="report-slide-header"><h2>Preliminary ROI Model</h2></div>
                         <div class="report-slide-content">
                             <div style="margin-bottom: 2rem;">
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Labor Cost</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Baseline Calculation</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Operations: 20 staff × 6 hrs/week × $85/hr × 48 weeks</td><td class="report-table-text-right">$489,600</td></tr>
-                                        <tr><td>Admin: 13 staff × 7 hrs/week × $50/hr × 48 weeks</td><td class="report-table-text-right">$218,400</td></tr>
-                                        <tr class="report-table-row-total"><td><strong>Baseline Total</strong></td><td class="report-table-text-right"><strong>$708,000</strong></td></tr>
+                                        <tr><td>Documentation Staff (85% of 50)</td><td class="report-table-text-right">43</td></tr>
+                                        <tr><td>Hours per Staff per Week</td><td class="report-table-text-right">4.5</td></tr>
+                                        <tr><td>Total Weekly Hours</td><td class="report-table-text-right">193.5</td></tr>
+                                        <tr><td>Loaded Cost Rate</td><td class="report-table-text-right">$140/hr</td></tr>
+                                        <tr><td>Working Weeks per Year</td><td class="report-table-text-right">48</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 2rem;">
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Documentation Cost</h3>
+                                <div class="report-bg-light">
+                                    <table class="report-table report-table-no-margin">
+                                        <tr><td>193.5 hrs × $140 × 48 weeks</td><td class="report-table-text-right">$1,306,080</td></tr>
                                     </table>
                                 </div>
                             </div>
                             <div>
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Industry-Adjusted Annual Value</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Conservative Automation Opportunity (40%)</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Industry Variance Multiplier</td><td class="report-table-text-right"><em>Applied (High-Reliability)</em></td></tr>
-                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Adjusted Annual Value</strong></td><td class="report-table-text-right"><strong>~$432k</strong></td></tr>
+                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Proven low-hanging fruit tasks</strong></td><td class="report-table-text-right"><strong>$522,432</strong></td></tr>
                                     </table>
                                 </div>
+                                <p class="report-text-small-gray-margin" style="margin-top: 0.75rem;">
+                                    Note: This baseline uses industry-average assumptions. Phase 1 testing on YOUR documents may reveal higher or lower automation potential based on document complexity and format standardization in your specific practice.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -789,14 +792,13 @@
                                 <thead><tr><th>Variable</th><th>Value</th></tr></thead>
                                 <tbody>
                                     <tr><td>Total Staff</td><td>50</td></tr>
-                                    <tr><td>Documentation Staff (60%)</td><td>30</td></tr>
+                                    <tr><td>Documentation Staff (85%)</td><td>43</td></tr>
+                                    <tr><td>Hours/Week per Staff</td><td>4.5</td></tr>
+                                    <tr><td>Loaded Cost Rate</td><td>$140/hr</td></tr>
                                     <tr><td>Current Process</td><td>Manual / CRM Integration</td></tr>
-                                    <tr><td>Adviser Rate (Loaded Cost)</td><td>$120/hr</td></tr>
-                                    <tr><td>Paraplanner Rate (Loaded Cost)</td><td>$75/hr</td></tr>
-                                    <tr><td>Industry Variance</td><td><strong>Applied (High-Reliability)</strong></td></tr>
                                 </tbody>
                             </table>
-                            <p class="report-text-small">*Client statements and compliance forms follow regulatory standards with predictable structures.</p>
+                            <p class="report-text-small">*Loaded cost includes salary + superannuation + overhead.</p>
                         </div>
                     </div>
                     <div class="swiper-slide report-slide report-slide-light">
@@ -829,23 +831,35 @@
                         <div class="report-slide-header"><h2>Preliminary ROI Model</h2></div>
                         <div class="report-slide-content">
                             <div style="margin-bottom: 2rem;">
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Labor Cost</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Baseline Calculation</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Advisers: 15 staff × 4 hrs/week × $120/hr × 48 weeks</td><td class="report-table-text-right">$345,600</td></tr>
-                                        <tr><td>Paraplanners: 15 staff × 6 hrs/week × $75/hr × 48 weeks</td><td class="report-table-text-right">$324,000</td></tr>
-                                        <tr class="report-table-row-total"><td><strong>Baseline Total</strong></td><td class="report-table-text-right"><strong>$669,600</strong></td></tr>
+                                        <tr><td>Documentation Staff (85% of 50)</td><td class="report-table-text-right">43</td></tr>
+                                        <tr><td>Hours per Staff per Week</td><td class="report-table-text-right">4.5</td></tr>
+                                        <tr><td>Total Weekly Hours</td><td class="report-table-text-right">193.5</td></tr>
+                                        <tr><td>Loaded Cost Rate</td><td class="report-table-text-right">$140/hr</td></tr>
+                                        <tr><td>Working Weeks per Year</td><td class="report-table-text-right">48</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 2rem;">
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Documentation Cost</h3>
+                                <div class="report-bg-light">
+                                    <table class="report-table report-table-no-margin">
+                                        <tr><td>193.5 hrs × $140 × 48 weeks</td><td class="report-table-text-right">$1,306,080</td></tr>
                                     </table>
                                 </div>
                             </div>
                             <div>
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Industry-Adjusted Annual Value</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Conservative Automation Opportunity (40%)</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Industry Variance Multiplier</td><td class="report-table-text-right"><em>Applied (High-Reliability)</em></td></tr>
-                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Adjusted Annual Value</strong></td><td class="report-table-text-right"><strong>~$358k</strong></td></tr>
+                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Proven low-hanging fruit tasks</strong></td><td class="report-table-text-right"><strong>$522,432</strong></td></tr>
                                     </table>
                                 </div>
+                                <p class="report-text-small-gray-margin" style="margin-top: 0.75rem;">
+                                    Note: This baseline uses industry-average assumptions. Phase 1 testing on YOUR documents may reveal higher or lower automation potential based on document complexity and format standardization in your specific practice.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -889,14 +903,13 @@
                                 <thead><tr><th>Variable</th><th>Value</th></tr></thead>
                                 <tbody>
                                     <tr><td>Total Staff</td><td>50</td></tr>
-                                    <tr><td>Documentation Staff (70%)</td><td>35</td></tr>
+                                    <tr><td>Documentation Staff (85%)</td><td>43</td></tr>
+                                    <tr><td>Hours/Week per Staff</td><td>4.5</td></tr>
+                                    <tr><td>Loaded Cost Rate</td><td>$140/hr</td></tr>
                                     <tr><td>Current Process</td><td>Manual / Claims System</td></tr>
-                                    <tr><td>Claims Processor Rate (Loaded Cost)</td><td>$80/hr</td></tr>
-                                    <tr><td>Underwriter Rate (Loaded Cost)</td><td>$110/hr</td></tr>
-                                    <tr><td>Industry Variance</td><td><strong>Applied (High-Reliability)</strong></td></tr>
                                 </tbody>
                             </table>
-                            <p class="report-text-small">*Insurance documents (claims, policies, renewals) follow standardized industry formats.</p>
+                            <p class="report-text-small">*Loaded cost includes salary + superannuation + overhead.</p>
                         </div>
                     </div>
                     <div class="swiper-slide report-slide report-slide-light">
@@ -929,23 +942,35 @@
                         <div class="report-slide-header"><h2>Preliminary ROI Model</h2></div>
                         <div class="report-slide-content">
                             <div style="margin-bottom: 2rem;">
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Labor Cost</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Baseline Calculation</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Claims Processors: 20 staff × 6 hrs/week × $80/hr × 48 weeks</td><td class="report-table-text-right">$460,800</td></tr>
-                                        <tr><td>Underwriters: 15 staff × 4 hrs/week × $110/hr × 48 weeks</td><td class="report-table-text-right">$316,800</td></tr>
-                                        <tr class="report-table-row-total"><td><strong>Baseline Total</strong></td><td class="report-table-text-right"><strong>$777,600</strong></td></tr>
+                                        <tr><td>Documentation Staff (85% of 50)</td><td class="report-table-text-right">43</td></tr>
+                                        <tr><td>Hours per Staff per Week</td><td class="report-table-text-right">4.5</td></tr>
+                                        <tr><td>Total Weekly Hours</td><td class="report-table-text-right">193.5</td></tr>
+                                        <tr><td>Loaded Cost Rate</td><td class="report-table-text-right">$140/hr</td></tr>
+                                        <tr><td>Working Weeks per Year</td><td class="report-table-text-right">48</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div style="margin-bottom: 2rem;">
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Annual Documentation Cost</h3>
+                                <div class="report-bg-light">
+                                    <table class="report-table report-table-no-margin">
+                                        <tr><td>193.5 hrs × $140 × 48 weeks</td><td class="report-table-text-right">$1,306,080</td></tr>
                                     </table>
                                 </div>
                             </div>
                             <div>
-                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Industry-Adjusted Annual Value</h3>
+                                <h3 style="color: #0B1221; font-size: 1.1rem; margin-bottom: 1rem; font-weight: 600;">Conservative Automation Opportunity (40%)</h3>
                                 <div class="report-bg-light">
                                     <table class="report-table report-table-no-margin">
-                                        <tr><td>Industry Variance Multiplier</td><td class="report-table-text-right"><em>Applied (High-Reliability)</em></td></tr>
-                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Adjusted Annual Value</strong></td><td class="report-table-text-right"><strong>~$489k</strong></td></tr>
+                                        <tr class="report-table-row-total" style="background: #fef3c7;"><td><strong>Proven low-hanging fruit tasks</strong></td><td class="report-table-text-right"><strong>$522,432</strong></td></tr>
                                     </table>
                                 </div>
+                                <p class="report-text-small-gray-margin" style="margin-top: 0.75rem;">
+                                    Note: This baseline uses industry-average assumptions. Phase 1 testing on YOUR documents may reveal higher or lower automation potential based on document complexity and format standardization in your specific practice.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -980,27 +1005,27 @@
     <script src="assets/js/main.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script>
-        // Sector data for stats (using industry variance-adjusted values)
+        // Sector data for stats (unified formula: 50 staff × 85% = 43 doc staff × 4.5 hrs × $140 × 48 weeks × 40%)
         const sectorData = {
             engineering: {
-                efficiency: '$594k',   // Engineering: 0.75 multiplier (Medium-Reliability)
-                capacity: '$1.01M'
+                efficiency: '$522k',
+                capacity: '$1.31M'
             },
             accounting: {
-                efficiency: '$765k',   // Accounting: 0.90 multiplier (High-Reliability)
-                capacity: '$1.27M'
+                efficiency: '$522k',
+                capacity: '$1.31M'
             },
             logistics: {
-                efficiency: '$763k',   // Logistics: 0.90 multiplier (High-Reliability)
-                capacity: '$890k'
+                efficiency: '$522k',
+                capacity: '$1.31M'
             },
             'financial-planning': {
-                efficiency: '$612k',   // Financial Planning: 0.90 multiplier (High-Reliability)
-                capacity: '$1.15M'
+                efficiency: '$522k',
+                capacity: '$1.31M'
             },
             insurance: {
-                efficiency: '$701k',   // Insurance: 0.90 multiplier (High-Reliability)
-                capacity: '$1.18M'
+                efficiency: '$522k',
+                capacity: '$1.31M'
             }
         };
 

@@ -1,0 +1,185 @@
+Developer Instructions: Update ROI Model to Unified Standard
+Global Changes Required
+1. Universal Formula (All Industries)
+Replace all existing calculations with this single model:
+Documentation Staff = Total Staff × 85%
+Weekly Hours = Documentation Staff × 4.5 hrs/week
+Annual Cost = Weekly Hours × $140/hr × 48 weeks
+Conservative Savings = Annual Cost × 40%
+2. For 50-Person Example (All Industries)
+50 staff × 85% = 42.5 → round to 43 people
+43 people × 4.5 hrs/week = 193.5 hrs/week
+193.5 × $140 × 48 = $1,306,080/year
+$1,306,080 × 40% = $522,432 conservative savings
+
+Specific Page Updates
+A. Industry Cards (Homepage Image)
+Current: Various values ($449k, $594k, $765k, etc.)
+Change to: All show $522k
+Annual Production Value: $522k
+(50-person firm baseline)
+
+B. ROI Calculator Step 3
+Remove:
+
+All "Industry Variance Multiplier" references
+Two-tier staff breakdowns (Tier 1/Tier 2)
+"Documentation Staff %" varying by industry (80%, 75%, 70%, etc.)
+
+Replace with:
+htmlYour Documentation Staff Profile:
+├─ Total Staff: 50
+├─ Documentation Staff (85%): 43
+├─ Hours/Week per Staff: 4.5
+├─ Loaded Cost Rate: $140/hr
+└─ Total Weekly Documentation: 193.5 hours
+
+Annual Documentation Cost: $1,306,080
+
+Conservative Baseline (40%): $522,432
+Based on proven automation rates for low-hanging fruit tasks
+Remove entirely:
+
+"Savings Scenarios: Optimistic, Probable, Conservative" section
+"Staff Adoption Impact" section
+
+Replace with single scenario:
+htmlEstimated Annual Savings: $522,432
+
+What This Represents:
+- 40% automation of proven repetitive tasks
+- Conservative estimate (low-hanging fruit only)
+- Assumes normal staff adoption (~60-70%)
+
+Your Actual Opportunity:
+Phase 1 ($1,500) validates if your documents achieve this rate.
+Results may be higher or lower based on:
+- Document complexity and standardization
+- Current process efficiency
+- System integration requirements
+
+If Phase 1 shows <$400k validated savings, full refund.
+
+C. Feasibility Preview (All Industry Sliders)
+Slide 2 - Assumed Variables Table:
+Replace varying tables with unified table for ALL industries:
+html<tr><td>Total Staff</td><td>50</td></tr>
+<tr><td>Documentation Staff (85%)</td><td>43</td></tr>
+<tr><td>Hours/Week per Staff</td><td>4.5</td></tr>
+<tr><td>Loaded Cost Rate</td><td>$140/hr</td></tr>
+<tr><td>Current Process</td><td>[Industry-specific description]</td></tr>
+Remove row: "Industry Variance"
+Slide 4 - Preliminary ROI Model:
+Replace complex multi-tier calculations with:
+html<h3>Baseline Calculation</h3>
+<table>
+    <tr><td>Documentation Staff (85% of 50)</td><td>43</td></tr>
+    <tr><td>Hours per Staff per Week</td><td>4.5</td></tr>
+    <tr><td>Total Weekly Hours</td><td>193.5</td></tr>
+    <tr><td>Loaded Cost Rate</td><td>$140/hr</td></tr>
+    <tr><td>Working Weeks per Year</td><td>48</td></tr>
+</table>
+
+<h3>Annual Documentation Cost</h3>
+<table>
+    <tr><td>193.5 hrs × $140 × 48 weeks</td><td>$1,306,080</td></tr>
+</table>
+
+<h3>Conservative Automation Opportunity (40%)</h3>
+<table>
+    <tr><td>Proven low-hanging fruit tasks</td><td>$522,432</td></tr>
+</table>
+Remove:
+
+All "Industry-Adjusted Annual Production Value" sections
+All "Industry Variance Multiplier" references
+All two-tier breakdowns (Tier 1/Tier 2)
+
+Add this disclaimer at bottom:
+html<p class="report-text-small-gray-margin">
+Note: This baseline uses industry-average assumptions. 
+Phase 1 testing on YOUR documents may reveal higher or lower 
+automation potential based on document complexity and format 
+standardization in your specific practice.
+</p>
+
+D. JavaScript Updates (feasibility-preview.html)
+Current sectorData object:
+javascriptconst sectorData = {
+    engineering: {
+        efficiency: '$594k',
+        capacity: '$1.01M'
+    },
+    accounting: {
+        efficiency: '$765k',
+        capacity: '$1.27M'
+    },
+    // etc...
+};
+Replace with:
+javascriptconst sectorData = {
+    engineering: {
+        efficiency: '$522k',
+        capacity: '$1.31M'
+    },
+    accounting: {
+        efficiency: '$522k',
+        capacity: '$1.31M'
+    },
+    logistics: {
+        efficiency: '$522k',
+        capacity: '$1.31M'
+    },
+    'financial-planning': {
+        efficiency: '$522k',
+        capacity: '$1.31M'
+    },
+    insurance: {
+        efficiency: '$522k',
+        capacity: '$1.31M'
+    }
+};
+Capacity calculation: $1,306,080 baseline × 100% = $1,306,080 (if 100% could be billed)
+
+Global Text Changes
+Everywhere "Industry Variance" appears:
+Remove or replace with:
+
+"This baseline uses conservative industry averages. Your Phase 1 report will show YOUR actual automation potential based on YOUR document types."
+
+Everywhere different percentages appear (70%, 75%, 80%):
+Replace with: 85% documentation staff
+Everywhere different hourly rates appear:
+Replace with: $140/hr loaded cost
+
+Summary of Numbers
+OLD (varies by industry):
+
+Accounting: $765k (with 0.90 multiplier)
+Engineering: $594k (with 0.75 multiplier)
+Insurance: $489k (with 0.90 multiplier)
+
+NEW (same for all):
+
+All Industries: $522k baseline
+All Industries: $1.31M capacity upside (if 100% recovered time is billable)
+
+
+Files to Update
+
+index.html or homepage - Industry cards section
+roi-calculator/step-3.html - Results page
+feasibility-preview.html - All 5 industry sliders
+Any backend calculation files using old formulas
+
+
+Quality Check
+After updates, verify:
+
+✅ All industry cards show $522k
+✅ ROI calculator shows $522k for 50 staff
+✅ All feasibility preview slides show same baseline ($522k)
+✅ No mentions of "Industry Variance Multiplier"
+✅ No mentions of "Tier 1" / "Tier 2" staff breakdowns
+✅ All use 85% documentation staff, 4.5 hrs/week, $140/hr
+✅ All use 40% as conservative savings rate
