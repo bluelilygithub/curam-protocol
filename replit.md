@@ -13,11 +13,11 @@ The platform serves as both a customer-facing demo/trial system and an internal 
 - Logistics: FTA lists, Bills of Lading, packing lists
 
 **Target Industries (5 validated):**
-- Accounting ($739k average ROI)
-- Engineering ($437k average ROI)
-- Logistics ($432k average ROI)
-- Financial Planning ($358k average ROI)
-- Insurance ($489k average ROI)
+- Accounting ($924k average ROI)
+- Engineering ($546k average ROI)
+- Logistics ($540k average ROI)
+- Financial Planning ($448k average ROI)
+- Insurance ($611k average ROI)
 
 ## User Preferences
 
