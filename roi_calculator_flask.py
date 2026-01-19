@@ -2187,8 +2187,6 @@ HTML_TEMPLATE = """
             <div style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem; font-style: italic;">Based on your inputs</div>
         </div>
         
-        <hr>
-        
         <h2>Proven Low-Hanging Fruit Tasks</h2>
         <p class="section-subhead">These are repetitive tasks we KNOW exist in {{ industry }} firms and have proven automation success:</p>
         
