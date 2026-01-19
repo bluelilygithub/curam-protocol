@@ -196,7 +196,7 @@ def calculate_conservative_roi(total_staff, industry_config):
     
     # Use conservative hours and rate
     hours_per_doc_staff = industry_config.get('doc_staff_hours_per_week', 5.0)
-    typical_doc_rate = industry_config.get('doc_staff_typical_rate', 130)
+    typical_doc_rate = industry_config.get('doc_staff_typical_rate', 140)
     
     # Calculate totals
     total_weekly_hours = doc_staff_count * hours_per_doc_staff

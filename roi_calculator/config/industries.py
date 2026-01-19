@@ -8,7 +8,7 @@ INDUSTRIES = {
         # Conservative v3.1 fields with firm size scaling
         "doc_staff_percentage_base": 0.75,  # Base percentage (medium firm) - will be scaled
         "doc_staff_hours_per_week": 5.0,
-        "doc_staff_typical_rate": 130,
+        "doc_staff_typical_rate": 140,
         # Industry Variance Multiplier (Medium-Reliability: Semi-structured documents)
         "industry_variance_multiplier": 0.75,
         "proven_tasks": {
