@@ -2295,12 +2295,6 @@ HTML_TEMPLATE = """
                 <div class="roi-result-label">Hours Recoverable per Week</div>
                 <p class="roi-result-description">Time that can be redirected to billable work</p>
             </div>
-            
-            <div class="roi-result-card">
-                <div class="roi-result-stat">${{ "{:,.0f}".format(calculations.get('potential_revenue', 0)) }}</div>
-                <div class="roi-result-label">Revenue Opportunity</div>
-                <p class="roi-result-description">If recovered hours are billed to clients</p>
-            </div>
         </div>
         
         <!-- THREE SCENARIOS: OPTIMISTIC, PROBABLE, CONSERVATIVE -->
