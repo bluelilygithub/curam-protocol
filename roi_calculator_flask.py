@@ -3147,7 +3147,7 @@ def roi_calculator():
             else:
                 # Fallback for industries without full config
                 # Use industry-specific automation_potential and basic assumptions
-                avg_rate = session.get('avg_rate', 130)  # Get rate from session or use default
+                avg_rate = session.get('avg_rate', 140)  # Get rate from session or use default
                 calculations = calculate_simple_roi(staff_count, avg_rate, industry_config)
             session['calculations'] = calculations
             
@@ -3228,7 +3228,7 @@ def roi_calculator():
             roadmap = generate_automation_roadmap_v3(
                 calculations.get('task_analysis', []),
                 calculations.get('doc_staff_count', staff_count),
-                calculations.get('typical_doc_rate', 130)
+                calculations.get('typical_doc_rate', 140)
             )
             
             # Calculate additional metrics for universal template
@@ -3246,7 +3246,7 @@ def roi_calculator():
                 industry_config=industry_config,
                 industry_slug=industry_slug,
                 staff_count=staff_count,
-                avg_rate=calculations.get('typical_doc_rate', 130),  # Use doc staff rate
+                avg_rate=calculations.get('typical_doc_rate', 140),  # Use doc staff rate
                 platform=platform,
                 calculations=calculations,
                 total_weekly_hours=total_weekly_hours,
@@ -3868,7 +3868,7 @@ def results_improved():
     
     # Get hours per week and avg rate from industry config
     hours_per_week = industry_config.get('hours_per_week', 5.0)
-    avg_rate = industry_config.get('avg_rate', 130.0)
+    avg_rate = industry_config.get('avg_rate', 140.0)
     
     # Generate roadmap
     roadmap = generate_roadmap(industry_config, doc_staff_count, hours_per_week, avg_rate)
@@ -3915,7 +3915,7 @@ def pdf_improved():
     
     # Get hours per week and avg rate from industry config
     hours_per_week = industry_config.get('hours_per_week', 5.0)
-    avg_rate = industry_config.get('avg_rate', 130.0)
+    avg_rate = industry_config.get('avg_rate', 140.0)
     
     # Generate roadmap
     roadmap = generate_roadmap(industry_config, doc_staff_count, hours_per_week, avg_rate)
