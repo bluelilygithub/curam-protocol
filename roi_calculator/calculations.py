@@ -393,77 +393,79 @@ def calculate_metrics_v3(staff_count, avg_rate, industry_config):
 
 def calculate_simple_roi(staff_count, avg_rate, industry_config):
     """
-    Fallback calculation for industries without full proven_tasks configuration.
+    Simplified ROI calculation for marketing/sales website examples.
     
-    Uses industry-specific automation_potential and basic assumptions when
-    detailed task breakdown is not available.
+    Uses fixed formula without industry variance multipliers:
+    - 85% documentation staff (15% executives excluded)
+    - 4.5 hours/week per doc staff
+    - 40% conservative automation potential
+    - 48 weeks/year
     
-    This is used for industries that don't have:
-    - proven_tasks dictionary
-    - tasks array with detailed definitions
+    Formula:
+    X staff × 85% = doc_staff (rounded)
+    doc_staff × 4.5 hrs × $rate × 48 weeks = annual_cost
+    annual_cost × 40% = conservative_savings
     
     Args:
         staff_count: Total number of staff
         avg_rate: Average hourly rate
-        industry_config: Industry configuration dictionary
+        industry_config: Industry configuration dictionary (used for backward compat)
     
     Returns:
-        dict: ROI calculation results compatible with calculate_conservative_roi format
+        dict: ROI calculation results
     """
-    # Apply 20% executive exclusion (fixed rule)
-    EXECUTIVE_EXCLUSION_RATE = 0.20
-    doc_staff_percentage = 1.0 - EXECUTIVE_EXCLUSION_RATE  # Always 80%
-    doc_staff_count = int(staff_count * doc_staff_percentage)
+    # Fixed marketing formula parameters
+    DOC_STAFF_PERCENTAGE = 0.85  # 85% documentation staff
+    HOURS_PER_WEEK = 4.5  # 4.5 hours per doc staff per week
+    AUTOMATION_POTENTIAL = 0.40  # 40% conservative automation
+    WEEKS_PER_YEAR = 48
     
-    # Use industry-specific automation potential or conservative default
-    automation_potential = industry_config.get('automation_potential', 0.50)
+    # Calculate documentation staff (rounded)
+    doc_staff_count = round(staff_count * DOC_STAFF_PERCENTAGE)
     
-    # Use industry-specific hours per staff or default
-    hours_per_staff = industry_config.get('hours_per_staff_per_week', 4.0)
-    total_weekly_hours = doc_staff_count * hours_per_staff
+    # Calculate weekly hours
+    total_weekly_hours = doc_staff_count * HOURS_PER_WEEK
     
-    # Calculate basic metrics
-    annual_burn = total_weekly_hours * avg_rate * 48
-    tier_1_savings = annual_burn * automation_potential
+    # Calculate annual documentation cost
+    annual_burn = total_weekly_hours * avg_rate * WEEKS_PER_YEAR
     
-    # Tier 2 assumes expanded automation (add 25% more)
-    tier_2_potential = min(automation_potential + 0.25, 0.70)
+    # Calculate conservative savings (40% automation)
+    tier_1_savings = annual_burn * AUTOMATION_POTENTIAL
+    
+    # Tier 2: expanded automation (55% - add 15% more)
+    tier_2_potential = 0.55
     tier_2_savings = annual_burn * tier_2_potential
     
     # Calculate recoverable hours
-    total_recoverable_hours = total_weekly_hours * automation_potential
-    
-    # Apply Industry Variance Multiplier (accounts for industry fit to P1 model)
-    industry_variance_multiplier = industry_config.get('industry_variance_multiplier', 1.0)
-    adjusted_tier_1_savings = tier_1_savings * industry_variance_multiplier
-    adjusted_tier_2_savings = tier_2_savings * industry_variance_multiplier
+    total_recoverable_hours = total_weekly_hours * AUTOMATION_POTENTIAL
     
     return {
-        "mode": "simple_fallback",
+        "mode": "simple_marketing",
         "total_staff": staff_count,
         "doc_staff_count": doc_staff_count,
-        "doc_staff_percentage": doc_staff_percentage * 100,  # 80%
-        "base_doc_staff_percentage": doc_staff_percentage * 100,
+        "doc_staff_percentage": DOC_STAFF_PERCENTAGE * 100,  # 85%
+        "base_doc_staff_percentage": DOC_STAFF_PERCENTAGE * 100,
         "base_doc_staff_count": doc_staff_count,
         "firm_size_category": "Standard",
-        "scaling_note": "80% documentation staff (20% executives excluded)",
-        "hours_per_doc_staff": hours_per_staff,
+        "scaling_note": "85% documentation staff (15% executives excluded)",
+        "hours_per_doc_staff": HOURS_PER_WEEK,
         "typical_doc_rate": avg_rate,
         "total_weekly_hours": total_weekly_hours,
         "annual_cost": annual_burn,
         "annual_burn": annual_burn,
-        "task_analysis": [],  # No task breakdown available
+        "task_analysis": [],  # No task breakdown for marketing
         "total_recoverable_hours": total_recoverable_hours,
-        "weighted_potential": automation_potential,
+        "weighted_potential": AUTOMATION_POTENTIAL,
+        "automation_potential": AUTOMATION_POTENTIAL,
         "proven_tier_1_savings": tier_1_savings,
-        "industry_variance_multiplier": industry_variance_multiplier,
-        "adjusted_tier_1_savings": adjusted_tier_1_savings,
-        "tier_1_savings": adjusted_tier_1_savings,
+        "industry_variance_multiplier": 1.0,  # No variance for marketing
+        "adjusted_tier_1_savings": tier_1_savings,
+        "tier_1_savings": tier_1_savings,
         "tier_2_potential": tier_2_potential,
-        "tier_2_savings": adjusted_tier_2_savings,  # Return adjusted value for backward compatibility
-        "adjusted_tier_2_savings": adjusted_tier_2_savings,
-        "capacity_hours": total_recoverable_hours * 48,
-        "potential_revenue": adjusted_tier_1_savings
+        "tier_2_savings": tier_2_savings,
+        "adjusted_tier_2_savings": tier_2_savings,
+        "capacity_hours": total_recoverable_hours * WEEKS_PER_YEAR,
+        "potential_revenue": tier_1_savings
     }
 
 

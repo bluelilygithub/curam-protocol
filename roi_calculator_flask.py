@@ -443,124 +443,83 @@ def get_doc_staff_percentage(total_staff, industry_config):
 
 def calculate_conservative_roi(total_staff, industry_config):
     """
-    Calculate CONSERVATIVE ROI based on proven low-hanging fruit only.
-    Includes firm size scaling for documentation staff percentage.
+    Simplified ROI calculation for marketing/sales website examples.
     
-    Philosophy: Show minimum proven savings on known repetitive tasks,
-    not aspirational total opportunity. Focus on documentation staff
-    (junior/mid-level) who actually do the work.
+    Uses fixed formula without complexity:
+    - 85% documentation staff (15% executives excluded)
+    - 4.5 hours/week per doc staff
+    - 40% conservative automation potential
+    - 48 weeks/year
+    
+    Formula:
+    X staff × 85% = doc_staff (rounded)
+    doc_staff × 4.5 hrs × $rate × 48 weeks = annual_cost
+    annual_cost × 40% = conservative_savings
     """
     
-    # Apply 20% executive exclusion (fixed rule)
-    EXECUTIVE_EXCLUSION_RATE = 0.20
-    doc_staff_percentage = 1.0 - EXECUTIVE_EXCLUSION_RATE  # Always 80%
-    doc_staff_count = int(total_staff * doc_staff_percentage)
+    # Fixed marketing formula parameters
+    DOC_STAFF_PERCENTAGE = 0.85  # 85% documentation staff
+    HOURS_PER_WEEK = 4.5  # 4.5 hours per doc staff per week
     
-    # Store original for display
+    # Calculate documentation staff (rounded)
+    doc_staff_count = round(total_staff * DOC_STAFF_PERCENTAGE)
+    doc_staff_percentage = DOC_STAFF_PERCENTAGE
+    
+    # Store for display
     base_doc_staff = doc_staff_count
-    base_percentage = doc_staff_percentage
+    base_percentage = DOC_STAFF_PERCENTAGE
     
-    # Use conservative hours and rate
-    hours_per_doc_staff = industry_config.get('doc_staff_hours_per_week', 5.0)
-    typical_doc_rate = industry_config.get('doc_staff_typical_rate', 130)
+    # Use fixed hours and get rate from config (default $140)
+    hours_per_doc_staff = HOURS_PER_WEEK
+    typical_doc_rate = industry_config.get('doc_staff_typical_rate', 140)
+    
+    # Fixed automation potential for marketing
+    AUTOMATION_POTENTIAL = 0.40  # 40% conservative automation
+    WEEKS_PER_YEAR = 48
     
     # Calculate totals
     total_weekly_hours = doc_staff_count * hours_per_doc_staff
-    annual_cost = total_weekly_hours * typical_doc_rate * 48
+    annual_cost = total_weekly_hours * typical_doc_rate * WEEKS_PER_YEAR
     
-    # Get proven task breakdown
-    proven_tasks = industry_config.get('proven_tasks', {})
-    tasks = industry_config.get('tasks', [])
+    # Calculate conservative savings (40% automation)
+    total_recoverable_hours = total_weekly_hours * AUTOMATION_POTENTIAL
+    tier_1_savings = annual_cost * AUTOMATION_POTENTIAL
     
-    # Calculate per-task conservative savings
+    # Tier 2: expanded automation (55% - add 15% more)
+    tier_2_potential = 0.55
+    tier_2_savings = annual_cost * tier_2_potential
+    
+    # Empty task analysis for simplified marketing formula
     task_analysis = []
-    total_recoverable_hours = 0
-    total_proven_savings = 0
-    
-    for task in tasks:
-        task_id = task['id']
-        task_percentage = proven_tasks.get(task_id, 0)
-        task_hours = total_weekly_hours * task_percentage
-        
-        # Use conservative automation potential
-        automation_potential = task['automation_potential']
-        
-        # Apply success rate (conservative adjustment)
-        proven_success_rate = task.get('proven_success_rate', 0.85)
-        conservative_potential = automation_potential * proven_success_rate
-        
-        recoverable_hours = task_hours * conservative_potential
-        annual_savings = recoverable_hours * typical_doc_rate * 48
-        
-        task_analysis.append({
-            'id': task_id,
-            'name': task['name'],
-            'complexity': task['complexity'],
-            'complexity_label': task['complexity_label'],
-            'description': task['description'],
-            'hours_per_week': task_hours,
-            'percentage_of_total': task_percentage * 100,
-            'automation_potential': automation_potential,
-            'proven_success_rate': proven_success_rate,
-            'conservative_potential': conservative_potential,
-            'recoverable_hours_per_week': recoverable_hours,
-            'annual_savings': annual_savings,
-            'multiplier': task['multiplier'],
-            'is_low_hanging_fruit': task.get('is_low_hanging_fruit', False),
-            'requires_phase_1': task.get('requires_phase_1', False)
-        })
-        
-        total_recoverable_hours += recoverable_hours
-        total_proven_savings += annual_savings
-    
-    # Sort by annual savings (highest proven ROI first)
-    task_analysis.sort(key=lambda x: x['annual_savings'], reverse=True)
-    
-    # Calculate weighted average (conservative)
-    weighted_potential = total_recoverable_hours / total_weekly_hours if total_weekly_hours > 0 else 0
-    
-    # Tier 2 is aspirational - show but don't emphasize
-    tier_2_potential = min(weighted_potential + 0.25, 0.70)  # More conservative
-    tier_2_savings = total_weekly_hours * tier_2_potential * typical_doc_rate * 48
-    
-    # Determine firm size category for display
-    if total_staff < 20:
-        firm_size_category = "Small"
-        scaling_note = "Flat structure: most staff do documentation"
-    elif total_staff < 50:
-        firm_size_category = "Medium"
-        scaling_note = "Typical structure: baseline percentage"
-    elif total_staff < 100:
-        firm_size_category = "Large"
-        scaling_note = "More management: fewer staff do documentation"
-    else:
-        firm_size_category = "Very Large"
-        scaling_note = "Significant hierarchy: much less documentation staff"
     
     return {
-        "mode": "conservative_proven",
+        "mode": "simple_marketing",
         "total_staff": total_staff,
         "doc_staff_count": doc_staff_count,
         "doc_staff_percentage": doc_staff_percentage * 100,
         "base_doc_staff_percentage": base_percentage * 100,
         "base_doc_staff_count": base_doc_staff,
-        "firm_size_category": firm_size_category,
-        "scaling_note": scaling_note,
+        "firm_size_category": "Standard",
+        "scaling_note": "85% documentation staff (15% executives excluded)",
         "hours_per_doc_staff": hours_per_doc_staff,
         "typical_doc_rate": typical_doc_rate,
         "total_weekly_hours": total_weekly_hours,
         "annual_cost": annual_cost,
         "task_analysis": task_analysis,
         "total_recoverable_hours": total_recoverable_hours,
-        "weighted_potential": weighted_potential,
-        "proven_tier_1_savings": total_proven_savings,
+        "weighted_potential": AUTOMATION_POTENTIAL,
+        "automation_potential": AUTOMATION_POTENTIAL,
+        "proven_tier_1_savings": tier_1_savings,
         "tier_2_potential": tier_2_potential,
         "tier_2_savings": tier_2_savings,
-        "capacity_hours": total_recoverable_hours * 48,
-        "potential_revenue": total_proven_savings,
+        "capacity_hours": total_recoverable_hours * WEEKS_PER_YEAR,
+        "potential_revenue": tier_1_savings,
+        "industry_variance_multiplier": 1.0,
+        "adjusted_tier_1_savings": tier_1_savings,
+        "adjusted_tier_2_savings": tier_2_savings,
         # Legacy fields for backward compatibility
         "annual_burn": annual_cost,
-        "tier_1_savings": total_proven_savings
+        "tier_1_savings": tier_1_savings
     }
 
 def calculate_metrics_v3(staff_count, avg_rate, industry_config):
@@ -2118,8 +2077,8 @@ HTML_TEMPLATE = """
         }
         
         function updateStaffCalculation(totalStaff) {
-            const EXECUTIVE_EXCLUSION_RATE = 0.20;
-            const docStaffPercentage = 1.0 - EXECUTIVE_EXCLUSION_RATE;  // Always 80%
+            const DOC_STAFF_PERCENTAGE = 0.85;  // 85% documentation staff
+            const docStaffPercentage = DOC_STAFF_PERCENTAGE;
             
             const docStaff = Math.round(totalStaff * docStaffPercentage);
             const excludedStaff = totalStaff - docStaff;
@@ -2127,8 +2086,8 @@ HTML_TEMPLATE = """
             const estimateDiv = document.getElementById('doc-staff-estimate');
             if (estimateDiv) {
                 estimateDiv.innerHTML = `
-                    <strong>Documentation Staff (80%):</strong> ${docStaff} people<br>
-                    <strong>Excluded (20%):</strong> ${excludedStaff} executives/senior partners<br>
+                    <strong>Documentation Staff (85%):</strong> ${docStaff} people<br>
+                    <strong>Excluded (15%):</strong> ${excludedStaff} executives/senior partners<br>
                     <br>
                     <em>We calculate savings based on the ${docStaff} staff who do repetitive documentation work.</em>
                 `;
@@ -2168,7 +2127,7 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="methodology-notice">
-            <p><strong>⚠️ Methodology:</strong> Based on {{ calculations.doc_staff_count }} documentation staff (80% of your {{ calculations.total_staff }} total staff). We exclude the top 20% who are executives/senior partners that primarily review and approve work rather than handle repetitive documentation tasks. Average of {{ calculations.hours_per_doc_staff }} hours/week per documentation staff at ${{ calculations.typical_doc_rate }}/hr loaded cost.</p>
+            <p><strong>⚠️ Methodology:</strong> Based on {{ calculations.doc_staff_count }} documentation staff (85% of your {{ calculations.total_staff }} total staff). We exclude the top 15% who are executives/senior partners that primarily review and approve work rather than handle repetitive documentation tasks. Average of {{ calculations.hours_per_doc_staff }} hours/week per documentation staff at ${{ calculations.typical_doc_rate }}/hr loaded cost.</p>
         </div>
         
         <hr>
@@ -2184,11 +2143,11 @@ HTML_TEMPLATE = """
                 <span class="profile-value">{{ calculations.firm_size_category }}</span>
             </div>
             <div class="profile-item">
-                <span class="profile-label">Documentation Staff (80%):</span>
+                <span class="profile-label">Documentation Staff (85%):</span>
                 <span class="profile-value">{{ calculations.doc_staff_count }}</span>
             </div>
             <div class="profile-item">
-                <span class="profile-label">Executives/Senior Partners (20%):</span>
+                <span class="profile-label">Executives/Senior Partners (15%):</span>
                 <span class="profile-value">{{ calculations.total_staff - calculations.doc_staff_count }} (excluded - review/approve only)</span>
             </div>
             <div class="profile-item">
@@ -2394,54 +2353,6 @@ HTML_TEMPLATE = """
             </div>
         </div>
         
-        <!-- STAFF ADOPTION SENSITIVITY -->
-        <div style="background: white; border: 2px solid #E5E7EB; border-radius: 12px; padding: 2rem; margin: 2rem 0;">
-            <h2 style="color: #0B1221; font-size: 1.75rem; margin-bottom: 0.5rem;">Staff Adoption Impact</h2>
-            <p style="color: #6B7280; margin-bottom: 1.5rem; font-size: 0.95rem;">
-                Even with perfect automation, actual savings depend on how many staff adopt the new system. This shows the impact on your <strong>Probable scenario</strong>.
-            </p>
-            
-            {% set high_adoption = probable_savings * 0.80 %}
-            {% set expected_adoption = probable_savings * 0.60 %}
-            {% set low_adoption = probable_savings * 0.40 %}
-            
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 1.5rem;">
-                <!-- HIGH ADOPTION -->
-                <div style="background: linear-gradient(to bottom, #DCFCE7, white); border: 2px solid #10B981; border-radius: 8px; padding: 1.5rem; text-align: center;">
-                    <div style="font-size: 0.875rem; font-weight: 600; color: #10B981; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">High Adoption</div>
-                    <div style="font-size: 2rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">${{ "{:,.0f}".format(high_adoption) }}</div>
-                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">80% of staff use system</div>
-                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
-                        Strong change management, comprehensive training, and executive sponsorship.
-                    </p>
-                </div>
-                
-                <!-- EXPECTED ADOPTION -->
-                <div style="background: linear-gradient(to bottom, #FEF3C7, white); border: 3px solid #F59E0B; border-radius: 8px; padding: 1.5rem; text-align: center; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);">
-                    <div style="font-size: 0.875rem; font-weight: 600; color: #F59E0B; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Expected Adoption ⭐</div>
-                    <div style="font-size: 2rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">${{ "{:,.0f}".format(expected_adoption) }}</div>
-                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">60% of staff use system</div>
-                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
-                        <strong>Most likely outcome</strong> with standard training and support. Typical for mid-sized firms.
-                    </p>
-                </div>
-                
-                <!-- LOW ADOPTION -->
-                <div style="background: linear-gradient(to bottom, #FEE2E2, white); border: 2px solid #DC2626; border-radius: 8px; padding: 1.5rem; text-align: center;">
-                    <div style="font-size: 0.875rem; font-weight: 600; color: #DC2626; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;">Low Adoption</div>
-                    <div style="font-size: 2rem; font-weight: 800; color: #0B1221; margin-bottom: 0.5rem;">${{ "{:,.0f}".format(low_adoption) }}</div>
-                    <div style="font-size: 0.875rem; color: #6B7280; margin-bottom: 1rem;">40% of staff use system</div>
-                    <p style="font-size: 0.85rem; color: #4B5563; line-height: 1.5; margin: 0;">
-                        Minimal training, resistance to change, or lack of executive support. Still delivers value.
-                    </p>
-                </div>
-            </div>
-            
-            <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 1rem 1.5rem; border-radius: 4px; margin-top: 2rem; font-size: 0.875rem; color: #1E40AF;">
-                <strong>💡 Mitigation Strategy:</strong> Phase 2-4 includes SOP videos, 30-day support channels, and change management protocols to maximize adoption rates. Most firms achieve 60%+ adoption within 90 days.
-            </div>
-        </div>
-        
         <div class="tier-2-note">
             <h4>📈 Tier 2 Opportunity: ${{ "{:,.0f}".format(calculations.get('adjusted_tier_2_savings', calculations.get('tier_2_savings', 0))) }}</h4>
             <p>With expanded automation and workflow optimization (typically 12-18 months), firms achieve {{ (calculations.get('tier_2_potential', 0.70) * 100)|round(0)|int }}% efficiency gains. <strong>But let's prove Phase 1 first.</strong></p>
@@ -2620,14 +2531,6 @@ HTML_TEMPLATE = """
                     3 hours of your time. 48-hour turnaround. Full refund if accuracy <90%.
                 </p>
             </div>
-        </div>
-        
-        <h3>Cost Reduction Roadmap</h3>
-        <p style="color: #6B7280; font-size: 0.95rem; margin-bottom: 1rem;">
-            Annual documentation costs after each automation phase (bars show remaining cost):
-        </p>
-        <div class="chart-container">
-            <div id="chart"></div>
         </div>
         
         {% if ai_opportunities and ai_opportunities|length > 0 %}

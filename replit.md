@@ -13,11 +13,11 @@ The platform serves as both a customer-facing demo/trial system and an internal 
 - Logistics: FTA lists, Bills of Lading, packing lists
 
 **Target Industries (5 validated):**
-- Accounting ($449k average ROI)
-- Engineering ($316k average ROI)
-- Logistics ($449k average ROI)
-- Financial Planning ($449k average ROI)
-- Insurance ($449k average ROI)
+- Accounting ($521k annual production value)
+- Engineering ($521k annual production value)
+- Logistics ($521k annual production value)
+- Financial Planning ($521k annual production value)
+- Insurance ($521k annual production value)
 
 ## User Preferences
 
@@ -25,10 +25,11 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (January 2026)
 
-- **ROI Calculator**: Fixed 80% documentation staff rule (20% executives excluded)
+- **ROI Calculator**: Simplified marketing formula (85% doc staff, 4.5 hrs/week, 40% automation, no variance)
+- **Feasibility Report**: Removed Staff Adoption and Cost Reduction Roadmap sections
 - **Navigation**: Standardized navbar across all pages, removed Resources dropdown
 - **Blog**: Hybrid API approach - server API first, falls back to direct WordPress API
-- **Target Markets**: Updated to 5 validated industries with specific ROI figures
+- **Target Markets**: Updated to 5 validated industries with $521k production value (50 staff @ $140/hr)
 
 ## System Architecture
 
@@ -98,28 +99,33 @@ Preferred communication style: Simple, everyday language.
 
 ## ROI Calculator
 
-### Documentation Staff Rule (Fixed 80/20)
-- **80%** of total staff are documentation staff who do repetitive work
-- **20%** are executives/senior partners excluded (review/approve only)
-- This is a fixed rule applied across all industries and firm sizes
+### Simplified Marketing Formula (January 2026)
+Fixed formula for website marketing examples:
+- **85%** of total staff are documentation staff
+- **15%** are executives/senior partners excluded
+- **4.5 hours/week** per doc staff on documentation
+- **40%** conservative automation potential
+- **48 weeks/year**
+- No industry variance multipliers
 
 ### Calculation Formula
 ```
-Documentation Staff = Total Staff × 0.80
-Total Weekly Hours = Doc Staff × Hours per Staff per Week
+Documentation Staff = Total Staff × 0.85 (rounded)
+Total Weekly Hours = Doc Staff × 4.5 hours
 Annual Documentation Cost = Weekly Hours × Hourly Rate × 48 weeks
-Tier 1 Savings = Annual Cost × Automation Potential
+Conservative Savings = Annual Cost × 40%
 ```
 
-### Three Savings Scenarios
-- **Conservative:** Base rate × industry variance multiplier
-- **Probable:** Conservative × 1.15 (15% above conservative)
-- **Optimistic:** Conservative × 1.35 (35% above conservative)
+**Example (50 staff @ $140/hr):**
+- 50 × 85% = 43 doc staff
+- 43 × 4.5 = 193.5 hrs/week
+- 193.5 × $140 × 48 = $1,302,480/year
+- $1,302,480 × 40% = **$520,992 conservative savings**
 
-### Staff Adoption Sensitivity
-- **High Adoption (80%):** Strong change management
-- **Expected Adoption (60%):** Standard training (default)
-- **Low Adoption (40%):** Minimal training
+### Three Savings Scenarios
+- **Conservative:** Annual cost × 40%
+- **Probable:** Conservative × 1.15 (15% above)
+- **Optimistic:** Conservative × 1.35 (35% above)
 
 ## External Dependencies
 
