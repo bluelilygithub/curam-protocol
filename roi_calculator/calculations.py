@@ -395,30 +395,33 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
     """
     Simplified ROI calculation for marketing/sales website examples.
     
-    Uses fixed formula without industry variance multipliers:
-    - 85% documentation staff (15% executives excluded)
-    - 4.5 hours/week per doc staff
-    - 40% conservative automation potential
-    - 48 weeks/year
+    Uses database-driven parameters from industry_configs table:
+    - doc_staff_pct: Percentage of staff doing documentation
+    - hrs_per_week: Hours per doc staff per week
+    - loaded_cost: Hourly rate (overrides avg_rate parameter)
+    - automation_rate: Conservative automation potential
     
     Formula:
-    X staff × 85% = doc_staff (rounded)
-    doc_staff × 4.5 hrs × $rate × 48 weeks = annual_cost
-    annual_cost × 40% = conservative_savings
+    X staff × doc_staff_pct = doc_staff (rounded)
+    doc_staff × hrs_per_week × loaded_cost × 48 weeks = annual_cost
+    annual_cost × automation_rate = conservative_savings
     
     Args:
         staff_count: Total number of staff
-        avg_rate: Average hourly rate
-        industry_config: Industry configuration dictionary (used for backward compat)
+        avg_rate: Average hourly rate (fallback only)
+        industry_config: Industry configuration dictionary with database values
     
     Returns:
         dict: ROI calculation results
     """
-    # Fixed marketing formula parameters
-    DOC_STAFF_PERCENTAGE = 0.85  # 85% documentation staff
-    HOURS_PER_WEEK = 4.5  # 4.5 hours per doc staff per week
-    AUTOMATION_POTENTIAL = 0.40  # 40% conservative automation
+    # Get parameters from database config (with defaults)
+    DOC_STAFF_PERCENTAGE = float(industry_config.get('doc_staff_pct', 0.85))
+    HOURS_PER_WEEK = float(industry_config.get('hrs_per_week', 4.5))
+    AUTOMATION_POTENTIAL = float(industry_config.get('automation_rate', 0.40))
     WEEKS_PER_YEAR = 48
+    
+    # Use database loaded_cost, fall back to passed avg_rate
+    avg_rate = float(industry_config.get('loaded_cost', avg_rate))
     
     # Calculate documentation staff (rounded)
     doc_staff_count = round(staff_count * DOC_STAFF_PERCENTAGE)
