@@ -24,6 +24,69 @@ def create_optimized_engine():
 
 engine = create_optimized_engine()
 
+
+def ensure_industry_configs():
+    """Ensure industry_configs table exists and has data (auto-seed for production)"""
+    if not engine:
+        return
+    
+    try:
+        with engine.connect() as conn:
+            # Check if table exists
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'industry_configs'
+                )
+            """))
+            table_exists = result.scalar()
+            
+            if not table_exists:
+                # Create the table
+                conn.execute(text("""
+                    CREATE TABLE industry_configs (
+                        id SERIAL PRIMARY KEY,
+                        industry_name VARCHAR(100) NOT NULL,
+                        industry_slug VARCHAR(50) NOT NULL UNIQUE,
+                        doc_staff_pct DECIMAL(5,2) DEFAULT 0.85,
+                        hrs_per_week DECIMAL(5,2) DEFAULT 4.5,
+                        loaded_cost DECIMAL(10,2) DEFAULT 140.00,
+                        automation_rate DECIMAL(5,2) DEFAULT 0.40,
+                        explanation TEXT,
+                        is_active BOOLEAN DEFAULT true,
+                        display_order INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.commit()
+                print("Created industry_configs table")
+            
+            # Check if table has data
+            result = conn.execute(text("SELECT COUNT(*) FROM industry_configs"))
+            count = result.scalar()
+            
+            if count == 0:
+                # Seed the data
+                conn.execute(text("""
+                    INSERT INTO industry_configs (industry_name, industry_slug, doc_staff_pct, hrs_per_week, loaded_cost, automation_rate, explanation, is_active, display_order)
+                    VALUES 
+                    ('Accounting', 'accounting', 0.85, 4.50, 140.00, 0.50, 'Invoices, receipts, statements - highly standardized formats', true, 1),
+                    ('Insurance', 'insurance', 0.85, 4.50, 140.00, 0.48, 'Claims forms, policies - industry-standardized documents', true, 2),
+                    ('Logistics', 'logistics', 0.85, 4.50, 140.00, 0.45, 'BOLs, manifests, customs forms - regulated formats', true, 3),
+                    ('Financial Planning', 'financial-planning', 0.85, 4.50, 140.00, 0.42, 'SOAs, compliance forms - mix of structured and custom content', true, 4),
+                    ('Engineering', 'engineering', 0.85, 4.50, 140.00, 0.38, 'CAD schedules, specs, drawings - semi-structured with variations', true, 5)
+                """))
+                conn.commit()
+                print("Seeded industry_configs with 5 industries")
+    except Exception as e:
+        print(f"Error in ensure_industry_configs: {e}")
+
+
+# Auto-seed on module load
+ensure_industry_configs()
+
+
 def test_connection():
     """Test database connection"""
     if not engine:
