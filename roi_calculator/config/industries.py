@@ -133,7 +133,7 @@ INDUSTRIES = {
         "q2_range": (0, 20)
     },
     "Accounting & Advisory": {
-        "context": "Australian accounting firms (15-100 staff)",
+        "context": "Australian accounting firms (50-100 staff)",
         # Industry Variance Multiplier (High-Reliability: Structured data)
         "industry_variance_multiplier": 0.90,
         "pain_point_question": "What's your biggest manual processing pain point?",
@@ -221,7 +221,7 @@ INDUSTRIES = {
         "q2_range": (10, 150)
     },
     "Construction": {
-        "context": "Civil engineering and construction firms (15-100 staff)",
+        "context": "Civil engineering and construction firms (50-100 staff)",
         # Industry Variance Multiplier (Medium-Reliability: Semi-structured documents)
         "industry_variance_multiplier": 0.75,
         "pain_point_question": "What's your biggest documentation bottleneck?",
