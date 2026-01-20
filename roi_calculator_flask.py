@@ -2067,7 +2067,7 @@ HTML_TEMPLATE = """
             <div class="form-group">
                 <label>Average Billable Rate (AUD/hour)</label>
                 <div class="rate-display" style="background: rgba(0, 178, 163, 0.1); border: 1px solid rgba(0, 178, 163, 0.3); border-radius: 8px; padding: 12px 16px; font-size: 1.25rem; font-weight: 600; color: var(--cyan-accent);">
-                    $140/hour
+                    ${{ industry_config.get('loaded_cost', 140)|int }}/hour
                 </div>
                 <small style="color: #4B5563; display: block; margin-top: 0.5rem;">
                     Industry average for professional services staff (loaded cost including super, leave, overheads)
