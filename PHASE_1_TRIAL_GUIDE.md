@@ -873,7 +873,7 @@ A: Yes, the multiplier is stored in the industry configuration and can be adjust
 ### References
 
 - **Code:** `roi_calculator/calculations.py`
-- **Industry Configs:** `roi_calculator/config/industries.py` (includes `industry_variance_multiplier` for each industry)
+- **Industry Configs:** Embedded in `roi_calculator_flask.py`
 - **Documentation:** `templates/admin/documentation/roi.html`
 
 ---

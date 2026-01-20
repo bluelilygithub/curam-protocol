@@ -61,12 +61,10 @@ Applied to Probable scenario:
 roi_calculator/
 ├── __init__.py
 ├── calculations.py      # Core calculation functions
-├── config/
-│   ├── __init__.py
-│   ├── industries.py    # Industry configurations
-│   └── opportunities.py # AI opportunities by industry
 └── README.md
 ```
+
+Note: Industry configs are now embedded in `roi_calculator_flask.py`.
 
 ## Key Functions
 
@@ -82,15 +80,14 @@ Checks if industry has proven_tasks and tasks arrays for detailed calculation.
 ## Usage
 
 ```python
-from roi_calculator.config import INDUSTRIES
 from roi_calculator.calculations import calculate_conservative_roi, calculate_simple_roi
 
-# For industries with full configuration
-industry_config = INDUSTRIES["Engineering"]
+# Industry configs are defined in roi_calculator_flask.py
+# Pass industry_config dict to calculation functions
 results = calculate_conservative_roi(total_staff=50, industry_config=industry_config)
 
 # For industries without full configuration
-results = calculate_simple_roi(staff_count=50, avg_rate=130, industry_config=industry_config)
+results = calculate_simple_roi(staff_count=50, avg_rate=140, industry_config=industry_config)
 
 # Results include:
 # - doc_staff_count: 40 (80% of 50)

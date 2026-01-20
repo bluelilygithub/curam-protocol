@@ -187,11 +187,10 @@ gunicorn main:app --bind 0.0.0.0:$PORT --workers 4 --timeout 120
 
 **Step 1: Update Industry Config**
 ```python
-# In roi_calculator/config/industries.py
+# In roi_calculator_flask.py (INDUSTRIES dict at top of file)
 INDUSTRIES = {
     'New Industry': {
         'context': 'Industry description',
-        'industry_variance_multiplier': 0.75,
         'automation_potential': 0.40,
         # ... other config
     }

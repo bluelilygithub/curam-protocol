@@ -56,9 +56,8 @@ Preferred communication style: Simple, everyday language.
 - Prompts managed exclusively via `prompt_templates` database table
 
 **ROI Calculator:**
-- `roi_calculator_flask.py` - Main calculator with embedded templates
+- `roi_calculator_flask.py` - Main calculator with embedded templates and industry configs
 - `roi_calculator/calculations.py` - Core calculation logic
-- `roi_calculator/config/industries.py` - Industry configurations
 
 **Configuration:**
 - `config.py` - Centralized settings for upload directories, department configs, sample file mappings

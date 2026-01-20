@@ -281,7 +281,7 @@ def extract_data(pdf_path):
 
 **Configuration:**
 - `config.py` - Department field definitions
-- `roi_calculator/config/industries.py` - Industry configs
+- Industry configs embedded in `roi_calculator_flask.py`
 
 ---
 
