@@ -1005,29 +1005,53 @@
     <script src="assets/js/main.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
     <script>
-        // Sector data for stats (unified formula: 50 staff × 85% = 43 doc staff × 4.5 hrs × $140 × 48 weeks × 40%)
-        const sectorData = {
-            engineering: {
-                efficiency: '$522k',
-                capacity: '$1.31M'
-            },
-            accounting: {
-                efficiency: '$522k',
-                capacity: '$1.31M'
-            },
-            logistics: {
-                efficiency: '$522k',
-                capacity: '$1.31M'
-            },
-            'financial-planning': {
-                efficiency: '$522k',
-                capacity: '$1.31M'
-            },
-            insurance: {
-                efficiency: '$522k',
-                capacity: '$1.31M'
-            }
+        // Industry configs loaded from database via API
+        // Default values (fallback if API fails)
+        let sectorData = {
+            engineering: { efficiency: '$522k', capacity: '$1.31M' },
+            accounting: { efficiency: '$522k', capacity: '$1.31M' },
+            logistics: { efficiency: '$522k', capacity: '$1.31M' },
+            'financial-planning': { efficiency: '$522k', capacity: '$1.31M' },
+            insurance: { efficiency: '$522k', capacity: '$1.31M' }
         };
+
+        // Calculate ROI values from industry config
+        function calculateROI(config, staffCount = 50) {
+            const docStaff = Math.round(staffCount * config.doc_staff_pct);
+            const weeklyHours = docStaff * config.hrs_per_week;
+            const annualCost = weeklyHours * config.loaded_cost * 48;
+            const conservativeSavings = annualCost * config.automation_rate;
+            return {
+                efficiency: '$' + Math.round(conservativeSavings / 1000) + 'k',
+                capacity: '$' + (annualCost / 1000000).toFixed(2) + 'M'
+            };
+        }
+
+        // Load industry configs from API
+        async function loadIndustryConfigs() {
+            try {
+                const response = await fetch('/api/industry-configs');
+                if (response.ok) {
+                    const configs = await response.json();
+                    // Update sectorData with calculated values
+                    Object.keys(configs).forEach(slug => {
+                        const roi = calculateROI(configs[slug]);
+                        sectorData[slug] = roi;
+                    });
+                    // Refresh current display
+                    const activeBtn = document.querySelector('.sector-btn.active');
+                    if (activeBtn) {
+                        switchSector(activeBtn.dataset.sector);
+                    }
+                    console.log('Industry configs loaded from database');
+                }
+            } catch (error) {
+                console.log('Using default industry configs (API unavailable)');
+            }
+        }
+
+        // Load configs on page load
+        loadIndustryConfigs();
 
         // Initialize swipers
         const engineeringSwiper = new Swiper('#slider-engineering', {

@@ -1693,3 +1693,57 @@ def cleanup_expired_documents():
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ============================================================================
+# INDUSTRY CONFIGS API
+# ============================================================================
+
+@api_bp.route('/api/industry-configs', methods=['GET'])
+def get_industry_configs():
+    """
+    Get all industry configurations for ROI calculator and feasibility reports.
+    
+    Returns JSON with all active industry configs including:
+    - doc_staff_pct: Percentage of staff doing documentation (e.g., 0.85 = 85%)
+    - hrs_per_week: Hours per documentation staff per week
+    - loaded_cost: Loaded hourly rate ($)
+    - automation_rate: Conservative automation potential (e.g., 0.40 = 40%)
+    """
+    from database import get_all_industry_configs
+    
+    configs = get_all_industry_configs()
+    
+    result = {}
+    for config in configs:
+        result[config['industry_slug']] = {
+            'name': config['industry_name'],
+            'doc_staff_pct': float(config['doc_staff_pct']),
+            'hrs_per_week': float(config['hrs_per_week']),
+            'loaded_cost': float(config['loaded_cost']),
+            'automation_rate': float(config['automation_rate']),
+            'explanation': config['explanation']
+        }
+    
+    return jsonify(result)
+
+
+@api_bp.route('/api/industry-configs/<slug>', methods=['GET'])
+def get_single_industry_config(slug):
+    """Get a single industry configuration by slug."""
+    from database import get_industry_config
+    
+    config = get_industry_config(slug)
+    
+    if not config:
+        return jsonify({'error': f'Industry "{slug}" not found'}), 404
+    
+    return jsonify({
+        'name': config['industry_name'],
+        'slug': config['industry_slug'],
+        'doc_staff_pct': float(config['doc_staff_pct']),
+        'hrs_per_week': float(config['hrs_per_week']),
+        'loaded_cost': float(config['loaded_cost']),
+        'automation_rate': float(config['automation_rate']),
+        'explanation': config['explanation']
+    })

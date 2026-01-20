@@ -1257,3 +1257,60 @@ def phase1_trial_generate_report(trial_id):
     except Exception as e:
         print(f"Error generating report: {e}")
         return f"Error generating report: {str(e)}", 500
+
+
+# ============================================================================
+# INDUSTRY CONFIGS (ROI Calculator & Feasibility Report)
+# ============================================================================
+
+@admin_bp.route('/industry-configs')
+@require_admin
+def industry_configs():
+    """Admin page to manage industry configurations for ROI calculator"""
+    from database import get_all_industry_configs
+    
+    configs = get_all_industry_configs()
+    
+    return render_template('admin/industry_configs.html', configs=configs)
+
+
+@admin_bp.route('/industry-configs/<int:config_id>', methods=['GET', 'POST'])
+@require_admin
+def industry_config_edit(config_id):
+    """Edit a single industry configuration"""
+    from database import get_all_industry_configs, update_industry_config
+    from sqlalchemy import text
+    from database import engine
+    
+    if request.method == 'POST':
+        updates = {
+            'doc_staff_pct': float(request.form.get('doc_staff_pct', 0.85)),
+            'hrs_per_week': float(request.form.get('hrs_per_week', 4.5)),
+            'loaded_cost': float(request.form.get('loaded_cost', 140)),
+            'automation_rate': float(request.form.get('automation_rate', 0.40)),
+            'explanation': request.form.get('explanation', ''),
+            'display_order': int(request.form.get('display_order', 0))
+        }
+        
+        if update_industry_config(config_id, updates):
+            flash('Industry config updated successfully', 'success')
+        else:
+            flash('Failed to update config', 'error')
+        
+        return redirect(url_for('admin.industry_configs'))
+    
+    # GET - fetch config
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            SELECT id, industry_name, industry_slug, doc_staff_pct, hrs_per_week,
+                   loaded_cost, automation_rate, explanation, is_active, display_order
+            FROM industry_configs WHERE id = :id
+        """), {"id": config_id})
+        row = result.fetchone()
+        config = dict(row._mapping) if row else None
+    
+    if not config:
+        flash('Config not found', 'error')
+        return redirect(url_for('admin.industry_configs'))
+    
+    return render_template('admin/industry_config_edit.html', config=config)

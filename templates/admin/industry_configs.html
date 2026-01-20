@@ -1,0 +1,82 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Industry Configurations{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h2>Industry Configurations</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Manage ROI calculator and feasibility report parameters</p>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="admin-card" style="background: {% if category == 'success' %}#D1FAE5{% elif category == 'error' %}#FEE2E2{% else %}#DBEAFE{% endif %}; border-left: 3px solid {% if category == 'success' %}#10B981{% elif category == 'error' %}#EF4444{% else %}#3B82F6{% endif %};">
+                <p style="margin: 0; color: {% if category == 'success' %}#065F46{% elif category == 'error' %}#991B1B{% else %}#1E40AF{% endif %};">{{ message }}</p>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="admin-card" style="background: #EFF6FF; border-left: 3px solid #3B82F6; margin-bottom: 1.5rem;">
+    <h4 style="margin: 0 0 0.5rem; color: #1E40AF;">How These Values Are Used</h4>
+    <p style="margin: 0; color: #1E40AF; font-size: 0.875rem;">
+        These parameters control the ROI calculations shown in the ROI Calculator and Feasibility Sprint Report pages.<br>
+        <strong>Formula:</strong> Doc Staff × Hrs/Week × Loaded Cost × 48 weeks × Automation Rate = Conservative Savings
+    </p>
+</div>
+
+<div class="admin-card">
+    <h3 style="margin: 0 0 1rem;">Industry Parameters</h3>
+    
+    {% if configs %}
+    <table class="admin-table">
+        <thead>
+            <tr>
+                <th>Industry</th>
+                <th>Doc Staff %</th>
+                <th>Hrs/Week</th>
+                <th>Loaded Cost</th>
+                <th>Automation Rate</th>
+                <th>Example (50 staff)</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for config in configs %}
+            {% set doc_staff = (50 * config.doc_staff_pct)|round|int %}
+            {% set weekly_hrs = doc_staff * config.hrs_per_week %}
+            {% set annual_cost = weekly_hrs * config.loaded_cost * 48 %}
+            {% set savings = annual_cost * config.automation_rate %}
+            <tr>
+                <td><strong>{{ config.industry_name }}</strong></td>
+                <td>{{ (config.doc_staff_pct * 100)|round|int }}%</td>
+                <td>{{ config.hrs_per_week }}</td>
+                <td>${{ config.loaded_cost|round|int }}</td>
+                <td>{{ (config.automation_rate * 100)|round|int }}%</td>
+                <td>
+                    <span style="color: #059669; font-weight: 600;">${{ "{:,.0f}".format(savings) }}</span>
+                    <span style="color: #6B7280; font-size: 0.75rem;">/ ${{ "{:,.0f}".format(annual_cost) }} annual</span>
+                </td>
+                <td>
+                    <a href="{{ url_for('admin.industry_config_edit', config_id=config.id) }}" class="btn-admin" style="text-decoration: none; padding: 0.375rem 0.75rem; font-size: 0.875rem;">Edit</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #6B7280;">No industry configurations found in database.</p>
+    {% endif %}
+</div>
+
+<div class="admin-card" style="background: #FEF3C7; border-left: 3px solid #F59E0B;">
+    <h4 style="margin: 0 0 0.5rem; color: #92400E;">API Endpoint</h4>
+    <p style="margin: 0; color: #92400E; font-size: 0.875rem;">
+        These values are also available via API at: <code>/api/industry-configs</code><br>
+        The Feasibility Sprint Report page loads values dynamically from this API.
+    </p>
+</div>
+{% endblock %}

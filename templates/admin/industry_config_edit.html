@@ -1,0 +1,94 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Edit {{ config.industry_name }}{% endblock %}
+
+{% block content %}
+<div class="admin-header">
+    <div>
+        <h2>Edit: {{ config.industry_name }}</h2>
+        <p style="color: #6B7280; margin: 0.25rem 0 0; font-size: 0.875rem;">Adjust ROI calculation parameters for this industry</p>
+    </div>
+    <div class="admin-header-actions">
+        <a href="{{ url_for('admin.industry_configs') }}" class="btn-admin btn-admin-secondary">Back to List</a>
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="admin-card" style="background: {% if category == 'success' %}#D1FAE5{% elif category == 'error' %}#FEE2E2{% else %}#DBEAFE{% endif %}; border-left: 3px solid {% if category == 'success' %}#10B981{% elif category == 'error' %}#EF4444{% else %}#3B82F6{% endif %};">
+                <p style="margin: 0; color: {% if category == 'success' %}#065F46{% elif category == 'error' %}#991B1B{% else %}#1E40AF{% endif %};">{{ message }}</p>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="admin-card">
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #374151;">Documentation Staff Percentage</label>
+                <input type="number" name="doc_staff_pct" value="{{ config.doc_staff_pct }}" step="0.01" min="0" max="1" 
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; font-size: 1rem;">
+                <p style="font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;">Percentage of staff doing documentation work (0.85 = 85%)</p>
+            </div>
+            
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #374151;">Hours per Week (per staff)</label>
+                <input type="number" name="hrs_per_week" value="{{ config.hrs_per_week }}" step="0.5" min="0" max="40"
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; font-size: 1rem;">
+                <p style="font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;">Average hours per week each doc staff spends on documentation</p>
+            </div>
+            
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #374151;">Loaded Cost ($/hr)</label>
+                <input type="number" name="loaded_cost" value="{{ config.loaded_cost }}" step="5" min="50" max="500"
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; font-size: 1rem;">
+                <p style="font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;">Fully loaded hourly cost (salary + super + overhead)</p>
+            </div>
+            
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #374151;">Automation Rate</label>
+                <input type="number" name="automation_rate" value="{{ config.automation_rate }}" step="0.01" min="0" max="1"
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; font-size: 1rem;">
+                <p style="font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;">Conservative automation potential (0.40 = 40%). Higher = more structured documents.</p>
+            </div>
+        </div>
+        
+        <div style="margin-top: 1.5rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #374151;">Explanation</label>
+            <textarea name="explanation" rows="3" 
+                      style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; font-size: 1rem;">{{ config.explanation or '' }}</textarea>
+            <p style="font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;">Brief explanation of document types and why this automation rate applies</p>
+        </div>
+        
+        <div style="margin-top: 1.5rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #374151;">Display Order</label>
+            <input type="number" name="display_order" value="{{ config.display_order or 0 }}" min="0" max="100"
+                   style="width: 120px; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; font-size: 1rem;">
+            <p style="font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;">Order in dropdown lists (lower = first)</p>
+        </div>
+        
+        <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #E5E7EB;">
+            <h4 style="margin: 0 0 1rem; color: #374151;">Preview (50 staff example)</h4>
+            {% set doc_staff = (50 * config.doc_staff_pct)|round|int %}
+            {% set weekly_hrs = doc_staff * config.hrs_per_week %}
+            {% set annual_cost = weekly_hrs * config.loaded_cost * 48 %}
+            {% set savings = annual_cost * config.automation_rate %}
+            <div style="background: #F3F4F6; padding: 1rem; border-radius: 0.5rem;">
+                <p style="margin: 0 0 0.5rem;"><strong>Doc Staff:</strong> 50 x {{ (config.doc_staff_pct * 100)|round|int }}% = {{ doc_staff }} staff</p>
+                <p style="margin: 0 0 0.5rem;"><strong>Weekly Hours:</strong> {{ doc_staff }} x {{ config.hrs_per_week }} = {{ weekly_hrs|round(1) }} hrs</p>
+                <p style="margin: 0 0 0.5rem;"><strong>Annual Cost:</strong> {{ weekly_hrs|round(1) }} x ${{ config.loaded_cost|round|int }} x 48 = <span style="color: #0B1221; font-weight: 600;">${{ "{:,.0f}".format(annual_cost) }}</span></p>
+                <p style="margin: 0;"><strong>Conservative Savings ({{ (config.automation_rate * 100)|round|int }}%):</strong> <span style="color: #059669; font-weight: 700; font-size: 1.25rem;">${{ "{:,.0f}".format(savings) }}</span></p>
+            </div>
+        </div>
+        
+        <div style="margin-top: 2rem; display: flex; gap: 1rem;">
+            <button type="submit" class="btn-admin" style="padding: 0.75rem 2rem;">Save Changes</button>
+            <a href="{{ url_for('admin.industry_configs') }}" class="btn-admin btn-admin-secondary" style="text-decoration: none; padding: 0.75rem 2rem;">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
