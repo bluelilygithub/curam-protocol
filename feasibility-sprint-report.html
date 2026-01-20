@@ -1020,12 +1020,15 @@
 
         // Calculate ROI values from industry config
         function calculateROI(config, staffCount = 50) {
-            const docStaff = Math.round(staffCount * config.doc_staff_pct);
+            const docStaffPct = config.doc_staff_pct;
+            const docStaff = Math.round(staffCount * docStaffPct);
             const weeklyHours = docStaff * config.hrs_per_week;
             const annualCost = weeklyHours * config.loaded_cost * 48;
             const conservativeSavings = annualCost * config.automation_rate;
             return {
+                docStaffPct: docStaffPct,
                 docStaff: docStaff,
+                staffCount: staffCount,
                 weeklyHours: weeklyHours,
                 loadedCost: config.loaded_cost,
                 annualCost: annualCost,
@@ -1040,25 +1043,48 @@
         function updateSliderValues(slug, roi) {
             const slider = document.getElementById('slider-' + slug);
             if (!slider) return;
+            
+            const docStaffPctDisplay = Math.round(roi.docStaffPct * 100);
+            const automationPctDisplay = Math.round(roi.automationRate * 100);
 
-            // Update all table cells with Loaded Cost Rate
+            // Update all table cells
             slider.querySelectorAll('td').forEach(td => {
-                if (td.textContent.includes('$140/hr') || td.textContent.includes('$') && td.textContent.includes('/hr')) {
+                // Update "Documentation Staff (85% of 50)" text
+                if (td.textContent.includes('Documentation Staff') && td.textContent.includes('% of')) {
+                    td.textContent = 'Documentation Staff (' + docStaffPctDisplay + '% of ' + roi.staffCount + ')';
+                }
+                // Update doc staff count (43)
+                if (td.textContent === '43' && td.previousElementSibling && td.previousElementSibling.textContent.includes('Documentation Staff')) {
+                    td.textContent = roi.docStaff;
+                }
+                // Update Loaded Cost Rate
+                if (td.textContent.includes('/hr') && td.textContent.includes('$')) {
                     td.textContent = '$' + Math.round(roi.loadedCost) + '/hr';
                 }
                 // Update formula cells like "193.5 hrs × $140 × 48 weeks"
-                if (td.textContent.includes('× $140 ×') || td.textContent.includes('× $') && td.textContent.includes('× 48 weeks')) {
+                if (td.textContent.includes('hrs ×') && td.textContent.includes('× 48 weeks')) {
                     td.textContent = roi.weeklyHours.toFixed(1) + ' hrs × $' + Math.round(roi.loadedCost) + ' × 48 weeks';
                 }
                 // Update annual cost result
                 if (td.textContent === '$1,306,080') {
                     td.textContent = '$' + Math.round(roi.annualCost).toLocaleString();
                 }
-                // Update conservative savings
-                if (td.textContent.includes('$522,432') || (td.previousElementSibling && td.previousElementSibling.textContent.includes('low-hanging fruit'))) {
-                    if (td.textContent.startsWith('$')) {
+                // Update conservative savings heading
+                if (td.textContent.includes('Conservative Automation Opportunity')) {
+                    td.textContent = 'Conservative Automation Opportunity (' + automationPctDisplay + '%)';
+                }
+                // Update conservative savings amount
+                if (td.previousElementSibling && td.previousElementSibling.textContent.includes('low-hanging fruit')) {
+                    if (td.textContent.startsWith('$') || td.innerHTML.includes('$')) {
                         td.innerHTML = '<strong>$' + Math.round(roi.conservativeSavings).toLocaleString() + '</strong>';
                     }
+                }
+            });
+            
+            // Update h3 headings for automation opportunity
+            slider.querySelectorAll('h3').forEach(h3 => {
+                if (h3.textContent.includes('Conservative Automation Opportunity')) {
+                    h3.textContent = 'Conservative Automation Opportunity (' + automationPctDisplay + '%)';
                 }
             });
         }

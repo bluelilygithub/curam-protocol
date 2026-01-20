@@ -516,6 +516,7 @@ def calculate_conservative_roi(total_staff, industry_config):
         "mode": "simple_marketing",
         "total_staff": total_staff,
         "doc_staff_count": doc_staff_count,
+        "doc_staff_pct": doc_staff_percentage,  # Raw decimal for template
         "doc_staff_percentage": doc_staff_percentage * 100,
         "base_doc_staff_percentage": base_percentage * 100,
         "base_doc_staff_count": base_doc_staff,
@@ -2161,7 +2162,7 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="methodology-notice">
-            <p><strong>⚠️ Methodology:</strong> Based on {{ calculations.doc_staff_count }} documentation staff (85% of your {{ calculations.total_staff }} total staff). We exclude the top 15% who are executives/senior partners that primarily review and approve work rather than handle repetitive documentation tasks. Average of {{ calculations.hours_per_doc_staff }} hours/week per documentation staff at ${{ calculations.typical_doc_rate }}/hr loaded cost.</p>
+            <p><strong>⚠️ Methodology:</strong> Based on {{ calculations.doc_staff_count }} documentation staff ({{ (calculations.doc_staff_pct * 100)|int }}% of your {{ calculations.total_staff }} total staff). We exclude the top {{ (100 - calculations.doc_staff_pct * 100)|int }}% who are executives/senior partners that primarily review and approve work rather than handle repetitive documentation tasks. Average of {{ calculations.hours_per_doc_staff }} hours/week per documentation staff at ${{ calculations.typical_doc_rate }}/hr loaded cost.</p>
         </div>
         
         <hr>
