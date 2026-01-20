@@ -66,7 +66,7 @@ AI_OPPORTUNITIES = {
 # Industry configurations (5 supported industries only)
 INDUSTRIES = {
     "Accounting": {
-        "context": "Australian accounting firms (15-100 staff)",
+        "context": "Australian accounting firms (50-100 staff)",
         "pain_point_question": "What's your biggest manual processing pain point?",
         "pain_point_options": [
             {
@@ -108,7 +108,7 @@ INDUSTRIES = {
         "q2_range": (10, 200)
     },
     "Engineering": {
-        "context": "Engineering firms (10-100 staff)",
+        "context": "Engineering firms (50-100 staff)",
         "pain_point_question": "What's your biggest documentation bottleneck?",
         "pain_point_options": [
             {
@@ -149,7 +149,7 @@ INDUSTRIES = {
         "q2_range": (10, 200)
     },
     "Logistics": {
-        "context": "Logistics and freight forwarding firms (10-100 staff)",
+        "context": "Logistics and freight forwarding firms (50-100 staff)",
         "pain_point_question": "What's your biggest operational bottleneck?",
         "pain_point_options": [
             {
@@ -190,7 +190,7 @@ INDUSTRIES = {
         "q2_range": (15, 150)
     },
     "Financial Planning": {
-        "context": "Financial planning and advisory firms (10-100 staff)",
+        "context": "Financial planning and advisory firms (50-100 staff)",
         "pain_point_question": "What's your biggest administrative bottleneck?",
         "pain_point_options": [
             {
@@ -231,7 +231,7 @@ INDUSTRIES = {
         "q2_range": (10, 120)
     },
     "Insurance": {
-        "context": "Insurance underwriting and risk assessment firms (10-100 staff)",
+        "context": "Insurance underwriting and risk assessment firms (50-100 staff)",
         "pain_point_question": "What's your biggest operational bottleneck?",
         "pain_point_options": [
             {
