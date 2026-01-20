@@ -13,11 +13,31 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 import io
-from database import capture_email_request, mark_email_sent, log_roi_report
+from database import capture_email_request, mark_email_sent, log_roi_report, get_industry_config_by_name, get_all_industry_configs
 
 # Configuration
 BOOKING_URL = "/booking.html"
 COMPANY_NAME = "Curam AI"
+
+def get_db_industry_config(industry_name):
+    """
+    Get industry config from database, merged with static INDUSTRIES dict.
+    Database values override static values for calculation parameters.
+    
+    Returns merged config with DB values for: doc_staff_pct, hrs_per_week, loaded_cost, automation_rate
+    """
+    db_config = get_industry_config_by_name(industry_name)
+    static_config = INDUSTRIES.get(industry_name, {}).copy()
+    
+    if db_config:
+        static_config['doc_staff_pct'] = float(db_config['doc_staff_pct'])
+        static_config['hrs_per_week'] = float(db_config['hrs_per_week'])
+        static_config['loaded_cost'] = float(db_config['loaded_cost'])
+        static_config['automation_rate'] = float(db_config['automation_rate'])
+        static_config['automation_potential'] = float(db_config['automation_rate'])
+        static_config['explanation'] = db_config['explanation']
+    
+    return static_config
 
 # Create Flask Blueprint for ROI calculator
 from flask import Blueprint
@@ -3060,7 +3080,7 @@ def roi_calculator():
                 # If industry not found, redirect to step 1 with error message
                 return render_template_string(HTML_TEMPLATE, step=1, industries=INDUSTRIES, error=f"Industry '{industry}' not found. Please select from the list below.")
             
-            industry_config = INDUSTRIES[industry]
+            industry_config = get_db_industry_config(industry)
             
             # Handle form submission
             if request.method == 'POST' and action == 'calculate':
@@ -3125,8 +3145,8 @@ def roi_calculator():
             session['staff_count'] = staff_count
             session['platform'] = platform
             
-            # Get industry config for automation potential
-            industry_config = INDUSTRIES.get(industry, {})
+            # Get industry config from database (merged with static config)
+            industry_config = get_db_industry_config(industry)
             
             # Check if industry has full configuration (proven_tasks + tasks)
             # Import here to avoid circular imports
@@ -3842,25 +3862,24 @@ def results_improved():
     if not calculations:
         return redirect(url_for('roi_calculator.roi_calculator', step=1))
     
-    # Get industry config
-    industry_config = INDUSTRIES.get(industry, {})
+    # Get industry config from database
+    industry_config = get_db_industry_config(industry)
     
-    # Calculate firm size and doc staff percentage
-    if staff_count <= 20:
-        firm_size = "Small"
-        doc_staff_percentage = 0.80
-    elif staff_count <= 50:
-        firm_size = "Medium"
-        doc_staff_percentage = 0.75
-    else:
-        firm_size = "Large"
-        doc_staff_percentage = 0.70
-    
+    # Get doc staff percentage from database config
+    doc_staff_percentage = industry_config.get('doc_staff_pct', 0.85)
     doc_staff_count = int(staff_count * doc_staff_percentage)
     
-    # Get hours per week and avg rate from industry config
-    hours_per_week = industry_config.get('hours_per_week', 5.0)
-    avg_rate = industry_config.get('avg_rate', 140.0)
+    # Determine firm size label
+    if staff_count <= 20:
+        firm_size = "Small"
+    elif staff_count <= 50:
+        firm_size = "Medium"
+    else:
+        firm_size = "Large"
+    
+    # Get hours per week and avg rate from database config
+    hours_per_week = industry_config.get('hrs_per_week', 4.5)
+    avg_rate = industry_config.get('loaded_cost', 140.0)
     
     # Generate roadmap
     roadmap = generate_roadmap(industry_config, doc_staff_count, hours_per_week, avg_rate)
@@ -3889,25 +3908,24 @@ def pdf_improved():
     if not calculations:
         return "No calculations found. Please complete the assessment first.", 400
     
-    # Get industry config
-    industry_config = INDUSTRIES.get(industry, {})
+    # Get industry config from database
+    industry_config = get_db_industry_config(industry)
     
-    # Calculate firm size and doc staff percentage
-    if staff_count <= 20:
-        firm_size = "Small"
-        doc_staff_percentage = 0.80
-    elif staff_count <= 50:
-        firm_size = "Medium"
-        doc_staff_percentage = 0.75
-    else:
-        firm_size = "Large"
-        doc_staff_percentage = 0.70
-    
+    # Get doc staff percentage from database config
+    doc_staff_percentage = industry_config.get('doc_staff_pct', 0.85)
     doc_staff_count = int(staff_count * doc_staff_percentage)
     
-    # Get hours per week and avg rate from industry config
-    hours_per_week = industry_config.get('hours_per_week', 5.0)
-    avg_rate = industry_config.get('avg_rate', 140.0)
+    # Determine firm size label
+    if staff_count <= 20:
+        firm_size = "Small"
+    elif staff_count <= 50:
+        firm_size = "Medium"
+    else:
+        firm_size = "Large"
+    
+    # Get hours per week and avg rate from database config
+    hours_per_week = industry_config.get('hrs_per_week', 4.5)
+    avg_rate = industry_config.get('loaded_cost', 140.0)
     
     # Generate roadmap
     roadmap = generate_roadmap(industry_config, doc_staff_count, hours_per_week, avg_rate)

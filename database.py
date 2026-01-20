@@ -2626,3 +2626,154 @@ def update_trial_retention(trial_id, retention_days):
     except Exception as e:
         print(f"❌ Error updating retention: {e}")
         return False
+
+
+# ============================================================================
+# INDUSTRY CONFIGS (ROI Calculator & Feasibility Report)
+# ============================================================================
+
+def get_all_industry_configs():
+    """
+    Get all active industry configurations from database.
+    
+    Returns:
+        list: List of industry config dictionaries
+    """
+    if not engine:
+        return []
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT id, industry_name, industry_slug, doc_staff_pct, hrs_per_week,
+                       loaded_cost, automation_rate, explanation, is_active, display_order
+                FROM industry_configs
+                WHERE is_active = true
+                ORDER BY display_order, industry_name
+            """))
+            return [dict(row._mapping) for row in result]
+    except Exception as e:
+        print(f"❌ Error fetching industry configs: {e}")
+        return []
+
+
+def get_industry_config(industry_slug):
+    """
+    Get a single industry configuration by slug.
+    
+    Args:
+        industry_slug: URL-safe identifier (e.g., 'accounting', 'financial-planning')
+    
+    Returns:
+        dict: Industry config or None if not found
+    """
+    if not engine:
+        return None
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT id, industry_name, industry_slug, doc_staff_pct, hrs_per_week,
+                       loaded_cost, automation_rate, explanation, is_active, display_order
+                FROM industry_configs
+                WHERE industry_slug = :slug AND is_active = true
+            """), {"slug": industry_slug})
+            row = result.fetchone()
+            return dict(row._mapping) if row else None
+    except Exception as e:
+        print(f"❌ Error fetching industry config for {industry_slug}: {e}")
+        return None
+
+
+def get_industry_config_by_name(industry_name):
+    """
+    Get a single industry configuration by name.
+    
+    Args:
+        industry_name: Display name (e.g., 'Accounting', 'Financial Planning')
+    
+    Returns:
+        dict: Industry config or None if not found
+    """
+    if not engine:
+        return None
+    
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT id, industry_name, industry_slug, doc_staff_pct, hrs_per_week,
+                       loaded_cost, automation_rate, explanation, is_active, display_order
+                FROM industry_configs
+                WHERE industry_name = :name AND is_active = true
+            """), {"name": industry_name})
+            row = result.fetchone()
+            return dict(row._mapping) if row else None
+    except Exception as e:
+        print(f"❌ Error fetching industry config for {industry_name}: {e}")
+        return None
+
+
+def update_industry_config(industry_id, updates):
+    """
+    Update an industry configuration.
+    
+    Args:
+        industry_id: Database ID of the industry
+        updates: Dictionary of fields to update
+    
+    Returns:
+        bool: Success status
+    """
+    if not engine:
+        return False
+    
+    allowed_fields = ['doc_staff_pct', 'hrs_per_week', 'loaded_cost', 'automation_rate', 
+                      'explanation', 'is_active', 'display_order', 'industry_name']
+    
+    set_clauses = []
+    params = {"id": industry_id}
+    
+    for field, value in updates.items():
+        if field in allowed_fields:
+            set_clauses.append(f"{field} = :{field}")
+            params[field] = value
+    
+    if not set_clauses:
+        return False
+    
+    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+    
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(f"""
+                UPDATE industry_configs
+                SET {', '.join(set_clauses)}
+                WHERE id = :id
+            """), params)
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"❌ Error updating industry config: {e}")
+        return False
+
+
+def get_industry_configs_dict():
+    """
+    Get all industry configs as a dictionary keyed by industry_name.
+    Format compatible with ROI calculator INDUSTRIES dict.
+    
+    Returns:
+        dict: {industry_name: config_dict, ...}
+    """
+    configs = get_all_industry_configs()
+    return {
+        config['industry_name']: {
+            'doc_staff_pct': float(config['doc_staff_pct']),
+            'hrs_per_week': float(config['hrs_per_week']),
+            'loaded_cost': float(config['loaded_cost']),
+            'automation_rate': float(config['automation_rate']),
+            'explanation': config['explanation'],
+            'slug': config['industry_slug']
+        }
+        for config in configs
+    }
