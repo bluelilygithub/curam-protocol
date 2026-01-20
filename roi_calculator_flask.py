@@ -465,21 +465,21 @@ def calculate_conservative_roi(total_staff, industry_config):
     """
     Simplified ROI calculation for marketing/sales website examples.
     
-    Uses fixed formula without complexity:
-    - 85% documentation staff (15% executives excluded)
-    - 4.5 hours/week per doc staff
-    - 40% conservative automation potential
-    - 48 weeks/year
+    Uses database-driven parameters from industry_configs table:
+    - doc_staff_pct: Percentage of staff doing documentation (e.g., 0.85 = 85%)
+    - hrs_per_week: Hours per doc staff per week
+    - loaded_cost: Hourly rate
+    - automation_rate: Conservative automation potential
     
     Formula:
-    X staff × 85% = doc_staff (rounded)
-    doc_staff × 4.5 hrs × $rate × 48 weeks = annual_cost
-    annual_cost × 40% = conservative_savings
+    X staff × doc_staff_pct = doc_staff (rounded)
+    doc_staff × hrs_per_week × loaded_cost × 48 weeks = annual_cost
+    annual_cost × automation_rate = conservative_savings
     """
     
-    # Fixed marketing formula parameters
-    DOC_STAFF_PERCENTAGE = 0.85  # 85% documentation staff
-    HOURS_PER_WEEK = 4.5  # 4.5 hours per doc staff per week
+    # Get parameters from database config (with defaults)
+    DOC_STAFF_PERCENTAGE = float(industry_config.get('doc_staff_pct', 0.85))
+    HOURS_PER_WEEK = float(industry_config.get('hrs_per_week', 4.5))
     
     # Calculate documentation staff (rounded)
     doc_staff_count = round(total_staff * DOC_STAFF_PERCENTAGE)
@@ -489,12 +489,12 @@ def calculate_conservative_roi(total_staff, industry_config):
     base_doc_staff = doc_staff_count
     base_percentage = DOC_STAFF_PERCENTAGE
     
-    # Use fixed hours and get rate from config (default $140)
+    # Get rate from database config
     hours_per_doc_staff = HOURS_PER_WEEK
-    typical_doc_rate = industry_config.get('doc_staff_typical_rate', 140)
+    typical_doc_rate = float(industry_config.get('loaded_cost', 140))
     
-    # Fixed automation potential for marketing
-    AUTOMATION_POTENTIAL = 0.40  # 40% conservative automation
+    # Get automation potential from database config
+    AUTOMATION_POTENTIAL = float(industry_config.get('automation_rate', 0.40))
     WEEKS_PER_YEAR = 48
     
     # Calculate totals
