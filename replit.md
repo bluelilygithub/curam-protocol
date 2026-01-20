@@ -25,8 +25,9 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (January 2026)
 
-- **ROI Calculator**: Simplified marketing formula (85% doc staff, 4.5 hrs/week, 40% automation, no variance)
-- **Feasibility Report**: Removed Staff Adoption and Cost Reduction Roadmap sections
+- **Industry Configs**: Database-driven industry parameters for ROI calculator (manageable via Admin > Industry Configs)
+- **ROI Calculator**: Simplified marketing formula (85% doc staff, 4.5 hrs/week, 40% automation, industry-specific automation rates)
+- **Feasibility Report**: Loads ROI values dynamically from `/api/industry-configs` API endpoint
 - **Navigation**: Standardized navbar across all pages, removed Resources dropdown
 - **Blog**: Hybrid API approach - server API first, falls back to direct WordPress API
 - **Target Markets**: Updated to 5 validated industries with $521k production value (50 staff @ $140/hr)
@@ -76,6 +77,7 @@ Preferred communication style: Simple, everyday language.
 - `sectors` - Industry categories (finance, engineering, logistics, transmittal)
 - `document_types` - Specific document types per sector with demo settings
 - `prompt_templates` - AI extraction prompts organized by scope/document type
+- `industry_configs` - ROI calculator parameters per industry (doc_staff_pct, hrs_per_week, loaded_cost, automation_rate)
 - `phase1_trials` - Customer trial management with token-based report access
 - `extraction_logs` - Processing history and performance tracking
 - `users` - Admin authentication with password hashing
