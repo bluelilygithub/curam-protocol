@@ -2093,6 +2093,9 @@ HTML_TEMPLATE = """
         </form>
         
         <script>
+        // Get doc_staff_pct from database via template (defaults to 0.85)
+        const DOC_STAFF_PERCENTAGE = {{ industry_config.get('doc_staff_pct', 0.85) }};
+        
         function getDocStaffPercentage(totalStaff, basePercentage) {
             // Firm size scaling logic
             if (totalStaff < 20) {
@@ -2107,8 +2110,9 @@ HTML_TEMPLATE = """
         }
         
         function updateStaffCalculation(totalStaff) {
-            const DOC_STAFF_PERCENTAGE = 0.85;  // 85% documentation staff
             const docStaffPercentage = DOC_STAFF_PERCENTAGE;
+            const docStaffPct = Math.round(docStaffPercentage * 100);
+            const excludedPct = 100 - docStaffPct;
             
             const docStaff = Math.round(totalStaff * docStaffPercentage);
             const excludedStaff = totalStaff - docStaff;
@@ -2116,8 +2120,8 @@ HTML_TEMPLATE = """
             const estimateDiv = document.getElementById('doc-staff-estimate');
             if (estimateDiv) {
                 estimateDiv.innerHTML = `
-                    <strong>Documentation Staff (85%):</strong> ${docStaff} people<br>
-                    <strong>Excluded (15%):</strong> ${excludedStaff} executives/senior partners<br>
+                    <strong>Documentation Staff (${docStaffPct}%):</strong> ${docStaff} people<br>
+                    <strong>Excluded (${excludedPct}%):</strong> ${excludedStaff} executives/senior partners<br>
                     <br>
                     <em>We calculate savings based on the ${docStaff} staff who do repetitive documentation work.</em>
                 `;
