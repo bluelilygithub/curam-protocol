@@ -1015,6 +1015,9 @@
             insurance: { efficiency: '$522k', capacity: '$1.31M' }
         };
 
+        // Store full configs for updating HTML
+        let industryConfigs = {};
+
         // Calculate ROI values from industry config
         function calculateROI(config, staffCount = 50) {
             const docStaff = Math.round(staffCount * config.doc_staff_pct);
@@ -1022,9 +1025,42 @@
             const annualCost = weeklyHours * config.loaded_cost * 48;
             const conservativeSavings = annualCost * config.automation_rate;
             return {
+                docStaff: docStaff,
+                weeklyHours: weeklyHours,
+                loadedCost: config.loaded_cost,
+                annualCost: annualCost,
+                automationRate: config.automation_rate,
+                conservativeSavings: conservativeSavings,
                 efficiency: '$' + Math.round(conservativeSavings / 1000) + 'k',
                 capacity: '$' + (annualCost / 1000000).toFixed(2) + 'M'
             };
+        }
+
+        // Update hardcoded values in slider HTML
+        function updateSliderValues(slug, roi) {
+            const slider = document.getElementById('slider-' + slug);
+            if (!slider) return;
+
+            // Update all table cells with Loaded Cost Rate
+            slider.querySelectorAll('td').forEach(td => {
+                if (td.textContent.includes('$140/hr') || td.textContent.includes('$') && td.textContent.includes('/hr')) {
+                    td.textContent = '$' + Math.round(roi.loadedCost) + '/hr';
+                }
+                // Update formula cells like "193.5 hrs × $140 × 48 weeks"
+                if (td.textContent.includes('× $140 ×') || td.textContent.includes('× $') && td.textContent.includes('× 48 weeks')) {
+                    td.textContent = roi.weeklyHours.toFixed(1) + ' hrs × $' + Math.round(roi.loadedCost) + ' × 48 weeks';
+                }
+                // Update annual cost result
+                if (td.textContent === '$1,306,080') {
+                    td.textContent = '$' + Math.round(roi.annualCost).toLocaleString();
+                }
+                // Update conservative savings
+                if (td.textContent.includes('$522,432') || (td.previousElementSibling && td.previousElementSibling.textContent.includes('low-hanging fruit'))) {
+                    if (td.textContent.startsWith('$')) {
+                        td.innerHTML = '<strong>$' + Math.round(roi.conservativeSavings).toLocaleString() + '</strong>';
+                    }
+                }
+            });
         }
 
         // Load industry configs from API
@@ -1033,17 +1069,19 @@
                 const response = await fetch('/api/industry-configs');
                 if (response.ok) {
                     const configs = await response.json();
-                    // Update sectorData with calculated values
+                    industryConfigs = configs;
+                    // Update sectorData with calculated values and update HTML
                     Object.keys(configs).forEach(slug => {
                         const roi = calculateROI(configs[slug]);
                         sectorData[slug] = roi;
+                        updateSliderValues(slug, roi);
                     });
                     // Refresh current display
                     const activeBtn = document.querySelector('.sector-btn.active');
                     if (activeBtn) {
                         switchSector(activeBtn.dataset.sector);
                     }
-                    console.log('Industry configs loaded from database');
+                    console.log('Industry configs loaded from database:', configs);
                 }
             } catch (error) {
                 console.log('Using default industry configs (API unavailable)');
