@@ -2750,7 +2750,7 @@ def get_industry_config(industry_slug):
 
 def get_industry_config_by_name(industry_name):
     """
-    Get a single industry configuration by name.
+    Get a single industry configuration by name (case-insensitive).
     
     Args:
         industry_name: Display name (e.g., 'Accounting', 'Financial Planning')
@@ -2767,7 +2767,7 @@ def get_industry_config_by_name(industry_name):
                 SELECT id, industry_name, industry_slug, doc_staff_pct, hrs_per_week,
                        loaded_cost, automation_rate, explanation, is_active, display_order
                 FROM industry_configs
-                WHERE industry_name = :name AND is_active = true
+                WHERE LOWER(industry_name) = LOWER(:name) AND is_active = true
             """), {"name": industry_name})
             row = result.fetchone()
             return dict(row._mapping) if row else None
