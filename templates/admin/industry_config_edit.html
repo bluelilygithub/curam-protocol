@@ -55,6 +55,13 @@
                        style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; font-size: 1rem;">
                 <p style="font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;">Conservative automation potential (0.40 = 40%). Higher = more structured documents.</p>
             </div>
+
+            <div>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #374151;">Billing Rate ($/hr)</label>
+                <input type="number" name="billing_rate" value="{{ config.billing_rate or 250 }}" step="5" min="50" max="1000"
+                       style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; font-size: 1rem;">
+                <p style="font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;">Average billing rate for staff time recovered (used for Capacity Value)</p>
+            </div>
         </div>
         
         <div style="margin-top: 1.5rem;">
@@ -77,11 +84,14 @@
             {% set weekly_hrs = doc_staff * config.hrs_per_week %}
             {% set annual_cost = weekly_hrs * config.loaded_cost * 48 %}
             {% set savings = annual_cost * config.automation_rate %}
+            {% set billing_rate = config.billing_rate or (config.loaded_cost * 2.5) %}
+            {% set capacity = (weekly_hrs * billing_rate * 48) * config.automation_rate %}
             <div style="background: #F3F4F6; padding: 1rem; border-radius: 0.5rem;">
                 <p style="margin: 0 0 0.5rem;"><strong>Doc Staff:</strong> 50 x {{ (config.doc_staff_pct * 100)|round|int }}% = {{ doc_staff }} staff</p>
                 <p style="margin: 0 0 0.5rem;"><strong>Weekly Hours:</strong> {{ doc_staff }} x {{ config.hrs_per_week }} = {{ weekly_hrs|round(1) }} hrs</p>
                 <p style="margin: 0 0 0.5rem;"><strong>Annual Cost:</strong> {{ weekly_hrs|round(1) }} x ${{ config.loaded_cost|round|int }} x 48 = <span style="color: #0B1221; font-weight: 600;">${{ "{:,.0f}".format(annual_cost) }}</span></p>
-                <p style="margin: 0;"><strong>Conservative Savings ({{ (config.automation_rate * 100)|round|int }}%):</strong> <span style="color: #059669; font-weight: 700; font-size: 1.25rem;">${{ "{:,.0f}".format(savings) }}</span></p>
+                <p style="margin: 0 0 0.5rem;"><strong>Conservative Savings ({{ (config.automation_rate * 100)|round|int }}%):</strong> <span style="color: #059669; font-weight: 700; font-size: 1.1rem;">${{ "{:,.0f}".format(savings) }}</span></p>
+                <p style="margin: 0;"><strong>Billing Capacity (at ${{ billing_rate|round|int }}/hr):</strong> <span style="color: #2563EB; font-weight: 700; font-size: 1.1rem;">${{ "{:,.0f}".format(capacity) }}</span></p>
             </div>
         </div>
         

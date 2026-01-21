@@ -1288,6 +1288,7 @@ def industry_config_edit(config_id):
             'hrs_per_week': float(request.form.get('hrs_per_week', 4.5)),
             'loaded_cost': float(request.form.get('loaded_cost', 140)),
             'automation_rate': float(request.form.get('automation_rate', 0.40)),
+            'billing_rate': float(request.form.get('billing_rate', 250.0)),
             'explanation': request.form.get('explanation', ''),
             'display_order': int(request.form.get('display_order', 0))
         }
@@ -1303,7 +1304,7 @@ def industry_config_edit(config_id):
     with engine.connect() as conn:
         result = conn.execute(text("""
             SELECT id, industry_name, industry_slug, doc_staff_pct, hrs_per_week,
-                   loaded_cost, automation_rate, explanation, is_active, display_order
+                   loaded_cost, automation_rate, billing_rate, explanation, is_active, display_order
             FROM industry_configs WHERE id = :id
         """), {"id": config_id})
         row = result.fetchone()
