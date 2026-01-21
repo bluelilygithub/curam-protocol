@@ -420,8 +420,9 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
     AUTOMATION_POTENTIAL = float(industry_config.get('automation_rate', 0.40))
     WEEKS_PER_YEAR = 48
     
-    # Use database loaded_cost, fall back to passed avg_rate
+    # Use database values if available
     avg_rate = float(industry_config.get('loaded_cost', avg_rate))
+    billing_rate = float(industry_config.get('billing_rate', avg_rate * 2.5))
     
     # Calculate documentation staff (rounded)
     doc_staff_count = round(staff_count * DOC_STAFF_PERCENTAGE)
@@ -434,6 +435,10 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
     
     # Calculate conservative savings (40% automation)
     tier_1_savings = annual_burn * AUTOMATION_POTENTIAL
+    
+    # Calculate Billing Capacity (Revenue Unlocked)
+    # Formula: Doc Staff × Hrs/Week × Billing Rate × 48 weeks × Automation Rate
+    billing_capacity = total_weekly_hours * billing_rate * WEEKS_PER_YEAR * AUTOMATION_POTENTIAL
     
     # Tier 2: expanded automation (55% - add 15% more)
     tier_2_potential = 0.55
@@ -453,6 +458,7 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
         "scaling_note": "85% documentation staff (15% executives excluded)",
         "hours_per_doc_staff": HOURS_PER_WEEK,
         "typical_doc_rate": avg_rate,
+        "billing_rate": billing_rate,
         "total_weekly_hours": total_weekly_hours,
         "annual_cost": annual_burn,
         "annual_burn": annual_burn,
@@ -468,7 +474,8 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
         "tier_2_savings": tier_2_savings,
         "adjusted_tier_2_savings": tier_2_savings,
         "capacity_hours": total_recoverable_hours * WEEKS_PER_YEAR,
-        "potential_revenue": tier_1_savings
+        "potential_revenue": billing_capacity,
+        "billing_capacity": billing_capacity
     }
 
 

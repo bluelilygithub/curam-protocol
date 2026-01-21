@@ -24,7 +24,7 @@ def get_db_industry_config(industry_name):
     Get industry config from database, merged with static INDUSTRIES dict.
     Database values override static values for calculation parameters.
     
-    Returns merged config with DB values for: doc_staff_pct, hrs_per_week, loaded_cost, automation_rate
+    Returns merged config with DB values for: doc_staff_pct, hrs_per_week, loaded_cost, automation_rate, billing_rate
     """
     db_config = get_industry_config_by_name(industry_name)
     static_config = INDUSTRIES.get(industry_name, {}).copy()
@@ -35,6 +35,7 @@ def get_db_industry_config(industry_name):
         static_config['loaded_cost'] = float(db_config['loaded_cost'])
         static_config['automation_rate'] = float(db_config['automation_rate'])
         static_config['automation_potential'] = float(db_config['automation_rate'])
+        static_config['billing_rate'] = float(db_config.get('billing_rate', 250.0))
         static_config['explanation'] = db_config['explanation']
     
     return static_config

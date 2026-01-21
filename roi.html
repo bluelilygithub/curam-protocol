@@ -328,82 +328,93 @@
         const industrySections = {
             'all': {
                 title: 'Select Your Industry',
-                subtitle: 'Choose from our 5 supported industries',
-                industries: [
-                    { id: 'accounting', name: 'Accounting', icon: '💼', description: 'Invoice processing, expense management, reconciliation' },
-                    { id: 'engineering', name: 'Engineering', icon: '🏗️', description: 'Structural schedules, specifications, technical documentation' },
-                    { id: 'logistics', name: 'Logistics', icon: '🚛', description: 'Bills of lading, customs documentation, freight manifests' },
-                    { id: 'financial-planning', name: 'Financial Planning', icon: '📊', description: 'Client statements, compliance forms, portfolio documentation' },
-                    { id: 'insurance', name: 'Insurance', icon: '🛡️', description: 'Policy documents, claims forms, underwriting paperwork' }
-                ]
+                subtitle: 'Choose from our validated industries',
+                industries: []
             }
         };
 
-        // Map URL parameter values to full industry names for calculator
-        // Only includes the 5 supported industries
-        const industryMap = {
-            'accounting': 'Accounting',
-            'engineering': 'Engineering',
-            'logistics': 'Logistics',
-            'financial-planning': 'Financial Planning',
-            'insurance': 'Insurance'
-        };
+        // Initialize industry data from API
+        async function loadIndustryData() {
+            try {
+                const response = await fetch('/api/industry-configs');
+                const configs = await response.json();
+                
+                const industries = configs.map(config => ({
+                    id: config.industry_slug,
+                    name: config.industry_name,
+                    icon: getIndustryIcon(config.industry_slug),
+                    description: config.explanation
+                }));
 
-        (function() {
+                industrySections.all.industries = industries;
+                
+                // Map industry slugs to names for the calculator
+                industries.forEach(ind => {
+                    industryMap[ind.id] = ind.name;
+                });
+
+                // Trigger render if needed
+                renderIndustrySelector();
+            } catch (error) {
+                console.error('Error loading industry data:', error);
+            }
+        }
+
+        function getIndustryIcon(slug) {
+            const icons = {
+                'accounting': '💼',
+                'engineering': '🏗️',
+                'logistics': '🚛',
+                'financial-planning': '📊',
+                'insurance': '🛡️',
+                'legal-services': '⚖️',
+                'property-management': '🏢',
+                'civil-engineering': '🌉'
+            };
+            return icons[slug] || '📁';
+        }
+
+        const industryMap = {};
+
+        function renderIndustrySelector() {
             const urlParams = new URLSearchParams(window.location.search);
             const sectionParam = urlParams.get('section');
-            const industryParam = urlParams.get('industry');
-            
-            // Handle section parameter - show industry selector
             if (sectionParam && industrySections[sectionParam]) {
                 const section = industrySections[sectionParam];
                 const selectorSection = document.getElementById('industry-section-selector');
-                const calculatorSection = document.getElementById('calculator-section');
-                
-                if (selectorSection && calculatorSection) {
-                    // Update section title
-                    const titleEl = selectorSection.querySelector('.section-headline');
-                    const subtitleEl = selectorSection.querySelector('.section-subhead');
-                    if (titleEl) titleEl.textContent = section.title;
-                    if (subtitleEl) subtitleEl.textContent = section.subtitle;
-                    
-                    // Build industry options
-                    const container = document.getElementById('industry-options-container');
-                    if (container) {
-                        container.innerHTML = section.industries.map(industry => `
-                            <div class="methodology-card methodology-card-clickable" onclick="window.location.href='roi.html?industry=${industry.id}'">
-                                <div class="methodology-content">
-                                    <h3>${industry.icon} ${industry.name}</h3>
-                                    <p class="methodology-desc">${industry.description}</p>
-                                    <p class="methodology-link" style="margin-top: 15px;">
-                                        <a href="roi.html?industry=${industry.id}">Calculate ROI →</a>
-                                    </p>
-                                </div>
+                const container = document.getElementById('industry-options-container');
+                if (selectorSection && container) {
+                    container.innerHTML = section.industries.map(industry => `
+                        <div class="methodology-card methodology-card-clickable" onclick="window.location.href='roi.html?industry=${industry.id}'">
+                            <div class="methodology-content">
+                                <h3>${industry.icon} ${industry.name}</h3>
+                                <p class="methodology-desc">${industry.description}</p>
+                                <p class="methodology-link" style="margin-top: 15px;">
+                                    <a href="roi.html?industry=${industry.id}">Calculate ROI →</a>
+                                </p>
                             </div>
-                        `).join('');
-                    }
-                    
-                    // Show selector, hide calculator initially
+                        </div>
+                    `).join('');
                     selectorSection.style.display = 'block';
-                    calculatorSection.style.display = 'none';
+                    document.getElementById('calculator-section').style.display = 'none';
                 }
             }
+        }
+
+        (async function() {
+            await loadIndustryData();
             
-            // Handle industry parameter - pass to iframe
+            const urlParams = new URLSearchParams(window.location.search);
+            const industryParam = urlParams.get('industry');
+            
             if (industryParam) {
                 const industryName = industryMap[industryParam.toLowerCase()];
-                
                 if (industryName) {
                     const iframe = document.getElementById('roi-calculator-iframe');
                     if (iframe) {
-                        const encodedIndustry = encodeURIComponent(industryName);
-                        iframe.src = `/roi-calculator/?industry=${encodedIndustry}`;
-                        
-                        // Show calculator, hide selector
-                        const selectorSection = document.getElementById('industry-section-selector');
-                        const calculatorSection = document.getElementById('calculator-section');
-                        if (selectorSection) selectorSection.style.display = 'none';
-                        if (calculatorSection) calculatorSection.style.display = 'block';
+                        iframe.src = `/roi-calculator/?industry=${encodeURIComponent(industryName)}`;
+                        document.getElementById('industry-section-selector').style.display = 'none';
+                        document.getElementById('calculator-section').style.display = 'block';
                     }
                 }
             }
