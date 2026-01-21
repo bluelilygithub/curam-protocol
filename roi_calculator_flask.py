@@ -2599,24 +2599,24 @@ HTML_TEMPLATE = """
             <p>This represents the total cost of wasted time spent on manual administrative tasks. Calculated as:</p>
             <ul>
                 <li><strong>Staff Count</strong> × <strong>Weekly Waste Hours</strong> × <strong>Billable Rate</strong> × <strong>48 weeks</strong></li>
-                <li>Example: 50 staff × 5 hours/week × $185/hour × 48 weeks = $2,220,000 annually</li>
+                <li>Example: {{ calculations.total_staff }} staff × {{ calculations.hours_per_doc_staff }} hours/week × ${{ calculations.typical_doc_rate }}/hour × 48 weeks = {{ format_currency(calculations.total_staff * calculations.hours_per_doc_staff * calculations.typical_doc_rate * 48) }} annually</li>
             </ul>
             <p><strong>Capacity Hours:</strong></p>
             <p>The total billable hours currently lost to non-billable administrative work:</p>
             <ul>
                 <li><strong>Staff Count</strong> × <strong>Weekly Waste Hours</strong> × <strong>48 weeks</strong></li>
-                <li>Example: 50 staff × 5 hours/week × 48 weeks = 12,000 hours/year</li>
+                <li>Example: {{ calculations.total_staff }} staff × {{ calculations.hours_per_doc_staff }} hours/week × 48 weeks = {{ "{:,.0f}".format(calculations.total_staff * calculations.hours_per_doc_staff * 48) }} hours/year</li>
             </ul>
             <p><strong>Potential Revenue Opportunity:</strong></p>
             <p>If these hours were freed up and could be billed to clients:</p>
             <ul>
                 <li><strong>Capacity Hours</strong> × <strong>Billable Rate</strong></li>
-                <li>Example: 12,000 hours × $185/hour = $2,220,000 in potential revenue</li>
+                <li>Example: {{ "{:,.0f}".format(calculations.total_staff * calculations.hours_per_doc_staff * 48) }} hours × ${{ calculations.typical_doc_rate }}/hour = {{ format_currency(calculations.total_staff * calculations.hours_per_doc_staff * calculations.typical_doc_rate * 48) }} in potential revenue</li>
             </ul>
-            <p><strong>Tier 1 Opportunity (Immediate Opportunity - {{ tier1_percentage }}% Reduction):</strong></p>
-            <p>A conservative estimate assuming {{ tier1_percentage }}% reduction in administrative time through Phase 1 automation (e.g., automated data extraction, document processing):</p>
+            <p><strong>Tier 1 Opportunity (Immediate Opportunity - {{ (calculations.weighted_potential * 100)|round(0)|int }}% Reduction):</strong></p>
+            <p>A conservative estimate assuming {{ (calculations.weighted_potential * 100)|round(0)|int }}% reduction in administrative time through Phase 1 automation (e.g., automated data extraction, document processing):</p>
             <ul>
-                <li><strong>Annual Revenue Leakage</strong> × <strong>{{ tier1_percentage }}%</strong></li>
+                <li><strong>Annual Revenue Leakage</strong> × <strong>{{ (calculations.weighted_potential * 100)|round(0)|int }}%</strong></li>
                 <li>This represents the "low-hanging fruit" - quick wins that can be implemented in the first 3-6 months</li>
             </ul>
             <p><strong>Tier 2 Opportunity (Expanded Automation - 70% Reduction):</strong></p>
