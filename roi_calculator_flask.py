@@ -2158,7 +2158,7 @@ HTML_TEMPLATE = """
         </div>
         
         <div class="methodology-notice">
-            <p><strong>⚠️ Methodology:</strong> Based on {{ calculations.doc_staff_count }} documentation staff ({{ (calculations.doc_staff_pct * 100)|int }}% of your {{ calculations.total_staff }} total staff). We exclude the top {{ (100 - calculations.doc_staff_pct * 100)|int }}% who are executives/senior partners that primarily review and approve work rather than handle repetitive documentation tasks. Average of {{ calculations.hours_per_doc_staff }} hours/week per documentation staff at ${{ calculations.typical_doc_rate }}/hr loaded cost.</p>
+            <p><strong>⚠️ Methodology:</strong> Based on {{ calculations.doc_staff_count }} documentation staff ({{ (calculations.get('doc_staff_pct', 0.85) * 100)|int }}% of your {{ calculations.total_staff }} total staff). We exclude the top {{ (100 - calculations.get('doc_staff_pct', 0.85) * 100)|int }}% who are executives/senior partners that primarily review and approve work rather than handle repetitive documentation tasks. Average of {{ calculations.hours_per_doc_staff }} hours/week per documentation staff at ${{ calculations.typical_doc_rate }}/hr loaded cost.</p>
         </div>
         
         <hr>

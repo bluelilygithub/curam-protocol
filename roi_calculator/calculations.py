@@ -451,6 +451,7 @@ def calculate_simple_roi(staff_count, avg_rate, industry_config):
         "mode": "simple_marketing",
         "total_staff": staff_count,
         "doc_staff_count": doc_staff_count,
+        "doc_staff_pct": DOC_STAFF_PERCENTAGE,
         "doc_staff_percentage": DOC_STAFF_PERCENTAGE * 100,  # 85%
         "base_doc_staff_percentage": DOC_STAFF_PERCENTAGE * 100,
         "base_doc_staff_count": doc_staff_count,
