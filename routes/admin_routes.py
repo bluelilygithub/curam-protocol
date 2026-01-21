@@ -1301,14 +1301,26 @@ def industry_config_edit(config_id):
         return redirect(url_for('admin.industry_configs'))
     
     # GET - fetch config
-    with engine.connect() as conn:
-        result = conn.execute(text("""
-            SELECT id, industry_name, industry_slug, doc_staff_pct, hrs_per_week,
-                   loaded_cost, automation_rate, billing_rate, explanation, is_active, display_order
-            FROM industry_configs WHERE id = :id
-        """), {"id": config_id})
-        row = result.fetchone()
-        config = dict(row._mapping) if row else None
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT id, industry_name, industry_slug, doc_staff_pct, hrs_per_week,
+                       loaded_cost, automation_rate, billing_rate, explanation, is_active, display_order
+                FROM industry_configs WHERE id = :id
+            """), {"id": config_id})
+            row = result.fetchone()
+            if row:
+                config = dict(row._mapping)
+                # Convert Decimal/Numeric to float for template safety
+                for key in ['doc_staff_pct', 'hrs_per_week', 'loaded_cost', 'automation_rate', 'billing_rate']:
+                    if config.get(key) is not None:
+                        config[key] = float(config[key])
+            else:
+                config = None
+    except Exception as e:
+        print(f"Database error in industry_config_edit: {e}")
+        flash(f"Database error: {str(e)}", "error")
+        return redirect(url_for('admin.industry_configs'))
     
     if not config:
         flash('Config not found', 'error')
