@@ -12,12 +12,14 @@ The platform serves as both a customer-facing demo/trial system and an internal 
 - Transmittal: Drawing register extraction (95%+ accuracy)
 - Logistics: FTA lists, Bills of Lading, packing lists
 
-**Target Industries (5 validated):**
+**Target Industries (7 validated):**
 - Accounting ($521k annual production value)
 - Engineering ($521k annual production value)
 - Logistics ($521k annual production value)
 - Financial Planning ($521k annual production value)
 - Insurance ($521k annual production value)
+- Legal Services ($730k annual production value)
+- Property Management ($500k annual production value)
 
 ## User Preferences
 
@@ -25,12 +27,10 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (January 2026)
 
-- **Industry Configs**: Database-driven industry parameters for ROI calculator (manageable via Admin > Industry Configs)
-- **ROI Calculator**: Simplified marketing formula (85% doc staff, 4.5 hrs/week, 40% automation, industry-specific automation rates)
-- **Feasibility Report**: Loads ROI values dynamically from `/api/industry-configs` API endpoint
-- **Navigation**: Standardized navbar across all pages, removed Resources dropdown
-- **Blog**: Hybrid API approach - server API first, falls back to direct WordPress API
-- **Target Markets**: Updated to 5 validated industries with $521k production value (50 staff @ $140/hr)
+- **Industry Configs**: Added Legal Services and Property Management to validated industries.
+- **ROI Calculator**: Added 'Billing Capacity' metric to show revenue potential ($2.5M for Legal).
+- **Database**: Added `billing_rate` column to `industry_configs`.
+- **Feasibility Report**: Dynamically updates ROI labels based on industry-specific DB values.
 
 ## System Architecture
 
