@@ -99,6 +99,14 @@ Preferred communication style: Simple, everyday language.
 - For Railway persistent storage, mount volume to `/data/uploads`
 - Organized by department: `uploads/finance/`, `uploads/phase1_trials/`
 
+### Deployment & Maintenance
+
+- **Port Configuration:** Production server (Gunicorn) must bind to `0.0.0.0:5000` to match Replit's infrastructure.
+- **Security Scans:** To speed up future deployments:
+    1.  **Cache Results:** Replit caches successful scans; only code changes trigger full re-scans.
+    2.  **Configuration Stability:** Avoid frequent changes to the `deployment_config` to prevent triggering extra health check cycles.
+    3.  **Dependency Management:** Large additions to `requirements.txt` can increase scan time.
+
 ## ROI Calculator
 
 ### Simplified Marketing Formula (January 2026)
