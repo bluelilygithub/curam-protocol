@@ -1024,18 +1024,25 @@
             const docStaff = Math.round(staffCount * docStaffPct);
             const weeklyHours = docStaff * config.hrs_per_week;
             const annualCost = weeklyHours * config.loaded_cost * 48;
+            const billingRate = config.billing_rate || config.loaded_cost * 2.5;
+            const annualBillingCapacity = weeklyHours * billingRate * 48;
             const conservativeSavings = annualCost * config.automation_rate;
+            const billingCapacityUnlocked = annualBillingCapacity * config.automation_rate;
+            
             return {
                 docStaffPct: docStaffPct,
                 docStaff: docStaff,
                 staffCount: staffCount,
                 weeklyHours: weeklyHours,
                 loadedCost: config.loaded_cost,
+                billingRate: billingRate,
                 annualCost: annualCost,
+                annualBillingCapacity: annualBillingCapacity,
                 automationRate: config.automation_rate,
                 conservativeSavings: conservativeSavings,
+                billingCapacityUnlocked: billingCapacityUnlocked,
                 efficiency: '$' + Math.round(conservativeSavings / 1000) + 'k',
-                capacity: '$' + (annualCost / 1000000).toFixed(2) + 'M'
+                capacity: '$' + (annualBillingCapacity * config.automation_rate / 1000000).toFixed(2) + 'M'
             };
         }
 
@@ -1058,7 +1065,7 @@
                     td.textContent = roi.docStaff;
                 }
                 // Update Loaded Cost Rate
-                if (td.textContent.includes('/hr') && td.textContent.includes('$')) {
+                if (td.textContent.includes('/hr') && td.textContent.includes('$') && !td.textContent.includes('Bill')) {
                     td.textContent = '$' + Math.round(roi.loadedCost) + '/hr';
                 }
                 // Update formula cells like "193.5 hrs × $140 × 48 weeks"
@@ -1081,6 +1088,13 @@
                 }
             });
             
+            // Update capacity value in top-line cards if they exist
+            const efficiencyCard = slider.querySelector('.card-roi:first-child .value');
+            if (efficiencyCard) efficiencyCard.textContent = roi.efficiency;
+            
+            const capacityCard = slider.querySelector('.card-roi:last-child .value');
+            if (capacityCard) capacityCard.textContent = '$' + (roi.billingCapacityUnlocked / 1000).toFixed(0) + 'k';
+
             // Update h3 headings for automation opportunity
             slider.querySelectorAll('h3').forEach(h3 => {
                 if (h3.textContent.includes('Conservative Automation Opportunity')) {

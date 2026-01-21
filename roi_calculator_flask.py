@@ -501,13 +501,19 @@ def calculate_conservative_roi(total_staff, industry_config):
     total_weekly_hours = doc_staff_count * hours_per_doc_staff
     annual_cost = total_weekly_hours * typical_doc_rate * WEEKS_PER_YEAR
     
+    # Billing Capacity logic
+    typical_billing_rate = float(industry_config.get('billing_rate', typical_doc_rate * 2.5))
+    annual_billing_capacity = total_weekly_hours * typical_billing_rate * WEEKS_PER_YEAR
+    
     # Calculate conservative savings (40% automation)
     total_recoverable_hours = total_weekly_hours * AUTOMATION_POTENTIAL
     tier_1_savings = annual_cost * AUTOMATION_POTENTIAL
+    billing_capacity_unlocked = annual_billing_capacity * AUTOMATION_POTENTIAL
     
     # Tier 2: expanded automation (55% - add 15% more)
     tier_2_potential = 0.55
     tier_2_savings = annual_cost * tier_2_potential
+    tier_2_billing_capacity = annual_billing_capacity * tier_2_potential
     
     # Empty task analysis for simplified marketing formula
     task_analysis = []
@@ -524,15 +530,19 @@ def calculate_conservative_roi(total_staff, industry_config):
         "scaling_note": "85% documentation staff (15% executives excluded)",
         "hours_per_doc_staff": hours_per_doc_staff,
         "typical_doc_rate": typical_doc_rate,
+        "typical_billing_rate": typical_billing_rate,
         "total_weekly_hours": total_weekly_hours,
         "annual_cost": annual_cost,
+        "annual_billing_capacity": annual_billing_capacity,
         "task_analysis": task_analysis,
         "total_recoverable_hours": total_recoverable_hours,
         "weighted_potential": AUTOMATION_POTENTIAL,
         "automation_potential": AUTOMATION_POTENTIAL,
         "proven_tier_1_savings": tier_1_savings,
+        "billing_capacity_unlocked": billing_capacity_unlocked,
         "tier_2_potential": tier_2_potential,
         "tier_2_savings": tier_2_savings,
+        "tier_2_billing_capacity": tier_2_billing_capacity,
         "capacity_hours": total_recoverable_hours * WEEKS_PER_YEAR,
         "potential_revenue": tier_1_savings,
         "industry_variance_multiplier": 1.0,
