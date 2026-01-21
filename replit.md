@@ -31,6 +31,7 @@ Preferred communication style: Simple, everyday language.
 - **ROI Calculator**: Added 'Billing Capacity' metric to show revenue potential ($2.5M for Legal).
 - **Database**: Added `billing_rate` column to `industry_configs`.
 - **Feasibility Report**: Dynamically updates ROI labels based on industry-specific DB values.
+- **Bug Fixes**: Resolved internal server error in industry config updates by authorizing the `billing_rate` field.
 
 ## System Architecture
 
