@@ -482,76 +482,61 @@ def calculate_conservative_roi(total_staff, industry_config):
     DOC_STAFF_PERCENTAGE = float(industry_config.get('doc_staff_pct', 0.85))
     HOURS_PER_WEEK = float(industry_config.get('hrs_per_week', 4.5))
     
+    # Use database values if available
+    avg_rate = float(industry_config.get('loaded_cost', avg_rate))
+    billing_rate = float(industry_config.get('billing_rate', avg_rate * 2.5))
+    
     # Calculate documentation staff (rounded)
-    doc_staff_count = round(total_staff * DOC_STAFF_PERCENTAGE)
-    doc_staff_percentage = DOC_STAFF_PERCENTAGE
+    doc_staff_count = round(staff_count * DOC_STAFF_PERCENTAGE)
     
-    # Store for display
-    base_doc_staff = doc_staff_count
-    base_percentage = DOC_STAFF_PERCENTAGE
+    # Calculate weekly hours
+    total_weekly_hours = doc_staff_count * HOURS_PER_WEEK
     
-    # Get rate from database config
-    hours_per_doc_staff = HOURS_PER_WEEK
-    typical_doc_rate = float(industry_config.get('loaded_cost', 140))
-    
-    # Get automation potential from database config
-    AUTOMATION_POTENTIAL = float(industry_config.get('automation_rate', 0.40))
-    WEEKS_PER_YEAR = 48
-    
-    # Calculate totals
-    total_weekly_hours = doc_staff_count * hours_per_doc_staff
-    annual_cost = total_weekly_hours * typical_doc_rate * WEEKS_PER_YEAR
-    
-    # Billing Capacity logic
-    typical_billing_rate = float(industry_config.get('billing_rate', typical_doc_rate * 2.5))
-    annual_billing_capacity = total_weekly_hours * typical_billing_rate * WEEKS_PER_YEAR
+    # Calculate annual documentation cost
+    annual_burn = total_weekly_hours * avg_rate * WEEKS_PER_YEAR
     
     # Calculate conservative savings (40% automation)
-    total_recoverable_hours = total_weekly_hours * AUTOMATION_POTENTIAL
-    tier_1_savings = annual_cost * AUTOMATION_POTENTIAL
-    billing_capacity_unlocked = annual_billing_capacity * AUTOMATION_POTENTIAL
+    tier_1_savings = annual_burn * AUTOMATION_POTENTIAL
+    
+    # Calculate Billing Capacity (Revenue Unlocked)
+    billing_capacity = total_weekly_hours * billing_rate * WEEKS_PER_YEAR * AUTOMATION_POTENTIAL
     
     # Tier 2: expanded automation (55% - add 15% more)
     tier_2_potential = 0.55
-    tier_2_savings = annual_cost * tier_2_potential
-    tier_2_billing_capacity = annual_billing_capacity * tier_2_potential
+    tier_2_savings = annual_burn * tier_2_potential
     
-    # Empty task analysis for simplified marketing formula
-    task_analysis = []
+    # Calculate recoverable hours
+    total_recoverable_hours = total_weekly_hours * AUTOMATION_POTENTIAL
     
     return {
         "mode": "simple_marketing",
-        "total_staff": total_staff,
+        "total_staff": staff_count,
         "doc_staff_count": doc_staff_count,
-        "doc_staff_pct": doc_staff_percentage,  # Raw decimal for template
-        "doc_staff_percentage": doc_staff_percentage * 100,
-        "base_doc_staff_percentage": base_percentage * 100,
-        "base_doc_staff_count": base_doc_staff,
+        "doc_staff_percentage": DOC_STAFF_PERCENTAGE * 100,
+        "base_doc_staff_percentage": DOC_STAFF_PERCENTAGE * 100,
+        "base_doc_staff_count": doc_staff_count,
         "firm_size_category": "Standard",
         "scaling_note": "85% documentation staff (15% executives excluded)",
-        "hours_per_doc_staff": hours_per_doc_staff,
-        "typical_doc_rate": typical_doc_rate,
-        "typical_billing_rate": typical_billing_rate,
+        "hours_per_doc_staff": HOURS_PER_WEEK,
+        "typical_doc_rate": avg_rate,
+        "billing_rate": billing_rate,
         "total_weekly_hours": total_weekly_hours,
-        "annual_cost": annual_cost,
-        "annual_billing_capacity": annual_billing_capacity,
-        "task_analysis": task_analysis,
+        "annual_cost": annual_burn,
+        "annual_burn": annual_burn,
+        "task_analysis": [],
         "total_recoverable_hours": total_recoverable_hours,
         "weighted_potential": AUTOMATION_POTENTIAL,
         "automation_potential": AUTOMATION_POTENTIAL,
         "proven_tier_1_savings": tier_1_savings,
-        "billing_capacity_unlocked": billing_capacity_unlocked,
-        "tier_2_potential": tier_2_potential,
-        "tier_2_savings": tier_2_savings,
-        "tier_2_billing_capacity": tier_2_billing_capacity,
-        "capacity_hours": total_recoverable_hours * WEEKS_PER_YEAR,
-        "potential_revenue": tier_1_savings,
         "industry_variance_multiplier": 1.0,
         "adjusted_tier_1_savings": tier_1_savings,
+        "tier_1_savings": tier_1_savings,
+        "tier_2_potential": tier_2_potential,
+        "tier_2_savings": tier_2_savings,
         "adjusted_tier_2_savings": tier_2_savings,
-        # Legacy fields for backward compatibility
-        "annual_burn": annual_cost,
-        "tier_1_savings": tier_1_savings
+        "capacity_hours": total_recoverable_hours * WEEKS_PER_YEAR,
+        "potential_revenue": billing_capacity,
+        "billing_capacity": billing_capacity
     }
 
 def calculate_metrics_v3(staff_count, avg_rate, industry_config):
