@@ -2791,7 +2791,7 @@ def update_industry_config(industry_id, updates):
         return False
     
     allowed_fields = ['doc_staff_pct', 'hrs_per_week', 'loaded_cost', 'automation_rate', 
-                      'explanation', 'is_active', 'display_order', 'industry_name']
+                      'billing_rate', 'explanation', 'is_active', 'display_order', 'industry_name']
     
     set_clauses = []
     params = {"id": industry_id}
@@ -2835,6 +2835,7 @@ def get_industry_configs_dict():
             'hrs_per_week': float(config['hrs_per_week']),
             'loaded_cost': float(config['loaded_cost']),
             'automation_rate': float(config['automation_rate']),
+            'billing_rate': float(config.get('billing_rate', 250.0)),
             'explanation': config['explanation'],
             'slug': config['industry_slug']
         }
