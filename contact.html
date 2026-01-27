@@ -135,6 +135,38 @@
         border-color: #f59e0b;
         color: white;
       }
+      /* Chat sizing toggle */
+      .chat-panel-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .chat-panel-toggle-size {
+        background: transparent;
+        border: none;
+        color: white;
+        cursor: pointer;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.8;
+        transition: opacity 0.2s;
+      }
+      .chat-panel-toggle-size:hover {
+        opacity: 1;
+      }
+      .chat-panel.full-screen {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        border-radius: 0 !important;
+      }
+      .chat-panel.full-screen .chat-panel-content {
+        max-width: 800px;
+        margin: 0 auto;
+        width: 100%;
+      }
     </style>
   </head>
   <body>
@@ -160,12 +192,22 @@
             <h3>AI Inquiry Assistant</h3>
             <span class="contact-ai-tag">AI</span>
           </div>
-          <button class="chat-panel-close" id="chatPanelClose" aria-label="Close chat">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
+          <div class="chat-panel-actions">
+            <button class="chat-panel-toggle-size" id="chatPanelToggleSize" title="Toggle Sidebar/Full Screen" aria-label="Toggle chat size">
+              <svg class="icon-expand" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
+              </svg>
+              <svg class="icon-collapse" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M10 14l-7 7"></path>
+              </svg>
+            </button>
+            <button class="chat-panel-close" id="chatPanelClose" aria-label="Close chat">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="chat-panel-content">
           <p class="contact-ai-intro">
@@ -347,6 +389,18 @@
           }
         }
       })();
+
+      const chatPanel = document.getElementById('chatPanel');
+      const chatPanelToggleSize = document.getElementById('chatPanelToggleSize');
+      const expandIcon = chatPanelToggleSize.querySelector('.icon-expand');
+      const collapseIcon = chatPanelToggleSize.querySelector('.icon-collapse');
+
+      chatPanelToggleSize.addEventListener('click', () => {
+          chatPanel.classList.toggle('full-screen');
+          const isFull = chatPanel.classList.contains('full-screen');
+          expandIcon.style.display = isFull ? 'none' : 'block';
+          collapseIcon.style.display = isFull ? 'block' : 'none';
+      });
 
       // AI Contact Assistant
       const chatContainer = document.getElementById('chatContainer');
