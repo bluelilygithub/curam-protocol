@@ -197,9 +197,31 @@ def demo_legacy():
 @app.route('/sample')
 def view_sample():
     requested = request.args.get('path')
+    if not requested:
+        abort(404)
+
+    # Allow direct links to curam-ai.com.au domain for samples
+    if requested.startswith(('http://www.curam-ai.com.au', 'https://www.curam-ai.com.au')):
+        try:
+            # Parse the URL to see if it's a relative path on our own domain
+            from urllib.parse import urlparse, parse_qs
+            parsed = urlparse(requested)
+            if parsed.path == '/sample':
+                qs = parse_qs(parsed.query)
+                if 'path' in qs and qs['path']:
+                    # Recursively handle the internal path
+                    requested = qs['path'][0]
+            else:
+                # If it's a direct link to a file, we can't easily serve it 
+                # but we can try to extract the relative path if it's in our repo
+                if '/samples/' in requested:
+                    requested = 'samples/' + requested.split('/samples/', 1)[1]
+        except:
+            pass
+
     # Use sample_loader to get allowed paths (supports database override)
     allowed_paths = get_allowed_sample_paths(use_database=False)
-    if not requested or requested not in allowed_paths:
+    if requested not in allowed_paths:
         abort(404)
 
     if not os.path.isfile(requested):
