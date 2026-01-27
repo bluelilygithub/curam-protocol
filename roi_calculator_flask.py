@@ -2170,10 +2170,6 @@ HTML_TEMPLATE = """
                 <span class="profile-value">{{ calculations.total_staff }}</span>
             </div>
             <div class="profile-item">
-                <span class="profile-label">Firm Size Category:</span>
-                <span class="profile-value">{{ calculations.firm_size_category }}</span>
-            </div>
-            <div class="profile-item">
                 <span class="profile-label">Documentation Staff (85%):</span>
                 <span class="profile-value">{{ calculations.doc_staff_count }}</span>
             </div>
