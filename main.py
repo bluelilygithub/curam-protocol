@@ -196,13 +196,26 @@ def demo_legacy():
 
 @app.route('/sample')
 def view_sample():
-    requested = request.args.get('path')
+    # Log the exact raw path for debugging
+    raw_path = request.args.get('path', '')
+    app.logger.info(f"Sample request raw path: {raw_path}")
+    
+    # Re-construct the full path from all arguments to handle ampersands correctly
+    # Flask's request.args.get('path') stops at the first '&'
+    full_query = request.query_string.decode('utf-8')
+    requested = ""
+    if 'path=' in full_query:
+        requested = full_query.split('path=', 1)[1]
+    else:
+        requested = raw_path
+
     if not requested:
         abort(404)
 
-    # Clean the requested path to handle URL encoding and potential double-encoding
+    # Clean the requested path to handle URL encoding
     from urllib.parse import unquote
     requested = unquote(requested)
+    app.logger.info(f"Sample request unquoted path: {requested}")
 
     # Allow direct links to curam-ai.com.au domain for samples
     if requested.startswith(('http://www.curam-ai.com.au', 'https://www.curam-ai.com.au')):
@@ -210,38 +223,39 @@ def view_sample():
             from urllib.parse import urlparse, parse_qs
             parsed = urlparse(requested)
             if parsed.path == '/sample':
-                qs = parse_qs(parsed.query)
-                if 'path' in qs and qs['path']:
-                    # Recursively handle the internal path (and unquote again for safety)
-                    requested = unquote(qs['path'][0])
+                # Extract path from query string of the nested URL
+                if parsed.query and 'path=' in parsed.query:
+                    requested = unquote(parsed.query.split('path=', 1)[1])
             else:
                 if '/samples/' in requested:
                     requested = 'samples/' + requested.split('/samples/', 1)[1]
-        except:
-            pass
+        except Exception as e:
+            app.logger.error(f"URL parsing error: {e}")
 
     # Use sample_loader to get allowed paths (supports database override)
     allowed_paths = get_allowed_sample_paths(use_database=False)
     
-    # Check for direct match or encoded match
-    if requested not in allowed_paths:
-        # Try finding a case-insensitive or space-normalized match if it fails
-        # because browsers sometimes handle the ampersand and spaces differently
-        normalized_requested = requested.replace(' ', '%20').replace('&', '%26')
-        found = False
-        for path in allowed_paths:
-            if path == requested or path == normalized_requested or unquote(path) == requested:
-                requested = path
-                found = True
-                break
-        
-        if not found:
-            abort(404)
+    # Final normalization: standardizing spaces and common special characters
+    def normalize(p):
+        return unquote(p).replace('+', ' ').strip()
 
-    if not os.path.isfile(requested):
+    norm_requested = normalize(requested)
+    
+    found_path = None
+    for path in allowed_paths:
+        if normalize(path) == norm_requested:
+            found_path = path
+            break
+    
+    if not found_path:
+        app.logger.warn(f"Path not found in allowed list: {norm_requested}")
         abort(404)
 
-    return send_file(requested)
+    if not os.path.isfile(found_path):
+        app.logger.error(f"File exists in allowed list but not on disk: {found_path}")
+        abort(404)
+
+    return send_file(found_path)
 
 # =============================================================================
 # ROI CALCULATOR BLUEPRINT REGISTRATION
