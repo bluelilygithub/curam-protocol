@@ -156,21 +156,46 @@ os.makedirs(FINANCE_UPLOAD_DIR, exist_ok=True)
 @app.route('/feasibility-preview.html')
 def feasibility_preview_html():
     """Serve feasibility-preview.html page with iframe to automater"""
-    # Default sector configuration
-    sector_config = {
-        'name': 'Professional Services',
-        'headline': 'Sample Industry P1 Feasibility Demo',
-        'subheadline': 'Test our AI-powered document classification and extraction engine live.',
-        'demo_title': 'P1 Feasibility Sprint',
-        'demo_description': 'Upload PDFs, images, or scanned documents to test extraction',
-        'icon': None
+    sector_slug = request.args.get('sector', 'professional-services')
+    
+    # Map sector slug to department and metadata
+    sector_mapping = {
+        'professional-services': {
+            'dept': 'finance',
+            'name': 'Professional Services',
+            'headline': 'AI Document Automation for Professional Services',
+            'subheadline': 'Extract structured data from invoices, receipts, and professional forms with 95%+ accuracy.',
+            'demo_title': 'P1 Feasibility Sprint',
+            'demo_description': 'Upload finance documents to test extraction',
+            'icon': '💼'
+        },
+        'logistics-compliance': {
+            'dept': 'logistics',
+            'name': 'Logistics & Compliance',
+            'headline': 'Trade & Logistics Document Extraction',
+            'subheadline': 'Automate FTA lists, Bills of Lading, and Packing Lists processing.',
+            'demo_title': 'Logistics Feasibility Demo',
+            'demo_description': 'Test extraction on trade and shipping documents',
+            'icon': '📦'
+        },
+        'built-environment': {
+            'dept': 'engineering',
+            'name': 'Built Environment',
+            'headline': 'Engineering & Construction Data Extraction',
+            'subheadline': 'Extract beam schedules and technical specs from structural drawings.',
+            'demo_title': 'Engineering Feasibility Demo',
+            'demo_description': 'Test extraction on technical engineering schedules',
+            'icon': '🏗️'
+        }
     }
     
-    try:
-        return render_template('feasibility-preview.html', sector=sector_config)
-    except:
-        # Fallback: try to send as static file
-        return send_file('feasibility-preview.html')
+    sector_config = sector_mapping.get(sector_slug, sector_mapping['professional-services'])
+    department = sector_config['dept']
+    
+    return render_template('feasibility-preview.html', 
+                         sector=sector_config, 
+                         department=department,
+                         sector_slug=sector_slug)
 
 @app.route('/feasibility-preview', methods=['GET', 'POST'])
 def feasibility_preview_redirect():
