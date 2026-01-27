@@ -454,14 +454,17 @@ Use paragraphs (\n\n)."""
                 
                 followup_prompt = f"""Based on this user question: "{message}"{sources_text}
 
-Generate exactly 3 short, specific follow-up questions (max 10 words each) that would help the user learn more. Questions should be directly answerable from our content.
+Generate exactly 3 short, specific follow-up questions (max 10 words each) that would help the user learn more about Curam-Ai Protocol™'s specific services and expertise. 
+
+CRITICAL: Questions MUST be directly related to the provided source content or Curam-Ai's core services (Phase 1-4, document automation, engineering/finance/logistics focus). 
+DO NOT ask general AI or cloud questions unless they are explicitly mentioned in the context of how Curam-Ai uses them.
 
 Format: One question per line, no numbering, no punctuation at end.
 
 Example:
 How does Phase 1 reduce implementation risk
-What industries benefit most from RAG
-Can this work with handwritten documents"""
+What industries benefit most from our extraction
+Can this work with our specific document types"""
                 
                 print(f"DEBUG: Generating follow-up questions...")
                 fq_client = get_gemini_client()
