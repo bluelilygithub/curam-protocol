@@ -2204,6 +2204,7 @@ HTML_TEMPLATE = """
             <div style="color: rgba(255, 255, 255, 0.7); font-size: 0.95rem; font-style: italic;">Based on your inputs</div>
         </div>
         
+        {% if calculations.get('task_analysis') %}
         <h2>Proven Low-Hanging Fruit Tasks</h2>
         <p class="section-subhead">These are repetitive tasks we KNOW exist in {{ industry }} firms and have proven automation success:</p>
         
@@ -2212,64 +2213,61 @@ HTML_TEMPLATE = """
         </p>
         
         <div class="task-breakdown">
-            {% if calculations.get('task_analysis') %}
-                {% for task in calculations.task_analysis %}
-                <div class="task-card {% if task.is_low_hanging_fruit %}task-card-highlight{% endif %}">
-                    <div class="task-header">
-                        <h3>
-                            {{ task.name }} 
-                            <span class="complexity-badge complexity-{{ task.complexity }}">
-                                [{{ task.complexity }}/10]
-                            </span>
-                            {% if task.is_low_hanging_fruit %}
-                            <span class="roi-badge">🎯 LOW-HANGING FRUIT</span>
-                            {% endif %}
-                            {% if task.requires_phase_1 %}
-                            <span class="validation-badge">⚠️ NEEDS VALIDATION</span>
-                            {% endif %}
-                        </h3>
-                    </div>
-                    <div class="task-details">
-                        <div class="task-stat">
-                            <span class="stat-label">Estimated Time:</span>
-                            <span class="stat-value">{{ task.hours_per_week|round(1) }} hrs/week ({{ task.percentage_of_total|round(0)|int }}% of doc time)</span>
-                        </div>
-                        <div class="task-stat">
-                            <span class="stat-label">Description:</span>
-                            <span class="stat-value">{{ task.description }}</span>
-                        </div>
-                        <div class="task-stat">
-                            <span class="stat-label">Automation Potential (Lab Testing):</span>
-                            <span class="stat-value">{{ (task.automation_potential * 100)|round(0)|int }}%</span>
-                        </div>
-                        <div class="task-stat">
-                            <span class="stat-label">Proven Success Rate:</span>
-                            <span class="stat-value">{{ (task.proven_success_rate * 100)|round(0)|int }}% of implementations succeed</span>
-                        </div>
-                        <div class="task-stat">
-                            <span class="stat-label">Conservative Estimate:</span>
-                            <span class="stat-value">{{ (task.conservative_potential * 100)|round(0)|int }}% (potential × success rate)</span>
-                        </div>
-                        <div class="task-stat">
-                            <span class="stat-label">Recoverable Time:</span>
-                            <span class="stat-value">{{ task.recoverable_hours_per_week|round(1) }} hrs/week</span>
-                        </div>
-                        <div class="task-stat">
-                            <span class="stat-label">Minimum Annual Value:</span>
-                            <span class="stat-value">${{ "{:,.0f}".format(task.annual_savings) }}</span>
-                        </div>
-                    </div>
-                    {% if task.requires_phase_1 %}
-                    <div class="task-warning">
-                        <strong>⚠️ Validation Required:</strong> This task requires human judgment. Phase 1 will test if YOUR specific documents are suitable for automation.
-                    </div>
-                    {% endif %}
+            {% for task in calculations.task_analysis %}
+            <div class="task-card {% if task.is_low_hanging_fruit %}task-card-highlight{% endif %}">
+                <div class="task-header">
+                    <h3>
+                        {{ task.name }} 
+                        <span class="complexity-badge complexity-{{ task.complexity }}">
+                            [{{ task.complexity }}/10]
+                        </span>
+                        {% if task.is_low_hanging_fruit %}
+                        <span class="roi-badge">🎯 LOW-HANGING FRUIT</span>
+                        {% endif %}
+                        {% if task.requires_phase_1 %}
+                        <span class="validation-badge">⚠️ NEEDS VALIDATION</span>
+                        {% endif %}
+                    </h3>
                 </div>
-                {% endfor %}
-            {% else %}
-                <p>Task breakdown not available for this industry.</p>
-            {% endif %}
+                <div class="task-details">
+                    <div class="task-stat">
+                        <span class="stat-label">Estimated Time:</span>
+                        <span class="stat-value">{{ task.hours_per_week|round(1) }} hrs/week ({{ task.percentage_of_total|round(0)|int }}% of doc time)</span>
+                    </div>
+                    <div class="task-stat">
+                        <span class="stat-label">Description:</span>
+                        <span class="stat-value">{{ task.description }}</span>
+                    </div>
+                    <div class="task-stat">
+                        <span class="stat-label">Automation Potential (Lab Testing):</span>
+                        <span class="stat-value">{{ (task.automation_potential * 100)|round(0)|int }}%</span>
+                    </div>
+                    <div class="task-stat">
+                        <span class="stat-label">Proven Success Rate:</span>
+                        <span class="stat-value">{{ (task.proven_success_rate * 100)|round(0)|int }}% of implementations succeed</span>
+                    </div>
+                    <div class="task-stat">
+                        <span class="stat-label">Conservative Estimate:</span>
+                        <span class="stat-value">{{ (task.conservative_potential * 100)|round(0)|int }}% (potential × success rate)</span>
+                    </div>
+                    <div class="task-stat">
+                        <span class="stat-label">Recoverable Time:</span>
+                        <span class="stat-value">{{ task.recoverable_hours_per_week|round(1) }} hrs/week</span>
+                    </div>
+                    <div class="task-stat">
+                        <span class="stat-label">Minimum Annual Value:</span>
+                        <span class="stat-value">${{ "{:,.0f}".format(task.annual_savings) }}</span>
+                    </div>
+                </div>
+                {% if task.requires_phase_1 %}
+                <div class="task-warning">
+                    <strong>⚠️ Validation Required:</strong> This task requires human judgment. Phase 1 will test if YOUR specific documents are suitable for automation.
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
+        {% endif %}
         
         <hr>
         
