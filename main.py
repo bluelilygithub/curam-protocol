@@ -200,20 +200,21 @@ def view_sample():
     if not requested:
         abort(404)
 
+    # Clean the requested path to handle URL encoding and potential double-encoding
+    from urllib.parse import unquote
+    requested = unquote(requested)
+
     # Allow direct links to curam-ai.com.au domain for samples
     if requested.startswith(('http://www.curam-ai.com.au', 'https://www.curam-ai.com.au')):
         try:
-            # Parse the URL to see if it's a relative path on our own domain
             from urllib.parse import urlparse, parse_qs
             parsed = urlparse(requested)
             if parsed.path == '/sample':
                 qs = parse_qs(parsed.query)
                 if 'path' in qs and qs['path']:
-                    # Recursively handle the internal path
-                    requested = qs['path'][0]
+                    # Recursively handle the internal path (and unquote again for safety)
+                    requested = unquote(qs['path'][0])
             else:
-                # If it's a direct link to a file, we can't easily serve it 
-                # but we can try to extract the relative path if it's in our repo
                 if '/samples/' in requested:
                     requested = 'samples/' + requested.split('/samples/', 1)[1]
         except:
@@ -221,8 +222,21 @@ def view_sample():
 
     # Use sample_loader to get allowed paths (supports database override)
     allowed_paths = get_allowed_sample_paths(use_database=False)
+    
+    # Check for direct match or encoded match
     if requested not in allowed_paths:
-        abort(404)
+        # Try finding a case-insensitive or space-normalized match if it fails
+        # because browsers sometimes handle the ampersand and spaces differently
+        normalized_requested = requested.replace(' ', '%20').replace('&', '%26')
+        found = False
+        for path in allowed_paths:
+            if path == requested or path == normalized_requested or unquote(path) == requested:
+                requested = path
+                found = True
+                break
+        
+        if not found:
+            abort(404)
 
     if not os.path.isfile(requested):
         abort(404)
