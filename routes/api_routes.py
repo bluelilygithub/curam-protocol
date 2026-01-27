@@ -456,13 +456,13 @@ Use paragraphs (\n\n)."""
 
 Generate exactly 3 short, specific follow-up questions (max 10 words each) that would help the user learn more about Curam-Ai Protocol™'s specific services and expertise. 
 
-CRITICAL: Questions MUST be derived directly from the provided source content or Curam-Ai's core services. 
-If the user's question (like "do you support 365") matches information in the sources (e.g., how we automate 365/SharePoint workflows), the follow-up questions MUST bridge that specific topic to our services.
+CRITICAL: Questions MUST be derived directly from the PROVIDED source content or Curam-Ai's core services. 
+If the user's question (like "do you support google cloud") matches information in the sources (e.g., how we use Google Gemini or GCP), the follow-up questions MUST bridge that specific topic to our services.
 
-Example for a "365" query:
-Can you automate SharePoint document registers
-How does the protocol integrate with 365
-What is the ROI for 365 document workflows
+Example for a "Google Cloud" query:
+How does our Gemini extraction use Google Cloud
+Can we automate documents stored in Google Drive
+What is the ROI for Google-based automation sprints
 
 Format: One question per line, no numbering, no punctuation at end."""
                 
