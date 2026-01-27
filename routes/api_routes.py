@@ -456,15 +456,15 @@ Use paragraphs (\n\n)."""
 
 Generate exactly 3 short, specific follow-up questions (max 10 words each) that would help the user learn more about Curam-Ai Protocol™'s specific services and expertise. 
 
-CRITICAL: Questions MUST be directly related to the provided source content or Curam-Ai's core services (Phase 1-4, document automation, engineering/finance/logistics focus). 
-DO NOT ask general AI or cloud questions unless they are explicitly mentioned in the context of how Curam-Ai uses them.
+CRITICAL: Questions MUST be derived directly from the provided source content or Curam-Ai's core services. 
+If the user's question (like "do you support 365") matches information in the sources (e.g., how we automate 365/SharePoint workflows), the follow-up questions MUST bridge that specific topic to our services.
 
-Format: One question per line, no numbering, no punctuation at end.
+Example for a "365" query:
+Can you automate SharePoint document registers
+How does the protocol integrate with 365
+What is the ROI for 365 document workflows
 
-Example:
-How does Phase 1 reduce implementation risk
-What industries benefit most from our extraction
-Can this work with our specific document types"""
+Format: One question per line, no numbering, no punctuation at end."""
                 
                 print(f"DEBUG: Generating follow-up questions...")
                 fq_client = get_gemini_client()
