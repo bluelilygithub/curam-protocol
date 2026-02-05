@@ -181,15 +181,23 @@ class Curam_Webhook_Handler {
          * @param array $payload The payload to send.
          */
         private static function send_webhook( $post_id, $payload ) {
+                // Priority: 1. Database option, 2. wp-config.php constant, 3. Fail with error
                 $zapier_webhook_url = get_option( 'xero_zapier_webhook_url', '' );
+                if ( empty( $zapier_webhook_url ) && defined( 'ZAPIER_WEBHOOK_URL' ) ) {
+                        $zapier_webhook_url = ZAPIER_WEBHOOK_URL;
+                }
+
+                // No hardcoded fallback - must be configured properly
                 if ( empty( $zapier_webhook_url ) ) {
-                        $zapier_webhook_url = defined( 'ZAPIER_WEBHOOK_URL' )
-                                ? ZAPIER_WEBHOOK_URL
-                                : 'https://hooks.zapier.com/hooks/catch/4397603/uq1jzq5/';
+                        error_log( "Curam Xero: No webhook URL configured for post {$post_id} - check wp-config.php ZAPIER_WEBHOOK_URL or Settings page" );
+                        $current_details = get_field( 'email_details', $post_id );
+                        $error_msg = current_time( 'd/m/y' ) . ': ERROR - Webhook URL not configured, invoice not sent';
+                        update_field( 'email_details', $current_details . "\n" . $error_msg, $post_id );
+                        return;
                 }
 
                 if ( ! filter_var( $zapier_webhook_url, FILTER_VALIDATE_URL ) ) {
-                        error_log( 'DiamondPlate Xero: Invalid webhook URL configured' );
+                        error_log( 'Curam Xero: Invalid webhook URL configured' );
                         return;
                 }
 
