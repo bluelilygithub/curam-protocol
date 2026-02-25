@@ -1,0 +1,33 @@
+1. SQLite vs MySQL — This is the big one
+
+Your project uses SQLite, not MySQL. The spec relies heavily on MySQL-specific features — FULLTEXT indexes, InnoDB engine, ENUM types, and MATCH ... AGAINST queries. None of these work with SQLite. I'd need to replace the search with SQLite's FTS5 (its equivalent full-text search module) and adapt the table schemas. The end result would be functionally the same, but the underlying SQL will look different from the spec. Are you OK with that?
+
+2. Plugin naming and menu placement
+
+The spec calls it "DiamondPlate AI Chat" with dp-chat- class prefixes. But you said it should resemble the other Curam plugins and sit alongside them in the admin menu. Should I:
+
+Keep the name "DiamondPlate AI Chat" but give it a top-level admin menu with a green icon alongside the other Curam plugins?
+Or rename it to "Curam AI Chat" with curam-chat- prefixes to fully match the family?
+3. Composer / PDF parsing dependency
+
+The spec requires smalot/pdfparser via Composer for PDF text extraction. The project doesn't currently use Composer. Adding it means a vendor/ directory and autoloader inside the plugin. Are you happy with that, or would you prefer to defer PDF indexing to a later phase and get the core chat working first?
+
+4. Google Gemini API key
+
+The other Curam plugins store credentials like Twilio as PHP constants in wp-config.php. The spec suggests storing the Gemini key both as a WordPress option (admin settings) and optionally as a wp-config.php constant. Should I follow the same pattern as the other plugins (constant in wp-config.php takes priority, admin setting as fallback)?
+
+5. Message Relevance Guard — Section 13
+
+This section describes checking messages typed into a contact form textarea, not the chat widget itself. Is this meant to integrate with your existing Contact Form 7 forms from Curam Enquiries? Or is this a separate feature you'd want on the chat widget's own input? It feels like a separate concern from the chatbot itself.
+
+6. The front-end widget — where does it appear?
+
+The spec says "every page." On the live DiamondPlate site this makes sense. In this development environment, do you want me to build it so it only renders on the front-end (not the WordPress admin dashboard)? And should there be a way to restrict it to certain pages, or is "all front-end pages" correct?
+
+7. Brand colour defaults
+
+The spec uses navy (#0B1221) and gold (#D4AF37) as defaults. Are these the actual DiamondPlate brand colours you want as the default values, or should I use different ones?
+
+8. The "check-relevance" API endpoint
+
+This feels like a separate feature from the chatbot — it's an AI-powered spam filter for contact forms. Do you want this built as part of the initial plugin, or would you prefer to focus on the core chatbot first and add relevance checking later?
