@@ -22,6 +22,27 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Auto-seed: create account from env vars if no users exist
+async function seedInitialUser() {
+  const { SEED_EMAIL, SEED_PASSWORD } = process.env;
+  if (!SEED_EMAIL || !SEED_PASSWORD) return;
+  const db = require('./db');
+  const existing = db.prepare('SELECT id FROM users WHERE 1').get();
+  if (existing) return;
+  const bcrypt = require('bcrypt');
+  const hash = await bcrypt.hash(SEED_PASSWORD, 12);
+  db.prepare('INSERT INTO users (email, passwordHash) VALUES (?, ?)').run(SEED_EMAIL.toLowerCase(), hash);
+  console.log('✓ Initial user created:', SEED_EMAIL);
+}
+seedInitialUser().catch(err => console.error('Seed error:', err));
+
+// Auth (must be before requireAuth middleware)
+app.use('/api/auth', require('./routes/auth'));
+
+// Protect all remaining /api routes
+const { requireAuth } = require('./middleware/auth');
+app.use('/api', requireAuth);
+
 // Routes
 app.use('/api/health', require('./routes/health'));
 app.use('/api/projects', require('./routes/projects'));

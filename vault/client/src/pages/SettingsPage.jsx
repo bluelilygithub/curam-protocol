@@ -1,11 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import useSettingsStore from '../store/settingsStore';
+import useAuthStore from '../store/authStore';
 import { themes, fontOptions, iconPackOptions } from '../themes';
 import { useIcon } from '../providers/IconProvider';
 
 function SettingsPage() {
   const { font, theme, iconPack, setFont, setTheme, setIconPack } = useSettingsStore();
+  const { token } = useAuthStore();
   const getIcon = useIcon();
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
+  const [pwStatus, setPwStatus] = useState(null); // { ok, msg }
+
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    setPwStatus(null);
+    if (pwForm.next !== pwForm.confirm) return setPwStatus({ ok: false, msg: 'New passwords do not match' });
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
+      });
+      const data = await res.json();
+      if (!res.ok) return setPwStatus({ ok: false, msg: data.error });
+      setPwStatus({ ok: true, msg: 'Password updated' });
+      setPwForm({ current: '', next: '', confirm: '' });
+    } catch {
+      setPwStatus({ ok: false, msg: 'Network error' });
+    }
+  }
 
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-10">
@@ -94,6 +117,51 @@ function SettingsPage() {
             </button>
           ))}
         </div>
+      </section>
+
+      {/* Change Password */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
+          Change Password
+        </h2>
+        <form
+          onSubmit={handleChangePassword}
+          className="rounded-2xl border p-6 space-y-4"
+          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+        >
+          {[
+            { label: 'Current Password', key: 'current' },
+            { label: 'New Password', key: 'next' },
+            { label: 'Confirm New Password', key: 'confirm' },
+          ].map(({ label, key }) => (
+            <div key={key}>
+              <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>
+                {label}
+              </label>
+              <input
+                type="password"
+                value={pwForm[key]}
+                onChange={e => setPwForm(f => ({ ...f, [key]: e.target.value }))}
+                required
+                placeholder="••••••••"
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </div>
+          ))}
+          {pwStatus && (
+            <p className="text-xs" style={{ color: pwStatus.ok ? 'var(--color-primary)' : '#ef4444' }}>
+              {pwStatus.msg}
+            </p>
+          )}
+          <button
+            type="submit"
+            className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-80"
+            style={{ background: 'var(--color-primary)' }}
+          >
+            Update Password
+          </button>
+        </form>
       </section>
 
       {/* Live Preview */}
