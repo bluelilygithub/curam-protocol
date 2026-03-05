@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --color-bg: #F5F5F0;
+  --color-surface: #EEEEE8;
+  --color-border: #D8D8D0;
+  --color-primary: #CC785C;
+  --color-text: #1A1A1A;
+  --color-muted: #888888;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
+
+/* Textarea auto-resize */
+textarea { overflow-y: hidden; }
+textarea:focus { overflow-y: auto; }
+
+/* Prose overrides — inherit theme colours */
+.prose { color: var(--color-text); }
+.prose strong { color: var(--color-text); font-weight: 600; }
+.prose a { color: var(--color-primary); text-decoration: underline; }
+.prose hr { border-color: var(--color-border); }
+.prose table { width: 100%; }
+.prose th, .prose td { border: 1px solid var(--color-border); padding: 6px 10px; }
+.prose th { background: var(--color-surface); font-weight: 600; }
+
+/* Bounce animation */
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50% { transform: translateY(-4px); opacity: 1; }
+}
+.animate-bounce {
+  animation: bounce 1s ease-in-out infinite;
+}

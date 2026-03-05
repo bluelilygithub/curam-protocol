@@ -1,0 +1,870 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useChat } from '../hooks/useChat';
+import { useVoice } from '../hooks/useVoice';
+import { useFileAttachment } from '../hooks/useFileAttachment';
+import { useUrlAttachment } from '../hooks/useUrlAttachment';
+import useProjectStore from '../store/projectStore';
+import { useIcon } from '../providers/IconProvider';
+import MessageBubble from '../components/MessageBubble';
+import AtMentionDropdown from '../components/AtMentionDropdown';
+import ExportMenu from '../components/ExportMenu';
+import ChatFileBar from '../components/ChatFileBar';
+import ChatFilePicker from '../components/ChatFilePicker';
+import UrlBar from '../components/UrlBar';
+import ArtifactPanel, { extractCodeBlocks } from '../components/ArtifactPanel';
+import FollowUpChips from '../components/FollowUpChips';
+import { downloadChatMd } from '../utils/exportMd';
+import { MODELS, getModelById, getModelShortName } from '../utils/models';
+import { calcCost, formatCost, formatTokens } from '../utils/pricing';
+
+const TEMPERATURES = [
+  { label: 'Precise', value: 0.2, desc: 'Focused, deterministic' },
+  { label: 'Balanced', value: 0.7, desc: 'Default' },
+  { label: 'Creative', value: 1.0, desc: 'Varied, imaginative' },
+];
+
+function ChatPage() {
+  const { id: projectIdParam } = useParams();
+  const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
+  const projectId = projectIdParam ? Number(projectIdParam) : activeProjectId;
+
+  const { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate } = useChat({ projectId });
+  const { isSTTAvailable, isTTSAvailable, isListening, transcript, startListening, stopListening, speak } = useVoice();
+  const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
+  const { urlAttachments, addUrl, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
+  const getIcon = useIcon();
+
+  const [input, setInput] = useState('');
+  const [showMention, setShowMention] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [showFilePicker, setShowFilePicker] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlInputValue, setUrlInputValue] = useState('');
+  const [sessions, setSessions] = useState([]);
+
+  // Title editing
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleInput, setTitleInput] = useState('');
+
+  // Session deletion
+  const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
+
+  // Model + temperature
+  const [chatModel, setChatModel] = useState(null);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [temperature, setTemperature] = useState(0.7);
+  const [showTempPicker, setShowTempPicker] = useState(false);
+
+  // Summarize
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [showSummaryPanel, setShowSummaryPanel] = useState(false);
+  const [summaryText, setSummaryText] = useState('');
+
+  // Artifacts
+  const [activeArtifacts, setActiveArtifacts] = useState(null); // { artifacts, initialIndex }
+
+  // Follow-up suggestions
+  const [suggestions, setSuggestions] = useState([]);
+
+  // Prompt picker
+  const [showPromptPicker, setShowPromptPicker] = useState(false);
+  const [prompts, setPrompts] = useState([]);
+  const [promptSearch, setPromptSearch] = useState('');
+
+  // Reasoning mode
+  const [reasoning, setReasoning] = useState(false);
+
+  // Persona picker
+  const [personas, setPersonas] = useState([]);
+  const [selectedPersonaId, setSelectedPersonaId] = useState(null);
+  const [showPersonaPicker, setShowPersonaPicker] = useState(false);
+
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
+  const titleInputRef = useRef(null);
+
+  const project = projects.find((p) => p.id === projectId);
+  const currentSession = sessions.find(s => s.sessionId === sessionId);
+  const sessionTitle = currentSession?.title || '';
+  const isSummarized = !!(currentSession?.isSummarized);
+  const isStarred = !!(currentSession?.starred);
+
+  const totalContentSize = messages.reduce((acc, m) => acc + (m.content?.length || 0), 0);
+  const contextWarning = messages.length >= 20 && !isSummarized && totalContentSize > 12000;
+
+  useEffect(() => {
+    fetchProjects();
+    if (projectId) { setActive(projectId); fetchSessions(); }
+  }, [projectId]);
+
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => { if (transcript) setInput(transcript); }, [transcript]);
+
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  }, [input]);
+
+  useEffect(() => {
+    if (sessionId) { setSummaryText(''); setShowSummaryPanel(false); setSuggestions([]); }
+  }, [sessionId]);
+
+  // Fetch follow-up suggestions after stream ends
+  useEffect(() => {
+    if (!isStreaming && sessionId && messages.length >= 2) {
+      fetch('/api/chat/suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId }),
+      }).then(r => r.json()).then(d => setSuggestions(d.suggestions || [])).catch(() => {});
+    } else if (isStreaming) {
+      setSuggestions([]);
+    }
+  }, [isStreaming]);
+
+  // Cmd+N new chat listener
+  useEffect(() => {
+    const handler = () => { clearMessages(); setSuggestions([]); setActiveArtifacts(null); };
+    document.addEventListener('vault:new-chat', handler);
+    return () => document.removeEventListener('vault:new-chat', handler);
+  }, [clearMessages]);
+
+  const fetchSessions = async () => {
+    if (!projectId) return;
+    const res = await fetch(`/api/chat/sessions/${projectId}`);
+    setSessions(await res.json());
+  };
+
+  const loadPrompts = async () => {
+    const res = await fetch(`/api/prompts${projectId ? `?projectId=${projectId}` : ''}`);
+    setPrompts(await res.json());
+  };
+
+  const loadPersonas = async () => {
+    const res = await fetch('/api/personas');
+    setPersonas(await res.json());
+  };
+
+  const effectiveModel = chatModel || project?.model || 'claude-sonnet-4-6';
+
+  const handleSend = async (overrideText) => {
+    const text = (overrideText || input).trim();
+    if (!text || isStreaming) return;
+    if (urlAttachments.some(u => u.status === 'fetching')) return;
+    const ids = attachments.map(a => a.id);
+    const meta = attachments.map(a => ({ id: a.id, name: a.name, mimetype: a.mimetype, preview: a.preview }));
+    const readyUrls = urlAttachments.filter(u => u.status === 'ready');
+    setInput('');
+    setShowMention(false);
+    setShowUrlInput(false);
+    setUrlInputValue('');
+    setShowPromptPicker(false);
+    clearAttachments();
+    clearUrls();
+    setSuggestions([]);
+    setActiveArtifacts(null);
+    await sendMessage(text, ids, meta, effectiveModel, readyUrls, temperature, selectedPersonaId, reasoning);
+    setTimeout(fetchSessions, 2000);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setInput(val);
+    const cursorPos = e.target.selectionStart;
+    const textBefore = val.slice(0, cursorPos);
+    const atIndex = textBefore.lastIndexOf('@');
+    if (atIndex !== -1 && !textBefore.slice(atIndex + 1).includes(' ')) {
+      setShowMention(true);
+      setMentionQuery(textBefore.slice(atIndex + 1));
+    } else {
+      setShowMention(false);
+    }
+  };
+
+  const handleMentionSelect = (token) => {
+    const cursorPos = textareaRef.current?.selectionStart || input.length;
+    const atIndex = input.lastIndexOf('@', cursorPos);
+    setInput(input.slice(0, atIndex) + token + input.slice(cursorPos));
+    setShowMention(false);
+    textareaRef.current?.focus();
+  };
+
+  const startEditTitle = () => {
+    setTitleInput(sessionTitle);
+    setEditingTitle(true);
+    setTimeout(() => titleInputRef.current?.focus(), 0);
+  };
+
+  const saveTitle = async () => {
+    setEditingTitle(false);
+    if (!sessionId || !titleInput.trim() || titleInput.trim() === sessionTitle) return;
+    await fetch(`/api/chat/sessions/${sessionId}/title`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: titleInput.trim() }),
+    });
+    fetchSessions();
+  };
+
+  const handleDeleteSession = async () => {
+    if (!sessionId) return;
+    await fetch(`/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
+    clearMessages();
+    setConfirmDeleteSession(false);
+    fetchSessions();
+  };
+
+  const handleToggleStar = async () => {
+    if (!sessionId) return;
+    await fetch(`/api/chat/sessions/${sessionId}/star`, { method: 'PATCH' });
+    fetchSessions();
+  };
+
+  const handleSummarize = async () => {
+    if (!sessionId || isSummarizing || messages.length < 4) return;
+    setIsSummarizing(true);
+    try {
+      const res = await fetch(`/api/chat/sessions/${sessionId}/summarize`, { method: 'POST' });
+      const data = await res.json();
+      if (data.summary) {
+        setSummaryText(data.summary);
+        await fetchSessions();
+        setShowSummaryPanel(true);
+      }
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
+  const handleViewSummary = async () => {
+    if (summaryText) { setShowSummaryPanel(v => !v); return; }
+    const res = await fetch(`/api/chat/sessions/${sessionId}/summary`);
+    const data = await res.json();
+    setSummaryText(data.summaryContent || '');
+    setShowSummaryPanel(true);
+  };
+
+  const handleRevertSummary = async () => {
+    if (!sessionId) return;
+    if (totalContentSize > 150000) {
+      if (!window.confirm('This is a very long conversation. Reverting may approach context limits. Continue?')) return;
+    }
+    await fetch(`/api/chat/sessions/${sessionId}/summary`, { method: 'DELETE' });
+    setSummaryText('');
+    setShowSummaryPanel(false);
+    fetchSessions();
+  };
+
+  const handleOpenArtifact = (artifactsArr, initialIndex = 0) => {
+    setActiveArtifacts({ artifacts: artifactsArr, initialIndex });
+  };
+
+  const handleRegenerate = async () => {
+    if (isStreaming || messages.length < 2) return;
+    const lastUser = [...messages].reverse().find(m => m.role === 'user');
+    if (!lastUser) return;
+    await regenerate(lastUser.content, [], [], effectiveModel, [], temperature, selectedPersonaId, reasoning);
+    setTimeout(fetchSessions, 2000);
+  };
+
+  const handleBranch = async (messageIndex) => {
+    if (!sessionId) return;
+    try {
+      const res = await fetch(`/api/chat/sessions/${sessionId}/branch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageIndex }),
+      });
+      const data = await res.json();
+      if (data.newSessionId) {
+        loadHistory(data.newSessionId);
+        setSuggestions([]);
+        setActiveArtifacts(null);
+        setTimeout(fetchSessions, 500);
+      }
+    } catch (err) {
+      console.error('Branch error:', err);
+    }
+  };
+
+  const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
+  const hasInput = input.trim().length > 0;
+
+  const currentTempLabel = TEMPERATURES.find(t => t.value === temperature)?.label || 'Balanced';
+  const costDisplay = sessionUsage.inputTokens > 0
+    ? `${formatTokens(sessionUsage.inputTokens + sessionUsage.outputTokens)} tokens · ${formatCost(calcCost(sessionUsage.model || effectiveModel, sessionUsage.inputTokens, sessionUsage.outputTokens))}`
+    : null;
+
+  const filteredPrompts = promptSearch
+    ? prompts.filter(p => p.title.toLowerCase().includes(promptSearch.toLowerCase()) || p.content.toLowerCase().includes(promptSearch.toLowerCase()))
+    : prompts;
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+
+      {/* Header */}
+      <div
+        className="flex-shrink-0 px-4 h-12 flex items-center gap-2 border-b"
+        style={{ borderColor: 'var(--color-border)' }}
+      >
+        {project && (
+          <span className="text-sm font-medium flex-shrink-0 truncate max-w-[120px]" style={{ color: 'var(--color-text)' }}>
+            {project.name}
+          </span>
+        )}
+
+        {project && sessionId && (
+          <span style={{ color: 'var(--color-border)' }} className="flex-shrink-0">/</span>
+        )}
+
+        {sessionId && (
+          editingTitle ? (
+            <input
+              ref={titleInputRef}
+              value={titleInput}
+              onChange={e => setTitleInput(e.target.value)}
+              onBlur={saveTitle}
+              onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+              className="text-xs px-2 py-1 rounded-lg border outline-none flex-1 min-w-0 max-w-[200px]"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-text)' }}
+            />
+          ) : (
+            <button
+              onClick={startEditTitle}
+              className="text-xs truncate max-w-[180px] hover:opacity-70 transition-opacity text-left"
+              style={{ color: 'var(--color-muted)' }}
+              title="Click to rename"
+            >
+              {sessionTitle || (sessions.length > 0 ? 'Untitled chat' : '')}
+            </button>
+          )
+        )}
+
+        {sessions.length > 0 && (
+          <select
+            className="text-xs px-2 py-1 rounded-lg border outline-none flex-shrink-0"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            value={sessionId || ''}
+            onChange={(e) => {
+              setShowSummaryPanel(false);
+              setSummaryText('');
+              setSuggestions([]);
+              setActiveArtifacts(null);
+              e.target.value === 'new' ? clearMessages() : loadHistory(e.target.value);
+            }}
+          >
+            <option value="new">+ New chat</option>
+            {sessions.map((s) => (
+              <option key={s.sessionId} value={s.sessionId}>
+                {s.starred ? '⭐ ' : ''}{s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}
+                {s.isSummarized ? ' ✦' : ''}
+              </option>
+            ))}
+          </select>
+        )}
+
+        <div className="flex-1" />
+
+        {/* Usage display */}
+        {costDisplay && (
+          <span className="text-xs hidden md:block" style={{ color: 'var(--color-muted)', opacity: 0.6 }}>
+            {costDisplay}
+          </span>
+        )}
+
+        {/* Temperature picker */}
+        <div className="relative">
+          <button
+            onClick={() => { setShowTempPicker(v => !v); setShowModelPicker(false); }}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
+            title="Response temperature"
+          >
+            {getIcon('flame', { size: 12 })}
+            {currentTempLabel}
+          </button>
+          {showTempPicker && (
+            <div
+              className="absolute right-0 top-full mt-1 w-44 rounded-xl border shadow-lg py-1.5 z-40"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+            >
+              {TEMPERATURES.map(t => (
+                <button
+                  key={t.value}
+                  onClick={() => { setTemperature(t.value); setShowTempPicker(false); }}
+                  className="w-full text-left px-3 py-2 flex items-center justify-between hover:opacity-70 transition-opacity"
+                >
+                  <div>
+                    <div className="text-xs font-medium" style={{ color: temperature === t.value ? 'var(--color-primary)' : 'var(--color-text)' }}>{t.label}</div>
+                    <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{t.desc}</div>
+                  </div>
+                  {temperature === t.value && <span className="text-xs" style={{ color: 'var(--color-primary)' }}>✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Model picker */}
+        <div className="relative">
+          <button
+            onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); }}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
+            title="Switch AI model"
+          >
+            {getModelShortName(effectiveModel)}
+          </button>
+          {showModelPicker && (
+            <div
+              className="absolute right-0 top-full mt-1 w-52 rounded-xl border shadow-lg py-1.5 z-40"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+            >
+              {MODELS.map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => { setChatModel(m.id); setShowModelPicker(false); }}
+                  className="w-full text-left px-3 py-2 flex items-start gap-2.5 hover:opacity-70 transition-opacity"
+                >
+                  <span className="text-base flex-shrink-0 mt-0.5">{m.emoji}</span>
+                  <div>
+                    <div className="text-xs font-semibold" style={{ color: effectiveModel === m.id ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                      {m.label} · {m.name}
+                    </div>
+                    <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{m.tagline}</div>
+                  </div>
+                  {effectiveModel === m.id && <span className="ml-auto text-xs" style={{ color: 'var(--color-primary)' }}>✓</span>}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Reasoning mode toggle — only for sonnet/opus */}
+        {(effectiveModel.includes('sonnet') || effectiveModel.includes('opus')) && (
+          <button
+            onClick={() => setReasoning(v => !v)}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all hover:opacity-70"
+            style={{
+              borderColor: reasoning ? 'var(--color-primary)' : 'var(--color-border)',
+              color: reasoning ? 'var(--color-primary)' : 'var(--color-muted)',
+              background: reasoning ? 'var(--color-primary)10' : 'var(--color-surface)',
+            }}
+            title={reasoning ? 'Disable extended reasoning' : 'Enable extended reasoning (slower, more thorough)'}
+          >
+            {getIcon('cpu', { size: 12 })}
+            Reason
+          </button>
+        )}
+
+        {/* Persona picker */}
+        <div className="relative">
+          <button
+            onClick={() => { setShowPersonaPicker(v => !v); if (!showPersonaPicker) loadPersonas(); setShowModelPicker(false); setShowTempPicker(false); }}
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
+            style={{
+              borderColor: selectedPersonaId ? 'var(--color-primary)' : 'var(--color-border)',
+              color: selectedPersonaId ? 'var(--color-primary)' : 'var(--color-muted)',
+              background: 'var(--color-surface)',
+            }}
+            title="Select persona"
+          >
+            {getIcon('user', { size: 12 })}
+            {selectedPersonaId ? (personas.find(p => p.id === selectedPersonaId)?.name || 'Persona') : 'Persona'}
+          </button>
+          {showPersonaPicker && (
+            <div
+              className="absolute right-0 top-full mt-1 w-56 rounded-xl border shadow-lg py-1.5 z-40"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+            >
+              <button
+                onClick={() => { setSelectedPersonaId(null); setShowPersonaPicker(false); }}
+                className="w-full text-left px-3 py-2 text-xs hover:opacity-70 transition-opacity"
+                style={{ color: selectedPersonaId === null ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              >
+                {selectedPersonaId === null ? '✓ ' : ''}No persona
+              </button>
+              {personas.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => { setSelectedPersonaId(p.id); setShowPersonaPicker(false); }}
+                  className="w-full text-left px-3 py-2 flex items-start gap-2 hover:opacity-70 transition-opacity"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium" style={{ color: selectedPersonaId === p.id ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                      {selectedPersonaId === p.id ? '✓ ' : ''}{p.name}
+                    </div>
+                    {p.description && (
+                      <div className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{p.description}</div>
+                    )}
+                  </div>
+                </button>
+              ))}
+              {personas.length === 0 && (
+                <p className="text-xs px-3 py-2" style={{ color: 'var(--color-muted)' }}>No personas yet. Create some in Personas.</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Star */}
+        {sessionId && (
+          <button
+            onClick={handleToggleStar}
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            style={{ color: isStarred ? '#f59e0b' : 'var(--color-muted)' }}
+            title={isStarred ? 'Unstar chat' : 'Star chat'}
+          >
+            {getIcon('star', { size: 14 })}
+          </button>
+        )}
+
+        {sessionId && messages.length >= 4 && !isSummarized && (
+          <button
+            onClick={handleSummarize}
+            disabled={isSummarizing}
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            style={{ color: 'var(--color-primary)' }}
+            title="Summarize this conversation"
+          >
+            {isSummarizing ? getIcon('loader', { size: 14 }) : getIcon('sparkles', { size: 14 })}
+          </button>
+        )}
+
+        {sessionId && (
+          <button
+            onClick={() => downloadChatMd(messages, sessionTitle || sessionId, project?.name)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            style={{ color: 'var(--color-muted)' }}
+            title="Save chat as Markdown"
+          >
+            {getIcon('file-down', { size: 14 })}
+          </button>
+        )}
+
+        <ExportMenu sessionId={sessionId} projectId={projectId} />
+
+        {sessionId && (
+          <button
+            onClick={() => setConfirmDeleteSession(true)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            style={{ color: 'var(--color-muted)' }}
+            title="Delete this chat"
+          >
+            {getIcon('trash', { size: 14 })}
+          </button>
+        )}
+      </div>
+
+      {/* Banners */}
+      {confirmDeleteSession && (
+        <div className="flex-shrink-0 mx-4 mt-3 px-4 py-3 rounded-xl border flex items-center gap-3" style={{ background: '#fff1f2', borderColor: '#fca5a5' }}>
+          <span className="text-sm text-red-700 flex-1">Delete this chat? All messages will be permanently removed.</span>
+          <button onClick={handleDeleteSession} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-red-500">Delete</button>
+          <button onClick={() => setConfirmDeleteSession(false)} className="text-xs" style={{ color: 'var(--color-muted)' }}>Cancel</button>
+        </div>
+      )}
+
+      {isSummarized && (
+        <div className="flex-shrink-0 mx-4 mt-3 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <span style={{ color: 'var(--color-primary)' }}>✦</span>
+          <span className="flex-1" style={{ color: 'var(--color-text)' }}>Conversation summarized — Claude is working from the summary.</span>
+          <button onClick={handleViewSummary} className="font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>{showSummaryPanel ? 'Hide' : 'View'}</button>
+          <button onClick={handleRevertSummary} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Revert to full thread</button>
+        </div>
+      )}
+
+      {isSummarized && showSummaryPanel && summaryText && (
+        <div className="flex-shrink-0 mx-4 mt-2 px-4 py-3 rounded-xl border text-xs leading-relaxed max-h-48 overflow-y-auto" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', whiteSpace: 'pre-wrap' }}>
+          {summaryText}
+        </div>
+      )}
+
+      {/* Main content area — flex row when artifact panel open */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* Chat column */}
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto">
+            {messages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full pb-16 px-6 text-center">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>
+                  {getIcon('chat', { size: 22 })}
+                </div>
+                <p className="text-base font-medium mb-1" style={{ color: 'var(--color-text)' }}>
+                  {project ? `Chat with ${project.name}` : 'Start a conversation'}
+                </p>
+                <p className="text-sm max-w-xs" style={{ color: 'var(--color-muted)' }}>
+                  {project ? 'Claude has full context of your project. Attach files, ask anything.' : 'Select a project from the sidebar to load context.'}
+                </p>
+              </div>
+            ) : (
+              <div className="max-w-3xl mx-auto px-4 py-6">
+                {messages.map((msg, i) => {
+                  const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
+                  const codeBlocks = msg.role === 'assistant' ? extractCodeBlocks(msg.content) : [];
+                  return (
+                    <div key={i}>
+                      <MessageBubble
+                        message={msg}
+                        messageIndex={i}
+                        onDelete={msg.role === 'user' && !isStreaming ? () => deleteMessagePair(i) : undefined}
+                        onOpenArtifact={codeBlocks.length > 0 ? (idx) => handleOpenArtifact(codeBlocks, idx) : undefined}
+                        artifactCount={codeBlocks.length}
+                        onBranch={msg.role === 'user' && sessionId && !isStreaming ? handleBranch : undefined}
+                      />
+                      {isLastAssistant && !isStreaming && (
+                        <>
+                          <div className="flex justify-start mb-3 ml-10">
+                            <button
+                              onClick={handleRegenerate}
+                              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
+                              title="Regenerate response"
+                            >
+                              {getIcon('refresh-cw', { size: 11 })}
+                              Regenerate
+                            </button>
+                          </div>
+                          <FollowUpChips
+                            suggestions={suggestions}
+                            onSelect={(s) => handleSend(s)}
+                          />
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Context warning */}
+          {contextWarning && (
+            <div className="flex-shrink-0 mx-4 mb-2 px-4 py-2.5 rounded-xl flex items-center gap-2.5 text-xs" style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#78350f' }}>
+              {getIcon('alert-triangle', { size: 13 })}
+              <span className="flex-1">This conversation is getting long ({messages.length} messages). Summarizing keeps Claude focused.</span>
+              <button onClick={handleSummarize} disabled={isSummarizing} className="px-2.5 py-1 rounded-lg text-xs font-medium text-white flex-shrink-0" style={{ background: '#d97706' }}>
+                {isSummarizing ? 'Summarizing…' : 'Summarize'}
+              </button>
+            </div>
+          )}
+
+          {/* Input area */}
+          <div className="flex-shrink-0 px-4 pb-5 pt-1">
+            <div className="max-w-3xl mx-auto">
+              <div className="relative">
+
+                {/* File picker */}
+                {showFilePicker && (
+                  <ChatFilePicker
+                    projectId={projectId}
+                    attachedIds={attachments.map(a => a.id)}
+                    onUpload={(file) => { uploadAndAttach(file); setShowFilePicker(false); }}
+                    onAttachExisting={(file) => { attachExisting(file); setShowFilePicker(false); }}
+                    onClose={() => setShowFilePicker(false)}
+                  />
+                )}
+
+                {/* URL input popover */}
+                {showUrlInput && (
+                  <div
+                    className="absolute bottom-full mb-2 left-0 z-50 flex items-center gap-2 px-3 py-2 rounded-xl border shadow-lg"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '320px' }}
+                  >
+                    {getIcon('link', { size: 14, color: 'var(--color-primary)' })}
+                    <input
+                      autoFocus
+                      type="url"
+                      value={urlInputValue}
+                      onChange={e => setUrlInputValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); if (urlInputValue.trim()) { addUrl(urlInputValue.trim()); setUrlInputValue(''); setShowUrlInput(false); } }
+                        if (e.key === 'Escape') { setShowUrlInput(false); setUrlInputValue(''); }
+                      }}
+                      placeholder="Paste a URL and press Enter…"
+                      className="flex-1 bg-transparent outline-none text-sm"
+                      style={{ color: 'var(--color-text)' }}
+                    />
+                    {urlInputValue && (
+                      <button type="button" onClick={() => { addUrl(urlInputValue.trim()); setUrlInputValue(''); setShowUrlInput(false); }} className="text-xs font-medium px-2 py-1 rounded-lg" style={{ background: 'var(--color-primary)', color: '#fff' }}>Add</button>
+                    )}
+                  </div>
+                )}
+
+                {/* Prompt picker */}
+                {showPromptPicker && (
+                  <div
+                    className="absolute bottom-full mb-2 left-0 z-50 rounded-xl border shadow-lg overflow-hidden"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '340px', maxHeight: '300px' }}
+                  >
+                    <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                      <input
+                        autoFocus
+                        value={promptSearch}
+                        onChange={e => setPromptSearch(e.target.value)}
+                        placeholder="Search prompts…"
+                        className="w-full bg-transparent outline-none text-xs"
+                        style={{ color: 'var(--color-text)' }}
+                      />
+                    </div>
+                    <div className="overflow-y-auto" style={{ maxHeight: '240px' }}>
+                      {filteredPrompts.length === 0 ? (
+                        <p className="text-xs px-3 py-4 text-center" style={{ color: 'var(--color-muted)' }}>
+                          {prompts.length === 0 ? 'No saved prompts. Add some in the Prompt Library.' : 'No matches.'}
+                        </p>
+                      ) : filteredPrompts.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => { setInput(p.content); setShowPromptPicker(false); setPromptSearch(''); textareaRef.current?.focus(); }}
+                          className="w-full text-left px-3 py-2.5 hover:opacity-70 transition-opacity border-b last:border-0"
+                          style={{ borderColor: 'var(--color-border)' }}
+                        >
+                          <div className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>{p.title}</div>
+                          <div className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{p.content}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Mention dropdown */}
+                {showMention && (
+                  <div className="absolute bottom-full mb-2 left-0 w-56 z-50">
+                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onClose={() => setShowMention(false)} />
+                  </div>
+                )}
+
+                {/* Input box */}
+                <div className="rounded-2xl border shadow-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                  <ChatFileBar attachments={attachments} onRemove={removeAttachment} />
+                  <UrlBar urlAttachments={urlAttachments} onRemove={removeUrl} />
+
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder={
+                      urlAttachments.length > 0
+                        ? 'What would you like to know about this page?'
+                        : attachments.length > 0
+                        ? `What would you like to do with ${attachments.length === 1 ? 'this file' : 'these files'}?`
+                        : project ? `Message ${project.name}…` : 'Message…'
+                    }
+                    rows={1}
+                    className="w-full px-4 pt-3.5 pb-12 bg-transparent outline-none resize-none text-sm leading-relaxed"
+                    style={{ color: 'var(--color-text)', minHeight: '56px' }}
+                  />
+
+                  <div className="flex items-center justify-between px-3 py-2.5">
+                    <div className="flex items-center gap-1">
+                      {/* File picker */}
+                      <button
+                        onClick={() => { setShowFilePicker(v => !v); setShowUrlInput(false); setShowPromptPicker(false); }}
+                        className="relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                        style={{ color: showFilePicker || attachments.length > 0 ? 'var(--color-primary)' : 'var(--color-muted)', background: showFilePicker ? 'var(--color-bg)' : 'transparent' }}
+                        title="Attach file"
+                      >
+                        {uploading ? getIcon('loader', { size: 14 }) : getIcon('upload', { size: 14 })}
+                        {attachments.length > 0 && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full text-white flex items-center justify-center font-medium" style={{ background: 'var(--color-primary)', fontSize: '9px', lineHeight: 1 }}>
+                            {attachments.length}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* URL attachment */}
+                      <button
+                        type="button"
+                        onClick={() => { setShowUrlInput(v => !v); setShowFilePicker(false); setShowPromptPicker(false); }}
+                        className="relative w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                        style={{ color: showUrlInput || urlAttachments.length > 0 ? 'var(--color-primary)' : 'var(--color-muted)', background: showUrlInput ? 'var(--color-bg)' : 'transparent' }}
+                        title="Attach a web page"
+                      >
+                        {getIcon('link', { size: 14 })}
+                        {urlAttachments.length > 0 && (
+                          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full text-white flex items-center justify-center font-medium" style={{ background: 'var(--color-primary)', fontSize: '9px', lineHeight: 1 }}>
+                            {urlAttachments.length}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Prompt library */}
+                      <button
+                        type="button"
+                        onClick={() => { setShowPromptPicker(v => !v); if (!showPromptPicker) loadPrompts(); setShowFilePicker(false); setShowUrlInput(false); }}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                        style={{ color: showPromptPicker ? 'var(--color-primary)' : 'var(--color-muted)', background: showPromptPicker ? 'var(--color-bg)' : 'transparent' }}
+                        title="Prompt library"
+                      >
+                        {getIcon('book', { size: 14 })}
+                      </button>
+
+                      {isSTTAvailable && (
+                        <button
+                          onClick={isListening ? stopListening : startListening}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
+                          style={{ color: isListening ? 'var(--color-primary)' : 'var(--color-muted)', background: isListening ? 'var(--color-bg)' : 'transparent' }}
+                          title={isListening ? 'Stop recording' : 'Voice input'}
+                        >
+                          {getIcon('mic', { size: 14 })}
+                        </button>
+                      )}
+
+                      {isTTSAvailable && lastAssistantMsg && (
+                        <button onClick={() => speak(lastAssistantMsg.content)} className="w-7 h-7 flex items-center justify-center rounded-lg" style={{ color: 'var(--color-muted)' }} title="Read last response aloud">
+                          {getIcon('speaker', { size: 14 })}
+                        </button>
+                      )}
+
+                      {attachError && <span className="text-xs ml-1" style={{ color: '#ef4444' }}>{attachError}</span>}
+                    </div>
+
+                    <button
+                      onClick={isStreaming ? stopStreaming : handleSend}
+                      disabled={!isStreaming && !hasInput}
+                      className="w-8 h-8 flex items-center justify-center rounded-xl transition-all"
+                      style={{
+                        background: isStreaming ? '#fee2e2' : hasInput ? 'var(--color-primary)' : 'var(--color-border)',
+                        color: isStreaming ? '#ef4444' : hasInput ? '#fff' : 'var(--color-muted)',
+                      }}
+                      title={isStreaming ? 'Stop' : 'Send'}
+                    >
+                      {isStreaming ? getIcon('stop-circle', { size: 16 }) : getIcon('send', { size: 15 })}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-center text-xs mt-2" style={{ color: 'var(--color-muted)', opacity: 0.5 }}>
+                Enter to send · Shift+Enter for new line · @ mention · ⌘/ shortcuts
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Artifact panel */}
+        {activeArtifacts && (
+          <ArtifactPanel
+            artifacts={activeArtifacts.artifacts}
+            initialIndex={activeArtifacts.initialIndex}
+            onClose={() => setActiveArtifacts(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default ChatPage;
