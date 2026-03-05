@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useIcon } from '../providers/IconProvider';
+import api from '../utils/apiClient';
 
 const ACCEPTED = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.txt,.json,.csv,.md';
 
@@ -18,7 +19,7 @@ function ChatFilePicker({ projectId, onUpload, onAttachExisting, onClose, attach
 
   useEffect(() => {
     if (projectId) {
-      fetch(`/api/files/${projectId}`).then(r => r.json()).then(setProjectFiles);
+      api.get(`/api/files/${projectId}`).then(r => r.json()).then(setProjectFiles);
     }
     const handler = (e) => {
       if (panelRef.current && !panelRef.current.contains(e.target)) onClose();

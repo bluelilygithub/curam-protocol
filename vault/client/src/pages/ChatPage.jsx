@@ -5,6 +5,7 @@ import { useVoice } from '../hooks/useVoice';
 import { useFileAttachment } from '../hooks/useFileAttachment';
 import { useUrlAttachment } from '../hooks/useUrlAttachment';
 import useProjectStore from '../store/projectStore';
+import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import MessageBubble from '../components/MessageBubble';
 import AtMentionDropdown from '../components/AtMentionDropdown';
@@ -115,11 +116,8 @@ function ChatPage() {
   // Fetch follow-up suggestions after stream ends
   useEffect(() => {
     if (!isStreaming && sessionId && messages.length >= 2) {
-      fetch('/api/chat/suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      }).then(r => r.json()).then(d => setSuggestions(d.suggestions || [])).catch(() => {});
+      api.post('/api/chat/suggestions', { sessionId })
+        .then(r => r.json()).then(d => setSuggestions(d.suggestions || [])).catch(() => {});
     } else if (isStreaming) {
       setSuggestions([]);
     }
@@ -134,17 +132,17 @@ function ChatPage() {
 
   const fetchSessions = async () => {
     if (!projectId) return;
-    const res = await fetch(`/api/chat/sessions/${projectId}`);
+    const res = await api.get(`/api/chat/sessions/${projectId}`);
     setSessions(await res.json());
   };
 
   const loadPrompts = async () => {
-    const res = await fetch(`/api/prompts${projectId ? `?projectId=${projectId}` : ''}`);
+    const res = await api.get(`/api/prompts${projectId ? `?projectId=${projectId}` : ''}`);
     setPrompts(await res.json());
   };
 
   const loadPersonas = async () => {
-    const res = await fetch('/api/personas');
+    const res = await api.get('/api/personas');
     setPersonas(await res.json());
   };
 
@@ -205,17 +203,13 @@ function ChatPage() {
   const saveTitle = async () => {
     setEditingTitle(false);
     if (!sessionId || !titleInput.trim() || titleInput.trim() === sessionTitle) return;
-    await fetch(`/api/chat/sessions/${sessionId}/title`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: titleInput.trim() }),
-    });
+    await api.patch(`/api/chat/sessions/${sessionId}/title`, { title: titleInput.trim() });
     fetchSessions();
   };
 
   const handleDeleteSession = async () => {
     if (!sessionId) return;
-    await fetch(`/api/chat/sessions/${sessionId}`, { method: 'DELETE' });
+    await api.delete(`/api/chat/sessions/${sessionId}`);
     clearMessages();
     setConfirmDeleteSession(false);
     fetchSessions();
@@ -223,7 +217,7 @@ function ChatPage() {
 
   const handleToggleStar = async () => {
     if (!sessionId) return;
-    await fetch(`/api/chat/sessions/${sessionId}/star`, { method: 'PATCH' });
+    await api.patch(`/api/chat/sessions/${sessionId}/star`);
     fetchSessions();
   };
 
@@ -231,7 +225,7 @@ function ChatPage() {
     if (!sessionId || isSummarizing || messages.length < 4) return;
     setIsSummarizing(true);
     try {
-      const res = await fetch(`/api/chat/sessions/${sessionId}/summarize`, { method: 'POST' });
+      const res = await api.post(`/api/chat/sessions/${sessionId}/summarize`);
       const data = await res.json();
       if (data.summary) {
         setSummaryText(data.summary);
@@ -245,7 +239,7 @@ function ChatPage() {
 
   const handleViewSummary = async () => {
     if (summaryText) { setShowSummaryPanel(v => !v); return; }
-    const res = await fetch(`/api/chat/sessions/${sessionId}/summary`);
+    const res = await api.get(`/api/chat/sessions/${sessionId}/summary`);
     const data = await res.json();
     setSummaryText(data.summaryContent || '');
     setShowSummaryPanel(true);
@@ -256,7 +250,7 @@ function ChatPage() {
     if (totalContentSize > 150000) {
       if (!window.confirm('This is a very long conversation. Reverting may approach context limits. Continue?')) return;
     }
-    await fetch(`/api/chat/sessions/${sessionId}/summary`, { method: 'DELETE' });
+    await api.delete(`/api/chat/sessions/${sessionId}/summary`);
     setSummaryText('');
     setShowSummaryPanel(false);
     fetchSessions();
@@ -277,11 +271,7 @@ function ChatPage() {
   const handleBranch = async (messageIndex) => {
     if (!sessionId) return;
     try {
-      const res = await fetch(`/api/chat/sessions/${sessionId}/branch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messageIndex }),
-      });
+      const res = await api.post(`/api/chat/sessions/${sessionId}/branch`, { messageIndex });
       const data = await res.json();
       if (data.newSessionId) {
         loadHistory(data.newSessionId);

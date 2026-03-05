@@ -21,19 +21,15 @@ function ProjectSidebar({ onClose }) {
 
   useEffect(() => { fetchProjects(); }, []);
   useEffect(() => {
-    fetch('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
+    api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
   }, []);
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
-    await fetch('/api/folders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newFolderName.trim() }),
-    });
+    await api.post('/api/folders', { name: newFolderName.trim() });
     setNewFolderName('');
     setShowFolderInput(false);
-    fetch('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
+    api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
   };
 
   const toggleFolder = (folderId) => setCollapsedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));

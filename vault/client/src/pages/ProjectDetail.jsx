@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useProjectStore from '../store/projectStore';
+import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
@@ -41,9 +42,9 @@ function ProjectDetail() {
   useEffect(() => {
     fetchProjects();
     setActive(Number(id));
-    fetch('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
-    fetch('/api/personas').then(r => r.json()).then(setPersonas).catch(() => {});
-    fetch(`/api/pinned-urls/${id}`).then(r => r.json()).then(setPinnedUrls).catch(() => {});
+    api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
+    api.get('/api/personas').then(r => r.json()).then(setPersonas).catch(() => {});
+    api.get(`/api/pinned-urls/${id}`).then(r => r.json()).then(setPinnedUrls).catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -60,11 +61,7 @@ function ProjectDetail() {
     if (!urlInput.trim() || addingUrl) return;
     setAddingUrl(true);
     try {
-      const res = await fetch('/api/pinned-urls', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: Number(id), url: urlInput.trim() }),
-      });
+      const res = await api.post('/api/pinned-urls', { projectId: Number(id), url: urlInput.trim() });
       const data = await res.json();
       if (!data.error) { setPinnedUrls(prev => [...prev, data]); setUrlInput(''); }
     } finally {
@@ -73,7 +70,7 @@ function ProjectDetail() {
   };
 
   const handleRemovePinnedUrl = async (urlId) => {
-    await fetch(`/api/pinned-urls/${urlId}`, { method: 'DELETE' });
+    await api.delete(`/api/pinned-urls/${urlId}`);
     setPinnedUrls(prev => prev.filter(u => u.id !== urlId));
   };
 
