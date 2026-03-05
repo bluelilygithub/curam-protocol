@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import useProjectStore from '../store/projectStore';
+import api from '../utils/apiClient';
 
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -17,7 +18,7 @@ function FileCard({ file, onDelete, onChat, onTogglePin }) {
   const isImage = file.mimetype?.startsWith('image/');
 
   const handlePin = async () => {
-    const res = await fetch(`/api/files/${file.id}/pin`, { method: 'PATCH' });
+    const res = await api.patch(`/api/files/${file.id}/pin`);
     const data = await res.json();
     setPinned(data.pinned);
     onTogglePin && onTogglePin(file.id, data.pinned);
@@ -122,7 +123,7 @@ function FileList({ projectId }) {
 
   const fetchFiles = async () => {
     setLoading(true);
-    const res = await fetch(`/api/files/${projectId}`);
+    const res = await api.get(`/api/files/${projectId}`);
     const data = await res.json();
     setFiles(data);
     setLoading(false);
@@ -133,7 +134,7 @@ function FileList({ projectId }) {
   }, [projectId]);
 
   const handleDelete = async (id) => {
-    await fetch(`/api/files/${id}`, { method: 'DELETE' });
+    await api.delete(`/api/files/${id}`);
     setFiles((prev) => prev.filter((f) => f.id !== id));
   };
 

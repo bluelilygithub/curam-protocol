@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import useProjectStore from '../store/projectStore';
 import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from './NewProjectModal';
+import api from '../utils/apiClient';
 
 function ProjectSidebar({ onClose }) {
   const { projects, activeProjectId, fetchProjects, setActive, create, update } = useProjectStore();

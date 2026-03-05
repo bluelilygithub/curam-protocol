@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Brain, Trash2, Plus } from 'lucide-react';
+import api from '../utils/apiClient';
 
 function MemoryPage() {
   const [memories, setMemories] = useState([]);
@@ -7,7 +8,7 @@ function MemoryPage() {
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
-    const res = await fetch('/api/memory');
+    const res = await api.get('/api/memory');
     setMemories(await res.json());
   };
 
@@ -17,18 +18,14 @@ function MemoryPage() {
     e.preventDefault();
     if (!input.trim() || saving) return;
     setSaving(true);
-    await fetch('/api/memory', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: input.trim() }),
-    });
+    await api.post('/api/memory', { content: input.trim() });
     setInput('');
     setSaving(false);
     load();
   };
 
   const handleDelete = async (id) => {
-    await fetch(`/api/memory/${id}`, { method: 'DELETE' });
+    await api.delete(`/api/memory/${id}`);
     setMemories(prev => prev.filter(m => m.id !== id));
   };
 

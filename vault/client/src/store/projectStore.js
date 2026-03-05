@@ -1,11 +1,12 @@
 import { create } from 'zustand';
+import api from '../utils/apiClient';
 
 const useProjectStore = create((set, get) => ({
   projects: [],
   activeProjectId: null,
 
   fetchProjects: async () => {
-    const res = await fetch('/api/projects');
+    const res = await api.get('/api/projects');
     const projects = await res.json();
     set({ projects });
     return projects;
@@ -14,22 +15,14 @@ const useProjectStore = create((set, get) => ({
   setActive: (id) => set({ activeProjectId: id }),
 
   create: async (data) => {
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
+    const res = await api.post('/api/projects', data);
     const project = await res.json();
     set((s) => ({ projects: [project, ...s.projects] }));
     return project;
   },
 
   update: async (id, data) => {
-    const res = await fetch(`/api/projects/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
+    const res = await api.put(`/api/projects/${id}`, data);
     const project = await res.json();
     set((s) => ({
       projects: s.projects.map((p) => (p.id === id ? project : p)),
@@ -38,7 +31,7 @@ const useProjectStore = create((set, get) => ({
   },
 
   remove: async (id) => {
-    await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+    await api.delete(`/api/projects/${id}`);
     set((s) => ({
       projects: s.projects.filter((p) => p.id !== id),
       activeProjectId: s.activeProjectId === id ? null : s.activeProjectId,

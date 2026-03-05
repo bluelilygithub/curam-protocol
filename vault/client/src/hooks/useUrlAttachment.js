@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import api from '../utils/apiClient';
 
 export function useUrlAttachment() {
   const [urlAttachments, setUrlAttachments] = useState([]);
@@ -18,11 +19,7 @@ export function useUrlAttachment() {
     });
 
     try {
-      const res = await fetch('/api/fetch-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
-      });
+      const res = await api.post('/api/fetch-url', { url });
       const data = await res.json();
       setUrlAttachments(prev => prev.map(u =>
         u.url === url

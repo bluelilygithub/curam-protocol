@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import useAuthStore from '../store/authStore';
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -22,7 +23,12 @@ export function useFileAttachment(projectId) {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch(`/api/files/upload/${projectId}`, { method: 'POST', body: formData });
+      const token = useAuthStore.getState().token;
+      const res = await fetch(`/api/files/upload/${projectId}`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
       if (!res.ok) throw new Error('Upload failed');
       const record = await res.json();
 

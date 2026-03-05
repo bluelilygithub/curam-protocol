@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import api from '../utils/apiClient';
 
 export function useChat({ projectId }) {
   const [messages, setMessages] = useState([]);
@@ -26,22 +27,17 @@ export function useChat({ projectId }) {
     abortRef.current = controller;
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: newMessages,
-          projectId: projectId || undefined,
-          sessionId: sessionId || undefined,
-          attachmentIds: attachmentIds.length ? attachmentIds : undefined,
-          urlAttachments: urlAttachments.length ? urlAttachments : undefined,
-          model: model || undefined,
-          temperature,
-          personaId: personaId || undefined,
-          reasoning: reasoning || undefined,
-        }),
-        signal: controller.signal,
-      });
+      const res = await api.stream('/api/chat', {
+        messages: newMessages,
+        projectId: projectId || undefined,
+        sessionId: sessionId || undefined,
+        attachmentIds: attachmentIds.length ? attachmentIds : undefined,
+        urlAttachments: urlAttachments.length ? urlAttachments : undefined,
+        model: model || undefined,
+        temperature,
+        personaId: personaId || undefined,
+        reasoning: reasoning || undefined,
+      }, controller.signal);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -115,7 +111,7 @@ export function useChat({ projectId }) {
   const stopStreaming = useCallback(() => abortRef.current?.abort(), []);
 
   const loadHistory = useCallback(async (sid) => {
-    const res = await fetch(`/api/chat/history/${sid}`);
+    const res = await api.get(`/api/chat/history/${sid}`);
     const history = await res.json();
     setMessages(history.map((m) => ({ role: m.role, content: m.content, id: m.id })));
     setSessionId(sid);
@@ -128,11 +124,7 @@ export function useChat({ projectId }) {
 
   const deleteMessagePair = useCallback(async (startIndex) => {
     if (!sessionId) return;
-    await fetch('/api/chat/messages/pair', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, startIndex }),
-    });
+    await api.delete('/api/chat/messages/pair', { sessionId, startIndex });
     setMessages(prev => {
       const updated = [...prev];
       updated.splice(startIndex, 2);
@@ -160,13 +152,9 @@ export function useChat({ projectId }) {
     });
     // Delete from DB
     if (sessionId) {
-      const msgs = await fetch(`/api/chat/history/${sessionId}`).then(r => r.json());
+      const msgs = await api.get(`/api/chat/history/${sessionId}`).then(r => r.json());
       if (msgs.length >= 2) {
-        await fetch('/api/chat/messages/pair', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, startIndex: msgs.length - 2 }),
-        });
+        await api.delete('/api/chat/messages/pair', { sessionId, startIndex: msgs.length - 2 });
       }
     }
     // Re-send

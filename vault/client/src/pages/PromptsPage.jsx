@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BookOpen, Plus, Trash2, Copy, Check } from 'lucide-react';
+import api from '../utils/apiClient';
 
 function PromptsPage() {
   const [prompts, setPrompts] = useState([]);
@@ -10,7 +11,7 @@ function PromptsPage() {
   const [search, setSearch] = useState('');
 
   const load = async () => {
-    const res = await fetch('/api/prompts');
+    const res = await api.get('/api/prompts');
     setPrompts(await res.json());
   };
 
@@ -20,11 +21,7 @@ function PromptsPage() {
     e.preventDefault();
     if (!form.title.trim() || !form.content.trim() || saving) return;
     setSaving(true);
-    await fetch('/api/prompts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    await api.post('/api/prompts', form);
     setForm({ title: '', content: '', tags: '' });
     setShowForm(false);
     setSaving(false);
@@ -32,7 +29,7 @@ function PromptsPage() {
   };
 
   const handleDelete = async (id) => {
-    await fetch(`/api/prompts/${id}`, { method: 'DELETE' });
+    await api.delete(`/api/prompts/${id}`);
     setPrompts(prev => prev.filter(p => p.id !== id));
   };
 

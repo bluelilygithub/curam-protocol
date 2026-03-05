@@ -2,9 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import ProjectSidebar from './ProjectSidebar';
 import { useIcon } from '../providers/IconProvider';
+import useAuthStore from '../store/authStore';
 
 function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { token, clearAuth } = useAuthStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handler = () => setSidebarOpen(v => !v);
@@ -13,6 +16,15 @@ function Layout() {
   }, []);
   const getIcon = useIcon();
   const location = useLocation();
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    }).catch(() => {});
+    clearAuth();
+    navigate('/login', { replace: true });
+  };
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}>
@@ -114,6 +126,15 @@ function Layout() {
           >
             {getIcon('settings', { size: 16 })}
           </Link>
+
+          <button
+            onClick={handleLogout}
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: 'var(--color-muted)' }}
+            title="Sign out"
+          >
+            {getIcon('log-out', { size: 16 })}
+          </button>
         </header>
 
         {/* Page content */}

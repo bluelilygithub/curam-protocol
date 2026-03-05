@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useIcon } from '../providers/IconProvider';
+import api from '../utils/apiClient';
 
 function EmailModal({ sessionId, onClose }) {
   const [to, setTo] = useState('');
@@ -12,11 +13,7 @@ function EmailModal({ sessionId, onClose }) {
     if (!to.trim()) return;
     setStatus('sending');
     try {
-      const res = await fetch('/api/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, to, subject }),
-      });
+      const res = await api.post('/api/email', { sessionId, to, subject });
       const data = await res.json();
       if (data.ok) {
         setStatus('success');

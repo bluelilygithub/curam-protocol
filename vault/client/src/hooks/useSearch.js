@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import api from '../utils/apiClient';
 
 export function useSearch() {
   const [results, setResults] = useState([]);
@@ -14,7 +15,7 @@ export function useSearch() {
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const res = await api.get(`/api/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
         setResults(data);
       } catch {

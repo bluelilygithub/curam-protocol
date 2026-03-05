@@ -11,6 +11,8 @@ import MemoryPage from './pages/MemoryPage';
 import PromptsPage from './pages/PromptsPage';
 import UserGuidePage from './pages/UserGuidePage';
 import PersonasPage from './pages/PersonasPage';
+import LoginPage from './pages/LoginPage';
+import AuthGuard from './components/AuthGuard';
 import SearchPalette from './components/SearchPalette';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 
@@ -44,7 +46,9 @@ function App() {
           <SearchPalette />
           {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
           <Routes>
-            <Route element={<Layout />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<Navigate to="/login" replace />} />
+            <Route element={<AuthGuard><Layout /></AuthGuard>}>
               <Route index element={<ProjectList />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/projects/:id/chat" element={<ChatPage />} />

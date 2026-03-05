@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useIcon } from '../providers/IconProvider';
+import api from '../utils/apiClient';
 
 const BLANK = { name: '', description: '', systemPrompt: '' };
 
@@ -72,34 +73,26 @@ function PersonasPage() {
   const getIcon = useIcon();
 
   const fetchPersonas = async () => {
-    const res = await fetch('/api/personas');
+    const res = await api.get('/api/personas');
     setPersonas(await res.json());
   };
 
   useEffect(() => { fetchPersonas(); }, []);
 
   const handleCreate = async (form) => {
-    await fetch('/api/personas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    await api.post('/api/personas', form);
     setShowCreate(false);
     fetchPersonas();
   };
 
   const handleUpdate = async (id, form) => {
-    await fetch(`/api/personas/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    await api.put(`/api/personas/${id}`, form);
     setEditingId(null);
     fetchPersonas();
   };
 
   const handleDelete = async (id) => {
-    await fetch(`/api/personas/${id}`, { method: 'DELETE' });
+    await api.delete(`/api/personas/${id}`);
     fetchPersonas();
   };
 
