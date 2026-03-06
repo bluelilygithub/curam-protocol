@@ -56,7 +56,6 @@ function ProjectList() {
       {showModal && <NewProjectModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
 
       {projects.length === 0 ? (
-        /* Empty state */
         <div className="flex-1 flex flex-col items-center justify-center px-6 pb-16">
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5"
@@ -80,7 +79,6 @@ function ProjectList() {
           </button>
         </div>
       ) : (
-        /* Project grid */
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between mb-6">
@@ -123,38 +121,38 @@ function ProjectList() {
                     onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
                     className="w-full text-left p-4 rounded-xl"
                   >
-                  <div className="flex items-start justify-between mb-3">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center"
-                      style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}
-                    >
-                      {getIcon('folder', { size: 15 })}
+                    <div className="flex items-start justify-between mb-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center"
+                        style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}
+                      >
+                        {getIcon('folder', { size: 15 })}
+                      </div>
+                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {new Date(project.updatedAt).toLocaleDateString()}
+                      </span>
                     </div>
-                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                      {new Date(project.updatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <h3 className="font-medium text-sm mb-1 truncate" style={{ color: 'var(--color-text)' }}>
-                    {project.name}
-                  </h3>
-                  {project.goal ? (
-                    <p className="text-xs line-clamp-2" style={{ color: 'var(--color-muted)' }}>{project.goal}</p>
-                  ) : (
-                    <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>No description</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-2">
-                    {project.model && (
-                      <span className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.8 }}>
-                        {getModelShortName(project.model)}
-                      </span>
+                    <h3 className="font-medium text-sm mb-1 truncate" style={{ color: 'var(--color-text)' }}>
+                      {project.name}
+                    </h3>
+                    {project.goal ? (
+                      <p className="text-xs line-clamp-2" style={{ color: 'var(--color-muted)' }}>{project.goal}</p>
+                    ) : (
+                      <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>No description</p>
                     )}
-                    {project.chatCount > 0 && (
-                      <span className="text-xs ml-auto" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
-                        {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
-                      </span>
-                    )}
-                  </div>
-                </button>
+                    <div className="flex items-center gap-2 mt-2">
+                      {project.model && (
+                        <span className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.8 }}>
+                          {getModelShortName(project.model)}
+                        </span>
+                      )}
+                      {project.chatCount > 0 && (
+                        <span className="text-xs ml-auto" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
+                          {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
+                        </span>
+                      )}
+                    </div>
+                  </button>
                 </div>
               ))}
             </div>
