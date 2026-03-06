@@ -104,7 +104,7 @@ router.delete('/:id', (req, res) => {
   }
 
   db.prepare(`DELETE FROM projects WHERE id=?`).run(req.params.id);
-  db.prepare(`DELETE FROM search_index WHERE projectId=?`).run(String(req.params.id));
+  try { db.prepare(`DELETE FROM search_index WHERE projectId=?`).run(String(req.params.id)); } catch (e) {}
   res.json({ ok: true });
 });
 

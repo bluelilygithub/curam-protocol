@@ -1,6 +1,5 @@
 flask
 flask-compress>=1.14
-python-dotenv
 flask-wtf
 google-genai
 pdfplumber
@@ -21,6 +20,7 @@ opencv-python-headless>=4.8.0
 pytesseract>=0.3.10
 numpy>=1.24.0
 
+PyMuPDF
+
 # Optional: Streamlit for admin tools
 streamlit
-PyMuPDF

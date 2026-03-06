@@ -126,6 +126,8 @@ function ProjectSidebar({ onClose }) {
               <div
                 key={project.id}
                 className="group relative"
+                draggable
+                onDragStart={(e) => handleDragStart(e, project.id)}
                 onDragOver={(e) => handleDragOver(e, project.id)}
                 onDrop={(e) => handleDrop(e, project.id)}
                 onDragEnd={handleDragEnd}
@@ -134,16 +136,6 @@ function ProjectSidebar({ onClose }) {
                   borderLeft: dragOverId === project.id ? '2px solid var(--color-primary)' : '2px solid transparent',
                 }}
               >
-                <div
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, project.id)}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 cursor-grab opacity-0 group-hover:opacity-30 hover:!opacity-70 transition-opacity z-10 text-xs select-none"
-                  style={{ color: 'var(--color-muted)', lineHeight: 1 }}
-                  title="Drag to reorder"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {'\u28ff'}
-                </div>
                 {isRenaming ? (
                   <input
                     ref={renameInputRef}

@@ -125,7 +125,7 @@ db.exec(`
   );
 `);
 
-// Migrations — safe to run on existing DBs
+// Migrations ΓÇö safe to run on existing DBs
 ['ALTER TABLE projects ADD COLUMN sortOrder INTEGER DEFAULT 0',
  'ALTER TABLE projects ADD COLUMN model TEXT DEFAULT \'claude-sonnet-4-6\'',
  'ALTER TABLE projects ADD COLUMN projectType TEXT',
