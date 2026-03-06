@@ -6,11 +6,13 @@ import NewProjectModal from './NewProjectModal';
 import api from '../utils/apiClient';
 
 function ProjectSidebar({ onClose }) {
-  const { projects, activeProjectId, fetchProjects, setActive, create, update } = useProjectStore();
+  const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
+  const [draggedId, setDraggedId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const getIcon = useIcon();
@@ -33,6 +35,23 @@ function ProjectSidebar({ onClose }) {
   };
 
   const toggleFolder = (folderId) => setCollapsedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
+
+  const handleDragStart = (e, id) => { setDraggedId(id); e.dataTransfer.effectAllowed = 'move'; };
+  const handleDragOver = (e, id) => { e.preventDefault(); if (id !== draggedId) setDragOverId(id); };
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) return;
+    const ids = projects.map(p => p.id);
+    const from = ids.indexOf(draggedId);
+    const to = ids.indexOf(targetId);
+    const reordered = [...ids];
+    reordered.splice(from, 1);
+    reordered.splice(to, 0, draggedId);
+    reorder(reordered);
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+  const handleDragEnd = () => { setDraggedId(null); setDragOverId(null); };
 
   const handleCreate = async (data) => {
     const project = await create(data);
@@ -104,7 +123,27 @@ function ProjectSidebar({ onClose }) {
             const isActive = location.pathname.startsWith(`/projects/${project.id}`);
             const isRenaming = renamingId === project.id;
             return (
-              <div key={project.id} className="group relative">
+              <div
+                key={project.id}
+                className="group relative"
+                onDragOver={(e) => handleDragOver(e, project.id)}
+                onDrop={(e) => handleDrop(e, project.id)}
+                onDragEnd={handleDragEnd}
+                style={{
+                  opacity: draggedId === project.id ? 0.4 : 1,
+                  borderLeft: dragOverId === project.id ? '2px solid var(--color-primary)' : '2px solid transparent',
+                }}
+              >
+                <div
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, project.id)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 cursor-grab opacity-0 group-hover:opacity-30 hover:!opacity-70 transition-opacity z-10 text-xs select-none"
+                  style={{ color: 'var(--color-muted)', lineHeight: 1 }}
+                  title="Drag to reorder"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  ⠿
+                </div>
                 {isRenaming ? (
                   <input
                     ref={renameInputRef}
