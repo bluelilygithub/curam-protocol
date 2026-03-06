@@ -113,11 +113,13 @@ function ChatPage() {
     if (sessionId) { setSummaryText(''); setShowSummaryPanel(false); setSuggestions([]); }
   }, [sessionId]);
 
-  // Fetch follow-up suggestions after stream ends
+  // Fetch follow-up suggestions and refresh session/project lists after stream ends
   useEffect(() => {
     if (!isStreaming && sessionId && messages.length >= 2) {
       api.post('/api/chat/suggestions', { sessionId })
         .then(r => r.json()).then(d => setSuggestions(d.suggestions || [])).catch(() => {});
+      fetchSessions();
+      fetchProjects();
     } else if (isStreaming) {
       setSuggestions([]);
     }
