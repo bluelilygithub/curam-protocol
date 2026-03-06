@@ -30,6 +30,13 @@ const useProjectStore = create((set, get) => ({
     return project;
   },
 
+  reorder: async (orderedIds) => {
+    set((s) => ({
+      projects: orderedIds.map(id => s.projects.find(p => p.id === id)).filter(Boolean),
+    }));
+    await api.patch('/api/projects/reorder', { ids: orderedIds });
+  },
+
   remove: async (id) => {
     await api.delete(`/api/projects/${id}`);
     set((s) => ({

@@ -19,9 +19,21 @@ router.get('/', (req, res) => {
     FROM projects p
     LEFT JOIN messages m ON m.projectId = p.id
     GROUP BY p.id
-    ORDER BY p.updatedAt DESC
+    ORDER BY p.sortOrder ASC, p.updatedAt DESC
   `).all();
   res.json(projects);
+});
+
+// PATCH /api/projects/reorder
+router.patch('/reorder', (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ error: 'ids must be an array' });
+  const update = db.prepare('UPDATE projects SET sortOrder=? WHERE id=?');
+  const updateAll = db.transaction((ids) => {
+    ids.forEach((id, index) => update.run(index, id));
+  });
+  updateAll(ids);
+  res.json({ ok: true });
 });
 
 // POST /api/projects
