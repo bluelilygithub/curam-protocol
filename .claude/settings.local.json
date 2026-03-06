@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(python:*)",
+      "Bash(venv/Scripts/python:*)",
+      "Bash(curl:*)",
+      "Bash(npm install:*)",
+      "Bash(netstat:*)",
+      "Bash(dir C:\\\\Users\\\\micha\\\\Local Sites\\\\Curam-Protocol\\\\venv\\\\Scripts:*)",
+      "Bash(dir:*)",
+      "Bash(git:*)"
+    ]
+  }
+}

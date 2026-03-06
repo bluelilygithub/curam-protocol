@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 import os
 from flask import Flask, request, render_template, send_file, abort, redirect
 from flask_compress import Compress

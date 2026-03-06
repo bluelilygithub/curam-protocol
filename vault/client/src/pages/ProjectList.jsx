@@ -6,12 +6,44 @@ import NewProjectModal from '../components/NewProjectModal';
 import { getModelShortName } from '../utils/models';
 
 function ProjectList() {
-  const { projects, fetchProjects, create, setActive } = useProjectStore();
+  const { projects, fetchProjects, create, setActive, reorder } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
+  const [draggedId, setDraggedId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
   const navigate = useNavigate();
   const getIcon = useIcon();
 
   useEffect(() => { fetchProjects(); }, []);
+
+  const handleDragStart = (e, id) => {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e, id) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (id !== draggedId) setDragOverId(id);
+  };
+
+  const handleDrop = (e, targetId) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) return;
+    const ids = projects.map(p => p.id);
+    const from = ids.indexOf(draggedId);
+    const to = ids.indexOf(targetId);
+    const reordered = [...ids];
+    reordered.splice(from, 1);
+    reordered.splice(to, 0, draggedId);
+    reorder(reordered);
+    setDraggedId(null);
+    setDragOverId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverId(null);
+  };
 
   const handleCreate = async (data) => {
     const project = await create(data);
@@ -65,12 +97,32 @@ function ProjectList() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {projects.map((project) => (
-                <button
+                <div
                   key={project.id}
-                  onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
-                  className="text-left p-4 rounded-xl border transition-all hover:shadow-sm"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+                  onDragOver={(e) => handleDragOver(e, project.id)}
+                  onDrop={(e) => handleDrop(e, project.id)}
+                  onDragEnd={handleDragEnd}
+                  className="relative rounded-xl border transition-all hover:shadow-sm"
+                  style={{
+                    background: 'var(--color-surface)',
+                    borderColor: dragOverId === project.id ? 'var(--color-primary)' : 'var(--color-border)',
+                    opacity: draggedId === project.id ? 0.4 : 1,
+                  }}
                 >
+                  <div
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, project.id)}
+                    className="absolute top-3 right-3 p-1 rounded cursor-grab opacity-30 hover:opacity-70 transition-opacity z-10"
+                    style={{ color: 'var(--color-muted)', lineHeight: 1 }}
+                    title="Drag to reorder"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    ⠿
+                  </div>
+                  <button
+                    onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
+                    className="w-full text-left p-4 rounded-xl"
+                  >
                   <div className="flex items-start justify-between mb-3">
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center"

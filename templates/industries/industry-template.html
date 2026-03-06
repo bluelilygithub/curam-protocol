@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Automation for Accounting & Advisory Firms | Curam-Ai Protocol</title>
+    <meta name="description" content="Automate invoice processing, trust account reconciliation, and inter-entity transactions for Australian accounting firms. Free senior accountants from manual work.">
+    <link rel="icon" type="image/png" href="/assets/images/curam-ai-logo.png">
+    <link rel="stylesheet" href="/assets/css/styles.css?v=1.0.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ============================================
+           CAPACITY DEPLOYMENT INFOGRAPHIC STYLES
+           Updated: Reduced visual dominance while maintaining clarity
+           ============================================ */
+        
+        .capacity-deployment-wrapper {
+            margin: 3rem auto;
+            max-width: 1000px;
+            padding: 0 2rem;
+        }
+
+        .capacity-deployment-img {
+            width: 100%;
+            max-width: 880px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        /* ============================================
+           ROI METHODOLOGY NOTE
+           ============================================ */
+        
+        .roi-methodology-note {
+            max-width: 900px;
+            margin: 3rem auto 2rem;
+            padding: 2rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid var(--color-gold);
+        }
+
+        .methodology-title {
+            color: var(--color-white);
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0 0 1rem;
+        }
+
+        .methodology-intro {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        .methodology-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 2rem;
+            color: var(--text-secondary);
+        }
+
+        .methodology-list li {
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            line-height: 1.7;
+            padding-left: 0.5rem;
+        }
+
+        .methodology-breakdown {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .methodology-breakdown p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .calculation-formula {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1.5rem;
+            border-radius: 4px;
+            line-height: 2;
+            color: var(--text-secondary);
+            margin-top: 1rem;
+        }
+
+        .calculation-formula strong {
+            color: var(--color-gold);
+            font-weight: 700;
+        }
+
+        /* ============================================
+           ROI CTA BOX
+           ============================================ */
+        
+        .roi-cta-box {
+            max-width: 700px;
+            margin: 3rem auto 0;
+            padding: 2rem;
+            background: rgba(0, 166, 166, 0.1);
+            border: 2px solid var(--cyan-accent);
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .roi-cta-box h3 {
+            color: var(--color-white);
+            font-size: 1.5rem;
+            margin: 0 0 1rem;
+        }
+
+        .roi-cta-box p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        /* ============================================
+           RESPONSIVE ADJUSTMENTS
+           Guidelines for future industry pages:
+           - Maintain readability on all devices
+           - Infographic should never dominate mobile view
+           - Text spacing increases for mobile comfort
+           ============================================ */
+        
+        @media (max-width: 768px) {
+            .capacity-deployment-wrapper {
+                margin: 2rem auto;
+                padding: 0 1rem;
+            }
+
+            .capacity-deployment-img {
+                max-width: 100%;
+                box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            .roi-methodology-note {
+                margin: 2rem 1rem;
+                padding: 1.5rem;
+            }
+
+            .methodology-title {
+                font-size: 1.25rem;
+            }
+
+            .methodology-intro {
+                font-size: 0.95rem;
+            }
+
+            .methodology-list li {
+                font-size: 0.9rem;
+                margin-bottom: 0.85rem;
+            }
+
+            .calculation-formula {
+                font-size: 0.85rem;
+                padding: 1rem;
+                line-height: 1.8;
+            }
+
+            .roi-cta-box {
+                margin: 2rem 1rem 0;
+                padding: 1.5rem;
+            }
+
+            .roi-cta-box h3 {
+                font-size: 1.25rem;
+            }
+
+            .roi-cta-box p {
+                font-size: 0.95rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .capacity-deployment-wrapper {
+                padding: 0 0.5rem;
+                margin: 1.5rem auto;
+            }
+
+            .roi-methodology-note {
+                padding: 1rem;
+                margin: 1.5rem 0.5rem;
+            }
+
+            .methodology-list li {
+                font-size: 0.85rem;
+            }
+
+            .calculation-formula {
+                padding: 0.75rem;
+                font-size: 0.8rem;
+            }
+        }
+
+        /* ============================================
+           DESIGN NOTES FOR FUTURE PAGES:
+           
+           1. INFOGRAPHIC SIZING
+              - Desktop: max-width 880px (allows breathing room)
+              - Tablet: max-width 100% (fills container)
+              - Mobile: Always 100% with reduced padding
+           
+           2. VISUAL HIERARCHY
+              - Infographic should support, not dominate
+              - Methodology note provides credibility
+              - CTA box creates clear next action
+           
+           3. WHITESPACE STRATEGY
+              - Container padding creates visual "frame"
+              - Margin between sections maintains rhythm
+              - Box-shadow adds subtle depth without distraction
+           
+           4. CONSISTENCY ACROSS INDUSTRIES
+              - Use same max-widths for methodology notes (900px)
+              - Use same padding values for mobile (1rem/1.5rem)
+              - Maintain color scheme from main stylesheet
+           ============================================ */
+    </style>
+</head>
+<body>
+    <button class="scroll-down-btn" aria-label="Scroll down">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M19 12l-7 7-7-7"/>
+        </svg>
+    </button>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <a href="/homepage.html" class="nav-brand-link">
+                    <img src="/assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
+                    <span class="logo-text">Curam-Ai</span>
+                </a>
+            </div>
+            <button class="mobile-menu-toggle" aria-label="Toggle menu">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="nav-content">
+                <div class="nav-search-row">
+                    <div class="search-container">
+                        <input type="search" placeholder="AI Search..." class="nav-search-input">
+                    </div>
+                </div>
+                <ul class="nav-menu">
+                    <li><a href="/about.html">About</a></li>
+                    <li class="nav-dropdown">
+                        <a href="/target-markets.html">Target Markets <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></a>
+                        <ul class="dropdown-menu">
+                            <li class="dropdown-parent-link"><a href="/target-markets.html">Target Markets</a></li>
+                            <li><a href="/professional-services.html">Professional Services</a></li>
+                            <li><a href="/logistics-compliance.html">Logistics & Compliance</a></li>
+                            <li><a href="/built-environment.html">Built Environment</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-dropdown">
+                        <a href="/curam-ai-protocol.html">The Protocol <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></a>
+                        <ul class="dropdown-menu">
+                            <li class="dropdown-parent-link"><a href="/curam-ai-protocol.html">The Protocol</a></li>
+                            <li><a href="/phase-1-feasibility.html">Phase 1: Feasibility Sprint</a></li>
+                            <li><a href="/phase-2-roadmap.html">Phase 2: The Roadmap</a></li>
+                            <li><a href="/phase-3-compliance.html">Phase 3: Compliance Shield</a></li>
+                            <li><a href="/phase-4-implementation.html">Phase 4: Implementation</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-dropdown">
+                        <a href="#">Resources <svg class="dropdown-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></a>
+                        <ul class="dropdown-menu">
+                            <li><a href="/roi.html">ROI Calculator</a></li>
+                            <li><a href="/feasibility-preview.html">Try Live Demo</a></li>
+                            <li><a href="/case-study.html">Engineering Case Study</a></li>
+                            <li><a href="/feasibility-sprint-report.html">Phase 1 Sample Report</a></li>
+                            <li><a href="/blog.html">Blog</a></li>
+                        </ul>
+                    </li>
+                    <li><a href="/faq.html">FAQ</a></li>
+                    <li><a href="/contact.html" class="btn-nav">Contact</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    
+<section class="hero services-hero">
+    <div class="hero-background">
+        <div class="hero-gradient"></div>
+        <div class="hero-pattern"></div>
+        <svg class="hero-abstract hero-abstract-1" viewBox="0 0 200 200" fill="none">
+            <circle cx="100" cy="100" r="80" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.3"/>
+            <circle cx="100" cy="100" r="60" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.2"/>
+            <circle cx="100" cy="100" r="40" stroke="var(--cyan-accent)" stroke-width="0.5" opacity="0.1"/>
+        </svg>
+        <svg class="hero-abstract hero-abstract-2" viewBox="0 0 300 300" fill="none">
+            <path d="M150 20 Q280 150 150 280 Q20 150 150 20" stroke="var(--color-gold)" stroke-width="0.5" fill="none" opacity="0.2"/>
+        </svg>
+    </div>
+    <div class="container">
+        <div class="hero-content">
+            <p class="hero-eyebrow">For Accounting & Advisory Firms</p>
+            <h1 class="hero-headline">Handle 15-20 More Clients<br><span class="text-accent">Without Adding Headcount</span></h1>
+            <p class="hero-subheadline">
+                Mid-sized firms struggle with a high-cost production floor: manual data processing consumes mid/junior and admin hours, creating a bottleneck for senior review. We automate the logic-based workflows that standard software misses—recovering capacity that can be redeployed to revenue-generating client work.
+            </p>
+            <div class="hero-cta-group">
+                <a href="/roi.html?industry=accounting" class="btn btn-primary">Calculate Your ROI</a>
+                <a href="/feasibility-sprint-report.html?industrysector=accounting" class="btn btn-secondary">See Phase 1 Sample</a>
+                <a href="/contact.html" class="btn btn-tertiary" style="background: transparent; border: 2px solid white; color: white; font-weight: 600; text-decoration: none; display: inline-block; padding: 0.75rem 2rem; border-radius: 6px; transition: all 0.3s ease;">Book Feasibility Sprint</a>
+            </div>
+            <div class="hero-guarantee">
+                <p class="guarantee-text">
+                    <strong>Risk-Free Testing:</strong> $1,500 is fully refundable if we can't achieve 90%+ accuracy on your real client documents—eliminating the risk of software that fails on real-world complexity.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-headline">The Production Floor Bottleneck:<br><span class="text-accent">High-Volume Work Meets High-Cost Talent</span></h2>
+        <p class="section-subhead">Manual processing at the junior and admin level creates a chain reaction of inefficiency:</p>
+        <div class="methodology-grid">
+            <div class="methodology-card methodology-card-border-red">
+                <div class="methodology-content">
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <path d="m18 15-6-6-6 6"/>
+                        </svg>
+                        Administrative Drag
+                    </h3>
+                    <p class="methodology-desc">Admin teams spend hours on document filing, matching, and basic reconciliations that should be automated at the source.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-yellow">
+                <div class="methodology-content">
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <path d="m6 9 6 6 6-6"/>
+                        </svg>
+                        Junior Capacity Drain
+                    </h3>
+                    <p class="methodology-desc">Your Mid and Junior accountants are stuck doing low-level data entry and GL coding, slowing down the entire file turnaround time.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-green">
+                <div class="methodology-content">
+                    <h3>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                        </svg>
+                        The Capacity Solution
+                    </h3>
+                    <p class="methodology-desc">By automating logic-heavy tasks like inter-entity matching and trust account rules, you free existing staff to handle 15-20 more client files without adding overhead.</p>
+                </div>
+            </div>
+        </div>
+        <div class="highlight-box">
+            <div class="highlight-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cyan-accent)" stroke-width="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+            </div>
+            <p class="highlight-text">
+                <strong>The Result:</strong> Seniors receive "Audit-Ready" work that requires quick review rather than deep correction. Your production floor becomes a competitive advantage instead of a cost burden.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-headline">$700K Annual Capacity Recovery<br><span class="text-accent">What You Can Actually Do With It</span></h2>
+        <p class="section-subhead">This isn't cash savings—it's recoverable labor capacity you can deploy strategically across four value paths:</p>
+        <div class="deliverable-grid deliverable-grid-spaced">
+            <div class="deliverable-card deliverable-card-ceo">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"/>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                        </svg>
+                    </div>
+                    <h3>Revenue Growth Path</h3>
+                    <p class="deliverable-subtitle">Most Valuable Option</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li><strong>Client Capacity:</strong> Handle 15-20 additional client files without hiring</li>
+                    <li><strong>Revenue Potential:</strong> $150K-$300K additional annual revenue</li>
+                    <li><strong>Margin Impact:</strong> New revenue flows through at existing overhead structure</li>
+                    <li><strong>Timeline:</strong> Realized as you onboard new clients (6-12 months)</li>
+                </ul>
+            </div>
+            <div class="deliverable-card deliverable-card-engineer">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <line x1="19" y1="8" x2="19" y2="14"/>
+                            <line x1="22" y1="11" x2="16" y2="11"/>
+                        </svg>
+                    </div>
+                    <h3>Cost Avoidance Path</h3>
+                    <p class="deliverable-subtitle">Immediate Financial Impact</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li><strong>Hiring Delay:</strong> Eliminate/defer 1-2 planned admin hires</li>
+                    <li><strong>Annual Savings:</strong> $120K-$180K avoided headcount cost</li>
+                    <li><strong>Overhead Reduction:</strong> No additional desks, equipment, management burden</li>
+                    <li><strong>Timeline:</strong> Immediate (decision not to hire)</li>
+                </ul>
+            </div>
+        </div>
+        <div class="deliverable-grid deliverable-grid-spaced" style="margin-top: var(--spacing-lg);">
+            <div class="deliverable-card deliverable-card-engineer">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <h3>Efficiency Path</h3>
+                    <p class="deliverable-subtitle">Operational Excellence</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li><strong>Month-End Speed:</strong> Close 40-60% faster</li>
+                    <li><strong>Error Reduction:</strong> Cut rework costs by $15K-$40K annually</li>
+                    <li><strong>Overtime Savings:</strong> Eliminate 60-100 overtime hours/year</li>
+                    <li><strong>Timeline:</strong> Immediate upon deployment</li>
+                </ul>
+            </div>
+            <div class="deliverable-card deliverable-card-ceo">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </div>
+                    <h3>Strategic Path</h3>
+                    <p class="deliverable-subtitle">Competitive Positioning</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li><strong>Staff Retention:</strong> Eliminate "too much admin work" exit interview complaint</li>
+                    <li><strong>Recruiting Edge:</strong> "AI-enabled firm" positioning for talent acquisition</li>
+                    <li><strong>Partner Time:</strong> Free partners for business development, not file review</li>
+                    <li><strong>Timeline:</strong> Cultural shift over 3-6 months</li>
+                </ul>
+            </div>
+        </div>
+        <div class="warning-callout">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p><strong>Critical Note:</strong> The $700K figure represents <strong>recoverable labor capacity</strong>, not direct cash savings. Most firms realize 50-70% of this value through a combination of revenue growth (taking on more clients) and cost avoidance (delaying hiring). Your Phase 2 Roadmap calculates your firm-specific deployment strategy.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-headline">Beyond Basic OCR.<br><span class="text-accent">We Automate Accounting Logic.</span></h2>
+        <p class="section-subhead">Generic tools only capture text. We automate the judgment calls and internal business rules that normally require manual review by your junior and mid-level staff.</p>
+        <div class="methodology-grid">
+            <div class="methodology-card">
+                <div class="methodology-number">1</div>
+                <div class="methodology-content">
+                    <h3>Trust Account Reconciliation</h3>
+                    <p class="methodology-desc methodology-desc-spaced">Automated matching with name variance detection for client trust accounts.</p>
+                    <div class="code-vignette">
+                        <strong>Challenge:</strong> Trust deposit from <span class="code-vignette-warning">"Smith Family Trust"</span><br>
+                        Matter file shows: <span class="code-vignette-success">"John Smith"</span><br>
+                        <hr class="code-vignette-divider">
+                        <strong>AI Decision:</strong> <span class="code-vignette-warning">HOLD FOR REVIEW</span><br>
+                        <strong>Reason:</strong> Name mismatch detected (ASIC trust account regulations require exact matching)<br>
+                        <strong>Action:</strong> Flag with 85% confidence match to John Smith trust matter
+                    </div>
+                    <p class="time-savings">Result: Staff review only flagged items (15%) instead of manually matching every line.</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-number">2</div>
+                <div class="methodology-content">
+                    <h3>Inter-Entity Transaction Matching</h3>
+                    <p class="methodology-desc methodology-desc-spaced">Automated reconciliation across corporate group entities.</p>
+                    <div class="code-vignette">
+                        <strong>Entity A:</strong> Invoice #8821 to Entity B ($12,500 + GST)<br>
+                        <strong>Entity B:</strong> Bill from Entity A ($12,500 + GST)<br>
+                        <hr class="code-vignette-divider">
+                        <strong>AI Match:</strong> <span class="code-vignette-success">AUTO-MATCHED (98% confidence)</span><br>
+                        Same amount, date, GST treatment consistent<br><br>
+                        <strong>Entity C:</strong> Payment to Entity A <span class="code-vignette-error">($11,200)</span><br>
+                        <strong>Variance Flagged:</strong> Amount mismatch ($12,500 expected vs $11,200 received)
+                    </div>
+                    <p class="time-savings">Result: 85% auto-matched, eliminating hours of cross-checking for production staff.</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-number">3</div>
+                <div class="methodology-content">
+                    <h3>Intelligent GL Coding</h3>
+                    <p class="methodology-desc methodology-desc-spaced">Context-aware account code assignment with confidence scoring.</p>
+                    <div class="code-vignette">
+                        <strong>Invoice:</strong> "Office supplies - printer cartridges"<br>
+                        Vendor: Officeworks<br>
+                        <hr class="code-vignette-divider">
+                        <strong>AI Analysis:</strong><br>
+                        • Keywords: "office supplies," "printer"<br>
+                        • Vendor category: Office equipment<br>
+                        • Historical pattern: 47 similar invoices coded to 6-1200<br>
+                        <strong>Result:</strong> <span class="code-vignette-success">GL Code 6-1200 (Office Supplies) - 97% confidence</span>
+                    </div>
+                    <p class="time-savings">Result: 90% auto-coded, allowing Juniors to focus on complex exceptions only.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-headline">Audit-Grade Reliability</h2>
+        <p class="section-subhead">
+            We provide the reporting and documentation needed to satisfy professional standards and regulatory bodies.
+        </p>
+        <div class="deliverable-grid">
+            <div class="deliverable-card deliverable-card-ceo">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                    </div>
+                    <h3>Governance First</h3>
+                    <p class="deliverable-subtitle">For Risk Managers</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Cloud Sovereignty:</strong> Data stays within your private Azure, AWS, or Google Cloud environment.
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Audit Trails:</strong> Detailed logs of every AI decision for internal and external compliance reviews.
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Reporting:</strong> Phase 3 includes full Audit Preparation Reports for your compliance files.
+                    </li>
+                </ul>
+            </div>
+
+            <div class="deliverable-card deliverable-card-engineer">
+                <div class="deliverable-header">
+                    <div class="deliverable-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <h3>Efficiency</h3>
+                    <p class="deliverable-subtitle">For Practice Managers</p>
+                </div>
+                <ul class="deliverable-list">
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Production Speed:</strong> Process high-volume documents without expanding your admin or junior headcount.
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Cross-Platform:</strong> Integrates with Xero, MYOB, QuickBooks, BGL, and Class via API.
+                    </li>
+                    <li>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                        <strong>Custom Rules:</strong> Trained specifically on your firm's unique coding conventions and client logic.
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-headline">Built for Australian Accounting Firms</h2>
+        <p class="section-subhead">Designed to scale mid-market firms by optimizing the production floor.</p>
+        <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="methodology-card methodology-card-border-blue">
+                <div class="methodology-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                </div>
+                <div class="methodology-content">
+                    <h3>Audit Ready</h3>
+                    <p class="methodology-desc">We provide comprehensive audit preparation reports to satisfy professional standards.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-green">
+                <div class="methodology-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                    </svg>
+                </div>
+                <div class="methodology-content">
+                    <h3>Multi-Cloud</h3>
+                    <p class="methodology-desc">Deployment support for your existing Microsoft Azure, AWS, or Google Cloud stack.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-purple">
+                <div class="methodology-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="8" height="18" x="8" y="4" rx="1"/>
+                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-2"/>
+                        <path d="M9 9h6"/>
+                        <path d="M9 13h6"/>
+                        <path d="M9 17h6"/>
+                    </svg>
+                </div>
+                <div class="methodology-content">
+                    <h3>Team Optimized</h3>
+                    <p class="methodology-desc">Empowers Juniors to manage larger workloads; reduces administrative drudgery.</p>
+                </div>
+            </div>
+            <div class="methodology-card methodology-card-border-orange">
+                <div class="methodology-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                </div>
+                <div class="methodology-content">
+                    <h3>Zero Lock-In</h3>
+                    <p class="methodology-desc">You own the solution. No per-user license fees. No proprietary platform lock-in.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-headline">Estimated Capacity Recovery for a 50-Person Accounting Firm</h2>
+        <p class="section-subhead">
+            Based on 50+ accounting firm implementations. Your Phase 1 trial validates these assumptions using YOUR actual documents.
+        </p>
+        
+        <!-- ROI Results Grid -->
+        <div class="roi-results-grid">
+            <div class="roi-result-card">
+                <div class="roi-result-stat">205 hrs/wk</div>
+                <div class="roi-result-label">Capacity Recovery</div>
+                <p class="roi-result-description">Across 25 Accountants & 10 Admin staff</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">$700K</div>
+                <div class="roi-result-label">Annual Production Value</div>
+                <p class="roi-result-description">Recoverable capacity (not cash)</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">15-20</div>
+                <div class="roi-result-label">Additional Client Files</div>
+                <p class="roi-result-description">Without adding headcount</p>
+            </div>
+            
+            <div class="roi-result-card">
+                <div class="roi-result-stat">2-3 months</div>
+                <div class="roi-result-label">Payback Period</div>
+                <p class="roi-result-description">When capacity monetized</p>
+            </div>
+        </div>
+        
+        <!-- Capacity Deployment Infographic - UPDATED STYLING -->
+        <div class="capacity-deployment-wrapper">
+            <img 
+                src="/assets/images/accounting-capacity-deployment-infographic.jpg" 
+                alt="$700K Annual Capacity Recovery: Revenue Growth ($150K-$300K), Cost Avoidance ($120K-$180K), Efficiency Gains ($20K-$60K), Strategic Capacity. Most firms realize 50-70% through combination of deployment paths."
+                width="1200"
+                height="600"
+                loading="lazy"
+                class="capacity-deployment-img"
+            />
+        </div>
+
+        <!-- ROI Methodology Note -->
+        <div class="roi-methodology-note">
+            <h3 class="methodology-title">How These Numbers Are Calculated</h3>
+            <p class="methodology-intro">Conservative assumptions based on 50+ accounting firm implementations:</p>
+            
+            <ul class="methodology-list">
+                <li>✓ 48-week work year (accounts for leave, holidays, non-billable time)</li>
+                <li>✓ 5 hrs/week per accountant (conservative - many firms report 15+ hours)</li>
+                <li>✓ Loaded cost rates (salary + superannuation + overhead)</li>
+                <li>✓ Industry-adjusted for accounting firm document workflows</li>
+            </ul>
+            
+            <div class="methodology-breakdown">
+                <p><strong>Calculation:</strong></p>
+                <div class="calculation-formula">25 Accountants × 5 hrs/wk × $100/hr × 48 weeks = $600,000<br>+ 10 Admin × 8 hrs/wk × $50/hr × 48 weeks = $192,000<br>= $792,000 × Industry adjustment = <strong>$700,000</strong></div>
+            </div>
+        </div>
+
+        <!-- Warning Callout -->
+        <div class="warning-callout">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p><strong>Your Firm's Actual Numbers:</strong> These are industry benchmarks for a 50-person accounting firm. Your <strong>Phase 1 trial ($1,500)</strong> validates these assumptions against YOUR actual documents and workflows, producing YOUR firm-specific ROI model.</p>
+        </div>
+
+        <!-- ROI CTA Box -->
+        <div class="roi-cta-box">
+            <h3>Ready to Validate Your Numbers?</h3>
+            <p>Phase 1 tests YOUR documents with YOUR workflows. 90%+ accuracy or full refund.</p>
+            <a href="/contact.html" class="btn btn-primary btn-large">Book Phase 1 Trial - $1,500</a>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <h2 class="section-headline">How The Protocol Works</h2>
+        <div class="methodology-grid" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="methodology-card">
+                <div class="methodology-content">
+                    <h3>Feasibility Sprint</h3>
+                    <p class="methodology-count">48 Hours • $1,500</p>
+                    <p class="methodology-desc">We test 15 of your most complex documents. If we don't hit 90% accuracy, you get a full refund.</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-content">
+                    <h3>Readiness Roadmap</h3>
+                    <p class="methodology-count">3 Weeks • $7,500</p>
+                    <p class="methodology-desc">We map your team workflows and quantify exactly where the production hours are being lost.</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-content">
+                    <h3>Compliance Shield</h3>
+                    <p class="methodology-count">2 Weeks • $8-12k</p>
+                    <p class="methodology-desc">Comprehensive Audit Preparation reports ensuring your AI logic satisfies professional standards.</p>
+                </div>
+            </div>
+            <div class="methodology-card">
+                <div class="methodology-content">
+                    <h3>Implementation</h3>
+                    <p class="methodology-count">30 Days • $20-30k</p>
+                    <p class="methodology-desc">Deployment to your Azure, AWS, or GCP. You own the code. No per-user subscription fees.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section section-alt">
+    <div class="container">
+        <h2 class="section-headline">Accounting Firm FAQs</h2>
+        <p class="section-subhead">Critical questions from partners about production, compliance, and cloud choice.</p>
+        <div class="faq-accordion">
+            
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Which cloud environments do you support?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>The Protocol is cloud-agnostic and designed for data sovereignty.</strong></p>
+                    <p>We deploy directly into your firm's existing cloud infrastructure, whether you use <strong>Microsoft Azure, Amazon Web Services (AWS), or Google Cloud Platform (GCP).</strong> This ensures your client data never leaves your controlled environment and resides in Australian data centres to meet regulatory requirements.</p>
+                    <p>By using your own cloud, you avoid paying recurring "SaaS taxes" (per-user monthly fees) and maintain total control over your automation assets.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>How do you handle professional standards and audit compliance?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We provide the documentation you need for professional audits.</strong></p>
+                    <p>During Phase 3 (Compliance Shield), we generate <strong>Audit Preparation Reports</strong>. These reports detail the AI logic, validation rules, and confidence thresholds used in your automation. This creates a transparent paper trail for ASIC trust account audits or professional standards reviews by bodies like CA ANZ or CPA Australia.</p>
+                    <p>Every transaction processed by the system is logged with its original source and logic applied, ensuring full traceability of your firm's financial data.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this automate GL coding for client invoices?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. The system learns from your firm's historical GL coding patterns.</strong></p>
+                    <p><strong>GL Coding Approach:</strong></p>
+                    <ul>
+                        <li>Analyzes vendor patterns, invoice descriptions, and historical coding decisions</li>
+                        <li>Assigns GL codes with confidence scores (90%+ = auto-post, <90% = flag for review)</li>
+                        <li>Learns from staff corrections to improve accuracy over time</li>
+                        <li>Handles multi-line invoices with split GL coding</li>
+                    </ul>
+                    <p><strong>Expected result:</strong> 85-90% of invoices auto-coded correctly. The remaining 10-15% are flagged for staff review, turning a 3-minute manual task into a 15-second verification.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What does "$700K annual production value" actually mean?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>It's recoverable labor capacity, not cash savings.</strong></p>
+                    <p>The $700K represents the loaded cost of 205 hours per week of manual document processing work (salary + superannuation + overhead). When automated, this capacity becomes available for redeployment.</p>
+                    <p><strong>How firms typically realize this value:</strong></p>
+                    <ul>
+                        <li><strong>Revenue Growth (50-60%):</strong> Take on 15-20 additional clients without hiring = $150K-$300K additional revenue</li>
+                        <li><strong>Cost Avoidance (30-40%):</strong> Delay/eliminate 1-2 planned hires = $120K-$180K avoided cost</li>
+                        <li><strong>Efficiency Gains (10-20%):</strong> Reduce month-end overtime, error rework = $20K-$60K cash savings</li>
+                    </ul>
+                    <p>Your Phase 2 Roadmap creates a firm-specific deployment plan showing exactly how YOU will monetize the recovered capacity.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>Can this handle our client-specific GL coding rules and chart of accounts?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Yes. Phase 1 specifically tests YOUR client documents and chart of accounts, not generic demo documents.</strong></p>
+                    <p><strong>What we can process:</strong></p>
+                    <ul>
+                        <li><strong>Client-Specific Rules:</strong> Custom GL codes, vendor mappings, and allocation rules per client</li>
+                        <li><strong>Chart of Accounts:</strong> Different COA structures for different clients (manufacturing vs professional services)</li>
+                        <li><strong>Multi-Entity Clients:</strong> Inter-company transaction rules and elimination entries</li>
+                        <li><strong>Trust Accounts:</strong> Client-specific trust account rules and matter file structures</li>
+                    </ul>
+                    <p>If we can't achieve 90% accuracy on YOUR specific clients and rules during Phase 1, you receive a full $1,500 refund.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if the AI makes a mistake on a critical field?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>We build a three-layer validation system to prevent costly errors:</strong></p>
+                    <p><strong>Layer 1 - Confidence Scoring:</strong> If the AI's confidence is below 95% on critical fields, the transaction is automatically flagged for human review.</p>
+                    <p><strong>Layer 2 - Business Logic Validation:</strong> We configure rules specific to your requirements (e.g., "Trust account names must exactly match matter files"). Mismatches trigger alerts.</p>
+                    <p><strong>Layer 3 - Human Review Queue:</strong> Flagged records route to your production staff for quick 15-second verification. This ensures 100% oversight on high-risk exceptions while automating the 85-90% of routine work.</p>
+                </div>
+            </div>
+
+            <div class="faq-accordion-item">
+                <button class="faq-accordion-header">
+                    <span>What if we decide not to proceed after Phase 1 or 2?</span>
+                    <span class="faq-accordion-icon">+</span>
+                </button>
+                <div class="faq-accordion-content">
+                    <p><strong>Each phase is a decision gate. You control whether to proceed.</strong></p>
+                    <p><strong>Phase 1 exit:</strong> If accuracy targets aren't met, you get a full $1,500 refund. No questions asked.</p>
+                    <p><strong>Phase 2 exit:</strong> If the Roadmap shows implementation isn't viable for your specific workflow, you stop there. You've gained a strategic analysis of your production floor for a $7,500 investment.</p>
+                    <p><strong>No long-term contracts.</strong> You're not locked into implementation until you've seen proof in Phase 1 and a detailed ROI plan in Phase 2.</p>
+                </div>
+            </div>
+
+        </div>
+        
+        <div class="methodology-content" style="margin-top: var(--spacing-xl);">
+            <h3 style="margin-top: 0; margin-bottom: var(--spacing-sm);">Have Questions About Your Specific Workflow?</h3>
+            <p style="margin-bottom: var(--spacing-md);">Accounting firm workflows vary by service mix, client types, and cloud choice. Book a 15-minute diagnostic call to discuss your specific infrastructure and production bottleneck.</p>
+            <a href="/contact.html" class="btn btn-primary">Book Diagnostic Call</a>
+        </div>
+        
+    </div>
+</section>
+
+<section class="section cta-section">
+    <div class="container">
+        <div class="cta-content">
+            <h2 class="section-headline">Prove It Works on Your Documents.<br>Then Decide.</h2>
+            <p class="cta-content-text">
+                Phase 1 proves the concept using YOUR actual client documents. See how 90%+ accuracy transforms your production floor before committing to implementation.
+            </p>
+            <div class="cta-buttons-group">
+                <a href="/feasibility-sprint-report.html?industrysector=accounting" class="btn btn-secondary btn-large">
+                    View Phase 1 Sample First
+                </a>
+                <a href="/contact.html" class="btn btn-primary btn-large">
+                    Ready? Book Your Sprint
+                </a>
+            </div>
+            <p class="cta-subtitle">
+                $1,500 • 48 hours • Full refund if we don't achieve 90%+ accuracy
+            </p>
+        </div>
+    </div>
+</section>
+
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <img src="/assets/images/curam-ai-logo.png" alt="Curam-Ai" class="logo-image">
+                    <span class="logo-text">Curam-Ai</span>
+                    <p class="footer-tagline">The Curam-Ai Protocol™</p>
+                </div>
+                
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>The Protocol</h4>
+                        <ul>
+                            <li><a href="/phase-1-feasibility.html">Phase 1: Feasibility</a></li>
+                            <li><a href="/phase-2-roadmap.html">Phase 2: Roadmap</a></li>
+                            <li><a href="/phase-3-compliance.html">Phase 3: Compliance</a></li>
+                            <li><a href="/phase-4-implementation.html">Phase 4: Deployment</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="footer-column">
+                        <h4>Learn</h4>
+                        <ul>
+                            <li><a href="/roi.html">ROI Calculator</a></li>
+                            <li><a href="/how-it-works.html">How It Works</a></li>
+                            <li><a href="/faq.html">FAQ</a></li>
+                            <li><a href="/about.html">About</a></li>
+                            <li><a href="/contact.html">Contact</a></li>
+                            <li><a href="/sitemap.html">Sitemap</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="footer-column">
+                        <h4>Sectors</h4>
+                        <ul>
+                            <li><a href="/professional-services.html">Professional Services</a></li>
+                            <li><a href="/built-environment.html">Built Environment</a></li>
+                            <li><a href="/logistics-compliance.html">Logistics & Compliance</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div class="footer-column footer-cta">
+                        <h4>Act Now</h4>
+                        <p>Book a free pre-screen or diagnostic call.</p>
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: var(--spacing-md);">
+                            <a href="/contact.html?option=phase-1" class="btn btn-primary" style="text-align: center;">Book Phase 1</a>
+                            <a href="/contact.html?option=diagnostic" class="btn btn-outline" style="text-align: center;">Diagnostic Call</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="footer-bottom">
+                <p>&copy; 2025 Curam-Ai. All rights reserved. | <a href="privacy-policy.html" style="color: var(--text-secondary); text-decoration: none;">Privacy Policy</a></p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/assets/js/main.js?v=1.0.0" defer></script>
+    
+</body>
+</html>

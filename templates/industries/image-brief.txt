@@ -1,0 +1,700 @@
+Complete Designer Brief - Capacity Recovery Deployment Infographic
+Project Overview
+Deliverable: Professional consulting-style infographic showing 4 deployment paths for 
+700
+K
+c
+a
+p
+a
+c
+i
+t
+y
+r
+e
+c
+o
+v
+e
+r
+y
+∗
+∗
+S
+t
+y
+l
+e
+R
+e
+q
+u
+i
+r
+e
+m
+e
+n
+t
+:
+∗
+∗
+M
+U
+S
+T
+m
+a
+t
+c
+h
+t
+h
+e
+a
+e
+s
+t
+h
+e
+t
+i
+c
+o
+f
+t
+h
+e
+P
+r
+o
+t
+o
+c
+o
+l
+J
+o
+u
+r
+n
+e
+y
+i
+n
+f
+o
+g
+r
+a
+p
+h
+i
+c
+A
+N
+D
+t
+h
+e
+P
+h
+a
+s
+e
+2
+R
+e
+a
+d
+i
+n
+e
+s
+s
+R
+o
+a
+d
+m
+a
+p
+i
+n
+f
+o
+g
+r
+a
+p
+h
+i
+c
+(
+c
+l
+e
+a
+n
+,
+p
+r
+o
+f
+e
+s
+s
+i
+o
+n
+a
+l
+,
+M
+c
+K
+i
+n
+s
+e
+y
+−
+s
+t
+y
+l
+e
+)
+∗
+∗
+U
+s
+e
+C
+a
+s
+e
+:
+∗
+∗
+W
+e
+b
+s
+i
+t
+e
+d
+i
+s
+p
+l
+a
+y
+o
+n
+h
+t
+t
+p
+s
+:
+/
+/
+w
+w
+w
+.
+c
+u
+r
+a
+m
+−
+a
+i
+.
+c
+o
+m
+.
+a
+u
+/
+a
+c
+c
+o
+u
+n
+t
+i
+n
+g
+−
+s
+e
+r
+v
+i
+c
+e
+s
+.
+h
+t
+m
+l
+w
+i
+t
+h
+i
+n
+t
+h
+e
+"
+E
+s
+t
+i
+m
+a
+t
+e
+d
+R
+O
+I
+"
+s
+e
+c
+t
+i
+o
+n
+∗
+∗
+K
+e
+y
+M
+e
+s
+s
+a
+g
+e
+:
+∗
+∗
+"
+700Kcapacityrecovery∗∗StyleRequirement:∗∗MUSTmatchtheaestheticoftheProtocolJourneyinfographicANDthePhase2ReadinessRoadmapinfographic(clean,professional,McKinsey−style)∗∗UseCase:∗∗Websitedisplayonhttps://www.curam−ai.com.au/accounting−services.htmlwithinthe"EstimatedROI"section∗∗KeyMessage:∗∗"
+700K is recoverable labor capacity - here are 4 concrete ways to deploy it for business value"
+Critical Design Principles
+MATCH THE PHASE 2 ROADMAP INFOGRAPHIC STYLE:
+✅ Clean dark navy background (#1a2332 → #243447 gradient)
+✅ Flat design (NO glowing effects, NO neon, minimal gradients)
+✅ Gold (#d4af37) as primary accent color (borders, highlights)
+✅ Professional typography (sentence case, clean hierarchy)
+✅ Simple line-art icons (consistent with Phase 2 style)
+✅ McKinsey consulting aesthetic (NOT tech startup)
+✅ Horizontal left-to-right flow with connecting arrows
+This infographic must look like it belongs to the same brand family as the Phase 2 Roadiness Roadmap infographic.
+Technical Specifications
+Canvas:
+Dimensions: 1200px wide × 600px high (horizontal emphasis, similar to Phase 2)
+Format: PNG (optimized) or SVG (preferred if possible)
+Resolution: 300 DPI (print quality)
+File size: <250KB optimized
+Background:
+Style: Subtle gradient (like Phase 2 Roadmap)
+Colors: Navy #1a2332 (top-left) → Slightly lighter navy #243447 (bottom-right)
+NO circuit boards
+NO tech elements
+NO glowing effects
+Clean, professional, minimal
+Color Palette (STRICT - Must Match Phase 2 Infographic)
+Primary:
+Navy (dark): #1a2332 (gradient start)
+Navy (light): #243447 (gradient end, card backgrounds)
+White: #ffffff (primary text)
+Light Gray: #94a3b8 (secondary text, descriptions)
+Accent:
+Gold: #d4af37 (borders, card outlines, arrows, emphasis text)
+DO NOT USE:
+❌ Bright cyan/teal (#00d4ff or similar)
+❌ Glowing neon effects
+❌ Multiple competing accent colors
+❌ Bright greens, purples, or oranges
+Layout Structure: Left-to-Right Flow with 4 Equal Cards
+code
+Code
+┌────────────────────────────────────────────────────────────────┐
+│                        TITLE SECTION                           │
+│       $700K Annual Capacity Recovery                          │
+│       How to Deploy This Recoverable Labor Capacity           │
+└────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────┐  →  ┌─────────┐  →  ┌─────────┐  →  ┌─────────┐
+│  CARD 1 │ ──▶ │  CARD 2 │ ──▶ │  CARD 3 │ ──▶ │  CARD 4 │
+│ Revenue │     │  Cost   │     │Efficiency│    │Strategic│
+│  Growth │     │Avoidance│     │  Gains   │    │ Capacity│
+└─────────┘     └─────────┘     └─────────┘     └─────────┘
+                              ↓
+              Most firms realize 50-70%
+             through combination of paths
+SECTION 1: TITLE (Top of Canvas)
+Main Heading:
+$700K Annual Capacity Recovery
+Font size: 38px
+Weight: Bold
+Color: White (#ffffff)
+Alignment: Centered
+Position: 40px from top
+Subheading:
+How to Deploy This Recoverable Labor Capacity
+Font size: 20px
+Weight: Regular
+Color: Light gray (#94a3b8)
+Alignment: Centered
+Position: 12px below main heading
+SECTION 2: FOUR DEPLOYMENT PATH CARDS (Horizontal Row)
+Card Specifications
+Shape:
+Rounded rectangle
+Border radius: 12px
+Width: 240px (all cards equal width)
+Height: 380px (consistent across all cards)
+Border:
+Width: 2px
+Color: Gold (#d4af37)
+Style: Solid
+Fill:
+Color: Slightly lighter navy (#243447)
+NO glowing effects
+Subtle, professional appearance
+Positioning:
+Horizontal row, evenly spaced
+40px gap between cards
+First card: 60px from left edge
+Vertically: 140px from top (below title)
+Connecting Arrows:
+Between each card
+Style: Simple right-pointing arrow (→)
+Width: 3px
+Color: Gold (#d4af37)
+Length: 40px (matching gap between cards)
+Positioned at mid-height of cards
+CARD 1: REVENUE GROWTH
+Icon (top-center):
+Size: 56px × 56px
+Style: Simple line art (2px stroke)
+Color: Gold (#d4af37)
+Icon: Dollar sign with upward arrow OR trending line graph
+Position: Centered horizontally, 28px from top of card
+Card Label (below icon):
+REVENUE GROWTH
+Font size: 18px
+Weight: Bold
+Color: White (#ffffff)
+Alignment: Centered
+Position: 16px below icon
+Description Text:
+Handle 15-20 additional client files without adding headcount
+Font size: 14px
+Weight: Regular
+Color: Light gray (#94a3b8)
+Line height: 1.5
+Alignment: Centered
+Max width: 200px (centered within card)
+Position: 16px below label
+Value Display (bottom of card):
+150
+K
+−
+150K−
+300K
+Font size: 22px
+Weight: Bold
+Color: Gold (#d4af37)
+Alignment: Centered
+Position: 20px from bottom
+Value Label:
+additional revenue
+Font size: 13px
+Weight: Regular
+Color: Light gray (#94a3b8)
+Alignment: Centered
+Position: Directly below value (4px gap)
+CARD 2: COST AVOIDANCE
+Icon:
+Size: 56px × 56px
+Color: Gold (#d4af37)
+Icon: Person with plus sign (add user) with slash/X through it OR shield with dollar sign
+Position: Same as Card 1
+Card Label:
+COST AVOIDANCE
+Font size: 18px, Bold, White
+Position: Same as Card 1
+Description Text:
+Eliminate 1-2 planned hires and associated overhead costs
+Font size: 14px, Regular, Light gray (#94a3b8)
+Line height: 1.5
+Alignment: Centered
+Max width: 200px
+Value Display:
+120
+K
+−
+120K−
+180K
+Font size: 22px, Bold, Gold (#d4af37)
+Value Label:
+avoided costs
+Font size: 13px, Regular, Light gray
+CARD 3: EFFICIENCY GAINS
+Icon:
+Size: 56px × 56px
+Color: Gold (#d4af37)
+Icon: Lightning bolt OR speedometer/gauge OR activity/heartbeat line
+Position: Same as Card 1 & 2
+Card Label:
+EFFICIENCY GAINS
+Font size: 18px, Bold, White
+Description Text:
+Month-end 40-60% faster, reduce error rework costs
+Font size: 14px, Regular, Light gray (#94a3b8)
+Line height: 1.5
+Max width: 200px
+Value Display:
+20
+K
+−
+20K−
+60K
+Font size: 22px, Bold, Gold (#d4af37)
+Value Label:
+cash savings
+Font size: 13px, Regular, Light gray
+CARD 4: STRATEGIC CAPACITY
+Icon:
+Size: 56px × 56px
+Color: Gold (#d4af37)
+Icon: Target/bullseye OR compass OR trophy
+Position: Same as Card 1, 2 & 3
+Card Label:
+STRATEGIC CAPACITY
+Font size: 18px, Bold, White
+Description Text:
+Staff retention, recruiting edge, competitive positioning
+Font size: 14px, Regular, Light gray (#94a3b8)
+Line height: 1.5
+Max width: 200px
+Value Display:
+Competitive
+Font size: 22px, Bold, Gold (#d4af37)
+Value Label:
+advantage
+Font size: 13px, Regular, Light gray
+SECTION 3: FOOTER NOTE (Bottom of Canvas)
+Text:
+Most firms realize 50-70% of this value through a combination of these deployment paths
+Font size: 15px
+Weight: Regular
+Color: Light gray (#94a3b8)
+Alignment: Centered
+Position: 40px below bottom of cards
+Max width: 800px (centered)
+Typography System Summary
+Element Font Size   Weight  Color
+Main title  38px    Bold    White
+Subtitle    20px    Regular Light gray
+Card labels 18px    Bold    White
+Card descriptions   14px    Regular Light gray (#94a3b8)
+Value numbers   22px    Bold    Gold (#d4af37)
+Value labels    13px    Regular Light gray
+Footer note 15px    Regular Light gray
+Font family: Clean sans-serif (Montserrat, Helvetica, Inter, or similar - MUST match Phase 2 infographic)
+Icon Requirements
+Style: Heroicons Outline style or equivalent (MUST match Phase 2 Roadmap infographic icons)
+Specifications:
+Stroke width: 2px
+Color: Gold (#d4af37)
+No fills, gradients, glows, or complex illustrations
+Simple, clean line art
+Required Icons:
+Card 1 (Revenue Growth): Dollar sign with upward arrow OR line graph trending up
+Card 2 (Cost Avoidance): Person with X/slash OR shield with dollar
+Card 3 (Efficiency): Lightning bolt OR speedometer OR activity line
+Card 4 (Strategic): Target/bullseye OR compass OR trophy
+Use same icon library as Phase 2 Roadmap infographic for consistency.
+Spacing & Alignment
+Horizontal spacing:
+Left margin: 60px
+Right margin: 60px
+Gap between cards: 40px
+Arrow length (in gaps): 40px
+Cards should be evenly distributed across width
+Vertical spacing:
+Top margin (to title): 40px
+Title to subtitle: 12px
+Subtitle to cards: 70px
+Cards to footer note: 40px
+Bottom margin: 40px
+Internal card spacing:
+Icon to top edge: 28px
+Icon to label: 16px
+Label to description: 16px
+Description to value: auto-flex (push value to bottom)
+Value to value label: 4px
+Value label to bottom edge: 24px
+Left/right padding: 20px
+Visual Hierarchy Emphasis
+Primary Focus (Largest/Boldest):
+Main title "$700K Annual Capacity Recovery"
+Value numbers in each card (
+150
+K
+−
+150K−
+300K, etc.)
+Secondary Focus (Prominent):
+Card labels (REVENUE GROWTH, COST AVOIDANCE, etc.)
+Icons (gold color makes them pop)
+Tertiary (Supporting):
+Subtitle "How to Deploy This Recoverable Labor Capacity"
+Card descriptions
+Value labels
+Footer note
+What NOT to Include
+❌ Circuit board patterns
+❌ Tech background elements
+❌ Glowing neon effects
+❌ Bright cyan/teal colors (except as very subtle accent if needed)
+❌ Heavy gradients on cards
+❌ 3D effects or drop shadows
+❌ ALL CAPS for everything (use sentence case for labels)
+❌ Multiple competing fonts
+❌ Decorative or complex illustrations
+❌ Anything that looks "tech startup" rather than "consulting firm"
+Style Reference & Consistency
+CRITICAL: This infographic must look like it belongs to the same brand family as the Phase 2: The Readiness Roadmap infographic.
+Check against Phase 2 Roadmap infographic for:
+✅ Same background gradient (navy #1a2332 → #243447)
+✅ Same accent color (gold #d4af37)
+✅ Same flat, professional aesthetic
+✅ Same icon style (simple line art, 2px stroke)
+✅ Same typography approach (Montserrat, clean hierarchy)
+✅ Same card border style (2px gold, rounded corners)
+✅ Same overall "consulting framework" vibe
+✅ Same horizontal flow with connecting arrows
+If this doesn't look like it could be on the same slide deck as the Phase 2 Roadmap infographic, it's wrong.
+Quality Checklist
+Before submitting, verify:
+✅ Dark navy gradient background (#1a2332 → #243447), no patterns
+✅ Gold (#d4af37) is primary accent, used consistently
+✅ All four cards have identical dimensions (240px × 380px)
+✅ Cards evenly spaced with 40px gaps
+✅ All text is white or light gray (high contrast on dark)
+✅ Sentence case for card labels (not ALL CAPS everywhere)
+✅ Icons are simple line art, 2px stroke, gold color
+✅ Arrows between cards are clean, gold, professional
+✅ Value numbers (
+150
+K
+−
+150K−
+300K, etc.) are prominent and gold
+✅ Looks like same brand as Phase 2 Roadmap infographic
+✅ Would look professional in a board presentation
+✅ File size under 250KB
+✅ All text is spelled correctly
+✅ All numbers are correct (
+150
+K
+−
+150K−
+300K, 
+120
+K
+−
+120K−
+180K, 
+20
+K
+−
+20K−
+60K)
+Deliverables
+Single file:
+File name: accounting-capacity-deployment-infographic.png (or .svg if possible)
+Dimensions: 1200px × 600px
+Format: PNG (optimized) or SVG (preferred)
+Optimized: <250KB
+Optional (if time permits):
+Light background version (white/light gray background for presentations)
+Editable source file (Figma link, .ai, or .sketch)
+Design Philosophy
+This should look like:
+✅ A McKinsey/BCG strategy framework diagram
+✅ Professional consulting methodology
+✅ Something you'd present to a CFO/board
+✅ Part of a cohesive brand family with Phase 2 Roadmap infographic
+✅ Clear value proposition with concrete numbers
+This should NOT look like:
+❌ A tech product feature diagram
+❌ A SaaS startup marketing graphic
+❌ A colorful infographic with competing colors
+❌ Something from a different brand/company
+Content Accuracy - CRITICAL
+Please double-check these exact values:
+Card 1:
+Description: "Handle 15-20 additional client files without adding headcount"
+Value: "
+150
+K
+−
+150K−
+300K"
+Label: "additional revenue"
+Card 2:
+Description: "Eliminate 1-2 planned hires and associated overhead costs"
+Value: "
+120
+K
+−
+120K−
+180K"
+Label: "avoided costs"
+Card 3:
+Description: "Month-end 40-60% faster, reduce error rework costs"
+Value: "
+20
+K
+−
+20K−
+60K"
+Label: "cash savings"
+Card 4:
+Description: "Staff retention, recruiting edge, competitive positioning"
+Value: "Competitive"
+Label: "advantage"
+Footer:
+"Most firms realize 50-70% of this value through a combination of these deployment paths"
+Reference Materials
+Please refer to:
+Phase 2: The Readiness Roadmap infographic - for style, colors, card structure
+Protocol Journey infographic - for overall brand aesthetic
+Existing accounting page - for context of where this will appear
+When in doubt, refer back to the Phase 2 Roadmap infographic and match its aesthetic.
+Timeline & Questions
+Timeline: [Add your expected timeline]
+Questions? Please reach out if anything is unclear or if you need clarification on:
+Icon style/selection
+Exact shade of colors
+Arrow design
+Any other design elements
