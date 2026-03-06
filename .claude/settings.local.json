@@ -9,7 +9,9 @@
       "Bash(netstat:*)",
       "Bash(dir C:\\\\Users\\\\micha\\\\Local Sites\\\\Curam-Protocol\\\\venv\\\\Scripts:*)",
       "Bash(dir:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(node:*)",
+      "Bash(cmd.exe:*)"
     ]
   }
 }

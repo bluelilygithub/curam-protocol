@@ -171,7 +171,7 @@ function ChatPage() {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) { e.preventDefault(); handleSend(); }
   };
 
   const handleInputChange = (e) => {
@@ -824,7 +824,8 @@ function ChatPage() {
                     </div>
 
                     <button
-                      onClick={isStreaming ? stopStreaming : handleSend}
+                      type="button"
+                      onClick={isStreaming ? stopStreaming : () => handleSend()}
                       disabled={!isStreaming && !hasInput}
                       className="w-8 h-8 flex items-center justify-center rounded-xl transition-all"
                       style={{
@@ -840,7 +841,7 @@ function ChatPage() {
               </div>
 
               <p className="text-center text-xs mt-2" style={{ color: 'var(--color-muted)', opacity: 0.5 }}>
-                Enter to send · Shift+Enter for new line · @ mention · ⌘/ shortcuts
+                Shift+Enter or Ctrl+Enter to send · Enter for new line · @ mention · ⌘/ shortcuts
               </p>
             </div>
           </div>

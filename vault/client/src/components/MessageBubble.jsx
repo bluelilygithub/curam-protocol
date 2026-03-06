@@ -244,6 +244,14 @@ function MessageBubble({ message, onDelete, onOpenArtifact, artifactCount, onBra
                     {children}
                   </blockquote>
                 ),
+                a: ({ href, children, ...props }) => {
+                  const isExternal = href?.startsWith('http://') || href?.startsWith('https://');
+                  return (
+                    <a href={href} {...(isExternal && { target: '_blank', rel: 'noopener noreferrer' })} {...props}>
+                      {children}
+                    </a>
+                  );
+                },
               }}
             >
               {message.content}
