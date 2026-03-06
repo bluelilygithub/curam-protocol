@@ -142,7 +142,7 @@ function ProjectSidebar({ onClose }) {
                   title="Drag to reorder"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  ⠿
+                  {'\u28ff'}
                 </div>
                 {isRenaming ? (
                   <input

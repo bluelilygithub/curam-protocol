@@ -117,7 +117,7 @@ function ProjectList() {
                     title="Drag to reorder"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    ⠿
+                    {'\u28ff'}
                   </div>
                   <button
                     onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
@@ -155,6 +155,7 @@ function ProjectList() {
                     )}
                   </div>
                 </button>
+                </div>
               ))}
             </div>
           </div>
