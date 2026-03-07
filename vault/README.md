@@ -67,6 +67,7 @@ vault/
 │       ├── fetchUrl.js           # URL content fetching (SSRF-protected)
 │       ├── webSearch.js          # Web search — Brave / Serper.dev / SerpAPI (rate-limited)
 │       ├── search.js             # Global search (vault-internal full-text)
+│       ├── admin.js              # Usage stats for dashboard (sessions, tokens, searches, debates)
 │       ├── export.js             # Chat export (JSON, PDF, Markdown, email)
 │       ├── email.js              # Email sending (HTML-escaped)
 │       ├── pdf.js                # PDF text extraction
@@ -126,7 +127,8 @@ vault/
 │       │   ├── useUrlAttachment.js
 │       │   ├── useSearch.js
 │       │   ├── useSystemPrompt.js
-│       │   └── useVoice.js       # Browser speech recognition + TTS
+│       │   ├── useVoice.js       # Browser speech recognition + TTS
+│       │   └── useGeminiNano.js  # Browser-native Gemini Nano (experimental)
 │       ├── utils/
 │       │   ├── apiClient.js      # Authenticated fetch wrapper (use for all /api/ calls)
 │       │   ├── models.js         # Claude + Gemini model definitions with provider field
@@ -181,9 +183,62 @@ vault/
 | `UPLOAD_DIR` | Yes | Absolute path to file uploads directory |
 | `NODE_ENV` | Yes | `production` or `development` |
 | `APP_URL` | Yes | Base URL for password reset emails (e.g. `https://curam-vault.up.railway.app`) |
+| `PORT` | Optional | HTTP port (default `3001` in dev; Railway sets this automatically) |
 | `GEMINI_API_KEY` | Optional | Google Gemini API access — enables Gemini 2.0 Flash and Gemini 2.5 Pro models |
 | `SEARCH_API_KEY` | Optional | Web search API key — supports Brave Search (`BSA…` prefix), Serper.dev (40-char hex), or SerpAPI (default) |
-| `MAIL_CHANNEL_API_KEY` | Optional | MailChannels API key for email export; falls back to SMTP if not set |
+| `MAIL_CHANNEL_API_KEY` | Optional | MailChannels API key for email; if absent, falls back to SMTP (see below) |
+| `SMTP_HOST` | Optional¹ | SMTP server hostname (e.g. `smtp.gmail.com`) |
+| `SMTP_PORT` | Optional¹ | SMTP port — `587` for TLS (default), `465` for SSL |
+| `SMTP_USER` | Optional¹ | SMTP username / email address; also used as the sender `From` address |
+| `SMTP_PASS` | Optional¹ | SMTP password or app-specific password |
+
+¹ Required together if `MAIL_CHANNEL_API_KEY` is not set and you want email features to work.
+
+### `.env.example`
+
+```env
+# ── Required ──────────────────────────────────────────────────────────────────
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# ── Server ────────────────────────────────────────────────────────────────────
+PORT=3001
+NODE_ENV=development   # set to "production" on Railway (handled via railway.toml)
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+# Local dev: relative paths work fine
+DB_PATH=./data/vault.db
+UPLOAD_DIR=./uploads
+
+# Railway production: point both at your mounted Volume path, e.g.
+#   DB_PATH=/data/vault.db
+#   UPLOAD_DIR=/data/uploads
+# Then mount the Volume at /data in the Railway dashboard.
+
+# ── Google Gemini (optional — enables Gemini models in chat, compare, debate) ─
+# Get a key at https://aistudio.google.com/app/apikey
+# You can also set this via Settings in the app UI
+GEMINI_API_KEY=
+
+# ── Web search (optional — enables @search in chat) ──────────────────────────
+# Supports Brave Search (BSA… prefix), Serper.dev (40-char hex), or SerpAPI
+# You can also set this via Settings in the app UI
+SEARCH_API_KEY=
+
+# ── Email ─────────────────────────────────────────────────────────────────────
+# Option A: MailChannels API (preferred — set MAIL_CHANNEL_API_KEY, or via Settings UI)
+MAIL_CHANNEL_API_KEY=
+
+# Option B: SMTP via nodemailer (fallback if MAIL_CHANNEL_API_KEY not set)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your_smtp_user
+SMTP_PASS=your_smtp_password
+
+# ── Password reset ─────────────────────────────────────────────────────────────
+# Base URL used in reset email links (no trailing slash)
+# Local: http://localhost:5173 | Railway: https://your-app.up.railway.app
+APP_URL=http://localhost:5173
+```
 
 ---
 
@@ -218,3 +273,20 @@ npm run dev
 Check your version: `node -v`. If you are on v23 or higher, install Node v22 LTS from [nodejs.org](https://nodejs.org) and reinstall.
 
 **Production** is deployed on Railway: `https://curam-vault.up.railway.app`
+
+---
+
+## Recent Changes
+
+- **Clipboard image paste** — paste screenshots or images directly into the chat input with Ctrl/Cmd+V; sent as inline base64, works in both project and General Chat without a file upload
+- **Session delete from dropdown** — native `<select>` replaced with a custom dropdown; hover any session to reveal a trash icon with an inline confirmation; non-active sessions can now be deleted without switching to them first
+- **General Chat** — project-free workspace at `/chat`; "General" section at the top of the sidebar with session list and new-chat button; sessions persisted with `projectId = null`
+- **Chat History browser** — `/history` page with date filter chips (Today, Yesterday, This Week, Last 7 days, This Month, Last Month, Last 30 days, Custom), text search across title/project/content, click-to-navigate
+- **Gemini models everywhere** — `gemini-2.0-flash` and `gemini-2.5-pro-preview-05-06` available in chat, document compare, and multi-model debate; centrally defined in `models.js` with `provider: 'gemini'`; server routes auto-detect and call Google SDK
+- **`@search` web search** — type `@` in chat and select "Search the web"; results shown in a panel (title, snippet, clickable URL) before attaching as URL context; supports Brave Search (auto-detected via `BSA` key prefix), Serper.dev, and SerpAPI
+- **Multi-Model Debate** (`/debate`) — pit multiple Claude and Gemini models against each other; multi-file context; round navigation; NO_CHANGE detection; synthesis summary; save to project
+- **Document Compare** (`/compare`) — compare two text blocks or vault files with any Claude or Gemini model; 4 modes (differences, similarities, improvements, summary); SSE streaming; save result to project
+- **Admin Dashboard** (`/admin`) — stat cards for projects, sessions, messages, searches, debates, comparisons, and tokens; period selector (Today / Week / Month / Last month / 6 months / 12 months / Custom)
+- **Password reset** — email-based flow at `/reset-password`; token stored in `password_resets` table with 1-hour expiry; `APP_URL` env var controls the link domain
+- **Security hardening** — SSRF blocked in all URL-fetch routes (DNS-based private IP check); path traversal fixed in file upload; login brute-force rate-limited; HTML escaping in email export; web search rate-limited; 2 MB response cap on URL fetching
+- **Mobile-responsive** — sidebar becomes a slide-over drawer; chat header collapses on small screens; artifact and file panels open full-screen on mobile; iOS keyboard zoom prevented; safe-area insets for notch and home bar
