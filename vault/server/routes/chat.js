@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const rateLimit = require('express-rate-limit');
 const db = require('../db');
 const { buildTypeConfigPrompt } = require('../typePrompts');
@@ -13,6 +14,8 @@ const chatLimiter = rateLimit({
 });
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 
 function buildSystemPrompt(project, personaId) {
   const parts = project
@@ -160,41 +163,88 @@ router.post('/', chatLimiter, async (req, res) => {
   try {
     const model = reqModel || project?.model || 'claude-sonnet-4-6';
     const temperature = typeof reqTemp === 'number' ? Math.max(0, Math.min(1, reqTemp)) : 0.7;
-    const useReasoning = reasoning && (model.includes('sonnet') || model.includes('opus'));
-
-    const streamParams = {
-      model,
-      max_tokens: useReasoning ? 16000 : 8096,
-      system: systemPrompt,
-      messages: apiMessages,
-    };
-    if (useReasoning) {
-      streamParams.thinking = { type: 'enabled', budget_tokens: 8000 };
-    } else {
-      streamParams.temperature = temperature;
-    }
-    const stream = anthropic.messages.stream(streamParams);
 
     let inputTokens = 0, outputTokens = 0;
-    let currentBlockType = 'text'; // track whether current block is thinking or text
 
-    for await (const chunk of stream) {
-      if (chunk.type === 'message_start') {
-        inputTokens = chunk.message?.usage?.input_tokens || 0;
+    if (isGemini(model)) {
+      // ── Gemini path ──────────────────────────────────────────────────────────
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      if (!geminiApiKey) throw new Error('GEMINI_API_KEY is not configured');
+
+      const genai = new GoogleGenerativeAI(geminiApiKey);
+      const gModel = genai.getGenerativeModel({
+        model,
+        systemInstruction: systemPrompt,
+        generationConfig: { temperature, maxOutputTokens: 8192 },
+      });
+
+      // Convert messages to Gemini format (role: 'user' | 'model')
+      // Last message is sent via sendMessageStream; history is everything before it
+      const history = apiMessages.slice(0, -1).map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
+      }));
+
+      const lastMsg = apiMessages[apiMessages.length - 1];
+      // Build parts for last message (may include image attachments)
+      let lastParts;
+      if (Array.isArray(lastMsg?.content)) {
+        lastParts = lastMsg.content.map(block => {
+          if (block.type === 'image') {
+            return { inlineData: { mimeType: block.source.media_type, data: block.source.data } };
+          }
+          return { text: block.text || '' };
+        });
+      } else {
+        lastParts = [{ text: lastMsg?.content || '' }];
       }
-      if (chunk.type === 'message_delta' && chunk.usage) {
-        outputTokens = chunk.usage.output_tokens || 0;
-      }
-      if (chunk.type === 'content_block_start') {
-        currentBlockType = chunk.content_block?.type || 'text';
-      }
-      if (chunk.type === 'content_block_delta') {
-        if (chunk.delta?.type === 'thinking_delta') {
-          res.write(`data: ${JSON.stringify({ thinkingDelta: chunk.delta.thinking, sessionId: sid })}\n\n`);
-        } else if (chunk.delta?.type === 'text_delta') {
-          const text = chunk.delta.text;
+
+      const chat = gModel.startChat({ history });
+      const streamResult = await chat.sendMessageStream(lastParts);
+
+      for await (const chunk of streamResult.stream) {
+        const text = chunk.text();
+        if (text) {
           fullContent += text;
           res.write(`data: ${JSON.stringify({ delta: text, sessionId: sid })}\n\n`);
+        }
+      }
+
+      const finalResponse = await streamResult.response;
+      inputTokens = finalResponse.usageMetadata?.promptTokenCount || 0;
+      outputTokens = finalResponse.usageMetadata?.candidatesTokenCount || 0;
+
+    } else {
+      // ── Anthropic path ───────────────────────────────────────────────────────
+      const useReasoning = reasoning && (model.includes('sonnet') || model.includes('opus'));
+      const streamParams = {
+        model,
+        max_tokens: useReasoning ? 16000 : 8096,
+        system: systemPrompt,
+        messages: apiMessages,
+      };
+      if (useReasoning) {
+        streamParams.thinking = { type: 'enabled', budget_tokens: 8000 };
+      } else {
+        streamParams.temperature = temperature;
+      }
+      const stream = anthropic.messages.stream(streamParams);
+
+      for await (const chunk of stream) {
+        if (chunk.type === 'message_start') {
+          inputTokens = chunk.message?.usage?.input_tokens || 0;
+        }
+        if (chunk.type === 'message_delta' && chunk.usage) {
+          outputTokens = chunk.usage.output_tokens || 0;
+        }
+        if (chunk.type === 'content_block_delta') {
+          if (chunk.delta?.type === 'thinking_delta') {
+            res.write(`data: ${JSON.stringify({ thinkingDelta: chunk.delta.thinking, sessionId: sid })}\n\n`);
+          } else if (chunk.delta?.type === 'text_delta') {
+            const text = chunk.delta.text;
+            fullContent += text;
+            res.write(`data: ${JSON.stringify({ delta: text, sessionId: sid })}\n\n`);
+          }
         }
       }
     }

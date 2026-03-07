@@ -1,8 +1,10 @@
 // Pricing in USD per million tokens (as of early 2026)
 export const MODEL_PRICING = {
-  'claude-haiku-4-5-20251001': { input: 0.80, output: 4.00 },
-  'claude-sonnet-4-6':         { input: 3.00, output: 15.00 },
-  'claude-opus-4-6':           { input: 15.00, output: 75.00 },
+  'claude-haiku-4-5-20251001':          { input: 0.80,  output: 4.00 },
+  'claude-sonnet-4-6':                  { input: 3.00,  output: 15.00 },
+  'claude-opus-4-6':                    { input: 15.00, output: 75.00 },
+  'gemini-2.0-flash':                   { input: 0.10,  output: 0.40 },
+  'gemini-2.5-pro-preview-05-06':       { input: 1.25,  output: 10.00 },
 };
 
 export function calcCost(model, inputTokens, outputTokens) {

@@ -7,6 +7,7 @@ export const MODELS = [
     tagline: 'Fast & affordable',
     desc: 'Best for quick tasks, drafts, and simple Q&A',
     color: '#059669',
+    provider: 'anthropic',
   },
   {
     id: 'claude-sonnet-4-6',
@@ -16,6 +17,7 @@ export const MODELS = [
     tagline: 'Smart & balanced',
     desc: 'Best for most work — code, writing, analysis',
     color: '#2563eb',
+    provider: 'anthropic',
   },
   {
     id: 'claude-opus-4-6',
@@ -25,6 +27,27 @@ export const MODELS = [
     tagline: 'Most capable',
     desc: 'Best for complex reasoning and deep analysis',
     color: '#7c3aed',
+    provider: 'anthropic',
+  },
+  {
+    id: 'gemini-2.0-flash',
+    name: 'Gemini 2.0 Flash',
+    label: 'Google Fast',
+    emoji: '🔷',
+    tagline: 'Google · Fast',
+    desc: 'Fast multimodal model from Google',
+    color: '#1a73e8',
+    provider: 'gemini',
+  },
+  {
+    id: 'gemini-2.5-pro-preview-05-06',
+    name: 'Gemini 2.5 Pro',
+    label: 'Google Pro',
+    emoji: '🔮',
+    tagline: 'Google · Most capable',
+    desc: 'Google\'s most capable model with deep reasoning',
+    color: '#9334e6',
+    provider: 'gemini',
   },
 ];
 
@@ -284,4 +307,8 @@ export function getModelById(id) {
 export function getModelShortName(id) {
   const m = getModelById(id);
   return `${m.emoji} ${m.name}`;
+}
+
+export function isGeminiModel(id) {
+  return typeof id === 'string' && id.startsWith('gemini-');
 }

@@ -7,13 +7,9 @@ import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useSettingsStore from '../store/settingsStore';
 import api from '../utils/apiClient';
-import { MODELS, getModelById } from '../utils/models';
+import { MODELS } from '../utils/models';
 
-const GEMINI_MODELS = [
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', label: 'Google', emoji: '🔵', color: '#4285F4' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', label: 'Google', emoji: '⚡', color: '#34A853' },
-];
-const DEBATE_MODELS = [...MODELS, ...GEMINI_MODELS];
+const DEBATE_MODELS = MODELS;
 
 function getDebateModelById(id) {
   return DEBATE_MODELS.find((m) => m.id === id) || MODELS[1];

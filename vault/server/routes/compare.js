@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('../db');
 
 const upload = multer({
@@ -11,6 +12,8 @@ const upload = multer({
 });
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 
 const MODE_PROMPTS = {
   diff: 'You will be given two documents. Provide a detailed comparison. Use clear headings to organise additions, removals, modifications, and unchanged sections. Be thorough and precise.',
@@ -93,16 +96,41 @@ router.post(
     res.setHeader('Connection', 'keep-alive');
 
     try {
-      const stream = anthropic.messages.stream({
-        model,
-        max_tokens: 8096,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: contentBlocks }],
-      });
+      if (isGemini(model)) {
+        const geminiApiKey = process.env.GEMINI_API_KEY;
+        if (!geminiApiKey) throw new Error('GEMINI_API_KEY is not configured');
 
-      for await (const chunk of stream) {
-        if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
-          res.write(`data: ${JSON.stringify({ delta: chunk.delta.text })}\n\n`);
+        const genai = new GoogleGenerativeAI(geminiApiKey);
+        const gModel = genai.getGenerativeModel({
+          model,
+          systemInstruction: systemPrompt,
+          generationConfig: { maxOutputTokens: 8192 },
+        });
+
+        // Convert Anthropic-style blocks to Gemini parts
+        const parts = contentBlocks.map(b => {
+          if (b.type === 'image') {
+            return { inlineData: { mimeType: b.source.media_type, data: b.source.data } };
+          }
+          return { text: b.text };
+        });
+
+        const streamResult = await gModel.generateContentStream(parts);
+        for await (const chunk of streamResult.stream) {
+          const text = chunk.text();
+          if (text) res.write(`data: ${JSON.stringify({ delta: text })}\n\n`);
+        }
+      } else {
+        const stream = anthropic.messages.stream({
+          model,
+          max_tokens: 8096,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: contentBlocks }],
+        });
+        for await (const chunk of stream) {
+          if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+            res.write(`data: ${JSON.stringify({ delta: chunk.delta.text })}\n\n`);
+          }
         }
       }
 
