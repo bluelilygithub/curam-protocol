@@ -158,6 +158,53 @@ db.exec(`
     createdAt TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    notes TEXT,
+    status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo','in-progress','done')),
+    priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('high','medium','low')),
+    category TEXT,
+    projectId INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    parentTaskId INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+    dueDate TEXT,
+    createdAt TEXT DEFAULT (datetime('now')),
+    updatedAt TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS task_tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    taskId INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    tag TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS task_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    taskId INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    type TEXT NOT NULL DEFAULT 'user' CHECK(type IN ('user', 'system')),
+    content TEXT NOT NULL,
+    createdAt TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS task_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    category TEXT,
+    priority TEXT DEFAULT 'medium',
+    recurrence TEXT DEFAULT 'none',
+    tags TEXT DEFAULT '',
+    createdAt TEXT DEFAULT (datetime('now')),
+    updatedAt TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS template_subtasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    templateId INTEGER NOT NULL REFERENCES task_templates(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    "order" INTEGER DEFAULT 0
+  );
+
   CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
     type,
     projectId UNINDEXED,
@@ -166,7 +213,7 @@ db.exec(`
   );
 `);
 
-// Migrations ΓÇö safe to run on existing DBs
+// Migrations — safe to run on existing DBs
 ['ALTER TABLE projects ADD COLUMN sortOrder INTEGER DEFAULT 0',
  'ALTER TABLE projects ADD COLUMN model TEXT DEFAULT \'claude-sonnet-4-6\'',
  'ALTER TABLE projects ADD COLUMN projectType TEXT',
@@ -179,6 +226,11 @@ db.exec(`
  'ALTER TABLE projects ADD COLUMN personaId INTEGER',
  'ALTER TABLE sessions ADD COLUMN personaId INTEGER',
  'ALTER TABLE sessions ADD COLUMN branchedFrom TEXT',
+ 'ALTER TABLE tasks ADD COLUMN "order" INTEGER DEFAULT 0',
+ 'ALTER TABLE tasks ADD COLUMN recurrence TEXT DEFAULT \'none\'',
+ 'ALTER TABLE tasks ADD COLUMN sourceSessionId TEXT DEFAULT NULL',
+ 'ALTER TABLE tasks ADD COLUMN recurrenceConfig TEXT DEFAULT NULL',
+ 'ALTER TABLE tasks ADD COLUMN recurrenceCount INTEGER DEFAULT 0',
 ].forEach(sql => { try { db.exec(sql); } catch (_) {} });
 
 module.exports = db;

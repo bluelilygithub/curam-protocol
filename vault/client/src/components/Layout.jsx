@@ -3,6 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import ProjectSidebar from './ProjectSidebar';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
+import api from '../utils/apiClient';
 
 function Layout() {
   const isMobileNow = () => typeof window !== 'undefined' && window.innerWidth < 640;
@@ -15,6 +16,29 @@ function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const getIcon = useIcon();
+
+  const [dueTodayCount, setDueTodayCount] = useState(0);
+  const [showDueBanner, setShowDueBanner] = useState(false);
+
+  useEffect(() => {
+    if (sessionStorage.getItem('tasksAlertDismissed')) return;
+    const todayEnd = new Date(); todayEnd.setHours(23, 59, 59, 999);
+    const dueBefore = todayEnd.toISOString().slice(0, 10);
+    api.get(`/api/tasks?status=todo&dueBefore=${dueBefore}`)
+      .then(r => r.json())
+      .then(tasks => {
+        if (Array.isArray(tasks) && tasks.length > 0) {
+          setDueTodayCount(tasks.length);
+          setShowDueBanner(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const dismissDueBanner = () => {
+    sessionStorage.setItem('tasksAlertDismissed', '1');
+    setShowDueBanner(false);
+  };
 
   // Track mobile/desktop on resize
   useEffect(() => {
@@ -175,6 +199,15 @@ function Layout() {
           </Link>
 
           <Link
+            to="/tasks"
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname === '/tasks' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Tasks"
+          >
+            {getIcon('list-checks', { size: 16 })}
+          </Link>
+
+          <Link
             to="/history"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/history' ? 'var(--color-primary)' : 'var(--color-muted)' }}
@@ -228,6 +261,23 @@ function Layout() {
             {getIcon('log-out', { size: 16 })}
           </button>
         </header>
+
+        {/* Due today banner */}
+        {showDueBanner && (
+          <div
+            className="flex-shrink-0 flex items-center gap-3 px-4 py-2 text-sm"
+            style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', color: '#78350f' }}
+          >
+            <span>⚠️</span>
+            <span className="flex-1">
+              You have {dueTodayCount} task{dueTodayCount !== 1 ? 's' : ''} due today.{' '}
+              <Link to="/tasks" onClick={dismissDueBanner} style={{ color: '#92400e', fontWeight: 600, textDecoration: 'underline' }}>
+                View Tasks
+              </Link>
+            </span>
+            <button onClick={dismissDueBanner} className="hover:opacity-60 transition-opacity font-bold" style={{ color: '#92400e' }}>✕</button>
+          </div>
+        )}
 
         {/* Page content */}
         <main className="flex-1 overflow-auto">

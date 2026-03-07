@@ -15,6 +15,7 @@ import ComparisonPage from './pages/ComparisonPage';
 import DebatePage from './pages/DebatePage';
 import AdminPage from './pages/AdminPage';
 import ChatHistoryPage from './pages/ChatHistoryPage';
+import TasksPage from './pages/TasksPage';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
@@ -68,6 +69,7 @@ function App() {
               <Route path="/debate" element={<DebatePage />} />
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/history" element={<ChatHistoryPage />} />
+              <Route path="/tasks" element={<TasksPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

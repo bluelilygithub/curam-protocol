@@ -253,10 +253,11 @@ function ChatPage({ general = false }) {
     }
   };
 
-  const handleMentionSelect = (token) => {
+  const handleMentionSelect = (token, extraContext = '') => {
     const cursorPos = textareaRef.current?.selectionStart || input.length;
     const atIndex = input.lastIndexOf('@', cursorPos);
-    setInput(input.slice(0, atIndex) + token + input.slice(cursorPos));
+    const replacement = token + extraContext;
+    setInput(input.slice(0, atIndex) + replacement + input.slice(cursorPos));
     setShowMention(false);
     textareaRef.current?.focus();
   };
