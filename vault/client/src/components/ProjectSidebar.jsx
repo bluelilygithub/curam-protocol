@@ -22,10 +22,13 @@ function ProjectSidebar({ onClose }) {
   const [collapsedFolders, setCollapsedFolders] = useState({});
   const [showFolderInput, setShowFolderInput] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [generalSessions, setGeneralSessions] = useState([]);
+  const [generalExpanded, setGeneralExpanded] = useState(true);
 
   useEffect(() => { fetchProjects(); }, []);
   useEffect(() => {
     api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
+    api.get('/api/chat/sessions/general').then(r => r.json()).then(setGeneralSessions).catch(() => {});
   }, []);
 
   const handleCreateFolder = async () => {
@@ -89,10 +92,71 @@ function ProjectSidebar({ onClose }) {
     setRenamingId(null);
   };
 
+  const isGeneralActive = location.pathname === '/chat';
+
   return (
     <div className="flex flex-col h-full w-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-3">
+      {/* General section */}
+      <div className="px-2 pt-2 pb-1">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => { navigate('/chat'); if (onClose) onClose(); }}
+            className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm transition-colors text-left"
+            style={{
+              background: isGeneralActive ? 'var(--color-bg)' : 'transparent',
+              color: isGeneralActive ? 'var(--color-primary)' : 'var(--color-text)',
+              fontWeight: isGeneralActive ? 500 : 400,
+            }}
+          >
+            <span style={{ flexShrink: 0, opacity: isGeneralActive ? 1 : 0.5 }}>
+              {getIcon('message-circle', { size: 14 })}
+            </span>
+            <span className="flex-1 truncate">General</span>
+            {generalSessions.length > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setGeneralExpanded(v => !v); }}
+                className="text-xs tabular-nums hover:opacity-60"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                {generalSessions.length}
+              </button>
+            )}
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); document.dispatchEvent(new CustomEvent('vault:new-chat')); navigate('/chat'); if (onClose) onClose(); }}
+            className="w-6 h-6 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0"
+            style={{ color: 'var(--color-primary)' }}
+            title="New general chat"
+          >
+            {getIcon('plus', { size: 14 })}
+          </button>
+        </div>
+        {generalExpanded && generalSessions.length > 0 && (
+          <div className="mt-0.5 space-y-0.5">
+            {generalSessions.slice(0, 8).map(s => (
+              <button
+                key={s.sessionId}
+                onClick={() => {
+                  navigate('/chat');
+                  setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: s.sessionId })), 80);
+                  if (onClose) onClose();
+                }}
+                className="w-full text-left px-3 py-1 rounded-md text-xs truncate transition-colors hover:opacity-70"
+                style={{ color: 'var(--color-muted)', paddingLeft: '2rem' }}
+              >
+                {s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="px-3 pb-1">
+        <div className="border-t" style={{ borderColor: 'var(--color-border)' }} />
+      </div>
+
+      {/* Projects header */}
+      <div className="flex items-center justify-between px-3 py-2">
         <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
           Projects
         </span>
@@ -301,7 +365,15 @@ function ProjectSidebar({ onClose }) {
       {/* Bottom */}
       <div className="px-2 py-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
         <button
-          onClick={() => navigate('/settings')}
+          onClick={() => { navigate('/history'); if (onClose) onClose(); }}
+          className="w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2.5 transition-colors hover:opacity-70"
+          style={{ color: location.pathname === '/history' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+        >
+          {getIcon('clock', { size: 14 })}
+          Chat History
+        </button>
+        <button
+          onClick={() => { navigate('/settings'); if (onClose) onClose(); }}
           className="w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2.5 transition-colors hover:opacity-70"
           style={{ color: 'var(--color-muted)' }}
         >

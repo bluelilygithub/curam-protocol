@@ -17,6 +17,7 @@ export function useChat({ projectId }) {
     temperature = 0.7,
     personaId = null,
     reasoning = false,
+    inlineImages = [],
   ) => {
     const newMessages = [...messages, { role: 'user', content: userContent, attachments: attachmentMeta, urlAttachments }];
     setMessages(newMessages);
@@ -33,6 +34,7 @@ export function useChat({ projectId }) {
         sessionId: sessionId || undefined,
         attachmentIds: attachmentIds.length ? attachmentIds : undefined,
         urlAttachments: urlAttachments.length ? urlAttachments : undefined,
+        inlineImages: inlineImages.length ? inlineImages : undefined,
         model: model || undefined,
         temperature,
         personaId: personaId || undefined,

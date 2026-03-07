@@ -74,12 +74,17 @@ function buildSystemPrompt(project, personaId) {
   return parts.join('\n');
 }
 
-function buildMessageContent(text, attachmentIds, urlAttachments) {
+function buildMessageContent(text, attachmentIds, urlAttachments, inlineImages) {
   const hasFiles = attachmentIds && attachmentIds.length > 0;
   const hasUrls = urlAttachments && urlAttachments.length > 0;
-  if (!hasFiles && !hasUrls) return text;
+  const hasInline = inlineImages && inlineImages.length > 0;
+  if (!hasFiles && !hasUrls && !hasInline) return text;
 
   const blocks = [];
+
+  for (const img of (inlineImages || [])) {
+    blocks.push({ type: 'image', source: { type: 'base64', media_type: img.mimeType, data: img.data } });
+  }
 
   for (const fileId of (attachmentIds || [])) {
     const file = db.prepare('SELECT * FROM files WHERE id=?').get(fileId);
@@ -113,7 +118,7 @@ function buildMessageContent(text, attachmentIds, urlAttachments) {
 
 // POST /api/chat
 router.post('/', chatLimiter, async (req, res) => {
-  const { messages, projectId, sessionId, attachmentIds, urlAttachments, model: reqModel, temperature: reqTemp, personaId, reasoning } = req.body;
+  const { messages, projectId, sessionId, attachmentIds, urlAttachments, inlineImages, model: reqModel, temperature: reqTemp, personaId, reasoning } = req.body;
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
@@ -139,16 +144,16 @@ router.post('/', chatLimiter, async (req, res) => {
       { role: 'assistant', content: 'Understood. I have the full context from the previous conversation. Please continue.' },
       ...postSummaryMsgs,
     ];
-    if (lastUserMsg?.role === 'user' && (attachmentIds?.length || urlAttachments?.length)) {
-      apiMessages.push({ role: 'user', content: buildMessageContent(lastUserMsg.content, attachmentIds, urlAttachments) });
+    if (lastUserMsg?.role === 'user' && (attachmentIds?.length || urlAttachments?.length || inlineImages?.length)) {
+      apiMessages.push({ role: 'user', content: buildMessageContent(lastUserMsg.content, attachmentIds, urlAttachments, inlineImages) });
     } else if (lastUserMsg) {
       apiMessages.push({ role: lastUserMsg.role, content: lastUserMsg.content });
     }
   } else {
     apiMessages = messages.map((m, i) => {
       const isLast = i === messages.length - 1;
-      if (isLast && m.role === 'user' && (attachmentIds?.length || urlAttachments?.length)) {
-        return { role: 'user', content: buildMessageContent(m.content, attachmentIds, urlAttachments) };
+      if (isLast && m.role === 'user' && (attachmentIds?.length || urlAttachments?.length || inlineImages?.length)) {
+        return { role: 'user', content: buildMessageContent(m.content, attachmentIds, urlAttachments, inlineImages) };
       }
       return { role: m.role, content: m.content };
     });
@@ -253,8 +258,8 @@ router.post('/', chatLimiter, async (req, res) => {
     res.write(`data: [DONE]\n\n`);
     res.end();
 
-    // Persist messages
-    if (projectId && messages.length > 0) {
+    // Persist messages (also for general chats where projectId is null)
+    if (messages.length > 0) {
       const lastUser = messages[messages.length - 1];
       if (lastUser.role === 'user') {
         let storedContent = lastUser.content;
@@ -263,14 +268,19 @@ router.post('/', chatLimiter, async (req, res) => {
             const f = db.prepare('SELECT name FROM files WHERE id=?').get(id);
             return f ? f.name : `file#${id}`;
           });
-          storedContent = `[Files: ${names.join(', ')}]\n${lastUser.content}`;
+          storedContent = `[Files: ${names.join(', ')}]\n${storedContent}`;
+        }
+        if (inlineImages?.length) {
+          storedContent = `[Pasted image${inlineImages.length > 1 ? 's' : ''}: ${inlineImages.length}]\n${storedContent}`;
         }
         db.prepare('INSERT INTO messages (sessionId, projectId, role, content) VALUES (?, ?, ?, ?)')
           .run(sid, projectId, 'user', storedContent);
         db.prepare('INSERT INTO messages (sessionId, projectId, role, content) VALUES (?, ?, ?, ?)')
           .run(sid, projectId, 'assistant', fullContent);
-        db.prepare('INSERT INTO search_index(type, projectId, title, body) VALUES (?, ?, ?, ?)')
-          .run('message', String(projectId), `Chat: ${sid}`, fullContent.substring(0, 500));
+        if (projectId) {
+          db.prepare('INSERT INTO search_index(type, projectId, title, body) VALUES (?, ?, ?, ?)')
+            .run('message', String(projectId), `Chat: ${sid}`, fullContent.substring(0, 500));
+        }
 
         // Update token counts for session
         if (inputTokens || outputTokens) {
@@ -308,6 +318,52 @@ router.post('/', chatLimiter, async (req, res) => {
     console.error('Chat stream error:', err);
     res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
     res.end();
+  }
+});
+
+// GET /api/chat/sessions/general — sessions with no project (must be before :projectId)
+router.get('/sessions/general', (req, res) => {
+  const rows = db.prepare(`
+    SELECT DISTINCT m.sessionId, MIN(m.createdAt) as startedAt,
+      s.title, COALESCE(s.isSummarized, 0) as isSummarized,
+      COALESCE(s.starred, 0) as starred,
+      COALESCE(s.inputTokens, 0) as inputTokens,
+      COALESCE(s.outputTokens, 0) as outputTokens
+    FROM messages m
+    LEFT JOIN sessions s ON s.sessionId = m.sessionId
+    WHERE m.projectId IS NULL
+    GROUP BY m.sessionId ORDER BY COALESCE(s.starred,0) DESC, startedAt DESC
+    LIMIT 30
+  `).all();
+  res.json(rows);
+});
+
+// GET /api/chat/all-history?from=ISO&to=ISO — all sessions across all projects
+router.get('/all-history', (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const fromDate = from || '2000-01-01';
+    const toDate = to || '2099-12-31';
+    const rows = db.prepare(`
+      SELECT
+        m.sessionId,
+        s.title,
+        m.projectId,
+        p.name as projectName,
+        MAX(m.createdAt) as lastAt,
+        (SELECT content FROM messages WHERE sessionId = m.sessionId AND role = 'assistant' ORDER BY createdAt DESC LIMIT 1) as lastMsg
+      FROM messages m
+      LEFT JOIN sessions s ON s.sessionId = m.sessionId
+      LEFT JOIN projects p ON p.id = m.projectId
+      WHERE m.createdAt >= ? AND m.createdAt <= ?
+      GROUP BY m.sessionId
+      ORDER BY lastAt DESC
+      LIMIT 300
+    `).all(fromDate, toDate);
+    res.json(rows);
+  } catch (err) {
+    console.error('[all-history]', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

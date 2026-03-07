@@ -27,10 +27,10 @@ const TEMPERATURES = [
   { label: 'Creative', value: 1.0, desc: 'Varied, imaginative' },
 ];
 
-function ChatPage() {
+function ChatPage({ general = false }) {
   const { id: projectIdParam } = useParams();
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
-  const projectId = projectIdParam ? Number(projectIdParam) : activeProjectId;
+  const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
   const { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate } = useChat({ projectId });
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, startListening, stopListening, speak } = useVoice();
@@ -50,6 +50,7 @@ function ChatPage() {
   const [searchError, setSearchError] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [inlineImages, setInlineImages] = useState([]);
 
   // Title editing
   const [editingTitle, setEditingTitle] = useState(false);
@@ -57,6 +58,8 @@ function ChatPage() {
 
   // Session deletion
   const [confirmDeleteSession, setConfirmDeleteSession] = useState(false);
+  const [showSessionPicker, setShowSessionPicker] = useState(false);
+  const [confirmDeleteSid, setConfirmDeleteSid] = useState(null);
 
   // Model + temperature
   const [chatModel, setChatModel] = useState(null);
@@ -106,8 +109,9 @@ function ChatPage() {
 
   useEffect(() => {
     fetchProjects();
-    if (projectId) { setActive(projectId); fetchSessions(); }
-  }, [projectId]);
+    if (general) { fetchSessions(); }
+    else if (projectId) { setActive(projectId); fetchSessions(); }
+  }, [projectId, general]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   useEffect(() => {
@@ -147,10 +151,28 @@ function ChatPage() {
     return () => document.removeEventListener('vault:new-chat', handler);
   }, [clearMessages]);
 
+  // Load a specific session (from sidebar or history page)
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.detail) return;
+      setShowSummaryPanel(false);
+      setSummaryText('');
+      setSuggestions([]);
+      setActiveArtifacts(null);
+      loadHistory(e.detail);
+    };
+    document.addEventListener('vault:load-session', handler);
+    return () => document.removeEventListener('vault:load-session', handler);
+  }, [loadHistory]);
+
   const fetchSessions = async () => {
-    if (!projectId) return;
-    const res = await api.get(`/api/chat/sessions/${projectId}`);
-    setSessions(await res.json());
+    if (general) {
+      const res = await api.get('/api/chat/sessions/general');
+      setSessions(await res.json());
+    } else if (projectId) {
+      const res = await api.get(`/api/chat/sessions/${projectId}`);
+      setSessions(await res.json());
+    }
   };
 
   const loadPrompts = async () => {
@@ -165,13 +187,37 @@ function ChatPage() {
 
   const effectiveModel = chatModel || project?.model || 'claude-sonnet-4-6';
 
+  const handlePaste = (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+    if (imageItems.length === 0) return;
+    e.preventDefault();
+    imageItems.forEach(item => {
+      const file = item.getAsFile();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target.result;
+        setInlineImages(prev => [...prev, {
+          id: Math.random().toString(36).slice(2),
+          mimeType: file.type,
+          data: dataUrl.split(',')[1],
+          preview: dataUrl,
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleSend = async (overrideText) => {
     const text = (overrideText || input).trim();
-    if (!text || isStreaming) return;
+    if (!text && inlineImages.length === 0) return;
+    if (isStreaming) return;
     if (urlAttachments.some(u => u.status === 'fetching')) return;
     const ids = attachments.map(a => a.id);
     const meta = attachments.map(a => ({ id: a.id, name: a.name, mimetype: a.mimetype, preview: a.preview }));
     const readyUrls = urlAttachments.filter(u => u.status === 'ready');
+    const imgPayload = inlineImages.map(i => ({ mimeType: i.mimeType, data: i.data }));
     setInput('');
     setShowMention(false);
     setShowUrlInput(false);
@@ -182,9 +228,10 @@ function ChatPage() {
     setShowPromptPicker(false);
     clearAttachments();
     clearUrls();
+    setInlineImages([]);
     setSuggestions([]);
     setActiveArtifacts(null);
-    await sendMessage(text, ids, meta, effectiveModel, readyUrls, temperature, selectedPersonaId, reasoning);
+    await sendMessage(text, ids, meta, effectiveModel, readyUrls, temperature, selectedPersonaId, reasoning, imgPayload);
     setTimeout(fetchSessions, 2000);
   };
 
@@ -279,6 +326,13 @@ function ChatPage() {
     await api.delete(`/api/chat/sessions/${sessionId}`);
     clearMessages();
     setConfirmDeleteSession(false);
+    fetchSessions();
+  };
+
+  const handleDeleteSessionById = async (sid) => {
+    await api.delete(`/api/chat/sessions/${sid}`);
+    if (sid === sessionId) clearMessages();
+    setConfirmDeleteSid(null);
     fetchSessions();
   };
 
@@ -378,13 +432,17 @@ function ChatPage() {
         className="flex-shrink-0 px-4 h-12 flex items-center gap-2 border-b"
         style={{ borderColor: 'var(--color-border)' }}
       >
-        {project && (
+        {general ? (
+          <span className="text-sm font-medium flex-shrink-0" style={{ color: 'var(--color-text)' }}>
+            General
+          </span>
+        ) : project ? (
           <span className="text-sm font-medium flex-shrink-0 truncate max-w-[120px]" style={{ color: 'var(--color-text)' }}>
             {project.name}
           </span>
-        )}
+        ) : null}
 
-        {project && sessionId && (
+        {(general ? sessionId : (project && sessionId)) && (
           <span style={{ color: 'var(--color-border)' }} className="flex-shrink-0">/</span>
         )}
 
@@ -412,26 +470,70 @@ function ChatPage() {
         )}
 
         {sessions.length > 0 && (
-          <select
-            className="text-xs px-2 py-1 rounded-lg border outline-none flex-shrink-0"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            value={sessionId || ''}
-            onChange={(e) => {
-              setShowSummaryPanel(false);
-              setSummaryText('');
-              setSuggestions([]);
-              setActiveArtifacts(null);
-              e.target.value === 'new' ? clearMessages() : loadHistory(e.target.value);
-            }}
-          >
-            <option value="new">+ New chat</option>
-            {sessions.map((s) => (
-              <option key={s.sessionId} value={s.sessionId}>
-                {s.starred ? '⭐ ' : ''}{s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}
-                {s.isSummarized ? ' ✦' : ''}
-              </option>
-            ))}
-          </select>
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={() => setShowSessionPicker(v => !v)}
+              className="text-xs px-2 py-1 rounded-lg border outline-none flex items-center gap-1 max-w-[140px]"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <span className="truncate">
+                {currentSession
+                  ? (currentSession.starred ? '⭐ ' : '') + (currentSession.title || `${new Date(currentSession.startedAt).toLocaleDateString()} · ${currentSession.sessionId.slice(-6)}`) + (currentSession.isSummarized ? ' ✦' : '')
+                  : '+ New chat'}
+              </span>
+              {getIcon('chevron-down', { size: 10 })}
+            </button>
+            {showSessionPicker && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => { setShowSessionPicker(false); setConfirmDeleteSid(null); }} />
+                <div
+                  className="absolute left-0 top-full mt-1 z-20 rounded-xl border shadow-lg overflow-hidden"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '220px', maxWidth: '300px', maxHeight: '320px', overflowY: 'auto' }}
+                >
+                  <button
+                    onClick={() => { clearMessages(); setShowSummaryPanel(false); setSummaryText(''); setSuggestions([]); setActiveArtifacts(null); setShowSessionPicker(false); }}
+                    className="w-full text-left px-3 py-2 text-xs hover:opacity-70 border-b"
+                    style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
+                  >
+                    + New chat
+                  </button>
+                  {sessions.map((s) => (
+                    <div
+                      key={s.sessionId}
+                      className="group flex items-center gap-1 px-3 py-2 border-b last:border-b-0 hover:opacity-80"
+                      style={{ background: s.sessionId === sessionId ? 'var(--color-bg)' : 'transparent', borderColor: 'var(--color-border)' }}
+                    >
+                      {confirmDeleteSid === s.sessionId ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="text-xs text-red-500 flex-1">Delete?</span>
+                          <button onClick={() => handleDeleteSessionById(s.sessionId)} className="text-xs px-2 py-0.5 rounded bg-red-500 text-white">Yes</button>
+                          <button onClick={() => setConfirmDeleteSid(null)} className="text-xs" style={{ color: 'var(--color-muted)' }}>No</button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => { setShowSummaryPanel(false); setSummaryText(''); setSuggestions([]); setActiveArtifacts(null); loadHistory(s.sessionId); setShowSessionPicker(false); }}
+                            className="flex-1 text-left text-xs truncate"
+                            style={{ color: 'var(--color-text)' }}
+                          >
+                            {s.starred ? '⭐ ' : ''}{s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}{s.isSummarized ? ' ✦' : ''}
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setConfirmDeleteSid(s.sessionId); }}
+                            className="opacity-0 group-hover:opacity-100 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
+                            style={{ color: 'var(--color-muted)' }}
+                            title="Delete chat"
+                          >
+                            {getIcon('trash', { size: 12 })}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         <div className="flex-1" />
@@ -921,11 +1023,33 @@ function ChatPage() {
                   <ChatFileBar attachments={attachments} onRemove={removeAttachment} />
                   <UrlBar urlAttachments={urlAttachments} onRemove={removeUrl} />
 
+                  {inlineImages.length > 0 && (
+                    <div className="flex flex-wrap gap-2 px-3 pt-2">
+                      {inlineImages.map(img => (
+                        <div key={img.id} className="relative">
+                          <img
+                            src={img.preview}
+                            alt="pasted"
+                            className="w-16 h-16 object-cover rounded-lg border"
+                            style={{ borderColor: 'var(--color-border)' }}
+                          />
+                          <button
+                            onClick={() => setInlineImages(prev => prev.filter(i => i.id !== img.id))}
+                            className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                            style={{ background: 'var(--color-muted)', lineHeight: 1 }}
+                            title="Remove image"
+                          >×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <textarea
                     ref={textareaRef}
                     value={input}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
                     placeholder={
                       urlAttachments.length > 0
                         ? 'What would you like to know about this page?'

@@ -175,6 +175,15 @@ function Layout() {
           </Link>
 
           <Link
+            to="/history"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname === '/history' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Chat History"
+          >
+            {getIcon('clock', { size: 16 })}
+          </Link>
+
+          <Link
             to="/debate"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/debate' ? 'var(--color-primary)' : 'var(--color-muted)' }}

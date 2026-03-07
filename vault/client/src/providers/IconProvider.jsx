@@ -56,6 +56,8 @@ const semanticMap = {
   eye: { lucide: 'Eye' },
   'eye-off': { lucide: 'EyeOff' },
   'bar-chart': { lucide: 'BarChart2' },
+  'clock': { lucide: 'Clock' },
+  'message-circle': { lucide: 'MessageCircle' },
 };
 
 const IconContext = createContext(null);

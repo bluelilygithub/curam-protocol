@@ -7,6 +7,9 @@ const SECTIONS = [
   { id: 'getting-started', label: 'Getting Started' },
   { id: 'projects',        label: 'Projects' },
   { id: 'chat',            label: 'Chat' },
+  { id: 'general-chat',    label: 'General Chat' },
+  { id: 'history',         label: 'Chat History' },
+  { id: 'web-search',      label: 'Web Search' },
   { id: 'files',           label: 'Files & Attachments' },
   { id: 'web-pages',       label: 'Web Pages' },
   { id: 'artifacts',       label: 'Artifacts' },
@@ -211,8 +214,11 @@ function UserGuidePage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 my-6">
           <FeatureCard emoji="📁" title="Projects" desc="Organise work into projects. Each project carries its own context, model, and behaviour settings." />
-          <FeatureCard emoji="💬" title="Chat" desc="Stream responses from Claude with full project context. Switch models, temperature, and sessions on the fly." />
+          <FeatureCard emoji="💬" title="Chat" desc="Stream responses from Claude or Gemini with full project context. Switch models, temperature, and sessions on the fly." />
+          <FeatureCard emoji="🗨️" title="General Chat" desc="A project-free workspace for ad-hoc questions and quick tasks. Sessions are saved and searchable like any project chat." />
+          <FeatureCard emoji="🕐" title="Chat History" desc="Browse every session across all projects and General Chat, filtered by date range or searched by content." />
           <FeatureCard emoji="📎" title="Files & URLs" desc="Attach PDFs, images, documents, and live web pages directly into the conversation." />
+          <FeatureCard emoji="🔍" title="Web Search" desc="Type @search in chat to fetch live web results and attach them as context before sending." />
           <FeatureCard emoji="🧠" title="Memory" desc="Teach Claude persistent facts about you — preferences, timezone, conventions — that carry across every project." />
           <FeatureCard emoji="📖" title="Prompt Library" desc="Save your best prompts, tag them, and insert them into any chat in one click." />
           <FeatureCard emoji="⬡" title="Artifacts" desc="Code and HTML from Claude renders in a live side panel — preview, copy, or iterate." />
@@ -315,12 +321,14 @@ function UserGuidePage() {
         <SubHeading>AI Model</SubHeading>
         <P>
           Set the default model for all chats within the project. This can be overridden per chat
-          session using the model picker in the chat header.
+          session using the model picker in the chat header. Both Anthropic and Google models are available.
         </P>
         <UL>
           <LI><strong>⚡ Haiku 4.5 (Economy)</strong> — Fast and affordable. Best for quick tasks, drafts, and Q&amp;A.</LI>
           <LI><strong>⚖️ Sonnet 4.6 (Standard)</strong> — Smart and balanced. Best for most work — code, writing, analysis.</LI>
           <LI><strong>🧠 Opus 4.6 (Premium)</strong> — Most capable. Best for complex reasoning and deep analysis.</LI>
+          <LI><strong>🔷 Gemini 2.0 Flash</strong> — Google's fast multimodal model. Great alternative for speed-sensitive tasks.</LI>
+          <LI><strong>🔮 Gemini 2.5 Pro</strong> — Google's most capable model with deep reasoning. Comparable to Opus for complex tasks.</LI>
         </UL>
 
         <SubHeading>Deleting a project</SubHeading>
@@ -412,8 +420,109 @@ function UserGuidePage() {
         <SubHeading>Renaming and deleting sessions</SubHeading>
         <UL>
           <LI>Click the session title in the header to rename it inline. Press <Kbd>Enter</Kbd> or click away to save.</LI>
-          <LI>Click the trash icon in the chat header to delete the session. All messages are permanently removed.</LI>
+          <LI>Click the trash icon in the chat header to delete the <em>current</em> session. A confirmation banner appears before anything is removed.</LI>
+          <LI>To delete any session (including ones you are not currently in), open the session dropdown and hover over the session — a trash icon appears on the right. Click it, then confirm with <strong>Yes</strong>.</LI>
         </UL>
+
+        <Divider />
+
+        {/* ── General Chat ── */}
+        <SectionHeading id="general-chat">General Chat</SectionHeading>
+        <P>
+          <strong>General Chat</strong> is a project-free workspace for ad-hoc conversations — questions,
+          quick tasks, and anything that does not belong to a specific project. Sessions created here are
+          stored just like project sessions, but have no project context injected.
+        </P>
+
+        <SubHeading>Opening General Chat</SubHeading>
+        <UL>
+          <LI>Click <strong>General</strong> at the top of the left sidebar.</LI>
+          <LI>Click the <strong>+</strong> icon next to <em>General</em> to start a fresh session immediately.</LI>
+          <LI>Navigate directly to <code>/chat</code>.</LI>
+        </UL>
+
+        <SubHeading>Session list</SubHeading>
+        <P>
+          The sidebar shows your most recent general sessions under the <em>General</em> heading.
+          Click any session title to jump straight into it. The session count badge on the right can be
+          clicked to expand or collapse the list.
+        </P>
+
+        <Callout type="tip">
+          General Chat still respects your active Persona and your global Memory — so Claude still knows
+          your preferences even without a project context.
+        </Callout>
+
+        <Divider />
+
+        {/* ── Chat History ── */}
+        <SectionHeading id="history">Chat History</SectionHeading>
+        <P>
+          The <strong>Chat History</strong> browser shows every chat session across all projects and
+          General Chat in one place, filterable by date and searchable by content.
+        </P>
+
+        <SubHeading>Opening Chat History</SubHeading>
+        <UL>
+          <LI>Click the <strong>clock icon</strong> in the top navigation bar.</LI>
+          <LI>Navigate directly to <code>/history</code>.</LI>
+          <LI>Click <strong>Chat History</strong> at the bottom of the left sidebar.</LI>
+        </UL>
+
+        <SubHeading>Date filters</SubHeading>
+        <P>
+          Use the filter chips at the top to narrow sessions by time period:
+        </P>
+        <UL>
+          <LI><strong>All time</strong> — every session ever (default).</LI>
+          <LI><strong>Today / Yesterday</strong> — sessions from those days.</LI>
+          <LI><strong>This week / Last 7 days / This month / Last month / Last 30 days</strong> — rolling window filters.</LI>
+          <LI><strong>Custom</strong> — reveals two date pickers so you can set an exact from/to range.</LI>
+        </UL>
+
+        <SubHeading>Search</SubHeading>
+        <P>
+          The search box filters sessions in real time by title, project name, or the content of the
+          last message. Useful for finding a session when you remember a phrase but not the date.
+        </P>
+
+        <SubHeading>Navigating to a session</SubHeading>
+        <P>
+          Click any row to open that session. Vault navigates to the correct project chat (or General
+          Chat) and loads the session automatically.
+        </P>
+
+        <Divider />
+
+        {/* ── Web Search ── */}
+        <SectionHeading id="web-search">Web Search</SectionHeading>
+        <P>
+          Use <code>@search</code> in any chat to fetch live web results and attach them as context
+          before sending your message. This lets Claude answer questions that require up-to-date
+          information beyond its training data.
+        </P>
+
+        <SubHeading>How to use @search</SubHeading>
+        <UL>
+          <LI>Type <strong>@</strong> in the chat input to open the mention menu, then select <strong>Search the web</strong>.</LI>
+          <LI>A search box appears — type your query and press <Kbd>Enter</Kbd>.</LI>
+          <LI>Results are shown in the panel with title, snippet, and a clickable URL for each.</LI>
+          <LI>Click <strong>Add all</strong> to attach all results as URL context chips, or click individual URLs to add them selectively.</LI>
+          <LI>Click <strong>Done</strong> to close the panel and return to the chat input.</LI>
+        </UL>
+
+        <SubHeading>How results are used</SubHeading>
+        <P>
+          Each attached URL is fetched server-side and its text content is included in your message
+          as context — the same as manually adding a URL via the link icon. Claude receives the full
+          page text and can summarise, compare, or answer questions about it.
+        </P>
+
+        <Callout type="info">
+          Web search requires a <strong>SEARCH_API_KEY</strong> to be configured. Vault auto-detects
+          the provider from the key format: Brave Search (keys starting with <code>BSA</code>),
+          Serper.dev (40-character hex keys), or SerpAPI (all others).
+        </Callout>
 
         <Divider />
 

@@ -14,6 +14,7 @@ import PersonasPage from './pages/PersonasPage';
 import ComparisonPage from './pages/ComparisonPage';
 import DebatePage from './pages/DebatePage';
 import AdminPage from './pages/AdminPage';
+import ChatHistoryPage from './pages/ChatHistoryPage';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
@@ -57,7 +58,7 @@ function App() {
               <Route index element={<ProjectList />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/projects/:id/chat" element={<ChatPage />} />
-              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/chat" element={<ChatPage general />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/memory" element={<MemoryPage />} />
               <Route path="/prompts" element={<PromptsPage />} />
@@ -66,6 +67,7 @@ function App() {
               <Route path="/compare" element={<ComparisonPage />} />
               <Route path="/debate" element={<DebatePage />} />
               <Route path="/admin" element={<AdminPage />} />
+              <Route path="/history" element={<ChatHistoryPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
