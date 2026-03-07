@@ -50,6 +50,12 @@ const semanticMap = {
   'folder-open': { lucide: 'FolderOpen' },
   'folder-plus': { lucide: 'FolderPlus' },
   cpu: { lucide: 'Cpu' },
+  files: { lucide: 'Files' },
+  compare: { lucide: 'GitCompare' },
+  debate: { lucide: 'Swords' },
+  eye: { lucide: 'Eye' },
+  'eye-off': { lucide: 'EyeOff' },
+  'bar-chart': { lucide: 'BarChart2' },
 };
 
 const IconContext = createContext(null);

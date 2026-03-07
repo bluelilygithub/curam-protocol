@@ -5,18 +5,26 @@ import { themes, fontOptions, iconPackOptions } from '../themes';
 import { useIcon } from '../providers/IconProvider';
 
 function SettingsPage() {
-  const { font, theme, iconPack, setFont, setTheme, setIconPack } = useSettingsStore();
+  const { font, theme, iconPack, setFont, setTheme, setIconPack, sessionBudget, setSessionBudget, allowedFileTypes, setAllowedFileTypes } = useSettingsStore();
+  const [customBudget, setCustomBudget] = useState(
+    sessionBudget && ![0.10, 0.25, 0.50, 1.00, 5.00].includes(sessionBudget)
+      ? String(sessionBudget)
+      : ''
+  );
+
+  const BUDGET_PRESETS = [0.10, 0.25, 0.50, 1.00, 5.00];
   const { token } = useAuthStore();
   const getIcon = useIcon();
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
-  const [pwStatus, setPwStatus] = useState(null); // { ok, msg }
+  const [pwStatus, setPwStatus] = useState(null);
+  const [showPwFields, setShowPwFields] = useState({ current: false, next: false, confirm: false });
 
   async function handleChangePassword(e) {
     e.preventDefault();
     setPwStatus(null);
     if (pwForm.next !== pwForm.confirm) return setPwStatus({ ok: false, msg: 'New passwords do not match' });
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await fetch('/api/user/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
@@ -119,6 +127,92 @@ function SettingsPage() {
         </div>
       </section>
 
+      {/* Session Budget */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Session Budget
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Show a warning when a single chat session approaches or exceeds a cost limit.
+        </p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            onClick={() => { setSessionBudget(null); setCustomBudget(''); }}
+            className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+            style={{
+              background: sessionBudget === null ? 'var(--color-primary)' : 'var(--color-surface)',
+              borderColor: sessionBudget === null ? 'var(--color-primary)' : 'var(--color-border)',
+              color: sessionBudget === null ? '#fff' : 'var(--color-text)',
+            }}
+          >
+            Off
+          </button>
+          {BUDGET_PRESETS.map(v => (
+            <button
+              key={v}
+              onClick={() => { setSessionBudget(v); setCustomBudget(''); }}
+              className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+              style={{
+                background: sessionBudget === v ? 'var(--color-primary)' : 'var(--color-surface)',
+                borderColor: sessionBudget === v ? 'var(--color-primary)' : 'var(--color-border)',
+                color: sessionBudget === v ? '#fff' : 'var(--color-text)',
+              }}
+            >
+              ${v.toFixed(2)}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Custom ($)</span>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            placeholder="e.g. 2.50"
+            value={customBudget}
+            onChange={e => {
+              setCustomBudget(e.target.value);
+              const v = parseFloat(e.target.value);
+              if (v > 0) setSessionBudget(v);
+            }}
+            className="w-28 px-3 py-1.5 rounded-lg border text-xs outline-none"
+            style={{
+              background: 'var(--color-surface)',
+              borderColor: customBudget && !BUDGET_PRESETS.includes(sessionBudget) && sessionBudget !== null
+                ? 'var(--color-primary)'
+                : 'var(--color-border)',
+              color: 'var(--color-text)',
+            }}
+          />
+          {sessionBudget !== null && (
+            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Warn at ${(sessionBudget * 0.8).toFixed(3)} (80%) and ${sessionBudget.toFixed(2)} (100%)
+            </span>
+          )}
+        </div>
+      </section>
+
+      {/* Upload File Types */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Upload File Types
+        </h2>
+        <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+          Comma-separated list of accepted file extensions and MIME types for all file upload inputs.
+        </p>
+        <input
+          type="text"
+          value={allowedFileTypes}
+          onChange={(e) => setAllowedFileTypes(e.target.value)}
+          className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none font-mono"
+          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          placeholder=".pdf,.txt,.md,.csv,.json,image/*"
+        />
+        <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
+          Examples: <code>.pdf,.docx,.xlsx</code> or <code>image/*</code> or <code>.pdf,image/*,.txt</code>
+        </p>
+      </section>
+
       {/* Change Password */}
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
@@ -138,15 +232,25 @@ function SettingsPage() {
               <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>
                 {label}
               </label>
-              <input
-                type="password"
-                value={pwForm[key]}
-                onChange={e => setPwForm(f => ({ ...f, [key]: e.target.value }))}
-                required
-                placeholder="••••••••"
-                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-              />
+              <div className="relative">
+                <input
+                  type={showPwFields[key] ? 'text' : 'password'}
+                  value={pwForm[key]}
+                  onChange={e => setPwForm(f => ({ ...f, [key]: e.target.value }))}
+                  required
+                  placeholder="••••••••"
+                  className="w-full px-3 py-2.5 pr-10 rounded-xl border text-sm outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPwFields((prev) => ({ ...prev, [key]: !prev[key] }))}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
+                  style={{ color: 'var(--color-muted)' }}
+                >
+                  {getIcon(showPwFields[key] ? 'eye-off' : 'eye', { size: 14 })}
+                </button>
+              </div>
             </div>
           ))}
           {pwStatus && (

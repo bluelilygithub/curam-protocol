@@ -11,7 +11,11 @@ import MemoryPage from './pages/MemoryPage';
 import PromptsPage from './pages/PromptsPage';
 import UserGuidePage from './pages/UserGuidePage';
 import PersonasPage from './pages/PersonasPage';
+import ComparisonPage from './pages/ComparisonPage';
+import DebatePage from './pages/DebatePage';
+import AdminPage from './pages/AdminPage';
 import LoginPage from './pages/LoginPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
 import SearchPalette from './components/SearchPalette';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
@@ -47,6 +51,7 @@ function App() {
           {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/register" element={<Navigate to="/login" replace />} />
             <Route element={<AuthGuard><Layout /></AuthGuard>}>
               <Route index element={<ProjectList />} />
@@ -58,6 +63,9 @@ function App() {
               <Route path="/prompts" element={<PromptsPage />} />
               <Route path="/guide" element={<UserGuidePage />} />
               <Route path="/personas" element={<PersonasPage />} />
+              <Route path="/compare" element={<ComparisonPage />} />
+              <Route path="/debate" element={<DebatePage />} />
+              <Route path="/admin" element={<AdminPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

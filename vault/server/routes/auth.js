@@ -2,10 +2,17 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const db = require('../db');
 
 const SALT_ROUNDS = 12;
 const SESSION_HOURS = 24;
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: 'Too many login attempts, please try again later.' },
+});
 
 function makeToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -39,7 +46,7 @@ router.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
 
@@ -58,36 +65,70 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/change-password
-router.post('/change-password', async (req, res) => {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Not authenticated' });
-
-  const session = db.prepare('SELECT * FROM auth_sessions WHERE token=?').get(token);
-  if (!session || new Date(session.expiresAt) < new Date()) {
-    return res.status(401).json({ error: 'Session expired' });
-  }
-
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Both fields required' });
-  if (newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
-
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(session.userId);
-  const match = await bcrypt.compare(currentPassword, user.passwordHash);
-  if (!match) return res.status(401).json({ error: 'Current password is incorrect' });
-
-  const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-  db.prepare('UPDATE users SET passwordHash=? WHERE id=?').run(newHash, user.id);
-  res.json({ ok: true });
-});
-
 // POST /api/auth/logout
 router.post('/logout', (req, res) => {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (token) db.prepare('DELETE FROM auth_sessions WHERE token=?').run(token);
   res.json({ ok: true });
+});
+
+// POST /api/auth/reset-password-request
+router.post('/reset-password-request', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email required' });
+
+  const user = db.prepare('SELECT id FROM users WHERE email=?').get(email.toLowerCase());
+  // Always return ok to avoid email enumeration
+  if (!user) return res.json({ ok: true });
+
+  const token = makeToken();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+  db.prepare('DELETE FROM password_resets WHERE email=?').run(email.toLowerCase());
+  db.prepare('INSERT INTO password_resets (token, email, expiresAt) VALUES (?, ?, ?)').run(token, email.toLowerCase(), expiresAt);
+
+  const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+  const resetLink = `${appUrl}/reset-password?token=${token}`;
+  const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f0;padding:20px;">
+<div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
+<h2 style="margin-top:0;">Reset your password</h2>
+<p>Click the link below to reset your Project Vault password. This link expires in 1 hour.</p>
+<a href="${resetLink}" style="display:inline-block;background:#CC785C;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Reset Password</a>
+<p style="margin-top:24px;font-size:12px;color:#888;">If you didn't request this, you can ignore this email.</p>
+</div></body></html>`;
+
+  try {
+    const sendEmail = require('../utils/sendEmail');
+    await sendEmail({ to: email.toLowerCase(), subject: 'Reset your Project Vault password', html });
+  } catch (err) {
+    console.error('Reset email error:', err.message);
+  }
+
+  res.json({ ok: true });
+});
+
+// POST /api/auth/reset-password-confirm
+router.post('/reset-password-confirm', async (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ error: 'token and password required' });
+
+  const reset = db.prepare('SELECT * FROM password_resets WHERE token=?').get(token);
+  if (!reset || new Date(reset.expiresAt) < new Date()) {
+    if (reset) db.prepare('DELETE FROM password_resets WHERE token=?').run(token);
+    return res.status(400).json({ error: 'Invalid or expired reset link' });
+  }
+
+  try {
+    const hash = await bcrypt.hash(password, SALT_ROUNDS);
+    db.prepare('UPDATE users SET passwordHash=? WHERE email=?').run(hash, reset.email);
+    db.prepare('DELETE FROM password_resets WHERE token=?').run(token);
+    const user = db.prepare('SELECT id FROM users WHERE email=?').get(reset.email);
+    if (user) db.prepare('DELETE FROM auth_sessions WHERE userId=?').run(user.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/auth/me

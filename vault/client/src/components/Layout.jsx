@@ -5,17 +5,40 @@ import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 
 function Layout() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isMobileNow = () => typeof window !== 'undefined' && window.innerWidth < 640;
+
+  // Start closed on mobile, open on desktop
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobileNow());
+  const [isMobile, setIsMobile] = useState(isMobileNow());
+
   const { token, clearAuth } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
+  const getIcon = useIcon();
 
+  // Track mobile/desktop on resize
+  useEffect(() => {
+    const check = () => {
+      const mobile = window.innerWidth < 640;
+      setIsMobile(mobile);
+      // Auto-open sidebar when transitioning to desktop
+      if (!mobile) setSidebarOpen(true);
+    };
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // Auto-close sidebar on mobile when navigating
+  useEffect(() => {
+    if (isMobile) setSidebarOpen(false);
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // External toggle event (keyboard shortcut etc.)
   useEffect(() => {
     const handler = () => setSidebarOpen(v => !v);
     document.addEventListener('vault:toggle-sidebar', handler);
     return () => document.removeEventListener('vault:toggle-sidebar', handler);
   }, []);
-  const getIcon = useIcon();
-  const location = useLocation();
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', {
@@ -26,18 +49,51 @@ function Layout() {
     navigate('/login', { replace: true });
   };
 
+  // Sidebar styles differ on mobile (fixed overlay) vs desktop (push)
+  const sidebarStyle = isMobile
+    ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        bottom: 0,
+        zIndex: 40,
+        width: '240px',
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-240px)',
+        transition: 'transform 0.2s ease',
+        borderRight: '1px solid var(--color-border)',
+        background: 'var(--color-surface)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }
+    : {
+        width: sidebarOpen ? '240px' : '0px',
+        transition: 'width 0.2s',
+        borderRight: '1px solid var(--color-border)',
+        background: 'var(--color-surface)',
+        display: 'flex',
+        flexDirection: 'column',
+        flexShrink: 0,
+        overflow: 'hidden',
+      };
+
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+    <div
+      className="flex overflow-hidden"
+      style={{ height: '100dvh', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+    >
+      {/* Mobile backdrop — tap to close sidebar */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 z-30"
+          style={{ background: 'rgba(0,0,0,0.35)' }}
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside
-        className="flex-shrink-0 flex flex-col border-r transition-all duration-200 overflow-hidden"
-        style={{
-          width: sidebarOpen ? '240px' : '0px',
-          borderColor: 'var(--color-border)',
-          background: 'var(--color-surface)',
-        }}
-      >
-        {sidebarOpen && <ProjectSidebar onClose={() => setSidebarOpen(false)} />}
+      <aside style={sidebarStyle}>
+        <ProjectSidebar onClose={() => setSidebarOpen(false)} />
       </aside>
 
       {/* Main */}
@@ -81,7 +137,7 @@ function Layout() {
 
           <Link
             to="/guide"
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity text-xs font-bold border"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-xs font-bold border"
             style={{
               color: location.pathname === '/guide' ? 'var(--color-primary)' : 'var(--color-muted)',
               borderColor: location.pathname === '/guide' ? 'var(--color-primary)' : 'var(--color-border)',
@@ -102,7 +158,7 @@ function Layout() {
 
           <Link
             to="/memory"
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/memory' ? 'var(--color-primary)' : 'var(--color-muted)' }}
             title="Memory"
           >
@@ -111,11 +167,38 @@ function Layout() {
 
           <Link
             to="/prompts"
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/prompts' ? 'var(--color-primary)' : 'var(--color-muted)' }}
             title="Prompt Library"
           >
             {getIcon('book', { size: 16 })}
+          </Link>
+
+          <Link
+            to="/debate"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname === '/debate' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Multi-Model Debate"
+          >
+            {getIcon('debate', { size: 16 })}
+          </Link>
+
+          <Link
+            to="/compare"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname === '/compare' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Document Compare"
+          >
+            {getIcon('compare', { size: 16 })}
+          </Link>
+
+          <Link
+            to="/admin"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname === '/admin' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Dashboard"
+          >
+            {getIcon('bar-chart', { size: 16 })}
           </Link>
 
           <Link

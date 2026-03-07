@@ -6,13 +6,15 @@ import NewProjectModal from './NewProjectModal';
 import api from '../utils/apiClient';
 
 function ProjectSidebar({ onClose }) {
-  const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder } = useProjectStore();
+  const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder, remove } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
   const getIcon = useIcon();
@@ -51,7 +53,21 @@ function ProjectSidebar({ onClose }) {
     setDraggedId(null);
     setDragOverId(null);
   };
-  const handleDragEnd = () => { setDraggedId(null); setDragOverId(null); };
+  const handleDragEnd = () => { setDraggedId(null); setDragOverId(null); setDragOverFolderId(null); };
+
+  const handleFolderDrop = async (e, folderId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedId) return;
+    const id = draggedId;
+    setDragOverFolderId(null);
+    setDraggedId(null);
+    setDragOverId(null);
+    await update(id, { folderId });
+    await fetchProjects();
+    // Expand the folder so the project is visible
+    if (folderId) setCollapsedFolders(prev => ({ ...prev, [folderId]: false }));
+  };
 
   const handleCreate = async (data) => {
     const project = await create(data);
@@ -115,6 +131,32 @@ function ProjectSidebar({ onClose }) {
 
       {showModal && <NewProjectModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
 
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete "{deleteTarget.name}"?</h3>
+            <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
+              This will permanently delete the project
+              {deleteTarget.chatCount > 0 && `, all ${deleteTarget.chatCount} chat session${deleteTarget.chatCount === 1 ? '' : 's'}`}
+              , all uploaded files, and all messages. This cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button
+                onClick={async () => {
+                  await remove(deleteTarget.id);
+                  setDeleteTarget(null);
+                  if (activeProjectId === deleteTarget.id) navigate('/');
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-red-500 hover:opacity-80 transition-opacity"
+              >
+                Delete project
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Project list */}
       <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
         {/* Render project row helper */}
@@ -177,6 +219,14 @@ function ProjectSidebar({ onClose }) {
                     >
                       {getIcon('edit', { size: 11 })}
                     </span>
+                    <span
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
+                      className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                      style={{ color: '#ef4444' }}
+                      title="Delete project"
+                    >
+                      {getIcon('trash', { size: 11 })}
+                    </span>
                   </button>
                 )}
               </div>
@@ -203,8 +253,15 @@ function ProjectSidebar({ onClose }) {
                   <div key={folder.id}>
                     <button
                       onClick={() => toggleFolder(folder.id)}
-                      className="w-full text-left px-2 py-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-opacity hover:opacity-70"
-                      style={{ color: 'var(--color-muted)' }}
+                      onDragOver={(e) => { e.preventDefault(); setDragOverFolderId(folder.id); }}
+                      onDragLeave={() => setDragOverFolderId(null)}
+                      onDrop={(e) => handleFolderDrop(e, folder.id)}
+                      className="w-full text-left px-2 py-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider transition-all rounded-lg"
+                      style={{
+                        color: dragOverFolderId === folder.id ? 'var(--color-primary)' : 'var(--color-muted)',
+                        background: dragOverFolderId === folder.id ? 'var(--color-primary)15' : 'transparent',
+                        outline: dragOverFolderId === folder.id ? '1px dashed var(--color-primary)' : 'none',
+                      }}
                     >
                       {getIcon(isCollapsed ? 'chevron-right' : 'chevron-down', { size: 11 })}
                       {getIcon('folder-open', { size: 12 })}
@@ -215,6 +272,21 @@ function ProjectSidebar({ onClose }) {
                   </div>
                 );
               })}
+              {draggedId && projects.find(p => p.id === draggedId)?.folderId && (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOverFolderId('none'); }}
+                  onDragLeave={() => setDragOverFolderId(null)}
+                  onDrop={(e) => handleFolderDrop(e, null)}
+                  className="mx-1 my-0.5 px-2 py-1.5 rounded-lg text-xs transition-all"
+                  style={{
+                    border: dragOverFolderId === 'none' ? '1px dashed var(--color-primary)' : '1px dashed var(--color-border)',
+                    color: dragOverFolderId === 'none' ? 'var(--color-primary)' : 'var(--color-muted)',
+                    background: dragOverFolderId === 'none' ? 'var(--color-primary)10' : 'transparent',
+                  }}
+                >
+                  Drop here to remove from folder
+                </div>
+              )}
               {unfoldered.map(p => renderProject(p, false))}
               {projects.length === 0 && (
                 <p className="px-3 py-6 text-xs text-center" style={{ color: 'var(--color-muted)' }}>

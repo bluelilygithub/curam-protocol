@@ -1,0 +1,129 @@
+const express = require('express');
+const router = express.Router();
+const multer = require('multer');
+const fs = require('fs');
+const Anthropic = require('@anthropic-ai/sdk');
+const db = require('../db');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+});
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+const MODE_PROMPTS = {
+  diff: 'You will be given two documents. Provide a detailed comparison. Use clear headings to organise additions, removals, modifications, and unchanged sections. Be thorough and precise.',
+  summarise: 'You will be given two documents. Summarise the key differences between them in a clear, structured way. Focus on what has changed, what was added, and what was removed.',
+  reconcile: 'You will be given two documents. Reconcile them into a single unified version that incorporates the best elements of both. Where there are conflicts, choose the better option and briefly explain your choice.',
+  conflicts: 'You will be given two documents. Identify only the conflicts, contradictions, and incompatibilities between them. Ignore similarities — focus only on where they disagree.',
+};
+
+const MODE_VERB = {
+  diff: 'compare',
+  summarise: 'summarise the differences between',
+  reconcile: 'reconcile',
+  conflicts: 'identify the conflicts between',
+};
+
+async function resolveDocument(fileId, fileBuffer, fileName, fileMime) {
+  if (fileId) {
+    const file = db.prepare('SELECT * FROM files WHERE id=?').get(parseInt(fileId, 10));
+    if (!file) throw new Error(`File ID ${fileId} not found`);
+    if (file.mimetype?.startsWith('image/')) {
+      const data = fs.readFileSync(file.path).toString('base64');
+      return { type: 'image', name: file.name, mediaType: file.mimetype, data };
+    }
+    const content = file.extractedText || `[File: ${file.name} — no text content available]`;
+    return { type: 'text', name: file.name, content };
+  }
+  if (fileBuffer) {
+    if (fileMime?.startsWith('image/')) {
+      return { type: 'image', name: fileName, mediaType: fileMime, data: fileBuffer.toString('base64') };
+    }
+    return { type: 'text', name: fileName, content: fileBuffer.toString('utf8') };
+  }
+  throw new Error('No document provided');
+}
+
+// POST /api/compare
+router.post(
+  '/',
+  upload.fields([{ name: 'fileA', maxCount: 1 }, { name: 'fileB', maxCount: 1 }]),
+  async (req, res) => {
+    const { fileAId, fileBId, mode = 'diff', model = 'claude-sonnet-4-6' } = req.body;
+    const uploadA = req.files?.fileA?.[0];
+    const uploadB = req.files?.fileB?.[0];
+
+    if (!fileAId && !uploadA) return res.status(400).json({ error: 'Document A is required' });
+    if (!fileBId && !uploadB) return res.status(400).json({ error: 'Document B is required' });
+
+    let docA, docB;
+    try {
+      docA = await resolveDocument(fileAId, uploadA?.buffer, uploadA?.originalname, uploadA?.mimetype);
+      docB = await resolveDocument(fileBId, uploadB?.buffer, uploadB?.originalname, uploadB?.mimetype);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    const systemPrompt = MODE_PROMPTS[mode] || MODE_PROMPTS.diff;
+    const verb = MODE_VERB[mode] || 'compare';
+
+    // Build message content blocks
+    const contentBlocks = [];
+
+    if (docA.type === 'image') {
+      contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: docA.mediaType, data: docA.data } });
+      contentBlocks.push({ type: 'text', text: `The above is Document A: "${docA.name}"` });
+    } else {
+      contentBlocks.push({ type: 'text', text: `Document A: "${docA.name}"\n\n${docA.content}` });
+    }
+
+    if (docB.type === 'image') {
+      contentBlocks.push({ type: 'image', source: { type: 'base64', media_type: docB.mediaType, data: docB.data } });
+      contentBlocks.push({ type: 'text', text: `The above is Document B: "${docB.name}"` });
+    } else {
+      contentBlocks.push({ type: 'text', text: `Document B: "${docB.name}"\n\n${docB.content}` });
+    }
+
+    contentBlocks.push({ type: 'text', text: `Please ${verb} these two documents.` });
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    try {
+      const stream = anthropic.messages.stream({
+        model,
+        max_tokens: 8096,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: contentBlocks }],
+      });
+
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+          res.write(`data: ${JSON.stringify({ delta: chunk.delta.text })}\n\n`);
+        }
+      }
+
+      res.write(`data: [DONE]\n\n`);
+      res.end();
+    } catch (err) {
+      console.error('Compare stream error:', err);
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
+    }
+  }
+);
+
+// POST /api/compare/save
+router.post('/save', (req, res) => {
+  const { projectId, docAName, docBName, mode, model, result } = req.body;
+  if (!result) return res.status(400).json({ error: 'result required' });
+  const r = db.prepare(
+    'INSERT INTO comparisons (projectId, docAName, docBName, mode, model, result) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(projectId || null, docAName || '', docBName || '', mode || 'diff', model || '', result);
+  res.json({ id: r.lastInsertRowid });
+});
+
+module.exports = router;

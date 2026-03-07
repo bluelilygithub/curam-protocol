@@ -6,10 +6,16 @@ import NewProjectModal from '../components/NewProjectModal';
 import { getModelShortName } from '../utils/models';
 
 function ProjectList() {
-  const { projects, fetchProjects, create, setActive, reorder } = useProjectStore();
+  const { projects, fetchProjects, create, setActive, reorder, remove } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const handleConfirmDelete = async () => {
+    await remove(deleteTarget.id);
+    setDeleteTarget(null);
+  };
 
   const handleDrop = (targetId) => {
     if (!draggedId || draggedId === targetId) return;
@@ -37,6 +43,23 @@ function ProjectList() {
   return (
     <div className="flex flex-col h-full">
       {showModal && <NewProjectModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Delete "{deleteTarget.name}"?</h3>
+            <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
+              This will permanently delete the project
+              {deleteTarget.chatCount > 0 && `, all ${deleteTarget.chatCount} chat session${deleteTarget.chatCount === 1 ? '' : 's'}`}
+              , all uploaded files, and all messages. This cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button onClick={handleConfirmDelete} className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-red-500 hover:opacity-80 transition-opacity">Delete project</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {projects.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center px-6 pb-16">
@@ -85,6 +108,7 @@ function ProjectList() {
                   onDragOver={(e) => { e.preventDefault(); if (project.id !== draggedId) setDragOverId(project.id); }}
                   onDrop={(e) => { e.preventDefault(); handleDrop(project.id); }}
                   onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
+                  className="relative group"
                   style={{
                     opacity: draggedId === project.id ? 0.4 : 1,
                     outline: dragOverId === project.id ? '2px solid var(--color-primary)' : 'none',
@@ -132,6 +156,15 @@ function ProjectList() {
                       </span>
                     )}
                   </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
+                  className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+                  title="Delete project"
+                >
+                  {getIcon('trash', { size: 12 })}
                 </button>
                 </div>
               ))}

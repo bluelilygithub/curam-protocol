@@ -9,9 +9,9 @@ function buildDefaultTypeConfig(typeId) {
 
 function NewProjectModal({ onClose, onCreate }) {
   const [name, setName] = useState('');
-  const [selectedType, setSelectedType] = useState(null);
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
-  const [typeConfig, setTypeConfig] = useState({});
+  const [selectedType, setSelectedType] = useState(() => PROJECT_TYPES.find(t => t.id === 'research') || null);
+  const [selectedModel, setSelectedModel] = useState('claude-haiku-4-5-20251001');
+  const [typeConfig, setTypeConfig] = useState(() => buildDefaultTypeConfig('research'));
   const [creating, setCreating] = useState(false);
   const nameRef = useRef(null);
 

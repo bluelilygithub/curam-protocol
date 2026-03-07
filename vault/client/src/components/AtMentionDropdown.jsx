@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import useProjectStore from '../store/projectStore';
 import { useIcon } from '../providers/IconProvider';
 
-function AtMentionDropdown({ query, onSelect, onClose }) {
+function AtMentionDropdown({ query, onSelect, onSearch, onClose }) {
   const { projects, setActive } = useProjectStore();
   const getIcon = useIcon();
   const listRef = useRef(null);
@@ -12,31 +12,44 @@ function AtMentionDropdown({ query, onSelect, onClose }) {
     p.name.toLowerCase().includes(query.toLowerCase())
   );
 
+  // Show "Search the web" when query is blank or starts to match "search"
+  const showSearch = query === '' || 'search the web'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('search');
+  const items = showSearch
+    ? [{ id: '__search__', isSearch: true }, ...filtered]
+    : filtered;
+
+  useEffect(() => {
+    setSelected(0);
+  }, [query]);
+
   useEffect(() => {
     const handler = (e) => {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelected((s) => Math.min(s + 1, filtered.length - 1));
+        setSelected((s) => Math.min(s + 1, items.length - 1));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setSelected((s) => Math.max(s - 1, 0));
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (filtered[selected]) handleSelect(filtered[selected]);
+        const item = items[selected];
+        if (!item) return;
+        if (item.isSearch) onSearch?.();
+        else handleSelect(item);
       } else if (e.key === 'Escape') {
         onClose();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [filtered, selected]);
+  }, [items, selected]);
 
   const handleSelect = (project) => {
     setActive(project.id);
     onSelect(`@[${project.name}]`);
   };
 
-  if (filtered.length === 0) return null;
+  if (items.length === 0) return null;
 
   return (
     <div
@@ -44,20 +57,35 @@ function AtMentionDropdown({ query, onSelect, onClose }) {
       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       ref={listRef}
     >
-      {filtered.map((project, i) => (
-        <button
-          key={project.id}
-          onClick={() => handleSelect(project)}
-          className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors"
-          style={{
-            background: i === selected ? 'var(--color-bg)' : 'transparent',
-            color: 'var(--color-text)',
-          }}
-        >
-          {getIcon('folder', { size: 14 })}
-          <span className="truncate">{project.name}</span>
-        </button>
-      ))}
+      {items.map((item, i) =>
+        item.isSearch ? (
+          <button
+            key="__search__"
+            onClick={() => onSearch?.()}
+            className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors"
+            style={{
+              background: i === selected ? 'var(--color-bg)' : 'transparent',
+              color: 'var(--color-primary)',
+            }}
+          >
+            {getIcon('search', { size: 14 })}
+            <span>Search the web…</span>
+          </button>
+        ) : (
+          <button
+            key={item.id}
+            onClick={() => handleSelect(item)}
+            className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors"
+            style={{
+              background: i === selected ? 'var(--color-bg)' : 'transparent',
+              color: 'var(--color-text)',
+            }}
+          >
+            {getIcon('folder', { size: 14 })}
+            <span className="truncate">{item.name}</span>
+          </button>
+        )
+      )}
     </div>
   );
 }

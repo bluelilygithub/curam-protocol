@@ -117,6 +117,47 @@ db.exec(`
     updatedAt TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS debates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    debateId TEXT NOT NULL UNIQUE,
+    topic TEXT NOT NULL,
+    modelA TEXT NOT NULL,
+    modelB TEXT NOT NULL,
+    rounds TEXT DEFAULT '[]',
+    projectId INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    createdAt TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS comparisons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    projectId INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    docAName TEXT,
+    docBName TEXT,
+    mode TEXT,
+    model TEXT,
+    result TEXT,
+    createdAt TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS search_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    query TEXT,
+    createdAt TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS password_resets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL,
+    expiresAt TEXT NOT NULL,
+    createdAt TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
     type,
     projectId UNINDEXED,

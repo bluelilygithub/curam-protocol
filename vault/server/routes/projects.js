@@ -60,14 +60,14 @@ router.get('/:id', (req, res) => {
 
 // PUT /api/projects/:id
 router.put('/:id', (req, res) => {
-  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig } = req.body;
+  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, folderId } = req.body;
   const project = db.prepare(`SELECT * FROM projects WHERE id=?`).get(req.params.id);
   if (!project) return res.status(404).json({ error: 'Not found' });
 
   db.prepare(`
     UPDATE projects SET
       name=?, goal=?, problem=?, audience=?, techStack=?, constraints=?,
-      successCriteria=?, tone=?, notes=?, model=?, projectType=?, typeConfig=?, updatedAt=datetime('now')
+      successCriteria=?, tone=?, notes=?, model=?, projectType=?, typeConfig=?, folderId=?, updatedAt=datetime('now')
     WHERE id=?
   `).run(
     name ?? project.name,
@@ -82,6 +82,7 @@ router.put('/:id', (req, res) => {
     model ?? project.model ?? 'claude-sonnet-4-6',
     projectType ?? project.projectType ?? null,
     typeConfig !== undefined ? JSON.stringify(typeConfig) : (project.typeConfig ?? null),
+    folderId !== undefined ? folderId : project.folderId,
     req.params.id
   );
 

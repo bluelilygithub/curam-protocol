@@ -5,6 +5,7 @@ import { useVoice } from '../hooks/useVoice';
 import { useFileAttachment } from '../hooks/useFileAttachment';
 import { useUrlAttachment } from '../hooks/useUrlAttachment';
 import useProjectStore from '../store/projectStore';
+import useSettingsStore from '../store/settingsStore';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import MessageBubble from '../components/MessageBubble';
@@ -14,6 +15,7 @@ import ChatFileBar from '../components/ChatFileBar';
 import ChatFilePicker from '../components/ChatFilePicker';
 import UrlBar from '../components/UrlBar';
 import ArtifactPanel, { extractCodeBlocks } from '../components/ArtifactPanel';
+import ProjectFilesPanel from '../components/ProjectFilesPanel';
 import FollowUpChips from '../components/FollowUpChips';
 import { downloadChatMd } from '../utils/exportMd';
 import { MODELS, getModelById, getModelShortName } from '../utils/models';
@@ -31,7 +33,7 @@ function ChatPage() {
   const projectId = projectIdParam ? Number(projectIdParam) : activeProjectId;
 
   const { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate } = useChat({ projectId });
-  const { isSTTAvailable, isTTSAvailable, isListening, transcript, startListening, stopListening, speak } = useVoice();
+  const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, startListening, stopListening, speak } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
   const { urlAttachments, addUrl, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
   const getIcon = useIcon();
@@ -42,6 +44,11 @@ function ChatPage() {
   const [showFilePicker, setShowFilePicker] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInputValue, setUrlInputValue] = useState('');
+  const [showSearchInput, setShowSearchInput] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
   const [sessions, setSessions] = useState([]);
 
   // Title editing
@@ -56,6 +63,9 @@ function ChatPage() {
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
   const [showTempPicker, setShowTempPicker] = useState(false);
+
+  // Files panel
+  const [showFilesPanel, setShowFilesPanel] = useState(false);
 
   // Summarize
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -100,7 +110,12 @@ function ChatPage() {
   }, [projectId]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-  useEffect(() => { if (transcript) setInput(transcript); }, [transcript]);
+  useEffect(() => {
+    if (transcript) {
+      setInput(prev => prev.trimEnd() ? prev.trimEnd() + ' ' + transcript.trim() : transcript.trim());
+      textareaRef.current?.focus();
+    }
+  }, [transcript]);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -161,6 +176,9 @@ function ChatPage() {
     setShowMention(false);
     setShowUrlInput(false);
     setUrlInputValue('');
+    setShowSearchInput(false);
+    setSearchQuery('');
+    setSearchResults([]);
     setShowPromptPicker(false);
     clearAttachments();
     clearUrls();
@@ -193,6 +211,53 @@ function ChatPage() {
     const atIndex = input.lastIndexOf('@', cursorPos);
     setInput(input.slice(0, atIndex) + token + input.slice(cursorPos));
     setShowMention(false);
+    textareaRef.current?.focus();
+  };
+
+  const handleOpenSearch = () => {
+    // Strip the @... mention text the user typed
+    const cursorPos = textareaRef.current?.selectionStart || input.length;
+    const atIndex = input.lastIndexOf('@', cursorPos);
+    if (atIndex !== -1) setInput(input.slice(0, atIndex) + input.slice(cursorPos));
+    setShowMention(false);
+    setSearchQuery('');
+    setSearchError('');
+    setSearchResults([]);
+    setShowSearchInput(true);
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim() || isSearching) return;
+    setIsSearching(true);
+    setSearchError('');
+    setSearchResults([]);
+    try {
+      const res = await api.get(`/api/web-search?q=${encodeURIComponent(searchQuery.trim())}`);
+      const data = await res.json();
+      if (data.error) {
+        setSearchError(data.error);
+        return;
+      }
+      const results = data.results || [];
+      if (results.length === 0) {
+        setSearchError('No results found. Try a different query.');
+        return;
+      }
+      setSearchResults(results);
+      for (const result of results) {
+        addUrl(result.url);
+      }
+    } catch (err) {
+      setSearchError(err.message || 'Search failed');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchDone = () => {
+    setShowSearchInput(false);
+    setSearchQuery('');
+    setSearchResults([]);
     textareaRef.current?.focus();
   };
 
@@ -289,6 +354,13 @@ function ChatPage() {
   const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
   const hasInput = input.trim().length > 0;
 
+  // Token budget
+  const sessionBudget = useSettingsStore(s => s.sessionBudget);
+  const sessionCost = sessionUsage.inputTokens > 0
+    ? calcCost(sessionUsage.model || effectiveModel, sessionUsage.inputTokens, sessionUsage.outputTokens)
+    : 0;
+  const budgetPct = sessionBudget ? (sessionCost / sessionBudget) * 100 : 0;
+
   const currentTempLabel = TEMPERATURES.find(t => t.value === temperature)?.label || 'Balanced';
   const costDisplay = sessionUsage.inputTokens > 0
     ? `${formatTokens(sessionUsage.inputTokens + sessionUsage.outputTokens)} tokens · ${formatCost(calcCost(sessionUsage.model || effectiveModel, sessionUsage.inputTokens, sessionUsage.outputTokens))}`
@@ -330,7 +402,7 @@ function ChatPage() {
           ) : (
             <button
               onClick={startEditTitle}
-              className="text-xs truncate max-w-[180px] hover:opacity-70 transition-opacity text-left"
+              className="hidden sm:block text-xs truncate max-w-[180px] hover:opacity-70 transition-opacity text-left"
               style={{ color: 'var(--color-muted)' }}
               title="Click to rename"
             >
@@ -372,7 +444,7 @@ function ChatPage() {
         )}
 
         {/* Temperature picker */}
-        <div className="relative">
+        <div className="relative hidden sm:block">
           <button
             onClick={() => { setShowTempPicker(v => !v); setShowModelPicker(false); }}
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
@@ -439,11 +511,11 @@ function ChatPage() {
           )}
         </div>
 
-        {/* Reasoning mode toggle — only for sonnet/opus */}
+        {/* Reasoning mode toggle — only for sonnet/opus, hidden on mobile */}
         {(effectiveModel.includes('sonnet') || effectiveModel.includes('opus')) && (
           <button
             onClick={() => setReasoning(v => !v)}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all hover:opacity-70"
+            className="hidden sm:flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all hover:opacity-70"
             style={{
               borderColor: reasoning ? 'var(--color-primary)' : 'var(--color-border)',
               color: reasoning ? 'var(--color-primary)' : 'var(--color-muted)',
@@ -456,8 +528,8 @@ function ChatPage() {
           </button>
         )}
 
-        {/* Persona picker */}
-        <div className="relative">
+        {/* Persona picker — hidden on mobile */}
+        <div className="relative hidden sm:block">
           <button
             onClick={() => { setShowPersonaPicker(v => !v); if (!showPersonaPicker) loadPersonas(); setShowModelPicker(false); setShowTempPicker(false); }}
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
@@ -506,11 +578,11 @@ function ChatPage() {
           )}
         </div>
 
-        {/* Star */}
+        {/* Star — hidden on mobile */}
         {sessionId && (
           <button
             onClick={handleToggleStar}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-lg transition-colors hover:opacity-70"
             style={{ color: isStarred ? '#f59e0b' : 'var(--color-muted)' }}
             title={isStarred ? 'Unstar chat' : 'Star chat'}
           >
@@ -522,7 +594,7 @@ function ChatPage() {
           <button
             onClick={handleSummarize}
             disabled={isSummarizing}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-lg transition-colors hover:opacity-70"
             style={{ color: 'var(--color-primary)' }}
             title="Summarize this conversation"
           >
@@ -533,7 +605,7 @@ function ChatPage() {
         {sessionId && (
           <button
             onClick={() => downloadChatMd(messages, sessionTitle || sessionId, project?.name)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-lg transition-colors hover:opacity-70"
             style={{ color: 'var(--color-muted)' }}
             title="Save chat as Markdown"
           >
@@ -541,7 +613,21 @@ function ChatPage() {
           </button>
         )}
 
-        <ExportMenu sessionId={sessionId} projectId={projectId} />
+        <div className="hidden sm:block"><ExportMenu sessionId={sessionId} projectId={projectId} /></div>
+
+        {projectId && (
+          <button
+            onClick={() => setShowFilesPanel(v => !v)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            style={{
+              color: showFilesPanel ? 'var(--color-primary)' : 'var(--color-muted)',
+              background: showFilesPanel ? 'var(--color-primary)15' : 'transparent',
+            }}
+            title="Project files"
+          >
+            {getIcon('files', { size: 14 })}
+          </button>
+        )}
 
         {sessionId && (
           <button
@@ -576,6 +662,31 @@ function ChatPage() {
       {isSummarized && showSummaryPanel && summaryText && (
         <div className="flex-shrink-0 mx-4 mt-2 px-4 py-3 rounded-xl border text-xs leading-relaxed max-h-48 overflow-y-auto" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', whiteSpace: 'pre-wrap' }}>
           {summaryText}
+        </div>
+      )}
+
+      {/* Session budget banners */}
+      {sessionBudget && budgetPct >= 100 && (
+        <div className="flex-shrink-0 mx-4 mt-3 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 text-xs" style={{ background: '#fff1f2', borderColor: '#fca5a5', color: '#991b1b' }}>
+          <span>💸</span>
+          <span className="flex-1">Session budget reached ({formatCost(sessionCost)} of {formatCost(sessionBudget)}) — consider summarising this chat.</span>
+          {messages.length >= 4 && !isSummarized && (
+            <button
+              onClick={handleSummarize}
+              disabled={isSummarizing}
+              className="flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium text-white"
+              style={{ background: '#ef4444' }}
+            >
+              {isSummarizing ? 'Summarising…' : 'Summarise now'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {sessionBudget && budgetPct >= 80 && budgetPct < 100 && (
+        <div className="flex-shrink-0 mx-4 mt-3 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 text-xs" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#78350f' }}>
+          <span>⚠️</span>
+          <span>You've used {Math.round(budgetPct)}% of your session budget ({formatCost(sessionCost)} of {formatCost(sessionBudget)}).</span>
         </div>
       )}
 
@@ -653,7 +764,7 @@ function ChatPage() {
           )}
 
           {/* Input area */}
-          <div className="flex-shrink-0 px-4 pb-5 pt-1">
+          <div className="flex-shrink-0 px-4 pb-safe pt-1">
             <div className="max-w-3xl mx-auto">
               <div className="relative">
 
@@ -671,7 +782,7 @@ function ChatPage() {
                 {/* URL input popover */}
                 {showUrlInput && (
                   <div
-                    className="absolute bottom-full mb-2 left-0 z-50 flex items-center gap-2 px-3 py-2 rounded-xl border shadow-lg"
+                    className="absolute bottom-full mb-2 left-0 right-0 sm:right-auto z-50 flex items-center gap-2 px-3 py-2 rounded-xl border shadow-lg"
                     style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '320px' }}
                   >
                     {getIcon('link', { size: 14, color: 'var(--color-primary)' })}
@@ -690,6 +801,74 @@ function ChatPage() {
                     />
                     {urlInputValue && (
                       <button type="button" onClick={() => { addUrl(urlInputValue.trim()); setUrlInputValue(''); setShowUrlInput(false); }} className="text-xs font-medium px-2 py-1 rounded-lg" style={{ background: 'var(--color-primary)', color: '#fff' }}>Add</button>
+                    )}
+                  </div>
+                )}
+
+                {/* Web search input */}
+                {showSearchInput && (
+                  <div
+                    className="absolute bottom-full mb-2 left-0 right-0 sm:right-auto z-50 rounded-xl border shadow-lg overflow-hidden"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '340px', maxWidth: '480px' }}
+                  >
+                    <div className="flex items-center gap-2 px-3 py-2.5">
+                      {getIcon('search', { size: 14, color: 'var(--color-primary)' })}
+                      <input
+                        autoFocus
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => { setSearchQuery(e.target.value); setSearchError(''); setSearchResults([]); }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); searchResults.length > 0 ? handleSearchDone() : handleSearch(); }
+                          if (e.key === 'Escape') { setShowSearchInput(false); setSearchQuery(''); setSearchResults([]); }
+                        }}
+                        placeholder="What do you want to search for?"
+                        className="flex-1 bg-transparent outline-none text-sm"
+                        style={{ color: 'var(--color-text)' }}
+                        disabled={isSearching}
+                      />
+                      {isSearching ? (
+                        <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14 })}</span>
+                      ) : searchResults.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={handleSearchDone}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                          style={{ background: 'var(--color-primary)', color: '#fff' }}
+                        >
+                          Done
+                        </button>
+                      ) : searchQuery.trim() ? (
+                        <button
+                          type="button"
+                          onClick={handleSearch}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                          style={{ background: 'var(--color-primary)', color: '#fff' }}
+                        >
+                          Search
+                        </button>
+                      ) : null}
+                    </div>
+                    {searchError && (
+                      <p className="px-3 pb-2.5 text-xs" style={{ color: '#ef4444' }}>{searchError}</p>
+                    )}
+                    {searchResults.length > 0 ? (
+                      <div className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                        {searchResults.map((r, i) => (
+                          <div key={i} className="px-3 py-2 border-b last:border-b-0 text-xs" style={{ borderColor: 'var(--color-border)' }}>
+                            <p className="font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.title || r.url}</p>
+                            {r.snippet && <p className="mt-0.5 line-clamp-2" style={{ color: 'var(--color-muted)' }}>{r.snippet}</p>}
+                            <a href={r.url} target="_blank" rel="noopener noreferrer" className="mt-0.5 truncate block opacity-60 hover:opacity-100 hover:underline" style={{ color: 'var(--color-primary)' }}>{r.url}</a>
+                          </div>
+                        ))}
+                        <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                          {searchResults.length} page{searchResults.length !== 1 ? 's' : ''} added to context · press Done or Enter
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                        Top 3 results will be fetched and attached as context · Esc to cancel
+                      </p>
                     )}
                   </div>
                 )}
@@ -733,7 +912,7 @@ function ChatPage() {
                 {/* Mention dropdown */}
                 {showMention && (
                   <div className="absolute bottom-full mb-2 left-0 w-56 z-50">
-                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onClose={() => setShowMention(false)} />
+                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onSearch={handleOpenSearch} onClose={() => setShowMention(false)} />
                   </div>
                 )}
 
@@ -804,14 +983,27 @@ function ChatPage() {
                       </button>
 
                       {isSTTAvailable && (
-                        <button
-                          onClick={isListening ? stopListening : startListening}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors"
-                          style={{ color: isListening ? 'var(--color-primary)' : 'var(--color-muted)', background: isListening ? 'var(--color-bg)' : 'transparent' }}
-                          title={isListening ? 'Stop recording' : 'Voice input'}
-                        >
-                          {getIcon('mic', { size: 14 })}
-                        </button>
+                        <>
+                          <button
+                            onClick={isListening ? stopListening : startListening}
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all${isListening ? ' animate-pulse' : ''}`}
+                            style={{
+                              color: isListening ? '#ef4444' : 'var(--color-muted)',
+                              background: isListening ? '#fee2e2' : 'transparent',
+                            }}
+                            title={isListening ? 'Stop recording' : 'Voice input'}
+                          >
+                            {getIcon('mic', { size: 14 })}
+                          </button>
+                          {isListening && (
+                            <span
+                              className="text-xs max-w-[140px] truncate"
+                              style={{ color: '#ef4444' }}
+                            >
+                              {interimText || 'Listening…'}
+                            </span>
+                          )}
+                        </>
                       )}
 
                       {isTTSAvailable && lastAssistantMsg && (
@@ -840,20 +1032,32 @@ function ChatPage() {
                 </div>
               </div>
 
-              <p className="text-center text-xs mt-2" style={{ color: 'var(--color-muted)', opacity: 0.5 }}>
+              <p className="hidden sm:block text-center text-xs mt-2" style={{ color: 'var(--color-muted)', opacity: 0.5 }}>
                 Shift+Enter or Ctrl+Enter to send · Enter for new line · @ mention · ⌘/ shortcuts
               </p>
             </div>
           </div>
         </div>
 
-        {/* Artifact panel */}
+        {/* Artifact panel — fullscreen overlay on mobile, side panel on desktop */}
         {activeArtifacts && (
-          <ArtifactPanel
-            artifacts={activeArtifacts.artifacts}
-            initialIndex={activeArtifacts.initialIndex}
-            onClose={() => setActiveArtifacts(null)}
-          />
+          <div className="fixed inset-0 z-30 sm:static sm:inset-auto sm:z-auto sm:flex sm:h-full">
+            <ArtifactPanel
+              artifacts={activeArtifacts.artifacts}
+              initialIndex={activeArtifacts.initialIndex}
+              onClose={() => setActiveArtifacts(null)}
+            />
+          </div>
+        )}
+
+        {/* Project files panel — fullscreen overlay on mobile, side panel on desktop */}
+        {showFilesPanel && projectId && (
+          <div className="fixed inset-0 z-30 sm:static sm:inset-auto sm:z-auto">
+            <ProjectFilesPanel
+              projectId={projectId}
+              onClose={() => setShowFilesPanel(false)}
+            />
+          </div>
         )}
       </div>
     </div>

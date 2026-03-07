@@ -20,8 +20,8 @@ function ArtifactPanel({ artifacts, initialIndex = 0, onClose }) {
 
   return (
     <div
-      className="flex flex-col border-l h-full overflow-hidden"
-      style={{ width: '45%', minWidth: '320px', borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+      className="flex flex-col border-l h-full overflow-hidden w-full sm:w-[45%]"
+      style={{ minWidth: '320px', borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
     >
       {/* Header */}
       <div

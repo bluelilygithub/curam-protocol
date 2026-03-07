@@ -57,7 +57,7 @@ function MessageBubble({ message, onDelete, onOpenArtifact, artifactCount, onBra
                 <span
                   key={att.id}
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs"
-                  style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}
                 >
                   📎 {att.name}
                 </span>
@@ -71,7 +71,7 @@ function MessageBubble({ message, onDelete, onOpenArtifact, artifactCount, onBra
                 <span
                   key={i}
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs"
-                  style={{ background: 'rgba(255,255,255,0.15)', color: '#fff' }}
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}
                 >
                   📎 {name}
                 </span>

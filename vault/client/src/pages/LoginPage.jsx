@@ -1,14 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
+import { useIcon } from '../providers/IconProvider';
 
 function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
+  const getIcon = useIcon();
+
+  // Forgot password modal state
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotStatus, setForgotStatus] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,11 +40,84 @@ function LoginPage() {
     }
   };
 
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotStatus(null);
+    try {
+      const res = await fetch('/api/auth/reset-password-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) return setForgotStatus({ ok: false, msg: data.error || 'Failed' });
+      setForgotStatus({ ok: true, msg: 'If that email is registered, a reset link has been sent.' });
+    } catch {
+      setForgotStatus({ ok: false, msg: 'Network error' });
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
     <div
       className="min-h-screen flex items-center justify-center px-4"
       style={{ background: 'var(--color-bg)' }}
     >
+      {/* Forgot password modal */}
+      {showForgot && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowForgot(false); }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border p-6 space-y-4"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Reset Password</h2>
+              <button
+                onClick={() => setShowForgot(false)}
+                className="opacity-50 hover:opacity-100 transition-opacity"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                {getIcon('x', { size: 16 })}
+              </button>
+            </div>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Enter your email address and we'll send a password reset link.
+            </p>
+            <form onSubmit={handleForgotSubmit} className="space-y-3">
+              <input
+                type="email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                required
+                autoFocus
+                placeholder="you@example.com"
+                className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+              {forgotStatus && (
+                <p className="text-xs" style={{ color: forgotStatus.ok ? 'var(--color-primary)' : '#ef4444' }}>
+                  {forgotStatus.msg}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={forgotLoading}
+                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-50"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {forgotLoading ? 'Sending…' : 'Send Reset Link'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div
@@ -72,15 +154,25 @@ function LoginPage() {
             <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>
               Password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
-              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            />
+            <div className="relative">
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                className="w-full px-3 py-2.5 pr-10 rounded-xl border text-sm outline-none"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 opacity-50 hover:opacity-100 transition-opacity"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                {getIcon(showPw ? 'eye-off' : 'eye', { size: 14 })}
+              </button>
+            </div>
           </div>
 
           {error && (
@@ -97,6 +189,15 @@ function LoginPage() {
           </button>
         </form>
 
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => { setShowForgot(true); setForgotStatus(null); setForgotEmail(''); }}
+            className="text-xs hover:opacity-70 transition-opacity"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            Forgot password?
+          </button>
+        </div>
       </div>
     </div>
   );

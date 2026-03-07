@@ -79,20 +79,39 @@ async function generateAiSummary(text, filename) {
   }
 }
 
+// Validate projectId before multer runs so it can't write to a bad path
+function requireNumericProjectId(req, res, next) {
+  if (!/^\d+$/.test(req.params.projectId)) return res.status(400).json({ error: 'Invalid project ID' });
+  next();
+}
+
 // POST /api/files/upload/:projectId
-router.post('/upload/:projectId', upload.single('file'), async (req, res) => {
+router.post('/upload/:projectId', requireNumericProjectId, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const { projectId } = req.params;
   let extractedText = '';
   let aiSummary = '';
 
-  const isPdf = req.file.mimetype === 'application/pdf' ||
-    path.extname(req.file.originalname).toLowerCase() === '.pdf';
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  const isPdf = req.file.mimetype === 'application/pdf' || ext === '.pdf';
+  const isText = [
+    'text/plain', 'text/csv', 'text/markdown', 'text/x-markdown', 'application/json'
+  ].includes(req.file.mimetype) || ['.txt', '.md', '.csv', '.json'].includes(ext);
+
   if (isPdf) {
     extractedText = await extractPdfText(req.file.path);
     if (extractedText) {
       aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+    }
+  } else if (isText) {
+    try {
+      extractedText = fs.readFileSync(req.file.path, 'utf8');
+      if (extractedText) {
+        aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+      }
+    } catch (err) {
+      console.error('Text file read error:', err.message);
     }
   }
 
@@ -111,7 +130,7 @@ router.post('/upload/:projectId', upload.single('file'), async (req, res) => {
 });
 
 // GET /api/files/:projectId
-router.get('/:projectId', (req, res) => {
+router.get('/:projectId', requireNumericProjectId, (req, res) => {
   const files = db.prepare('SELECT * FROM files WHERE projectId=? ORDER BY uploadedAt DESC').all(req.params.projectId);
   res.json(files);
 });

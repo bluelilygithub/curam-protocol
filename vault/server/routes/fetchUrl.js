@@ -2,6 +2,39 @@ const express = require('express');
 const router = express.Router();
 const http = require('http');
 const https = require('https');
+const dns = require('dns');
+
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
+
+function isPrivateIp(ip) {
+  // IPv6 loopback / link-local / unique-local
+  if (ip === '::1') return true;
+  const lower = ip.toLowerCase();
+  if (lower.startsWith('fe80')) return true;
+  if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
+
+  // IPv4
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some(isNaN)) return false;
+  const [a, b] = parts;
+  if (a === 127) return true;                           // 127.x loopback
+  if (a === 10) return true;                            // 10.x RFC-1918
+  if (a === 172 && b >= 16 && b <= 31) return true;    // 172.16–31.x RFC-1918
+  if (a === 192 && b === 168) return true;              // 192.168.x RFC-1918
+  if (a === 169 && b === 254) return true;              // 169.254.x link-local
+  if (a === 0) return true;                             // 0.0.0.0
+  return false;
+}
+
+function checkSsrf(hostname) {
+  return new Promise((resolve, reject) => {
+    dns.lookup(hostname, (err, address) => {
+      if (err) return reject(new Error('DNS lookup failed'));
+      if (isPrivateIp(address)) return reject(new Error('URL resolves to a private or internal address'));
+      resolve();
+    });
+  });
+}
 
 function doGet(url, redirectsLeft = 5) {
   return new Promise((resolve, reject) => {
@@ -9,34 +42,45 @@ function doGet(url, redirectsLeft = 5) {
     let parsed;
     try { parsed = new URL(url); } catch { return reject(new Error('Invalid URL')); }
 
-    const mod = parsed.protocol === 'https:' ? https : http;
-    const opts = {
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; VaultFetcher/1.0)',
-        'Accept': 'text/html,application/xhtml+xml,text/plain;q=0.9',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      timeout: 12000,
-    };
+    // SSRF check — runs on every hop including redirects
+    checkSsrf(parsed.hostname).then(() => {
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const opts = {
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; VaultFetcher/1.0)',
+          'Accept': 'text/html,application/xhtml+xml,text/plain;q=0.9',
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        timeout: 12000,
+      };
 
-    const req = mod.request(opts, (res) => {
-      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
-        const next = new URL(res.headers.location, url).toString();
-        return resolve(doGet(next, redirectsLeft - 1));
-      }
-      const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
-      res.on('end', () => resolve({ body: Buffer.concat(chunks).toString('utf8'), statusCode: res.statusCode }));
-      res.on('error', reject);
-    });
+      const req = mod.request(opts, (res) => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+          const next = new URL(res.headers.location, url).toString();
+          return resolve(doGet(next, redirectsLeft - 1));
+        }
+        const chunks = [];
+        let bytesReceived = 0;
+        res.on('data', chunk => {
+          bytesReceived += chunk.length;
+          if (bytesReceived > MAX_RESPONSE_BYTES) {
+            req.destroy();
+            return reject(new Error('Response too large'));
+          }
+          chunks.push(chunk);
+        });
+        res.on('end', () => resolve({ body: Buffer.concat(chunks).toString('utf8'), statusCode: res.statusCode }));
+        res.on('error', reject);
+      });
 
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
-    req.end();
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+      req.end();
+    }).catch(reject);
   });
 }
 
@@ -87,7 +131,9 @@ router.post('/', async (req, res) => {
     const content = htmlToText(body);
     res.json({ url: normalised, title, content });
   } catch (err) {
-    res.json({ url: normalised, error: err.message, title: '', content: '' });
+    // Surface SSRF / too-large errors as 400, others as 500
+    const status = (err.message.includes('private') || err.message.includes('DNS') || err.message.includes('too large')) ? 400 : 500;
+    res.status(status).json({ url: normalised, error: err.message, title: '', content: '' });
   }
 });
 

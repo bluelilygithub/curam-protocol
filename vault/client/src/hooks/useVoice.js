@@ -9,6 +9,7 @@ const isTTSAvailable = typeof window !== 'undefined' &&
 export function useVoice() {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [interimText, setInterimText] = useState('');
   const recognitionRef = useRef(null);
 
   useEffect(() => {
@@ -20,12 +21,29 @@ export function useVoice() {
     recognition.lang = 'en-US';
 
     recognition.onresult = (e) => {
-      const t = Array.from(e.results).map((r) => r[0].transcript).join('');
-      setTranscript(t);
+      let interim = '';
+      let final = '';
+      for (const result of Array.from(e.results)) {
+        if (result.isFinal) {
+          final += result[0].transcript;
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+      // Show live preview; only commit to transcript when browser confirms final
+      setInterimText(interim || final);
+      if (final) setTranscript(final);
     };
 
-    recognition.onend = () => setIsListening(false);
-    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => {
+      setIsListening(false);
+      setInterimText('');
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+      setInterimText('');
+    };
 
     recognitionRef.current = recognition;
     return () => recognition.abort();
@@ -34,6 +52,7 @@ export function useVoice() {
   const startListening = useCallback(() => {
     if (!isSTTAvailable || !recognitionRef.current) return;
     setTranscript('');
+    setInterimText('');
     setIsListening(true);
     recognitionRef.current.start();
   }, []);
@@ -42,6 +61,7 @@ export function useVoice() {
     if (!isSTTAvailable || !recognitionRef.current) return;
     recognitionRef.current.stop();
     setIsListening(false);
+    setInterimText('');
   }, []);
 
   const speak = useCallback((text) => {
@@ -63,6 +83,7 @@ export function useVoice() {
     isTTSAvailable,
     isListening,
     transcript,
+    interimText,
     startListening,
     stopListening,
     speak,

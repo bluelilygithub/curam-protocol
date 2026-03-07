@@ -1,27 +1,36 @@
 const express = require('express');
 const router = express.Router();
-const nodemailer = require('nodemailer');
 const db = require('../db');
+const sendEmail = require('../utils/sendEmail');
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function buildHtmlEmail(messages, subject) {
   const rows = messages.map((m) => `
     <tr>
       <td style="padding:12px 16px;vertical-align:top;width:80px;font-size:11px;font-weight:600;color:${m.role === 'user' ? '#CC785C' : '#555'};text-transform:uppercase;letter-spacing:0.05em;">
-        ${m.role}
+        ${escapeHtml(m.role)}
       </td>
       <td style="padding:12px 16px;font-size:14px;color:#1A1A1A;line-height:1.6;border-left:2px solid #E0E0E0;">
-        ${m.content.replace(/\n/g, '<br>')}
+        ${escapeHtml(m.content).replace(/\n/g, '<br>')}
       </td>
     </tr>
   `).join('');
 
   return `<!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>${subject}</title></head>
+<head><meta charset="utf-8"><title>${escapeHtml(subject)}</title></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'DM Sans',sans-serif;background:#F5F5F0;margin:0;padding:20px;">
   <div style="max-width:700px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
     <div style="background:#CC785C;padding:24px 32px;">
-      <h1 style="color:#fff;margin:0;font-size:20px;font-weight:600;">${subject}</h1>
+      <h1 style="color:#fff;margin:0;font-size:20px;font-weight:600;">${escapeHtml(subject)}</h1>
       <p style="color:rgba(255,255,255,0.8);margin:4px 0 0;font-size:13px;">Exported from Project Vault</p>
     </div>
     <table style="width:100%;border-collapse:collapse;">
@@ -47,23 +56,7 @@ router.post('/', async (req, res) => {
   const html = buildHtmlEmail(messages, emailSubject);
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_PORT === '465',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    await transporter.sendMail({
-      from: process.env.SMTP_USER,
-      to,
-      subject: emailSubject,
-      html,
-    });
-
+    await sendEmail({ to, subject: emailSubject, html });
     res.json({ ok: true });
   } catch (err) {
     console.error('Email error:', err);
