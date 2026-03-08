@@ -289,11 +289,19 @@ function AiSuggestPanel({ objective, onAddKr }) {
   );
 }
 
+const RENEWAL_DIMS_GOALS = [
+  { key: 'physical', label: '🏃 Physical', color: '#3b82f6' },
+  { key: 'mental', label: '📚 Mental', color: '#22c55e' },
+  { key: 'social', label: '🤝 Social', color: '#f59e0b' },
+  { key: 'spiritual', label: '🌱 Spiritual', color: '#8b5cf6' },
+];
+
 function NewObjectiveModal({ onClose, onCreated }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [timeframe, setTimeframe] = useState('');
   const [color, setColor] = useState('#6366f1');
+  const [renewalDimension, setRenewalDimension] = useState(null);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -301,7 +309,7 @@ function NewObjectiveModal({ onClose, onCreated }) {
     if (!title.trim()) return;
     setSaving(true);
     try {
-      const obj = await api.post('/api/goals', { title: title.trim(), description: description.trim() || null, timeframe: timeframe.trim() || null, color }).then(r => r.json());
+      const obj = await api.post('/api/goals', { title: title.trim(), description: description.trim() || null, timeframe: timeframe.trim() || null, color, renewalDimension: renewalDimension || null }).then(r => r.json());
       onCreated(obj);
     } finally {
       setSaving(false);
@@ -360,6 +368,19 @@ function NewObjectiveModal({ onClose, onCreated }) {
                   />
                 ))}
               </div>
+            </div>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: 'var(--color-muted)', display: 'block', marginBottom: 6 }}>Renewal Dimension (Habit 7)</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {RENEWAL_DIMS_GOALS.map(d => (
+                <button
+                  key={d.key}
+                  type="button"
+                  onClick={() => setRenewalDimension(renewalDimension === d.key ? null : d.key)}
+                  style={{ flex: 1, fontSize: 11, padding: '5px 4px', borderRadius: 7, border: `1px solid ${renewalDimension === d.key ? d.color : 'var(--color-border)'}`, background: renewalDimension === d.key ? d.color + '22' : 'transparent', color: renewalDimension === d.key ? d.color : 'var(--color-muted)', cursor: 'pointer', transition: 'all 0.12s', textAlign: 'center' }}
+                >{d.label}</button>
+              ))}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
@@ -689,6 +710,15 @@ export default function GoalsPage() {
   const [editingObjective, setEditingObjective] = useState(null); // field being edited
   const [editVal, setEditVal] = useState('');
   const [confirmDeleteObj, setConfirmDeleteObj] = useState(false);
+  const [showRenewalBalance, setShowRenewalBalance] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('goalsRenewalOpen') ?? 'true'); } catch { return true; }
+  });
+  const [renewalTasks, setRenewalTasks] = useState([]);
+  const [assessmentText, setAssessmentText] = useState('');
+  const [assessing, setAssessing] = useState(false);
+  const [assessmentDone, setAssessmentDone] = useState(false);
+  const missionRef = useRef(null);
+  const renewalRef = useRef(null);
 
   const loadObjectives = useCallback(async () => {
     try {
@@ -704,6 +734,26 @@ export default function GoalsPage() {
   }, []);
 
   useEffect(() => { loadObjectives(); }, [loadObjectives]);
+
+  useEffect(() => {
+    api.get('/api/tasks').then(r => r.json()).then(data => setRenewalTasks(Array.isArray(data) ? data : [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const section = params.get('section');
+    if (!section) return;
+    const scrollTo = (ref) => {
+      if (!ref.current) return;
+      ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      ref.current.style.transition = 'outline 0.3s';
+      ref.current.style.outline = '2px solid var(--color-primary)';
+      ref.current.style.borderRadius = '8px';
+      setTimeout(() => { if (ref.current) { ref.current.style.outline = 'none'; } }, 2500);
+    };
+    if (section === 'mission') { setTimeout(() => scrollTo(missionRef), 100); }
+    if (section === 'renewal') { setShowRenewalBalance(true); setTimeout(() => scrollTo(renewalRef), 150); }
+  }, []);
 
   const selectedObj = selected ? objectives.find(o => o.id === selected.id) || null : null;
 
@@ -744,9 +794,118 @@ export default function GoalsPage() {
     setConfirmDeleteObj(false);
   };
 
+  const dimData = RENEWAL_DIMS_GOALS.map(d => {
+    const matchingTasks = renewalTasks.filter(t => t.renewalDimension === d.key && t.status !== 'done');
+    const matchingObjs = objectives.filter(o => o.renewalDimension === d.key && o.status === 'active');
+    const avgProgress = matchingObjs.length ? Math.round(matchingObjs.reduce((s, o) => s + o.overallProgress, 0) / matchingObjs.length) : 0;
+    return { ...d, taskCount: matchingTasks.length, objectiveCount: matchingObjs.length, avgProgress };
+  });
+  const totalTagged = dimData.reduce((s, d) => s + d.taskCount + d.objectiveCount, 0);
+  const dominantDim = totalTagged > 0 ? dimData.reduce((best, d) => (d.taskCount + d.objectiveCount > best.taskCount + best.objectiveCount ? d : best), dimData[0]) : null;
+  const nudge = dominantDim && (dominantDim.taskCount + dominantDim.objectiveCount) / totalTagged > 0.5;
+
+  const handleAssessment = async () => {
+    setAssessmentText('');
+    setAssessing(true);
+    setAssessmentDone(false);
+    const dimensions = {};
+    dimData.forEach(d => { dimensions[d.key] = { taskCount: d.taskCount, objectiveCount: d.objectiveCount }; });
+    try {
+      const res = await api.post('/api/goals/renewal-assessment', { dimensions });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let accumulated = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          if (payload === '[DONE]') { setAssessmentDone(true); break; }
+          try { accumulated += JSON.parse(payload); setAssessmentText(accumulated); } catch {}
+        }
+      }
+      setAssessmentDone(true);
+    } catch (err) { console.error(err); }
+    finally { setAssessing(false); }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <MissionStatementCard />
+      <div ref={missionRef}><MissionStatementCard /></div>
+
+      {/* Renewal Balance Dashboard */}
+      <div ref={renewalRef} style={{ flexShrink: 0, borderBottom: '1px solid var(--color-border)' }}>
+        <button
+          onClick={() => {
+            const next = !showRenewalBalance;
+            setShowRenewalBalance(next);
+            localStorage.setItem('goalsRenewalOpen', JSON.stringify(next));
+          }}
+          style={{ width: '100%', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 8, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+        >
+          {getIcon(showRenewalBalance ? 'chevron-down' : 'chevron-right', { size: 12, style: { color: 'var(--color-muted)' } })}
+          <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-muted)' }}>🌱 Renewal Balance (Habit 7)</span>
+          {totalTagged === 0 && <span style={{ fontSize: 11, color: 'var(--color-muted)', marginLeft: 4 }}>— No items tagged yet</span>}
+        </button>
+        {showRenewalBalance && (
+          <div style={{ padding: '0 20px 16px' }}>
+            {/* 4 dimension cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+              {dimData.map(d => (
+                <div key={d.key} style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${d.taskCount + d.objectiveCount > 0 ? d.color + '44' : 'var(--color-border)'}`, background: d.taskCount + d.objectiveCount > 0 ? d.color + '0d' : 'var(--color-bg)' }}>
+                  <div style={{ fontSize: 16, marginBottom: 4 }}>{d.label.split(' ')[0]}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: d.color, marginBottom: 2 }}>{d.label.split(' ')[1]}</div>
+                  <div style={{ fontSize: 11, color: 'var(--color-muted)', marginBottom: 6 }}>
+                    {d.taskCount} task{d.taskCount !== 1 ? 's' : ''} · {d.objectiveCount} goal{d.objectiveCount !== 1 ? 's' : ''}
+                  </div>
+                  {d.objectiveCount > 0 && (
+                    <div style={{ height: 4, borderRadius: 2, background: 'var(--color-border)', overflow: 'hidden' }}>
+                      <div style={{ width: `${d.avgProgress}%`, height: '100%', background: d.color, borderRadius: 2 }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* Balance bar */}
+            {totalTagged > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', gap: 1 }}>
+                  {dimData.map(d => {
+                    const pct = ((d.taskCount + d.objectiveCount) / totalTagged) * 100;
+                    return pct > 0 ? <div key={d.key} style={{ width: `${pct}%`, background: d.color, transition: 'width 0.3s' }} title={`${d.label}: ${Math.round(pct)}%`} /> : null;
+                  })}
+                </div>
+                {nudge && dominantDim && (
+                  <p style={{ fontSize: 11, color: 'var(--color-muted)', marginTop: 6 }}>
+                    💡 {dominantDim.label} is dominant ({Math.round((dominantDim.taskCount + dominantDim.objectiveCount) / totalTagged * 100)}%). Consider adding tasks or goals in other dimensions to balance your renewal.
+                  </p>
+                )}
+              </div>
+            )}
+            {/* AI Assessment */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <button
+                onClick={handleAssessment}
+                disabled={assessing}
+                style={{ fontSize: 11, padding: '5px 12px', borderRadius: 7, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer', opacity: assessing ? 0.6 : 1, flexShrink: 0 }}
+              >
+                {getIcon('sparkles', { size: 11 })} {assessing ? 'Assessing…' : 'AI Assessment'}
+              </button>
+              {(assessmentText || assessing) && (
+                <p style={{ fontSize: 12, color: 'var(--color-muted)', lineHeight: 1.6, margin: 0, flex: 1 }}>
+                  {assessmentText}{assessing && !assessmentDone && <span style={{ color: 'var(--color-primary)' }}>▊</span>}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       {/* Left panel — objective list */}
       <div style={{ width: 280, flexShrink: 0, borderRight: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -793,8 +952,12 @@ export default function GoalsPage() {
                   <div style={{ width: 10, height: 10, borderRadius: '50%', background: obj.color, flexShrink: 0, marginTop: 2 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{obj.title}</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       {obj.timeframe && <span style={{ fontSize: 10, color: 'var(--color-muted)', background: 'var(--color-border)', padding: '1px 5px', borderRadius: 4 }}>{obj.timeframe}</span>}
+                      {obj.renewalDimension && (() => {
+                        const dm = RENEWAL_DIMS_GOALS.find(d => d.key === obj.renewalDimension);
+                        return dm ? <span style={{ fontSize: 10, color: dm.color }}>{dm.label}</span> : null;
+                      })()}
                       <span style={{ fontSize: 10, color: obj.status === 'active' ? progressColor(pct) : 'var(--color-muted)', fontWeight: 600 }}>{pct}%</span>
                     </div>
                     {obj.keyResults.length > 0 && (
@@ -875,6 +1038,17 @@ export default function GoalsPage() {
                         onClick={() => handleObjectiveField('color', c)}
                         style={{ width: 14, height: 14, borderRadius: '50%', background: c, border: selectedObj.color === c ? '2px solid var(--color-text)' : '2px solid transparent', cursor: 'pointer', padding: 0 }}
                       />
+                    ))}
+                  </div>
+                  {/* Renewal dimension inline selector */}
+                  <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+                    {RENEWAL_DIMS_GOALS.map(d => (
+                      <button
+                        key={d.key}
+                        onClick={() => handleObjectiveField('renewalDimension', selectedObj.renewalDimension === d.key ? null : d.key)}
+                        title={d.label}
+                        style={{ fontSize: 12, padding: '1px 5px', borderRadius: 5, border: `1px solid ${selectedObj.renewalDimension === d.key ? d.color : 'var(--color-border)'}`, background: selectedObj.renewalDimension === d.key ? d.color + '22' : 'transparent', color: selectedObj.renewalDimension === d.key ? d.color : 'var(--color-muted)', cursor: 'pointer' }}
+                      >{d.label.split(' ')[0]}</button>
                     ))}
                   </div>
                 </div>

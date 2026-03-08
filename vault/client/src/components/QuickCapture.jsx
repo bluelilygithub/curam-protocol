@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 
-const EMPTY = { title: '', priority: 'medium', dueDate: '' };
+const EMPTY = { title: '', priority: 'medium', dueDate: '', isUrgent: 0 };
 
 export default function QuickCapture() {
   const getIcon = useIcon();
@@ -32,6 +32,7 @@ export default function QuickCapture() {
         priority: form.priority,
         dueDate: form.dueDate || null,
         status: 'todo',
+        isUrgent: form.isUrgent ? 1 : 0,
       });
       document.dispatchEvent(new CustomEvent('vault:task-created'));
       setOpen(false);
@@ -105,6 +106,18 @@ export default function QuickCapture() {
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 />
               </div>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, isUrgent: f.isUrgent ? 0 : 1 }))}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-all"
+                style={{
+                  background: form.isUrgent ? '#f59e0b22' : 'transparent',
+                  borderColor: form.isUrgent ? '#f59e0b' : 'var(--color-border)',
+                  color: form.isUrgent ? '#f59e0b' : 'var(--color-muted)',
+                }}
+              >
+                ⚡ {form.isUrgent ? 'Urgent — Do First' : 'Not urgent'}
+              </button>
             </div>
             <div className="flex justify-end gap-2 px-5 pb-4">
               <button

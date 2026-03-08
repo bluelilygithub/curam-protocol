@@ -1,6 +1,14 @@
 import React from 'react';
 import { useIcon } from '../../providers/IconProvider';
 
+const RENEWAL_DIMS = [
+  { key: null, label: 'All Dimensions' },
+  { key: 'physical', label: '🏃 Physical', color: '#3b82f6' },
+  { key: 'mental', label: '📚 Mental', color: '#22c55e' },
+  { key: 'social', label: '🤝 Social', color: '#f59e0b' },
+  { key: 'spiritual', label: '🌱 Spiritual', color: '#8b5cf6' },
+];
+
 export default function TaskFilters({
   quickFilter,
   onSetQuickFilter,
@@ -17,11 +25,14 @@ export default function TaskFilters({
   categories,
   projects,
   searchInputRef,
+  filterDimension,
+  onSetFilterDimension,
 }) {
   const getIcon = useIcon();
 
   return (
-    <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-6 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+    <div className="flex-shrink-0 border-b" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="flex flex-wrap items-center gap-2 px-6 py-3">
       {[
         { key: 'all', label: 'All' },
         { key: 'today', label: 'Today' },
@@ -78,6 +89,26 @@ export default function TaskFilters({
         <option value="az">Sort: A–Z</option>
         <option value="za">Sort: Z–A</option>
       </select>
+      </div>
+
+      {/* Renewal dimension filter row */}
+      {onSetFilterDimension && (
+        <div className="flex items-center gap-1.5 px-6 pb-2.5">
+          <span className="text-xs mr-0.5" style={{ color: 'var(--color-muted)' }}>🌱</span>
+          {RENEWAL_DIMS.map(d => (
+            <button
+              key={String(d.key)}
+              onClick={() => onSetFilterDimension(d.key)}
+              className="px-2.5 py-0.5 rounded-md text-xs border transition-all"
+              style={{
+                background: filterDimension === d.key ? (d.color || 'var(--color-primary)') : 'transparent',
+                borderColor: filterDimension === d.key ? (d.color || 'var(--color-primary)') : 'var(--color-border)',
+                color: filterDimension === d.key ? '#fff' : 'var(--color-muted)',
+              }}
+            >{d.label}</button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

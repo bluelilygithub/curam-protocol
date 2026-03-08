@@ -192,14 +192,39 @@ router.post('/mission/generate', async (req, res) => {
   }
 });
 
+// POST /api/goals/renewal-assessment — SSE: stream renewal balance assessment (must be before /:id)
+router.post('/renewal-assessment', async (req, res) => {
+  try {
+    const { dimensions } = req.body;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    const summary = Object.entries(dimensions || {})
+      .map(([k, v]) => `${k}: ${v.taskCount || 0} task(s), ${v.objectiveCount || 0} objective(s)`)
+      .join('; ');
+    const prompt = `A person's current renewal dimension balance (Habit 7 — Sharpen the Saw):\n${summary}\n\nThe 4 renewal dimensions: Physical (body, health, exercise), Mental (learning, reading, creativity), Social/Emotional (relationships, empathy, giving), Spiritual (mission, values, reflection).\n\nIn 2-3 sentences, give a warm and practical assessment of their balance. If one dimension is significantly lower than others, suggest one specific action they could take this week to strengthen it. Be encouraging and brief.`;
+    const stream = client.messages.stream({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 250,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
+    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
+    stream.on('error', (err) => { console.error('[goals renewal-assessment]', err); res.write('data: [DONE]\n\n'); res.end(); });
+  } catch (err) {
+    console.error('[goals renewal-assessment]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/goals — create objective
 router.post('/', (req, res) => {
   try {
-    const { title, description, timeframe, color } = req.body;
+    const { title, description, timeframe, color, renewalDimension } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'title required' });
     const r = db.prepare(
-      "INSERT INTO objectives (title, description, timeframe, color) VALUES (?, ?, ?, ?)"
-    ).run(title.trim(), description || null, timeframe || null, color || '#6366f1');
+      "INSERT INTO objectives (title, description, timeframe, color, renewalDimension) VALUES (?, ?, ?, ?, ?)"
+    ).run(title.trim(), description || null, timeframe || null, color || '#6366f1', renewalDimension || null);
     const obj = db.prepare('SELECT * FROM objectives WHERE id = ?').get(r.lastInsertRowid);
     res.status(201).json(buildObjective(obj));
   } catch (err) {
@@ -225,15 +250,16 @@ router.put('/:id', (req, res) => {
   try {
     const obj = db.prepare('SELECT * FROM objectives WHERE id = ?').get(req.params.id);
     if (!obj) return res.status(404).json({ error: 'Objective not found' });
-    const { title, description, timeframe, color, status } = req.body;
+    const { title, description, timeframe, color, status, renewalDimension } = req.body;
     db.prepare(
-      "UPDATE objectives SET title=?, description=?, timeframe=?, color=?, status=?, updatedAt=datetime('now') WHERE id=?"
+      "UPDATE objectives SET title=?, description=?, timeframe=?, color=?, status=?, renewalDimension=?, updatedAt=datetime('now') WHERE id=?"
     ).run(
       title ?? obj.title,
       description !== undefined ? description : obj.description,
       timeframe !== undefined ? timeframe : obj.timeframe,
       color ?? obj.color,
       status ?? obj.status,
+      renewalDimension !== undefined ? (renewalDimension || null) : obj.renewalDimension,
       obj.id
     );
     res.json(buildObjective(db.prepare('SELECT * FROM objectives WHERE id = ?').get(obj.id)));

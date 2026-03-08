@@ -18,7 +18,8 @@
       "Bash(powershell:*)",
       "Bash(cmd:*)",
       "Bash(echo:*)",
-      "Bash(export:*)"
+      "Bash(export:*)",
+      "Bash(powershell.exe:*)"
     ]
   }
 }

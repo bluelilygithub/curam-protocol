@@ -43,10 +43,12 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 
 | Feature | Description |
 |---|---|
-| **Tasks** | Full personal task manager — List, Kanban, and Calendar views; drag-to-reorder; priority, due date, category, tags, project link; keyboard shortcuts |
+| **Tasks** | Full personal task manager — List, Kanban, Calendar, and Eisenhower Matrix views; drag-to-reorder; priority, urgency, due date, category, tags, project link; keyboard shortcuts |
 | **Kanban Board** | Three-column board (To Do / In Progress / Done); drag cards within or across columns to reorder and change status |
 | **Time-Blocking Calendar** | Day/week/month/agenda sub-views; task blocks absolutely positioned on a 24-hour CSS Grid; drag-drop to reschedule; resize bottom edge to change estimated effort; current-time indicator |
 | **Subtasks** | Nested subtasks with completion tracking; AI-generate subtasks from task title and notes |
+| **Eisenhower Matrix** | 4th task view — 2×2 Priority Matrix; Urgent (⚡ toggle) × Important (high priority); Q1 Do First / Q2 Schedule / Q3 Delegate / Q4 Eliminate; insight line + Show completed toggle; `m` shortcut; `?view=matrix` URL param |
+| **Renewal Dimension** | Tag any task with 🏃 Physical / 📚 Mental / 🤝 Social / 🌱 Spiritual (Habit 7 — Sharpen the Saw); four-button selector in the task form (below the Urgent toggle); emoji pill on list and board cards; second filter row in the filter bar (All Dimensions · 🏃 · 📚 · 🤝 · 🌱) |
 | **Task Dependencies** | Mark tasks as "blocked by" other tasks; 🔒 badge when incomplete blockers exist; dependency UI in expanded row; circular dependency detection |
 | **Recurring Tasks** | Daily / Weekly / Fortnightly / Monthly / Annually; new copy created automatically when marked done |
 | **Task Comments & Activity** | Per-task comment thread; system events (status, priority, due date changes) auto-logged |
@@ -59,16 +61,18 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **CSV Import** | Import tasks in bulk from a CSV file; download template, drag-drop upload, preview with row-level validation, selective import |
 | **Quick Capture** | Floating `+` button on every page (or `Ctrl+Shift+N`) — capture a task without leaving the current page |
 | **Morning Digest** | Daily overlay on first visit — overdue + today's tasks with a Claude-generated focus suggestion |
-| **Weekly Review** | Guided 3-step modal (`w` shortcut) — north star mission statement banner in Step 1 (if set); last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions and Goals progress update |
+| **Weekly Review** | Guided 3-step modal (`w` shortcut) — north star mission statement banner in Step 1 (if set); last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions, Goals progress update, and 🌱 Renewal This Week row (4 dimension icons with per-dimension completed-task counts; red dot on any zero) |
 
 #### Goals
 
 | Feature | Description |
 |---|---|
 | **Personal Mission Statement** | Compass-guided north star card at the top of the Goals page; write manually or use a 4-step Claude wizard (roles → character → contributions → principles) that streams a personalised statement via SSE; statement shown as a banner in Weekly Review Step 1 |
-| **Goals (OKR-lite)** | Objectives → Key Results → Tasks hierarchy; set numeric targets and track progress; AI-generated KR suggestions via Claude |
+| **Goals (OKR-lite)** | Objectives → Key Results → Tasks hierarchy; set numeric targets and track progress; AI-generated KR suggestions via Claude; tag objectives with renewal dimension |
+| **Renewal Balance Dashboard** | Collapsible section on Goals page (below Mission Statement); 4 dimension cards (🏃🟦 📚🟩 🤝🟨 🌱🟪) with active task/goal counts + progress; balance bar; nudge if dominant dimension >50%; AI Assessment button streams a warm coaching message |
+| **7 Habits Sidebar** | Collapsible section in the project sidebar; 3 quick-links: 🧭 Mission Statement, ⚡ Priority Matrix, 🌱 Renewal Balance |
 | **Goals Widget** | Home page summary showing active objective count, average progress, and top 3 progress bars |
-| **Goals in Weekly Review** | Step 3 of Weekly Review shows active objectives; inline KR current-value updates |
+| **Goals in Weekly Review** | Step 3 of Weekly Review shows active objectives + 🌱 Renewal This Week row (4 dimension icons with completed task counts; red dot if zero) |
 
 #### Admin & Account
 
@@ -152,7 +156,7 @@ vault/
 │       │   ├── SettingsPage.jsx  # Account settings / password change
 │       │   ├── AdminPage.jsx     # Usage dashboard
 │       │   ├── UserGuidePage.jsx # In-app user guide
-│       │   ├── TasksPage.jsx     # Full task manager — List / Kanban / Calendar views
+│       │   ├── TasksPage.jsx     # Full task manager — List / Kanban / Calendar / Matrix views
 │       │   ├── GoalsPage.jsx     # OKR Goals — Objectives + Key Results
 │       │   └── SharedTaskPage.jsx     # Public read-only task view (no auth required)
 │       ├── components/
@@ -236,13 +240,13 @@ vault/
 | `comparisons` | Saved document comparison results linked to projects |
 | `search_logs` | Web search query log (powers admin dashboard search count) |
 | `settings` | Key/value store for API keys and app config set via Settings UI |
-| `tasks` | Task records — status, priority, due date, category, tags, recurrence, estimated effort, time spent, share token, parent task link, key result link |
+| `tasks` | Task records — status, priority, urgency (`isUrgent`), renewal dimension (`renewalDimension`), due date, category, tags, recurrence, estimated effort, time spent, share token, parent task link, key result link |
 | `task_tags` | Many-to-many tag associations for tasks |
 | `task_comments` | Per-task comments and auto-logged activity events (status/priority/due-date changes) |
 | `task_dependencies` | Directed blocker relationships between tasks — `taskId` is blocked by `blockedByTaskId`; unique constraint prevents duplicates; circular dependency detection on insert |
 | `task_templates` | Reusable task templates with predefined priority, category, recurrence, and tags |
 | `template_subtasks` | Subtask definitions belonging to a task template |
-| `objectives` | OKR Objectives — title, description, timeframe, colour, status |
+| `objectives` | OKR Objectives — title, description, timeframe, colour, status, renewal dimension (`renewalDimension`) |
 | `key_results` | Key Results linked to an Objective — numeric target/current values, unit, due date |
 
 ---
@@ -356,6 +360,9 @@ npm run dev
 
 ### March 2026
 
+- **Renewal Dimension Tracking (Habit 7)** — tag any task or objective with 🏃 Physical / 📚 Mental / 🤝 Social / 🌱 Spiritual; emoji pills on task cards; dimension chip row in filter bar; dimension prefix in Matrix view insight line; Renewal Balance Dashboard on Goals page (4 dimension cards + balance bar + nudge + AI Assessment SSE via Claude Haiku); Renewal This Week row in Weekly Review Step 3 (4 icons + per-dimension count + red dot if zero); `?view=matrix` and `?section=renewal/mission` query params for deep-linking
+- **7 Habits Sidebar Navigation** — collapsible section in ProjectSidebar; 3 links: 🧭 Mission Statement (`/goals?section=mission`), ⚡ Priority Matrix (`/tasks?view=matrix`), 🌱 Renewal Balance (`/goals?section=renewal`); state persisted in `localStorage sidebarHabitsOpen`
+- **Eisenhower Matrix** — new 4th Tasks view (`m` shortcut or view toggle); 2×2 Priority Matrix grid (Q1 Do First / Q2 Schedule / Q3 Delegate / Q4 Eliminate); `isUrgent` toggle in task form and Quick Capture; ⚡ Urgent badge on list and board cards; insight line summarising most critical quadrant; "Show completed" toggle in matrix sub-header
 - **Personal Mission Statement** — compass-guided north star card at the top of Goals page; 4-step Claude wizard generates a personalised statement via SSE streaming; statement shown as context banner in Weekly Review Step 1
 - **TasksPage refactoring** — `TasksPage.jsx` split into focused sub-components under `components/tasks/`: `TaskFilters` (quick-filter chips, dropdowns, search, sort), `TaskStatsBar` (6-card stats bar + 14-day chart), `TaskTemplatesPanel` (templates side panel with internal form state), `FocusMode`, `WeeklyReviewModal`, `TaskImportModal`; no behaviour or API changes — pure structural extraction
 - **Time-Blocking Calendar** — full rewrite of `TasksCalendar.jsx`; day/week/month/agenda sub-views (persisted in `localStorage`); task blocks absolutely positioned on a 24-hour CSS Grid (`64px` per hour); drag-drop tasks to reschedule (updates `dueDate` via `PUT /api/tasks/:id`); drag from unscheduled panel to assign a time; resize block bottom edge to update `estimatedMinutes` (snaps to 15-min); current-time red indicator line; inline popover on block click; click empty slot opens New Task form pre-filled with that datetime

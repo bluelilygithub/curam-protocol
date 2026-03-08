@@ -475,11 +475,11 @@ router.delete('/:id/dependencies/:blockedByTaskId', (req, res) => {
 // POST /api/tasks
 router.post('/', (req, res) => {
   try {
-    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId } = req.body;
+    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId, isUrgent, renewalDimension } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const r = db.prepare(
-      "INSERT INTO tasks (title,notes,status,priority,category,projectId,parentTaskId,dueDate,recurrence,recurrenceConfig,estimatedMinutes,keyResultId,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
-    ).run(title, notes||null, status||'todo', priority||'medium', category||null, projectId||null, parentTaskId||null, dueDate||null, recurrence||'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId||null);
+      "INSERT INTO tasks (title,notes,status,priority,category,projectId,parentTaskId,dueDate,recurrence,recurrenceConfig,estimatedMinutes,keyResultId,isUrgent,renewalDimension,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
+    ).run(title, notes||null, status||'todo', priority||'medium', category||null, projectId||null, parentTaskId||null, dueDate||null, recurrence||'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId||null, isUrgent ? 1 : 0, renewalDimension||null);
     const id = r.lastInsertRowid;
     if (Array.isArray(tags)) tags.forEach(tag => { if (tag.trim()) db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)').run(id, tag.trim()); });
     res.json(buildTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
@@ -508,9 +508,11 @@ router.put('/:id', (req, res) => {
     const newTimeSpent = 'timeSpentMinutes' in req.body
       ? (req.body.timeSpentMinutes != null ? Number(req.body.timeSpentMinutes) : 0)
       : task.timeSpentMinutes;
+    const newIsUrgent = 'isUrgent' in req.body ? (req.body.isUrgent ? 1 : 0) : (task.isUrgent || 0);
+    const newRenewalDimension = 'renewalDimension' in req.body ? (req.body.renewalDimension || null) : task.renewalDimension;
     db.prepare(
-      "UPDATE tasks SET title=?,notes=?,status=?,priority=?,category=?,projectId=?,parentTaskId=?,dueDate=?,recurrence=?,recurrenceConfig=?,estimatedMinutes=?,keyResultId=?,timeSpentMinutes=?,updatedAt=datetime('now') WHERE id=?"
-    ).run(v('title'),v('notes'),v('status'),v('priority'),v('category'),v('projectId'),v('parentTaskId'),v('dueDate'),v('recurrence'),rcfg,newEstimated,newKeyResultId,newTimeSpent,id);
+      "UPDATE tasks SET title=?,notes=?,status=?,priority=?,category=?,projectId=?,parentTaskId=?,dueDate=?,recurrence=?,recurrenceConfig=?,estimatedMinutes=?,keyResultId=?,timeSpentMinutes=?,isUrgent=?,renewalDimension=?,updatedAt=datetime('now') WHERE id=?"
+    ).run(v('title'),v('notes'),v('status'),v('priority'),v('category'),v('projectId'),v('parentTaskId'),v('dueDate'),v('recurrence'),rcfg,newEstimated,newKeyResultId,newTimeSpent,newIsUrgent,newRenewalDimension,id);
     if (Array.isArray(req.body.tags)) {
       db.prepare('DELETE FROM task_tags WHERE taskId=?').run(id);
       req.body.tags.forEach(tag => { if (tag.trim()) db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)').run(id, tag.trim()); });

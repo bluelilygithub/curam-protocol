@@ -79,6 +79,7 @@ There is no keyboard shortcut to open Goals. Navigate via the sidebar target ico
 | **Timeframe** | Free text — e.g. `Q2 2026`, `H1 2026`, `2026` |
 | **Status** | Active / Completed / Paused |
 | **Color** | One of 6 preset swatches (indigo, pink, amber, green, blue, red) |
+| **Renewal Dimension** | `physical` / `mental` / `social` / `spiritual` / none — Habit 7 categorisation; shown as emoji badge in the objective list and in the Renewal Balance dashboard |
 
 ---
 
@@ -217,29 +218,59 @@ This provides a lightweight end-of-week cadence for updating goal metrics withou
 
 ---
 
+## Renewal Balance Dashboard
+
+Inspired by Habit 7 (Sharpen the Saw). A collapsible section on GoalsPage below the Mission Statement card, above the objectives panel. Collapsed by default; state persisted in `localStorage` under `goalsRenewalOpen`.
+
+### Layout
+- **4 dimension cards** (🏃 Physical · 📚 Mental · 🤝 Social · 🌱 Spiritual): each shows active task count, active objective count, and an average progress bar (when objectives exist)
+- **Balance bar**: horizontal segmented bar showing the proportion of dimension-tagged items across all 4 dimensions
+- **Nudge message**: if a single dimension accounts for >50% of tagged items, a hint appears suggesting balance
+- **AI Assessment button**: triggers `POST /api/goals/renewal-assessment` (SSE) — Claude Haiku streams a 2-3 sentence warm assessment with a concrete action suggestion
+
+### Navigation
+- Accessible via the 7 Habits sidebar section: **🌱 Renewal Balance** → `/goals?section=renewal`
+- GoalsPage reads the `?section=renewal` query param on mount and scrolls + briefly highlights the section
+
+---
+
+## 7 Habits Navigation (Sidebar)
+
+A collapsible **7 Habits** section in `ProjectSidebar.jsx`, positioned between the project list and the bottom nav (Chat History / Settings). Collapsed by default; state persisted in `localStorage` under `sidebarHabitsOpen`.
+
+Three navigation links:
+| Link | Destination |
+|---|---|
+| 🧭 Mission Statement | `/goals?section=mission` — scrolls to & highlights MissionStatementCard |
+| ⚡ Priority Matrix | `/tasks?view=matrix` — opens Tasks page in Matrix view |
+| 🌱 Renewal Balance | `/goals?section=renewal` — scrolls to & highlights Renewal Balance section |
+
+---
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/goals` | List all objectives with nested Key Results and computed progress |
-| POST | `/api/goals` | Create objective — body: `{ title, description, timeframe, color }` |
+| POST | `/api/goals` | Create objective — body: `{ title, description, timeframe, color, renewalDimension }` |
 | GET | `/api/goals/dashboard` | Summary for home widget — `{ activeCount, avgProgress, topObjectives, completedThisMonth }` |
 | POST | `/api/goals/ai-suggest` | SSE stream — body: `{ title, description, timeframe }` — streams KR suggestions as JSON lines |
+| POST | `/api/goals/renewal-assessment` | SSE stream — body: `{ dimensions: { physical, mental, social, spiritual } }` — streams renewal balance assessment via Claude Haiku |
 | GET | `/api/goals/:id` | Single objective with nested KRs |
-| PUT | `/api/goals/:id` | Update objective fields (partial updates supported) |
+| PUT | `/api/goals/:id` | Update objective fields (partial updates supported) incl. `renewalDimension` |
 | DELETE | `/api/goals/:id` | Delete objective, its KRs, and unlink tasks |
 | POST | `/api/goals/:id/key-results` | Add a KR — body: `{ title, targetValue, currentValue, unit, dueDate }` |
 | PUT | `/api/goals/key-results/:krId` | Update KR fields (partial updates supported) |
 | DELETE | `/api/goals/key-results/:krId` | Delete KR and unlink tasks |
 
-**Route ordering note:** `/dashboard`, `/ai-suggest`, and `/key-results/:krId` are registered before `/:id` in the Express router to prevent the parameterised route from matching them.
+**Route ordering note:** `/dashboard`, `/ai-suggest`, `/renewal-assessment`, `/key-results/:krId`, `/mission`, `/mission/generate` are all registered before `/:id` in the Express router to prevent the parameterised route from matching them.
 
 ---
 
 ## Database
 
 **`objectives`**
-- `id`, `title`, `description`, `timeframe`, `status` (active/completed/paused), `color`, `createdAt`, `updatedAt`
+- `id`, `title`, `description`, `timeframe`, `status` (active/completed/paused), `color`, `renewalDimension` (TEXT NULL), `createdAt`, `updatedAt`
 
 **`key_results`**
 - `id`, `objectiveId` (FK → objectives, CASCADE DELETE), `title`, `targetValue`, `currentValue`, `unit`, `status`, `dueDate`, `createdAt`, `updatedAt`

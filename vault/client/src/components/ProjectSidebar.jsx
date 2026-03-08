@@ -24,6 +24,9 @@ function ProjectSidebar({ onClose }) {
   const [newFolderName, setNewFolderName] = useState('');
   const [generalSessions, setGeneralSessions] = useState([]);
   const [generalExpanded, setGeneralExpanded] = useState(true);
+  const [habitsOpen, setHabitsOpen] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sidebarHabitsOpen') ?? 'false'); } catch { return false; }
+  });
 
   useEffect(() => { fetchProjects(); }, []);
   useEffect(() => {
@@ -360,6 +363,45 @@ function ProjectSidebar({ onClose }) {
             </>
           );
         })()}
+      </div>
+
+      {/* 7 Habits section */}
+      <div className="px-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <button
+          onClick={() => {
+            const next = !habitsOpen;
+            setHabitsOpen(next);
+            localStorage.setItem('sidebarHabitsOpen', JSON.stringify(next));
+          }}
+          className="w-full text-left px-2 py-2 flex items-center gap-1.5 transition-colors hover:opacity-70"
+        >
+          {getIcon(habitsOpen ? 'chevron-down' : 'chevron-right', { size: 11, style: { color: 'var(--color-muted)' } })}
+          <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>7 Habits</span>
+        </button>
+        {habitsOpen && (
+          <div className="pb-1 space-y-0.5">
+            {[
+              { label: '🧭 Mission Statement', path: '/goals?section=mission' },
+              { label: '⚡ Priority Matrix', path: '/tasks?view=matrix' },
+              { label: '🌱 Renewal Balance', path: '/goals?section=renewal' },
+            ].map(item => {
+              const isActive = location.pathname + location.search === item.path || location.search.includes(item.path.split('?')[1] || '___');
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => { navigate(item.path); if (onClose) onClose(); }}
+                  className="w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors hover:opacity-70"
+                  style={{
+                    color: 'var(--color-muted)',
+                    paddingLeft: '1.75rem',
+                  }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Bottom */}

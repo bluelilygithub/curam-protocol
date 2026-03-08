@@ -2,7 +2,7 @@
 
 ## Overview
 
-A full personal task manager built into Curam Vault. Accessible via the sidebar icon or directly at `/tasks`. Three views — List, Board, and Calendar — share the same data and filters.
+A full personal task manager built into Curam Vault. Accessible via the sidebar icon or directly at `/tasks`. Four views — List, Board, Calendar, and Eisenhower Matrix — share the same data and filters.
 
 ---
 
@@ -35,6 +35,8 @@ A full personal task manager built into Curam Vault. Accessible via the sidebar 
 | **Estimated effort** | `estimatedMinutes` integer — entered via presets or free text |
 | **Time spent** | `timeSpentMinutes` integer — accumulated focus time and manual timer sessions |
 | **Key Result** | Link to a Goal Key Result (`keyResultId`) |
+| **Urgent** | `isUrgent` integer (0/1) — marks a task as requiring immediate attention; drives the Eisenhower Matrix view |
+| **Renewal Dimension** | `renewalDimension` text — one of `physical`, `mental`, `social`, `spiritual` (or null); Habit 7 / Sharpen the Saw categorisation; shown as emoji pill on cards |
 
 **Computed fields returned by the API (not stored):**
 - `tags` — array from `task_tags`
@@ -60,6 +62,10 @@ Open with **+ New Task** (top right) or `n`. Edit by clicking the pencil icon on
 2. A second dropdown appears to select a Key Result from that Objective
 3. Clear the link by selecting "None" in either dropdown
 
+**Urgent toggle** — below the Priority field. Click ⚡ to mark the task urgent. Urgent tasks appear in Q1 (Do First) or Q3 (Delegate) of the Eisenhower Matrix. The toggle is also available in Quick Capture.
+
+**Renewal Dimension selector** — below the Urgent toggle. Four icon toggle buttons: 🏃 Physical · 📚 Mental · 🤝 Social · 🌱 Spiritual. Only one dimension can be active at a time; clicking the active button deselects it (sets `renewalDimension` to null). Maps to the `renewalDimension` field on the task. Used to categorise tasks by the Habit 7 / Sharpen the Saw dimensions.
+
 **Save as template** button in the form footer saves the current form state (title, notes, category, priority, recurrence, tags) plus existing subtasks as a reusable template.
 
 ---
@@ -84,6 +90,7 @@ Tasks are grouped by **category** and sorted by the active sort order within eac
 - Subtask progress badge: `2/5`
 - Effort pill: `~1h`
 - KR badge: `🎯 KR title` (if linked to a Key Result)
+- Renewal dimension emoji (e.g. `🏃`) — shown when `renewalDimension` is set; appears after the effort pill
 - **Notes tooltip** — hover the row to see a preview of the notes field (up to 300 characters)
 
 **Actions on hover:**
@@ -98,6 +105,7 @@ Tasks are grouped by **category** and sorted by the active sort order within eac
 **Inline badges (after effort pill):**
 - `⏱ 2h` — shown when `timeSpentMinutes > 0`
 - `🔒` — shown when `blockerCount > 0` (task has incomplete blockers); tooltip shows count
+- `⚡ Urgent` — shown when `isUrgent === 1` on incomplete tasks; amber badge
 
 ### Board view (Kanban)
 
@@ -105,7 +113,7 @@ Three fixed columns: **To Do** / **In Progress** / **Done**.
 
 Drag cards **within** a column to reorder. Drag cards **across** columns to change status.
 
-**Each card shows:** title, priority badge, due date, subtask count, effort pill, stale indicator, share button (on hover). Toggle done and edit buttons in top-right.
+**Each card shows:** title, priority badge, due date, subtask count, effort pill, stale indicator, `⚡` urgent badge (when `isUrgent`), share button (on hover). Toggle done and edit buttons in top-right.
 
 ### Calendar view
 
@@ -138,7 +146,30 @@ Rendered by `TasksCalendar` component (`vault/client/src/components/TasksCalenda
 - Drag down/up to change `estimatedMinutes` — snaps to 15-minute increments.
 - On release: `PUT /api/tasks/:id { estimatedMinutes }` is called.
 
-View selection (day/week/month/agenda buttons) is shown in the calendar header. The top-level view selection (list/board/calendar) persists in `localStorage` under `tasksViewMode`.
+View selection (day/week/month/agenda buttons) is shown in the calendar header. The top-level view selection (list/board/calendar/matrix) persists in `localStorage` under `tasksViewMode`.
+
+---
+
+### Matrix view (Eisenhower)
+
+Inspired by Habit 3 (Put First Things First). Renders the classic 2×2 Eisenhower Priority Matrix.
+
+**Axes:**
+- **Urgent** = `task.isUrgent === 1` (set via the ⚡ toggle in the task form or Quick Capture)
+- **Important** = `task.priority === 'high'`
+
+| | Urgent | Not Urgent |
+|---|---|---|
+| **Important** | **Q1 — Do First** (red) | **Q2 — Schedule** (indigo) |
+| **Not Important** | **Q3 — Delegate** (amber) | **Q4 — Eliminate** (gray) |
+
+Each quadrant is a scrollable card showing the task count, task rows with title + due date, and done/edit buttons.
+
+**Insight line** — a single sentence at the top summarises the most pressing quadrant (e.g. "3 tasks need immediate attention (Q1)").
+
+**Show completed toggle** — a chip in the matrix sub-header includes or excludes done tasks from the quadrants.
+
+Keyboard shortcut: `m` jumps directly to Matrix view. `b` cycles through all four views.
 
 ---
 
@@ -163,6 +194,9 @@ Shown below the toolbar when tasks exist. Six stat cards:
 
 ### Quick filter chips
 `All` · `Today` · `This Week` · `High Priority` · `Overdue`
+
+### Renewal dimension chips
+A second filter row below the quick filter chips: `All Dimensions` · `🏃 Physical` · `📚 Mental` · `🤝 Social` · `🌱 Spiritual`. Selecting a dimension hides all tasks that don't have that `renewalDimension` value set. Selecting `All Dimensions` removes the filter. Only one dimension can be active at a time.
 
 ### Dropdowns
 | Dropdown | Options |
@@ -465,7 +499,7 @@ Click **Weekly Review** in the toolbar or press `w`. Opens the 3-step `WeeklyRev
 
 1. **Last week** — tasks completed in the past 7 days grouped by category. If a Personal Mission Statement is saved, a compact **North star** banner appears at the top of this step (compass icon + statement text, truncated to one line).
 2. **Overdue** — incomplete overdue tasks with actions: mark done, reschedule (Today / Tomorrow / Next week), or remove due date
-3. **This week** — upcoming tasks + Claude SSE focus suggestions + total effort estimate + quick-add task + Goals progress panel (active objectives with inline KR value updates)
+3. **This week** — upcoming tasks + Claude SSE focus suggestions + total effort estimate + quick-add task + Goals progress panel (active objectives with inline KR value updates) + **🌱 Renewal This Week** row — four dimension icons (🏃 📚 🤝 🌱) each showing the count of tasks completed last week with that dimension; a red dot appears on any dimension with zero completed tasks as a balance nudge
 
 ---
 
@@ -483,7 +517,8 @@ Shortcuts fire when no text input is focused. Press `?` to see the in-app refere
 | `1` | Set status filter to To Do |
 | `2` | Set status filter to In Progress |
 | `3` | Set status filter to Done |
-| `b` | Cycle view: List → Board → Calendar |
+| `b` | Cycle view: List → Board → Calendar → Matrix |
+| `m` | Switch directly to Eisenhower Matrix view |
 | `Shift+F` | Open Focus Mode for the currently expanded task |
 | `?` | Open keyboard shortcuts modal |
 
@@ -560,6 +595,8 @@ Shortcuts fire when no text input is focused. Press `?` to see the in-app refere
 | `shareToken` | TEXT UNIQUE | 16-byte hex; NULL if not shared |
 | `estimatedMinutes` | INTEGER | Effort estimate in minutes |
 | `timeSpentMinutes` | INTEGER | Accumulated focus/timer time in minutes. Default 0. Added via migration. |
+| `isUrgent` | INTEGER | 1 = urgent, 0 = not urgent. Drives Eisenhower Matrix Q1/Q3. Added via migration. |
+| `renewalDimension` | TEXT | `physical` / `mental` / `social` / `spiritual` / NULL. Habit 7 categorisation. Added via migration. |
 | `keyResultId` | INTEGER FK | → `key_results.id` ON DELETE SET NULL |
 | `sourceSessionId` | TEXT | Session ID of the chat this task was extracted from |
 | `createdAt` | TEXT | `datetime('now')` |

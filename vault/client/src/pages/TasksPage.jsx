@@ -65,10 +65,17 @@ const EFFORT_PRESETS = [
 ];
 
 const EMPTY_FORM = {
-  title: '', notes: '', status: 'todo', priority: 'medium', category: '', tags: '',
+  title: '', notes: '', status: 'todo', priority: 'medium', isUrgent: 0, category: '', tags: '',
   dueDate: '', dueTime: '', dueDateRaw: '', projectId: '', parentTaskId: '', recurrence: 'none',
-  estimatedMinutes: null, keyResultId: null,
+  estimatedMinutes: null, keyResultId: null, renewalDimension: null,
 };
+
+const RENEWAL_DIMS = [
+  { key: 'physical', label: '🏃 Physical', color: '#3b82f6' },
+  { key: 'mental', label: '📚 Mental', color: '#22c55e' },
+  { key: 'social', label: '🤝 Social', color: '#f59e0b' },
+  { key: 'spiritual', label: '🌱 Spiritual', color: '#8b5cf6' },
+];
 
 const TASK_SHORTCUTS = [
   { keys: ['n'], desc: 'New task' },
@@ -79,7 +86,8 @@ const TASK_SHORTCUTS = [
   { keys: ['1'], desc: 'Filter: To Do' },
   { keys: ['2'], desc: 'Filter: In Progress' },
   { keys: ['3'], desc: 'Filter: Done' },
-  { keys: ['b'], desc: 'Cycle view: List → Board → Calendar' },
+  { keys: ['b'], desc: 'Cycle view: List → Board → Calendar → Matrix' },
+  { keys: ['m'], desc: 'Eisenhower Matrix view' },
   { keys: ['Shift+F'], desc: 'Focus mode on expanded task' },
   { keys: ['?'], desc: 'Show keyboard shortcuts' },
 ];
@@ -118,6 +126,93 @@ function TaskShortcutsModal({ onClose }) {
   );
 }
 
+function MatrixTaskRow({ task, onToggle, onEdit, onOpen }) {
+  const getIcon = useIcon();
+  const due = dueInfo(task.dueDate);
+  const isDone = task.status === 'done';
+  return (
+    <div
+      className="group flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
+      style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+      onClick={onOpen}
+    >
+      <button onClick={(e) => { e.stopPropagation(); onToggle(); }} style={{ color: isDone ? '#22c55e' : 'var(--color-muted)', flexShrink: 0 }}>
+        {getIcon(isDone ? 'check-circle' : 'circle', { size: 13 })}
+      </button>
+      <span className="flex-1 text-xs leading-snug" style={{ color: 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none', opacity: isDone ? 0.6 : 1 }}>{task.title}</span>
+      {due && <span className="text-xs font-medium flex-shrink-0" style={{ color: due.color }}>{due.label}</span>}
+      <button onClick={(e) => { e.stopPropagation(); onEdit(); }} style={{ color: 'var(--color-muted)', flexShrink: 0 }} className="opacity-0 group-hover:opacity-100 transition-opacity">
+        {getIcon('edit', { size: 11 })}
+      </button>
+    </div>
+  );
+}
+
+const MATRIX_QUADRANTS = [
+  { key: 'q1', label: 'Do First', sublabel: 'Urgent + Important', color: '#ef4444', test: t => t.isUrgent && t.priority === 'high' },
+  { key: 'q2', label: 'Schedule', sublabel: 'Not Urgent + Important', color: '#6366f1', test: t => !t.isUrgent && t.priority === 'high' },
+  { key: 'q3', label: 'Delegate', sublabel: 'Urgent + Not Important', color: '#f59e0b', test: t => t.isUrgent && t.priority !== 'high' },
+  { key: 'q4', label: 'Eliminate', sublabel: 'Not Urgent + Not Important', color: '#6b7280', test: t => !t.isUrgent && t.priority !== 'high' },
+];
+
+function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, dimensionLabel }) {
+  const q1Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && t.isUrgent && t.priority === 'high');
+  const q2Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && !t.isUrgent && t.priority === 'high');
+  const q3Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && t.isUrgent && t.priority !== 'high');
+  const q4Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && !t.isUrgent && t.priority !== 'high');
+  const qTasksMap = { q1: q1Tasks, q2: q2Tasks, q3: q3Tasks, q4: q4Tasks };
+
+  const urgentImportant = tasks.filter(t => t.status !== 'done' && t.isUrgent && t.priority === 'high').length;
+  const notUrgentImportant = tasks.filter(t => t.status !== 'done' && !t.isUrgent && t.priority === 'high').length;
+  const urgentNotImportant = tasks.filter(t => t.status !== 'done' && t.isUrgent && t.priority !== 'high').length;
+  const insight = urgentImportant > 0
+    ? `${urgentImportant} task${urgentImportant !== 1 ? 's' : ''} need immediate attention (Q1)`
+    : notUrgentImportant > 0
+    ? `No urgent tasks — focus on ${notUrgentImportant} important Q2 task${notUrgentImportant !== 1 ? 's' : ''} while you have space`
+    : urgentNotImportant > 0
+    ? `${urgentNotImportant} urgent task${urgentNotImportant !== 1 ? 's' : ''} to delegate or defer — none are high priority`
+    : 'All clear — no urgent tasks pending';
+
+  return (
+    <div className="flex-1 overflow-auto p-4 flex flex-col gap-3" style={{ minHeight: 0 }}>
+      <div className="flex-shrink-0 text-xs px-3 py-2 rounded-xl flex items-center gap-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+        <span style={{ color: 'var(--color-primary)' }}>📊</span>
+        {dimensionLabel && <span style={{ fontWeight: 600 }}>{dimensionLabel} ·</span>}
+        <span>{insight}</span>
+        <span style={{ marginLeft: 'auto', opacity: 0.5 }}>Urgent = tagged ⚡ · Important = High priority</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3" style={{ flex: 1, minHeight: 0 }}>
+        {MATRIX_QUADRANTS.map(({ key, label, sublabel, color }) => {
+          const qTasks = qTasksMap[key];
+          return (
+            <div key={key} className="rounded-2xl border flex flex-col overflow-hidden" style={{ borderColor: color + '44', background: color + '08', minHeight: 200 }}>
+              <div className="px-4 py-2.5 border-b flex items-center gap-2 flex-shrink-0" style={{ borderColor: color + '33' }}>
+                <span className="text-sm font-semibold" style={{ color }}>{label}</span>
+                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{sublabel}</span>
+                <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ background: color + '22', color }}>{qTasks.length}</span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                {qTasks.map(task => (
+                  <MatrixTaskRow
+                    key={task.id}
+                    task={task}
+                    onToggle={() => onToggleStatus(task)}
+                    onEdit={() => onEdit(task)}
+                    onOpen={() => onExpand(task.id)}
+                  />
+                ))}
+                {qTasks.length === 0 && (
+                  <div className="py-6 text-center text-xs" style={{ color: 'var(--color-muted)', opacity: 0.4 }}>Empty</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function TasksPage() {
   const getIcon = useIcon();
   const navigate = useNavigate();
@@ -135,14 +230,16 @@ export default function TasksPage() {
   const [completedOpen, setCompletedOpen] = useState(false);
   const [newlyAddedIds, setNewlyAddedIds] = useState(new Set());
 
-  // View mode: 'list' or 'board'
+  // View mode: 'list', 'board', 'calendar', or 'matrix'
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('tasksViewMode') || 'list');
+  const [showMatrixCompleted, setShowMatrixCompleted] = useState(false);
 
   // Filters
   const [quickFilter, setQuickFilter] = useState('all');
   const [filterCategory, setFilterCategory] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterDimension, setFilterDimension] = useState(null);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('due');
 
@@ -259,6 +356,16 @@ export default function TasksPage() {
     fetchTasks();
     api.get('/api/projects').then(r => r.json()).then(setProjects).catch(() => {});
   }, [fetchTasks]);
+
+  // Read ?view query param on mount to override viewMode
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get('view');
+    if (v && ['list', 'board', 'calendar', 'matrix'].includes(v)) {
+      setViewMode(v);
+      localStorage.setItem('tasksViewMode', v);
+    }
+  }, []);
 
   useEffect(() => {
     if (showTemplates) fetchTemplates();
@@ -512,6 +619,8 @@ export default function TasksPage() {
       recurrence: task.recurrence || 'none',
       estimatedMinutes: task.estimatedMinutes || null,
       keyResultId: task.keyResultId || null,
+      isUrgent: task.isUrgent || 0,
+      renewalDimension: task.renewalDimension || null,
     });
     setShowForm(true);
     loadGoalsForForm();
@@ -543,6 +652,8 @@ export default function TasksPage() {
         recurrence: form.recurrence,
         estimatedMinutes: form.estimatedMinutes || null,
         keyResultId: form.keyResultId || null,
+        isUrgent: form.isUrgent ? 1 : 0,
+        renewalDimension: form.renewalDimension || null,
       };
       if (editTask) {
         const updated = await api.put(`/api/tasks/${editTask.id}`, payload).then(r => r.json());
@@ -787,11 +898,17 @@ export default function TasksPage() {
         case 'b': {
           e.preventDefault();
           setViewMode(prev => {
-            const modes = ['list', 'board', 'calendar'];
+            const modes = ['list', 'board', 'calendar', 'matrix'];
             const next = modes[(modes.indexOf(prev) + 1) % modes.length];
             localStorage.setItem('tasksViewMode', next);
             return next;
           });
+          break;
+        }
+        case 'm': {
+          e.preventDefault();
+          setViewMode('matrix');
+          localStorage.setItem('tasksViewMode', 'matrix');
           break;
         }
         case '1': setFilterStatus('todo'); break;
@@ -859,6 +976,7 @@ export default function TasksPage() {
     }
     if (filterCategory && t.category !== filterCategory) return false;
     if (filterProject && t.projectId !== Number(filterProject)) return false;
+    if (filterDimension && t.renewalDimension !== filterDimension) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!t.title.toLowerCase().includes(q) && !(t.notes || '').toLowerCase().includes(q)) return false;
@@ -1010,11 +1128,20 @@ export default function TasksPage() {
                   🔒 {task.blockerCount}
                 </span>
               )}
+              {task.isUrgent === 1 && !isDone && (
+                <span className="text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0" style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b55' }} title="Urgent">
+                  ⚡ Urgent
+                </span>
+              )}
               {task.timeSpentMinutes > 0 && (
                 <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} title="Time logged">
                   ⏱ {formatEffort(task.timeSpentMinutes)}
                 </span>
               )}
+              {task.renewalDimension && (() => {
+                const rd = RENEWAL_DIMS.find(d => d.key === task.renewalDimension);
+                return rd ? <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: rd.color + '18', color: rd.color, border: `1px solid ${rd.color}44` }} title={rd.label}>{rd.label.split(' ')[0]}</span> : null;
+              })()}
             </div>
           </button>
 
@@ -1342,6 +1469,13 @@ export default function TasksPage() {
               {getIcon('clock', { size: 12 })}
             </span>
           )}
+          {task.isUrgent === 1 && !isDone && (
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b55' }} title="Urgent">⚡</span>
+          )}
+          {task.renewalDimension && (() => {
+            const rd = RENEWAL_DIMS.find(d => d.key === task.renewalDimension);
+            return rd ? <span className="text-xs" style={{ color: rd.color }} title={rd.label}>{rd.label.split(' ')[0]}</span> : null;
+          })()}
           <button
             onClick={(e) => { e.stopPropagation(); handleShare(task); }}
             className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto hover:opacity-60 p-0.5"
@@ -1452,6 +1586,7 @@ export default function TasksPage() {
               { mode: 'list', icon: 'list-checks', title: 'List view' },
               { mode: 'board', icon: 'layout', title: 'Board view' },
               { mode: 'calendar', icon: 'calendar', title: 'Calendar view' },
+              { mode: 'matrix', icon: 'target', title: 'Eisenhower Matrix (m)' },
             ].map((v, i) => (
               <button
                 key={v.mode}
@@ -1562,6 +1697,8 @@ export default function TasksPage() {
           categories={categories}
           projects={projects}
           searchInputRef={searchInputRef}
+          filterDimension={filterDimension}
+          onSetFilterDimension={setFilterDimension}
         />
 
         {/* Bulk action toolbar */}
@@ -1606,6 +1743,31 @@ export default function TasksPage() {
               onReschedule={handleReschedule}
               onUpdateEffort={handleUpdateEffort}
             />
+          ) : viewMode === 'matrix' ? (
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Eisenhower Matrix</span>
+                <button
+                  onClick={() => setShowMatrixCompleted(v => !v)}
+                  className="ml-auto text-xs px-2.5 py-1 rounded-lg border transition-all"
+                  style={{
+                    borderColor: showMatrixCompleted ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: showMatrixCompleted ? 'var(--color-primary)' : 'var(--color-muted)',
+                    background: showMatrixCompleted ? 'var(--color-bg)' : 'transparent',
+                  }}
+                >
+                  {showMatrixCompleted ? 'Hide completed' : 'Show completed'}
+                </button>
+              </div>
+              <MatrixView
+                tasks={filtered}
+                showCompleted={showMatrixCompleted}
+                onToggleStatus={handleToggleStatus}
+                onEdit={openEdit}
+                onExpand={handleExpand}
+                dimensionLabel={filterDimension ? RENEWAL_DIMS.find(d => d.key === filterDimension)?.label : null}
+              />
+            </div>
           ) : (
           <div className="flex-1 overflow-auto">
           {loading ? (
@@ -1728,8 +1890,9 @@ export default function TasksPage() {
                 <li><strong>List</strong> — tasks grouped by category; drag to reorder</li>
                 <li><strong>Board</strong> — Kanban (To Do / In Progress / Done); drag within column to reorder, across to change status</li>
                 <li><strong>Calendar</strong> — Day / Week / Month / Range; drag pills between dates to reschedule</li>
+                <li><strong>Matrix</strong> — Eisenhower 2×2 grid (Urgent/Important); mark tasks ⚡ Urgent in the form</li>
               </ul>
-              <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Press <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>b</kbd> to cycle views.</p>
+              <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Press <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>b</kbd> to cycle views · <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>m</kbd> for Matrix.</p>
             </div>
 
             {/* Creating */}
@@ -1805,7 +1968,8 @@ export default function TasksPage() {
                   ['/', 'Focus search'],
                   ['f', 'Cycle quick filters'],
                   ['1 / 2 / 3', 'Filter by status'],
-                  ['b', 'Cycle view'],
+                  ['b', 'Cycle view (List→Board→Calendar→Matrix)'],
+                  ['m', 'Matrix view'],
                   ['?', 'All shortcuts'],
                   ['Ctrl+Shift+N', 'Quick capture'],
                   ['Esc', 'Close / deselect'],
@@ -1859,6 +2023,19 @@ export default function TasksPage() {
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, isUrgent: f.isUrgent ? 0 : 1 }))}
+                    className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                    style={{
+                      background: form.isUrgent ? '#f59e0b22' : 'transparent',
+                      borderColor: form.isUrgent ? '#f59e0b' : 'var(--color-border)',
+                      color: form.isUrgent ? '#f59e0b' : 'var(--color-muted)',
+                    }}
+                    title="Mark as urgent — appears in Eisenhower Matrix Q1 or Q3"
+                  >
+                    ⚡ {form.isUrgent ? 'Urgent' : 'Not urgent'}
+                  </button>
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>Due date & time</label>
@@ -2015,6 +2192,26 @@ export default function TasksPage() {
                   )}
                 </div>
               )}
+
+              {/* Renewal Dimension selector */}
+              <div className="px-5 pt-1 pb-3">
+                <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--color-muted)' }}>🌱 Renewal Dimension (Habit 7)</label>
+                <div className="flex gap-2">
+                  {RENEWAL_DIMS.map(d => (
+                    <button
+                      key={d.key}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, renewalDimension: f.renewalDimension === d.key ? null : d.key }))}
+                      className="flex-1 text-xs py-1.5 rounded-lg border transition-all text-center"
+                      style={{
+                        borderColor: form.renewalDimension === d.key ? d.color : 'var(--color-border)',
+                        background: form.renewalDimension === d.key ? d.color + '22' : 'transparent',
+                        color: form.renewalDimension === d.key ? d.color : 'var(--color-muted)',
+                      }}
+                    >{d.label}</button>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="flex items-center justify-between gap-2 px-5 py-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
               <button

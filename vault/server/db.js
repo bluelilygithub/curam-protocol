@@ -267,6 +267,9 @@ db.exec(`
  'ALTER TABLE tasks ADD COLUMN estimatedMinutes INTEGER DEFAULT NULL',
  'ALTER TABLE tasks ADD COLUMN keyResultId INTEGER REFERENCES key_results(id) ON DELETE SET NULL',
  'ALTER TABLE tasks ADD COLUMN timeSpentMinutes INTEGER DEFAULT 0',
+ 'ALTER TABLE tasks ADD COLUMN isUrgent INTEGER DEFAULT 0',
+ 'ALTER TABLE tasks ADD COLUMN renewalDimension TEXT DEFAULT NULL',
+ 'ALTER TABLE objectives ADD COLUMN renewalDimension TEXT DEFAULT NULL',
 ].forEach(sql => { try { db.exec(sql); } catch (_) {} });
 
 // Unique index for shareToken (separate try/catch — CREATE INDEX IF NOT EXISTS is idempotent)

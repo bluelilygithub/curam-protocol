@@ -477,6 +477,48 @@ export default function WeeklyReview({ tasks, onClose, onTasksChanged }) {
                   )}
                 </div>
               )}
+
+              {/* Renewal this week */}
+              {(() => {
+                const RDIMS = [
+                  { key: 'physical', label: '🏃', name: 'Physical', color: '#3b82f6' },
+                  { key: 'mental', label: '📚', name: 'Mental', color: '#22c55e' },
+                  { key: 'social', label: '🤝', name: 'Social', color: '#f59e0b' },
+                  { key: 'spiritual', label: '🌱', name: 'Spiritual', color: '#8b5cf6' },
+                ];
+                const dimCounts = {};
+                lastWeekDone.forEach(t => {
+                  if (t.renewalDimension) dimCounts[t.renewalDimension] = (dimCounts[t.renewalDimension] || 0) + 1;
+                });
+                return (
+                  <div className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>🌱 Renewal This Week</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {RDIMS.map(d => (
+                        <div
+                          key={d.key}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium flex-1 justify-center"
+                          style={{
+                            background: dimCounts[d.key] ? d.color + '18' : 'var(--color-surface)',
+                            border: `1px solid ${dimCounts[d.key] ? d.color : 'var(--color-border)'}`,
+                            color: dimCounts[d.key] ? d.color : 'var(--color-muted)',
+                          }}
+                          title={d.name}
+                        >
+                          {d.label}
+                          {dimCounts[d.key] ? (
+                            <span>{dimCounts[d.key]}</span>
+                          ) : (
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#ef4444', display: 'inline-block', marginLeft: 2 }} title="None this week" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>
