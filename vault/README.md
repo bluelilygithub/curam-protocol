@@ -59,12 +59,13 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **CSV Import** | Import tasks in bulk from a CSV file; download template, drag-drop upload, preview with row-level validation, selective import |
 | **Quick Capture** | Floating `+` button on every page (or `Ctrl+Shift+N`) — capture a task without leaving the current page |
 | **Morning Digest** | Daily overlay on first visit — overdue + today's tasks with a Claude-generated focus suggestion |
-| **Weekly Review** | Guided 3-step modal (`w` shortcut) — last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions and Goals progress update |
+| **Weekly Review** | Guided 3-step modal (`w` shortcut) — north star mission statement banner in Step 1 (if set); last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions and Goals progress update |
 
 #### Goals
 
 | Feature | Description |
 |---|---|
+| **Personal Mission Statement** | Compass-guided north star card at the top of the Goals page; write manually or use a 4-step Claude wizard (roles → character → contributions → principles) that streams a personalised statement via SSE; statement shown as a banner in Weekly Review Step 1 |
 | **Goals (OKR-lite)** | Objectives → Key Results → Tasks hierarchy; set numeric targets and track progress; AI-generated KR suggestions via Claude |
 | **Goals Widget** | Home page summary showing active objective count, average progress, and top 3 progress bars |
 | **Goals in Weekly Review** | Step 3 of Weekly Review shows active objectives; inline KR current-value updates |
@@ -174,11 +175,15 @@ vault/
 │       │   ├── NewProjectModal.jsx
 │       │   ├── KeyboardShortcutsModal.jsx
 │       │   ├── TasksCalendar.jsx # Time-blocking calendar (day/week/month/agenda; drag-drop; block resize)
-│       │   ├── FocusMode.jsx     # Pomodoro timer overlay with subtask checklist + time tracking
-│       │   ├── WeeklyReview.jsx  # 3-step guided weekly review modal
-│       │   ├── TaskImport.jsx    # CSV import modal (template download, drag-drop, preview, validation)
 │       │   ├── MorningDigest.jsx # Daily task digest overlay (once per day)
-│       │   └── QuickCapture.jsx  # Floating quick-capture FAB (Ctrl+Shift+N)
+│       │   ├── QuickCapture.jsx  # Floating quick-capture FAB (Ctrl+Shift+N)
+│       │   └── tasks/            # Task-specific sub-components (extracted from TasksPage)
+│       │       ├── TaskFilters.jsx        # Quick-filter chips, category/project/status dropdowns, search, sort
+│       │       ├── TaskStatsBar.jsx       # 6-card stats bar + 14-day completion chart
+│       │       ├── TaskTemplatesPanel.jsx # Templates side panel (create, apply, delete)
+│       │       ├── FocusMode.jsx          # Pomodoro timer overlay with subtask checklist + time tracking
+│       │       ├── WeeklyReviewModal.jsx  # 3-step guided weekly review modal
+│       │       └── TaskImportModal.jsx    # CSV import modal (template download, drag-drop, preview, validation)
 │       ├── store/
 │       │   ├── authStore.js      # Zustand auth state (persisted)
 │       │   ├── projectStore.js   # Zustand project state
@@ -234,7 +239,7 @@ vault/
 | `tasks` | Task records — status, priority, due date, category, tags, recurrence, estimated effort, time spent, share token, parent task link, key result link |
 | `task_tags` | Many-to-many tag associations for tasks |
 | `task_comments` | Per-task comments and auto-logged activity events (status/priority/due-date changes) |
-| `task_dependencies` | Directed blocker relationships between tasks — `taskId` is blocked by `blockedByTaskId` |
+| `task_dependencies` | Directed blocker relationships between tasks — `taskId` is blocked by `blockedByTaskId`; unique constraint prevents duplicates; circular dependency detection on insert |
 | `task_templates` | Reusable task templates with predefined priority, category, recurrence, and tags |
 | `template_subtasks` | Subtask definitions belonging to a task template |
 | `objectives` | OKR Objectives — title, description, timeframe, colour, status |
@@ -351,6 +356,8 @@ npm run dev
 
 ### March 2026
 
+- **Personal Mission Statement** — compass-guided north star card at the top of Goals page; 4-step Claude wizard generates a personalised statement via SSE streaming; statement shown as context banner in Weekly Review Step 1
+- **TasksPage refactoring** — `TasksPage.jsx` split into focused sub-components under `components/tasks/`: `TaskFilters` (quick-filter chips, dropdowns, search, sort), `TaskStatsBar` (6-card stats bar + 14-day chart), `TaskTemplatesPanel` (templates side panel with internal form state), `FocusMode`, `WeeklyReviewModal`, `TaskImportModal`; no behaviour or API changes — pure structural extraction
 - **Time-Blocking Calendar** — full rewrite of `TasksCalendar.jsx`; day/week/month/agenda sub-views (persisted in `localStorage`); task blocks absolutely positioned on a 24-hour CSS Grid (`64px` per hour); drag-drop tasks to reschedule (updates `dueDate` via `PUT /api/tasks/:id`); drag from unscheduled panel to assign a time; resize block bottom edge to update `estimatedMinutes` (snaps to 15-min); current-time red indicator line; inline popover on block click; click empty slot opens New Task form pre-filled with that datetime
 - **Task Dependencies** — `task_dependencies` table; `blockerCount` computed field on every task response; dependency UI in expanded task row (Blocked by + Blocking subsections with live search to add blockers); `🔒` badge on cards with incomplete blockers; blocker-confirm warning when marking a blocked task done; circular dependency detection via BFS on `POST /api/tasks/:id/dependencies`
 - **Focus Mode (Pomodoro)** — `FocusMode.jsx` full-screen overlay; four timer modes (Focus 25m / Short break 5m / Long break 15m / Custom); SVG ring progress indicator; subtask checklist; Web Audio API beep (440Hz sine, 0.3s) at timer zero; auto-start breaks/focus toggles; session counter (N of 4); settings persisted in `localStorage`; accumulated focus time logged to `timeSpentMinutes` on close; accessible via 🎯 card button or `Shift+F` on expanded task

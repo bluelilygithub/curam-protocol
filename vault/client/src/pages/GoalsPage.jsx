@@ -374,6 +374,310 @@ function NewObjectiveModal({ onClose, onCreated }) {
   );
 }
 
+const WIZARD_QUESTIONS = [
+  "What are your most important roles in life? (e.g. parent, professional, community member)",
+  "What do you want to be known for — what character traits matter most to you?",
+  "What do you want to achieve or contribute in your lifetime?",
+  "What principles or values guide your decisions?",
+];
+
+function MissionStatementCard() {
+  const getIcon = useIcon();
+  const [statement, setStatement] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [editText, setEditText] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardAnswers, setWizardAnswers] = useState(['', '', '', '']);
+  const [generating, setGenerating] = useState(false);
+  const [generatedText, setGeneratedText] = useState('');
+  const [generationDone, setGenerationDone] = useState(false);
+
+  useEffect(() => {
+    api.get('/api/goals/mission').then(r => r.json()).then(data => {
+      setStatement(data.statement || null);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const data = await api.put('/api/goals/mission', { statement: editText }).then(r => r.json());
+      setStatement(data.statement || null);
+      setEditMode(false);
+    } catch (err) { console.error(err); }
+    finally { setSaving(false); }
+  };
+
+  const handleOpenWizard = (rewrite = false) => {
+    if (rewrite) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('missionWizardAnswers') || '[]');
+        if (Array.isArray(saved) && saved.length === 4) setWizardAnswers(saved);
+      } catch {}
+    } else {
+      setWizardAnswers(['', '', '', '']);
+    }
+    setWizardStep(1);
+    setGeneratedText('');
+    setGenerationDone(false);
+    setShowWizard(true);
+  };
+
+  const handleGenerate = async () => {
+    localStorage.setItem('missionWizardAnswers', JSON.stringify(wizardAnswers));
+    setGenerating(true);
+    setGeneratedText('');
+    setGenerationDone(false);
+    try {
+      const res = await api.post('/api/goals/mission/generate', { answers: wizardAnswers });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let accumulated = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          if (payload === '[DONE]') { setGenerationDone(true); break; }
+          try {
+            const token = JSON.parse(payload);
+            accumulated += token;
+            setGeneratedText(accumulated);
+          } catch {}
+        }
+      }
+      setGenerationDone(true);
+    } catch (err) { console.error(err); }
+    finally { setGenerating(false); }
+  };
+
+  const handleUseStatement = async () => {
+    setSaving(true);
+    try {
+      const data = await api.put('/api/goals/mission', { statement: generatedText }).then(r => r.json());
+      setStatement(data.statement || null);
+      setShowWizard(false);
+      setGeneratedText('');
+      setGenerationDone(false);
+    } catch (err) { console.error(err); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return null;
+
+  const s = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
+
+  return (
+    <div style={{ flexShrink: 0, borderBottom: '1px solid var(--color-border)' }}>
+      {/* Main card row */}
+      <div
+        style={{ padding: '14px 20px', background: s.background, position: 'relative' }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        {/* Empty state */}
+        {!statement && !editMode && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, borderRadius: 10, background: 'var(--color-primary)22', flexShrink: 0 }}>
+              {getIcon('compass', { size: 18, style: { color: 'var(--color-primary)' } })}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)', marginBottom: 2 }}>Personal Mission Statement</div>
+              <div style={{ fontSize: 12, color: 'var(--color-muted)' }}>Your north star — what do you want to be and do in your life?</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <button
+                onClick={() => handleOpenWizard(false)}
+                style={{ fontSize: 12, fontWeight: 500, padding: '6px 14px', borderRadius: 8, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                {getIcon('sparkles', { size: 12 })} Write with Claude
+              </button>
+              <button
+                onClick={() => { setEditText(''); setEditMode(true); setShowWizard(false); }}
+                style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', cursor: 'pointer' }}
+              >
+                Add manually
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Display state */}
+        {statement && !editMode && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: 'var(--color-primary)22', flexShrink: 0, marginTop: 2 }}>
+              {getIcon('compass', { size: 14, style: { color: 'var(--color-primary)' } })}
+            </div>
+            <blockquote style={{ flex: 1, margin: 0, paddingLeft: 14, borderLeft: '3px solid var(--color-primary)', fontStyle: 'italic', fontSize: 14, lineHeight: 1.65, color: 'var(--color-text)' }}>
+              {statement}
+            </blockquote>
+            {hovered && (
+              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                <button
+                  onClick={() => { setEditText(statement); setEditMode(true); setShowWizard(false); }}
+                  title="Edit"
+                  style={{ padding: '4px 7px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                >
+                  {getIcon('edit', { size: 13 })}
+                </button>
+                <button
+                  onClick={() => handleOpenWizard(true)}
+                  title="Rewrite with Claude"
+                  style={{ padding: '4px 7px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                >
+                  {getIcon('sparkles', { size: 13 })}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Edit state */}
+        {editMode && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+              {getIcon('compass', { size: 14, style: { color: 'var(--color-primary)' } })}
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)' }}>Personal Mission Statement</span>
+            </div>
+            <textarea
+              autoFocus
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              rows={3}
+              placeholder="Write your personal mission statement…"
+              style={{ width: '100%', fontSize: 14, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--color-primary)', background: 'var(--color-bg)', color: 'var(--color-text)', outline: 'none', resize: 'vertical', fontStyle: 'italic', lineHeight: 1.65, boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={handleSave}
+                disabled={saving || !editText.trim()}
+                style={{ fontSize: 12, fontWeight: 500, padding: '6px 14px', borderRadius: 8, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer', opacity: saving || !editText.trim() ? 0.5 : 1 }}
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                onClick={() => setEditMode(false)}
+                style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Claude wizard panel (inline collapsible) */}
+      {showWizard && (
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--color-border)', background: 'var(--color-bg)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {getIcon('sparkles', { size: 13, style: { color: 'var(--color-primary)' } })}
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)' }}>Write with Claude</span>
+              {!generating && !generatedText && (
+                <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>— Step {wizardStep} of 4</span>
+              )}
+            </div>
+            <button onClick={() => setShowWizard(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', display: 'flex', alignItems: 'center' }}>
+              {getIcon('x', { size: 14 })}
+            </button>
+          </div>
+
+          {/* Wizard steps */}
+          {!generating && !generatedText ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 620 }}>
+              <label style={{ fontSize: 13, color: 'var(--color-text)', fontWeight: 500 }}>
+                {WIZARD_QUESTIONS[wizardStep - 1]}
+              </label>
+              <textarea
+                autoFocus
+                value={wizardAnswers[wizardStep - 1]}
+                onChange={e => {
+                  const updated = [...wizardAnswers];
+                  updated[wizardStep - 1] = e.target.value;
+                  setWizardAnswers(updated);
+                }}
+                rows={2}
+                placeholder="Your answer…"
+                style={{ width: '100%', fontSize: 13, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                {wizardStep > 1 && (
+                  <button
+                    onClick={() => setWizardStep(s => s - 1)}
+                    style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer' }}
+                  >
+                    ← Back
+                  </button>
+                )}
+                {wizardStep < 4 ? (
+                  <button
+                    onClick={() => setWizardStep(s => s + 1)}
+                    disabled={!wizardAnswers[wizardStep - 1].trim()}
+                    style={{ fontSize: 12, fontWeight: 500, padding: '6px 14px', borderRadius: 8, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer', opacity: !wizardAnswers[wizardStep - 1].trim() ? 0.5 : 1 }}
+                  >
+                    Next →
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleGenerate}
+                    disabled={!wizardAnswers[3].trim()}
+                    style={{ fontSize: 12, fontWeight: 500, padding: '6px 14px', borderRadius: 8, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: !wizardAnswers[3].trim() ? 0.5 : 1 }}
+                  >
+                    {getIcon('sparkles', { size: 12 })} Generate
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Result panel */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 620 }}>
+              <div style={{ padding: '12px 16px', borderRadius: 10, borderLeft: '3px solid var(--color-primary)', background: 'var(--color-surface)', fontStyle: 'italic', fontSize: 14, lineHeight: 1.65, color: 'var(--color-text)', minHeight: 60 }}>
+                {generating && !generatedText
+                  ? <span style={{ color: 'var(--color-muted)' }}>Generating…</span>
+                  : <span>{generatedText}</span>
+                }
+                {generating && <span style={{ color: 'var(--color-primary)', marginLeft: 2 }}>▊</span>}
+              </div>
+              {generationDone && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    onClick={handleUseStatement}
+                    disabled={saving}
+                    style={{ fontSize: 12, fontWeight: 500, padding: '6px 14px', borderRadius: 8, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer', opacity: saving ? 0.5 : 1 }}
+                  >
+                    Use this statement
+                  </button>
+                  <button
+                    onClick={handleGenerate}
+                    style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    {getIcon('refresh-cw', { size: 11 })} Regenerate
+                  </button>
+                  <button
+                    onClick={() => { setGeneratedText(''); setGenerationDone(false); }}
+                    style={{ fontSize: 12, padding: '6px 12px', borderRadius: 8, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer' }}
+                  >
+                    ← Edit answers
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GoalsPage() {
   const getIcon = useIcon();
   const [objectives, setObjectives] = useState([]);
@@ -441,7 +745,9 @@ export default function GoalsPage() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <MissionStatementCard />
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
       {/* Left panel — objective list */}
       <div style={{ width: 280, flexShrink: 0, borderRight: '1px solid var(--color-border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -668,6 +974,7 @@ export default function GoalsPage() {
         )}
       </div>
 
+      </div>
       {showNew && <NewObjectiveModal onClose={() => setShowNew(false)} onCreated={(obj) => { setObjectives(prev => [obj, ...prev]); setSelected(obj); setShowNew(false); }} />}
     </div>
   );

@@ -109,7 +109,7 @@ Drag cards **within** a column to reorder. Drag cards **across** columns to chan
 
 ### Calendar view
 
-Rendered by `TasksCalendar` component (`vault/client/src/components/TasksCalendar.jsx`). Sub-view persists in `localStorage` under the key `tasksCalendarSubView`. Default: **week**.
+Rendered by `TasksCalendar` component (`vault/client/src/components/TasksCalendar.jsx`). Task-specific components (filters, stats bar, templates panel, focus mode, weekly review, CSV import) live in `vault/client/src/components/tasks/`. Sub-view persists in `localStorage` under the key `tasksCalendarSubView`. Default: **week**.
 
 **Sub-views:**
 
@@ -461,9 +461,9 @@ Dismissed once per session (`sessionStorage`). Reappears on next login.
 
 ## Weekly Review
 
-Click **Weekly Review** in the toolbar or press `w`. Opens the 3-step `WeeklyReview` modal:
+Click **Weekly Review** in the toolbar or press `w`. Opens the 3-step `WeeklyReviewModal` (`vault/client/src/components/tasks/WeeklyReviewModal.jsx`):
 
-1. **Last week** — tasks completed in the past 7 days grouped by category
+1. **Last week** — tasks completed in the past 7 days grouped by category. If a Personal Mission Statement is saved, a compact **North star** banner appears at the top of this step (compass icon + statement text, truncated to one line).
 2. **Overdue** — incomplete overdue tasks with actions: mark done, reschedule (Today / Tomorrow / Next week), or remove due date
 3. **This week** — upcoming tasks + Claude SSE focus suggestions + total effort estimate + quick-add task + Goals progress panel (active objectives with inline KR value updates)
 

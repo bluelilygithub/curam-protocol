@@ -4,6 +4,57 @@
 
 An OKR-lite goal tracking system built into Curam Vault. Accessible via the target icon in the sidebar or directly at `/goals`. Structured as a two-tier hierarchy: **Objectives** contain **Key Results**, and tasks can be linked to a Key Result to track execution progress.
 
+At the very top of the Goals page sits the **Personal Mission Statement** — a full-width card that provides the north star context for all your objectives.
+
+---
+
+## Personal Mission Statement
+
+Inspired by Habit 2 (Begin with the End in Mind) from the 7 Habits framework. Stored in the `settings` table under the key `mission_statement`.
+
+### Three card states
+
+| State | Shown when |
+|---|---|
+| **Empty** | No statement saved — compass icon, title, subtitle, two action buttons |
+| **Display** | Statement exists — rendered as an italic blockquote with a left primary-colour border; Edit and Rewrite buttons appear on hover |
+| **Edit** | Triggered by "Add manually" or the pencil icon — pre-filled textarea with Save / Cancel |
+
+### Write with Claude wizard
+
+Click **Write with Claude** (empty state) or the sparkle icon (display state hover) to open an inline collapsible panel below the card. The panel steps through 4 questions:
+
+1. **Roles** — "What are your most important roles in life? (e.g. parent, professional, community member)"
+2. **Character** — "What do you want to be known for — what character traits matter most to you?"
+3. **Contributions** — "What do you want to achieve or contribute in your lifetime?"
+4. **Principles** — "What principles or values guide your decisions?"
+
+Navigate with **Next** / **Back**. On step 4, the button becomes **Generate**, which calls `POST /api/goals/mission/generate` and streams the result via SSE. The generated statement appears live in a styled result panel. Once complete:
+
+- **Use this statement** — saves via `PUT /api/goals/mission` and closes the wizard
+- **Regenerate** — reruns with the same answers
+- **← Edit answers** — returns to wizard step 1 for editing
+
+Wizard answers are saved to `localStorage` under `missionWizardAnswers` when Generate is clicked. When reopening the wizard via "Rewrite with Claude", previous answers are pre-populated.
+
+### Weekly Review banner
+
+When the Weekly Review modal opens, `GET /api/goals/mission` is fetched. If a statement exists, a compact banner appears at the top of Step 1:
+
+> 🧭 **North star:** *[statement text truncated to one line, full text on hover]*
+
+If no statement exists, the banner is omitted.
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/goals/mission` | Returns `{ statement: string \| null }` |
+| PUT | `/api/goals/mission` | Body: `{ statement }` — upserts into `settings` table; returns `{ statement }` |
+| POST | `/api/goals/mission/generate` | SSE stream — body: `{ answers: [q1, q2, q3, q4] }` — streams mission statement tokens via Claude Haiku |
+
+All three endpoints are registered **before** the `/:id` parameterised routes to avoid routing conflicts.
+
 ---
 
 ## Pages & Entry Points

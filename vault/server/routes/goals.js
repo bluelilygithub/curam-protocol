@@ -135,6 +135,63 @@ router.delete('/key-results/:krId', (req, res) => {
   }
 });
 
+// GET /api/goals/mission — retrieve mission statement (must be before /:id)
+router.get('/mission', (req, res) => {
+  try {
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'mission_statement'").get();
+    res.json({ statement: row ? row.value : null });
+  } catch (err) {
+    console.error('[goals mission GET]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/goals/mission — upsert mission statement (must be before /:id)
+router.put('/mission', (req, res) => {
+  try {
+    const { statement } = req.body;
+    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('mission_statement', ?)").run(statement || '');
+    res.json({ statement: statement || '' });
+  } catch (err) {
+    console.error('[goals mission PUT]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/goals/mission/generate — SSE stream a generated mission statement (must be before /:id)
+router.post('/mission/generate', async (req, res) => {
+  try {
+    const { answers } = req.body;
+    if (!Array.isArray(answers) || answers.length < 4) {
+      return res.status(400).json({ error: 'answers array of length 4 required' });
+    }
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    const prompt = `Based on these answers about a person's roles, character traits, lifetime contributions, and guiding principles, write a personal mission statement that is 2–4 sentences, inspiring, personal, and written in the first person. Focus on being and contributing, not just achieving. Return only the mission statement text with no preamble or explanation.\n\nAnswers:\n1. Roles: ${answers[0]}\n2. Character traits: ${answers[1]}\n3. Lifetime contributions: ${answers[2]}\n4. Guiding principles: ${answers[3]}`;
+    const stream = client.messages.stream({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    stream.on('text', (text) => {
+      res.write(`data: ${JSON.stringify(text)}\n\n`);
+    });
+    stream.on('finalMessage', () => {
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+    stream.on('error', (err) => {
+      console.error('[goals mission generate]', err);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+  } catch (err) {
+    console.error('[goals mission generate]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/goals — create objective
 router.post('/', (req, res) => {
   try {

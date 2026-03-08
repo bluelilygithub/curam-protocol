@@ -3,9 +3,12 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import TasksCalendar from '../components/TasksCalendar';
-import WeeklyReview from '../components/WeeklyReview';
-import TaskImport from '../components/TaskImport';
-import FocusMode from '../components/FocusMode';
+import WeeklyReview from '../components/tasks/WeeklyReviewModal';
+import TaskImport from '../components/tasks/TaskImportModal';
+import FocusMode from '../components/tasks/FocusMode';
+import TaskTemplatesPanel from '../components/tasks/TaskTemplatesPanel';
+import TaskStatsBar from '../components/tasks/TaskStatsBar';
+import TaskFilters from '../components/tasks/TaskFilters';
 import { parseNaturalDate, formatDateForInput, toISOForAPI } from '../utils/parseDate';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
@@ -165,9 +168,6 @@ export default function TasksPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
-  const [templateForm, setTemplateForm] = useState({ name: '', description: '', category: '', priority: 'medium', recurrence: 'none', tags: '', subtasks: '' });
-  const [showNewTemplate, setShowNewTemplate] = useState(false);
-  const [savingTemplate, setSavingTemplate] = useState(false);
 
   // Note tooltip
   const [noteTooltip, setNoteTooltip] = useState(null); // { notes, x, y }
@@ -623,22 +623,6 @@ export default function TasksPage() {
   const handleDeleteTemplate = async (id) => {
     await api.delete(`/api/task-templates/${id}`);
     setTemplates(prev => prev.filter(t => t.id !== id));
-  };
-
-  const handleSaveNewTemplate = async () => {
-    if (!templateForm.name.trim()) return;
-    setSavingTemplate(true);
-    try {
-      const subtasks = templateForm.subtasks.split('\n').map(s => s.trim()).filter(Boolean).map(title => ({ title }));
-      const tmpl = await api.post('/api/task-templates', {
-        ...templateForm,
-        subtasks,
-      }).then(r => r.json());
-      setTemplates(prev => [tmpl, ...prev]);
-      setTemplateForm({ name: '', description: '', category: '', priority: 'medium', recurrence: 'none', tags: '', subtasks: '' });
-      setShowNewTemplate(false);
-    } catch (err) { console.error(err); }
-    finally { setSavingTemplate(false); }
   };
 
   // Drag handlers (list view)
@@ -1403,56 +1387,14 @@ export default function TasksPage() {
       )}
       {/* Templates side panel */}
       {showTemplates && (
-        <div className="w-72 flex-shrink-0 border-r flex flex-col overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-          <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
-            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Task Templates</span>
-            <div className="flex gap-1.5">
-              <button onClick={() => setShowNewTemplate(v => !v)} className="text-xs px-2 py-0.5 rounded-lg border" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>+ New</button>
-              <button onClick={() => setShowTemplates(false)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 14 })}</button>
-            </div>
-          </div>
-          {/* New template form */}
-          {showNewTemplate && (
-            <div className="border-b px-4 py-3 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-              <input value={templateForm.name} onChange={e => setTemplateForm(f => ({ ...f, name: e.target.value }))} placeholder="Template name *" className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-              <input value={templateForm.category} onChange={e => setTemplateForm(f => ({ ...f, category: e.target.value }))} placeholder="Category (optional)" className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-              <select value={templateForm.priority} onChange={e => setTemplateForm(f => ({ ...f, priority: e.target.value }))} className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-                <option value="high">High priority</option>
-                <option value="medium">Medium priority</option>
-                <option value="low">Low priority</option>
-              </select>
-              <textarea value={templateForm.subtasks} onChange={e => setTemplateForm(f => ({ ...f, subtasks: e.target.value }))} placeholder="Subtasks (one per line)" rows={3} className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none resize-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-              <div className="flex gap-2">
-                <button onClick={handleSaveNewTemplate} disabled={savingTemplate || !templateForm.name.trim()} className="flex-1 text-xs py-1.5 rounded-lg font-medium text-white disabled:opacity-50" style={{ background: 'var(--color-primary)' }}>{savingTemplate ? 'Saving…' : 'Save'}</button>
-                <button onClick={() => setShowNewTemplate(false)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>Cancel</button>
-              </div>
-            </div>
-          )}
-          <div className="flex-1 overflow-y-auto py-2">
-            {templatesLoading ? (
-              <div className="flex justify-center py-6" style={{ color: 'var(--color-muted)' }}>{getIcon('loader', { size: 16 })}</div>
-            ) : templates.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--color-muted)' }}>No templates yet. Create one above or save a task as a template.</div>
-            ) : (
-              templates.map(tmpl => (
-                <div key={tmpl.id} className="px-4 py-2.5 border-b hover:opacity-90" style={{ borderColor: 'var(--color-border)' }}>
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{tmpl.name}</span>
-                    <div className="flex gap-0.5 flex-shrink-0">
-                      <button onClick={() => handleApplyTemplate(tmpl.id)} className="text-xs px-1.5 py-0.5 rounded border font-medium" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>Apply</button>
-                      <button onClick={() => handleDeleteTemplate(tmpl.id)} className="hover:opacity-60 p-0.5" style={{ color: 'var(--color-muted)' }}>{getIcon('trash', { size: 11 })}</button>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    <span className="text-xs px-1 py-0.5 rounded" style={{ background: PRIORITY_COLOR[tmpl.priority] + '22', color: PRIORITY_COLOR[tmpl.priority] }}>{PRIORITY_LABEL[tmpl.priority]}</span>
-                    {tmpl.category && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{tmpl.category}</span>}
-                    {tmpl.subtasks.length > 0 && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{tmpl.subtasks.length} subtask{tmpl.subtasks.length !== 1 ? 's' : ''}</span>}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <TaskTemplatesPanel
+          templates={templates}
+          templatesLoading={templatesLoading}
+          onApply={handleApplyTemplate}
+          onDelete={handleDeleteTemplate}
+          onTemplateSaved={(tmpl) => setTemplates(prev => [tmpl, ...prev])}
+          onClose={() => setShowTemplates(false)}
+        />
       )}
 
       {/* Main content */}
@@ -1549,62 +1491,21 @@ export default function TasksPage() {
 
         {/* Stats bar */}
         {tasks.length > 0 && (
-          <>
-            <div className="flex-shrink-0 flex gap-3 px-6 py-3 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-              {[
-                { label: 'Total Active', value: totalIncomplete, icon: 'list-checks', action: null },
-                { label: 'Done This Week', value: completedThisWeek, icon: 'check-circle', action: () => setShowChart(v => !v) },
-                { label: 'Overdue', value: overdueCount, icon: 'calendar', action: () => setQuickFilter('overdue'), color: overdueCount > 0 ? '#ef4444' : undefined },
-                { label: 'High Priority', value: highPriorityCount, icon: 'tag', action: () => setQuickFilter('high'), color: highPriorityCount > 0 ? '#ef4444' : undefined },
-                { label: 'Total Effort', value: formatEffort(totalEffort), icon: 'clock', action: null },
-                { label: 'Time Logged', value: timeLogged > 0 ? formatEffort(timeLogged) : '—', icon: 'clock', action: null },
-              ].map(stat => (
-                <button
-                  key={stat.label}
-                  onClick={stat.action || undefined}
-                  disabled={!stat.action}
-                  className={`flex-1 flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all ${stat.action ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
-                >
-                  <span style={{ color: stat.color || 'var(--color-primary)' }}>{getIcon(stat.icon, { size: 16 })}</span>
-                  <div className="text-left">
-                    <div className="text-lg font-bold leading-none" style={{ color: stat.color || 'var(--color-text)' }}>{stat.value}</div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{stat.label}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            {/* 14-day completion chart */}
-            {showChart && (
-              <div className="flex-shrink-0 px-6 py-4 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Completion trend — last 14 days</span>
-                  <button onClick={() => setShowChart(false)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 12 })}</button>
-                </div>
-                <div className="flex items-end gap-1" style={{ height: 64 }}>
-                  {chartData.map(({ day, count }, i) => {
-                    const isToday = day === todayStr;
-                    const barH = Math.max(Math.round((count / chartMax) * 56), count > 0 ? 4 : 2);
-                    return (
-                      <div key={day} className="flex-1 flex flex-col items-center justify-end" style={{ height: 64 }}>
-                        {count > 0 && <span className="text-xs leading-none mb-0.5" style={{ color: 'var(--color-muted)', fontSize: 9 }}>{count}</span>}
-                        <div
-                          className="w-full rounded-t"
-                          style={{ height: barH, background: isToday ? 'var(--color-primary)' : 'var(--color-border)', opacity: count > 0 ? 1 : 0.4 }}
-                          title={`${day}: ${count} completed`}
-                        />
-                        {(i === 0 || i === 6 || i === 13) && (
-                          <span className="text-xs mt-1 leading-none" style={{ color: 'var(--color-muted)', fontSize: 9 }}>
-                            {new Date(day + 'T12:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </>
+          <TaskStatsBar
+            totalIncomplete={totalIncomplete}
+            completedThisWeek={completedThisWeek}
+            overdueCount={overdueCount}
+            highPriorityCount={highPriorityCount}
+            totalEffortFormatted={formatEffort(totalEffort)}
+            timeLoggedFormatted={timeLogged > 0 ? formatEffort(timeLogged) : '—'}
+            showChart={showChart}
+            onToggleChart={() => setShowChart(v => !v)}
+            onFilterOverdue={() => setQuickFilter('overdue')}
+            onFilterHigh={() => setQuickFilter('high')}
+            chartData={chartData}
+            chartMax={chartMax}
+            todayStr={todayStr}
+          />
         )}
 
         {/* AI panel */}
@@ -1645,64 +1546,23 @@ export default function TasksPage() {
         )}
 
         {/* Filter bar */}
-        <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-6 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          {[
-            { key: 'all', label: 'All' },
-            { key: 'today', label: 'Today' },
-            { key: 'week', label: 'This Week' },
-            { key: 'high', label: 'High Priority' },
-            { key: 'overdue', label: 'Overdue' },
-          ].map(f => (
-            <button
-              key={f.key}
-              onClick={() => setQuickFilter(f.key)}
-              className="px-3 py-1 rounded-lg text-xs font-medium border transition-all"
-              style={{
-                background: quickFilter === f.key ? 'var(--color-primary)' : 'transparent',
-                borderColor: quickFilter === f.key ? 'var(--color-primary)' : 'var(--color-border)',
-                color: quickFilter === f.key ? '#fff' : 'var(--color-muted)',
-              }}
-            >{f.label}</button>
-          ))}
-
-          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="text-xs px-2 py-1 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-            <option value="">All categories</option>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-
-          <select value={filterProject} onChange={e => setFilterProject(e.target.value)} className="text-xs px-2 py-1 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-            <option value="">All projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="text-xs px-2 py-1 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-            <option value="active">To Do + In Progress</option>
-            <option value="todo">To Do</option>
-            <option value="in-progress">In Progress</option>
-            <option value="done">Done</option>
-            <option value="all">All</option>
-          </select>
-
-          <div className="relative flex-1 min-w-[160px]">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-muted)' }}>{getIcon('search', { size: 12 })}</span>
-            <input
-              ref={searchInputRef}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search tasks…"
-              className="w-full pl-7 pr-3 py-1 rounded-lg border text-xs outline-none"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-            />
-          </div>
-
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="text-xs px-2 py-1 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-            <option value="due">Sort: Due Date</option>
-            <option value="priority">Sort: Priority</option>
-            <option value="created">Sort: Created</option>
-            <option value="az">Sort: A–Z</option>
-            <option value="za">Sort: Z–A</option>
-          </select>
-        </div>
+        <TaskFilters
+          quickFilter={quickFilter}
+          onSetQuickFilter={setQuickFilter}
+          filterCategory={filterCategory}
+          onSetFilterCategory={setFilterCategory}
+          filterProject={filterProject}
+          onSetFilterProject={setFilterProject}
+          filterStatus={filterStatus}
+          onSetFilterStatus={setFilterStatus}
+          search={search}
+          onSetSearch={setSearch}
+          sortBy={sortBy}
+          onSetSortBy={setSortBy}
+          categories={categories}
+          projects={projects}
+          searchInputRef={searchInputRef}
+        />
 
         {/* Bulk action toolbar */}
         {selectedIds.size > 0 && (
