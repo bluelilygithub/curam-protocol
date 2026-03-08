@@ -8,53 +8,75 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 
 ### Features
 
+#### Projects & Workspaces
+
 | Feature | Description |
 |---|---|
 | **Projects** | Workspace containers with structured briefs — organise AI work by client or topic |
 | **Folders** | Group projects into folders; drag-and-drop projects in and out of folders from the sidebar |
-| **General Chat** | Project-free chat workspace for ad-hoc questions; sessions are saved and searchable |
-| **Chat** | Claude and Gemini conversations scoped to a project's context; model and temperature switchable per session |
-| **Chat History** | Browse every session across all projects and General Chat, filterable by date range and searchable by content |
-| **Files** | Upload PDFs, images, and text files (txt, md, csv, json) to a project; text is extracted and AI-summarised on upload |
-| **Project Files panel** | Side panel in the chat interface — lists all project files, upload new files, pin/unpin files to inject into every chat's context |
-| **Pinned files** | Pinned files are automatically included in every chat's system prompt for that project |
-| **Clipboard image paste** | Paste images directly from the clipboard into the chat input; sent as inline base64 to the AI, no file upload required |
 | **Personas** | Reusable AI roles with custom system prompts (e.g. "Senior Copywriter", "Legal Reviewer") |
 | **Prompts** | Prompt library — save, tag, and reuse prompt templates across projects |
 | **Memory** | Global persistent notes injected into all chats (facts the AI should always know) |
 | **Pinned URLs** | Attach web URLs to a project; content is fetched and stored for AI context |
+| **Files** | Upload PDFs, images, and text files (txt, md, csv, json) to a project; text is extracted and AI-summarised on upload |
+| **Pinned files** | Pinned files are automatically included in every chat's system prompt for that project |
+
+#### Chat & AI
+
+| Feature | Description |
+|---|---|
+| **Chat** | Claude and Gemini conversations scoped to a project's context; model and temperature switchable per session |
+| **General Chat** | Project-free chat workspace for ad-hoc questions; sessions are saved and searchable |
+| **Chat History** | Browse every session across all projects and General Chat, filterable by date range and searchable by content |
+| **Project Files panel** | Side panel in the chat interface — lists all project files, upload new files, pin/unpin files to inject into every chat's context |
+| **Clipboard image paste** | Paste images directly from the clipboard into the chat input; sent as inline base64 to the AI, no file upload required |
 | **`@search` web search** | Type `@` in chat and select "Search the web"; results shown in a panel before attaching as URL context |
+| **@mention Tasks in Chat** | Type `@` in chat to attach a task's details as context; title, notes, and due date are injected into the conversation |
 | **Document Compare** | Compare two documents side by side using any Claude or Gemini model; 4 comparison modes; save results to a project |
 | **Multi-Model Debate** | Pit multiple AI models against each other on a topic; multi-file context upload; synthesis summary |
 | **Export** | Export chat conversations to Markdown, JSON, or PDF; email thread export |
-| **Search** | Global search palette across projects, chats, files, and tasks |
 | **Voice input** | Mic button in chat toolbar starts browser-native speech recognition (Web Speech API); live interim transcript preview; hidden in unsupported browsers |
 | **Read aloud** | Speaker button reads the last assistant message via browser text-to-speech; no external service required |
 | **Token budget alerts** | Set a per-session cost limit in Settings; amber warning at 80%, red at 100% with a direct "Summarise now" button |
-| **Password show/hide** | Eye icon on all password fields (login, change password, reset password) toggles visibility |
-| **Admin Dashboard** | Usage stats — sessions, messages, tokens, searches, debates, comparisons; filterable by date range |
-| **Password reset** | Email-based password reset flow with 1-hour expiry tokens |
+
+#### Tasks
+
+| Feature | Description |
+|---|---|
 | **Tasks** | Full personal task manager — List, Kanban, and Calendar views; drag-to-reorder; priority, due date, category, tags, project link; keyboard shortcuts |
-| **Task Templates** | Save any task as a reusable template (with subtasks, priority, category, recurrence); apply in one click |
 | **Kanban Board** | Three-column board (To Do / In Progress / Done); drag cards within or across columns to reorder and change status |
 | **Time-Blocking Calendar** | Day/week/month/agenda sub-views; task blocks absolutely positioned on a 24-hour CSS Grid; drag-drop to reschedule; resize bottom edge to change estimated effort; current-time indicator |
-| **Task Comments & Activity** | Per-task comment thread; system events (status, priority, due date changes) auto-logged |
-| **Recurring Tasks** | Daily / Weekly / Fortnightly / Monthly / Annually; new copy created automatically when marked done |
 | **Subtasks** | Nested subtasks with completion tracking; AI-generate subtasks from task title and notes |
 | **Task Dependencies** | Mark tasks as "blocked by" other tasks; 🔒 badge when incomplete blockers exist; dependency UI in expanded row; circular dependency detection |
+| **Recurring Tasks** | Daily / Weekly / Fortnightly / Monthly / Annually; new copy created automatically when marked done |
+| **Task Comments & Activity** | Per-task comment thread; system events (status, priority, due date changes) auto-logged |
+| **Task Templates** | Save any task as a reusable template (with subtasks, priority, category, recurrence); apply in one click |
 | **Focus Mode (Pomodoro)** | Full-screen overlay with a 25/5/15-min Pomodoro timer; SVG ring progress; subtask checklist; Web Audio API beep; auto-start breaks; time logged to task on close |
 | **Time Tracking** | `timeSpentMinutes` accumulated via Focus Mode or the per-card stopwatch; running timer indicator in toolbar; time pill on cards; Time Logged 6th stat card |
-| **Natural Language Due Dates** | Type `"tomorrow 3pm"`, `"next friday"`, `"Mar 15"` in the due date field; live resolved-date preview; 📅 calendar picker fallback |
-| **Morning Digest** | Daily overlay on first visit — overdue + today's tasks with a Claude-generated focus suggestion |
-| **Quick Capture** | Floating `+` button on every page (or `Ctrl+Shift+N`) — capture a task without leaving the current page |
 | **Effort Estimation** | Set estimated effort per task (quick-select presets or custom input); effort pills on cards; Total Effort stat in toolbar |
-| **Weekly Review** | Guided 3-step modal (`w` shortcut) — last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions and Goals progress update |
-| **CSV Import** | Import tasks in bulk from a CSV file; download template, drag-drop upload, preview with row-level validation, selective import |
+| **Natural Language Due Dates** | Type `"tomorrow 3pm"`, `"next friday"`, `"Mar 15"` in the due date field; live resolved-date preview; 📅 calendar picker fallback |
 | **Task Sharing** | Generate a public share link for any task; read-only view (no login required) with title, status, notes, tags, subtasks; revocable at any time |
-| **@mention Tasks in Chat** | Type `@` in chat to attach a task's details as context; title, notes, and due date are injected into the conversation |
+| **CSV Import** | Import tasks in bulk from a CSV file; download template, drag-drop upload, preview with row-level validation, selective import |
+| **Quick Capture** | Floating `+` button on every page (or `Ctrl+Shift+N`) — capture a task without leaving the current page |
+| **Morning Digest** | Daily overlay on first visit — overdue + today's tasks with a Claude-generated focus suggestion |
+| **Weekly Review** | Guided 3-step modal (`w` shortcut) — last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions and Goals progress update |
+
+#### Goals
+
+| Feature | Description |
+|---|---|
 | **Goals (OKR-lite)** | Objectives → Key Results → Tasks hierarchy; set numeric targets and track progress; AI-generated KR suggestions via Claude |
 | **Goals Widget** | Home page summary showing active objective count, average progress, and top 3 progress bars |
 | **Goals in Weekly Review** | Step 3 of Weekly Review shows active objectives; inline KR current-value updates |
+
+#### Admin & Account
+
+| Feature | Description |
+|---|---|
+| **Admin Dashboard** | Usage stats — sessions, messages, tokens, searches, debates, comparisons; filterable by date range |
+| **Search** | Global search palette across projects, chats, files, and tasks |
+| **Password reset** | Email-based password reset flow with 1-hour expiry tokens |
+| **Password show/hide** | Eye icon on all password fields (login, change password, reset password) toggles visibility |
 
 > **Detailed feature docs:** [TASKS.md](TASKS.md) · [GOALS.md](GOALS.md)
 

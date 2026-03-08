@@ -50,7 +50,7 @@ function App() {
   return (
     <ThemeProvider>
       <IconProvider>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <SearchPalette />
           {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
           <Routes>

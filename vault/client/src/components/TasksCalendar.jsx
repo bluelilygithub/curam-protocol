@@ -59,27 +59,27 @@ function TaskPopover({ task, onClose, onEdit, onToggleStatus, style }) {
     <div
       onClick={e => e.stopPropagation()}
       style={{
-        position: 'absolute', zIndex: 100, background: 'var(--bg-primary, #1a1a2e)',
-        border: '1px solid var(--border, #333)', borderRadius: '0.5rem',
+        position: 'absolute', zIndex: 100, background: 'var(--color-bg)',
+        border: '1px solid var(--color-border)', borderRadius: '0.5rem',
         padding: '0.75rem', width: '220px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
         ...style,
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-        <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-primary, #fff)', flex: 1, marginRight: '0.5rem' }}>{task.title}</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted, #888)', padding: 0, fontSize: '0.9rem' }}>✕</button>
+        <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--color-text)', flex: 1, marginRight: '0.5rem' }}>{task.title}</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', padding: 0, fontSize: '0.9rem' }}>✕</button>
       </div>
-      {task.notes && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted, #888)', marginBottom: '0.5rem', lineHeight: 1.4 }}>{task.notes.slice(0, 120)}{task.notes.length > 120 ? '…' : ''}</p>}
+      {task.notes && <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.5rem', lineHeight: 1.4 }}>{task.notes.slice(0, 120)}{task.notes.length > 120 ? '…' : ''}</p>}
       <div style={{ display: 'flex', gap: '0.5rem' }}>
         <button
           onClick={() => { onToggleStatus(task); onClose(); }}
-          style={{ flex: 1, padding: '0.375rem', fontSize: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border, #333)', cursor: 'pointer', background: task.status === 'done' ? '#22c55e22' : 'transparent', color: task.status === 'done' ? '#22c55e' : 'var(--text-secondary, #ccc)' }}
+          style={{ flex: 1, padding: '0.375rem', fontSize: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--color-border)', cursor: 'pointer', background: task.status === 'done' ? '#22c55e22' : 'transparent', color: task.status === 'done' ? '#22c55e' : 'var(--color-text)' }}
         >
           {task.status === 'done' ? '✓ Done' : 'Mark done'}
         </button>
         <button
           onClick={() => { onEdit(task); onClose(); }}
-          style={{ flex: 1, padding: '0.375rem', fontSize: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border, #333)', cursor: 'pointer', background: 'transparent', color: 'var(--text-secondary, #ccc)' }}
+          style={{ flex: 1, padding: '0.375rem', fontSize: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--color-border)', cursor: 'pointer', background: 'transparent', color: 'var(--color-text)' }}
         >
           Edit
         </button>
@@ -89,11 +89,20 @@ function TaskPopover({ task, onClose, onEdit, onToggleStatus, style }) {
 }
 
 function TaskBlock({ task, top, height, onEdit, onToggleStatus, onResizeEnd, draggingId, setDraggingId }) {
-  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [popoverPos, setPopoverPos] = useState(null); // { x, y } in viewport coords
   const resizeRef = useRef(null);
   const startY = useRef(null);
   const startHeight = useRef(null);
   const blockRef = useRef(null);
+
+  useEffect(() => {
+    if (!popoverPos) return;
+    const handler = (e) => {
+      if (!e.target.closest('[data-task-popover]')) setPopoverPos(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [popoverPos]);
 
   function handlePointerDown(e) {
     e.preventDefault();
@@ -134,7 +143,12 @@ function TaskBlock({ task, top, height, onEdit, onToggleStatus, onResizeEnd, dra
         setDraggingId(task.id);
       }}
       onDragEnd={() => setDraggingId(null)}
-      onClick={e => { e.stopPropagation(); setPopoverOpen(p => !p); }}
+      onClick={e => {
+        e.stopPropagation();
+        if (popoverPos) { setPopoverPos(null); return; }
+        const r = e.currentTarget.getBoundingClientRect();
+        setPopoverPos({ x: r.left, y: r.bottom + 4 });
+      }}
       style={{
         position: 'absolute',
         top: `${top}px`,
@@ -142,22 +156,21 @@ function TaskBlock({ task, top, height, onEdit, onToggleStatus, onResizeEnd, dra
         right: '4px',
         height: `${height}px`,
         minHeight: '20px',
-        background: priorityBg[task.priority] || 'rgba(99,102,241,0.15)',
+        background: priorityBg[task.priority] || 'rgba(var(--color-primary-rgb, 99,102,241), 0.15)',
         borderLeft: `3px solid ${priorityBorder[task.priority] || '#6366f1'}`,
         borderRadius: '0 0.375rem 0.375rem 0',
         padding: '2px 4px',
-        overflow: 'hidden',
         cursor: 'grab',
         opacity: done ? 0.5 : draggingId === task.id ? 0.4 : 1,
         userSelect: 'none',
         boxSizing: 'border-box',
-        zIndex: popoverOpen ? 50 : 10,
+        zIndex: popoverPos ? 50 : 10,
       }}
     >
       <span style={{
         fontSize: '0.7rem',
         fontWeight: 600,
-        color: 'var(--text-primary, #fff)',
+        color: 'var(--color-text)',
         display: 'block',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -176,14 +189,16 @@ function TaskBlock({ task, top, height, onEdit, onToggleStatus, onResizeEnd, dra
           background: 'transparent',
         }}
       />
-      {popoverOpen && (
-        <TaskPopover
-          task={task}
-          onClose={() => setPopoverOpen(false)}
-          onEdit={onEdit}
-          onToggleStatus={onToggleStatus}
-          style={{ top: `${height + 2}px`, left: 0 }}
-        />
+      {popoverPos && (
+        <div data-task-popover>
+          <TaskPopover
+            task={task}
+            onClose={() => setPopoverPos(null)}
+            onEdit={t => { onEdit(t); setPopoverPos(null); }}
+            onToggleStatus={t => { onToggleStatus(t); setPopoverPos(null); }}
+            style={{ position: 'fixed', top: popoverPos.y, left: popoverPos.x, zIndex: 300 }}
+          />
+        </div>
       )}
     </div>
   );
@@ -231,13 +246,13 @@ function TimeGrid({ days, tasks, onNew, onReschedule, onEdit, onToggleStatus, on
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       {/* Unscheduled panel */}
       {days.some((_, i) => untimedByDay[i].length > 0) && (
-        <div style={{ borderBottom: '1px solid var(--border, #333)', padding: '0.5rem 0', flexShrink: 0 }}>
+        <div style={{ borderBottom: '1px solid var(--color-border)', padding: '0.5rem 0', flexShrink: 0 }}>
           <div style={{ display: 'flex' }}>
-            <div style={{ width: '48px', flexShrink: 0, fontSize: '0.65rem', color: 'var(--text-muted, #888)', paddingTop: '4px', textAlign: 'right', paddingRight: '8px' }}>no time</div>
+            <div style={{ width: '48px', flexShrink: 0, fontSize: '0.65rem', color: 'var(--color-muted)', paddingTop: '4px', textAlign: 'right', paddingRight: '8px' }}>no time</div>
             {days.map((day, dIdx) => (
               <div
                 key={dIdx}
-                style={{ width: `${DAY_WIDTH}px`, flexShrink: 0, minHeight: '32px', padding: '2px', borderLeft: '1px solid var(--border, #333)', display: 'flex', flexWrap: 'wrap', gap: '2px' }}
+                style={{ width: `${DAY_WIDTH}px`, flexShrink: 0, minHeight: '32px', padding: '2px', borderLeft: '1px solid var(--color-border)', display: 'flex', flexWrap: 'wrap', gap: '2px' }}
                 onDragOver={e => e.preventDefault()}
                 onDrop={e => {
                   e.preventDefault();
@@ -255,9 +270,9 @@ function TimeGrid({ days, tasks, onNew, onReschedule, onEdit, onToggleStatus, on
                     style={{
                       fontSize: '0.65rem', fontWeight: 600,
                       padding: '1px 6px', borderRadius: '999px',
-                      background: priorityBg[task.priority] || 'rgba(99,102,241,0.15)',
+                      background: priorityBg[task.priority] || 'rgba(var(--color-primary-rgb, 99,102,241), 0.15)',
                       borderLeft: `2px solid ${priorityBorder[task.priority] || '#6366f1'}`,
-                      color: 'var(--text-primary, #fff)',
+                      color: 'var(--color-text)',
                       cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: '100%',
                       overflow: 'hidden', textOverflow: 'ellipsis',
                       textDecoration: task.status === 'done' ? 'line-through' : 'none',
@@ -279,29 +294,29 @@ function TimeGrid({ days, tasks, onNew, onReschedule, onEdit, onToggleStatus, on
           {/* Hour labels */}
           <div style={{ width: '48px', flexShrink: 0 }}>
             {Array.from({ length: 24 }, (_, h) => (
-              <div key={h} style={{ height: `${HOUR_HEIGHT}px`, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: '8px', paddingTop: '2px', boxSizing: 'border-box', borderTop: '1px solid var(--border, #333)' }}>
-                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted, #888)' }}>{formatHour(h)}</span>
+              <div key={h} style={{ height: `${HOUR_HEIGHT}px`, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: '8px', paddingTop: '2px', boxSizing: 'border-box', borderTop: '1px solid var(--color-border)' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--color-muted)' }}>{formatHour(h)}</span>
               </div>
             ))}
           </div>
 
           {/* Day columns */}
           {days.map((day, dIdx) => (
-            <div key={dIdx} style={{ width: `${DAY_WIDTH}px`, flexShrink: 0, position: 'relative', borderLeft: '1px solid var(--border, #333)' }}>
+            <div key={dIdx} style={{ width: `${DAY_WIDTH}px`, flexShrink: 0, position: 'relative', borderLeft: '1px solid var(--color-border)' }}>
               {Array.from({ length: 24 }, (_, h) => (
                 <div
                   key={h}
-                  style={{ height: `${HOUR_HEIGHT}px`, boxSizing: 'border-box', borderTop: '1px solid var(--border, #333)', position: 'relative' }}
+                  style={{ height: `${HOUR_HEIGHT}px`, boxSizing: 'border-box', borderTop: '1px solid var(--color-border)', position: 'relative' }}
                   onDragOver={e => { e.preventDefault(); setDragOver({ dayIdx: dIdx, h }); }}
                   onDragLeave={() => setDragOver(null)}
                   onDrop={e => handleDrop(e, dIdx, snapToSlot(h * 60))}
                   onClick={() => onNew(`${dateKey(day)}T${String(h).padStart(2,'0')}:00`)}
                 >
                   {/* Half-hour dashed line */}
-                  <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, borderTop: '1px dashed var(--border, #333)', opacity: 0.3, pointerEvents: 'none' }} />
+                  <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, borderTop: '1px dashed var(--color-border)', opacity: 0.3, pointerEvents: 'none' }} />
                   {/* Drag highlight */}
                   {dragOver && dragOver.dayIdx === dIdx && dragOver.h === h && (
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(99,102,241,0.15)', pointerEvents: 'none', borderRadius: '2px' }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(var(--color-primary-rgb, 99,102,241), 0.15)', pointerEvents: 'none', borderRadius: '2px' }} />
                   )}
                 </div>
               ))}
@@ -351,8 +366,8 @@ function TimeGrid({ days, tasks, onNew, onReschedule, onEdit, onToggleStatus, on
 function DayView({ date, tasks, onNew, onReschedule, onEdit, onToggleStatus, onUpdateEffort }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', borderBottom: '2px solid var(--border, #333)', paddingLeft: '48px', flexShrink: 0 }}>
-        <div style={{ width: `${DAY_WIDTH}px`, flexShrink: 0, padding: '0.5rem', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary, #fff)' }}>
+      <div style={{ display: 'flex', borderBottom: '2px solid var(--color-border)', paddingLeft: '48px', flexShrink: 0 }}>
+        <div style={{ width: `${DAY_WIDTH}px`, flexShrink: 0, padding: '0.5rem', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, color: 'var(--color-text)' }}>
           {DAYS[date.getDay()]} {date.getDate()}
         </div>
       </div>
@@ -367,14 +382,14 @@ function WeekView({ weekStart, tasks, onNew, onReschedule, onEdit, onToggleStatu
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', borderBottom: '2px solid var(--border, #333)', paddingLeft: '48px', flexShrink: 0 }}>
+      <div style={{ display: 'flex', borderBottom: '2px solid var(--color-border)', paddingLeft: '48px', flexShrink: 0 }}>
         {days.map((day, i) => (
           <div key={i} style={{
             width: `${DAY_WIDTH}px`, flexShrink: 0, padding: '0.5rem', textAlign: 'center',
             fontSize: '0.8rem', fontWeight: 600,
-            color: isSameDay(day, today) ? 'var(--accent, #6366f1)' : 'var(--text-secondary, #ccc)',
-            borderLeft: '1px solid var(--border, #333)',
-            background: isSameDay(day, today) ? 'rgba(99,102,241,0.05)' : 'transparent',
+            color: isSameDay(day, today) ? 'var(--color-primary)' : 'var(--color-text)',
+            borderLeft: '1px solid var(--color-border)',
+            background: isSameDay(day, today) ? 'rgba(var(--color-primary-rgb, 99,102,241), 0.05)' : 'transparent',
           }}>
             {DAYS[day.getDay()]} {day.getDate()}
           </div>
@@ -385,9 +400,19 @@ function WeekView({ weekStart, tasks, onNew, onReschedule, onEdit, onToggleStatu
   );
 }
 
-function MonthView({ year, month, tasks, onNew, onReschedule, onEdit }) {
+function MonthView({ year, month, tasks, onNew, onReschedule, onEdit, onToggleStatus }) {
   const [dayPopover, setDayPopover] = useState(null);
+  const [taskPopover, setTaskPopover] = useState(null); // { task, x, y }
   const today = new Date();
+
+  useEffect(() => {
+    if (!taskPopover) return;
+    const handler = (e) => {
+      if (!e.target.closest('[data-task-popover]')) setTaskPopover(null);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [taskPopover]);
 
   const firstDay = new Date(year, month, 1);
   const startPad = firstDay.getDay();
@@ -406,7 +431,7 @@ function MonthView({ year, month, tasks, onNew, onReschedule, onEdit }) {
     <div style={{ flex: 1, overflow: 'auto', padding: '0.5rem' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '0.25rem' }}>
         {DAYS.map(d => (
-          <div key={d} style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted, #888)', padding: '0.25rem' }}>{d}</div>
+          <div key={d} style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 600, color: 'var(--color-muted)', padding: '0.25rem' }}>{d}</div>
         ))}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
@@ -419,9 +444,9 @@ function MonthView({ year, month, tasks, onNew, onReschedule, onEdit }) {
               onClick={() => day && onNew(dateKey(day))}
               style={{
                 minHeight: '80px', padding: '4px',
-                background: isToday ? 'rgba(99,102,241,0.08)' : day ? 'var(--bg-secondary, #252542)' : 'transparent',
+                background: isToday ? 'rgba(var(--color-primary-rgb, 99,102,241), 0.08)' : day ? 'var(--color-surface)' : 'transparent',
                 borderRadius: '0.375rem',
-                border: isToday ? '1px solid rgba(99,102,241,0.4)' : '1px solid transparent',
+                border: isToday ? '1px solid rgba(var(--color-primary-rgb, 99,102,241), 0.4)' : '1px solid transparent',
                 cursor: day ? 'pointer' : 'default',
               }}
               onDragOver={e => day && e.preventDefault()}
@@ -434,19 +459,23 @@ function MonthView({ year, month, tasks, onNew, onReschedule, onEdit }) {
             >
               {day && (
                 <>
-                  <div style={{ fontSize: '0.72rem', fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--accent, #6366f1)' : 'var(--text-muted, #888)', marginBottom: '3px' }}>{day.getDate()}</div>
+                  <div style={{ fontSize: '0.72rem', fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--color-primary)' : 'var(--color-muted)', marginBottom: '3px' }}>{day.getDate()}</div>
                   {dayTasks.slice(0, 3).map(task => (
                     <div
                       key={task.id}
-                      onClick={e => { e.stopPropagation(); onEdit(task); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setTaskPopover({ task, x: r.left, y: r.bottom + 4 });
+                      }}
                       draggable
                       onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('taskId', String(task.id)); }}
                       style={{
                         fontSize: '0.65rem', padding: '1px 4px', marginBottom: '2px',
                         borderRadius: '3px',
-                        background: priorityBg[task.priority] || 'rgba(99,102,241,0.15)',
+                        background: priorityBg[task.priority] || 'rgba(var(--color-primary-rgb, 99,102,241), 0.15)',
                         borderLeft: `2px solid ${priorityBorder[task.priority] || '#6366f1'}`,
-                        color: 'var(--text-primary, #fff)',
+                        color: 'var(--color-text)',
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         textDecoration: task.status === 'done' ? 'line-through' : 'none',
                         opacity: task.status === 'done' ? 0.5 : 1,
@@ -457,7 +486,7 @@ function MonthView({ year, month, tasks, onNew, onReschedule, onEdit }) {
                   {dayTasks.length > 3 && (
                     <div
                       onClick={e => { e.stopPropagation(); setDayPopover(day); }}
-                      style={{ fontSize: '0.65rem', color: 'var(--text-muted, #888)', cursor: 'pointer' }}
+                      style={{ fontSize: '0.65rem', color: 'var(--color-muted)', cursor: 'pointer' }}
                     >+{dayTasks.length - 3} more</div>
                   )}
                 </>
@@ -467,26 +496,38 @@ function MonthView({ year, month, tasks, onNew, onReschedule, onEdit }) {
         })}
       </div>
 
+      {taskPopover && (
+        <div data-task-popover>
+          <TaskPopover
+            task={taskPopover.task}
+            onClose={() => setTaskPopover(null)}
+            onEdit={t => { onEdit(t); setTaskPopover(null); }}
+            onToggleStatus={t => { onToggleStatus(t); setTaskPopover(null); }}
+            style={{ position: 'fixed', top: taskPopover.y, left: taskPopover.x, zIndex: 300 }}
+          />
+        </div>
+      )}
+
       {dayPopover && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => setDayPopover(null)}
         >
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-primary, #1a1a2e)', border: '1px solid var(--border, #333)', borderRadius: '0.75rem', padding: '1rem', maxWidth: '320px', width: '100%', maxHeight: '70vh', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: '0.75rem', padding: '1rem', maxWidth: '320px', width: '100%', maxHeight: '70vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-              <span style={{ fontWeight: 600, color: 'var(--text-primary, #fff)', fontSize: '0.9rem' }}>
+              <span style={{ fontWeight: 600, color: 'var(--color-text)', fontSize: '0.9rem' }}>
                 {DAYS[dayPopover.getDay()]}, {dayPopover.toLocaleDateString('en-AU', { month: 'long', day: 'numeric' })}
               </span>
-              <button onClick={() => setDayPopover(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted, #888)' }}>✕</button>
+              <button onClick={() => setDayPopover(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)' }}>✕</button>
             </div>
             {getTasksForDay(dayPopover).map(task => (
               <div
                 key={task.id}
                 onClick={() => { onEdit(task); setDayPopover(null); }}
-                style={{ padding: '0.5rem', borderRadius: '0.375rem', marginBottom: '0.375rem', background: 'var(--bg-secondary, #252542)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                style={{ padding: '0.5rem', borderRadius: '0.375rem', marginBottom: '0.375rem', background: 'var(--color-surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
               >
                 <div style={{ width: '3px', height: '24px', borderRadius: '2px', background: priorityBorder[task.priority] || '#6366f1', flexShrink: 0 }} />
-                <span style={{ fontSize: '0.82rem', color: 'var(--text-primary, #fff)' }}>{task.title}</span>
+                <span style={{ fontSize: '0.82rem', color: 'var(--color-text)' }}>{task.title}</span>
               </div>
             ))}
           </div>
@@ -508,7 +549,7 @@ function AgendaView({ tasks, onEdit, onToggleStatus }) {
 
   if (tasksByDay.length === 0) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted, #888)', fontSize: '0.85rem' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-muted)', fontSize: '0.85rem' }}>
         No tasks in the next 30 days
       </div>
     );
@@ -520,7 +561,7 @@ function AgendaView({ tasks, onEdit, onToggleStatus }) {
         <div key={dateKey(date)} style={{ marginBottom: '1.25rem' }}>
           <div style={{
             fontSize: '0.78rem', fontWeight: 700,
-            color: isSameDay(date, new Date()) ? 'var(--accent, #6366f1)' : 'var(--text-muted, #888)',
+            color: isSameDay(date, new Date()) ? 'var(--color-primary)' : 'var(--color-muted)',
             marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em',
           }}>
             {isSameDay(date, new Date()) ? 'Today — ' : ''}{date.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })}
@@ -532,7 +573,7 @@ function AgendaView({ tasks, onEdit, onToggleStatus }) {
               style={{
                 display: 'flex', alignItems: 'center', gap: '0.75rem',
                 padding: '0.5rem 0.75rem', borderRadius: '0.375rem', marginBottom: '0.375rem',
-                background: 'var(--bg-secondary, #252542)', cursor: 'pointer',
+                background: 'var(--color-surface)', cursor: 'pointer',
                 opacity: task.status === 'done' ? 0.5 : 1,
               }}
             >
@@ -546,13 +587,13 @@ function AgendaView({ tasks, onEdit, onToggleStatus }) {
                 }}
               />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-primary, #fff)', textDecoration: task.status === 'done' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: '0.82rem', color: 'var(--color-text)', textDecoration: task.status === 'done' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {task.title}
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '2px' }}>
-                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #888)' }}>{task.priority}</span>
-                  {task.dueDate?.includes('T') && <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #888)' }}>{task.dueDate.slice(11, 16)}</span>}
-                  {task.category && <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #888)' }}>{task.category}</span>}
+                  <span style={{ fontSize: '0.68rem', color: 'var(--color-muted)' }}>{task.priority}</span>
+                  {task.dueDate?.includes('T') && <span style={{ fontSize: '0.68rem', color: 'var(--color-muted)' }}>{task.dueDate.slice(11, 16)}</span>}
+                  {task.category && <span style={{ fontSize: '0.68rem', color: 'var(--color-muted)' }}>{task.category}</span>}
                 </div>
               </div>
             </div>
@@ -607,10 +648,10 @@ export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus,
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-primary, #1a1a2e)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--color-bg)' }}>
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border, #333)', flexShrink: 0, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary, #252542)', borderRadius: '0.5rem', padding: '2px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--color-border)', flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--color-surface)', borderRadius: '0.5rem', padding: '2px' }}>
           {['day', 'week', 'month', 'agenda'].map(v => (
             <button
               key={v}
@@ -618,8 +659,8 @@ export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus,
               style={{
                 padding: '0.3rem 0.65rem', borderRadius: '0.375rem', border: 'none', cursor: 'pointer',
                 fontSize: '0.75rem', fontWeight: 600, textTransform: 'capitalize',
-                background: subView === v ? 'var(--accent, #6366f1)' : 'transparent',
-                color: subView === v ? '#fff' : 'var(--text-muted, #888)',
+                background: subView === v ? 'var(--color-primary)' : 'transparent',
+                color: subView === v ? '#fff' : 'var(--color-muted)',
                 transition: 'all 0.15s',
               }}
             >
@@ -630,10 +671,10 @@ export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus,
 
         {subView !== 'agenda' && (
           <>
-            <button onClick={() => navigate(-1)} style={{ background: 'none', border: '1px solid var(--border, #333)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--text-secondary, #ccc)', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}>‹</button>
-            <button onClick={() => setCurrentDate(new Date())} style={{ background: 'none', border: '1px solid var(--border, #333)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--text-secondary, #ccc)', padding: '0.3rem 0.65rem', fontSize: '0.75rem', fontWeight: 600 }}>Today</button>
-            <button onClick={() => navigate(1)} style={{ background: 'none', border: '1px solid var(--border, #333)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--text-secondary, #ccc)', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}>›</button>
-            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary, #fff)' }}>{getNavLabel()}</span>
+            <button onClick={() => navigate(-1)} style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--color-text)', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}>‹</button>
+            <button onClick={() => setCurrentDate(new Date())} style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--color-text)', padding: '0.3rem 0.65rem', fontSize: '0.75rem', fontWeight: 600 }}>Today</button>
+            <button onClick={() => navigate(1)} style={{ background: 'none', border: '1px solid var(--color-border)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--color-text)', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}>›</button>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--color-text)' }}>{getNavLabel()}</span>
           </>
         )}
       </div>
@@ -647,7 +688,7 @@ export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus,
           <WeekView weekStart={getWeekStart(currentDate)} tasks={tasks} onNew={onNew} onReschedule={onReschedule} onEdit={onEdit} onToggleStatus={onToggleStatus} onUpdateEffort={onUpdateEffort} />
         )}
         {subView === 'month' && (
-          <MonthView year={currentDate.getFullYear()} month={currentDate.getMonth()} tasks={tasks} onNew={onNew} onReschedule={onReschedule} onEdit={onEdit} />
+          <MonthView year={currentDate.getFullYear()} month={currentDate.getMonth()} tasks={tasks} onNew={onNew} onReschedule={onReschedule} onEdit={onEdit} onToggleStatus={onToggleStatus} />
         )}
         {subView === 'agenda' && (
           <AgendaView tasks={tasks} onEdit={onEdit} onToggleStatus={onToggleStatus} />

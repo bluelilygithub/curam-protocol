@@ -851,8 +851,6 @@ export default function TasksPage() {
   }).length;
   const highPriorityCount = tasks.filter(t => t.status !== 'done' && t.priority === 'high').length;
   const totalIncomplete = tasks.filter(t => t.status !== 'done').length;
-  const totalEffort = filtered.filter(t => t.status !== 'done' && t.estimatedMinutes).reduce((sum, t) => sum + t.estimatedMinutes, 0);
-  const timeLogged = filtered.filter(t => t.timeSpentMinutes > 0).reduce((sum, t) => sum + (t.timeSpentMinutes || 0), 0);
 
   // 14-day chart data
   const last14Days = Array.from({ length: 14 }, (_, i) => {
@@ -883,6 +881,9 @@ export default function TasksPage() {
     }
     return true;
   });
+
+  const totalEffort = filtered.filter(t => t.status !== 'done' && t.estimatedMinutes).reduce((sum, t) => sum + t.estimatedMinutes, 0);
+  const timeLogged = filtered.filter(t => t.timeSpentMinutes > 0).reduce((sum, t) => sum + (t.timeSpentMinutes || 0), 0);
 
   const PRIORITY_ORDER = { high: 1, medium: 2, low: 3 };
   const sortTasks = (arr) => {

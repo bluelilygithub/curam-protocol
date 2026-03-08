@@ -14,6 +14,14 @@ function loadFont(fontName) {
   document.head.appendChild(link);
 }
 
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `${r},${g},${b}`;
+}
+
 function ThemeProvider({ children }) {
   const theme = useSettingsStore((s) => s.theme);
   const font = useSettingsStore((s) => s.font);
@@ -32,6 +40,7 @@ function ThemeProvider({ children }) {
         --color-surface: ${t.surface};
         --color-border: ${t.border};
         --color-primary: ${t.primary};
+        --color-primary-rgb: ${hexToRgb(t.primary)};
         --color-text: ${t.text};
         --color-muted: ${t.muted};
       }
