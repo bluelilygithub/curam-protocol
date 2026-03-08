@@ -1,530 +1,658 @@
-import React, { useState, useMemo } from 'react';
-import { useIcon } from '../providers/IconProvider';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
-const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
-const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
-const DAYS_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const HOUR_HEIGHT = 64; // px per hour
+const DAY_WIDTH = 160;  // px per day column in week view
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SNAP_MINUTES = 15;
+const CAL_VIEW_KEY = 'tasksCalendarSubView';
 
-function isStale(task) {
-  if (task.status !== 'todo' || !task.createdAt) return false;
-  return (Date.now() - new Date(task.createdAt)) / 86400000 > 7;
+function startOfDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
-function toKey(d) {
-  if (typeof d === 'string') return d.slice(0, 10);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+function addDays(date, n) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
 }
 
-function getWeekStart(d) {
-  const c = new Date(d);
-  const dow = (c.getDay() + 6) % 7;
-  c.setDate(c.getDate() - dow);
-  c.setHours(0, 0, 0, 0);
-  return c;
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function getMonthGrid(year, month) {
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const startDow = (firstDay.getDay() + 6) % 7;
-  const days = [];
-  for (let i = startDow - 1; i >= 0; i--) {
-    days.push({ date: new Date(year, month, -i), inMonth: false });
-  }
-  for (let d = 1; d <= lastDay.getDate(); d++) {
-    days.push({ date: new Date(year, month, d), inMonth: true });
-  }
-  const rem = days.length % 7;
-  if (rem > 0) {
-    for (let i = 1; i <= 7 - rem; i++) {
-      days.push({ date: new Date(year, month + 1, i), inMonth: false });
-    }
-  }
-  return days;
+function dateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
-export default function TasksCalendar({ tasks, onEdit, onToggleStatus, onNew, onReschedule }) {
-  const getIcon = useIcon();
-  const [calView, setCalView] = useState('month');
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedKey, setSelectedKey] = useState(null);
-  const [rangeStart, setRangeStart] = useState('');
-  const [rangeEnd, setRangeEnd] = useState('');
-  const [dragOverDate, setDragOverDate] = useState(null);
-  const [noteTooltip, setNoteTooltip] = useState(null);
-  const todayKey = toKey(new Date());
+function parseTaskDate(task) {
+  if (!task.dueDate) return null;
+  return new Date(task.dueDate);
+}
 
-  const showNoteTooltip = (e, notes) => {
-    if (!notes) return;
-    const r = e.currentTarget.getBoundingClientRect();
-    setNoteTooltip({ notes, x: Math.min(r.left, window.innerWidth - 288), y: r.bottom + 6 });
-  };
-  const hideNoteTooltip = () => setNoteTooltip(null);
+function getTaskMinutes(task) {
+  if (!task.dueDate || !task.dueDate.includes('T')) return null;
+  const d = new Date(task.dueDate);
+  return d.getHours() * 60 + d.getMinutes();
+}
 
-  const tasksByDate = useMemo(() => {
-    const map = {};
-    tasks.forEach(t => {
-      if (!t.dueDate) return;
-      const k = t.dueDate.slice(0, 10);
-      if (!map[k]) map[k] = [];
-      map[k].push(t);
-    });
-    return map;
-  }, [tasks]);
+function formatHour(h) {
+  if (h === 0) return '12 AM';
+  if (h < 12) return `${h} AM`;
+  if (h === 12) return '12 PM';
+  return `${h - 12} PM`;
+}
 
-  const navigate = (dir) => {
-    setCurrentDate(prev => {
-      const d = new Date(prev);
-      if (calView === 'day') d.setDate(d.getDate() + dir);
-      else if (calView === 'week') d.setDate(d.getDate() + dir * 7);
-      else if (calView === 'month') d.setMonth(d.getMonth() + dir);
-      return d;
-    });
-    setSelectedKey(null);
-  };
+function snapToSlot(minutes) {
+  return Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
+}
 
-  const headerTitle = () => {
-    if (calView === 'day') {
-      return currentDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-    }
-    if (calView === 'week') {
-      const ws = getWeekStart(currentDate);
-      const we = new Date(ws); we.setDate(ws.getDate() + 6);
-      return `${ws.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${we.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
-    }
-    if (calView === 'month') {
-      return currentDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    }
-    return 'Custom Range';
-  };
+const priorityBorder = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
+const priorityBg = { high: '#ef444420', medium: '#f59e0b20', low: '#22c55e20' };
 
-  const handleCalendarDrop = (e, targetDateKey) => {
+function TaskPopover({ task, onClose, onEdit, onToggleStatus, style }) {
+  return (
+    <div
+      onClick={e => e.stopPropagation()}
+      style={{
+        position: 'absolute', zIndex: 100, background: 'var(--bg-primary, #1a1a2e)',
+        border: '1px solid var(--border, #333)', borderRadius: '0.5rem',
+        padding: '0.75rem', width: '220px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        ...style,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+        <span style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--text-primary, #fff)', flex: 1, marginRight: '0.5rem' }}>{task.title}</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted, #888)', padding: 0, fontSize: '0.9rem' }}>✕</button>
+      </div>
+      {task.notes && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted, #888)', marginBottom: '0.5rem', lineHeight: 1.4 }}>{task.notes.slice(0, 120)}{task.notes.length > 120 ? '…' : ''}</p>}
+      <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <button
+          onClick={() => { onToggleStatus(task); onClose(); }}
+          style={{ flex: 1, padding: '0.375rem', fontSize: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border, #333)', cursor: 'pointer', background: task.status === 'done' ? '#22c55e22' : 'transparent', color: task.status === 'done' ? '#22c55e' : 'var(--text-secondary, #ccc)' }}
+        >
+          {task.status === 'done' ? '✓ Done' : 'Mark done'}
+        </button>
+        <button
+          onClick={() => { onEdit(task); onClose(); }}
+          style={{ flex: 1, padding: '0.375rem', fontSize: '0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border, #333)', cursor: 'pointer', background: 'transparent', color: 'var(--text-secondary, #ccc)' }}
+        >
+          Edit
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TaskBlock({ task, top, height, onEdit, onToggleStatus, onResizeEnd, draggingId, setDraggingId }) {
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const resizeRef = useRef(null);
+  const startY = useRef(null);
+  const startHeight = useRef(null);
+  const blockRef = useRef(null);
+
+  function handlePointerDown(e) {
     e.preventDefault();
     e.stopPropagation();
-    setDragOverDate(null);
-    const taskId = parseInt(e.dataTransfer.getData('taskId'), 10);
-    const fromDate = e.dataTransfer.getData('fromDate');
-    if (!taskId || fromDate === targetDateKey) return;
-    onReschedule?.(taskId, targetDateKey);
-  };
+    startY.current = e.clientY;
+    startHeight.current = height;
+    resizeRef.current = true;
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  }
 
-  const renderPill = (task, compact = false) => {
-    const isDone = task.status === 'done';
-    const hasTime = task.dueDate?.includes('T');
-    const fromDate = task.dueDate?.slice(0, 10) || '';
-    return (
-      <button
-        key={task.id}
-        draggable
-        onDragStart={e => {
-          e.stopPropagation();
-          e.dataTransfer.setData('taskId', String(task.id));
-          e.dataTransfer.setData('fromDate', fromDate);
-          e.dataTransfer.effectAllowed = 'move';
-        }}
-        onDragEnd={() => setDragOverDate(null)}
-        onClick={e => { e.stopPropagation(); onEdit(task); }}
-        onMouseEnter={(e) => showNoteTooltip(e, task.notes)}
-        onMouseLeave={hideNoteTooltip}
-        className="w-full text-left truncate rounded transition-opacity hover:opacity-75 cursor-grab active:cursor-grabbing"
-        style={{
-          background: PRIORITY_COLOR[task.priority] + '1a',
-          borderLeft: `2px solid ${PRIORITY_COLOR[task.priority]}`,
-          color: 'var(--color-text)',
-          textDecoration: isDone ? 'line-through' : 'none',
-          opacity: isDone ? 0.55 : 1,
-          fontSize: compact ? 10 : 11,
-          padding: compact ? '2px 5px' : '3px 6px',
-          display: 'block',
-          marginBottom: 2,
-        }}
-        title={task.title}
-      >
-        {hasTime && <span style={{ opacity: 0.6, marginRight: 3, fontSize: 9 }}>{task.dueDate.slice(11, 16)}</span>}
+  function handlePointerMove(e) {
+    if (!resizeRef.current) return;
+    const delta = e.clientY - startY.current;
+    const newMins = snapToSlot(Math.max(15, Math.round((startHeight.current + delta) / HOUR_HEIGHT * 60)));
+    if (blockRef.current) {
+      blockRef.current.style.height = `${Math.max(20, (newMins / 60) * HOUR_HEIGHT)}px`;
+    }
+  }
+
+  function handlePointerUp(e) {
+    resizeRef.current = false;
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+    const delta = e.clientY - startY.current;
+    const newMins = snapToSlot(Math.max(15, Math.round((startHeight.current + delta) / HOUR_HEIGHT * 60)));
+    onResizeEnd(task.id, newMins);
+  }
+
+  const done = task.status === 'done';
+
+  return (
+    <div
+      ref={blockRef}
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('taskId', String(task.id));
+        setDraggingId(task.id);
+      }}
+      onDragEnd={() => setDraggingId(null)}
+      onClick={e => { e.stopPropagation(); setPopoverOpen(p => !p); }}
+      style={{
+        position: 'absolute',
+        top: `${top}px`,
+        left: '4px',
+        right: '4px',
+        height: `${height}px`,
+        minHeight: '20px',
+        background: priorityBg[task.priority] || 'rgba(99,102,241,0.15)',
+        borderLeft: `3px solid ${priorityBorder[task.priority] || '#6366f1'}`,
+        borderRadius: '0 0.375rem 0.375rem 0',
+        padding: '2px 4px',
+        overflow: 'hidden',
+        cursor: 'grab',
+        opacity: done ? 0.5 : draggingId === task.id ? 0.4 : 1,
+        userSelect: 'none',
+        boxSizing: 'border-box',
+        zIndex: popoverOpen ? 50 : 10,
+      }}
+    >
+      <span style={{
+        fontSize: '0.7rem',
+        fontWeight: 600,
+        color: 'var(--text-primary, #fff)',
+        display: 'block',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        textDecoration: done ? 'line-through' : 'none',
+      }}>
         {task.title}
-        {isStale(task) && <span title="Stale — 7+ days in To Do" style={{ color: '#f59e0b', marginLeft: 3, fontSize: 9 }}>⏱</span>}
-      </button>
-    );
-  };
+      </span>
+      {/* Resize handle */}
+      <div
+        onPointerDown={handlePointerDown}
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          height: '6px', cursor: 's-resize',
+          background: 'transparent',
+        }}
+      />
+      {popoverOpen && (
+        <TaskPopover
+          task={task}
+          onClose={() => setPopoverOpen(false)}
+          onEdit={onEdit}
+          onToggleStatus={onToggleStatus}
+          style={{ top: `${height + 2}px`, left: 0 }}
+        />
+      )}
+    </div>
+  );
+}
 
-  // Shared day detail panel shown below month/week grids
-  const renderDayDetail = () => {
-    if (!selectedKey) return null;
-    const dayTasks = tasksByDate[selectedKey] || [];
-    const d = new Date(selectedKey + 'T12:00:00');
-    const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-    const isToday = selectedKey === todayKey;
-    return (
-      <div className="flex-shrink-0 border-t px-5 py-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{label}</span>
-            {isToday && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>Today</span>}
-            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{dayTasks.length} task{dayTasks.length !== 1 ? 's' : ''}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => onNew(selectedKey)} className="text-xs px-2.5 py-1 rounded-lg border" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>+ Add</button>
-            <button onClick={() => setSelectedKey(null)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 13 })}</button>
-          </div>
-        </div>
-        {dayTasks.length === 0 ? (
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No tasks due on this day.</p>
-        ) : (
-          <div className="flex gap-2 flex-wrap max-h-32 overflow-y-auto">
-            {dayTasks.map(task => (
-              <div key={task.id} className="flex items-center gap-2 rounded-lg px-3 py-1.5 border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', borderLeft: `3px solid ${PRIORITY_COLOR[task.priority]}` }}>
-                <button onClick={() => onToggleStatus(task)} style={{ color: task.status === 'done' ? '#22c55e' : 'var(--color-muted)', flexShrink: 0 }}>
-                  {getIcon(task.status === 'done' ? 'check-circle' : 'circle', { size: 14 })}
-                </button>
-                <span className="text-sm" style={{ color: 'var(--color-text)', textDecoration: task.status === 'done' ? 'line-through' : 'none', opacity: task.status === 'done' ? 0.6 : 1, whiteSpace: 'nowrap' }}>{task.title}</span>
-                {task.dueDate?.includes('T') && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{task.dueDate.slice(11, 16)}</span>}
-                <button onClick={() => onEdit(task)} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('edit', { size: 12 })}</button>
+function TimeGrid({ days, tasks, onNew, onReschedule, onEdit, onToggleStatus, onUpdateEffort }) {
+  const [dragOver, setDragOver] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const timedByDay = days.map(day =>
+    tasks.filter(t => {
+      const d = parseTaskDate(t);
+      return d && isSameDay(d, day) && getTaskMinutes(t) !== null;
+    })
+  );
+  const untimedByDay = days.map(day =>
+    tasks.filter(t => {
+      const d = parseTaskDate(t);
+      return d && isSameDay(d, day) && getTaskMinutes(t) === null;
+    })
+  );
+
+  function handleDrop(e, dayIdx, slotMin) {
+    e.preventDefault();
+    setDragOver(null);
+    const taskId = parseInt(e.dataTransfer.getData('taskId'));
+    if (!taskId) return;
+    const day = days[dayIdx];
+    const h = String(Math.floor(slotMin / 60)).padStart(2, '0');
+    const m = String(slotMin % 60).padStart(2, '0');
+    onReschedule(taskId, `${dateKey(day)}T${h}:${m}`);
+  }
+
+  const todayIdx = days.findIndex(d => isSameDay(d, now));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      {/* Unscheduled panel */}
+      {days.some((_, i) => untimedByDay[i].length > 0) && (
+        <div style={{ borderBottom: '1px solid var(--border, #333)', padding: '0.5rem 0', flexShrink: 0 }}>
+          <div style={{ display: 'flex' }}>
+            <div style={{ width: '48px', flexShrink: 0, fontSize: '0.65rem', color: 'var(--text-muted, #888)', paddingTop: '4px', textAlign: 'right', paddingRight: '8px' }}>no time</div>
+            {days.map((day, dIdx) => (
+              <div
+                key={dIdx}
+                style={{ width: `${DAY_WIDTH}px`, flexShrink: 0, minHeight: '32px', padding: '2px', borderLeft: '1px solid var(--border, #333)', display: 'flex', flexWrap: 'wrap', gap: '2px' }}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => {
+                  e.preventDefault();
+                  const taskId = parseInt(e.dataTransfer.getData('taskId'));
+                  if (taskId) onReschedule(taskId, dateKey(day));
+                }}
+              >
+                {untimedByDay[dIdx].map(task => (
+                  <span
+                    key={task.id}
+                    draggable
+                    onDragStart={e => e.dataTransfer.setData('taskId', String(task.id))}
+                    onClick={() => onEdit(task)}
+                    title={task.title}
+                    style={{
+                      fontSize: '0.65rem', fontWeight: 600,
+                      padding: '1px 6px', borderRadius: '999px',
+                      background: priorityBg[task.priority] || 'rgba(99,102,241,0.15)',
+                      borderLeft: `2px solid ${priorityBorder[task.priority] || '#6366f1'}`,
+                      color: 'var(--text-primary, #fff)',
+                      cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: '100%',
+                      overflow: 'hidden', textOverflow: 'ellipsis',
+                      textDecoration: task.status === 'done' ? 'line-through' : 'none',
+                      opacity: task.status === 'done' ? 0.5 : 1,
+                    }}
+                  >
+                    {task.title}
+                  </span>
+                ))}
               </div>
             ))}
           </div>
-        )}
-      </div>
-    );
-  };
-
-  // Month view
-  const renderMonth = () => {
-    const grid = getMonthGrid(currentDate.getFullYear(), currentDate.getMonth());
-    return (
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div className="grid grid-cols-7 flex-shrink-0 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          {DAYS_SHORT.map(d => (
-            <div key={d} className="text-center py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>{d}</div>
-          ))}
         </div>
-        <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-7" style={{ minHeight: 480 }}>
-            {grid.map(({ date, inMonth }, i) => {
-              const key = toKey(date);
-              const dayTasks = tasksByDate[key] || [];
-              const isToday = key === todayKey;
-              const isSelected = key === selectedKey;
-              const isDragOver = dragOverDate === key;
-              const overflow = dayTasks.length - 3;
-              return (
-                <div
-                  key={i}
-                  onClick={() => setSelectedKey(isSelected ? null : key)}
-                  onDragOver={e => { e.preventDefault(); setDragOverDate(key); }}
-                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDate(null); }}
-                  onDrop={e => handleCalendarDrop(e, key)}
-                  className="border-b border-r p-1.5 cursor-pointer transition-colors"
-                  style={{
-                    borderColor: isDragOver ? 'var(--color-primary)' : 'var(--color-border)',
-                    background: isDragOver ? 'var(--color-primary)' + '18' : isSelected ? 'var(--color-primary)' + '12' : isToday ? 'var(--color-primary)' + '07' : 'transparent',
-                    minHeight: 88,
-                    opacity: inMonth ? 1 : 0.38,
-                    outline: isDragOver ? '1px solid var(--color-primary)' : 'none',
-                  }}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span
-                      className="text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full"
-                      style={{
-                        background: isToday ? 'var(--color-primary)' : 'transparent',
-                        color: isToday ? '#fff' : (inMonth ? 'var(--color-text)' : 'var(--color-muted)'),
-                      }}
-                    >
-                      {date.getDate()}
-                    </span>
-                    {dayTasks.length > 0 && (
-                      <span className="text-xs rounded-full px-1" style={{ background: 'var(--color-primary)' + '22', color: 'var(--color-primary)', fontSize: 9 }}>
-                        {dayTasks.length}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    {dayTasks.slice(0, 3).map(t => renderPill(t, true))}
-                    {overflow > 0 && (
-                      <div className="pl-1.5 text-xs" style={{ color: 'var(--color-muted)', fontSize: 9 }}>+{overflow} more</div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        {renderDayDetail()}
-      </div>
-    );
-  };
+      )}
 
-  // Week view
-  const renderWeek = () => {
-    const ws = getWeekStart(currentDate);
-    const days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(ws); d.setDate(ws.getDate() + i); return d;
-    });
-    return (
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        <div className="grid grid-cols-7 flex-shrink-0 border-b" style={{ borderColor: 'var(--color-border)' }}>
-          {days.map((d, i) => {
-            const key = toKey(d);
-            const isToday = key === todayKey;
-            const isSelected = key === selectedKey;
-            const count = (tasksByDate[key] || []).length;
-            return (
-              <div
-                key={i}
-                onClick={() => setSelectedKey(isSelected ? null : key)}
-                className="text-center py-3 border-r last:border-r-0 cursor-pointer hover:opacity-80 transition-opacity"
-                style={{ borderColor: 'var(--color-border)', background: isSelected ? 'var(--color-primary)' + '12' : isToday ? 'var(--color-primary)' + '07' : 'transparent' }}
-              >
-                <div className="text-xs uppercase tracking-wider font-medium" style={{ color: 'var(--color-muted)' }}>{DAYS_SHORT[i]}</div>
-                <div className="text-xl font-bold mt-0.5 w-10 h-10 mx-auto flex items-center justify-center rounded-full"
-                  style={{ background: isToday ? 'var(--color-primary)' : 'transparent', color: isToday ? '#fff' : 'var(--color-text)' }}>
-                  {d.getDate()}
-                </div>
-                {count > 0 && <div className="text-xs mt-0.5" style={{ color: 'var(--color-primary)', fontSize: 10 }}>{count} task{count !== 1 ? 's' : ''}</div>}
+      {/* Scrollable time grid */}
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
+        <div style={{ display: 'flex', minWidth: `${48 + DAY_WIDTH * days.length}px` }}>
+          {/* Hour labels */}
+          <div style={{ width: '48px', flexShrink: 0 }}>
+            {Array.from({ length: 24 }, (_, h) => (
+              <div key={h} style={{ height: `${HOUR_HEIGHT}px`, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end', paddingRight: '8px', paddingTop: '2px', boxSizing: 'border-box', borderTop: '1px solid var(--border, #333)' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted, #888)' }}>{formatHour(h)}</span>
               </div>
-            );
-          })}
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-7 min-h-full">
-            {days.map((d, i) => {
-              const key = toKey(d);
-              const dayTasks = tasksByDate[key] || [];
-              const isToday = key === todayKey;
-              const isSelected = key === selectedKey;
-              const isDragOver = dragOverDate === key;
-              return (
-                <div
-                  key={i}
-                  onDragOver={e => { e.preventDefault(); setDragOverDate(key); }}
-                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDate(null); }}
-                  onDrop={e => handleCalendarDrop(e, key)}
-                  className="border-r last:border-r-0 p-2 transition-colors"
-                  style={{
-                    borderColor: isDragOver ? 'var(--color-primary)' : 'var(--color-border)',
-                    background: isDragOver ? 'var(--color-primary)' + '12' : isSelected ? 'var(--color-primary)' + '08' : isToday ? 'var(--color-primary)' + '05' : 'transparent',
-                    minHeight: 140,
-                    outline: isDragOver ? '1px solid var(--color-primary)' : 'none',
-                  }}
-                >
-                  <div className="space-y-1">
-                    {dayTasks.map(t => renderPill(t))}
-                  </div>
-                  <button
-                    onClick={e => { e.stopPropagation(); onNew(key); }}
-                    className="w-full mt-1.5 py-1 rounded text-xs hover:opacity-60 transition-opacity"
-                    style={{ color: 'var(--color-muted)', border: '1px dashed var(--color-border)' }}
-                  >+</button>
-                </div>
-              );
-            })}
+            ))}
           </div>
-        </div>
-        {renderDayDetail()}
-      </div>
-    );
-  };
 
-  // Day view
-  const renderDay = () => {
-    const key = toKey(currentDate);
-    const dayTasks = tasksByDate[key] || [];
-    return (
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="max-w-xl mx-auto">
-          <div className="flex items-center justify-between mb-5">
-            <span className="text-sm" style={{ color: 'var(--color-muted)' }}>
-              {dayTasks.length > 0 ? `${dayTasks.length} task${dayTasks.length !== 1 ? 's' : ''} due` : 'No tasks due'}
-            </span>
-            <button onClick={() => onNew(key)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>
-              + Add task
-            </button>
-          </div>
-          {dayTasks.length === 0 ? (
-            <div className="flex flex-col items-center py-20" style={{ color: 'var(--color-muted)' }}>
-              <div style={{ opacity: 0.25 }}>{getIcon('calendar', { size: 42 })}</div>
-              <p className="mt-3 text-sm">Nothing due on this day.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {dayTasks.map(task => (
-                <div key={task.id} className="flex items-center gap-3 px-4 py-3 rounded-xl border"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', borderLeft: `3px solid ${PRIORITY_COLOR[task.priority]}` }}>
-                  <button onClick={() => onToggleStatus(task)} style={{ color: task.status === 'done' ? '#22c55e' : 'var(--color-muted)', flexShrink: 0 }}>
-                    {getIcon(task.status === 'done' ? 'check-circle' : 'circle', { size: 16 })}
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium" style={{ color: 'var(--color-text)', textDecoration: task.status === 'done' ? 'line-through' : 'none', opacity: task.status === 'done' ? 0.6 : 1 }}>{task.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: PRIORITY_COLOR[task.priority] + '22', color: PRIORITY_COLOR[task.priority] }}>{PRIORITY_LABEL[task.priority]}</span>
-                      {task.dueDate?.includes('T') && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{task.dueDate.slice(11, 16)}</span>}
-                      {task.category && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{task.category}</span>}
-                    </div>
-                  </div>
-                  <button onClick={() => onEdit(task)} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
-                    {getIcon('edit', { size: 14 })}
-                  </button>
+          {/* Day columns */}
+          {days.map((day, dIdx) => (
+            <div key={dIdx} style={{ width: `${DAY_WIDTH}px`, flexShrink: 0, position: 'relative', borderLeft: '1px solid var(--border, #333)' }}>
+              {Array.from({ length: 24 }, (_, h) => (
+                <div
+                  key={h}
+                  style={{ height: `${HOUR_HEIGHT}px`, boxSizing: 'border-box', borderTop: '1px solid var(--border, #333)', position: 'relative' }}
+                  onDragOver={e => { e.preventDefault(); setDragOver({ dayIdx: dIdx, h }); }}
+                  onDragLeave={() => setDragOver(null)}
+                  onDrop={e => handleDrop(e, dIdx, snapToSlot(h * 60))}
+                  onClick={() => onNew(`${dateKey(day)}T${String(h).padStart(2,'0')}:00`)}
+                >
+                  {/* Half-hour dashed line */}
+                  <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, borderTop: '1px dashed var(--border, #333)', opacity: 0.3, pointerEvents: 'none' }} />
+                  {/* Drag highlight */}
+                  {dragOver && dragOver.dayIdx === dIdx && dragOver.h === h && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(99,102,241,0.15)', pointerEvents: 'none', borderRadius: '2px' }} />
+                  )}
                 </div>
               ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
 
-  // Range view
-  const renderRange = () => {
-    const rangeGroups = [];
-    if (rangeStart && rangeEnd && rangeStart <= rangeEnd) {
-      const d = new Date(rangeStart + 'T00:00:00');
-      const end = new Date(rangeEnd + 'T00:00:00');
-      while (d <= end) {
-        const key = toKey(d);
-        const ts = tasksByDate[key] || [];
-        if (ts.length > 0) rangeGroups.push({ key, date: new Date(d), tasks: ts });
-        d.setDate(d.getDate() + 1);
-      }
-    }
-    const totalTasks = rangeGroups.reduce((s, g) => s + g.tasks.length, 0);
-    return (
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        <div className="max-w-xl mx-auto">
-          <div className="flex items-center gap-3 mb-6 flex-wrap">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>From</label>
-              <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)}
-                className="text-sm px-3 py-1.5 rounded-lg border outline-none"
-                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>To</label>
-              <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)}
-                className="text-sm px-3 py-1.5 rounded-lg border outline-none"
-                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-            </div>
-            {totalTasks > 0 && (
-              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{totalTasks} task{totalTasks !== 1 ? 's' : ''} across {rangeGroups.length} day{rangeGroups.length !== 1 ? 's' : ''}</span>
-            )}
-          </div>
-          {!rangeStart || !rangeEnd ? (
-            <div className="text-center py-16 text-sm" style={{ color: 'var(--color-muted)' }}>Select a start and end date above.</div>
-          ) : rangeGroups.length === 0 ? (
-            <div className="text-center py-16 text-sm" style={{ color: 'var(--color-muted)' }}>No tasks scheduled in this range.</div>
-          ) : (
-            <div className="space-y-5">
-              {rangeGroups.map(({ key, date, tasks: dayTasks }) => {
-                const isToday = key === todayKey;
+              {/* Current time indicator */}
+              {todayIdx === dIdx && (
+                <div style={{
+                  position: 'absolute',
+                  top: `${(nowMinutes / 60) * HOUR_HEIGHT}px`,
+                  left: 0, right: 0,
+                  borderTop: '2px solid #ef4444',
+                  zIndex: 20,
+                  pointerEvents: 'none',
+                }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', position: 'absolute', top: '-4px', left: '-4px' }} />
+                </div>
+              )}
+
+              {/* Task blocks */}
+              {timedByDay[dIdx].map(task => {
+                const mins = getTaskMinutes(task);
+                const top = (mins / 60) * HOUR_HEIGHT;
+                const durMins = Math.max(task.estimatedMinutes || 30, 30);
+                const height = (durMins / 60) * HOUR_HEIGHT;
                 return (
-                  <div key={key}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-semibold" style={{ color: isToday ? 'var(--color-primary)' : 'var(--color-text)' }}>
-                        {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                      </span>
-                      {isToday && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)', color: '#fff' }}>Today</span>}
-                      <div className="flex-1 h-px" style={{ background: 'var(--color-border)' }} />
-                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{dayTasks.length}</span>
-                    </div>
-                    <div className="space-y-1.5">
-                      {dayTasks.map(task => (
-                        <div key={task.id} className="flex items-center gap-3 px-3 py-2 rounded-xl border"
-                          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', borderLeft: `3px solid ${PRIORITY_COLOR[task.priority]}` }}>
-                          <button onClick={() => onToggleStatus(task)} style={{ color: task.status === 'done' ? '#22c55e' : 'var(--color-muted)', flexShrink: 0 }}>
-                            {getIcon(task.status === 'done' ? 'check-circle' : 'circle', { size: 14 })}
-                          </button>
-                          <span className="flex-1 text-sm min-w-0 truncate" style={{ color: 'var(--color-text)', textDecoration: task.status === 'done' ? 'line-through' : 'none', opacity: task.status === 'done' ? 0.6 : 1 }}>{task.title}</span>
-                          {task.dueDate?.includes('T') && <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{task.dueDate.slice(11, 16)}</span>}
-                          <button onClick={() => onEdit(task)} className="hover:opacity-60 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{getIcon('edit', { size: 12 })}</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <TaskBlock
+                    key={task.id}
+                    task={task}
+                    top={top}
+                    height={height}
+                    onEdit={onEdit}
+                    onToggleStatus={onToggleStatus}
+                    onResizeEnd={onUpdateEffort}
+                    draggingId={draggingId}
+                    setDraggingId={setDraggingId}
+                  />
                 );
               })}
             </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {noteTooltip && (
-        <div
-          className="fixed z-[9999] pointer-events-none w-64 rounded-xl border shadow-xl px-3 py-2.5"
-          style={{
-            left: noteTooltip.x,
-            top: noteTooltip.y,
-            background: 'var(--color-surface)',
-            borderColor: 'var(--color-border)',
-          }}
-        >
-          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-            {noteTooltip.notes.length > 300 ? noteTooltip.notes.slice(0, 300) + '…' : noteTooltip.notes}
-          </p>
-        </div>
-      )}
-      {/* Calendar header */}
-      <div className="flex-shrink-0 flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-        {calView !== 'range' && (
-          <>
-            <button
-              onClick={() => navigate(-1)}
-              className="w-7 h-7 flex items-center justify-center rounded-lg border hover:opacity-70 transition-opacity"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-            >
-              {getIcon('chevron-right', { size: 14, style: { transform: 'rotate(180deg)' } })}
-            </button>
-            <button
-              onClick={() => { setCurrentDate(new Date()); setSelectedKey(null); }}
-              className="text-xs px-3 py-1 rounded-lg border hover:opacity-70 transition-opacity"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => navigate(1)}
-              className="w-7 h-7 flex items-center justify-center rounded-lg border hover:opacity-70 transition-opacity"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-            >
-              {getIcon('chevron-right', { size: 14 })}
-            </button>
-          </>
-        )}
-        <span className="flex-1 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{headerTitle()}</span>
-        {/* View tabs */}
-        <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-          {[
-            { key: 'day', label: 'Day' },
-            { key: 'week', label: 'Week' },
-            { key: 'month', label: 'Month' },
-            { key: 'range', label: 'Range' },
-          ].map((v, i) => (
-            <button
-              key={v.key}
-              onClick={() => { setCalView(v.key); setSelectedKey(null); }}
-              className="px-3 py-1.5 text-xs font-medium transition-all border-l first:border-l-0"
-              style={{
-                background: calView === v.key ? 'var(--color-primary)' : 'transparent',
-                color: calView === v.key ? '#fff' : 'var(--color-muted)',
-                borderColor: 'var(--color-border)',
-              }}
-            >
-              {v.label}
-            </button>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Calendar body */}
-      {calView === 'month' && renderMonth()}
-      {calView === 'week' && renderWeek()}
-      {calView === 'day' && renderDay()}
-      {calView === 'range' && renderRange()}
+function DayView({ date, tasks, onNew, onReschedule, onEdit, onToggleStatus, onUpdateEffort }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', borderBottom: '2px solid var(--border, #333)', paddingLeft: '48px', flexShrink: 0 }}>
+        <div style={{ width: `${DAY_WIDTH}px`, flexShrink: 0, padding: '0.5rem', textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary, #fff)' }}>
+          {DAYS[date.getDay()]} {date.getDate()}
+        </div>
+      </div>
+      <TimeGrid days={[date]} tasks={tasks} onNew={onNew} onReschedule={onReschedule} onEdit={onEdit} onToggleStatus={onToggleStatus} onUpdateEffort={onUpdateEffort} />
+    </div>
+  );
+}
+
+function WeekView({ weekStart, tasks, onNew, onReschedule, onEdit, onToggleStatus, onUpdateEffort }) {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const today = new Date();
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', borderBottom: '2px solid var(--border, #333)', paddingLeft: '48px', flexShrink: 0 }}>
+        {days.map((day, i) => (
+          <div key={i} style={{
+            width: `${DAY_WIDTH}px`, flexShrink: 0, padding: '0.5rem', textAlign: 'center',
+            fontSize: '0.8rem', fontWeight: 600,
+            color: isSameDay(day, today) ? 'var(--accent, #6366f1)' : 'var(--text-secondary, #ccc)',
+            borderLeft: '1px solid var(--border, #333)',
+            background: isSameDay(day, today) ? 'rgba(99,102,241,0.05)' : 'transparent',
+          }}>
+            {DAYS[day.getDay()]} {day.getDate()}
+          </div>
+        ))}
+      </div>
+      <TimeGrid days={days} tasks={tasks} onNew={onNew} onReschedule={onReschedule} onEdit={onEdit} onToggleStatus={onToggleStatus} onUpdateEffort={onUpdateEffort} />
+    </div>
+  );
+}
+
+function MonthView({ year, month, tasks, onNew, onReschedule, onEdit }) {
+  const [dayPopover, setDayPopover] = useState(null);
+  const today = new Date();
+
+  const firstDay = new Date(year, month, 1);
+  const startPad = firstDay.getDay();
+  const cells = [];
+  for (let i = 0; i < startPad; i++) cells.push(null);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+  while (cells.length < 42) cells.push(null);
+
+  function getTasksForDay(day) {
+    if (!day) return [];
+    return tasks.filter(t => { const d = parseTaskDate(t); return d && isSameDay(d, day); });
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', padding: '0.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '0.25rem' }}>
+        {DAYS.map(d => (
+          <div key={d} style={{ textAlign: 'center', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted, #888)', padding: '0.25rem' }}>{d}</div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+        {cells.map((day, i) => {
+          const dayTasks = getTasksForDay(day);
+          const isToday = day && isSameDay(day, today);
+          return (
+            <div
+              key={i}
+              onClick={() => day && onNew(dateKey(day))}
+              style={{
+                minHeight: '80px', padding: '4px',
+                background: isToday ? 'rgba(99,102,241,0.08)' : day ? 'var(--bg-secondary, #252542)' : 'transparent',
+                borderRadius: '0.375rem',
+                border: isToday ? '1px solid rgba(99,102,241,0.4)' : '1px solid transparent',
+                cursor: day ? 'pointer' : 'default',
+              }}
+              onDragOver={e => day && e.preventDefault()}
+              onDrop={e => {
+                if (!day) return;
+                e.preventDefault();
+                const taskId = parseInt(e.dataTransfer.getData('taskId'));
+                if (taskId) onReschedule(taskId, dateKey(day));
+              }}
+            >
+              {day && (
+                <>
+                  <div style={{ fontSize: '0.72rem', fontWeight: isToday ? 700 : 400, color: isToday ? 'var(--accent, #6366f1)' : 'var(--text-muted, #888)', marginBottom: '3px' }}>{day.getDate()}</div>
+                  {dayTasks.slice(0, 3).map(task => (
+                    <div
+                      key={task.id}
+                      onClick={e => { e.stopPropagation(); onEdit(task); }}
+                      draggable
+                      onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData('taskId', String(task.id)); }}
+                      style={{
+                        fontSize: '0.65rem', padding: '1px 4px', marginBottom: '2px',
+                        borderRadius: '3px',
+                        background: priorityBg[task.priority] || 'rgba(99,102,241,0.15)',
+                        borderLeft: `2px solid ${priorityBorder[task.priority] || '#6366f1'}`,
+                        color: 'var(--text-primary, #fff)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        textDecoration: task.status === 'done' ? 'line-through' : 'none',
+                        opacity: task.status === 'done' ? 0.5 : 1,
+                        cursor: 'pointer',
+                      }}
+                    >{task.title}</div>
+                  ))}
+                  {dayTasks.length > 3 && (
+                    <div
+                      onClick={e => { e.stopPropagation(); setDayPopover(day); }}
+                      style={{ fontSize: '0.65rem', color: 'var(--text-muted, #888)', cursor: 'pointer' }}
+                    >+{dayTasks.length - 3} more</div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {dayPopover && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setDayPopover(null)}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-primary, #1a1a2e)', border: '1px solid var(--border, #333)', borderRadius: '0.75rem', padding: '1rem', maxWidth: '320px', width: '100%', maxHeight: '70vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary, #fff)', fontSize: '0.9rem' }}>
+                {DAYS[dayPopover.getDay()]}, {dayPopover.toLocaleDateString('en-AU', { month: 'long', day: 'numeric' })}
+              </span>
+              <button onClick={() => setDayPopover(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted, #888)' }}>✕</button>
+            </div>
+            {getTasksForDay(dayPopover).map(task => (
+              <div
+                key={task.id}
+                onClick={() => { onEdit(task); setDayPopover(null); }}
+                style={{ padding: '0.5rem', borderRadius: '0.375rem', marginBottom: '0.375rem', background: 'var(--bg-secondary, #252542)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+              >
+                <div style={{ width: '3px', height: '24px', borderRadius: '2px', background: priorityBorder[task.priority] || '#6366f1', flexShrink: 0 }} />
+                <span style={{ fontSize: '0.82rem', color: 'var(--text-primary, #fff)' }}>{task.title}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgendaView({ tasks, onEdit, onToggleStatus }) {
+  const today = startOfDay(new Date());
+  const end = addDays(today, 30);
+
+  const tasksByDay = [];
+  for (let d = new Date(today); d <= end; d = addDays(d, 1)) {
+    const dayTasks = tasks.filter(t => { const td = parseTaskDate(t); return td && isSameDay(td, d); });
+    if (dayTasks.length > 0) tasksByDay.push({ date: new Date(d), tasks: dayTasks });
+  }
+
+  if (tasksByDay.length === 0) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted, #888)', fontSize: '0.85rem' }}>
+        No tasks in the next 30 days
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem' }}>
+      {tasksByDay.map(({ date, tasks: dayTasks }) => (
+        <div key={dateKey(date)} style={{ marginBottom: '1.25rem' }}>
+          <div style={{
+            fontSize: '0.78rem', fontWeight: 700,
+            color: isSameDay(date, new Date()) ? 'var(--accent, #6366f1)' : 'var(--text-muted, #888)',
+            marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em',
+          }}>
+            {isSameDay(date, new Date()) ? 'Today — ' : ''}{date.toLocaleDateString('en-AU', { weekday: 'short', month: 'short', day: 'numeric' })}
+          </div>
+          {dayTasks.map(task => (
+            <div
+              key={task.id}
+              onClick={() => onEdit(task)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.75rem',
+                padding: '0.5rem 0.75rem', borderRadius: '0.375rem', marginBottom: '0.375rem',
+                background: 'var(--bg-secondary, #252542)', cursor: 'pointer',
+                opacity: task.status === 'done' ? 0.5 : 1,
+              }}
+            >
+              <button
+                onClick={e => { e.stopPropagation(); onToggleStatus(task); }}
+                style={{
+                  width: '18px', height: '18px', borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${priorityBorder[task.priority] || '#6366f1'}`,
+                  background: task.status === 'done' ? (priorityBorder[task.priority] || '#6366f1') : 'transparent',
+                  cursor: 'pointer',
+                }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-primary, #fff)', textDecoration: task.status === 'done' ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {task.title}
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '2px' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #888)' }}>{task.priority}</span>
+                  {task.dueDate?.includes('T') && <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #888)' }}>{task.dueDate.slice(11, 16)}</span>}
+                  {task.category && <span style={{ fontSize: '0.68rem', color: 'var(--text-muted, #888)' }}>{task.category}</span>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus, onNew, onReschedule, onUpdateEffort }) {
+  const [subView, setSubView] = useState(() => {
+    try { return localStorage.getItem(CAL_VIEW_KEY) || 'week'; } catch { return 'week'; }
+  });
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    try { localStorage.setItem(CAL_VIEW_KEY, subView); } catch { }
+  }, [subView]);
+
+  function getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    d.setDate(d.getDate() + diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  function navigate(dir) {
+    setCurrentDate(prev => {
+      const d = new Date(prev);
+      if (subView === 'day') d.setDate(d.getDate() + dir);
+      else if (subView === 'week') d.setDate(d.getDate() + dir * 7);
+      else if (subView === 'month') d.setMonth(d.getMonth() + dir);
+      return d;
+    });
+  }
+
+  function getNavLabel() {
+    if (subView === 'day') return currentDate.toLocaleDateString('en-AU', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    if (subView === 'week') {
+      const ws = getWeekStart(currentDate);
+      const we = addDays(ws, 6);
+      if (ws.getMonth() === we.getMonth()) return `${ws.getDate()}–${we.getDate()} ${MONTH_NAMES[ws.getMonth()]} ${ws.getFullYear()}`;
+      return `${ws.getDate()} ${MONTH_NAMES[ws.getMonth()].slice(0,3)} – ${we.getDate()} ${MONTH_NAMES[we.getMonth()].slice(0,3)} ${we.getFullYear()}`;
+    }
+    if (subView === 'month') return `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+    return 'Next 30 days';
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-primary, #1a1a2e)' }}>
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border, #333)', flexShrink: 0, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '0.25rem', background: 'var(--bg-secondary, #252542)', borderRadius: '0.5rem', padding: '2px' }}>
+          {['day', 'week', 'month', 'agenda'].map(v => (
+            <button
+              key={v}
+              onClick={() => setSubView(v)}
+              style={{
+                padding: '0.3rem 0.65rem', borderRadius: '0.375rem', border: 'none', cursor: 'pointer',
+                fontSize: '0.75rem', fontWeight: 600, textTransform: 'capitalize',
+                background: subView === v ? 'var(--accent, #6366f1)' : 'transparent',
+                color: subView === v ? '#fff' : 'var(--text-muted, #888)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+
+        {subView !== 'agenda' && (
+          <>
+            <button onClick={() => navigate(-1)} style={{ background: 'none', border: '1px solid var(--border, #333)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--text-secondary, #ccc)', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}>‹</button>
+            <button onClick={() => setCurrentDate(new Date())} style={{ background: 'none', border: '1px solid var(--border, #333)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--text-secondary, #ccc)', padding: '0.3rem 0.65rem', fontSize: '0.75rem', fontWeight: 600 }}>Today</button>
+            <button onClick={() => navigate(1)} style={{ background: 'none', border: '1px solid var(--border, #333)', borderRadius: '0.375rem', cursor: 'pointer', color: 'var(--text-secondary, #ccc)', padding: '0.3rem 0.6rem', fontSize: '0.85rem' }}>›</button>
+            <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary, #fff)' }}>{getNavLabel()}</span>
+          </>
+        )}
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {subView === 'day' && (
+          <DayView date={startOfDay(currentDate)} tasks={tasks} onNew={onNew} onReschedule={onReschedule} onEdit={onEdit} onToggleStatus={onToggleStatus} onUpdateEffort={onUpdateEffort} />
+        )}
+        {subView === 'week' && (
+          <WeekView weekStart={getWeekStart(currentDate)} tasks={tasks} onNew={onNew} onReschedule={onReschedule} onEdit={onEdit} onToggleStatus={onToggleStatus} onUpdateEffort={onUpdateEffort} />
+        )}
+        {subView === 'month' && (
+          <MonthView year={currentDate.getFullYear()} month={currentDate.getMonth()} tasks={tasks} onNew={onNew} onReschedule={onReschedule} onEdit={onEdit} />
+        )}
+        {subView === 'agenda' && (
+          <AgendaView tasks={tasks} onEdit={onEdit} onToggleStatus={onToggleStatus} />
+        )}
+      </div>
     </div>
   );
 }

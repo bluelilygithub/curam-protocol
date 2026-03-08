@@ -33,12 +33,14 @@ A full personal task manager built into Curam Vault. Accessible via the sidebar 
 | **Project** | Link to a Vault project |
 | **Parent task** | Makes this a subtask of another task |
 | **Estimated effort** | `estimatedMinutes` integer — entered via presets or free text |
+| **Time spent** | `timeSpentMinutes` integer — accumulated focus time and manual timer sessions |
 | **Key Result** | Link to a Goal Key Result (`keyResultId`) |
 
 **Computed fields returned by the API (not stored):**
 - `tags` — array from `task_tags`
 - `subtaskCount`, `subtaskDone` — count of child tasks and how many are done
 - `keyResultTitle`, `objectiveTitle` — joined from `key_results` + `objectives`
+- `blockerCount` — count of incomplete tasks that are blocking this task
 
 ---
 
@@ -50,6 +52,8 @@ Open with **+ New Task** (top right) or `n`. Edit by clicking the pencil icon on
 - `15m`, `30m`, `1h`, `2h`, `4h`, `1d`, `2d` — quick-select presets
 - `45m` → 45 minutes; `3h` → 180 minutes; `1.5h` → 90 minutes; `2d` → 960 minutes
 - Plain integer is treated as minutes
+
+**Due date input** accepts natural language — see [Natural Language Due Dates](#natural-language-due-dates).
 
 **Link to Goal** — two-step dropdown (only visible if Objectives exist):
 1. Select an Objective
@@ -83,11 +87,17 @@ Tasks are grouped by **category** and sorted by the active sort order within eac
 - **Notes tooltip** — hover the row to see a preview of the notes field (up to 300 characters)
 
 **Actions on hover:**
-- Circle button — toggle done/undone
+- Circle button — toggle done/undone (shows inline warning if the task has unresolved blockers; confirm to proceed anyway)
 - Share icon — generate public link (see [Task Sharing](#task-sharing))
 - Copy icon — duplicate task
 - Pencil icon — edit
+- Stopwatch (⏱) icon — start/stop the time tracker for this task
+- Focus (🎯) icon — open Focus Mode (Pomodoro timer overlay) for this task
 - Trash icon — delete (confirm inline)
+
+**Inline badges (after effort pill):**
+- `⏱ 2h` — shown when `timeSpentMinutes > 0`
+- `🔒` — shown when `blockerCount > 0` (task has incomplete blockers); tooltip shows count
 
 ### Board view (Kanban)
 
@@ -99,15 +109,42 @@ Drag cards **within** a column to reorder. Drag cards **across** columns to chan
 
 ### Calendar view
 
-Rendered by `TasksCalendar` component. Day, week, month, and range sub-views. Drag tasks to reschedule.
+Rendered by `TasksCalendar` component (`vault/client/src/components/TasksCalendar.jsx`). Sub-view persists in `localStorage` under the key `tasksCalendarSubView`. Default: **week**.
 
-View persists in `localStorage` under the key `tasksViewMode`.
+**Sub-views:**
+
+| Sub-view | Layout |
+|---|---|
+| **Day** | Single-day time grid — full 24-hour column |
+| **Week** | 7-day time grid — Mon–Sun columns side by side |
+| **Month** | 6-week grid — up to 3 task chips per cell; "+N more" popover for overflow |
+| **Agenda** | List of the next 30 days, skipping empty days; date heading + task rows with priority badge, time, category |
+
+**Time grid (Day/Week):**
+- 24 hour rows × 64px each. Half-hour divider lines (dashed). Hour labels on the left column.
+- **Unscheduled panel** at the top — tasks with no time component.
+- **Task blocks** are absolutely positioned: `top = (hours*60+mins)/60 × 64px`, `height = max(estimatedMinutes, 30)/60 × 64px`. Left border colour by priority. Completed tasks: 50% opacity + strikethrough title.
+- **Current time indicator** — red horizontal line + dot at the current hour/minute position.
+- **Click empty slot** → opens New Task form with that date+time pre-filled.
+- **Click task block** → inline popover (title, notes, status toggle, edit link).
+
+**Drag-drop rescheduling:**
+- Drag any task block to a new time slot → `PUT /api/tasks/:id` with updated `dueDate` (preserves existing date, changes time).
+- Drag from Unscheduled panel → assigns a time.
+- Drop target slots highlight on `dragover`.
+
+**Block resize (effort editing):**
+- A resize handle sits at the bottom edge of each block (cursor: `s-resize`).
+- Drag down/up to change `estimatedMinutes` — snaps to 15-minute increments.
+- On release: `PUT /api/tasks/:id { estimatedMinutes }` is called.
+
+View selection (day/week/month/agenda buttons) is shown in the calendar header. The top-level view selection (list/board/calendar) persists in `localStorage` under `tasksViewMode`.
 
 ---
 
 ## Stats Bar
 
-Shown below the toolbar when tasks exist. Five stat cards:
+Shown below the toolbar when tasks exist. Six stat cards:
 
 | Card | Value | Clickable |
 |---|---|---|
@@ -116,6 +153,7 @@ Shown below the toolbar when tasks exist. Five stat cards:
 | **Overdue** | Incomplete tasks with a past due date | Yes — applies Overdue quick filter |
 | **High Priority** | Incomplete high-priority tasks | Yes — applies High Priority quick filter |
 | **Total Effort** | Sum of `estimatedMinutes` for incomplete tasks in the current filter | No |
+| **Time Logged** | Sum of `timeSpentMinutes` for tasks with logged time in the current filter. Formatted as `Xh Ym`. Shows `—` when zero. | No |
 
 **14-day completion chart** — bar chart below the stats row; bars show completed task count per day; today's bar is highlighted in the primary colour.
 
@@ -164,6 +202,8 @@ Click the task title to expand it. Shows:
 - Subtasks with done/undone toggles
 - Inline **Add subtask** input (Enter to add)
 - **Generate subtasks** button — pre-filled with task title, edit then press Enter or Generate; Claude creates subtasks via `POST /api/tasks/ai-generate` with `parentTaskId`
+- **Time logged** row — `⏱ 2h 15m logged`; when `estimatedMinutes` is also set shows `⏱ 2h 15m of ~4h` with a progress bar
+- **Dependencies** section — see [Task Dependencies](#task-dependencies)
 - **Activity** section — user comments and auto-logged system events (see below)
 
 ---
@@ -275,7 +315,7 @@ Click **Import** in the toolbar to open the import modal.
 3. **Preview** — table shows each row with a per-row checkbox; invalid rows are flagged with the reason
 4. **Import selected** — POSTs to `POST /api/tasks/import`
 
-**Accepted CSV columns:** `title` (required), `notes`, `status`, `priority`, `category`, `projectId`, `dueDate`, `estimatedMinutes`, `tags` (comma-separated within the cell).
+**Accepted CSV columns:** `title` (required), `notes`, `status`, `priority`, `category`, `projectId`, `dueDate`, `estimatedMinutes`, `timeSpentMinutes`, `tags` (comma-separated within the cell).
 
 Row-level validation: missing title, invalid status/priority values, non-existent `projectId` are reported as errors but don't block importing valid rows.
 
@@ -294,6 +334,106 @@ The public URL is `APP_URL + /shared/task/:token` and requires no login. The pub
 **To revoke:** open the share popover → click **Revoke link** → `shareToken` is set to `NULL` and the URL immediately returns 404.
 
 If a task already has a `shareToken`, the share icon on the card is highlighted in the primary colour.
+
+---
+
+## Natural Language Due Dates
+
+The due date field in the New/Edit Task form accepts natural language. A live preview below the input shows the resolved date in green, or an amber warning if the input can't be parsed.
+
+**Supported formats** (all local time, handled by `vault/client/src/utils/parseDate.js`):
+
+| Input example | Result |
+|---|---|
+| `today` | Today at current time |
+| `tomorrow` | Tomorrow at 09:00 |
+| `yesterday` | Yesterday |
+| `monday` / `friday` (weekday name) | Next occurrence of that weekday |
+| `next monday` | Next Monday |
+| `this friday` | Coming Friday within the current week |
+| `in 3 days` / `in 2 weeks` / `in 1 month` | Relative offset |
+| `end of week` | Coming Sunday |
+| `end of month` | Last day of current month |
+| `next week` | Monday of next week |
+| `next month` | 1st of next month |
+| `mar 15` / `15 mar` / `march 15` | That date (current year or next year if past) |
+| `15/03` / `03-15` | DD/MM — current or next year |
+| `2027-03-15` / `15/03/2027` | Exact full date |
+| `tomorrow 3pm` / `friday 14:30` | Date + time combined |
+| `next friday 9am` | Next Friday at 09:00 |
+
+A 📅 icon in the field opens a standard date picker as a fallback.
+
+An optional **time** input appears below the date field to refine the time after a date is resolved.
+
+---
+
+## Task Dependencies
+
+Tasks can depend on other tasks. A **blocked task** cannot be started (conceptually) until all its blockers are done.
+
+**Setup (expanded view → Dependencies section):**
+- **Blocked by** — lists tasks that block this task. Each entry shows the blocker's title, status badge, and a `×` remove button.
+- **Add blocker** — type to search existing tasks. A dropdown shows matching results. Select one to create the dependency via `POST /api/tasks/:id/dependencies`.
+- **Blocking** (read-only) — lists tasks that this task is blocking (i.e., tasks that depend on this task).
+
+**🔒 badge:** shown on any task card when `blockerCount > 0` (at least one incomplete blocker). Tooltip shows "Blocked by N incomplete tasks".
+
+**Blocker warning on done:** if a task has unresolved blockers and you click its circle button to mark it done, an inline warning appears: "This task has N unresolved blockers. Mark as done anyway?" — Confirm/Cancel. The action is not blocked, just warned.
+
+**Circular dependency detection:** the server performs a BFS traversal from the new `blockedByTaskId` following its own blockers. If it reaches `taskId`, the POST returns `400 Circular dependency detected`.
+
+---
+
+## Time Tracking
+
+Two mechanisms accumulate `timeSpentMinutes` on a task:
+
+### 1. Stopwatch (task card)
+- Click the ⏱ icon on any task card hover actions to start timing.
+- Only one task can be timed at a time — starting a new timer stops and logs the previous one.
+- A running indicator appears in the top bar: `⏱ Task title — HH:MM:SS`.
+- Click the ⏱ icon again (or start a timer on another task) to stop and log the elapsed minutes via `PUT /api/tasks/:id { timeSpentMinutes }`.
+
+### 2. Focus Mode (Pomodoro timer)
+- Time accumulated while the Focus mode timer runs in **Focus** mode is logged on close — see [Focus Mode](#focus-mode-pomodoro).
+
+### Display
+- Task card: `⏱ 2h` pill next to effort pill when `timeSpentMinutes > 0`.
+- Expanded view: `⏱ 2h 15m logged` row. With an estimate: `⏱ 2h 15m of ~4h` with a small progress bar.
+- Stats bar: **Time Logged** card (6th card) shows the total across the current filtered view.
+
+---
+
+## Focus Mode (Pomodoro)
+
+Click the 🎯 icon on any task card to open the Focus Mode overlay. Also accessible via `Shift+F` when a task is expanded, or from the board card.
+
+**Layout:** fixed full-screen overlay with a centred card (max 480px wide, `z-index: 9999`). Click backdrop or press Esc to close.
+
+**Task panel:**
+- Task title, priority badge, due date
+- Notes (scrollable, max 80px)
+- Subtask checklist — each subtask is a checkbox; toggling calls `PUT /api/tasks/:subId { status }`
+- **Mark task done** button — marks the parent task done and closes the overlay
+
+**Pomodoro timer:**
+- Four mode buttons: **Focus** (25m), **Short break** (5m), **Long break** (15m), **Custom**
+- Large `MM:SS` countdown with an SVG ring progress indicator
+- **Start / Pause / Reset** controls
+- Session counter: "Session N of 4" — after every 4 focus sessions a long break is suggested
+- Timer zero: plays a 440Hz Web Audio API beep (0.3s, sine wave) and shows "Time's up!"
+
+**Settings** (gear ⚙ icon, inline panel):
+- Focus, short break, long break, and custom durations (1–120 min)
+- Auto-start breaks — automatically starts a short/long break when focus timer ends
+- Auto-start focus — automatically restarts focus after a break
+- Persisted in `localStorage` under key `pomodoroSettings`
+
+**Time tracking:**
+- `elapsedFocusSeconds` accumulates while the timer runs in Focus mode.
+- On close (✕, Esc, or backdrop click): if ≥ 1 minute has elapsed, `PUT /api/tasks/:id { timeSpentMinutes }` is called, and a "Paused — X minutes logged" message is shown for 1.5 s before closing.
+- On "Mark task done": time is logged before the task is marked done.
 
 ---
 
@@ -337,13 +477,14 @@ Shortcuts fire when no text input is focused. Press `?` to see the in-app refere
 |---|---|
 | `n` | Open New Task form |
 | `w` | Open Weekly Review |
-| `Esc` | Close form / Weekly Review / Import / collapse expanded task / deselect all / close shortcuts |
+| `Esc` | Close form / Weekly Review / Import / Focus Mode / collapse expanded task / deselect all / close shortcuts |
 | `/` | Focus the search input |
 | `f` | Cycle quick filters: All → Today → This Week → High Priority → Overdue → All |
 | `1` | Set status filter to To Do |
 | `2` | Set status filter to In Progress |
 | `3` | Set status filter to Done |
 | `b` | Cycle view: List → Board → Calendar |
+| `Shift+F` | Open Focus Mode for the currently expanded task |
 | `?` | Open keyboard shortcuts modal |
 
 ---
@@ -375,6 +516,9 @@ Shortcuts fire when no text input is focused. Press `?` to see the in-app refere
 | GET | `/api/tasks/:id/comments` | List comments and activity events |
 | POST | `/api/tasks/:id/comments` | Add comment — body: `{ content, type? }` (type defaults to `user`) |
 | DELETE | `/api/tasks/comments/:commentId` | Delete a comment |
+| GET | `/api/tasks/:id/dependencies` | Task dependencies — returns `{ blockers: [{id,title,status,priority}], dependents: [{...}] }` |
+| POST | `/api/tasks/:id/dependencies` | Add blocker — body: `{ blockedByTaskId }`. Returns 400 if circular dependency detected. |
+| DELETE | `/api/tasks/:id/dependencies/:blockedByTaskId` | Remove a blocker relationship |
 
 ### Templates
 
@@ -390,7 +534,7 @@ Shortcuts fire when no text input is focused. Press `?` to see the in-app refere
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/shared/task/:token` | Public read-only task view — returns `{ id, title, notes, priority, status, dueDate, category, estimatedMinutes, tags, subtasks }` |
+| GET | `/api/shared/task/:token` | Public read-only task view — returns `{ id, title, notes, priority, status, dueDate, category, estimatedMinutes, timeSpentMinutes, tags, subtasks }` |
 
 ---
 
@@ -415,6 +559,7 @@ Shortcuts fire when no text input is focused. Press `?` to see the in-app refere
 | `recurrenceCount` | INTEGER | Incremented each time a recurring task spawns a new copy |
 | `shareToken` | TEXT UNIQUE | 16-byte hex; NULL if not shared |
 | `estimatedMinutes` | INTEGER | Effort estimate in minutes |
+| `timeSpentMinutes` | INTEGER | Accumulated focus/timer time in minutes. Default 0. Added via migration. |
 | `keyResultId` | INTEGER FK | → `key_results.id` ON DELETE SET NULL |
 | `sourceSessionId` | TEXT | Session ID of the chat this task was extracted from |
 | `createdAt` | TEXT | `datetime('now')` |
@@ -453,6 +598,17 @@ Index: `CREATE UNIQUE INDEX idx_tasks_shareToken ON tasks(shareToken) WHERE shar
 | `tags` | TEXT | Comma-separated tag string |
 | `createdAt` | TEXT | |
 | `updatedAt` | TEXT | |
+
+### `task_dependencies`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `taskId` | INTEGER FK | → `tasks.id` ON DELETE CASCADE — the task that is blocked |
+| `blockedByTaskId` | INTEGER FK | → `tasks.id` ON DELETE CASCADE — the task doing the blocking |
+| `createdAt` | TEXT | `datetime('now')` |
+
+Unique constraint on `(taskId, blockedByTaskId)` — no duplicate edges.
 
 ### `template_subtasks`
 

@@ -15,6 +15,8 @@ An OKR-lite goal tracking system built into Curam Vault. Accessible via the targ
 | Home page (Projects) | Goals widget showing active objective count, average progress, and top 3 progress bars |
 | Weekly Review Step 3 | Active objectives with inline KR current-value update inputs |
 
+There is no keyboard shortcut to open Goals. Navigate via the sidebar target icon or the Goals widget on the home page.
+
 ---
 
 ## Objective Fields
@@ -148,7 +150,7 @@ Shown automatically on the Projects home page when at least one **active** objec
 - Top 3 objectives by progress — each shown as a mini progress bar with title and %
 - **View all goals →** link to `/goals`
 
-The widget does not render at all when `activeCount === 0`.
+The widget does not render at all when `activeCount === 0` — if all your objectives are **Completed** or **Paused** (none Active), the widget is hidden on the home page. To see goal progress for completed objectives, navigate directly to `/goals`. Mark an objective Active to make it reappear in the widget.
 
 ---
 

@@ -21,6 +21,7 @@ router.get('/task/:token', (req, res) => {
       dueDate: task.dueDate,
       category: task.category,
       estimatedMinutes: task.estimatedMinutes,
+      timeSpentMinutes: task.timeSpentMinutes,
       tags: getTags(task.id),
       subtasks: subtasks.map(s => ({
         id: s.id,

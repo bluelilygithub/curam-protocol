@@ -21,8 +21,15 @@ function getKrInfo(keyResultId) {
   return { keyResultTitle: kr?.krTitle || null, objectiveTitle: kr?.objTitle || null };
 }
 
+function getBlockerCount(taskId) {
+  const row = db.prepare(
+    "SELECT COUNT(*) as c FROM task_dependencies td JOIN tasks t ON t.id = td.blockedByTaskId WHERE td.taskId = ? AND t.status != 'done'"
+  ).get(taskId);
+  return row?.c || 0;
+}
+
 function buildTask(row) {
-  return { ...row, tags: getTags(row.id), ...getSubtaskStats(row.id), ...getKrInfo(row.keyResultId) };
+  return { ...row, tags: getTags(row.id), ...getSubtaskStats(row.id), ...getKrInfo(row.keyResultId), blockerCount: getBlockerCount(row.id) };
 }
 
 function calculateNextDate(dateStr, recurrence) {
@@ -207,7 +214,7 @@ router.post('/import', (req, res) => {
     let created = 0, skipped = 0;
     const errors = [];
     const insertTask = db.prepare(
-      "INSERT INTO tasks (title,notes,status,priority,category,projectId,dueDate,estimatedMinutes,updatedAt) VALUES (?,?,?,?,?,?,?,?,datetime('now'))"
+      "INSERT INTO tasks (title,notes,status,priority,category,projectId,dueDate,estimatedMinutes,timeSpentMinutes,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))"
     );
     const insertTag = db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)');
     const tx = db.transaction(() => {
@@ -225,7 +232,8 @@ router.post('/import', (req, res) => {
         const r = insertTask.run(
           t.title.trim(), t.notes || null, status, priority,
           t.category || null, projectId, t.dueDate || null,
-          t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null
+          t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null,
+          t.timeSpentMinutes != null ? Number(t.timeSpentMinutes) : 0
         );
         const taskId = r.lastInsertRowid;
         if (t.tags) {
@@ -412,6 +420,58 @@ router.delete('/comments/:commentId', (req, res) => {
   }
 });
 
+// GET /api/tasks/:id/dependencies
+router.get('/:id/dependencies', (req, res) => {
+  try {
+    const blockers = db.prepare(
+      'SELECT t.id, t.title, t.status, t.priority FROM task_dependencies td JOIN tasks t ON t.id = td.blockedByTaskId WHERE td.taskId = ?'
+    ).all(req.params.id);
+    const dependents = db.prepare(
+      'SELECT t.id, t.title, t.status, t.priority FROM task_dependencies td JOIN tasks t ON t.id = td.taskId WHERE td.blockedByTaskId = ?'
+    ).all(req.params.id);
+    res.json({ blockers, dependents });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tasks/:id/dependencies
+router.post('/:id/dependencies', (req, res) => {
+  try {
+    const { blockedByTaskId } = req.body;
+    if (!blockedByTaskId) return res.status(400).json({ error: 'blockedByTaskId required' });
+    const taskId = Number(req.params.id);
+    const blockerId = Number(blockedByTaskId);
+    if (taskId === blockerId) return res.status(400).json({ error: 'task cannot block itself' });
+    // BFS circular dependency check: if taskId is reachable from blockerId, adding this dep would create a cycle
+    const visited = new Set();
+    const queue = [blockerId];
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (current === taskId) return res.status(400).json({ error: 'circular dependency detected' });
+      if (visited.has(current)) continue;
+      visited.add(current);
+      const upstream = db.prepare('SELECT blockedByTaskId FROM task_dependencies WHERE taskId = ?').all(current);
+      upstream.forEach(r => queue.push(r.blockedByTaskId));
+    }
+    db.prepare('INSERT OR IGNORE INTO task_dependencies (taskId, blockedByTaskId) VALUES (?,?)').run(taskId, blockerId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[task dependencies POST]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/tasks/:id/dependencies/:blockedByTaskId
+router.delete('/:id/dependencies/:blockedByTaskId', (req, res) => {
+  try {
+    db.prepare('DELETE FROM task_dependencies WHERE taskId=? AND blockedByTaskId=?').run(req.params.id, req.params.blockedByTaskId);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/tasks
 router.post('/', (req, res) => {
   try {
@@ -445,9 +505,12 @@ router.put('/:id', (req, res) => {
     const newKeyResultId = 'keyResultId' in req.body
       ? (req.body.keyResultId != null ? Number(req.body.keyResultId) : null)
       : task.keyResultId;
+    const newTimeSpent = 'timeSpentMinutes' in req.body
+      ? (req.body.timeSpentMinutes != null ? Number(req.body.timeSpentMinutes) : 0)
+      : task.timeSpentMinutes;
     db.prepare(
-      "UPDATE tasks SET title=?,notes=?,status=?,priority=?,category=?,projectId=?,parentTaskId=?,dueDate=?,recurrence=?,recurrenceConfig=?,estimatedMinutes=?,keyResultId=?,updatedAt=datetime('now') WHERE id=?"
-    ).run(v('title'),v('notes'),v('status'),v('priority'),v('category'),v('projectId'),v('parentTaskId'),v('dueDate'),v('recurrence'),rcfg,newEstimated,newKeyResultId,id);
+      "UPDATE tasks SET title=?,notes=?,status=?,priority=?,category=?,projectId=?,parentTaskId=?,dueDate=?,recurrence=?,recurrenceConfig=?,estimatedMinutes=?,keyResultId=?,timeSpentMinutes=?,updatedAt=datetime('now') WHERE id=?"
+    ).run(v('title'),v('notes'),v('status'),v('priority'),v('category'),v('projectId'),v('parentTaskId'),v('dueDate'),v('recurrence'),rcfg,newEstimated,newKeyResultId,newTimeSpent,id);
     if (Array.isArray(req.body.tags)) {
       db.prepare('DELETE FROM task_tags WHERE taskId=?').run(id);
       req.body.tags.forEach(tag => { if (tag.trim()) db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)').run(id, tag.trim()); });

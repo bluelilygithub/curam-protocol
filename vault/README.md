@@ -37,9 +37,14 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Tasks** | Full personal task manager — List, Kanban, and Calendar views; drag-to-reorder; priority, due date, category, tags, project link; keyboard shortcuts |
 | **Task Templates** | Save any task as a reusable template (with subtasks, priority, category, recurrence); apply in one click |
 | **Kanban Board** | Three-column board (To Do / In Progress / Done); drag cards within or across columns to reorder and change status |
+| **Time-Blocking Calendar** | Day/week/month/agenda sub-views; task blocks absolutely positioned on a 24-hour CSS Grid; drag-drop to reschedule; resize bottom edge to change estimated effort; current-time indicator |
 | **Task Comments & Activity** | Per-task comment thread; system events (status, priority, due date changes) auto-logged |
 | **Recurring Tasks** | Daily / Weekly / Fortnightly / Monthly / Annually; new copy created automatically when marked done |
 | **Subtasks** | Nested subtasks with completion tracking; AI-generate subtasks from task title and notes |
+| **Task Dependencies** | Mark tasks as "blocked by" other tasks; 🔒 badge when incomplete blockers exist; dependency UI in expanded row; circular dependency detection |
+| **Focus Mode (Pomodoro)** | Full-screen overlay with a 25/5/15-min Pomodoro timer; SVG ring progress; subtask checklist; Web Audio API beep; auto-start breaks; time logged to task on close |
+| **Time Tracking** | `timeSpentMinutes` accumulated via Focus Mode or the per-card stopwatch; running timer indicator in toolbar; time pill on cards; Time Logged 6th stat card |
+| **Natural Language Due Dates** | Type `"tomorrow 3pm"`, `"next friday"`, `"Mar 15"` in the due date field; live resolved-date preview; 📅 calendar picker fallback |
 | **Morning Digest** | Daily overlay on first visit — overdue + today's tasks with a Claude-generated focus suggestion |
 | **Quick Capture** | Floating `+` button on every page (or `Ctrl+Shift+N`) — capture a task without leaving the current page |
 | **Effort Estimation** | Set estimated effort per task (quick-select presets or custom input); effort pills on cards; Total Effort stat in toolbar |
@@ -146,7 +151,8 @@ vault/
 │       │   ├── EmailModal.jsx
 │       │   ├── NewProjectModal.jsx
 │       │   ├── KeyboardShortcutsModal.jsx
-│       │   ├── TasksCalendar.jsx # Calendar view for tasks (day/week/month/range + drag-to-reschedule)
+│       │   ├── TasksCalendar.jsx # Time-blocking calendar (day/week/month/agenda; drag-drop; block resize)
+│       │   ├── FocusMode.jsx     # Pomodoro timer overlay with subtask checklist + time tracking
 │       │   ├── WeeklyReview.jsx  # 3-step guided weekly review modal
 │       │   ├── TaskImport.jsx    # CSV import modal (template download, drag-drop, preview, validation)
 │       │   ├── MorningDigest.jsx # Daily task digest overlay (once per day)
@@ -166,6 +172,7 @@ vault/
 │       │   ├── apiClient.js      # Authenticated fetch wrapper (use for all /api/ calls)
 │       │   ├── models.js         # Claude + Gemini model definitions with provider field
 │       │   ├── pricing.js        # Token pricing helpers
+│       │   ├── parseDate.js      # Natural language date parser (pure frontend, no API calls)
 │       │   ├── exportMd.js       # Markdown export formatter
 │       │   └── exportHelpers.js
 │       └── providers/
@@ -202,9 +209,10 @@ vault/
 | `comparisons` | Saved document comparison results linked to projects |
 | `search_logs` | Web search query log (powers admin dashboard search count) |
 | `settings` | Key/value store for API keys and app config set via Settings UI |
-| `tasks` | Task records — status, priority, due date, category, tags, recurrence, estimated effort, share token, parent task link, key result link |
+| `tasks` | Task records — status, priority, due date, category, tags, recurrence, estimated effort, time spent, share token, parent task link, key result link |
 | `task_tags` | Many-to-many tag associations for tasks |
 | `task_comments` | Per-task comments and auto-logged activity events (status/priority/due-date changes) |
+| `task_dependencies` | Directed blocker relationships between tasks — `taskId` is blocked by `blockedByTaskId` |
 | `task_templates` | Reusable task templates with predefined priority, category, recurrence, and tags |
 | `template_subtasks` | Subtask definitions belonging to a task template |
 | `objectives` | OKR Objectives — title, description, timeframe, colour, status |
@@ -321,6 +329,11 @@ npm run dev
 
 ### March 2026
 
+- **Time-Blocking Calendar** — full rewrite of `TasksCalendar.jsx`; day/week/month/agenda sub-views (persisted in `localStorage`); task blocks absolutely positioned on a 24-hour CSS Grid (`64px` per hour); drag-drop tasks to reschedule (updates `dueDate` via `PUT /api/tasks/:id`); drag from unscheduled panel to assign a time; resize block bottom edge to update `estimatedMinutes` (snaps to 15-min); current-time red indicator line; inline popover on block click; click empty slot opens New Task form pre-filled with that datetime
+- **Task Dependencies** — `task_dependencies` table; `blockerCount` computed field on every task response; dependency UI in expanded task row (Blocked by + Blocking subsections with live search to add blockers); `🔒` badge on cards with incomplete blockers; blocker-confirm warning when marking a blocked task done; circular dependency detection via BFS on `POST /api/tasks/:id/dependencies`
+- **Focus Mode (Pomodoro)** — `FocusMode.jsx` full-screen overlay; four timer modes (Focus 25m / Short break 5m / Long break 15m / Custom); SVG ring progress indicator; subtask checklist; Web Audio API beep (440Hz sine, 0.3s) at timer zero; auto-start breaks/focus toggles; session counter (N of 4); settings persisted in `localStorage`; accumulated focus time logged to `timeSpentMinutes` on close; accessible via 🎯 card button or `Shift+F` on expanded task
+- **Time Tracking** — `timeSpentMinutes` column on `tasks` (via migration); per-card ⏱ stopwatch button (one timer at a time); running `⏱ title — HH:MM:SS` indicator in toolbar; time pill on task cards; expanded view shows logged time vs estimate with progress bar; 6th **Time Logged** stat card in toolbar; `timeSpentMinutes` included in CSV import and public shared-task response
+- **Natural Language Due Dates** — single text input replaces separate date+time fields in the task form; `parseDate.js` utility handles: `today`, `tomorrow`, `yesterday`, `next friday`, `this monday`, `in 3 days/weeks/months`, `end of week/month`, `mar 15`, `15/03`, `2027-03-15`, `tomorrow 3pm`, `friday 14:30`; live green "Resolved: …" preview; amber warning when unparseable; 📅 icon opens native date picker fallback
 - **Goals (OKR-lite)** — new `/goals` page with two-panel layout; create Objectives with timeframe and colour; add measurable Key Results (target value, current value, unit); progress bars colour-coded green/amber/red; AI Suggest KRs streams SMART Key Result suggestions via Claude; inline editing throughout; Goals widget on home page shows active count, average progress, and top 3 progress bars; Goals section in Weekly Review Step 3 for end-of-week KR updates
 - **Key Result ↔ Task linking** — task form "Link to Goal" two-step dropdown (Objective → Key Result); linked tasks show a 🎯 badge with KR title on cards; completed linked tasks count toward KR task progress
 - **Effort Estimation** — `estimatedMinutes` field on tasks; quick-select presets (15m / 30m / 1h / 2h / 4h / 1d / 2d) plus free-text input (`45m`, `3h`, `1.5h`); effort pill on list and kanban cards; "Total Effort" 5th stat card in toolbar (sum of incomplete tasks with estimates in current filter)

@@ -5,6 +5,8 @@ import { useIcon } from '../providers/IconProvider';
 import TasksCalendar from '../components/TasksCalendar';
 import WeeklyReview from '../components/WeeklyReview';
 import TaskImport from '../components/TaskImport';
+import FocusMode from '../components/FocusMode';
+import { parseNaturalDate, formatDateForInput, toISOForAPI } from '../utils/parseDate';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -61,7 +63,7 @@ const EFFORT_PRESETS = [
 
 const EMPTY_FORM = {
   title: '', notes: '', status: 'todo', priority: 'medium', category: '', tags: '',
-  dueDate: '', dueTime: '', projectId: '', parentTaskId: '', recurrence: 'none',
+  dueDate: '', dueTime: '', dueDateRaw: '', projectId: '', parentTaskId: '', recurrence: 'none',
   estimatedMinutes: null, keyResultId: null,
 };
 
@@ -75,6 +77,7 @@ const TASK_SHORTCUTS = [
   { keys: ['2'], desc: 'Filter: In Progress' },
   { keys: ['3'], desc: 'Filter: Done' },
   { keys: ['b'], desc: 'Cycle view: List → Board → Calendar' },
+  { keys: ['Shift+F'], desc: 'Focus mode on expanded task' },
   { keys: ['?'], desc: 'Show keyboard shortcuts' },
 ];
 
@@ -206,6 +209,21 @@ export default function TasksPage() {
   const [sharePopovers, setSharePopovers] = useState({});
   const [shareLoading, setShareLoading] = useState(new Set());
 
+  // Focus mode
+  const [focusTask, setFocusTask] = useState(null);
+
+  // Time tracking
+  const [activeTimer, setActiveTimer] = useState(null); // { taskId, task }
+  const [elapsed, setElapsed] = useState(0); // seconds since timer started
+  const elapsedRef = useRef(0);
+  const timerIntervalRef = useRef(null);
+
+  // Dependencies
+  const [dependenciesCache, setDependenciesCache] = useState({});
+  const [depSearch, setDepSearch] = useState({}); // { [taskId]: queryString }
+  const [depSearchResults, setDepSearchResults] = useState({}); // { [taskId]: tasks[] }
+  const [blockerConfirm, setBlockerConfirm] = useState(null); // taskId that showed confirm on done
+
   const fetchTasks = useCallback(async () => {
     setLoading(true);
     try {
@@ -213,6 +231,21 @@ export default function TasksPage() {
       setTasks(await res.json());
     } catch { setTasks([]); } finally { setLoading(false); }
   }, []);
+
+  // Timer tick
+  useEffect(() => {
+    if (activeTimer) {
+      timerIntervalRef.current = setInterval(() => {
+        elapsedRef.current += 1;
+        setElapsed(elapsedRef.current);
+      }, 1000);
+    } else {
+      clearInterval(timerIntervalRef.current);
+      elapsedRef.current = 0;
+      setElapsed(0);
+    }
+    return () => clearInterval(timerIntervalRef.current);
+  }, [activeTimer]);
 
   const fetchTemplates = useCallback(async () => {
     setTemplatesLoading(true);
@@ -261,6 +294,7 @@ export default function TasksPage() {
     setExpandedId(id);
     fetchSubtasks(id);
     fetchComments(id);
+    fetchDependencies(id);
   };
 
   const handleToggleStatus = async (task) => {
@@ -321,9 +355,11 @@ export default function TasksPage() {
   const handleReschedule = async (taskId, newDateKey) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    // Preserve existing time component if present
-    const timeSuffix = task.dueDate?.includes('T') ? task.dueDate.slice(10) : '';
-    const updated = await api.put(`/api/tasks/${taskId}`, { dueDate: newDateKey + timeSuffix }).then(r => r.json());
+    // If full datetime provided (from time grid), use as-is; otherwise preserve existing time
+    const newDueDate = newDateKey.includes('T')
+      ? newDateKey
+      : newDateKey + (task.dueDate?.includes('T') ? task.dueDate.slice(10) : '');
+    const updated = await api.put(`/api/tasks/${taskId}`, { dueDate: newDueDate }).then(r => r.json());
     setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
   };
 
@@ -371,17 +407,87 @@ export default function TasksPage() {
     });
   };
 
+  // Time tracking handlers
+  const handleStartTimer = async (task) => {
+    if (activeTimer) await handleStopTimer();
+    elapsedRef.current = 0;
+    setElapsed(0);
+    setActiveTimer({ taskId: task.id, task });
+  };
+
+  const handleStopTimer = async () => {
+    if (!activeTimer) return;
+    clearInterval(timerIntervalRef.current);
+    const elapsedMins = Math.floor(elapsedRef.current / 60);
+    if (elapsedMins > 0) {
+      const task = tasks.find(t => t.id === activeTimer.taskId);
+      if (task) {
+        const newTotal = (task.timeSpentMinutes || 0) + elapsedMins;
+        const updated = await api.put(`/api/tasks/${task.id}`, { timeSpentMinutes: newTotal }).then(r => r.json());
+        setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+      }
+    }
+    setActiveTimer(null);
+    elapsedRef.current = 0;
+    setElapsed(0);
+  };
+
+  // Effort update (from calendar resize)
+  const handleUpdateEffort = async (taskId, minutes) => {
+    try {
+      const updated = await api.put(`/api/tasks/${taskId}`, { estimatedMinutes: minutes }).then(r => r.json());
+      setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
+    } catch (err) { console.error(err); }
+  };
+
+  // Dependencies
+  const fetchDependencies = async (taskId) => {
+    if (dependenciesCache[taskId]) return;
+    try {
+      const res = await api.get(`/api/tasks/${taskId}/dependencies`);
+      const data = await res.json();
+      setDependenciesCache(prev => ({ ...prev, [taskId]: data }));
+    } catch { setDependenciesCache(prev => ({ ...prev, [taskId]: { blockers: [], dependents: [] } })); }
+  };
+
+  const handleAddDependency = async (taskId, blockedByTaskId) => {
+    try {
+      await api.post(`/api/tasks/${taskId}/dependencies`, { blockedByTaskId });
+      // Refresh dependencies for this task
+      setDependenciesCache(prev => ({ ...prev, [taskId]: undefined }));
+      fetchDependencies(taskId);
+      // Update blockerCount locally
+      const blocker = tasks.find(t => t.id === blockedByTaskId);
+      if (blocker && blocker.status !== 'done') {
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, blockerCount: (t.blockerCount || 0) + 1 } : t));
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  const handleRemoveDependency = async (taskId, blockedByTaskId) => {
+    try {
+      await api.delete(`/api/tasks/${taskId}/dependencies/${blockedByTaskId}`);
+      setDependenciesCache(prev => ({
+        ...prev,
+        [taskId]: { ...(prev[taskId] || {}), blockers: (prev[taskId]?.blockers || []).filter(b => b.id !== blockedByTaskId) },
+      }));
+      const remaining = (dependenciesCache[taskId]?.blockers || []).filter(b => b.id !== blockedByTaskId && b.status !== 'done');
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, blockerCount: remaining.length } : t));
+    } catch (err) { console.error(err); }
+  };
+
   const loadGoalsForForm = () => {
     api.get('/api/goals').then(r => r.json()).then(setGoalsForForm).catch(() => {});
   };
 
   const openNew = (defaultStatus = 'todo', defaultDate = '') => {
     const now = new Date();
-    const todayDate = defaultDate || now.toISOString().slice(0, 10);
-    const currentTime = now.toTimeString().slice(0, 5);
+    const todayDate = defaultDate ? defaultDate.slice(0, 10) : now.toISOString().slice(0, 10);
+    const currentTime = defaultDate?.includes('T') ? defaultDate.slice(11, 16) : now.toTimeString().slice(0, 5);
+    const rawStr = defaultDate ? formatDateForInput(new Date(defaultDate.includes('T') ? defaultDate : defaultDate + 'T09:00')) : '';
     setEditTask(null);
     setFormObjectiveId('');
-    setForm({ ...EMPTY_FORM, dueDate: todayDate, dueTime: currentTime, status: defaultStatus });
+    setForm({ ...EMPTY_FORM, dueDate: todayDate, dueTime: currentTime, dueDateRaw: rawStr, status: defaultStatus });
     setShowForm(true);
     loadGoalsForForm();
   };
@@ -390,6 +496,7 @@ export default function TasksPage() {
     setEditTask(task);
     const existing = task.dueDate || '';
     const [datePart, timePart] = existing.includes('T') ? existing.split('T') : [existing, ''];
+    const rawStr = datePart ? formatDateForInput(new Date(datePart + (timePart ? 'T' + timePart : 'T09:00'))) : '';
     setForm({
       title: task.title || '',
       notes: task.notes || '',
@@ -399,6 +506,7 @@ export default function TasksPage() {
       tags: (task.tags || []).join(', '),
       dueDate: datePart,
       dueTime: timePart ? timePart.slice(0, 5) : '',
+      dueDateRaw: rawStr,
       projectId: task.projectId ? String(task.projectId) : '',
       parentTaskId: task.parentTaskId ? String(task.parentTaskId) : '',
       recurrence: task.recurrence || 'none',
@@ -706,6 +814,15 @@ export default function TasksPage() {
         case '2': setFilterStatus('in-progress'); break;
         case '3': setFilterStatus('done'); break;
         case '?': setShowShortcuts(true); break;
+        case 'F': {
+          // Shift+F — open Focus mode for expanded task
+          e.preventDefault();
+          if (expandedId !== null) {
+            const t = tasks.find(t => t.id === expandedId);
+            if (t) setFocusTask(t);
+          }
+          break;
+        }
         default: break;
       }
     };
@@ -735,6 +852,7 @@ export default function TasksPage() {
   const highPriorityCount = tasks.filter(t => t.status !== 'done' && t.priority === 'high').length;
   const totalIncomplete = tasks.filter(t => t.status !== 'done').length;
   const totalEffort = filtered.filter(t => t.status !== 'done' && t.estimatedMinutes).reduce((sum, t) => sum + t.estimatedMinutes, 0);
+  const timeLogged = filtered.filter(t => t.timeSpentMinutes > 0).reduce((sum, t) => sum + (t.timeSpentMinutes || 0), 0);
 
   // 14-day chart data
   const last14Days = Array.from({ length: 14 }, (_, i) => {
@@ -902,6 +1020,16 @@ export default function TasksPage() {
                   🎯 {task.keyResultTitle}
                 </span>
               )}
+              {task.blockerCount > 0 && (
+                <span className="text-xs px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: '#ef444420', color: '#ef4444', border: '1px solid #ef444440' }} title={`Blocked by ${task.blockerCount} incomplete task${task.blockerCount !== 1 ? 's' : ''}`}>
+                  🔒 {task.blockerCount}
+                </span>
+              )}
+              {task.timeSpentMinutes > 0 && (
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} title="Time logged">
+                  ⏱ {formatEffort(task.timeSpentMinutes)}
+                </span>
+              )}
             </div>
           </button>
 
@@ -913,13 +1041,40 @@ export default function TasksPage() {
               </>
             ) : (
               <>
+                {blockerConfirm === task.id ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs" style={{ color: '#f59e0b' }}>{task.blockerCount} blocker{task.blockerCount !== 1 ? 's' : ''}. Done anyway?</span>
+                    <button onClick={() => { setBlockerConfirm(null); handleToggleStatus(task); }} className="text-xs px-1.5 py-0.5 rounded bg-red-500 text-white">Yes</button>
+                    <button onClick={() => setBlockerConfirm(null)} className="text-xs" style={{ color: 'var(--color-muted)' }}>No</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (!isDone && task.blockerCount > 0) { setBlockerConfirm(task.id); return; }
+                      handleToggleStatus(task);
+                    }}
+                    className="hover:opacity-60 p-0.5"
+                    style={{ color: isDone ? '#22c55e' : 'var(--color-muted)' }}
+                    title={isDone ? 'Mark as to do' : 'Mark as done'}
+                  >
+                    {getIcon(isDone ? 'check-circle' : 'circle', { size: 13 })}
+                  </button>
+                )}
                 <button
-                  onClick={() => handleToggleStatus(task)}
-                  className="hover:opacity-60 p-0.5"
-                  style={{ color: isDone ? '#22c55e' : 'var(--color-muted)' }}
-                  title={isDone ? 'Mark as to do' : 'Mark as done'}
+                  onClick={() => activeTimer?.taskId === task.id ? handleStopTimer() : handleStartTimer(task)}
+                  className="hover:opacity-60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ color: activeTimer?.taskId === task.id ? '#f59e0b' : 'var(--color-muted)' }}
+                  title={activeTimer?.taskId === task.id ? 'Stop timer' : 'Start timer'}
                 >
-                  {getIcon(isDone ? 'check-circle' : 'circle', { size: 13 })}
+                  ⏱
+                </button>
+                <button
+                  onClick={() => setFocusTask(task)}
+                  className="hover:opacity-60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ color: 'var(--color-muted)' }}
+                  title="Focus mode (Shift+F when expanded)"
+                >
+                  🎯
                 </button>
                 <button
                   onClick={() => handleShare(task)}
@@ -1031,6 +1186,91 @@ export default function TasksPage() {
                 Generate subtasks
               </button>
             )}
+            {/* Time logged */}
+            {(task.timeSpentMinutes > 0 || task.estimatedMinutes > 0) && (
+              <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                <span>⏱</span>
+                {task.timeSpentMinutes > 0 && <span>{formatEffort(task.timeSpentMinutes)} logged</span>}
+                {task.estimatedMinutes > 0 && task.timeSpentMinutes > 0 && <span>of</span>}
+                {task.estimatedMinutes > 0 && <span>~{formatEffort(task.estimatedMinutes)} estimated</span>}
+                {task.estimatedMinutes > 0 && task.timeSpentMinutes > 0 && (
+                  <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)', maxWidth: 80 }}>
+                    <div className="h-full rounded-full" style={{ background: 'var(--color-primary)', width: `${Math.min(100, Math.round((task.timeSpentMinutes / task.estimatedMinutes) * 100))}%` }} />
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Dependencies */}
+            {(() => {
+              const deps = dependenciesCache[task.id];
+              const blockers = deps?.blockers || [];
+              const dependents = deps?.dependents || [];
+              return (
+                <div className="border-t pt-3 space-y-2" style={{ borderColor: 'var(--color-border)' }}>
+                  <div className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Dependencies</div>
+                  {/* Blocked by */}
+                  <div className="space-y-1">
+                    <div className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>Blocked by</div>
+                    {blockers.length === 0 && <div className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.5 }}>None</div>}
+                    {blockers.map(b => (
+                      <div key={b.id} className="flex items-center gap-2">
+                        <span className="text-xs flex-1" style={{ color: 'var(--color-text)', textDecoration: b.status === 'done' ? 'line-through' : 'none', opacity: b.status === 'done' ? 0.5 : 1 }}>
+                          {b.status === 'done' ? '✓ ' : '🔒 '}{b.title}
+                        </span>
+                        <button onClick={() => handleRemoveDependency(task.id, b.id)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)' }}>×</button>
+                      </div>
+                    ))}
+                    {/* Add blocker */}
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <input
+                        value={depSearch[task.id] || ''}
+                        onChange={async e => {
+                          const q = e.target.value;
+                          setDepSearch(prev => ({ ...prev, [task.id]: q }));
+                          if (q.length >= 2) {
+                            const res = await api.get(`/api/tasks?search=${encodeURIComponent(q)}`);
+                            const results = await res.json();
+                            setDepSearchResults(prev => ({ ...prev, [task.id]: results.filter(t => t.id !== task.id).slice(0, 6) }));
+                          } else {
+                            setDepSearchResults(prev => ({ ...prev, [task.id]: [] }));
+                          }
+                        }}
+                        placeholder="Search to add blocker…"
+                        className="flex-1 text-xs px-2 py-1 rounded border outline-none"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      />
+                    </div>
+                    {(depSearchResults[task.id] || []).length > 0 && (
+                      <div className="rounded border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                        {depSearchResults[task.id].map(result => (
+                          <button
+                            key={result.id}
+                            onClick={() => {
+                              handleAddDependency(task.id, result.id);
+                              setDepSearch(prev => ({ ...prev, [task.id]: '' }));
+                              setDepSearchResults(prev => ({ ...prev, [task.id]: [] }));
+                            }}
+                            className="w-full text-left px-2 py-1.5 text-xs hover:opacity-70 border-b last:border-b-0"
+                            style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                          >
+                            {result.title}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Blocking (read-only) */}
+                  {dependents.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>Blocking</div>
+                      {dependents.map(d => (
+                        <div key={d.id} className="text-xs" style={{ color: 'var(--color-muted)' }}>→ {d.title}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             {/* Comments / Activity */}
             <div className="border-t pt-3 space-y-2" style={{ borderColor: 'var(--color-border)' }}>
               <div className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Activity</div>
@@ -1237,6 +1477,16 @@ export default function TasksPage() {
           >
             {getIcon('calendar', { size: 13 })} Weekly Review
           </button>
+          {activeTimer && (
+            <button
+              onClick={handleStopTimer}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono"
+              style={{ borderColor: '#f59e0b', color: '#f59e0b', background: '#f59e0b11', animation: 'pulse 2s infinite' }}
+              title="Timer running — click to stop"
+            >
+              ⏱ {activeTimer.task.title.slice(0, 20)}{activeTimer.task.title.length > 20 ? '…' : ''} — {String(Math.floor(elapsed / 3600)).padStart(2,'0')}:{String(Math.floor((elapsed % 3600) / 60)).padStart(2,'0')}:{String(elapsed % 60).padStart(2,'0')}
+            </button>
+          )}
           <button
             onClick={() => setShowImport(v => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
@@ -1306,6 +1556,7 @@ export default function TasksPage() {
                 { label: 'Overdue', value: overdueCount, icon: 'calendar', action: () => setQuickFilter('overdue'), color: overdueCount > 0 ? '#ef4444' : undefined },
                 { label: 'High Priority', value: highPriorityCount, icon: 'tag', action: () => setQuickFilter('high'), color: highPriorityCount > 0 ? '#ef4444' : undefined },
                 { label: 'Total Effort', value: formatEffort(totalEffort), icon: 'clock', action: null },
+                { label: 'Time Logged', value: timeLogged > 0 ? formatEffort(timeLogged) : '—', icon: 'clock', action: null },
               ].map(stat => (
                 <button
                   key={stat.label}
@@ -1492,6 +1743,7 @@ export default function TasksPage() {
               onToggleStatus={handleToggleStatus}
               onNew={(dateKey) => openNew('todo', dateKey)}
               onReschedule={handleReschedule}
+              onUpdateEffort={handleUpdateEffort}
             />
           ) : (
           <div className="flex-1 overflow-auto">
@@ -1749,10 +2001,47 @@ export default function TasksPage() {
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>Due date & time</label>
-                  <div className="flex gap-2">
-                    <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))} className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-                    <input type="time" value={form.dueTime} onChange={e => setForm(f => ({ ...f, dueTime: e.target.value }))} className="w-24 px-3 py-2 rounded-lg border text-sm outline-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={form.dueDateRaw}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        setForm(f => {
+                          const parsed = parseNaturalDate(raw);
+                          if (parsed) {
+                            return { ...f, dueDateRaw: raw, dueDate: toISOForAPI(parsed).slice(0, 10), dueTime: toISOForAPI(parsed).includes('T') ? toISOForAPI(parsed).slice(11, 16) : '' };
+                          }
+                          return { ...f, dueDateRaw: raw };
+                        });
+                      }}
+                      placeholder='e.g. "tomorrow 3pm", "next friday", "Mar 15"'
+                      className="w-full px-3 py-2 rounded-lg border text-sm outline-none pr-8"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    />
+                    <input
+                      type="date"
+                      value={form.dueDate}
+                      onChange={e => {
+                        const d = e.target.value;
+                        setForm(f => ({ ...f, dueDate: d, dueDateRaw: d ? formatDateForInput(new Date(d + (f.dueTime ? 'T' + f.dueTime : 'T09:00'))) : '' }));
+                      }}
+                      style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', opacity: 0, width: 20, height: 20, cursor: 'pointer' }}
+                    />
+                    <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-muted)', pointerEvents: 'none', fontSize: 12 }}>📅</span>
                   </div>
+                  {form.dueDateRaw && (() => {
+                    const parsed = parseNaturalDate(form.dueDateRaw);
+                    if (parsed && form.dueDate) return <p className="text-xs mt-1" style={{ color: '#22c55e' }}>Resolved: {parsed.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}{form.dueTime ? ' at ' + form.dueTime : ''}</p>;
+                    if (!parsed && form.dueDateRaw.length > 2) return <p className="text-xs mt-1" style={{ color: '#f59e0b' }}>Could not parse — try "tomorrow", "next friday", "Mar 15"</p>;
+                    return null;
+                  })()}
+                  {form.dueDate && form.dueTime === '' && (
+                    <input type="time" value={form.dueTime} onChange={e => { setForm(f => ({ ...f, dueTime: e.target.value, dueDateRaw: f.dueDate ? formatDateForInput(new Date(f.dueDate + 'T' + e.target.value)) : '' })); }} className="w-full mt-1.5 px-3 py-1.5 rounded-lg border text-sm outline-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} placeholder="Add time (optional)" />
+                  )}
+                  {form.dueTime && (
+                    <input type="time" value={form.dueTime} onChange={e => { setForm(f => ({ ...f, dueTime: e.target.value, dueDateRaw: f.dueDate ? formatDateForInput(new Date(f.dueDate + 'T' + e.target.value)) : '' })); }} className="w-full mt-1.5 px-3 py-1.5 rounded-lg border text-sm outline-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                  )}
                 </div>
               </div>
               {form.dueDate && (
@@ -1904,6 +2193,19 @@ export default function TasksPage() {
         <TaskImport
           onClose={() => setShowImport(false)}
           onImported={() => { setShowImport(false); fetchTasks(); }}
+        />
+      )}
+
+      {/* Focus mode overlay */}
+      {focusTask && (
+        <FocusMode
+          task={focusTask}
+          onClose={() => setFocusTask(null)}
+          onTaskUpdate={(updates) => {
+            api.put(`/api/tasks/${focusTask.id}`, updates).then(r => r.json()).then(updated => {
+              setTasks(prev => prev.map(t => t.id === focusTask.id ? updated : t));
+            }).catch(console.error);
+          }}
         />
       )}
     </div>

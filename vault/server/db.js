@@ -235,6 +235,14 @@ db.exec(`
     createdAt TEXT DEFAULT (datetime('now')),
     updatedAt TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS task_dependencies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    taskId INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    blockedByTaskId INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    createdAt TEXT DEFAULT (datetime('now')),
+    UNIQUE(taskId, blockedByTaskId)
+  );
 `);
 
 // Migrations — safe to run on existing DBs
@@ -258,6 +266,7 @@ db.exec(`
  'ALTER TABLE tasks ADD COLUMN shareToken TEXT DEFAULT NULL',
  'ALTER TABLE tasks ADD COLUMN estimatedMinutes INTEGER DEFAULT NULL',
  'ALTER TABLE tasks ADD COLUMN keyResultId INTEGER REFERENCES key_results(id) ON DELETE SET NULL',
+ 'ALTER TABLE tasks ADD COLUMN timeSpentMinutes INTEGER DEFAULT 0',
 ].forEach(sql => { try { db.exec(sql); } catch (_) {} });
 
 // Unique index for shareToken (separate try/catch — CREATE INDEX IF NOT EXISTS is idempotent)
