@@ -26,6 +26,8 @@ const SECTIONS = [
   { id: 'branching',       label: 'Conversation Branching' },
   { id: 'regenerate',      label: 'Regenerating Responses' },
   { id: 'reasoning',       label: 'Reasoning Mode' },
+  { id: 'tasks',           label: 'Tasks' },
+  { id: 'goals',           label: 'Goals' },
 ];
 
 // ─── Micro-components ────────────────────────────────────────────────────────
@@ -1012,6 +1014,239 @@ function UserGuidePage() {
 
         <Callout type="warning">
           Reasoning mode sets <code>max_tokens</code> to 16,000 and allocates 8,000 tokens to the thinking budget. Each request may take noticeably longer. Temperature is forced to 1 when reasoning is active — the temperature picker has no effect.
+        </Callout>
+
+        <Divider />
+
+        {/* ── Tasks ── */}
+        <SectionHeading id="tasks">Tasks</SectionHeading>
+        <P>
+          The Tasks workspace (<strong>/tasks</strong>) is a full personal task manager built into Vault.
+          Capture, organise, and track work items alongside your AI conversations — with three views,
+          smart filters, recurring tasks, templates, effort estimation, CSV import, public sharing,
+          and AI-assisted capture. Tasks can be linked to Goals Key Results for progress tracking.
+        </P>
+
+        <SubHeading>Views</SubHeading>
+        <P>Switch between three views using the icons in the top-right of the Tasks toolbar, or press <Kbd>b</Kbd> to cycle through them.</P>
+        <UL>
+          <LI><strong>List view</strong> — tasks grouped by category, drag-to-reorder within groups, expandable rows with subtasks and comments.</LI>
+          <LI><strong>Board view</strong> — Kanban with three columns: To Do, In Progress, Done. Drag cards within a column to reorder, or across columns to change status.</LI>
+          <LI><strong>Calendar view</strong> — Day, Week, Month, and Range sub-views. Drag task pills between date cells to reschedule. Click any day to see a detail panel. Use the <strong>+ Add</strong> button on a date to create a task pre-filled with that date.</LI>
+        </UL>
+
+        <SubHeading>Creating Tasks</SubHeading>
+        <UL>
+          <LI>Click <strong>New Task</strong> (top-right) or press <Kbd>n</Kbd> to open the full creation form.</LI>
+          <LI>Fields: title, notes, status, priority, due date &amp; time, recurrence, category, tags, project, parent task, effort estimate, and optional Key Result link.</LI>
+          <LI>Press <Kbd>Enter</Kbd> in the title field to save immediately.</LI>
+          <LI>Click <strong>+ Save as template</strong> at the bottom of the form to turn the task into a reusable template.</LI>
+        </UL>
+
+        <SubHeading>Quick Capture</SubHeading>
+        <P>
+          A floating <strong>+</strong> button appears in the bottom-right corner of every page.
+          Click it (or press <Kbd>Ctrl+Shift+N</Kbd>) to open a minimal capture modal — just title,
+          priority, and optional due date. The task is created instantly without leaving your current page.
+        </P>
+
+        <SubHeading>Filtering &amp; Sorting</SubHeading>
+        <UL>
+          <LI>Press <Kbd>/</Kbd> to focus the search box. Press <Kbd>f</Kbd> to cycle quick-filters: All → Today → This Week → High Priority → Overdue.</LI>
+          <LI>Press <Kbd>1</Kbd> / <Kbd>2</Kbd> / <Kbd>3</Kbd> to filter by To Do / In Progress / Done.</LI>
+          <LI>Use the Sort dropdown to order by due date, priority, created date, or A–Z.</LI>
+          <LI>Filter by project or category using the dropdowns in the toolbar.</LI>
+        </UL>
+
+        <SubHeading>Recurring Tasks</SubHeading>
+        <P>
+          Set a recurrence on any task with a due date: Daily, Weekly, Fortnightly, Monthly, or Annually.
+          When you mark a recurring task as Done, a new copy is automatically created with the next due date.
+          A <strong>↻</strong> badge shows on the task with a count of how many times it has recurred.
+        </P>
+
+        <SubHeading>Task Aging Indicator</SubHeading>
+        <P>
+          Any task sitting in <strong>To Do</strong> for more than 7 days displays an amber <strong>⏱ clock icon</strong> as a gentle nudge to take action. The indicator appears in all three views.
+        </P>
+
+        <SubHeading>Morning Digest</SubHeading>
+        <P>
+          On your first visit each day, an overlay appears summarising your overdue tasks and tasks due today,
+          along with a Claude-generated suggestion for what to focus on first. Dismiss it with
+          <strong> Got it — let's go</strong> and it won't appear again until the next day.
+        </P>
+
+        <SubHeading>Subtasks</SubHeading>
+        <UL>
+          <LI>Expand any task row (click the title) to reveal the subtasks panel.</LI>
+          <LI>Type in the subtask input and press Enter to add. Click the circle to complete.</LI>
+          <LI>Use <strong>Generate with AI</strong> to have Claude suggest subtasks based on the task title and notes.</LI>
+        </UL>
+
+        <SubHeading>Comments &amp; Activity Log</SubHeading>
+        <P>
+          Each task has a comment thread visible in the expanded row. System events (status change,
+          priority change, due date change) are logged automatically. Add your own notes at any time.
+        </P>
+
+        <SubHeading>Bulk Actions</SubHeading>
+        <UL>
+          <LI>Hover any task row to reveal a checkbox. Tick one or more tasks to enter bulk mode.</LI>
+          <LI>Bulk actions: mark Done, move to In Progress, change priority, set category, or delete.</LI>
+          <LI>Click <strong>Select all</strong> to grab all visible tasks at once.</LI>
+        </UL>
+
+        <SubHeading>Templates</SubHeading>
+        <P>
+          Click the <strong>Templates</strong> button in the toolbar to open the templates panel.
+          Create reusable task templates with predefined priority, category, and subtasks.
+          Click <strong>Use</strong> on a template to instantly create a task from it.
+        </P>
+
+        <SubHeading>Effort Estimation</SubHeading>
+        <P>
+          Add an effort estimate to any task to plan your week and see a <strong>Total Effort</strong> stat
+          in the toolbar. In the task form, click a quick-select preset (<strong>15m, 30m, 1h, 2h, 4h, 1d, 2d</strong>)
+          or type a custom value like <Kbd>45m</Kbd>, <Kbd>3h</Kbd>, or <Kbd>1.5h</Kbd>. The estimate appears
+          as a pill on task cards and is included in Weekly Review's week-ahead effort total.
+        </P>
+
+        <SubHeading>Weekly Review</SubHeading>
+        <P>
+          Press <Kbd>w</Kbd> or click <strong>Weekly Review</strong> in the toolbar to open the 3-step guided review modal:
+        </P>
+        <UL>
+          <LI><strong>Step 1 — Last week recap:</strong> See all tasks completed during the previous Mon–Sun, grouped by category.</LI>
+          <LI><strong>Step 2 — Overdue &amp; carry-forward:</strong> Work through overdue tasks — mark done, reschedule with preset buttons (Tomorrow / Next Week / +1 month), or remove the due date entirely.</LI>
+          <LI><strong>Step 3 — Week ahead:</strong> View tasks due in the next 7 days grouped by day, your total estimated effort for the week, Claude's suggestions for focus, a quick-add input for new tasks, and a live progress update panel for your active Goals.</LI>
+        </UL>
+
+        <SubHeading>Import from CSV</SubHeading>
+        <P>
+          Click <strong>Import</strong> in the toolbar to bulk-import tasks from a CSV file.
+          Download the template first to see the expected columns: <em>title, notes, priority, status, category, dueDate, tags, projectId</em>.
+          After uploading, a preview table shows each row with validation — invalid rows (missing title, bad priority, wrong date format) are highlighted in red and unchecked.
+          Select the rows you want and click <strong>Import</strong>.
+        </P>
+
+        <SubHeading>Public Task Sharing</SubHeading>
+        <P>
+          Hover over any task card and click the <strong>share icon</strong> that appears to generate a public share link.
+          Anyone with the link can view a read-only version of the task (title, priority, status, notes, tags, subtasks)
+          without needing to log in. Click <strong>Revoke</strong> in the share popover to delete the link at any time.
+        </P>
+
+        <SubHeading>Link Tasks to Goals</SubHeading>
+        <P>
+          In the task creation or edit form, scroll to the <strong>Link to Goal</strong> field.
+          First pick an Objective, then select a Key Result within it.
+          Linked tasks show a <strong>🎯</strong> badge with the Key Result name on the card.
+          Completed linked tasks automatically count toward the Key Result's task progress in the Goals page.
+        </P>
+
+        <SubHeading>Extracting Tasks from Chat</SubHeading>
+        <P>
+          In any project chat, click the <strong>Extract tasks</strong> button to have Claude scan
+          the conversation and pull out all action items as tasks automatically.
+        </P>
+
+        <SubHeading>@mention Tasks in Chat</SubHeading>
+        <P>
+          In the chat input, type <Kbd>@</Kbd> to open the mention dropdown. Scroll to the <strong>Tasks</strong>
+          section to attach a task's details as context to your message. The task title, notes, and due date
+          are injected into the conversation automatically.
+        </P>
+
+        <SubHeading>Task Search</SubHeading>
+        <P>
+          Press <Kbd>Ctrl+K</Kbd> (or <Kbd>⌘K</Kbd>) to open the global command palette.
+          Type any keyword — tasks matching by title or notes appear under a <strong>Tasks</strong> section alongside projects, files, and messages.
+        </P>
+
+        <SubHeading>Keyboard Shortcuts</SubHeading>
+        <UL>
+          <LI><Kbd>n</Kbd> — New task</LI>
+          <LI><Kbd>w</Kbd> — Open Weekly Review</LI>
+          <LI><Kbd>/</Kbd> — Focus search</LI>
+          <LI><Kbd>f</Kbd> — Cycle quick filters</LI>
+          <LI><Kbd>1</Kbd> / <Kbd>2</Kbd> / <Kbd>3</Kbd> — Filter by status</LI>
+          <LI><Kbd>b</Kbd> — Cycle view (List → Board → Calendar)</LI>
+          <LI><Kbd>?</Kbd> — Show all shortcuts</LI>
+          <LI><Kbd>Ctrl+Shift+N</Kbd> — Quick capture from anywhere</LI>
+          <LI><Kbd>Esc</Kbd> — Close form / deselect / clear filter</LI>
+        </UL>
+
+        <Callout type="tip">
+          Hover over any task to see its notes in a pop-up tooltip — works in List, Board, and Calendar views.
+        </Callout>
+
+        {/* ── Goals ── */}
+        <SectionHeading id="goals">Goals</SectionHeading>
+        <P>
+          The Goals workspace (<strong>/goals</strong>) brings OKR-style goal tracking to Vault.
+          Set high-level <strong>Objectives</strong>, break them down into measurable <strong>Key Results</strong>,
+          and link your daily tasks to track real progress. A Goals summary widget also appears on the home page
+          and in the Weekly Review's week-ahead step.
+        </P>
+
+        <SubHeading>Objectives</SubHeading>
+        <P>
+          An Objective is a qualitative, inspiring goal with a timeframe (e.g. <em>Q2 2026</em>).
+          Click <strong>New</strong> in the Goals sidebar to create one. Each Objective has:
+        </P>
+        <UL>
+          <LI>A <strong>title</strong> and optional <strong>description</strong></LI>
+          <LI>A <strong>timeframe</strong> label (free text — Q1 2026, H1, This year, etc.)</LI>
+          <LI>A <strong>colour</strong> (choose from 6 swatches) used across all progress bars</LI>
+          <LI>A <strong>status</strong>: Active, Completed, or Paused</LI>
+          <LI>An <strong>overall progress %</strong> automatically averaged from all its Key Results</LI>
+        </UL>
+        <P>Click any Objective in the left panel to open its detail view. Click the title, description, or timeframe inline to edit — changes save on blur.</P>
+
+        <SubHeading>Key Results</SubHeading>
+        <P>
+          Key Results are quantitative measures that define what success looks like for an Objective.
+          Each KR has a <strong>target value</strong>, <strong>current value</strong>, and a <strong>unit</strong> (%, tasks, calls, $, etc.).
+        </P>
+        <UL>
+          <LI>Click <strong>+ Add KR</strong> in the detail panel to create a Key Result manually.</LI>
+          <LI>Click the current value on a KR row to edit it inline — blur or press Enter to save.</LI>
+          <LI>Progress bars colour green (≥70%), amber (30–69%), or red (&lt;30%) based on completion.</LI>
+          <LI>Each KR also shows how many linked tasks have been completed vs. total linked tasks.</LI>
+        </UL>
+
+        <SubHeading>AI Suggest Key Results</SubHeading>
+        <P>
+          With an Objective selected, click <strong>AI Suggest</strong> to stream Claude-generated SMART Key Results
+          for that objective. Suggestions appear as cards with a target value and unit — click <strong>Add</strong>
+          to instantly create a KR from a suggestion.
+        </P>
+
+        <SubHeading>Linking Tasks to Key Results</SubHeading>
+        <P>
+          In the task creation or edit form, use the <strong>Link to Goal</strong> dropdown to associate a task with a
+          specific Key Result. First select the Objective, then pick the KR. A <strong>🎯</strong> badge with the
+          KR title appears on the task card. Completed linked tasks increment the KR's task counter on the Goals page.
+        </P>
+
+        <SubHeading>Goals on the Home Page</SubHeading>
+        <P>
+          The home page (<strong>/</strong>) shows a <strong>Goals widget</strong> above the Tasks widget
+          whenever you have at least one active Objective. It displays the count of active goals, average
+          progress, and mini progress bars for your top 3 Objectives. Click <strong>View all goals →</strong>
+          to jump to the Goals page.
+        </P>
+
+        <SubHeading>Goals in Weekly Review</SubHeading>
+        <P>
+          Step 3 of the Weekly Review (Week ahead) includes a <strong>Your Goals</strong> section listing
+          all active Objectives with their Key Results. Click any KR's current value to update it inline
+          — a great habit to build into your end-of-week routine.
+        </P>
+
+        <Callout type="tip">
+          The overall progress % on an Objective is the simple average of all its Key Results' individual progress percentages — not weighted by target value.
         </Callout>
 
         <div className="h-16" /> {/* Bottom padding */}

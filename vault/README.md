@@ -27,13 +27,31 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Document Compare** | Compare two documents side by side using any Claude or Gemini model; 4 comparison modes; save results to a project |
 | **Multi-Model Debate** | Pit multiple AI models against each other on a topic; multi-file context upload; synthesis summary |
 | **Export** | Export chat conversations to Markdown, JSON, or PDF; email thread export |
-| **Search** | Global search palette across projects, chats, and files |
+| **Search** | Global search palette across projects, chats, files, and tasks |
 | **Voice input** | Mic button in chat toolbar starts browser-native speech recognition (Web Speech API); live interim transcript preview; hidden in unsupported browsers |
 | **Read aloud** | Speaker button reads the last assistant message via browser text-to-speech; no external service required |
 | **Token budget alerts** | Set a per-session cost limit in Settings; amber warning at 80%, red at 100% with a direct "Summarise now" button |
 | **Password show/hide** | Eye icon on all password fields (login, change password, reset password) toggles visibility |
 | **Admin Dashboard** | Usage stats — sessions, messages, tokens, searches, debates, comparisons; filterable by date range |
 | **Password reset** | Email-based password reset flow with 1-hour expiry tokens |
+| **Tasks** | Full personal task manager — List, Kanban, and Calendar views; drag-to-reorder; priority, due date, category, tags, project link; keyboard shortcuts |
+| **Task Templates** | Save any task as a reusable template (with subtasks, priority, category, recurrence); apply in one click |
+| **Kanban Board** | Three-column board (To Do / In Progress / Done); drag cards within or across columns to reorder and change status |
+| **Task Comments & Activity** | Per-task comment thread; system events (status, priority, due date changes) auto-logged |
+| **Recurring Tasks** | Daily / Weekly / Fortnightly / Monthly / Annually; new copy created automatically when marked done |
+| **Subtasks** | Nested subtasks with completion tracking; AI-generate subtasks from task title and notes |
+| **Morning Digest** | Daily overlay on first visit — overdue + today's tasks with a Claude-generated focus suggestion |
+| **Quick Capture** | Floating `+` button on every page (or `Ctrl+Shift+N`) — capture a task without leaving the current page |
+| **Effort Estimation** | Set estimated effort per task (quick-select presets or custom input); effort pills on cards; Total Effort stat in toolbar |
+| **Weekly Review** | Guided 3-step modal (`w` shortcut) — last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions and Goals progress update |
+| **CSV Import** | Import tasks in bulk from a CSV file; download template, drag-drop upload, preview with row-level validation, selective import |
+| **Task Sharing** | Generate a public share link for any task; read-only view (no login required) with title, status, notes, tags, subtasks; revocable at any time |
+| **@mention Tasks in Chat** | Type `@` in chat to attach a task's details as context; title, notes, and due date are injected into the conversation |
+| **Goals (OKR-lite)** | Objectives → Key Results → Tasks hierarchy; set numeric targets and track progress; AI-generated KR suggestions via Claude |
+| **Goals Widget** | Home page summary showing active objective count, average progress, and top 3 progress bars |
+| **Goals in Weekly Review** | Step 3 of Weekly Review shows active objectives; inline KR current-value updates |
+
+> **Detailed feature docs:** [TASKS.md](TASKS.md) · [GOALS.md](GOALS.md)
 
 ### Tech Stack
 
@@ -75,6 +93,11 @@ vault/
 │       ├── export.js             # Chat export (JSON, PDF, Markdown, email)
 │       ├── email.js              # Email sending (HTML-escaped)
 │       ├── pdf.js                # PDF text extraction
+│       ├── tasks.js              # Task CRUD + subtasks + comments + templates + AI generate/extract + SSE weekly review + CSV import + share
+│       ├── taskTemplates.js      # Task template CRUD + apply
+│       ├── goals.js              # Objectives + Key Results CRUD + dashboard + AI KR suggestions (SSE)
+│       ├── sharedTasks.js        # Public shared task view — no auth (registered before requireAuth)
+│       ├── settings.js           # App settings key/value store (API keys, config)
 │       └── health.js             # Health check endpoint
 │
 ├── client/
@@ -89,7 +112,7 @@ vault/
 │       ├── pages/
 │       │   ├── LoginPage.jsx
 │       │   ├── ResetPasswordPage.jsx  # Email-based password reset
-│       │   ├── ProjectList.jsx   # Home — list all projects
+│       │   ├── ProjectList.jsx   # Home — projects + Goals widget + Tasks widget
 │       │   ├── ProjectDetail.jsx # Project brief + files + pinned URLs
 │       │   ├── ChatPage.jsx      # Main chat interface (project and general)
 │       │   ├── ChatHistoryPage.jsx    # Browse all sessions by date / search
@@ -100,7 +123,10 @@ vault/
 │       │   ├── MemoryPage.jsx    # Global memory management
 │       │   ├── SettingsPage.jsx  # Account settings / password change
 │       │   ├── AdminPage.jsx     # Usage dashboard
-│       │   └── UserGuidePage.jsx # In-app user guide
+│       │   ├── UserGuidePage.jsx # In-app user guide
+│       │   ├── TasksPage.jsx     # Full task manager — List / Kanban / Calendar views
+│       │   ├── GoalsPage.jsx     # OKR Goals — Objectives + Key Results
+│       │   └── SharedTaskPage.jsx     # Public read-only task view (no auth required)
 │       ├── components/
 │       │   ├── Layout.jsx        # App shell with sidebar + top nav
 │       │   ├── ProjectSidebar.jsx
@@ -114,13 +140,17 @@ vault/
 │       │   ├── ProjectFilesPanel.jsx # Side panel for project file management in chat
 │       │   ├── UrlBar.jsx        # URL chips above textarea
 │       │   ├── SearchPalette.jsx # Global search modal
-│       │   ├── AtMentionDropdown.jsx  # @file/@prompt/@search mentions in chat
+│       │   ├── AtMentionDropdown.jsx  # @file/@prompt/@search/@task mentions in chat
 │       │   ├── FollowUpChips.jsx # Suggested follow-up prompts
 │       │   ├── ExportMenu.jsx
 │       │   ├── EmailModal.jsx
-│       │   ├── ImageAIPanel.jsx  # Image analysis panel
 │       │   ├── NewProjectModal.jsx
-│       │   └── KeyboardShortcutsModal.jsx
+│       │   ├── KeyboardShortcutsModal.jsx
+│       │   ├── TasksCalendar.jsx # Calendar view for tasks (day/week/month/range + drag-to-reschedule)
+│       │   ├── WeeklyReview.jsx  # 3-step guided weekly review modal
+│       │   ├── TaskImport.jsx    # CSV import modal (template download, drag-drop, preview, validation)
+│       │   ├── MorningDigest.jsx # Daily task digest overlay (once per day)
+│       │   └── QuickCapture.jsx  # Floating quick-capture FAB (Ctrl+Shift+N)
 │       ├── store/
 │       │   ├── authStore.js      # Zustand auth state (persisted)
 │       │   ├── projectStore.js   # Zustand project state
@@ -131,8 +161,7 @@ vault/
 │       │   ├── useUrlAttachment.js
 │       │   ├── useSearch.js
 │       │   ├── useSystemPrompt.js
-│       │   ├── useVoice.js       # Browser speech recognition + TTS
-│       │   └── useGeminiNano.js  # Browser-native Gemini Nano (experimental)
+│       │   └── useVoice.js       # Browser speech recognition + TTS
 │       ├── utils/
 │       │   ├── apiClient.js      # Authenticated fetch wrapper (use for all /api/ calls)
 │       │   ├── models.js         # Claude + Gemini model definitions with provider field
@@ -173,6 +202,13 @@ vault/
 | `comparisons` | Saved document comparison results linked to projects |
 | `search_logs` | Web search query log (powers admin dashboard search count) |
 | `settings` | Key/value store for API keys and app config set via Settings UI |
+| `tasks` | Task records — status, priority, due date, category, tags, recurrence, estimated effort, share token, parent task link, key result link |
+| `task_tags` | Many-to-many tag associations for tasks |
+| `task_comments` | Per-task comments and auto-logged activity events (status/priority/due-date changes) |
+| `task_templates` | Reusable task templates with predefined priority, category, recurrence, and tags |
+| `template_subtasks` | Subtask definitions belonging to a task template |
+| `objectives` | OKR Objectives — title, description, timeframe, colour, status |
+| `key_results` | Key Results linked to an Objective — numeric target/current values, unit, due date |
 
 ---
 
@@ -186,7 +222,7 @@ vault/
 | `DB_PATH` | Yes | Absolute path to SQLite database file |
 | `UPLOAD_DIR` | Yes | Absolute path to file uploads directory |
 | `NODE_ENV` | Yes | `production` or `development` |
-| `APP_URL` | Yes | Base URL for password reset emails (e.g. `https://curam-vault.up.railway.app`) |
+| `APP_URL` | Yes | Base URL for password reset emails and task share links (e.g. `https://curam-vault.up.railway.app`) |
 | `PORT` | Optional | HTTP port (default `3001` in dev; Railway sets this automatically) |
 | `GEMINI_API_KEY` | Optional | Google Gemini API access — enables Gemini 2.0 Flash and Gemini 2.5 Pro models |
 | `SEARCH_API_KEY` | Optional | Web search API key — supports Brave Search (`BSA…` prefix), Serper.dev (40-char hex), or SerpAPI (default) |
@@ -238,8 +274,8 @@ SMTP_PORT=587
 SMTP_USER=your_smtp_user
 SMTP_PASS=your_smtp_password
 
-# ── Password reset ─────────────────────────────────────────────────────────────
-# Base URL used in reset email links (no trailing slash)
+# ── Password reset & task share links ─────────────────────────────────────────
+# Base URL used in reset email links and public task share URLs (no trailing slash)
 # Local: http://localhost:5173 | Railway: https://your-app.up.railway.app
 APP_URL=http://localhost:5173
 ```
@@ -261,6 +297,7 @@ APP_URL=http://localhost:5173
 | **Auth sessions** | 32-byte random hex tokens; 24-hour expiry checked server-side on every request. |
 | **Passwords** | bcryptjs with SALT_ROUNDS=12. |
 | **Security headers** | `helmet` middleware applied in production (default CSP, HSTS, X-Frame-Options, etc.). |
+| **Public routes** | `/api/shared/task/:token` and `/api/auth/*` are registered before `requireAuth`; all other `/api/*` routes require a valid session token. |
 
 ---
 
@@ -272,9 +309,9 @@ npm install
 npm run dev
 ```
 
-**Node version:** `better-sqlite3` requires a pre-built native binary. Use **Node.js v22 LTS** — it has pre-built binaries and requires no compilation. Node v23+ does not have pre-built binaries and will fail to install on Windows without Visual Studio C++ Build Tools.
+**Node version:** `better-sqlite3` requires a pre-built native binary. **Node.js v22 LTS** has pre-built binaries and requires no compilation — this is the recommended version for a clean local setup. Node v23+ has no pre-built binaries and will fail on Windows without Visual Studio C++ Build Tools.
 
-Check your version: `node -v`. If you are on v23 or higher, install Node v22 LTS from [nodejs.org](https://nodejs.org) and reinstall.
+> **Windows / Node v24 note:** Local dev is currently broken on machines running Node v24 — `better-sqlite3` was removed during a failed WASM migration attempt. See [`local-setup-issues.md`](../local-setup-issues.md) in the project root for the full history and recovery options. Railway deployment is unaffected.
 
 **Production** is deployed on Railway: `https://curam-vault.up.railway.app`
 
@@ -284,6 +321,12 @@ Check your version: `node -v`. If you are on v23 or higher, install Node v22 LTS
 
 ### March 2026
 
+- **Goals (OKR-lite)** — new `/goals` page with two-panel layout; create Objectives with timeframe and colour; add measurable Key Results (target value, current value, unit); progress bars colour-coded green/amber/red; AI Suggest KRs streams SMART Key Result suggestions via Claude; inline editing throughout; Goals widget on home page shows active count, average progress, and top 3 progress bars; Goals section in Weekly Review Step 3 for end-of-week KR updates
+- **Key Result ↔ Task linking** — task form "Link to Goal" two-step dropdown (Objective → Key Result); linked tasks show a 🎯 badge with KR title on cards; completed linked tasks count toward KR task progress
+- **Effort Estimation** — `estimatedMinutes` field on tasks; quick-select presets (15m / 30m / 1h / 2h / 4h / 1d / 2d) plus free-text input (`45m`, `3h`, `1.5h`); effort pill on list and kanban cards; "Total Effort" 5th stat card in toolbar (sum of incomplete tasks with estimates in current filter)
+- **Weekly Review** — `w` keyboard shortcut or toolbar button opens a 3-step guided modal: (1) last week completed tasks grouped by category, (2) overdue carry-forward with mark-done / reschedule / remove-date actions, (3) week-ahead task list + Claude SSE focus suggestions + effort total + quick-add + Goals progress panel
+- **CSV Import** — toolbar Import button opens modal; download CSV template; drag-drop or browse to upload; client-side parsing with quoted-field support; row-level validation (missing title, invalid priority/status, bad date format); preview table with per-row checkboxes; bulk `POST /api/tasks/import`
+- **Public Task Sharing** — hover any task card to reveal share icon; generates a `shareToken` and public URL (`/shared/task/:token`); read-only view accessible without login (title, priority, status, notes, tags, subtasks); Revoke button deletes the token
 - **Clipboard image paste** — paste screenshots or images directly into the chat input with Ctrl/Cmd+V; sent as inline base64, works in both project and General Chat without a file upload
 - **Session delete from dropdown** — native `<select>` replaced with a custom dropdown; hover any session to reveal a trash icon with an inline confirmation; non-active sessions can now be deleted without switching to them first
 - **General Chat** — project-free workspace at `/chat`; "General" section at the top of the sidebar with session list and new-chat button; sessions persisted with `projectId = null`
@@ -293,6 +336,15 @@ Check your version: `node -v`. If you are on v23 or higher, install Node v22 LTS
 
 ### February 2026
 
+- **Tasks** — full task manager at `/tasks` with List (grouped by category, drag-to-reorder), Kanban (3-column board, drag cards within/across columns), and Calendar (day/week/month/range, drag to reschedule) views; priority, due date + time, category, tags, project and parent task links; keyboard shortcuts (`n` new, `/` search, `f` cycle filter, `1-3` status filter, `b` cycle view, `?` help)
+- **Task Templates** — save any task as a template; templates panel in sidebar; apply with one click to create a pre-filled task
+- **Recurring Tasks** — set recurrence (daily/weekly/fortnightly/monthly/annually) on any task with a due date; new instance auto-created when marked done; ↻ badge with recurrence count on cards
+- **Subtasks** — nested subtasks on any top-level task; expand row to add/complete; AI-generate subtasks from task title + notes
+- **Task Comments & Activity** — per-task comment thread visible in expanded row; status/priority/due-date changes are auto-logged as system events
+- **Quick Capture** — floating `+` FAB in bottom-right corner of every page; `Ctrl+Shift+N` from anywhere; opens minimal capture modal (title, priority, optional due date)
+- **Morning Digest** — on first visit each day, overlay shows overdue + today's tasks with Claude-generated focus suggestion; dismissed once per day
+- **Task Search** — global search palette (`Ctrl+K`) includes tasks (title + notes matching) alongside projects, files, and messages
+- **`@mention` tasks in chat** — type `@` in chat input and scroll to Tasks section to attach a task's title, notes, and due date as conversation context
 - **Multi-Model Debate** (`/debate`) — pit multiple Claude and Gemini models against each other; multi-file context; round navigation; NO_CHANGE detection; synthesis summary; save to project
 - **Document Compare** (`/compare`) — compare two text blocks or vault files with any Claude or Gemini model; 4 modes (differences, similarities, improvements, summary); SSE streaming; save result to project
 - **Admin Dashboard** (`/admin`) — stat cards for projects, sessions, messages, searches, debates, comparisons, and tokens; period selector (Today / Week / Month / Last month / 6 months / 12 months / Custom)
@@ -300,6 +352,7 @@ Check your version: `node -v`. If you are on v23 or higher, install Node v22 LTS
 - **Token budget alerts** — set a per-session cost limit in Settings; amber warning at 80%, red at 100% with a direct "Summarise now" button
 - **Password show/hide** — eye icon toggles visibility on all password fields (login, change password, reset password)
 - **Voice input** — mic button in chat toolbar starts browser-native speech recognition (Web Speech API, no API key needed); pulses red with a live transcript preview; hidden in unsupported browsers
+- **Read aloud** — speaker button reads the last assistant message via browser text-to-speech; no external service required
 
 ### Earlier
 

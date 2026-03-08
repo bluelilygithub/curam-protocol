@@ -16,6 +16,8 @@ import DebatePage from './pages/DebatePage';
 import AdminPage from './pages/AdminPage';
 import ChatHistoryPage from './pages/ChatHistoryPage';
 import TasksPage from './pages/TasksPage';
+import GoalsPage from './pages/GoalsPage';
+import SharedTaskPage from './pages/SharedTaskPage';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
@@ -55,6 +57,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/register" element={<Navigate to="/login" replace />} />
+            <Route path="/shared/task/:token" element={<SharedTaskPage />} />
             <Route element={<AuthGuard><Layout /></AuthGuard>}>
               <Route index element={<ProjectList />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
@@ -70,6 +73,7 @@ function App() {
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/history" element={<ChatHistoryPage />} />
               <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/goals" element={<GoalsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

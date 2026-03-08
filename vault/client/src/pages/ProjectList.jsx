@@ -6,6 +6,50 @@ import NewProjectModal from '../components/NewProjectModal';
 import { getModelShortName } from '../utils/models';
 import api from '../utils/apiClient';
 
+function GoalsWidget() {
+  const getIcon = useIcon();
+  const [dashboard, setDashboard] = useState(null);
+
+  useEffect(() => {
+    api.get('/api/goals/dashboard').then(r => r.json()).then(setDashboard).catch(() => {});
+  }, []);
+
+  if (!dashboard || dashboard.activeCount === 0) return null;
+
+  const pctColor = (p) => p >= 70 ? '#22c55e' : p >= 30 ? '#f59e0b' : '#ef4444';
+
+  return (
+    <div className="mb-6 rounded-2xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          {getIcon('target', { size: 14, style: { color: 'var(--color-primary)' } })}
+          <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Goals</span>
+          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>{dashboard.activeCount} active</span>
+          {dashboard.avgProgress > 0 && (
+            <span className="text-xs font-semibold" style={{ color: pctColor(dashboard.avgProgress) }}>{dashboard.avgProgress}% avg</span>
+          )}
+        </div>
+        <Link to="/goals" className="text-xs hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>
+          View all →
+        </Link>
+      </div>
+      <div className="flex flex-col gap-2">
+        {dashboard.topObjectives.map(obj => (
+          <div key={obj.id}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs truncate" style={{ color: 'var(--color-text)', maxWidth: '70%' }}>{obj.title}</span>
+              <span className="text-xs font-semibold" style={{ color: pctColor(obj.overallProgress) }}>{obj.overallProgress}%</span>
+            </div>
+            <div style={{ height: 4, borderRadius: 2, background: 'var(--color-border)', overflow: 'hidden' }}>
+              <div style={{ width: `${obj.overallProgress}%`, height: '100%', background: obj.color || 'var(--color-primary)', borderRadius: 2, transition: 'width 0.3s' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TasksWidget() {
   const getIcon = useIcon();
   const [tasks, setTasks] = useState([]);
@@ -274,6 +318,7 @@ function ProjectList() {
       ) : (
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto">
+            <GoalsWidget />
             <TasksWidget />
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Projects</h1>

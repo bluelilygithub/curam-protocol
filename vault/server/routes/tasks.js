@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
+const crypto = require('crypto');
 
 const client = new Anthropic();
 
@@ -14,8 +15,14 @@ function getSubtaskStats(taskId) {
   return { subtaskCount: subs.length, subtaskDone: subs.filter(s => s.status === 'done').length };
 }
 
+function getKrInfo(keyResultId) {
+  if (!keyResultId) return { keyResultTitle: null, objectiveTitle: null };
+  const kr = db.prepare('SELECT kr.title as krTitle, o.title as objTitle FROM key_results kr LEFT JOIN objectives o ON o.id = kr.objectiveId WHERE kr.id = ?').get(keyResultId);
+  return { keyResultTitle: kr?.krTitle || null, objectiveTitle: kr?.objTitle || null };
+}
+
 function buildTask(row) {
-  return { ...row, tags: getTags(row.id), ...getSubtaskStats(row.id) };
+  return { ...row, tags: getTags(row.id), ...getSubtaskStats(row.id), ...getKrInfo(row.keyResultId) };
 }
 
 function calculateNextDate(dateStr, recurrence) {
@@ -116,6 +123,156 @@ router.delete('/bulk', (req, res) => {
   }
 });
 
+// GET /api/tasks/morning-digest — must be before /:id routes
+router.get('/morning-digest', async (req, res) => {
+  try {
+    const todayStart = new Date().toISOString().slice(0, 10);
+    const todayEnd = todayStart + 'T23:59:59';
+    const overdue = db.prepare(
+      "SELECT * FROM tasks WHERE parentTaskId IS NULL AND status IN ('todo','in-progress') AND dueDate IS NOT NULL AND dueDate < ? ORDER BY dueDate ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10"
+    ).all(todayStart).map(buildTask);
+    const today = db.prepare(
+      "SELECT * FROM tasks WHERE parentTaskId IS NULL AND status IN ('todo','in-progress') AND dueDate >= ? AND dueDate <= ? ORDER BY dueDate ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10"
+    ).all(todayStart, todayEnd).map(buildTask);
+    let suggestion = '';
+    if (overdue.length > 0 || today.length > 0) {
+      const lines = [
+        ...overdue.map(t => `[OVERDUE] ${t.title} (${t.priority} priority, due ${t.dueDate?.slice(0, 10)})`),
+        ...today.map(t => `[TODAY] ${t.title} (${t.priority} priority${t.dueDate?.includes('T') ? ', at ' + t.dueDate.slice(11, 16) : ''})`),
+      ];
+      try {
+        const response = await client.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 150,
+          system: 'You are a productivity assistant. Given the user\'s task list, recommend what to focus on first today and explain briefly why in 2-3 sentences. Be direct and specific.',
+          messages: [{ role: 'user', content: `My tasks:\n${lines.join('\n')}\n\nWhat should I focus on first?` }],
+        });
+        suggestion = response.content[0]?.text?.trim() || '';
+      } catch { suggestion = ''; }
+    }
+    res.json({ overdue, today, suggestion });
+  } catch (err) {
+    console.error('[morning-digest]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tasks/weekly-review-suggestions — SSE stream — must be before /:id routes
+router.post('/weekly-review-suggestions', async (req, res) => {
+  try {
+    const tasks = db.prepare(
+      "SELECT * FROM tasks WHERE status != 'done' AND parentTaskId IS NULL ORDER BY CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, dueDate ASC LIMIT 20"
+    ).all().map(buildTask);
+    if (tasks.length === 0) {
+      res.json({ text: 'No open tasks found. You\'re all caught up — use the new week to plan fresh goals!' });
+      return;
+    }
+    const lines = tasks.map(t =>
+      `- ${t.title} [${t.priority} priority, status: ${t.status}${t.dueDate ? ', due ' + t.dueDate.slice(0, 10) : ''}${t.estimatedMinutes ? ', ~' + t.estimatedMinutes + 'min' : ''}]`
+    ).join('\n');
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    const stream = client.messages.stream({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 400,
+      system: 'You are a productivity coach. Based on the user\'s open tasks, give 3-5 concrete, actionable suggestions for the coming week. Be specific, encouraging, and prioritise by impact. Use bullet points.',
+      messages: [{ role: 'user', content: `Here are my open tasks:\n${lines}\n\nWhat should I focus on this week?` }],
+    });
+    stream.on('text', (text) => {
+      res.write(`data: ${JSON.stringify(text)}\n\n`);
+    });
+    stream.on('finalMessage', () => {
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+    stream.on('error', (err) => {
+      console.error('[weekly-review-suggestions]', err);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+  } catch (err) {
+    console.error('[weekly-review-suggestions]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tasks/import — bulk CSV import — must be before /:id routes
+router.post('/import', (req, res) => {
+  try {
+    const { tasks: rows } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'tasks array required' });
+    const validStatuses = ['todo', 'in-progress', 'done'];
+    const validPriorities = ['high', 'medium', 'low'];
+    let created = 0, skipped = 0;
+    const errors = [];
+    const insertTask = db.prepare(
+      "INSERT INTO tasks (title,notes,status,priority,category,projectId,dueDate,estimatedMinutes,updatedAt) VALUES (?,?,?,?,?,?,?,?,datetime('now'))"
+    );
+    const insertTag = db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)');
+    const tx = db.transaction(() => {
+      for (let i = 0; i < rows.length; i++) {
+        const t = rows[i];
+        if (!t.title || !t.title.trim()) { errors.push({ row: i + 1, reason: 'title required' }); skipped++; continue; }
+        const status = validStatuses.includes(t.status) ? t.status : 'todo';
+        const priority = validPriorities.includes(t.priority) ? t.priority : 'medium';
+        // Validate projectId exists
+        let projectId = null;
+        if (t.projectId) {
+          const proj = db.prepare('SELECT id FROM projects WHERE id=?').get(Number(t.projectId));
+          projectId = proj ? Number(t.projectId) : null;
+        }
+        const r = insertTask.run(
+          t.title.trim(), t.notes || null, status, priority,
+          t.category || null, projectId, t.dueDate || null,
+          t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null
+        );
+        const taskId = r.lastInsertRowid;
+        if (t.tags) {
+          const tags = String(t.tags).split(',').map(s => s.trim()).filter(Boolean);
+          tags.forEach(tag => insertTag.run(taskId, tag));
+        }
+        created++;
+      }
+    });
+    tx();
+    res.json({ created, skipped, errors });
+  } catch (err) {
+    console.error('[tasks import]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tasks/:id/share — generate share token — must be before /:id routes
+router.post('/:id/share', (req, res) => {
+  try {
+    const task = db.prepare('SELECT id, shareToken FROM tasks WHERE id=?').get(req.params.id);
+    if (!task) return res.status(404).json({ error: 'not found' });
+    const token = task.shareToken || crypto.randomBytes(16).toString('hex');
+    if (!task.shareToken) {
+      db.prepare("UPDATE tasks SET shareToken=?, updatedAt=datetime('now') WHERE id=?").run(token, req.params.id);
+    }
+    const appUrl = process.env.APP_URL || 'https://curam-vault.up.railway.app';
+    res.json({ shareUrl: `${appUrl}/shared/task/${token}`, token });
+  } catch (err) {
+    console.error('[tasks share]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/tasks/:id/share — revoke share token — must be before /:id routes
+router.delete('/:id/share', (req, res) => {
+  try {
+    const task = db.prepare('SELECT id FROM tasks WHERE id=?').get(req.params.id);
+    if (!task) return res.status(404).json({ error: 'not found' });
+    db.prepare("UPDATE tasks SET shareToken=NULL, updatedAt=datetime('now') WHERE id=?").run(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[tasks unshare]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/tasks/extract — extract tasks from a chat session — must be before /:id routes
 router.post('/extract', async (req, res) => {
   try {
@@ -162,8 +319,8 @@ router.post('/ai-generate', async (req, res) => {
     const { prompt, projectId, parentTaskId: aiParentId } = req.body;
     if (!prompt) return res.status(400).json({ error: 'prompt required' });
     const systemPrompt = aiParentId
-      ? 'You are a task planning assistant. Generate subtasks for the given task. Return ONLY a valid JSON array of objects with fields: title, notes (optional). No other text.'
-      : 'You are a task planning assistant. Extract or generate a structured task list from the user input. Return ONLY a valid JSON array of task objects, no other text.';
+      ? 'You are a task planning assistant. Generate subtasks for the given task. Return ONLY a valid JSON array of objects with fields: title, notes (optional), estimatedMinutes (number of minutes or null). No other text.'
+      : 'You are a task planning assistant. Extract or generate a structured task list from the user input. Return ONLY a valid JSON array of task objects with fields: title, notes (optional), priority (high/medium/low), category (optional), dueDate (ISO date string or null), estimatedMinutes (number of minutes or null). No other text.';
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
@@ -183,8 +340,8 @@ router.post('/ai-generate', async (req, res) => {
     for (const t of aiTasks) {
       if (!t.title) continue;
       const r = db.prepare(
-        "INSERT INTO tasks (title,notes,status,priority,category,projectId,parentTaskId,dueDate,updatedAt) VALUES (?,?,'todo',?,?,?,?,?,datetime('now'))"
-      ).run(t.title, t.notes||null, t.priority||'medium', t.category||null, projectId||null, aiParentId||null, t.dueDate||null);
+        "INSERT INTO tasks (title,notes,status,priority,category,projectId,parentTaskId,dueDate,estimatedMinutes,updatedAt) VALUES (?,?,'todo',?,?,?,?,?,?,datetime('now'))"
+      ).run(t.title, t.notes||null, t.priority||'medium', t.category||null, projectId||null, aiParentId||null, t.dueDate||null, t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null);
       const taskId = r.lastInsertRowid;
       if (!aiParentId && Array.isArray(t.subtasks)) {
         for (const sub of t.subtasks) {
@@ -258,11 +415,11 @@ router.delete('/comments/:commentId', (req, res) => {
 // POST /api/tasks
 router.post('/', (req, res) => {
   try {
-    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig } = req.body;
+    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const r = db.prepare(
-      "INSERT INTO tasks (title,notes,status,priority,category,projectId,parentTaskId,dueDate,recurrence,recurrenceConfig,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))"
-    ).run(title, notes||null, status||'todo', priority||'medium', category||null, projectId||null, parentTaskId||null, dueDate||null, recurrence||'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null);
+      "INSERT INTO tasks (title,notes,status,priority,category,projectId,parentTaskId,dueDate,recurrence,recurrenceConfig,estimatedMinutes,keyResultId,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
+    ).run(title, notes||null, status||'todo', priority||'medium', category||null, projectId||null, parentTaskId||null, dueDate||null, recurrence||'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId||null);
     const id = r.lastInsertRowid;
     if (Array.isArray(tags)) tags.forEach(tag => { if (tag.trim()) db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)').run(id, tag.trim()); });
     res.json(buildTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
@@ -282,9 +439,15 @@ router.put('/:id', (req, res) => {
     const rcfg = 'recurrenceConfig' in req.body
       ? (req.body.recurrenceConfig ? JSON.stringify(req.body.recurrenceConfig) : null)
       : task.recurrenceConfig;
+    const newEstimated = 'estimatedMinutes' in req.body
+      ? (req.body.estimatedMinutes != null ? Number(req.body.estimatedMinutes) : null)
+      : task.estimatedMinutes;
+    const newKeyResultId = 'keyResultId' in req.body
+      ? (req.body.keyResultId != null ? Number(req.body.keyResultId) : null)
+      : task.keyResultId;
     db.prepare(
-      "UPDATE tasks SET title=?,notes=?,status=?,priority=?,category=?,projectId=?,parentTaskId=?,dueDate=?,recurrence=?,recurrenceConfig=?,updatedAt=datetime('now') WHERE id=?"
-    ).run(v('title'),v('notes'),v('status'),v('priority'),v('category'),v('projectId'),v('parentTaskId'),v('dueDate'),v('recurrence'),rcfg,id);
+      "UPDATE tasks SET title=?,notes=?,status=?,priority=?,category=?,projectId=?,parentTaskId=?,dueDate=?,recurrence=?,recurrenceConfig=?,estimatedMinutes=?,keyResultId=?,updatedAt=datetime('now') WHERE id=?"
+    ).run(v('title'),v('notes'),v('status'),v('priority'),v('category'),v('projectId'),v('parentTaskId'),v('dueDate'),v('recurrence'),rcfg,newEstimated,newKeyResultId,id);
     if (Array.isArray(req.body.tags)) {
       db.prepare('DELETE FROM task_tags WHERE taskId=?').run(id);
       req.body.tags.forEach(tag => { if (tag.trim()) db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)').run(id, tag.trim()); });

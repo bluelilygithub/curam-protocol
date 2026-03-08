@@ -66,6 +66,11 @@ const semanticMap = {
   'wand': { lucide: 'Wand2' },
   'grip-vertical': { lucide: 'GripVertical' },
   'layout': { lucide: 'LayoutDashboard' },
+  'share-2': { lucide: 'Share2' },
+  'calendar-check': { lucide: 'CalendarCheck' },
+  'arrow-right': { lucide: 'ArrowRight' },
+  'check-square': { lucide: 'CheckSquare' },
+  'target': { lucide: 'Target' },
 };
 
 const IconContext = createContext(null);

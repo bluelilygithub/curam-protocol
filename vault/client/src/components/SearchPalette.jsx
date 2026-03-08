@@ -7,12 +7,14 @@ const TYPE_ICON = {
   project: 'folder',
   file: 'file',
   message: 'chat',
+  task: 'list-checks',
 };
 
 const TYPE_LABEL = {
   project: 'Projects',
   file: 'Files',
   message: 'Messages',
+  task: 'Tasks',
 };
 
 function SearchPalette() {
@@ -78,6 +80,7 @@ function SearchPalette() {
     if (result.type === 'project') navigate(`/projects/${result.projectId}`);
     else if (result.type === 'file') navigate(`/projects/${result.projectId}`);
     else if (result.type === 'message') navigate(`/projects/${result.projectId}/chat`);
+    else if (result.type === 'task') navigate('/tasks');
   };
 
   if (!open) return null;
@@ -100,7 +103,7 @@ function SearchPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Search projects, files, messages..."
+            placeholder="Search projects, files, messages, tasks..."
             className="flex-1 bg-transparent outline-none text-sm"
             style={{ color: 'var(--color-text)' }}
           />

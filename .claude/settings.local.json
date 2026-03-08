@@ -11,7 +11,14 @@
       "Bash(dir:*)",
       "Bash(git:*)",
       "Bash(node:*)",
-      "Bash(cmd.exe:*)"
+      "Bash(cmd.exe:*)",
+      "Bash(\"/c/Program Files/Git/bin/git\":*)",
+      "Bash(where node:*)",
+      "Bash(del:*)",
+      "Bash(powershell:*)",
+      "Bash(cmd:*)",
+      "Bash(echo:*)",
+      "Bash(export:*)"
     ]
   }
 }

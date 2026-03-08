@@ -4,6 +4,8 @@ import ProjectSidebar from './ProjectSidebar';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
+import QuickCapture from './QuickCapture';
+import MorningDigest from './MorningDigest';
 
 function Layout() {
   const isMobileNow = () => typeof window !== 'undefined' && window.innerWidth < 640;
@@ -208,6 +210,15 @@ function Layout() {
           </Link>
 
           <Link
+            to="/goals"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname === '/goals' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Goals"
+          >
+            {getIcon('target', { size: 16 })}
+          </Link>
+
+          <Link
             to="/history"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/history' ? 'var(--color-primary)' : 'var(--color-muted)' }}
@@ -284,6 +295,8 @@ function Layout() {
           <Outlet />
         </main>
       </div>
+      <QuickCapture />
+      <MorningDigest />
     </div>
   );
 }

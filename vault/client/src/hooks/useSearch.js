@@ -15,9 +15,15 @@ export function useSearch() {
     timerRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await api.get(`/api/search?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
-        setResults(data);
+        const q = encodeURIComponent(query);
+        const [searchRes, taskRes] = await Promise.all([
+          api.get(`/api/search?q=${q}`).then(r => r.json()).catch(() => []),
+          api.get(`/api/tasks?search=${q}&limit=5`).then(r => r.json()).catch(() => []),
+        ]);
+        const taskResults = Array.isArray(taskRes)
+          ? taskRes.map(t => ({ type: 'task', id: t.id, title: t.title, snippet: t.notes ? t.notes.slice(0, 80) : t.status }))
+          : [];
+        setResults([...(Array.isArray(searchRes) ? searchRes : []), ...taskResults]);
       } catch {
         setResults([]);
       } finally {

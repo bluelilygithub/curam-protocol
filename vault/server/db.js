@@ -211,6 +211,30 @@ db.exec(`
     title,
     body
   );
+
+  CREATE TABLE IF NOT EXISTS objectives (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT,
+    timeframe TEXT,
+    status TEXT DEFAULT 'active',
+    color TEXT DEFAULT '#6366f1',
+    createdAt TEXT DEFAULT (datetime('now')),
+    updatedAt TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS key_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    objectiveId INTEGER NOT NULL REFERENCES objectives(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    targetValue REAL NOT NULL DEFAULT 100,
+    currentValue REAL NOT NULL DEFAULT 0,
+    unit TEXT DEFAULT '%',
+    status TEXT DEFAULT 'active',
+    dueDate TEXT,
+    createdAt TEXT DEFAULT (datetime('now')),
+    updatedAt TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migrations — safe to run on existing DBs
@@ -231,6 +255,12 @@ db.exec(`
  'ALTER TABLE tasks ADD COLUMN sourceSessionId TEXT DEFAULT NULL',
  'ALTER TABLE tasks ADD COLUMN recurrenceConfig TEXT DEFAULT NULL',
  'ALTER TABLE tasks ADD COLUMN recurrenceCount INTEGER DEFAULT 0',
+ 'ALTER TABLE tasks ADD COLUMN shareToken TEXT DEFAULT NULL',
+ 'ALTER TABLE tasks ADD COLUMN estimatedMinutes INTEGER DEFAULT NULL',
+ 'ALTER TABLE tasks ADD COLUMN keyResultId INTEGER REFERENCES key_results(id) ON DELETE SET NULL',
 ].forEach(sql => { try { db.exec(sql); } catch (_) {} });
+
+// Unique index for shareToken (separate try/catch — CREATE INDEX IF NOT EXISTS is idempotent)
+try { db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_shareToken ON tasks(shareToken) WHERE shareToken IS NOT NULL').run(); } catch (_) {}
 
 module.exports = db;

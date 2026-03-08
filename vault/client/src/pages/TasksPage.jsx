@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import TasksCalendar from '../components/TasksCalendar';
+import WeeklyReview from '../components/WeeklyReview';
+import TaskImport from '../components/TaskImport';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -30,20 +33,48 @@ function relTime(dateStr) {
   return `${Math.round(diff / 86400)}d ago`;
 }
 
+function isStale(task) {
+  if (task.status !== 'todo' || !task.createdAt) return false;
+  return (Date.now() - new Date(task.createdAt)) / 86400000 > 7;
+}
+
+function formatEffort(mins) {
+  if (!mins) return '—';
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+}
+
+function parseEffortInput(str) {
+  if (!str || !str.trim()) return null;
+  const s = str.trim().toLowerCase();
+  if (/^\d+d$/.test(s)) return parseInt(s) * 480;
+  if (/^\d*\.?\d+h$/.test(s)) return Math.round(parseFloat(s) * 60);
+  if (/^\d+m$/.test(s)) return parseInt(s);
+  if (/^\d+$/.test(s)) return parseInt(s);
+  return null;
+}
+
+const EFFORT_PRESETS = [
+  { label: '15m', val: 15 }, { label: '30m', val: 30 }, { label: '1h', val: 60 },
+  { label: '2h', val: 120 }, { label: '4h', val: 240 }, { label: '1d', val: 480 }, { label: '2d', val: 960 },
+];
+
 const EMPTY_FORM = {
   title: '', notes: '', status: 'todo', priority: 'medium', category: '', tags: '',
   dueDate: '', dueTime: '', projectId: '', parentTaskId: '', recurrence: 'none',
+  estimatedMinutes: null, keyResultId: null,
 };
 
 const TASK_SHORTCUTS = [
   { keys: ['n'], desc: 'New task' },
+  { keys: ['w'], desc: 'Open Weekly Review' },
   { keys: ['Esc'], desc: 'Close / cancel / deselect' },
   { keys: ['/'], desc: 'Focus search' },
   { keys: ['f'], desc: 'Cycle quick filters' },
   { keys: ['1'], desc: 'Filter: To Do' },
   { keys: ['2'], desc: 'Filter: In Progress' },
   { keys: ['3'], desc: 'Filter: Done' },
-  { keys: ['b'], desc: 'Toggle board / list view' },
+  { keys: ['b'], desc: 'Cycle view: List → Board → Calendar' },
   { keys: ['?'], desc: 'Show keyboard shortcuts' },
 ];
 
@@ -124,6 +155,8 @@ export default function TasksPage() {
   const [editTask, setEditTask] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [goalsForForm, setGoalsForForm] = useState([]);
+  const [formObjectiveId, setFormObjectiveId] = useState('');
 
   // Templates panel
   const [showTemplates, setShowTemplates] = useState(false);
@@ -132,6 +165,15 @@ export default function TasksPage() {
   const [templateForm, setTemplateForm] = useState({ name: '', description: '', category: '', priority: 'medium', recurrence: 'none', tags: '', subtasks: '' });
   const [showNewTemplate, setShowNewTemplate] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+
+  // Note tooltip
+  const [noteTooltip, setNoteTooltip] = useState(null); // { notes, x, y }
+  const showNoteTooltip = (e, notes) => {
+    if (!notes) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    setNoteTooltip({ notes, x: Math.min(r.left, window.innerWidth - 288), y: r.bottom + 6 });
+  };
+  const hideNoteTooltip = () => setNoteTooltip(null);
 
   // Drag state
   const [dragOverId, setDragOverId] = useState(null);
@@ -146,10 +188,23 @@ export default function TasksPage() {
   // Keyboard shortcuts modal
   const [showShortcuts, setShowShortcuts] = useState(false);
 
+  // In-page help panel
+  const [showHelp, setShowHelp] = useState(false);
+
   // AI subtask generation state
   const [aiSubtaskTaskId, setAiSubtaskTaskId] = useState(null);
   const [aiSubtaskPrompt, setAiSubtaskPrompt] = useState('');
   const [aiSubtaskLoading, setAiSubtaskLoading] = useState(false);
+
+  // Feature 6: Weekly Review
+  const [showWeeklyReview, setShowWeeklyReview] = useState(false);
+
+  // Feature 7: CSV Import
+  const [showImport, setShowImport] = useState(false);
+
+  // Feature 8: Share popovers — Map<taskId, { url, copied }>
+  const [sharePopovers, setSharePopovers] = useState({});
+  const [shareLoading, setShareLoading] = useState(new Set());
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
@@ -175,6 +230,13 @@ export default function TasksPage() {
   useEffect(() => {
     if (showTemplates) fetchTemplates();
   }, [showTemplates, fetchTemplates]);
+
+  // Refresh when a task is created from Quick Capture on another page
+  useEffect(() => {
+    const handler = () => fetchTasks();
+    document.addEventListener('vault:task-created', handler);
+    return () => document.removeEventListener('vault:task-created', handler);
+  }, [fetchTasks]);
 
   const fetchSubtasks = async (taskId) => {
     if (subtasksCache[taskId]) return;
@@ -256,6 +318,15 @@ export default function TasksPage() {
     if (expandedId === id) setExpandedId(null);
   };
 
+  const handleReschedule = async (taskId, newDateKey) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    // Preserve existing time component if present
+    const timeSuffix = task.dueDate?.includes('T') ? task.dueDate.slice(10) : '';
+    const updated = await api.put(`/api/tasks/${taskId}`, { dueDate: newDateKey + timeSuffix }).then(r => r.json());
+    setTasks(prev => prev.map(t => t.id === taskId ? updated : t));
+  };
+
   const handleDuplicate = async (task) => {
     const res = await api.post(`/api/tasks/${task.id}/duplicate`);
     const dup = await res.json();
@@ -265,13 +336,54 @@ export default function TasksPage() {
     setTimeout(() => setNewlyAddedIds(prev => { const n = new Set(prev); n.delete(dup.id); return n; }), 2000);
   };
 
-  const openNew = (defaultStatus = 'todo') => {
+  // Feature 8: Share handlers
+  const handleShare = async (task) => {
+    if (sharePopovers[task.id]) {
+      setSharePopovers(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+      return;
+    }
+    if (task.shareToken) {
+      const appUrl = window.location.origin;
+      setSharePopovers(prev => ({ ...prev, [task.id]: { url: `${appUrl}/shared/task/${task.shareToken}`, copied: false } }));
+      return;
+    }
+    setShareLoading(prev => new Set([...prev, task.id]));
+    try {
+      const { shareUrl, token } = await api.post(`/api/tasks/${task.id}/share`, {}).then(r => r.json());
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, shareToken: token } : t));
+      setSharePopovers(prev => ({ ...prev, [task.id]: { url: shareUrl, copied: false } }));
+    } catch (err) { console.error(err); }
+    finally { setShareLoading(prev => { const n = new Set(prev); n.delete(task.id); return n; }); }
+  };
+
+  const handleRevoke = async (task) => {
+    try {
+      await api.delete(`/api/tasks/${task.id}/share`);
+      setTasks(prev => prev.map(t => t.id === task.id ? { ...t, shareToken: null } : t));
+      setSharePopovers(prev => { const n = { ...prev }; delete n[task.id]; return n; });
+    } catch (err) { console.error(err); }
+  };
+
+  const handleCopyShareUrl = (taskId, url) => {
+    navigator.clipboard.writeText(url).then(() => {
+      setSharePopovers(prev => ({ ...prev, [taskId]: { ...prev[taskId], copied: true } }));
+      setTimeout(() => setSharePopovers(prev => ({ ...prev, [taskId]: { ...prev[taskId], copied: false } })), 2000);
+    });
+  };
+
+  const loadGoalsForForm = () => {
+    api.get('/api/goals').then(r => r.json()).then(setGoalsForForm).catch(() => {});
+  };
+
+  const openNew = (defaultStatus = 'todo', defaultDate = '') => {
     const now = new Date();
-    const todayDate = now.toISOString().slice(0, 10);
+    const todayDate = defaultDate || now.toISOString().slice(0, 10);
     const currentTime = now.toTimeString().slice(0, 5);
     setEditTask(null);
+    setFormObjectiveId('');
     setForm({ ...EMPTY_FORM, dueDate: todayDate, dueTime: currentTime, status: defaultStatus });
     setShowForm(true);
+    loadGoalsForForm();
   };
 
   const openEdit = (task) => {
@@ -290,8 +402,20 @@ export default function TasksPage() {
       projectId: task.projectId ? String(task.projectId) : '',
       parentTaskId: task.parentTaskId ? String(task.parentTaskId) : '',
       recurrence: task.recurrence || 'none',
+      estimatedMinutes: task.estimatedMinutes || null,
+      keyResultId: task.keyResultId || null,
     });
     setShowForm(true);
+    loadGoalsForForm();
+    // Pre-select the objective for the linked KR
+    if (task.keyResultId) {
+      api.get('/api/goals').then(r => r.json()).then(data => {
+        const obj = data.find(o => o.keyResults?.some(kr => kr.id === task.keyResultId));
+        if (obj) setFormObjectiveId(String(obj.id));
+      }).catch(() => {});
+    } else {
+      setFormObjectiveId('');
+    }
   };
 
   const handleSave = async () => {
@@ -309,6 +433,8 @@ export default function TasksPage() {
         projectId: form.projectId ? Number(form.projectId) : null,
         parentTaskId: form.parentTaskId ? Number(form.parentTaskId) : null,
         recurrence: form.recurrence,
+        estimatedMinutes: form.estimatedMinutes || null,
+        keyResultId: form.keyResultId || null,
       };
       if (editTask) {
         const updated = await api.put(`/api/tasks/${editTask.id}`, payload).then(r => r.json());
@@ -448,6 +574,7 @@ export default function TasksPage() {
     e.preventDefault();
     setDragOverColumn(status);
   };
+  // Drop on the column background — only fires when not dropped on a card (card handler stops propagation)
   const handleKanbanDrop = async (e, targetStatus) => {
     e.preventDefault();
     setDragOverColumn(null);
@@ -458,6 +585,44 @@ export default function TasksPage() {
     if (!task || task.status === targetStatus) return;
     const updated = await api.put(`/api/tasks/${draggedId}`, { status: targetStatus }).then(r => r.json());
     setTasks(prev => prev.map(t => t.id === draggedId ? updated : t));
+  };
+  // Drop on a specific card — handles both within-column reorder and cross-column move
+  const handleKanbanCardDrop = async (e, targetTask) => {
+    e.preventDefault();
+    e.stopPropagation(); // prevent column handler from also firing
+    setDragOverId(null);
+    setDragOverColumn(null);
+    setDragging(false);
+    const draggedId = Number(e.dataTransfer.getData('taskId'));
+    if (!draggedId || draggedId === targetTask.id) return;
+    const draggedTask = tasks.find(t => t.id === draggedId);
+    if (!draggedTask) return;
+    if (draggedTask.status === targetTask.status) {
+      // Same column — reorder
+      const column = filtered
+        .filter(t => t.status === targetTask.status)
+        .sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)) || (a.id - b.id));
+      const from = column.findIndex(t => t.id === draggedId);
+      const to = column.findIndex(t => t.id === targetTask.id);
+      if (from === -1 || to === -1) return;
+      const reordered = [...column];
+      const [moved] = reordered.splice(from, 1);
+      reordered.splice(to, 0, moved);
+      const items = reordered.map((t, i) => ({ id: t.id, order: i }));
+      setTasks(prev => {
+        const updated = [...prev];
+        items.forEach(({ id, order }) => {
+          const idx = updated.findIndex(t => t.id === id);
+          if (idx !== -1) updated[idx] = { ...updated[idx], order };
+        });
+        return updated;
+      });
+      await api.put('/api/tasks/reorder', { items }).catch(console.error);
+    } else {
+      // Different column — change status (insert at target position)
+      const updated = await api.put(`/api/tasks/${draggedId}`, { status: targetTask.status }).then(r => r.json());
+      setTasks(prev => prev.map(t => t.id === draggedId ? updated : t));
+    }
   };
 
   // Bulk select handlers
@@ -503,12 +668,20 @@ export default function TasksPage() {
           openNew();
           break;
         }
+        case 'w': {
+          e.preventDefault();
+          setShowWeeklyReview(true);
+          break;
+        }
         case 'Escape':
           setShowForm(false);
+          setShowWeeklyReview(false);
+          setShowImport(false);
           setExpandedId(null);
           setSelectedIds(new Set());
           setShowShortcuts(false);
           setShowTemplates(false);
+          setSharePopovers({});
           break;
         case '/': e.preventDefault(); searchInputRef.current?.focus(); break;
         case 'f': {
@@ -522,7 +695,8 @@ export default function TasksPage() {
         case 'b': {
           e.preventDefault();
           setViewMode(prev => {
-            const next = prev === 'list' ? 'board' : 'list';
+            const modes = ['list', 'board', 'calendar'];
+            const next = modes[(modes.indexOf(prev) + 1) % modes.length];
             localStorage.setItem('tasksViewMode', next);
             return next;
           });
@@ -560,6 +734,7 @@ export default function TasksPage() {
   }).length;
   const highPriorityCount = tasks.filter(t => t.status !== 'done' && t.priority === 'high').length;
   const totalIncomplete = tasks.filter(t => t.status !== 'done').length;
+  const totalEffort = filtered.filter(t => t.status !== 'done' && t.estimatedMinutes).reduce((sum, t) => sum + t.estimatedMinutes, 0);
 
   // 14-day chart data
   const last14Days = Array.from({ length: 14 }, (_, i) => {
@@ -650,8 +825,10 @@ export default function TasksPage() {
         }}
       >
         <div
-          className="group flex items-start gap-2 px-3 py-2.5 hover:opacity-90 transition-opacity"
+          className="group flex items-start gap-2 px-3 py-2.5 hover:opacity-90 transition-opacity relative"
           style={{ borderLeft: `3px solid ${PRIORITY_COLOR[task.priority]}` }}
+          onMouseEnter={(e) => showNoteTooltip(e, task.notes)}
+          onMouseLeave={hideNoteTooltip}
         >
           <input
             type="checkbox"
@@ -696,6 +873,11 @@ export default function TasksPage() {
               {due && (
                 <span className="text-xs font-medium" style={{ color: due.color }}>{due.label}</span>
               )}
+              {isStale(task) && (
+                <span title="Stale — sitting in To Do for 7+ days" className="flex-shrink-0 inline-flex items-center" style={{ color: '#f59e0b' }}>
+                  {getIcon('clock', { size: 12 })}
+                </span>
+              )}
               {task.recurrence && task.recurrence !== 'none' && (
                 <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}>
                   ↻ {task.recurrence}
@@ -708,6 +890,16 @@ export default function TasksPage() {
               {task.subtaskCount > 0 && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
                   {task.subtaskDone}/{task.subtaskCount}
+                </span>
+              )}
+              {task.estimatedMinutes > 0 && (
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} title="Estimated effort">
+                  ~{formatEffort(task.estimatedMinutes)}
+                </span>
+              )}
+              {task.keyResultId && task.keyResultTitle && (
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)' + '18', color: 'var(--color-primary)', border: '1px solid ' + 'var(--color-primary)' + '33' }} title={task.objectiveTitle || ''}>
+                  🎯 {task.keyResultTitle}
                 </span>
               )}
             </div>
@@ -729,12 +921,34 @@ export default function TasksPage() {
                 >
                   {getIcon(isDone ? 'check-circle' : 'circle', { size: 13 })}
                 </button>
+                <button
+                  onClick={() => handleShare(task)}
+                  className="hover:opacity-60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ color: task.shareToken ? 'var(--color-primary)' : 'var(--color-muted)' }}
+                  title={task.shareToken ? 'Shared — click to manage' : 'Share task'}
+                  disabled={shareLoading.has(task.id)}
+                >
+                  {getIcon('share-2', { size: 12 })}
+                </button>
                 <button onClick={() => handleDuplicate(task)} style={{ color: 'var(--color-muted)' }} title="Duplicate" className="hover:opacity-60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">{getIcon('copy', { size: 13 })}</button>
                 <button onClick={() => openEdit(task)} style={{ color: 'var(--color-muted)' }} title="Edit" className="hover:opacity-60 p-0.5">{getIcon('edit', { size: 13 })}</button>
                 <button onClick={() => setConfirmDeleteId(task.id)} style={{ color: 'var(--color-muted)' }} title="Delete" className="hover:opacity-60 p-0.5">{getIcon('trash', { size: 13 })}</button>
               </>
             )}
           </div>
+          {/* Share popover */}
+          {sharePopovers[task.id] && (
+            <div className="absolute right-0 top-8 z-20 w-80 rounded-xl border shadow-xl p-3 space-y-2" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <p className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Share link</p>
+              <div className="flex items-center gap-2">
+                <input readOnly value={sharePopovers[task.id].url} className="flex-1 text-xs px-2 py-1 rounded border outline-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} onClick={e => e.target.select()} />
+                <button onClick={() => handleCopyShareUrl(task.id, sharePopovers[task.id].url)} className="text-xs px-2 py-1 rounded border font-medium flex-shrink-0" style={{ borderColor: 'var(--color-primary)', color: sharePopovers[task.id].copied ? '#22c55e' : 'var(--color-primary)' }}>
+                  {sharePopovers[task.id].copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <button onClick={() => handleRevoke(task)} className="text-xs hover:opacity-70" style={{ color: '#ef4444' }}>Revoke link</button>
+            </div>
+          )}
         </div>
 
         {/* Expanded view */}
@@ -862,18 +1076,26 @@ export default function TasksPage() {
   const renderKanbanCard = (task) => {
     const due = dueInfo(task.dueDate);
     const isDone = task.status === 'done';
+    const isOver = dragOverId === task.id;
     return (
       <div
         key={task.id}
         draggable
         onDragStart={(e) => handleDragStart(e, task)}
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOverId(task.id); }}
+        onDragLeave={() => setDragOverId(null)}
+        onDrop={(e) => handleKanbanCardDrop(e, task)}
         onDragEnd={handleDragEnd}
-        className="p-3 rounded-xl border cursor-grab active:cursor-grabbing select-none"
+        onMouseEnter={(e) => showNoteTooltip(e, task.notes)}
+        onMouseLeave={hideNoteTooltip}
+        className="group p-3 rounded-xl border cursor-grab active:cursor-grabbing select-none transition-all"
         style={{
           background: 'var(--color-bg)',
-          borderColor: 'var(--color-border)',
-          borderLeft: `3px solid ${PRIORITY_COLOR[task.priority]}`,
+          borderColor: isOver ? 'var(--color-primary)' : 'var(--color-border)',
+          borderLeft: `3px solid ${isOver ? 'var(--color-primary)' : PRIORITY_COLOR[task.priority]}`,
           opacity: isDone ? 0.7 : 1,
+          boxShadow: isOver ? '0 0 0 1px var(--color-primary)' : 'none',
+          transform: isOver ? 'scale(1.01)' : 'none',
         }}
       >
         <div className="flex items-start justify-between gap-2 mb-2">
@@ -883,17 +1105,61 @@ export default function TasksPage() {
             <button onClick={() => openEdit(task)} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 p-0.5">{getIcon('edit', { size: 12 })}</button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1 items-center">
           <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: PRIORITY_COLOR[task.priority] + '22', color: PRIORITY_COLOR[task.priority] }}>{PRIORITY_LABEL[task.priority]}</span>
           {due && <span className="text-xs font-medium" style={{ color: due.color }}>{due.label}</span>}
           {task.subtaskCount > 0 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>{task.subtaskDone}/{task.subtaskCount}</span>}
+          {task.estimatedMinutes > 0 && (
+            <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>~{formatEffort(task.estimatedMinutes)}</span>
+          )}
+          {isStale(task) && (
+            <span title="Stale — sitting in To Do for 7+ days" className="flex items-center" style={{ color: '#f59e0b' }}>
+              {getIcon('clock', { size: 12 })}
+            </span>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); handleShare(task); }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto hover:opacity-60 p-0.5"
+            style={{ color: task.shareToken ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title={task.shareToken ? 'Shared' : 'Share task'}
+            disabled={shareLoading.has(task.id)}
+          >
+            {getIcon('share-2', { size: 11 })}
+          </button>
         </div>
+        {/* Share popover */}
+        {sharePopovers[task.id] && (
+          <div className="mt-2 rounded-lg border p-2 space-y-1.5" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>
+            <div className="flex items-center gap-1.5">
+              <input readOnly value={sharePopovers[task.id].url} className="flex-1 text-xs px-1.5 py-1 rounded border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }} onClick={e => e.target.select()} />
+              <button onClick={() => handleCopyShareUrl(task.id, sharePopovers[task.id].url)} className="text-xs px-1.5 py-1 rounded border font-medium flex-shrink-0" style={{ borderColor: 'var(--color-primary)', color: sharePopovers[task.id].copied ? '#22c55e' : 'var(--color-primary)' }}>
+                {sharePopovers[task.id].copied ? '✓' : 'Copy'}
+              </button>
+            </div>
+            <button onClick={() => handleRevoke(task)} className="text-xs hover:opacity-70" style={{ color: '#ef4444' }}>Revoke</button>
+          </div>
+        )}
       </div>
     );
   };
 
   return (
     <div className="flex h-full overflow-hidden">
+      {noteTooltip && (
+        <div
+          className="fixed z-[9999] pointer-events-none w-64 rounded-xl border shadow-xl px-3 py-2.5"
+          style={{
+            left: noteTooltip.x,
+            top: noteTooltip.y,
+            background: 'var(--color-surface)',
+            borderColor: 'var(--color-border)',
+          }}
+        >
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {noteTooltip.notes.length > 300 ? noteTooltip.notes.slice(0, 300) + '…' : noteTooltip.notes}
+          </p>
+        </div>
+      )}
       {/* Templates side panel */}
       {showTemplates && (
         <div className="w-72 flex-shrink-0 border-r flex flex-col overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -964,6 +1230,22 @@ export default function TasksPage() {
             {getIcon('wand', { size: 13 })} Ask Claude
           </button>
           <button
+            onClick={() => setShowWeeklyReview(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            title="Weekly Review (W)"
+          >
+            {getIcon('calendar', { size: 13 })} Weekly Review
+          </button>
+          <button
+            onClick={() => setShowImport(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
+            style={{ borderColor: showImport ? 'var(--color-primary)' : 'var(--color-border)', color: showImport ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Import from CSV"
+          >
+            {getIcon('upload', { size: 13 })} Import
+          </button>
+          <button
             onClick={() => { setShowTemplates(v => !v); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
             style={{ borderColor: showTemplates ? 'var(--color-primary)' : 'var(--color-border)', color: showTemplates ? 'var(--color-primary)' : 'var(--color-muted)' }}
@@ -973,23 +1255,30 @@ export default function TasksPage() {
           </button>
           {/* View toggle */}
           <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-            <button
-              onClick={() => { setViewMode('list'); localStorage.setItem('tasksViewMode', 'list'); }}
-              className="px-2.5 py-1.5 text-xs transition-all"
-              style={{ background: viewMode === 'list' ? 'var(--color-primary)' : 'transparent', color: viewMode === 'list' ? '#fff' : 'var(--color-muted)' }}
-              title="List view (b)"
-            >
-              {getIcon('list-checks', { size: 13 })}
-            </button>
-            <button
-              onClick={() => { setViewMode('board'); localStorage.setItem('tasksViewMode', 'board'); }}
-              className="px-2.5 py-1.5 text-xs transition-all border-l"
-              style={{ background: viewMode === 'board' ? 'var(--color-primary)' : 'transparent', color: viewMode === 'board' ? '#fff' : 'var(--color-muted)', borderColor: 'var(--color-border)' }}
-              title="Board view (b)"
-            >
-              {getIcon('layout', { size: 13 })}
-            </button>
+            {[
+              { mode: 'list', icon: 'list-checks', title: 'List view' },
+              { mode: 'board', icon: 'layout', title: 'Board view' },
+              { mode: 'calendar', icon: 'calendar', title: 'Calendar view' },
+            ].map((v, i) => (
+              <button
+                key={v.mode}
+                onClick={() => { setViewMode(v.mode); localStorage.setItem('tasksViewMode', v.mode); }}
+                className="px-2.5 py-1.5 text-xs transition-all border-l first:border-l-0"
+                style={{ background: viewMode === v.mode ? 'var(--color-primary)' : 'transparent', color: viewMode === v.mode ? '#fff' : 'var(--color-muted)', borderColor: 'var(--color-border)' }}
+                title={v.title}
+              >
+                {getIcon(v.icon, { size: 13 })}
+              </button>
+            ))}
           </div>
+          <button
+            onClick={() => setShowHelp(v => !v)}
+            className="w-8 h-8 flex items-center justify-center rounded-lg border hover:opacity-70 transition-opacity"
+            style={{ borderColor: showHelp ? 'var(--color-primary)' : 'var(--color-border)', color: showHelp ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Tasks guide"
+          >
+            {getIcon('book', { size: 14 })}
+          </button>
           <button
             onClick={() => setShowShortcuts(true)}
             className="w-8 h-8 flex items-center justify-center rounded-lg border text-xs font-bold hover:opacity-70 transition-opacity"
@@ -1016,6 +1305,7 @@ export default function TasksPage() {
                 { label: 'Done This Week', value: completedThisWeek, icon: 'check-circle', action: () => setShowChart(v => !v) },
                 { label: 'Overdue', value: overdueCount, icon: 'calendar', action: () => setQuickFilter('overdue'), color: overdueCount > 0 ? '#ef4444' : undefined },
                 { label: 'High Priority', value: highPriorityCount, icon: 'tag', action: () => setQuickFilter('high'), color: highPriorityCount > 0 ? '#ef4444' : undefined },
+                { label: 'Total Effort', value: formatEffort(totalEffort), icon: 'clock', action: null },
               ].map(stat => (
                 <button
                   key={stat.label}
@@ -1193,7 +1483,18 @@ export default function TasksPage() {
         )}
 
         {/* Task content area */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-hidden flex flex-col">
+          {viewMode === 'calendar' ? (
+            <TasksCalendar
+              tasks={tasks}
+              projects={projects}
+              onEdit={openEdit}
+              onToggleStatus={handleToggleStatus}
+              onNew={(dateKey) => openNew('todo', dateKey)}
+              onReschedule={handleReschedule}
+            />
+          ) : (
+          <div className="flex-1 overflow-auto">
           {loading ? (
             <div className="flex items-center justify-center py-16" style={{ color: 'var(--color-muted)' }}>
               {getIcon('loader', { size: 20 })}
@@ -1206,7 +1507,9 @@ export default function TasksPage() {
                 { status: 'in-progress', label: 'In Progress' },
                 { status: 'done', label: 'Done' },
               ].map(({ status, label }) => {
-                const columnTasks = sortTasks(filtered.filter(t => t.status === status));
+                const columnTasks = filtered
+                  .filter(t => t.status === status)
+                  .sort((a, b) => ((a.order ?? 0) - (b.order ?? 0)) || (a.id - b.id));
                 return (
                   <div
                     key={status}
@@ -1288,8 +1591,128 @@ export default function TasksPage() {
               )}
             </div>
           )}
+          </div>
+          )}
         </div>
       </div>
+
+      {/* Tasks help panel (right side) */}
+      {showHelp && (
+        <div className="w-80 flex-shrink-0 border-l flex flex-col overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <div className="flex items-center justify-between px-4 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="flex items-center gap-2">
+              {getIcon('book', { size: 14, style: { color: 'var(--color-primary)' } })}
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Tasks Guide</span>
+            </div>
+            <button onClick={() => setShowHelp(false)} className="hover:opacity-60" style={{ color: 'var(--color-muted)' }}>{getIcon('x', { size: 14 })}</button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 text-sm" style={{ color: 'var(--color-text)' }}>
+
+            {/* Views */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Views</p>
+              <ul className="space-y-1.5 text-xs" style={{ color: 'var(--color-text)', opacity: 0.85 }}>
+                <li><strong>List</strong> — tasks grouped by category; drag to reorder</li>
+                <li><strong>Board</strong> — Kanban (To Do / In Progress / Done); drag within column to reorder, across to change status</li>
+                <li><strong>Calendar</strong> — Day / Week / Month / Range; drag pills between dates to reschedule</li>
+              </ul>
+              <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Press <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>b</kbd> to cycle views.</p>
+            </div>
+
+            {/* Creating */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Creating Tasks</p>
+              <ul className="space-y-1.5 text-xs" style={{ color: 'var(--color-text)', opacity: 0.85 }}>
+                <li>Click <strong>New Task</strong> or press <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>n</kbd></li>
+                <li>Press <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>Enter</kbd> in the title field to save instantly</li>
+                <li>Use <strong>+ Save as template</strong> to turn any task into a reusable template</li>
+              </ul>
+            </div>
+
+            {/* Quick Capture */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Quick Capture</p>
+              <p className="text-xs" style={{ color: 'var(--color-text)', opacity: 0.85 }}>The <strong>+</strong> button (bottom-right of every page) opens a minimal modal — title, priority, due date. Also: <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>Ctrl+Shift+N</kbd></p>
+            </div>
+
+            {/* Filtering */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Filtering &amp; Sorting</p>
+              <ul className="space-y-1.5 text-xs" style={{ color: 'var(--color-text)', opacity: 0.85 }}>
+                <li><kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>/</kbd> — focus search</li>
+                <li><kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>f</kbd> — cycle quick filters (All → Today → Week → High → Overdue)</li>
+                <li><kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>1</kbd> / <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>2</kbd> / <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>3</kbd> — filter by status</li>
+              </ul>
+            </div>
+
+            {/* Recurring */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Recurring Tasks</p>
+              <p className="text-xs" style={{ color: 'var(--color-text)', opacity: 0.85 }}>Set recurrence on any task with a due date. When marked Done, a new copy is created with the next due date. A <strong>↻</strong> badge tracks the count.</p>
+            </div>
+
+            {/* Aging */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Aging Indicator</p>
+              <p className="text-xs" style={{ color: 'var(--color-text)', opacity: 0.85 }}>Tasks sitting in <strong>To Do</strong> for more than 7 days show an amber <span style={{ color: '#f59e0b' }}>⏱</span> clock icon in all three views.</p>
+            </div>
+
+            {/* Morning Digest */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Morning Digest</p>
+              <p className="text-xs" style={{ color: 'var(--color-text)', opacity: 0.85 }}>On first visit each day an overlay shows overdue tasks, today's tasks, and a Claude suggestion for what to focus on first.</p>
+            </div>
+
+            {/* Subtasks & Comments */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Subtasks &amp; Comments</p>
+              <ul className="space-y-1.5 text-xs" style={{ color: 'var(--color-text)', opacity: 0.85 }}>
+                <li>Click a task title to expand and see subtasks + comments</li>
+                <li>Use <strong>Generate with AI</strong> to auto-suggest subtasks</li>
+                <li>Status, priority, and due date changes are logged automatically</li>
+              </ul>
+            </div>
+
+            {/* Bulk & Templates */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Bulk Actions &amp; Templates</p>
+              <ul className="space-y-1.5 text-xs" style={{ color: 'var(--color-text)', opacity: 0.85 }}>
+                <li>Hover a task to reveal its checkbox; tick multiple for bulk edit/delete</li>
+                <li>Click <strong>Templates</strong> in the toolbar to create and apply reusable task templates</li>
+              </ul>
+            </div>
+
+            {/* Keyboard Shortcuts */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-primary)' }}>Keyboard Shortcuts</p>
+              <div className="space-y-1.5">
+                {[
+                  ['n', 'New task'],
+                  ['w', 'Weekly Review'],
+                  ['/', 'Focus search'],
+                  ['f', 'Cycle quick filters'],
+                  ['1 / 2 / 3', 'Filter by status'],
+                  ['b', 'Cycle view'],
+                  ['?', 'All shortcuts'],
+                  ['Ctrl+Shift+N', 'Quick capture'],
+                  ['Esc', 'Close / deselect'],
+                ].map(([key, desc]) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-xs" style={{ color: 'var(--color-text)', opacity: 0.8 }}>{desc}</span>
+                    <kbd className="text-xs px-1.5 py-0.5 rounded border font-mono flex-shrink-0" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>{key}</kbd>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Hover note */}
+            <div className="rounded-xl px-3 py-2.5 text-xs" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+              <strong style={{ color: 'var(--color-primary)' }}>Tip:</strong> Hover any task to see its notes in a tooltip — works in all three views.
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Task form modal */}
       {showForm && (
@@ -1372,6 +1795,76 @@ export default function TasksPage() {
                   </select>
                 </div>
               </div>
+              {/* Effort estimation */}
+              <div>
+                <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>
+                  Effort estimate {form.estimatedMinutes ? <span style={{ color: 'var(--color-primary)' }}>— {formatEffort(form.estimatedMinutes)}</span> : ''}
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {EFFORT_PRESETS.map(p => (
+                    <button
+                      key={p.val}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, estimatedMinutes: f.estimatedMinutes === p.val ? null : p.val }))}
+                      className="px-2 py-1 rounded-lg border text-xs font-medium transition-all"
+                      style={{
+                        background: form.estimatedMinutes === p.val ? 'var(--color-primary)' : 'transparent',
+                        borderColor: form.estimatedMinutes === p.val ? 'var(--color-primary)' : 'var(--color-border)',
+                        color: form.estimatedMinutes === p.val ? '#fff' : 'var(--color-muted)',
+                      }}
+                    >{p.label}</button>
+                  ))}
+                </div>
+                <input
+                  placeholder="or type: 45m, 3h, 1.5h, 2d"
+                  className="w-full px-3 py-1.5 rounded-lg border text-sm outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  onChange={e => {
+                    const parsed = parseEffortInput(e.target.value);
+                    if (parsed !== null) setForm(f => ({ ...f, estimatedMinutes: parsed }));
+                    else if (!e.target.value.trim()) setForm(f => ({ ...f, estimatedMinutes: null }));
+                  }}
+                />
+              </div>
+              {/* Key Result linkage */}
+              {goalsForForm.length > 0 && (
+                <div>
+                  <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>Link to Goal</label>
+                  {form.keyResultId ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs px-2 py-1 rounded-lg" style={{ background: 'var(--color-primary)' + '22', color: 'var(--color-primary)', border: '1px solid ' + 'var(--color-primary)' + '44' }}>
+                        🎯 {goalsForForm.flatMap(o => o.keyResults).find(kr => kr.id === form.keyResultId)?.title || 'Key Result'}
+                      </span>
+                      <button type="button" onClick={() => { setForm(f => ({ ...f, keyResultId: null })); setFormObjectiveId(''); }} className="text-xs hover:opacity-60" style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Clear</button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <select
+                        value={formObjectiveId}
+                        onChange={e => { setFormObjectiveId(e.target.value); setForm(f => ({ ...f, keyResultId: null })); }}
+                        className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      >
+                        <option value="">— Select objective</option>
+                        {goalsForForm.map(o => <option key={o.id} value={o.id}>{o.title}</option>)}
+                      </select>
+                      {formObjectiveId && (
+                        <select
+                          value={form.keyResultId || ''}
+                          onChange={e => setForm(f => ({ ...f, keyResultId: e.target.value ? Number(e.target.value) : null }))}
+                          className="flex-1 px-3 py-2 rounded-lg border text-sm outline-none"
+                          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                        >
+                          <option value="">— Select Key Result</option>
+                          {(goalsForForm.find(o => String(o.id) === formObjectiveId)?.keyResults || []).map(kr => (
+                            <option key={kr.id} value={kr.id}>{kr.title}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-between gap-2 px-5 py-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
               <button
@@ -1396,6 +1889,23 @@ export default function TasksPage() {
 
       {/* Keyboard shortcuts modal */}
       {showShortcuts && <TaskShortcutsModal onClose={() => setShowShortcuts(false)} />}
+
+      {/* Weekly Review modal */}
+      {showWeeklyReview && (
+        <WeeklyReview
+          tasks={tasks}
+          onClose={() => setShowWeeklyReview(false)}
+          onTasksChanged={fetchTasks}
+        />
+      )}
+
+      {/* CSV Import modal */}
+      {showImport && (
+        <TaskImport
+          onClose={() => setShowImport(false)}
+          onImported={() => { setShowImport(false); fetchTasks(); }}
+        />
+      )}
     </div>
   );
 }
