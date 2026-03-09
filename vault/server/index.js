@@ -1,5 +1,16 @@
 require('dotenv').config(); const express = require('express'); const helmet = require('helmet'); const path = require('path'); const fs = require('fs');
 
+// Security check — warn if gmail token encryption key is absent
+try {
+  const { getKey } = require('./utils/encryption');
+  if (!getKey()) {
+    console.warn('[security] ENCRYPTION_KEY is not set — gmail_tokens will be stored unencrypted. Generate a key with: openssl rand -hex 32');
+  }
+} catch (e) {
+  console.error('[security] Encryption key error:', e.message);
+  process.exit(1);
+}
+
 const app = express(); const PORT = process.env.PORT || 3001;
 
 app.use(helmet({ contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false, }));
@@ -19,6 +30,7 @@ const { requireAuth } = require('./middleware/auth'); app.use('/api', requireAut
 app.use('/api/user', requireAuth, require('./routes/user')); app.use('/api/health', require('./routes/health')); app.use('/api/projects', require('./routes/projects')); app.use('/api/chat', require('./routes/chat')); app.use('/api/files', require('./routes/files')); app.use('/api/pdf', require('./routes/pdf')); app.use('/api/search', require('./routes/search')); app.use('/api/email', require('./routes/email')); app.use('/api/export', require('./routes/export')); app.use('/api/fetch-url', require('./routes/fetchUrl')); app.use('/api/web-search', require('./routes/webSearch')); app.use('/api/memory', require('./routes/memory')); app.use('/api/prompts', require('./routes/prompts')); app.use('/api/folders', require('./routes/folders')); app.use('/api/personas', require('./routes/personas')); app.use('/api/pinned-urls', require('./routes/pinnedUrls')); app.use('/api/compare', require('./routes/compare')); app.use('/api/debate', require('./routes/debate')); app.use('/api/settings', require('./routes/settings')); app.use('/api/admin', require('./routes/admin')); app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/goals', require('./routes/goals'));
+app.use('/api/notes', require('./routes/notes'));
 
 if (process.env.NODE_ENV === 'production') { const distPath = path.join(__dirname, '../dist'); app.use(express.static(distPath)); app.get('*', (req, res) => { res.sendFile(path.join(distPath, 'index.html')); }); }
 

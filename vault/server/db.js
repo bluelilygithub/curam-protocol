@@ -256,6 +256,16 @@ db.exec(`
     createdAt TEXT DEFAULT (datetime('now')),
     updatedAt TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS notes (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+    title      TEXT NOT NULL DEFAULT 'Untitled',
+    body       TEXT NOT NULL DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migrations — safe to run on existing DBs
@@ -287,5 +297,7 @@ db.exec(`
 
 // Unique index for shareToken (separate try/catch — CREATE INDEX IF NOT EXISTS is idempotent)
 try { db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_shareToken ON tasks(shareToken) WHERE shareToken IS NOT NULL').run(); } catch (_) {}
+try { db.prepare('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id)').run(); } catch (_) {}
+try { db.prepare('CREATE INDEX IF NOT EXISTS idx_notes_project_id ON notes(project_id)').run(); } catch (_) {}
 
 module.exports = db;

@@ -20,6 +20,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Pinned URLs** | Attach web URLs to a project; content is fetched and stored for AI context |
 | **Files** | Upload PDFs, images, and text files (txt, md, csv, json) to a project; text is extracted and AI-summarised on upload |
 | **Pinned files** | Pinned files are automatically included in every chat's system prompt for that project |
+| **Notes** | Quick-capture thought pad — title, date, free text body; optional project link; "Take to Chat →" opens note as a new chat session with full context preloaded |
 
 #### Chat & AI
 
@@ -324,6 +325,9 @@ vault/
 | `objectives` | OKR Objectives — title, description, timeframe, colour, status, renewal dimension (`renewalDimension`) |
 | `key_results` | Key Results linked to an Objective — numeric target/current values, unit, due date |
 | `gmail_tokens` | Gmail OAuth tokens per user — `accessToken`, `refreshToken`, `tokenType`, `expiryDate`, `scope`, `email`; access token auto-refreshed and persisted via `googleapis` token event |
+| `notes` | User-scoped quick-capture notes — title, body, optional project link |
+
+> **Roadmap:** PostgreSQL migration is scoped and planned on branch `postgres-migration` (258 db calls across 24 files + FTS5 → tsvector). Currently deferred — SQLite on Railway mounted volume with daily backups.
 
 ---
 
@@ -344,6 +348,7 @@ vault/
 | `GOOGLE_CLIENT_ID` | Optional | Google OAuth 2.0 client ID — enables Gmail integration (`@gmail` in chat, Settings → Integrations) |
 | `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth 2.0 client secret |
 | `GOOGLE_REDIRECT_URI` | Optional | OAuth redirect URI — must match exactly in Google Cloud Console (e.g. `https://your-app.up.railway.app/api/gmail/callback`) |
+| `ENCRYPTION_KEY` | Optional² | 64 hex char key (32 bytes) for AES-256-GCM encryption of Gmail OAuth tokens at rest. Generate: `openssl rand -hex 32`. If absent, tokens stored plaintext with a startup warning. |
 | `MAIL_CHANNEL_API_KEY` | Optional | MailChannels API key for email; if absent, falls back to SMTP (see below) |
 | `SMTP_HOST` | Optional¹ | SMTP server hostname (e.g. `smtp.gmail.com`) |
 | `SMTP_PORT` | Optional¹ | SMTP port — `587` for TLS (default), `465` for SSL |
@@ -351,6 +356,8 @@ vault/
 | `SMTP_PASS` | Optional¹ | SMTP password or app-specific password |
 
 ¹ Required together if `MAIL_CHANNEL_API_KEY` is not set and you want email features to work.
+
+² Strongly recommended in production. Without it Gmail OAuth tokens are stored unencrypted in the SQLite file.
 
 ### `.env.example`
 
@@ -405,6 +412,12 @@ APP_URL=http://localhost:5173
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=http://localhost:3001/api/gmail/callback
+
+# ── Gmail token encryption (recommended in production) ────────────────────────
+# Encrypts OAuth access and refresh tokens at rest using AES-256-GCM.
+# Generate with: openssl rand -hex 32
+# If absent, tokens are stored in plaintext (a warning is logged on startup).
+ENCRYPTION_KEY=
 ```
 
 ---
@@ -426,6 +439,10 @@ GOOGLE_REDIRECT_URI=http://localhost:3001/api/gmail/callback
 | **Security headers** | `helmet` middleware applied in production (default CSP, HSTS, X-Frame-Options, etc.). |
 | **Public routes** | `/api/shared/task/:token`, `/api/auth/*`, and `/api/gmail/callback` are registered before `requireAuth`; all other `/api/*` routes require a valid session token. The Gmail router applies `requireAuth` internally for all its paths except `/callback`. |
 | **OAuth state nonce** | Gmail OAuth state nonce stored in `settings` table with a 10-minute expiry; validated and deleted on use; prevents CSRF during the OAuth redirect flow. |
+| **Gmail tokens at rest** | `accessToken` and `refreshToken` encrypted with AES-256-GCM before writing to `gmail_tokens`; decrypted only at runtime. Key loaded from `ENCRYPTION_KEY` env var (64 hex chars). Graceful fallback: if key is absent, tokens are stored plaintext and a startup warning is logged. Existing plaintext rows are transparently handled on read and re-encrypted on next write. |
+| **Gmail rate limiting** | `/api/gmail/auth` — 5 req/15 min per IP; `/api/gmail/search` and `/api/gmail/thread/:id` — 60 req/min per IP; `/api/gmail/ask` — 20 req/min per IP (tightest, triggers both Gmail API and Anthropic). |
+| **Gmail search input** | `q` parameter capped at 500 characters; returns 400 if exceeded. `max` clamped to `GMAIL_LIMITS.count` (500). |
+| **Anthropic data retention** | `store: false` set on every Anthropic API call (chat stream, summarisation, auto-title, suggestions, Gmail ask, NLP query translation). Opts out of Anthropic using request content for model training. |
 
 ---
 
@@ -449,6 +466,7 @@ npm run dev
 
 ### March 2026
 
+- **Security hardening** — `store: false` added to every Anthropic API call (chat stream, summarisation, auto-title, suggestions, Gmail ask, NLP translation) opting out of Anthropic data retention; Gmail OAuth tokens (`accessToken`, `refreshToken`) encrypted at rest with AES-256-GCM via `server/utils/encryption.js` (`ENCRYPTION_KEY` env var, 64 hex chars); existing plaintext rows transparently handled and re-encrypted on next write; one-time migration script at `server/scripts/reencrypt-gmail-tokens.js`; rate limiting added to all Gmail endpoints (auth: 5/15 min, search/thread: 60/min, ask: 20/min); 500-char length cap on Gmail search `q` param
 - **Gmail integration** — connect personal Gmail via Google OAuth 2.0 from Settings → Integrations; `@gmail` mention in chat opens a search modal; natural language queries translated to Gmail search syntax via Claude Haiku (`gmailNLP.js` service with `calculateDates()` for pre-computed date ranges — today/yesterday/this week/last week/month/year/quarter/Australian FY); browse results, attach email threads as context (`gmail://thread/<id>` URL attachments via `addManual()`); ask follow-up questions about any thread via SSE `/ask` endpoint with ownership-framing system prompt; refusal detection logged to console; `GMAIL_LIMITS` constants control max result counts (count:500/extract:200/list:50/prose:50); 45-case NLP test harness (`gmailNLP.test.js`)
 - **Chat stream error handling** — `classifyStreamError` extended with a dedicated `billing` code for Anthropic credit exhaustion (HTTP 402 or "credit balance too low" message) and improved Gemini patterns (`API_KEY_INVALID`, `RESOURCE_EXHAUSTED`, `models/*/is not found`); unknown errors now surface the raw API message in the hint; chat error banner redesigned with per-code icons (🔑 auth, 💳 billing, 🤖 model, ⏳ rate limit, ⚠️ other) and distinct colours; billing errors styled orange with a direct link to `console.anthropic.com/settings/billing`; `preflightError` state in ChatPage surfaces key-missing errors before any API call is made, avoiding wasted requests
 - **Search — chat result navigation fixed** — clicking a message result in the global search palette now opens the correct chat session; `search.js` extracts the `sessionId` from the stored `Chat: <id>` title, looks up the session's human title from the `sessions` table, and returns both; `SearchPalette.navigateTo` now uses the same navigate-then-dispatch pattern as the history page (`vault:load-session` event after 80ms); general chat sessions (no project) correctly navigate to `/chat` instead of `/projects/null/chat`

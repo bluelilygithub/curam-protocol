@@ -201,6 +201,15 @@ function Layout() {
           </Link>
 
           <Link
+            to="/notes"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname === '/notes' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Notes"
+          >
+            {getIcon('pen-line', { size: 16 })}
+          </Link>
+
+          <Link
             to="/tasks"
             className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/tasks' ? 'var(--color-primary)' : 'var(--color-muted)' }}

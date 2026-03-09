@@ -175,6 +175,7 @@ router.post('/test-model', async (req, res) => {
       const response = await anthropic.messages.create({
         model: modelId,
         max_tokens: 10,
+        store: false,
         messages: [{ role: 'user', content: 'Reply with only the word "ok".' }],
       });
       const text = response.content[0]?.text?.trim() || '';
@@ -298,6 +299,7 @@ router.post('/', chatLimiter, async (req, res) => {
         max_tokens: useReasoning ? 16000 : 8096,
         system: systemPrompt,
         messages: apiMessages,
+        store: false,
       };
       if (useReasoning) {
         streamParams.thinking = { type: 'enabled', budget_tokens: 8000 };
@@ -371,6 +373,7 @@ router.post('/', chatLimiter, async (req, res) => {
           anthropic.messages.create({
             model: 'claude-haiku-4-5-20251001',
             max_tokens: 12,
+            store: false,
             messages: [{
               role: 'user',
               content: `Give a 2–4 word title for a chat starting with: "${lastUser.content.substring(0, 250)}". Reply with only the title, no punctuation.`,
@@ -504,6 +507,7 @@ router.post('/sessions/:sessionId/summarize', async (req, res) => {
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 2000,
+      store: false,
       messages: [{
         role: 'user',
         content: `Create a comprehensive summary of this conversation that captures all key decisions, context, facts, and next steps. The summary will replace the full thread as Claude's context for continuing — so make it complete enough that nothing important is lost:\n\n${conversationText}`,
@@ -605,6 +609,7 @@ router.post('/suggestions', async (req, res) => {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 180,
+      store: false,
       messages: [{
         role: 'user',
         content: `Based on this conversation, suggest exactly 3 short follow-up questions or requests (max 8 words each). Return a JSON array of strings only, no other text.\n\n${conversationSnippet}`,

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import { useFileAttachment } from '../hooks/useFileAttachment';
@@ -29,6 +29,7 @@ const TEMPERATURES = [
 
 function ChatPage({ general = false }) {
   const { id: projectIdParam } = useParams();
+  const location = useLocation();
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
@@ -120,6 +121,14 @@ function ChatPage({ general = false }) {
 
   const totalContentSize = messages.reduce((acc, m) => acc + (m.content?.length || 0), 0);
   const contextWarning = messages.length >= 20 && !isSummarized && totalContentSize > 12000;
+
+  // Pre-fill input from Notes "Take to Chat"
+  useEffect(() => {
+    if (location.state?.draft) {
+      setInput(location.state.draft);
+      window.history.replaceState({}, '');
+    }
+  }, []);
 
   useEffect(() => {
     fetchProjects();
