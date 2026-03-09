@@ -6,7 +6,11 @@ export function useChat({ projectId }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [sessionUsage, setSessionUsage] = useState({ inputTokens: 0, outputTokens: 0, model: null });
+  const [streamError, setStreamError] = useState(null);
   const abortRef = useRef(null);
+  const timeoutRef = useRef(null);
+
+  const clearStreamError = useCallback(() => setStreamError(null), []);
 
   const sendMessage = useCallback(async (
     userContent,
@@ -19,6 +23,7 @@ export function useChat({ projectId }) {
     reasoning = false,
     inlineImages = [],
   ) => {
+    setStreamError(null);
     const newMessages = [...messages, { role: 'user', content: userContent, attachments: attachmentMeta, urlAttachments }];
     setMessages(newMessages);
     setIsStreaming(true);
@@ -26,6 +31,15 @@ export function useChat({ projectId }) {
 
     const controller = new AbortController();
     abortRef.current = controller;
+
+    // 30-second timeout — aborts if no first chunk arrives
+    let gotFirstChunk = false;
+    timeoutRef.current = setTimeout(() => {
+      if (!gotFirstChunk) {
+        controller.abort();
+        setStreamError({ code: 'timeout', message: 'No response received after 30 seconds.', hint: 'The API may be unreachable. Check your API key and try again.' });
+      }
+    }, 30000);
 
     try {
       const res = await api.stream('/api/chat', {
@@ -47,7 +61,7 @@ export function useChat({ projectId }) {
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
+      outer: while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
@@ -58,10 +72,20 @@ export function useChat({ projectId }) {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6).trim();
-          if (data === '[DONE]') break;
+          if (data === '[DONE]') break outer;
           try {
             const parsed = JSON.parse(data);
-            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.streamError) {
+              setStreamError(parsed.streamError);
+              // Remove the empty assistant placeholder
+              setMessages((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === 'assistant' && !last.content) updated.pop();
+                return updated;
+              });
+              break outer;
+            }
             if (parsed.sessionId && !sessionId) setSessionId(parsed.sessionId);
             if (parsed.usage) {
               setSessionUsage(u => ({
@@ -71,6 +95,10 @@ export function useChat({ projectId }) {
               }));
             }
             if (parsed.delta) {
+              if (!gotFirstChunk) {
+                gotFirstChunk = true;
+                clearTimeout(timeoutRef.current);
+              }
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -81,6 +109,10 @@ export function useChat({ projectId }) {
               });
             }
             if (parsed.thinkingDelta) {
+              if (!gotFirstChunk) {
+                gotFirstChunk = true;
+                clearTimeout(timeoutRef.current);
+              }
               setMessages((prev) => {
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
@@ -91,20 +123,24 @@ export function useChat({ projectId }) {
               });
             }
           } catch (e) {
-            // ignore parse errors
+            // ignore JSON parse errors
           }
         }
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
         console.error('Chat error:', err);
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: `Error: ${err.message}` };
-          return updated;
-        });
+        setStreamError({ code: 'unknown', message: 'Connection error.', hint: err.message });
       }
+      // Remove the empty assistant placeholder on any error/abort
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.role === 'assistant' && !last.content) updated.pop();
+        return updated;
+      });
     } finally {
+      clearTimeout(timeoutRef.current);
       setIsStreaming(false);
       abortRef.current = null;
     }
@@ -165,5 +201,5 @@ export function useChat({ projectId }) {
     }
   }, [isStreaming, sessionId, sendMessage]);
 
-  return { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate };
+  return { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError };
 }

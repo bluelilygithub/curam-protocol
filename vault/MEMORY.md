@@ -174,5 +174,15 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 ## Local Setup Issues
 See `local-setup-issues.md` for details on the broken Node.js environment.
 
+## Gmail Integration
+- **Routes:** `vault/server/routes/gmail.js` (registered BEFORE requireAuth in index.js; has internal auth middleware that skips /callback)
+- **DB:** `gmail_tokens` table (userId, accessToken, refreshToken, expiryDate, scope, email)
+- **Env vars:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
+- **OAuth flow:** `/api/gmail/auth` → returns authUrl → client navigates → Google → `/api/gmail/callback` → redirect to `/settings?gmailConnected=1`
+- **Endpoints:** `GET /status`, `GET /auth`, `GET /callback`, `POST /disconnect`, `GET /search?q=`, `GET /thread/:threadId`, `POST /ask` (SSE)
+- **Frontend:** `GmailConnect.jsx` in SettingsPage "Integrations" section; `@gmail` in AtMentionDropdown triggers Gmail search modal in ChatPage
+- **Thread attachment:** Gmail threads added via `addManual()` from `useUrlAttachment` as `gmail://thread/<id>` URLs; `buildMessageContent` in chat.js uses `[Email thread: ...]` label
+- **Package:** `googleapis` ^144.0.0 added to package.json dependencies
+
 ## Known Bugs / To Revisit
 - **Drag project into folder doesn't persist** — server `PUT /api/projects/:id` includes `folderId`, sidebar calls `fetchProjects()` after update. Still not working locally — suspect nodemon not picking up changes or local/Railway env difference. Needs network tab debugging.

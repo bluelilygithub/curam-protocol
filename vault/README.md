@@ -31,6 +31,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Project Files panel** | Side panel in the chat interface — lists all project files, upload new files, pin/unpin files to inject into every chat's context |
 | **Clipboard image paste** | Paste images directly from the clipboard into the chat input; sent as inline base64 to the AI, no file upload required |
 | **`@search` web search** | Type `@` in chat and select "Search the web"; results shown in a panel before attaching as URL context |
+| **`@gmail` email search** | Type `@` in chat and select "Search Gmail…"; natural language query translated to Gmail search syntax via Claude Haiku; browse results, attach email threads as context; ask follow-up questions about any thread via the `/ask` endpoint (SSE streaming) |
 | **@mention Tasks in Chat** | Type `@` in chat to attach a task's details as context; title, notes, and due date are injected into the conversation |
 | **Document Compare** | Compare two documents side by side using any Claude or Gemini model; 4 comparison modes; save results to a project |
 | **Multi-Model Debate** | Pit multiple AI models against each other on a topic; multi-file context upload; synthesis summary |
@@ -38,6 +39,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Voice input** | Mic button in chat toolbar starts browser-native speech recognition (Web Speech API); live interim transcript preview; hidden in unsupported browsers |
 | **Read aloud** | Speaker button reads the last assistant message via browser text-to-speech; no external service required |
 | **Token budget alerts** | Set a per-session cost limit in Settings; amber warning at 80%, red at 100% with a direct "Summarise now" button |
+| **Model error handling** | Stream errors classified by type and shown in a banner: 🔑 auth (key missing/invalid), 💳 billing (credit exhausted — links to Anthropic billing), 🤖 model not found, ⏳ rate limit, ⚠️ timeout/unknown; pre-send check blocks requests immediately if the provider key is confirmed absent |
 
 #### Tasks
 
@@ -82,6 +84,8 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Search** | Global search palette across projects, chats, files, and tasks |
 | **Password reset** | Email-based password reset flow with 1-hour expiry tokens |
 | **Password show/hide** | Eye icon on all password fields (login, change password, reset password) toggles visibility |
+| **Model management** | Add, edit, delete, and test AI models from Settings → AI Models; changes persist to DB and are reflected immediately across the entire app (chat selector, compare, project settings); Reset to defaults button restores the built-in 5 models |
+| **Model availability** | Settings page shows API key status (✓ configured / ⚠️ key missing) per model; Test button sends a live probe to each model and reports success or the exact error (auth, billing, model not found, rate limit) |
 
 > **Detailed feature docs:** [TASKS.md](TASKS.md) · [GOALS.md](GOALS.md)
 
@@ -91,6 +95,71 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 - **Frontend:** React / Vite, Zustand (auth + project + settings state), React Router, Tailwind CSS
 - **Auth:** Token-based sessions (single-user via seed credentials); bcryptjs for password hashing
 - **Deploy:** Railway with persistent volume for SQLite DB and file uploads
+
+---
+
+## AI Model Management
+
+Models are managed centrally from **Settings → AI Models**. The active model list is stored in the `settings` table under the key `vault_models` as a JSON array. If that key is absent the app falls back to the static defaults defined in `client/src/utils/models.js`.
+
+### How it works end-to-end
+
+1. **Static defaults** — `utils/models.js` exports `MODELS` (5 built-in models: Haiku 4.5, Sonnet 4.6, Opus 4.6, Gemini 2.0 Flash, Gemini 2.5 Pro). This is the fallback used on first run and as the "Reset defaults" target.
+
+2. **`useModels` hook** (`hooks/useModels.js`) — fetches `GET /api/settings` on mount; if `vault_models` exists it parses and returns that list, otherwise returns the static defaults. Exposes `models`, `saveModels(array)`, and `loading`. Used by **ChatPage** (model picker) and **SettingsPage** (CRUD UI).
+
+3. **Settings UI** — Settings → AI Models section lets you:
+   - **Add** a model (fields: Model API ID, display name, label, provider, emoji, tagline, description)
+   - **Edit** any model inline
+   - **Delete** any model
+   - **Reset to defaults** — clears `vault_models` and restores the built-in 5
+   - **Test** any model — `POST /api/chat/test-model` sends a minimal live probe and reports success or the classified error (key missing, credit exhausted, model not found, rate limit)
+
+4. **API key status** — `GET /api/chat/model-status` returns `{ anthropic: bool, gemini: bool }` indicating which provider keys are configured. Shown as ✓ / ⚠️ badges in the Settings model list and in the chat model picker button/dropdown.
+
+5. **Server routing** — `chat.js`, `compare.js`, and `debate.js` detect the provider by checking whether `modelId.startsWith('gemini-')`. Any model whose ID starts with `gemini-` is routed to the Google Generative AI SDK; all others go to the Anthropic SDK. Adding a new Gemini model in Settings just requires using the correct `gemini-*` ID.
+
+6. **Pre-send validation** — `ChatPage.handleSend` checks `modelStatus` before calling the API. If the provider key is confirmed absent it shows an error banner immediately without consuming the request.
+
+### Adding a new model
+
+1. Go to **Settings → AI Models → + Add model**
+2. Enter the exact API model ID (e.g. `claude-opus-4-5` or `gemini-2.0-flash-exp`)
+3. Set provider to **Anthropic** or **Google Gemini** (controls which SDK is used server-side)
+4. Click **Test** to verify the model is reachable before using it in chat
+
+No server restart or code deploy is required.
+
+---
+
+## Gmail Integration
+
+Users can connect their personal Gmail account via Google OAuth 2.0 and query their inbox using natural language directly from the chat `@gmail` mention.
+
+### How it works end-to-end
+
+1. **OAuth flow** — `GET /api/gmail/auth` generates an OAuth URL with a short-lived state nonce stored in the `settings` table. Google redirects back to `GET /api/gmail/callback` (registered *before* `requireAuth` — no session cookie required during callback). Tokens are stored in `gmail_tokens`.
+
+2. **Natural language → Gmail query** — `GET /api/gmail/search?q=` passes the user's natural language input through `translateToGmailQuery()` in `server/services/gmailNLP.js`, which calls Claude Haiku to produce a valid Gmail search query, intent classification, max result count, and response mode. All date arithmetic is pre-computed in JavaScript and injected into the system prompt — Claude never invents dates.
+
+3. **Thread attachment** — selecting a search result fetches the full email thread via `GET /api/gmail/thread/:threadId`. The thread text is injected into the chat as a `gmail://thread/<id>` URL attachment (using the existing URL attachment system) with pre-fetched content, so no additional API call is made when the message is sent.
+
+4. **Ask endpoint** — `POST /api/gmail/ask` streams a Claude Haiku answer about a specific thread via SSE. The system prompt strongly asserts inbox ownership to prevent content-policy refusals on financial/legal/personal emails. Any suspected refusal is logged to the console with the email subject and question for prompt tuning.
+
+### Date ranges supported
+
+The `gmailNLP` service pre-computes all commonly needed date ranges from today's date: today, yesterday, this/last week (Mon-Sun), this/last month, this/last year, last 7/14/30/90 days, this/last quarter, current and last Australian financial year (Jul–Jun), and the most recent January.
+
+### Setup
+
+1. Enable the **Gmail API** in [Google Cloud Console](https://console.cloud.google.com/) and create an OAuth 2.0 Client ID (Web application type).
+2. Add the redirect URI: `https://your-app.up.railway.app/api/gmail/callback` (and `http://localhost:3001/api/gmail/callback` for local dev).
+3. Add the three env vars (see Environment Variables below).
+4. Connect from **Settings → Integrations → Connect Gmail**.
+
+### NLP test harness
+
+Run `node server/services/gmailNLP.test.js` to execute 45 test cases across 11 categories (direction, name resolution, time ranges, content keywords, attachments, status, count/extract/summary/thread intent, and combined queries). Output includes per-category breakdown and an overall score.
 
 ---
 
@@ -109,7 +178,7 @@ vault/
 │       ├── auth.js               # Login (rate-limited) / logout / session / password reset
 │       ├── user.js               # Change password (protected by requireAuth)
 │       ├── projects.js           # Project CRUD
-│       ├── chat.js               # Claude/Gemini streaming chat + session management
+│       ├── chat.js               # Claude/Gemini streaming chat + session management; GET /model-status (key config check); POST /test-model (live model probe)
 │       ├── compare.js            # Document comparison (Claude + Gemini, SSE streaming)
 │       ├── debate.js             # Multi-model debate rounds
 │       ├── files.js              # File upload, extraction, AI summary
@@ -128,9 +197,13 @@ vault/
 │       ├── tasks.js              # Task CRUD + subtasks + comments + templates + AI generate/extract + SSE weekly review + CSV import + share
 │       ├── taskTemplates.js      # Task template CRUD + apply
 │       ├── goals.js              # Objectives + Key Results CRUD + dashboard + AI KR suggestions (SSE)
+│       ├── gmail.js              # Gmail OAuth flow + search + thread fetch + ask (SSE); registered before requireAuth; applies auth internally for all paths except /callback
 │       ├── sharedTasks.js        # Public shared task view — no auth (registered before requireAuth)
 │       ├── settings.js           # App settings key/value store (API keys, config)
 │       └── health.js             # Health check endpoint
+│   ├── services/
+│   │   ├── gmailNLP.js           # Natural language → Gmail query translator; calculateDates() pre-computes all date ranges; translateToGmailQuery() calls Claude Haiku; GMAIL_LIMITS constants
+│   │   └── gmailNLP.test.js      # 45-case test harness with scoring and ANSI colour output; run: node server/services/gmailNLP.test.js
 │
 ├── client/
 │   ├── index.html
@@ -146,14 +219,14 @@ vault/
 │       │   ├── ResetPasswordPage.jsx  # Email-based password reset
 │       │   ├── ProjectList.jsx   # Home — projects + Goals widget + Tasks widget
 │       │   ├── ProjectDetail.jsx # Project brief + files + pinned URLs
-│       │   ├── ChatPage.jsx      # Main chat interface (project and general)
+│       │   ├── ChatPage.jsx      # Main chat interface (project and general); uses useModels for dynamic model list
 │       │   ├── ChatHistoryPage.jsx    # Browse all sessions by date / search
 │       │   ├── ComparisonPage.jsx     # Document compare tool
 │       │   ├── DebatePage.jsx         # Multi-model debate tool
 │       │   ├── PersonasPage.jsx  # Manage AI personas
 │       │   ├── PromptsPage.jsx   # Prompt library
 │       │   ├── MemoryPage.jsx    # Global memory management
-│       │   ├── SettingsPage.jsx  # Account settings / password change
+│       │   ├── SettingsPage.jsx  # Account settings, password change, and AI model management (add/edit/delete/test)
 │       │   ├── AdminPage.jsx     # Usage dashboard
 │       │   ├── UserGuidePage.jsx # In-app user guide
 │       │   ├── TasksPage.jsx     # Full task manager — List / Kanban / Calendar / Matrix views
@@ -172,7 +245,8 @@ vault/
 │       │   ├── ProjectFilesPanel.jsx # Side panel for project file management in chat
 │       │   ├── UrlBar.jsx        # URL chips above textarea
 │       │   ├── SearchPalette.jsx # Global search modal
-│       │   ├── AtMentionDropdown.jsx  # @file/@prompt/@search/@task mentions in chat
+│       │   ├── AtMentionDropdown.jsx  # @file/@prompt/@search/@task/@gmail mentions in chat
+│       │   ├── GmailConnect.jsx   # Gmail OAuth connect/disconnect component (used in SettingsPage → Integrations)
 │       │   ├── FollowUpChips.jsx # Suggested follow-up prompts
 │       │   ├── ExportMenu.jsx
 │       │   ├── EmailModal.jsx
@@ -194,6 +268,7 @@ vault/
 │       │   └── settingsStore.js  # Zustand settings state
 │       ├── hooks/
 │       │   ├── useChat.js        # Chat logic + streaming (Anthropic + Gemini)
+│       │   ├── useModels.js      # Dynamic model list — loads from DB (settings.vault_models), falls back to static defaults; used by ChatPage and SettingsPage
 │       │   ├── useFileAttachment.js
 │       │   ├── useUrlAttachment.js
 │       │   ├── useSearch.js
@@ -201,7 +276,7 @@ vault/
 │       │   └── useVoice.js       # Browser speech recognition + TTS
 │       ├── utils/
 │       │   ├── apiClient.js      # Authenticated fetch wrapper (use for all /api/ calls)
-│       │   ├── models.js         # Claude + Gemini model definitions with provider field
+│       │   ├── models.js         # Default Claude + Gemini model definitions (static fallback); active list is managed via useModels hook and stored in settings.vault_models
 │       │   ├── pricing.js        # Token pricing helpers
 │       │   ├── parseDate.js      # Natural language date parser (pure frontend, no API calls)
 │       │   ├── exportMd.js       # Markdown export formatter
@@ -239,7 +314,7 @@ vault/
 | `debates` | Multi-model debate rounds and results |
 | `comparisons` | Saved document comparison results linked to projects |
 | `search_logs` | Web search query log (powers admin dashboard search count) |
-| `settings` | Key/value store for API keys and app config set via Settings UI |
+| `settings` | Key/value store for API keys and app config — includes `vault_models` (JSON array of active AI models); if `vault_models` is absent the app uses the built-in defaults from `utils/models.js` |
 | `tasks` | Task records — status, priority, urgency (`isUrgent`), renewal dimension (`renewalDimension`), due date, category, tags, recurrence, estimated effort, time spent, share token, parent task link, key result link |
 | `task_tags` | Many-to-many tag associations for tasks |
 | `task_comments` | Per-task comments and auto-logged activity events (status/priority/due-date changes) |
@@ -248,6 +323,7 @@ vault/
 | `template_subtasks` | Subtask definitions belonging to a task template |
 | `objectives` | OKR Objectives — title, description, timeframe, colour, status, renewal dimension (`renewalDimension`) |
 | `key_results` | Key Results linked to an Objective — numeric target/current values, unit, due date |
+| `gmail_tokens` | Gmail OAuth tokens per user — `accessToken`, `refreshToken`, `tokenType`, `expiryDate`, `scope`, `email`; access token auto-refreshed and persisted via `googleapis` token event |
 
 ---
 
@@ -265,6 +341,9 @@ vault/
 | `PORT` | Optional | HTTP port (default `3001` in dev; Railway sets this automatically) |
 | `GEMINI_API_KEY` | Optional | Google Gemini API access — enables Gemini 2.0 Flash and Gemini 2.5 Pro models |
 | `SEARCH_API_KEY` | Optional | Web search API key — supports Brave Search (`BSA…` prefix), Serper.dev (40-char hex), or SerpAPI (default) |
+| `GOOGLE_CLIENT_ID` | Optional | Google OAuth 2.0 client ID — enables Gmail integration (`@gmail` in chat, Settings → Integrations) |
+| `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth 2.0 client secret |
+| `GOOGLE_REDIRECT_URI` | Optional | OAuth redirect URI — must match exactly in Google Cloud Console (e.g. `https://your-app.up.railway.app/api/gmail/callback`) |
 | `MAIL_CHANNEL_API_KEY` | Optional | MailChannels API key for email; if absent, falls back to SMTP (see below) |
 | `SMTP_HOST` | Optional¹ | SMTP server hostname (e.g. `smtp.gmail.com`) |
 | `SMTP_PORT` | Optional¹ | SMTP port — `587` for TLS (default), `465` for SSL |
@@ -317,6 +396,15 @@ SMTP_PASS=your_smtp_password
 # Base URL used in reset email links and public task share URLs (no trailing slash)
 # Local: http://localhost:5173 | Railway: https://your-app.up.railway.app
 APP_URL=http://localhost:5173
+
+# ── Gmail integration (optional — enables @gmail in chat) ─────────────────────
+# Create credentials at https://console.cloud.google.com/ → APIs & Services → Credentials
+# Enable the Gmail API and create an OAuth 2.0 Client ID (Web application)
+# Add redirect URIs: http://localhost:3001/api/gmail/callback (dev) and
+#                   https://your-app.up.railway.app/api/gmail/callback (prod)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://localhost:3001/api/gmail/callback
 ```
 
 ---
@@ -336,7 +424,8 @@ APP_URL=http://localhost:5173
 | **Auth sessions** | 32-byte random hex tokens; 24-hour expiry checked server-side on every request. |
 | **Passwords** | bcryptjs with SALT_ROUNDS=12. |
 | **Security headers** | `helmet` middleware applied in production (default CSP, HSTS, X-Frame-Options, etc.). |
-| **Public routes** | `/api/shared/task/:token` and `/api/auth/*` are registered before `requireAuth`; all other `/api/*` routes require a valid session token. |
+| **Public routes** | `/api/shared/task/:token`, `/api/auth/*`, and `/api/gmail/callback` are registered before `requireAuth`; all other `/api/*` routes require a valid session token. The Gmail router applies `requireAuth` internally for all its paths except `/callback`. |
+| **OAuth state nonce** | Gmail OAuth state nonce stored in `settings` table with a 10-minute expiry; validated and deleted on use; prevents CSRF during the OAuth redirect flow. |
 
 ---
 
@@ -360,6 +449,10 @@ npm run dev
 
 ### March 2026
 
+- **Gmail integration** — connect personal Gmail via Google OAuth 2.0 from Settings → Integrations; `@gmail` mention in chat opens a search modal; natural language queries translated to Gmail search syntax via Claude Haiku (`gmailNLP.js` service with `calculateDates()` for pre-computed date ranges — today/yesterday/this week/last week/month/year/quarter/Australian FY); browse results, attach email threads as context (`gmail://thread/<id>` URL attachments via `addManual()`); ask follow-up questions about any thread via SSE `/ask` endpoint with ownership-framing system prompt; refusal detection logged to console; `GMAIL_LIMITS` constants control max result counts (count:500/extract:200/list:50/prose:50); 45-case NLP test harness (`gmailNLP.test.js`)
+- **Chat stream error handling** — `classifyStreamError` extended with a dedicated `billing` code for Anthropic credit exhaustion (HTTP 402 or "credit balance too low" message) and improved Gemini patterns (`API_KEY_INVALID`, `RESOURCE_EXHAUSTED`, `models/*/is not found`); unknown errors now surface the raw API message in the hint; chat error banner redesigned with per-code icons (🔑 auth, 💳 billing, 🤖 model, ⏳ rate limit, ⚠️ other) and distinct colours; billing errors styled orange with a direct link to `console.anthropic.com/settings/billing`; `preflightError` state in ChatPage surfaces key-missing errors before any API call is made, avoiding wasted requests
+- **Search — chat result navigation fixed** — clicking a message result in the global search palette now opens the correct chat session; `search.js` extracts the `sessionId` from the stored `Chat: <id>` title, looks up the session's human title from the `sessions` table, and returns both; `SearchPalette.navigateTo` now uses the same navigate-then-dispatch pattern as the history page (`vault:load-session` event after 80ms); general chat sessions (no project) correctly navigate to `/chat` instead of `/projects/null/chat`
+- **Dynamic AI Model Management** — models are now managed from Settings → AI Models; add, edit, delete, and reorder models without a code deploy; model list stored in `settings.vault_models` (JSON) with static `utils/models.js` as fallback; `useModels` hook used by ChatPage and SettingsPage for a single source of truth; API key status shown per model (✓ / ⚠️); Test button sends a live probe via `POST /api/chat/test-model` and reports success or classified error (auth, billing, model not found, rate limit); pre-send validation in ChatPage blocks requests when the provider key is missing; `GET /api/chat/model-status` endpoint returns `{ anthropic: bool, gemini: bool }` for key config checks
 - **Renewal Dimension Tracking (Habit 7)** — tag any task or objective with 🏃 Physical / 📚 Mental / 🤝 Social / 🌱 Spiritual; emoji pills on task cards; dimension chip row in filter bar; dimension prefix in Matrix view insight line; Renewal Balance Dashboard on Goals page (4 dimension cards + balance bar + nudge + AI Assessment SSE via Claude Haiku); Renewal This Week row in Weekly Review Step 3 (4 icons + per-dimension count + red dot if zero); `?view=matrix` and `?section=renewal/mission` query params for deep-linking
 - **7 Habits Sidebar Navigation** — collapsible section in ProjectSidebar; 3 links: 🧭 Mission Statement (`/goals?section=mission`), ⚡ Priority Matrix (`/tasks?view=matrix`), 🌱 Renewal Balance (`/goals?section=renewal`); state persisted in `localStorage sidebarHabitsOpen`
 - **Eisenhower Matrix** — new 4th Tasks view (`m` shortcut or view toggle); 2×2 Priority Matrix grid (Q1 Do First / Q2 Schedule / Q3 Delegate / Q4 Eliminate); `isUrgent` toggle in task form and Quick Capture; ⚡ Urgent badge on list and board cards; insight line summarising most critical quadrant; "Show completed" toggle in matrix sub-header

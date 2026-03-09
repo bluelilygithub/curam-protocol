@@ -243,6 +243,19 @@ db.exec(`
     createdAt TEXT DEFAULT (datetime('now')),
     UNIQUE(taskId, blockedByTaskId)
   );
+
+  CREATE TABLE IF NOT EXISTS gmail_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    userId INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    accessToken TEXT NOT NULL,
+    refreshToken TEXT,
+    tokenType TEXT DEFAULT 'Bearer',
+    expiryDate INTEGER,
+    scope TEXT,
+    email TEXT,
+    createdAt TEXT DEFAULT (datetime('now')),
+    updatedAt TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 // Migrations — safe to run on existing DBs

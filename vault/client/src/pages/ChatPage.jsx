@@ -18,8 +18,8 @@ import ArtifactPanel, { extractCodeBlocks } from '../components/ArtifactPanel';
 import ProjectFilesPanel from '../components/ProjectFilesPanel';
 import FollowUpChips from '../components/FollowUpChips';
 import { downloadChatMd } from '../utils/exportMd';
-import { MODELS, getModelById, getModelShortName } from '../utils/models';
 import { calcCost, formatCost, formatTokens } from '../utils/pricing';
+import { useModels } from '../hooks/useModels';
 
 const TEMPERATURES = [
   { label: 'Precise', value: 0.2, desc: 'Focused, deterministic' },
@@ -32,10 +32,11 @@ function ChatPage({ general = false }) {
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
-  const { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate } = useChat({ projectId });
+  const { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError } = useChat({ projectId });
+  const { models: MODELS } = useModels();
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, startListening, stopListening, speak } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
-  const { urlAttachments, addUrl, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
+  const { urlAttachments, addUrl, addManual: addManualAttachment, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
   const getIcon = useIcon();
 
   const [input, setInput] = useState('');
@@ -49,6 +50,15 @@ function ChatPage({ general = false }) {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+
+  // Gmail search state
+  const [showGmailSearch, setShowGmailSearch] = useState(false);
+  const [gmailQuery, setGmailQuery] = useState('');
+  const [isGmailSearching, setIsGmailSearching] = useState(false);
+  const [gmailError, setGmailError] = useState('');
+  const [gmailResults, setGmailResults] = useState([]);
+  const [gmailAttached, setGmailAttached] = useState([]); // threadIds already attached
+  const [gmailTranslatedQuery, setGmailTranslatedQuery] = useState('');
   const [sessions, setSessions] = useState([]);
   const [inlineImages, setInlineImages] = useState([]);
 
@@ -89,6 +99,10 @@ function ChatPage({ general = false }) {
   // Reasoning mode
   const [reasoning, setReasoning] = useState(false);
 
+  // Model availability (null = unknown, true = configured, false = missing key)
+  const [modelStatus, setModelStatus] = useState({ anthropic: null, gemini: null });
+  const [preflightError, setPreflightError] = useState(null);
+
   // Persona picker
   const [personas, setPersonas] = useState([]);
   const [selectedPersonaId, setSelectedPersonaId] = useState(null);
@@ -111,6 +125,7 @@ function ChatPage({ general = false }) {
     fetchProjects();
     if (general) { fetchSessions(); }
     else if (projectId) { setActive(projectId); fetchSessions(); }
+    api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
   }, [projectId, general]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -186,6 +201,9 @@ function ChatPage({ general = false }) {
   };
 
   const effectiveModel = chatModel || project?.model || 'claude-sonnet-4-6';
+  // Clear preflight error when model changes
+  const prevEffectiveModelRef = useRef(effectiveModel);
+  if (prevEffectiveModelRef.current !== effectiveModel) { prevEffectiveModelRef.current = effectiveModel; setPreflightError(null); }
 
   const handlePaste = (e) => {
     const items = Array.from(e.clipboardData?.items || []);
@@ -214,6 +232,17 @@ function ChatPage({ general = false }) {
     if (!text && inlineImages.length === 0) return;
     if (isStreaming) return;
     if (urlAttachments.some(u => u.status === 'fetching')) return;
+    // Pre-flight: block send if the provider key is confirmed missing
+    const modelIsGemini = effectiveModel.startsWith('gemini-');
+    const provider = modelIsGemini ? 'gemini' : 'anthropic';
+    if (modelStatus[provider] === false) {
+      const hint = modelIsGemini
+        ? 'Add GEMINI_API_KEY to your Railway environment variables.'
+        : 'Add ANTHROPIC_API_KEY to your Railway environment variables.';
+      setPreflightError({ code: 'auth', message: `${modelIsGemini ? 'Gemini' : 'Anthropic'} API key is not configured.`, hint });
+      return;
+    }
+    setPreflightError(null);
     const ids = attachments.map(a => a.id);
     const meta = attachments.map(a => ({ id: a.id, name: a.name, mimetype: a.mimetype, preview: a.preview }));
     const readyUrls = urlAttachments.filter(u => u.status === 'ready');
@@ -225,6 +254,11 @@ function ChatPage({ general = false }) {
     setShowSearchInput(false);
     setSearchQuery('');
     setSearchResults([]);
+    setShowGmailSearch(false);
+    setGmailQuery('');
+    setGmailResults([]);
+    setGmailAttached([]);
+    setGmailTranslatedQuery('');
     setShowPromptPicker(false);
     clearAttachments();
     clearUrls();
@@ -306,6 +340,69 @@ function ChatPage({ general = false }) {
     setShowSearchInput(false);
     setSearchQuery('');
     setSearchResults([]);
+    textareaRef.current?.focus();
+  };
+
+  const handleOpenGmailSearch = () => {
+    const cursorPos = textareaRef.current?.selectionStart || input.length;
+    const atIndex = input.lastIndexOf('@', cursorPos);
+    if (atIndex !== -1) setInput(input.slice(0, atIndex) + input.slice(cursorPos));
+    setShowMention(false);
+    setGmailQuery('');
+    setGmailError('');
+    setGmailResults([]);
+    setShowGmailSearch(true);
+  };
+
+  const handleGmailSearch = async () => {
+    if (!gmailQuery.trim() || isGmailSearching) return;
+    setIsGmailSearching(true);
+    setGmailError('');
+    setGmailResults([]);
+    setGmailTranslatedQuery('');
+    try {
+      const res = await api.get(`/api/gmail/search?q=${encodeURIComponent(gmailQuery.trim())}&max=10`);
+      const data = await res.json();
+      if (data.error) { setGmailError(data.error); return; }
+      if (data.translatedQuery && data.translatedQuery !== gmailQuery.trim()) {
+        setGmailTranslatedQuery(data.translatedQuery);
+      }
+      const results = data.results || [];
+      if (results.length === 0) { setGmailError(`No emails found${data.translatedQuery ? ` for: ${data.translatedQuery}` : ''}. Try rephrasing.`); return; }
+      setGmailResults(results);
+    } catch (err) {
+      setGmailError(err.message || 'Gmail search failed');
+    } finally {
+      setIsGmailSearching(false);
+    }
+  };
+
+  const handleGmailAttachThread = async (result) => {
+    if (gmailAttached.includes(result.threadId)) return;
+    try {
+      const res = await api.get(`/api/gmail/thread/${result.threadId}`);
+      const data = await res.json();
+      if (data.error) { setGmailError(data.error); return; }
+      const threadText = (data.messages || []).map(m =>
+        `From: ${m.from}\nDate: ${m.date}\nSubject: ${m.subject}\n\n${m.body}`
+      ).join('\n\n---\n\n');
+      addManualAttachment({
+        url: `gmail://thread/${result.threadId}`,
+        title: `📧 ${result.subject}`,
+        content: threadText,
+      });
+      setGmailAttached(prev => [...prev, result.threadId]);
+    } catch (err) {
+      setGmailError(err.message || 'Failed to load email thread');
+    }
+  };
+
+  const handleGmailDone = () => {
+    setShowGmailSearch(false);
+    setGmailQuery('');
+    setGmailResults([]);
+    setGmailAttached([]);
+    setGmailTranslatedQuery('');
     textareaRef.current?.focus();
   };
 
@@ -584,32 +681,42 @@ function ChatPage({ general = false }) {
           <button
             onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); }}
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
-            title="Switch AI model"
+            style={{
+              borderColor: modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? '#f59e0b' : 'var(--color-border)',
+              color: 'var(--color-muted)',
+              background: 'var(--color-surface)',
+            }}
+            title={modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? 'API key not configured — click to switch model' : 'Switch AI model'}
           >
-            {getModelShortName(effectiveModel)}
+            {(() => { const m = MODELS.find(x => x.id === effectiveModel); return m ? `${m.emoji} ${m.name}` : effectiveModel; })()}
+            {modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false && <span style={{ color: '#f59e0b' }}>⚠️</span>}
           </button>
           {showModelPicker && (
             <div
               className="absolute right-0 top-full mt-1 w-52 rounded-xl border shadow-lg py-1.5 z-40"
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             >
-              {MODELS.map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => { setChatModel(m.id); setShowModelPicker(false); }}
-                  className="w-full text-left px-3 py-2 flex items-start gap-2.5 hover:opacity-70 transition-opacity"
-                >
-                  <span className="text-base flex-shrink-0 mt-0.5">{m.emoji}</span>
-                  <div>
-                    <div className="text-xs font-semibold" style={{ color: effectiveModel === m.id ? 'var(--color-primary)' : 'var(--color-text)' }}>
-                      {m.label} · {m.name}
+              {MODELS.map(m => {
+                const unavailable = modelStatus[m.provider] === false;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => { setChatModel(m.id); setShowModelPicker(false); }}
+                    className="w-full text-left px-3 py-2 flex items-start gap-2.5 hover:opacity-70 transition-opacity"
+                    title={unavailable ? `${m.provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'} not configured` : undefined}
+                  >
+                    <span className="text-base flex-shrink-0 mt-0.5">{m.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold flex items-center gap-1.5" style={{ color: effectiveModel === m.id ? 'var(--color-primary)' : unavailable ? 'var(--color-muted)' : 'var(--color-text)' }}>
+                        {m.label} · {m.name}
+                        {unavailable && <span title="API key not configured" style={{ color: '#f59e0b' }}>⚠️</span>}
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{unavailable ? 'API key not configured' : m.tagline}</div>
                     </div>
-                    <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{m.tagline}</div>
-                  </div>
-                  {effectiveModel === m.id && <span className="ml-auto text-xs" style={{ color: 'var(--color-primary)' }}>✓</span>}
-                </button>
-              ))}
+                    {effectiveModel === m.id && <span className="ml-auto text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>✓</span>}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -866,6 +973,37 @@ function ChatPage({ general = false }) {
             </div>
           )}
 
+          {/* Error banner — stream errors and pre-send preflight errors */}
+          {(streamError || preflightError) && (() => {
+            const err = streamError || preflightError;
+            const isRed = err.code === 'auth' || err.code === 'model' || err.code === 'billing';
+            const isOrange = err.code === 'billing';
+            const bg = isOrange ? '#fff7ed' : isRed ? '#fff1f2' : '#fffbeb';
+            const border = isOrange ? '#fed7aa' : isRed ? '#fca5a5' : '#fde68a';
+            const color = isOrange ? '#9a3412' : isRed ? '#991b1b' : '#78350f';
+            const icon = err.code === 'auth' ? '🔑' : err.code === 'billing' ? '💳' : err.code === 'model' ? '🤖' : err.code === 'rate_limit' ? '⏳' : '⚠️';
+            return (
+              <div
+                className="flex-shrink-0 mx-4 mb-2 px-4 py-3 rounded-xl border flex items-start gap-3 text-xs"
+                style={{ background: bg, borderColor: border, color }}
+              >
+                <span className="text-sm leading-none mt-0.5 flex-shrink-0">{icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium">{err.message}</p>
+                  {err.hint && <p className="mt-0.5 opacity-80">{err.hint}</p>}
+                </div>
+                <button
+                  onClick={() => { clearStreamError(); setPreflightError(null); }}
+                  className="flex-shrink-0 opacity-50 hover:opacity-100 transition-opacity leading-none"
+                  style={{ color: 'inherit' }}
+                  title="Dismiss"
+                >
+                  {getIcon('x', { size: 12 })}
+                </button>
+              </div>
+            );
+          })()}
+
           {/* Input area */}
           <div className="flex-shrink-0 px-4 pb-safe pt-1">
             <div className="max-w-3xl mx-auto">
@@ -976,6 +1114,90 @@ function ChatPage({ general = false }) {
                   </div>
                 )}
 
+                {/* Gmail search */}
+                {showGmailSearch && (
+                  <div
+                    className="absolute bottom-full mb-2 left-0 right-0 sm:right-auto z-50 rounded-xl border shadow-lg overflow-hidden"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '340px', maxWidth: '520px' }}
+                  >
+                    <div className="flex items-center gap-2 px-3 py-2.5">
+                      <span style={{ fontSize: 13, flexShrink: 0 }}>✉️</span>
+                      <input
+                        autoFocus
+                        type="text"
+                        value={gmailQuery}
+                        onChange={e => { setGmailQuery(e.target.value); setGmailError(''); setGmailResults([]); }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); gmailResults.length > 0 ? handleGmailDone() : handleGmailSearch(); }
+                          if (e.key === 'Escape') { setShowGmailSearch(false); setGmailQuery(''); setGmailResults([]); setGmailAttached([]); }
+                        }}
+                        placeholder="Search Gmail (e.g. from:boss@company.com invoice)"
+                        className="flex-1 bg-transparent outline-none text-sm"
+                        style={{ color: 'var(--color-text)' }}
+                        disabled={isGmailSearching}
+                      />
+                      {isGmailSearching ? (
+                        <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14 })}</span>
+                      ) : gmailResults.length > 0 ? (
+                        <button type="button" onClick={handleGmailDone}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                          style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                          Done
+                        </button>
+                      ) : gmailQuery.trim() ? (
+                        <button type="button" onClick={handleGmailSearch}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                          style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                          Search
+                        </button>
+                      ) : null}
+                    </div>
+                    {gmailError && (
+                      <p className="px-3 pb-2.5 text-xs" style={{ color: '#ef4444' }}>{gmailError}</p>
+                    )}
+                    {gmailTranslatedQuery && (
+                      <p className="px-3 pb-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                        Query: <code style={{ color: 'var(--color-primary)' }}>{gmailTranslatedQuery}</code>
+                      </p>
+                    )}
+                    {gmailResults.length > 0 ? (
+                      <div className="border-t" style={{ borderColor: 'var(--color-border)', maxHeight: '260px', overflowY: 'auto' }}>
+                        {gmailResults.map((r) => {
+                          const attached = gmailAttached.includes(r.threadId);
+                          return (
+                            <button
+                              key={r.id}
+                              onClick={() => handleGmailAttachThread(r)}
+                              disabled={attached}
+                              className="w-full text-left px-3 py-2.5 border-b last:border-b-0 transition-opacity"
+                              style={{ borderColor: 'var(--color-border)', opacity: attached ? 0.5 : 1 }}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.subject}</p>
+                                {attached
+                                  ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>✓ Added</span>
+                                  : <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>Attach</span>
+                                }
+                              </div>
+                              <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-muted)' }}>{r.from} · {r.date ? new Date(r.date).toLocaleDateString() : ''}</p>
+                              {r.snippet && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--color-muted)' }}>{r.snippet}</p>}
+                            </button>
+                          );
+                        })}
+                        {gmailAttached.length > 0 && (
+                          <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                            {gmailAttached.length} thread{gmailAttached.length !== 1 ? 's' : ''} added to context · press Done or Enter
+                          </p>
+                        )}
+                      </div>
+                    ) : !gmailError && (
+                      <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                        Search your inbox and attach emails as context · Esc to cancel
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Prompt picker */}
                 {showPromptPicker && (
                   <div
@@ -1015,7 +1237,7 @@ function ChatPage({ general = false }) {
                 {/* Mention dropdown */}
                 {showMention && (
                   <div className="absolute bottom-full mb-2 left-0 w-56 z-50">
-                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onSearch={handleOpenSearch} onClose={() => setShowMention(false)} />
+                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onSearch={handleOpenSearch} onGmailSearch={handleOpenGmailSearch} onClose={() => setShowMention(false)} />
                   </div>
                 )}
 

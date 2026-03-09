@@ -122,6 +122,7 @@ npm run dev
 | **Prompts / Personas / Memory** | Reusable prompt library, AI personas, memory snippets |
 | **Admin Dashboard** | Usage stats — messages, sessions, searches, debates, comparisons, tokens; period selector |
 | **Web Search** | `@search` in chat; Brave Search / Serper / SerpAPI auto-detected from key format |
+| **Gmail** | `@gmail` in chat; connect personal Gmail via OAuth; natural language search with Claude Haiku query translation; attach email threads as context; ask questions about threads via SSE streaming |
 
 ### API Auth
 
@@ -131,7 +132,7 @@ Token-based. All `/api/*` endpoints (except `/api/auth/*` and `/api/health`) req
 
 SQLite at `DB_PATH`. Schema + migrations in `vault/server/db.js`. On Railway, DB lives on a mounted volume (`/data/vault.db`).
 
-Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions`, `tasks`, `task_templates`, `task_tags`, `task_comments`, `objectives`, `key_results`, `personas`, `prompts`, `memory`, `debates`, `comparisons`, `settings`
+Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions`, `tasks`, `task_templates`, `task_tags`, `task_comments`, `objectives`, `key_results`, `personas`, `prompts`, `memory`, `debates`, `comparisons`, `settings`, `gmail_tokens`
 
 ---
 
@@ -151,6 +152,13 @@ NODE_ENV=production
 DB_PATH=/data/vault.db
 UPLOAD_DIR=/data/uploads
 APP_URL=https://curam-vault.up.railway.app
+```
+
+**Optional — Gmail integration:**
+```
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+GOOGLE_REDIRECT_URI=https://curam-vault.up.railway.app/api/gmail/callback
 ```
 
 ---

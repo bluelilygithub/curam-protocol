@@ -12,6 +12,7 @@ async function seedInitialUser() { const { SEED_EMAIL, SEED_PASSWORD } = process
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/shared', require('./routes/sharedTasks'));
+app.use('/api/gmail', require('./routes/gmail')); // Gmail has its own auth (except /callback)
 
 const { requireAuth } = require('./middleware/auth'); app.use('/api', requireAuth);
 

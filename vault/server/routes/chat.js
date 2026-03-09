@@ -105,9 +105,10 @@ function buildMessageContent(text, attachmentIds, urlAttachments, inlineImages) 
 
   for (const ua of (urlAttachments || [])) {
     if (ua.content) {
+      const label = ua.url?.startsWith('gmail://') ? 'Email thread' : 'Web page';
       blocks.push({
         type: 'text',
-        text: `[Web page: ${ua.url}]\nTitle: ${ua.title || '(no title)'}\n\n${ua.content}`,
+        text: `[${label}: ${ua.title || ua.url}]\n\n${ua.content}`,
       });
     }
   }
@@ -115,6 +116,75 @@ function buildMessageContent(text, attachmentIds, urlAttachments, inlineImages) 
   blocks.push({ type: 'text', text });
   return blocks;
 }
+
+function classifyStreamError(err) {
+  const msg = err.message || '';
+  const status = err.status || err.statusCode || 0;
+  if (/anthropic_api_key is not configured/i.test(msg)) {
+    return { code: 'auth', message: 'Anthropic API key is not configured.', hint: 'Add ANTHROPIC_API_KEY to your Railway environment variables.' };
+  }
+  if (/gemini_api_key is not configured/i.test(msg)) {
+    return { code: 'auth', message: 'Gemini API key is not configured.', hint: 'Add GEMINI_API_KEY to your Railway environment variables.' };
+  }
+  // Anthropic credit exhaustion — status 402 or 403 with billing message
+  if (status === 402 || /credit.balance.is.too.low|insufficient.credit/i.test(msg)) {
+    return { code: 'billing', message: 'Anthropic credit balance is too low.', hint: 'Top up your account at console.anthropic.com/settings/billing.' };
+  }
+  if (status === 403 && /credit|billing|payment/i.test(msg)) {
+    return { code: 'billing', message: 'Anthropic billing issue — credit balance may be exhausted.', hint: 'Check your account at console.anthropic.com/settings/billing.' };
+  }
+  if (status === 401 || /invalid.api.key|authentication.error|api.key.not.valid|API_KEY_INVALID/i.test(msg)) {
+    return { code: 'auth', message: 'API key is invalid or rejected.', hint: 'Check your ANTHROPIC_API_KEY (or GEMINI_API_KEY) in Railway environment variables.' };
+  }
+  if (status === 429 || /rate.limit|too.many.request|quota.exceeded|RESOURCE_EXHAUSTED/i.test(msg)) {
+    return { code: 'rate_limit', message: 'Rate limit or quota exceeded.', hint: 'Wait a moment and try again, or check your API usage limits.' };
+  }
+  if (/model.not.found|invalid.model|does not exist|unknown model|models\/.*is not found|not supported.*model/i.test(msg)) {
+    return { code: 'model', message: 'Model not found or unavailable.', hint: 'Switch to a different model using the model selector in the chat header.' };
+  }
+  if (/timeout|ETIMEDOUT|ECONNRESET|ECONNREFUSED/i.test(msg) || err.code === 'ETIMEDOUT') {
+    return { code: 'timeout', message: 'Request timed out.', hint: 'The AI provider may be slow or unreachable. Try again in a moment.' };
+  }
+  return { code: 'unknown', message: 'An error occurred while generating the response.', hint: msg || 'Try again. If the problem persists, check the server logs.' };
+}
+
+// GET /api/chat/model-status — returns which provider API keys are configured
+router.get('/model-status', (req, res) => {
+  res.json({
+    anthropic: !!process.env.ANTHROPIC_API_KEY,
+    gemini: !!process.env.GEMINI_API_KEY,
+  });
+});
+
+// POST /api/chat/test-model — quick non-streaming test of a single model
+router.post('/test-model', async (req, res) => {
+  const { modelId } = req.body;
+  if (!modelId) return res.status(400).json({ ok: false, error: 'modelId required' });
+  try {
+    if (isGemini(modelId)) {
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      if (!geminiApiKey) return res.json({ ok: false, code: 'auth', error: 'GEMINI_API_KEY is not configured.' });
+      const { GoogleGenerativeAI } = require('@google/generative-ai');
+      const genai = new GoogleGenerativeAI(geminiApiKey);
+      const gModel = genai.getGenerativeModel({ model: modelId });
+      const result = await gModel.generateContent('Reply with only the word "ok".');
+      const text = result.response.text().trim();
+      res.json({ ok: true, response: text });
+    } else {
+      if (!process.env.ANTHROPIC_API_KEY) return res.json({ ok: false, code: 'auth', error: 'ANTHROPIC_API_KEY is not configured.' });
+      const response = await anthropic.messages.create({
+        model: modelId,
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'Reply with only the word "ok".' }],
+      });
+      const text = response.content[0]?.text?.trim() || '';
+      res.json({ ok: true, response: text });
+    }
+  } catch (err) {
+    const classified = classifyStreamError(err);
+    res.json({ ok: false, code: classified.code, error: classified.message, hint: classified.hint });
+  }
+});
 
 // POST /api/chat
 router.post('/', chatLimiter, async (req, res) => {
@@ -221,6 +291,7 @@ router.post('/', chatLimiter, async (req, res) => {
 
     } else {
       // ── Anthropic path ───────────────────────────────────────────────────────
+      if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured');
       const useReasoning = reasoning && (model.includes('sonnet') || model.includes('opus'));
       const streamParams = {
         model,
@@ -315,8 +386,9 @@ router.post('/', chatLimiter, async (req, res) => {
       }
     }
   } catch (err) {
-    console.error('Chat stream error:', err);
-    res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+    const classified = classifyStreamError(err);
+    console.error(`[chat] Stream error — model: ${reqModel || 'default'}, code: ${classified.code} —`, err.message);
+    res.write(`data: ${JSON.stringify({ streamError: classified })}\n\n`);
     res.end();
   }
 });

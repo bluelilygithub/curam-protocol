@@ -77,10 +77,22 @@ function SearchPalette() {
 
   const navigateTo = (result) => {
     setOpen(false);
-    if (result.type === 'project') navigate(`/projects/${result.projectId}`);
-    else if (result.type === 'file') navigate(`/projects/${result.projectId}`);
-    else if (result.type === 'message') navigate(`/projects/${result.projectId}/chat`);
-    else if (result.type === 'task') navigate('/tasks');
+    if (result.type === 'project') {
+      navigate(`/projects/${result.projectId}`);
+    } else if (result.type === 'file') {
+      navigate(`/projects/${result.projectId}`);
+    } else if (result.type === 'message') {
+      if (result.projectId) {
+        navigate(`/projects/${result.projectId}/chat`);
+      } else {
+        navigate('/chat');
+      }
+      if (result.sessionId) {
+        setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: result.sessionId })), 80);
+      }
+    } else if (result.type === 'task') {
+      navigate('/tasks');
+    }
   };
 
   if (!open) return null;

@@ -33,11 +33,19 @@ export function useUrlAttachment() {
     }
   }, []);
 
+  // Add a pre-fetched attachment directly (e.g. Gmail thread content)
+  const addManual = useCallback((attachment) => {
+    setUrlAttachments(prev => {
+      if (prev.some(u => u.url === attachment.url)) return prev;
+      return [...prev, { ...attachment, status: 'ready' }];
+    });
+  }, []);
+
   const remove = useCallback((url) => {
     setUrlAttachments(prev => prev.filter(u => u.url !== url));
   }, []);
 
   const clear = useCallback(() => setUrlAttachments([]), []);
 
-  return { urlAttachments, addUrl, remove, clear };
+  return { urlAttachments, addUrl, addManual, remove, clear };
 }

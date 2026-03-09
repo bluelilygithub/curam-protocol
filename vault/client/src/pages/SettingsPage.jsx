@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useSettingsStore from '../store/settingsStore';
 import useAuthStore from '../store/authStore';
 import { themes, fontOptions, iconPackOptions } from '../themes';
 import { useIcon } from '../providers/IconProvider';
+import { MODELS as DEFAULT_MODELS } from '../utils/models';
+import api from '../utils/apiClient';
+import { useModels } from '../hooks/useModels';
+import GmailConnect from '../components/GmailConnect';
 
 function SettingsPage() {
   const { font, theme, iconPack, setFont, setTheme, setIconPack, sessionBudget, setSessionBudget, allowedFileTypes, setAllowedFileTypes } = useSettingsStore();
@@ -18,6 +22,57 @@ function SettingsPage() {
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwStatus, setPwStatus] = useState(null);
   const [showPwFields, setShowPwFields] = useState({ current: false, next: false, confirm: false });
+  const [modelStatus, setModelStatus] = useState(null);
+  const { models, saveModels } = useModels();
+  const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
+  const [modelForm, setModelForm] = useState({});
+
+  useEffect(() => {
+    api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
+  }, []);
+
+  const EMPTY_MODEL = { emoji: '🤖', name: '', label: '', id: '', provider: 'anthropic', tagline: '', desc: '' };
+
+  function openAdd() { setModelForm(EMPTY_MODEL); setEditingModel('new'); }
+  function openEdit(m) { setModelForm({ ...m }); setEditingModel(m.id); }
+  function cancelEdit() { setEditingModel(null); setModelForm({}); }
+
+  async function saveModel() {
+    if (!modelForm.id.trim() || !modelForm.name.trim()) return;
+    let updated;
+    if (editingModel === 'new') {
+      updated = [...models, { ...modelForm, id: modelForm.id.trim() }];
+    } else {
+      updated = models.map(m => m.id === editingModel ? { ...modelForm, id: modelForm.id.trim() } : m);
+    }
+    await saveModels(updated);
+    cancelEdit();
+  }
+
+  async function deleteModel(id) {
+    await saveModels(models.filter(m => m.id !== id));
+  }
+
+  async function resetModels() {
+    await saveModels(DEFAULT_MODELS);
+  }
+
+  const [testResults, setTestResults] = useState({}); // { [modelId]: { status: 'testing'|'ok'|'error', message } }
+
+  async function testModel(modelId) {
+    setTestResults(r => ({ ...r, [modelId]: { status: 'testing' } }));
+    try {
+      const res = await api.post('/api/chat/test-model', { modelId });
+      const data = await res.json();
+      if (data.ok) {
+        setTestResults(r => ({ ...r, [modelId]: { status: 'ok', message: data.response } }));
+      } else {
+        setTestResults(r => ({ ...r, [modelId]: { status: 'error', message: data.error, hint: data.hint } }));
+      }
+    } catch {
+      setTestResults(r => ({ ...r, [modelId]: { status: 'error', message: 'Connection error.' } }));
+    }
+  }
 
   async function handleChangePassword(e) {
     e.preventDefault();
@@ -213,6 +268,211 @@ function SettingsPage() {
         </p>
       </section>
 
+      {/* AI Models */}
+      <section>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-sm font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
+            AI Models
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={resetModels}
+              className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
+              title="Reset to defaults"
+            >
+              Reset defaults
+            </button>
+            <button
+              onClick={openAdd}
+              className="text-xs px-2 py-1 rounded-lg text-white transition-opacity hover:opacity-80"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              + Add model
+            </button>
+          </div>
+        </div>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Add, edit, or remove models. The model ID must match the exact API identifier (e.g. <code>claude-sonnet-4-6</code>).
+        </p>
+
+        {/* Add / Edit form */}
+        {editingModel && (
+          <div className="rounded-xl border p-4 mb-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-primary)' }}>
+            <div className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-primary)' }}>
+              {editingModel === 'new' ? 'Add model' : 'Edit model'}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Model API ID *</label>
+                <input
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none font-mono"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="e.g. claude-haiku-4-5-20251001"
+                  value={modelForm.id}
+                  onChange={e => setModelForm(f => ({ ...f, id: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Display name *</label>
+                <input
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="e.g. Haiku 4.5"
+                  value={modelForm.name}
+                  onChange={e => setModelForm(f => ({ ...f, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Label</label>
+                <input
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="e.g. Economy"
+                  value={modelForm.label}
+                  onChange={e => setModelForm(f => ({ ...f, label: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Provider</label>
+                <select
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  value={modelForm.provider}
+                  onChange={e => setModelForm(f => ({ ...f, provider: e.target.value }))}
+                >
+                  <option value="anthropic">Anthropic</option>
+                  <option value="gemini">Google Gemini</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Emoji</label>
+                <input
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="⚡"
+                  value={modelForm.emoji}
+                  onChange={e => setModelForm(f => ({ ...f, emoji: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Tagline</label>
+                <input
+                  className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  placeholder="e.g. Fast & affordable"
+                  value={modelForm.tagline}
+                  onChange={e => setModelForm(f => ({ ...f, tagline: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Description</label>
+              <input
+                className="w-full px-3 py-2 rounded-lg border text-xs outline-none"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                placeholder="e.g. Best for quick tasks, drafts, and simple Q&A"
+                value={modelForm.desc}
+                onChange={e => setModelForm(f => ({ ...f, desc: e.target.value }))}
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={saveModel}
+                disabled={!modelForm.id.trim() || !modelForm.name.trim()}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {editingModel === 'new' ? 'Add' : 'Save'}
+              </button>
+              <button
+                onClick={cancelEdit}
+                className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Model list */}
+        <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+          {models.map((m, i) => {
+            const configured = modelStatus ? modelStatus[m.provider] : null;
+            return (
+              <div
+                key={m.id}
+                className="flex flex-col px-4 py-3"
+                style={{
+                  background: 'var(--color-surface)',
+                  borderBottom: i < models.length - 1 ? '1px solid var(--color-border)' : 'none',
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xl flex-shrink-0">{m.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{m.name}</span>
+                      {m.label && <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>{m.label}</span>}
+                    </div>
+                    <div className="text-xs font-mono mt-0.5 truncate" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>{m.id}</div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {configured === true && (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
+                    )}
+                    {configured === false && (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={m.provider === 'gemini' ? 'GEMINI_API_KEY not set' : 'ANTHROPIC_API_KEY not set'} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
+                    )}
+                    <button
+                      onClick={() => testModel(m.id)}
+                      disabled={testResults[m.id]?.status === 'testing'}
+                      className="text-xs px-2 py-1 rounded border transition-opacity hover:opacity-70 disabled:opacity-50"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                    >
+                      {testResults[m.id]?.status === 'testing' ? 'Testing…' : 'Test'}
+                    </button>
+                    <button
+                      onClick={() => openEdit(m)}
+                      className="text-xs px-2 py-1 rounded border transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteModel(m.id)}
+                      className="text-xs px-2 py-1 rounded border transition-opacity hover:opacity-70"
+                      style={{ borderColor: '#fca5a5', color: '#991b1b' }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                {testResults[m.id] && testResults[m.id].status !== 'testing' && (
+                  <div
+                    className="mt-2 px-3 py-2 rounded-lg text-xs flex items-start gap-2"
+                    style={{
+                      background: testResults[m.id].status === 'ok' ? '#f0fdf4' : '#fff1f2',
+                      color: testResults[m.id].status === 'ok' ? '#16a34a' : '#991b1b',
+                    }}
+                  >
+                    <span className="flex-shrink-0">{testResults[m.id].status === 'ok' ? '✓' : '✗'}</span>
+                    <span className="flex-1">{testResults[m.id].message}{testResults[m.id].hint ? ` — ${testResults[m.id].hint}` : ''}</span>
+                    <button onClick={() => setTestResults(r => { const n = { ...r }; delete n[m.id]; return n; })} className="flex-shrink-0 opacity-50 hover:opacity-100">✕</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {models.length === 0 && (
+            <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--color-muted)' }}>
+              No models configured. Add one above or reset to defaults.
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Change Password */}
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
@@ -299,6 +559,12 @@ function SettingsPage() {
             Primary Action
           </button>
         </div>
+      </section>
+
+      {/* Integrations */}
+      <section>
+        <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Integrations</h2>
+        <GmailConnect />
       </section>
     </div>
   );

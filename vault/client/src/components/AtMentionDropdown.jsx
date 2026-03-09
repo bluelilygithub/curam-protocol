@@ -3,7 +3,7 @@ import useProjectStore from '../store/projectStore';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 
-function AtMentionDropdown({ query, onSelect, onSearch, onClose }) {
+function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onClose }) {
   const { projects, setActive } = useProjectStore();
   const getIcon = useIcon();
   const listRef = useRef(null);
@@ -27,10 +27,12 @@ function AtMentionDropdown({ query, onSelect, onSearch, onClose }) {
     : tasks.slice(0, 5);
 
   const showSearch = query === '' || 'search the web'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('search');
+  const showGmail = query === '' || 'search gmail'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('gmail');
 
-  // Build items list: search option + projects + tasks
+  // Build items list: search option + gmail option + projects + tasks
   const items = [
     ...(showSearch ? [{ id: '__search__', isSearch: true }] : []),
+    ...(showGmail ? [{ id: '__gmail__', isGmail: true }] : []),
     ...filteredProjects.map(p => ({ ...p, isProject: true })),
     ...filteredTasks.map(t => ({ ...t, isTask: true })),
   ];
@@ -52,6 +54,7 @@ function AtMentionDropdown({ query, onSelect, onSearch, onClose }) {
         const item = items[selected];
         if (!item) return;
         if (item.isSearch) onSearch?.();
+        else if (item.isGmail) onGmailSearch?.();
         else if (item.isProject) handleSelectProject(item);
         else if (item.isTask) handleSelectTask(item);
       } else if (e.key === 'Escape') {
@@ -78,7 +81,8 @@ function AtMentionDropdown({ query, onSelect, onSearch, onClose }) {
   // Check if we have both projects and tasks to show a divider
   const hasProjects = filteredProjects.length > 0;
   const hasTasks = filteredTasks.length > 0;
-  const projectStartIdx = showSearch ? 1 : 0;
+  const specialCount = (showSearch ? 1 : 0) + (showGmail ? 1 : 0);
+  const projectStartIdx = specialCount;
   const taskStartIdx = projectStartIdx + filteredProjects.length;
 
   return (
@@ -101,6 +105,20 @@ function AtMentionDropdown({ query, onSelect, onSearch, onClose }) {
             >
               {getIcon('search', { size: 14 })}
               <span>Search the web…</span>
+            </button>
+          );
+        }
+
+        if (item.isGmail) {
+          return (
+            <button
+              key="__gmail__"
+              onClick={() => onGmailSearch?.()}
+              className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors"
+              style={{ background: bg, color: 'var(--color-primary)' }}
+            >
+              <span style={{ fontSize: 13 }}>✉️</span>
+              <span>Search Gmail…</span>
             </button>
           );
         }
