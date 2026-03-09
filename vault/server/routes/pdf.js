@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
-const db = require('../db');
+const { pool } = require('../db');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -10,7 +10,8 @@ router.post('/chat', async (req, res) => {
   const { fileId, messages } = req.body;
   if (!fileId || !messages) return res.status(400).json({ error: 'fileId and messages required' });
 
-  const file = db.prepare('SELECT * FROM files WHERE id=?').get(fileId);
+  const { rows: fileRows } = await pool.query('SELECT * FROM files WHERE id=$1', [fileId]);
+  const file = fileRows[0];
   if (!file) return res.status(404).json({ error: 'File not found' });
 
   const systemPrompt = file.extractedText

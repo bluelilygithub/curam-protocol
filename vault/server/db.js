@@ -1,303 +1,432 @@
-const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
+'use strict';
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, '../data/vault.db');
-const dbDir = path.dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+const { Pool } = require('pg');
+
+// Enable SSL for any non-localhost host (Railway, Render, Supabase, etc.)
+function sslConfig() {
+  try {
+    const u = new URL(process.env.DATABASE_URL || '');
+    const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+    return local ? false : { rejectUnauthorized: false };
+  } catch (_) {
+    return false;
+  }
 }
 
-const db = new Database(dbPath);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: sslConfig(),
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+});
 
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+// ── Schema initialisation ──────────────────────────────────────────────────────
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT NOT NULL UNIQUE,
-    passwordHash TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+async function initSchema() {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  CREATE TABLE IF NOT EXISTS auth_sessions (
-    token TEXT PRIMARY KEY,
-    userId INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expiresAt TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+    // ── Users & auth ──────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id            SERIAL PRIMARY KEY,
+        email         TEXT NOT NULL UNIQUE,
+        "passwordHash" TEXT NOT NULL,
+        "createdAt"   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS folders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        token       TEXT PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "expiresAt" TIMESTAMPTZ NOT NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS personas (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    description TEXT,
-    systemPrompt TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id          SERIAL PRIMARY KEY,
+        token       TEXT NOT NULL UNIQUE,
+        email       TEXT NOT NULL,
+        "expiresAt" TIMESTAMPTZ NOT NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS pinned_urls (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    projectId INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    url TEXT NOT NULL,
-    title TEXT,
-    content TEXT,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+    // ── Organisation ──────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS folders (
+        id          SERIAL PRIMARY KEY,
+        name        TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS memory (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    content TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS personas (
+        id             SERIAL PRIMARY KEY,
+        name           TEXT NOT NULL,
+        description    TEXT,
+        "systemPrompt" TEXT NOT NULL,
+        "createdAt"    TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS prompts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    content TEXT NOT NULL,
-    tags TEXT DEFAULT '',
-    projectId INTEGER REFERENCES projects(id) ON DELETE SET NULL,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    // folderId / personaId kept as plain integers (no FK) — same as SQLite
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS projects (
+        id                 SERIAL PRIMARY KEY,
+        name               TEXT NOT NULL,
+        goal               TEXT,
+        problem            TEXT,
+        audience           TEXT,
+        "techStack"        TEXT,
+        constraints        TEXT,
+        "successCriteria"  TEXT,
+        tone               TEXT,
+        notes              TEXT,
+        "createdAt"        TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"        TIMESTAMPTZ DEFAULT NOW(),
+        "sortOrder"        INTEGER DEFAULT 0,
+        model              TEXT DEFAULT 'claude-sonnet-4-6',
+        "projectType"      TEXT,
+        "typeConfig"       TEXT,
+        "folderId"         INTEGER,
+        "personaId"        INTEGER
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS projects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    goal TEXT,
-    problem TEXT,
-    audience TEXT,
-    techStack TEXT,
-    constraints TEXT,
-    successCriteria TEXT,
-    tone TEXT,
-    notes TEXT,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    // ── Content stores ────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS memory (
+        id          SERIAL PRIMARY KEY,
+        content     TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS files (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    projectId INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    size INTEGER,
-    mimetype TEXT,
-    path TEXT NOT NULL,
-    extractedText TEXT,
-    aiDescription TEXT,
-    aiSummary TEXT,
-    uploadedAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS prompts (
+        id          SERIAL PRIMARY KEY,
+        title       TEXT NOT NULL,
+        content     TEXT NOT NULL,
+        tags        TEXT DEFAULT '',
+        "projectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sessionId TEXT NOT NULL,
-    projectId INTEGER REFERENCES projects(id) ON DELETE CASCADE,
-    role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
-    content TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pinned_urls (
+        id          SERIAL PRIMARY KEY,
+        "projectId" INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        url         TEXT NOT NULL,
+        title       TEXT,
+        content     TEXT,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS sessions (
-    sessionId TEXT PRIMARY KEY,
-    projectId INTEGER REFERENCES projects(id) ON DELETE CASCADE,
-    title TEXT,
-    isSummarized INTEGER DEFAULT 0,
-    summaryContent TEXT,
-    summarizedAt TEXT,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS files (
+        id              SERIAL PRIMARY KEY,
+        "projectId"     INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name            TEXT NOT NULL,
+        size            INTEGER,
+        mimetype        TEXT,
+        path            TEXT NOT NULL,
+        "extractedText" TEXT,
+        "aiDescription" TEXT,
+        "aiSummary"     TEXT,
+        "uploadedAt"    TIMESTAMPTZ DEFAULT NOW(),
+        pinned          INTEGER DEFAULT 0
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS debates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    debateId TEXT NOT NULL UNIQUE,
-    topic TEXT NOT NULL,
-    modelA TEXT NOT NULL,
-    modelB TEXT NOT NULL,
-    rounds TEXT DEFAULT '[]',
-    projectId INTEGER REFERENCES projects(id) ON DELETE SET NULL,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+    // ── Chat ──────────────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        "sessionId"      TEXT PRIMARY KEY,
+        "projectId"      INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+        title            TEXT,
+        "isSummarized"   INTEGER DEFAULT 0,
+        "summaryContent" TEXT,
+        "summarizedAt"   TIMESTAMPTZ,
+        "createdAt"      TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"      TIMESTAMPTZ DEFAULT NOW(),
+        starred          INTEGER DEFAULT 0,
+        "inputTokens"    INTEGER DEFAULT 0,
+        "outputTokens"   INTEGER DEFAULT 0,
+        "personaId"      INTEGER,
+        "branchedFrom"   TEXT
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id          SERIAL PRIMARY KEY,
+        "sessionId" TEXT NOT NULL,
+        "projectId" INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+        role        TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+        content     TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS comparisons (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    projectId INTEGER REFERENCES projects(id) ON DELETE SET NULL,
-    docAName TEXT,
-    docBName TEXT,
-    mode TEXT,
-    model TEXT,
-    result TEXT,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+    // ── AI features ───────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS debates (
+        id          SERIAL PRIMARY KEY,
+        "debateId"  TEXT NOT NULL UNIQUE,
+        topic       TEXT NOT NULL,
+        "modelA"    TEXT NOT NULL,
+        "modelB"    TEXT NOT NULL,
+        rounds      TEXT DEFAULT '[]',
+        "projectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS search_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    query TEXT,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS comparisons (
+        id          SERIAL PRIMARY KEY,
+        "projectId" INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        "docAName"  TEXT,
+        "docBName"  TEXT,
+        mode        TEXT,
+        model       TEXT,
+        result      TEXT,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS password_resets (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    token TEXT NOT NULL UNIQUE,
-    email TEXT NOT NULL,
-    expiresAt TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+    // ── Config & logs ─────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    notes TEXT,
-    status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('todo','in-progress','done')),
-    priority TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('high','medium','low')),
-    category TEXT,
-    projectId INTEGER REFERENCES projects(id) ON DELETE SET NULL,
-    parentTaskId INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
-    dueDate TEXT,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS search_logs (
+        id          SERIAL PRIMARY KEY,
+        query       TEXT,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS task_tags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    taskId INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    tag TEXT NOT NULL
-  );
+    // ── Goals (created before tasks so keyResultId FK can be added after) ─────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS objectives (
+        id                  SERIAL PRIMARY KEY,
+        title               TEXT NOT NULL,
+        description         TEXT,
+        timeframe           TEXT,
+        status              TEXT DEFAULT 'active',
+        color               TEXT DEFAULT '#6366f1',
+        "createdAt"         TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"         TIMESTAMPTZ DEFAULT NOW(),
+        "renewalDimension"  TEXT DEFAULT NULL
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS task_comments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    taskId INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    type TEXT NOT NULL DEFAULT 'user' CHECK(type IN ('user', 'system')),
-    content TEXT NOT NULL,
-    createdAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS key_results (
+        id             SERIAL PRIMARY KEY,
+        "objectiveId"  INTEGER NOT NULL REFERENCES objectives(id) ON DELETE CASCADE,
+        title          TEXT NOT NULL,
+        "targetValue"  REAL NOT NULL DEFAULT 100,
+        "currentValue" REAL NOT NULL DEFAULT 0,
+        unit           TEXT DEFAULT '%',
+        status         TEXT DEFAULT 'active',
+        "dueDate"      TEXT,
+        "createdAt"    TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS task_templates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    description TEXT,
-    category TEXT,
-    priority TEXT DEFAULT 'medium',
-    recurrence TEXT DEFAULT 'none',
-    tags TEXT DEFAULT '',
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    // ── Tasks ─────────────────────────────────────────────────────────────────
+    // "order" is a reserved word — kept quoted throughout.
+    // keyResultId defined without FK here; constraint added below after key_results exists.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id                  SERIAL PRIMARY KEY,
+        title               TEXT NOT NULL,
+        notes               TEXT,
+        status              TEXT NOT NULL DEFAULT 'todo'   CHECK(status   IN ('todo','in-progress','done')),
+        priority            TEXT NOT NULL DEFAULT 'medium' CHECK(priority IN ('high','medium','low')),
+        category            TEXT,
+        "projectId"         INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        "parentTaskId"      INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+        "dueDate"           TEXT,
+        "createdAt"         TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"         TIMESTAMPTZ DEFAULT NOW(),
+        "order"             INTEGER DEFAULT 0,
+        recurrence          TEXT DEFAULT 'none',
+        "sourceSessionId"   TEXT DEFAULT NULL,
+        "recurrenceConfig"  TEXT DEFAULT NULL,
+        "recurrenceCount"   INTEGER DEFAULT 0,
+        "shareToken"        TEXT DEFAULT NULL,
+        "estimatedMinutes"  INTEGER DEFAULT NULL,
+        "keyResultId"       INTEGER,
+        "timeSpentMinutes"  INTEGER DEFAULT 0,
+        "isUrgent"          INTEGER DEFAULT 0,
+        "renewalDimension"  TEXT DEFAULT NULL
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS template_subtasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    templateId INTEGER NOT NULL REFERENCES task_templates(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    "order" INTEGER DEFAULT 0
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS task_tags (
+        id       SERIAL PRIMARY KEY,
+        "taskId" INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        tag      TEXT NOT NULL
+      )
+    `);
 
-  CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
-    type,
-    projectId UNINDEXED,
-    title,
-    body
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS task_comments (
+        id          SERIAL PRIMARY KEY,
+        "taskId"    INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        type        TEXT NOT NULL DEFAULT 'user' CHECK(type IN ('user', 'system')),
+        content     TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS objectives (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT,
-    timeframe TEXT,
-    status TEXT DEFAULT 'active',
-    color TEXT DEFAULT '#6366f1',
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS task_templates (
+        id          SERIAL PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT,
+        category    TEXT,
+        priority    TEXT DEFAULT 'medium',
+        recurrence  TEXT DEFAULT 'none',
+        tags        TEXT DEFAULT '',
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS key_results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    objectiveId INTEGER NOT NULL REFERENCES objectives(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    targetValue REAL NOT NULL DEFAULT 100,
-    currentValue REAL NOT NULL DEFAULT 0,
-    unit TEXT DEFAULT '%',
-    status TEXT DEFAULT 'active',
-    dueDate TEXT,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS template_subtasks (
+        id           SERIAL PRIMARY KEY,
+        "templateId" INTEGER NOT NULL REFERENCES task_templates(id) ON DELETE CASCADE,
+        title        TEXT NOT NULL,
+        "order"      INTEGER DEFAULT 0
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS task_dependencies (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    taskId INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    blockedByTaskId INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    createdAt TEXT DEFAULT (datetime('now')),
-    UNIQUE(taskId, blockedByTaskId)
-  );
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS task_dependencies (
+        id                SERIAL PRIMARY KEY,
+        "taskId"          INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        "blockedByTaskId" INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        "createdAt"       TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE("taskId", "blockedByTaskId")
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS gmail_tokens (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    userId INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    accessToken TEXT NOT NULL,
-    refreshToken TEXT,
-    tokenType TEXT DEFAULT 'Bearer',
-    expiryDate INTEGER,
-    scope TEXT,
-    email TEXT,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
+    // ── Gmail ─────────────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gmail_tokens (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        "accessToken"  TEXT NOT NULL,
+        "refreshToken" TEXT,
+        "tokenType"    TEXT DEFAULT 'Bearer',
+        "expiryDate"   BIGINT,
+        scope          TEXT,
+        email          TEXT,
+        "createdAt"    TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-  CREATE TABLE IF NOT EXISTS notes (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
-    title      TEXT NOT NULL DEFAULT 'Untitled',
-    body       TEXT NOT NULL DEFAULT '',
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  );
-`);
+    // ── Notes ─────────────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notes (
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+        title      TEXT NOT NULL DEFAULT 'Untitled',
+        body       TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
-// Migrations — safe to run on existing DBs
-['ALTER TABLE projects ADD COLUMN sortOrder INTEGER DEFAULT 0',
- 'ALTER TABLE projects ADD COLUMN model TEXT DEFAULT \'claude-sonnet-4-6\'',
- 'ALTER TABLE projects ADD COLUMN projectType TEXT',
- 'ALTER TABLE projects ADD COLUMN typeConfig TEXT',
- 'ALTER TABLE sessions ADD COLUMN starred INTEGER DEFAULT 0',
- 'ALTER TABLE sessions ADD COLUMN inputTokens INTEGER DEFAULT 0',
- 'ALTER TABLE sessions ADD COLUMN outputTokens INTEGER DEFAULT 0',
- 'ALTER TABLE files ADD COLUMN pinned INTEGER DEFAULT 0',
- 'ALTER TABLE projects ADD COLUMN folderId INTEGER',
- 'ALTER TABLE projects ADD COLUMN personaId INTEGER',
- 'ALTER TABLE sessions ADD COLUMN personaId INTEGER',
- 'ALTER TABLE sessions ADD COLUMN branchedFrom TEXT',
- 'ALTER TABLE tasks ADD COLUMN "order" INTEGER DEFAULT 0',
- 'ALTER TABLE tasks ADD COLUMN recurrence TEXT DEFAULT \'none\'',
- 'ALTER TABLE tasks ADD COLUMN sourceSessionId TEXT DEFAULT NULL',
- 'ALTER TABLE tasks ADD COLUMN recurrenceConfig TEXT DEFAULT NULL',
- 'ALTER TABLE tasks ADD COLUMN recurrenceCount INTEGER DEFAULT 0',
- 'ALTER TABLE tasks ADD COLUMN shareToken TEXT DEFAULT NULL',
- 'ALTER TABLE tasks ADD COLUMN estimatedMinutes INTEGER DEFAULT NULL',
- 'ALTER TABLE tasks ADD COLUMN keyResultId INTEGER REFERENCES key_results(id) ON DELETE SET NULL',
- 'ALTER TABLE tasks ADD COLUMN timeSpentMinutes INTEGER DEFAULT 0',
- 'ALTER TABLE tasks ADD COLUMN isUrgent INTEGER DEFAULT 0',
- 'ALTER TABLE tasks ADD COLUMN renewalDimension TEXT DEFAULT NULL',
- 'ALTER TABLE objectives ADD COLUMN renewalDimension TEXT DEFAULT NULL',
-].forEach(sql => { try { db.exec(sql); } catch (_) {} });
+    // ── Full-text search placeholder ──────────────────────────────────────────
+    // The SQLite FTS5 virtual table is replaced with a plain table for now.
+    // Phase 5 adds GIN indexes and converts queries to tsvector / plainto_tsquery.
+    // projectId stored as TEXT to match existing write patterns (String(projectId)).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS search_index (
+        id          SERIAL PRIMARY KEY,
+        type        TEXT,
+        "projectId" TEXT,
+        title       TEXT,
+        body        TEXT
+      )
+    `);
 
-// Unique index for shareToken (separate try/catch — CREATE INDEX IF NOT EXISTS is idempotent)
-try { db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_shareToken ON tasks(shareToken) WHERE shareToken IS NOT NULL').run(); } catch (_) {}
-try { db.prepare('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id)').run(); } catch (_) {}
-try { db.prepare('CREATE INDEX IF NOT EXISTS idx_notes_project_id ON notes(project_id)').run(); } catch (_) {}
+    await client.query('COMMIT');
 
-module.exports = db;
+    // ── Post-commit: FK and indexes (idempotent) ──────────────────────────────
+
+    // tasks.keyResultId → key_results (forward reference, added after both tables exist)
+    await pool.query(`
+      DO $$ BEGIN
+        ALTER TABLE tasks
+          ADD CONSTRAINT fk_tasks_keyresultid
+          FOREIGN KEY ("keyResultId") REFERENCES key_results(id) ON DELETE SET NULL;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$
+    `);
+
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_sharetoken
+        ON tasks("shareToken") WHERE "shareToken" IS NOT NULL
+    `);
+
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_user_id    ON notes(user_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_project_id  ON notes(project_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_session  ON messages("sessionId")`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_project     ON tasks("projectId")`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_project  ON sessions("projectId")`);
+
+    // ── Full-text search GIN index (Phase 5) ──────────────────────────────────
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_search_index_fts
+        ON search_index USING GIN (to_tsvector('english', COALESCE(title,'') || ' ' || COALESCE(body,'')))
+    `);
+
+    console.log('[db] Schema ready');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ── Startup ───────────────────────────────────────────────────────────────────
+
+pool.query('SELECT NOW()')
+  .then(() => {
+    console.log('[db] PostgreSQL connected');
+    return initSchema();
+  })
+  .catch(err => {
+    console.error('[db] PostgreSQL startup failed:', err.message);
+    process.exit(1);
+  });
+
+module.exports = { pool };

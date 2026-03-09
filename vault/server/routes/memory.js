@@ -1,36 +1,60 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { pool } = require('../db');
 
 // GET /api/memory
-router.get('/', (req, res) => {
-  const rows = db.prepare('SELECT * FROM memory ORDER BY createdAt DESC').all();
-  res.json(rows);
+router.get('/', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM memory ORDER BY "createdAt" DESC');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/memory
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { content } = req.body;
   if (!content?.trim()) return res.status(400).json({ error: 'content required' });
-  const result = db.prepare('INSERT INTO memory (content) VALUES (?)').run(content.trim());
-  const row = db.prepare('SELECT * FROM memory WHERE id=?').get(result.lastInsertRowid);
-  res.status(201).json(row);
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO memory (content) VALUES ($1) RETURNING id',
+      [content.trim()]
+    );
+    const { rows: mem } = await pool.query('SELECT * FROM memory WHERE id=$1', [rows[0].id]);
+    res.status(201).json(mem[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PUT /api/memory/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { content } = req.body;
   if (!content?.trim()) return res.status(400).json({ error: 'content required' });
-  db.prepare("UPDATE memory SET content=?, updatedAt=datetime('now') WHERE id=?").run(content.trim(), req.params.id);
-  const row = db.prepare('SELECT * FROM memory WHERE id=?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Not found' });
-  res.json(row);
+  try {
+    await pool.query(
+      'UPDATE memory SET content=$1, "updatedAt"=NOW() WHERE id=$2',
+      [content.trim(), req.params.id]
+    );
+    const { rows } = await pool.query('SELECT * FROM memory WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE /api/memory/:id
-router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM memory WHERE id=?').run(req.params.id);
-  res.json({ ok: true });
+router.delete('/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM memory WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { pool } = require('../db');
 const http = require('http');
 const https = require('https');
 const dns = require('dns');
@@ -86,8 +86,16 @@ function parseHtml(html, url) {
 }
 
 // GET /api/pinned-urls/:projectId
-router.get('/:projectId', (req, res) => {
-  res.json(db.prepare('SELECT * FROM pinned_urls WHERE projectId=? ORDER BY createdAt ASC').all(req.params.projectId));
+router.get('/:projectId', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM pinned_urls WHERE "projectId"=$1 ORDER BY "createdAt" ASC',
+      [req.params.projectId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/pinned-urls — fetch + store
@@ -97,10 +105,12 @@ router.post('/', async (req, res) => {
   try {
     const raw = await fetchUrl(url.startsWith('http') ? url : `https://${url}`);
     const { title, content } = parseHtml(raw, url);
-    const result = db.prepare(
-      'INSERT INTO pinned_urls (projectId, url, title, content) VALUES (?, ?, ?, ?)'
-    ).run(projectId, url, title, content);
-    res.status(201).json(db.prepare('SELECT * FROM pinned_urls WHERE id=?').get(result.lastInsertRowid));
+    const { rows } = await pool.query(
+      'INSERT INTO pinned_urls ("projectId", url, title, content) VALUES ($1, $2, $3, $4) RETURNING id',
+      [projectId, url, title, content]
+    );
+    const { rows: pinned } = await pool.query('SELECT * FROM pinned_urls WHERE id=$1', [rows[0].id]);
+    res.status(201).json(pinned[0]);
   } catch (err) {
     const status = (err.message.includes('private') || err.message.includes('DNS') || err.message.includes('too large')) ? 400 : 500;
     res.status(status).json({ error: err.message });
@@ -108,9 +118,13 @@ router.post('/', async (req, res) => {
 });
 
 // DELETE /api/pinned-urls/:id
-router.delete('/:id', (req, res) => {
-  db.prepare('DELETE FROM pinned_urls WHERE id=?').run(req.params.id);
-  res.json({ ok: true });
+router.delete('/:id', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM pinned_urls WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

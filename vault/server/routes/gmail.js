@@ -1,9 +1,11 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
 const { google } = require('googleapis');
 const Anthropic = require('@anthropic-ai/sdk');
 const rateLimit = require('express-rate-limit');
-const db = require('../db');
+const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { translateToGmailQuery, GMAIL_LIMITS } = require('../services/gmailNLP');
 const { encrypt, decrypt } = require('../utils/encryption');
@@ -49,24 +51,36 @@ router.use((req, res, next) => {
 });
 
 // GET /api/gmail/status
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID) {
     return res.json({ connected: false, configured: false, email: null });
   }
-  const row = db.prepare('SELECT email FROM gmail_tokens WHERE userId=?').get(req.user.id);
-  res.json({ connected: !!row, configured: true, email: row?.email || null });
+  try {
+    const { rows } = await pool.query(
+      'SELECT email FROM gmail_tokens WHERE "userId"=$1', [req.user.id]
+    );
+    res.json({ connected: !!rows[0], configured: true, email: rows[0]?.email || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/gmail/auth — generate OAuth URL
-router.get('/auth', gmailAuthLimiter, (req, res) => {
+router.get('/auth', gmailAuthLimiter, async (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {
     return res.status(400).json({ error: 'Gmail OAuth not configured. Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI to environment variables.' });
   }
 
   const state = require('crypto').randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)')
-    .run(`gmail_oauth_state_${state}`, JSON.stringify({ userId: req.user.id, expiresAt }));
+  try {
+    await pool.query(
+      'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value',
+      [`gmail_oauth_state_${state}`, JSON.stringify({ userId: req.user.id, expiresAt })]
+    );
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 
   const oauth2Client = getOAuth2Client();
   const authUrl = oauth2Client.generateAuthUrl({
@@ -95,25 +109,27 @@ router.get('/callback', async (req, res) => {
   }
 
   const stateKey = `gmail_oauth_state_${state}`;
-  const stateRow = db.prepare('SELECT value FROM settings WHERE key=?').get(stateKey);
-  if (!stateRow) {
-    return res.redirect(`${appUrl}/settings?gmailError=invalid_state`);
-  }
-
-  let userId, expiresAt;
   try {
-    ({ userId, expiresAt } = JSON.parse(stateRow.value));
-  } catch {
-    return res.redirect(`${appUrl}/settings?gmailError=invalid_state`);
-  }
+    const { rows: stateRows } = await pool.query(
+      'SELECT value FROM settings WHERE key=$1', [stateKey]
+    );
+    if (!stateRows[0]) {
+      return res.redirect(`${appUrl}/settings?gmailError=invalid_state`);
+    }
 
-  if (new Date(expiresAt) < new Date()) {
-    db.prepare('DELETE FROM settings WHERE key=?').run(stateKey);
-    return res.redirect(`${appUrl}/settings?gmailError=state_expired`);
-  }
-  db.prepare('DELETE FROM settings WHERE key=?').run(stateKey);
+    let userId, expiresAt;
+    try {
+      ({ userId, expiresAt } = JSON.parse(stateRows[0].value));
+    } catch {
+      return res.redirect(`${appUrl}/settings?gmailError=invalid_state`);
+    }
 
-  try {
+    if (new Date(expiresAt) < new Date()) {
+      await pool.query('DELETE FROM settings WHERE key=$1', [stateKey]);
+      return res.redirect(`${appUrl}/settings?gmailError=state_expired`);
+    }
+    await pool.query('DELETE FROM settings WHERE key=$1', [stateKey]);
+
     const oauth2Client = getOAuth2Client();
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
@@ -122,31 +138,34 @@ router.get('/callback', async (req, res) => {
     const userInfo = await oauth2Api.userinfo.get();
     const email = userInfo.data.email;
 
-    const existing = db.prepare('SELECT id, refreshToken FROM gmail_tokens WHERE userId=?').get(userId);
-    if (existing) {
-      // Decrypt the stored refresh token before using it as a fallback (it may be encrypted)
-      const existingRefresh = decrypt(existing.refreshToken);
-      db.prepare(
-        `UPDATE gmail_tokens SET accessToken=?, refreshToken=?, expiryDate=?, scope=?, email=?, updatedAt=datetime('now') WHERE userId=?`
-      ).run(
-        encrypt(tokens.access_token),
-        encrypt(tokens.refresh_token || existingRefresh),
-        tokens.expiry_date || null,
-        tokens.scope || null,
-        email,
-        userId
+    const { rows: existing } = await pool.query(
+      'SELECT id, "refreshToken" FROM gmail_tokens WHERE "userId"=$1', [userId]
+    );
+    if (existing[0]) {
+      const existingRefresh = decrypt(existing[0].refreshToken);
+      await pool.query(
+        `UPDATE gmail_tokens SET "accessToken"=$1, "refreshToken"=$2, "expiryDate"=$3, scope=$4, email=$5, "updatedAt"=NOW() WHERE "userId"=$6`,
+        [
+          encrypt(tokens.access_token),
+          encrypt(tokens.refresh_token || existingRefresh),
+          tokens.expiry_date || null,
+          tokens.scope || null,
+          email,
+          userId,
+        ]
       );
     } else {
-      db.prepare(
-        'INSERT INTO gmail_tokens (userId, accessToken, refreshToken, tokenType, expiryDate, scope, email) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).run(
-        userId,
-        encrypt(tokens.access_token),
-        tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
-        tokens.token_type || 'Bearer',
-        tokens.expiry_date || null,
-        tokens.scope || null,
-        email
+      await pool.query(
+        'INSERT INTO gmail_tokens ("userId", "accessToken", "refreshToken", "tokenType", "expiryDate", scope, email) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+        [
+          userId,
+          encrypt(tokens.access_token),
+          tokens.refresh_token ? encrypt(tokens.refresh_token) : null,
+          tokens.token_type || 'Bearer',
+          tokens.expiry_date || null,
+          tokens.scope || null,
+          email,
+        ]
       );
     }
 
@@ -158,37 +177,47 @@ router.get('/callback', async (req, res) => {
 });
 
 // POST /api/gmail/disconnect
-router.post('/disconnect', (req, res) => {
-  const row = db.prepare('SELECT accessToken FROM gmail_tokens WHERE userId=?').get(req.user.id);
-  if (row) {
-    try {
-      const oauth2Client = getOAuth2Client();
-      oauth2Client.revokeToken(decrypt(row.accessToken)).catch(() => {});
-    } catch (_) {}
-    db.prepare('DELETE FROM gmail_tokens WHERE userId=?').run(req.user.id);
+router.post('/disconnect', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT "accessToken" FROM gmail_tokens WHERE "userId"=$1', [req.user.id]
+    );
+    if (rows[0]) {
+      try {
+        const oauth2Client = getOAuth2Client();
+        oauth2Client.revokeToken(decrypt(rows[0].accessToken)).catch(() => {});
+      } catch (_) {}
+      await pool.query('DELETE FROM gmail_tokens WHERE "userId"=$1', [req.user.id]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-  res.json({ ok: true });
 });
 
 // Build authenticated Gmail client for a user
-function getGmailClient(userId) {
-  const row = db.prepare('SELECT * FROM gmail_tokens WHERE userId=?').get(userId);
-  if (!row) throw new Error('Gmail not connected');
+async function getGmailClient(userId) {
+  const { rows } = await pool.query('SELECT * FROM gmail_tokens WHERE "userId"=$1', [userId]);
+  if (!rows[0]) throw new Error('Gmail not connected');
+  const row = rows[0];
 
   const oauth2Client = getOAuth2Client();
   oauth2Client.setCredentials({
     access_token: decrypt(row.accessToken),
     refresh_token: decrypt(row.refreshToken),
     token_type: row.tokenType || 'Bearer',
-    expiry_date: row.expiryDate || undefined,
+    // BIGINT comes back as string from pg — convert to number
+    expiry_date: row.expiryDate ? Number(row.expiryDate) : undefined,
     scope: row.scope || undefined,
   });
 
-  // Persist refreshed access token (encrypt before storing)
+  // Persist refreshed access token (fire-and-forget — event listener can't be async)
   oauth2Client.on('tokens', (tokens) => {
     if (tokens.access_token) {
-      db.prepare(`UPDATE gmail_tokens SET accessToken=?, expiryDate=?, updatedAt=datetime('now') WHERE userId=?`)
-        .run(encrypt(tokens.access_token), tokens.expiry_date || null, userId);
+      pool.query(
+        `UPDATE gmail_tokens SET "accessToken"=$1, "expiryDate"=$2, "updatedAt"=NOW() WHERE "userId"=$3`,
+        [encrypt(tokens.access_token), tokens.expiry_date || null, userId]
+      ).catch(err => console.error('[gmail] token refresh persist error:', err));
     }
   });
 
@@ -234,7 +263,7 @@ router.get('/search', gmailSearchLimiter, async (req, res) => {
 
     const resolvedMax = Math.min(parseInt(max) || nlpMax, GMAIL_LIMITS.count);
 
-    const gmail = getGmailClient(req.user.id);
+    const gmail = await getGmailClient(req.user.id);
     const listRes = await gmail.users.messages.list({
       userId: 'me',
       q: gmailQuery,
@@ -274,7 +303,7 @@ router.get('/search', gmailSearchLimiter, async (req, res) => {
 // GET /api/gmail/thread/:threadId
 router.get('/thread/:threadId', gmailThreadLimiter, async (req, res) => {
   try {
-    const gmail = getGmailClient(req.user.id);
+    const gmail = await getGmailClient(req.user.id);
     const thread = await gmail.users.threads.get({
       userId: 'me',
       id: req.params.threadId,
@@ -307,7 +336,7 @@ router.post('/ask', gmailAskLimiter, async (req, res) => {
   if (!process.env.ANTHROPIC_API_KEY) return res.status(400).json({ error: 'ANTHROPIC_API_KEY not configured' });
 
   try {
-    const gmail = getGmailClient(req.user.id);
+    const gmail = await getGmailClient(req.user.id);
     const thread = await gmail.users.threads.get({ userId: 'me', id: threadId, format: 'full' });
 
     const emailText = (thread.data.messages || []).map(msg => {
@@ -328,7 +357,6 @@ router.post('/ask', gmailAskLimiter, async (req, res) => {
     const stream = anthropic.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
-      store: false,
       system: `You are a personal email assistant integrated into the user's own productivity workspace. The user has authenticated their personal Gmail account via Google OAuth — every email you receive is FROM THEIR OWN INBOX. They are the author or recipient of every email shown.
 
 You must help the user with ANY of their own emails including:

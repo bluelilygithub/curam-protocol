@@ -1,13 +1,22 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
-const db = require('../db');
+const { pool } = require('../db');
 
 // GET /api/export/chat/:sessionId — JSON download
-router.get('/chat/:sessionId', (req, res) => {
-  const messages = db.prepare('SELECT * FROM messages WHERE sessionId=? ORDER BY createdAt ASC').all(req.params.sessionId);
-  res.setHeader('Content-Disposition', `attachment; filename="chat-${req.params.sessionId}.json"`);
-  res.json(messages);
+router.get('/chat/:sessionId', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC',
+      [req.params.sessionId]
+    );
+    res.setHeader('Content-Disposition', `attachment; filename="chat-${req.params.sessionId}.json"`);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/export/chat/pdf — PDF export
@@ -15,10 +24,13 @@ router.post('/chat/pdf', async (req, res) => {
   const { sessionId, title } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
 
-  const messages = db.prepare('SELECT * FROM messages WHERE sessionId=? ORDER BY createdAt ASC').all(sessionId);
-  if (messages.length === 0) return res.status(404).json({ error: 'No messages found' });
-
   try {
+    const { rows: messages } = await pool.query(
+      'SELECT * FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC',
+      [sessionId]
+    );
+    if (messages.length === 0) return res.status(404).json({ error: 'No messages found' });
+
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -83,22 +95,36 @@ router.post('/chat/pdf', async (req, res) => {
 });
 
 // GET /api/export/project/:id
-router.get('/project/:id', (req, res) => {
-  const project = db.prepare('SELECT * FROM projects WHERE id=?').get(req.params.id);
-  if (!project) return res.status(404).json({ error: 'Not found' });
+router.get('/project/:id', async (req, res) => {
+  try {
+    const { rows: projects } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    if (!projects[0]) return res.status(404).json({ error: 'Not found' });
 
-  const files = db.prepare('SELECT id, name, size, mimetype, aiSummary, uploadedAt FROM files WHERE projectId=?').all(req.params.id);
-  const messages = db.prepare('SELECT * FROM messages WHERE projectId=? ORDER BY createdAt ASC').all(req.params.id);
+    const { rows: files } = await pool.query(
+      'SELECT id, name, size, mimetype, "aiSummary", "uploadedAt" FROM files WHERE "projectId"=$1',
+      [req.params.id]
+    );
+    const { rows: messages } = await pool.query(
+      'SELECT * FROM messages WHERE "projectId"=$1 ORDER BY "createdAt" ASC',
+      [req.params.id]
+    );
 
-  res.setHeader('Content-Disposition', `attachment; filename="project-${req.params.id}.json"`);
-  res.json({ project, files, messages });
+    res.setHeader('Content-Disposition', `attachment; filename="project-${req.params.id}.json"`);
+    res.json({ project: projects[0], files, messages });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/export/projects
-router.get('/projects', (req, res) => {
-  const projects = db.prepare('SELECT * FROM projects ORDER BY updatedAt DESC').all();
-  res.setHeader('Content-Disposition', 'attachment; filename="all-projects.json"');
-  res.json(projects);
+router.get('/projects', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM projects ORDER BY "updatedAt" DESC');
+    res.setHeader('Content-Disposition', 'attachment; filename="all-projects.json"');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

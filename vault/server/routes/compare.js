@@ -4,7 +4,7 @@ const multer = require('multer');
 const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const db = require('../db');
+const { pool } = require('../db');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -31,7 +31,8 @@ const MODE_VERB = {
 
 async function resolveDocument(fileId, fileBuffer, fileName, fileMime) {
   if (fileId) {
-    const file = db.prepare('SELECT * FROM files WHERE id=?').get(parseInt(fileId, 10));
+    const { rows } = await pool.query('SELECT * FROM files WHERE id=$1', [parseInt(fileId, 10)]);
+    const file = rows[0];
     if (!file) throw new Error(`File ID ${fileId} not found`);
     if (file.mimetype?.startsWith('image/')) {
       const data = fs.readFileSync(file.path).toString('base64');
@@ -145,13 +146,18 @@ router.post(
 );
 
 // POST /api/compare/save
-router.post('/save', (req, res) => {
+router.post('/save', async (req, res) => {
   const { projectId, docAName, docBName, mode, model, result } = req.body;
   if (!result) return res.status(400).json({ error: 'result required' });
-  const r = db.prepare(
-    'INSERT INTO comparisons (projectId, docAName, docBName, mode, model, result) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(projectId || null, docAName || '', docBName || '', mode || 'diff', model || '', result);
-  res.json({ id: r.lastInsertRowid });
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO comparisons ("projectId", "docAName", "docBName", mode, model, result) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [projectId || null, docAName || '', docBName || '', mode || 'diff', model || '', result]
+    );
+    res.json({ id: rows[0].id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

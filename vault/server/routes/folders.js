@@ -1,34 +1,57 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { pool } = require('../db');
 
 // GET /api/folders
-router.get('/', (req, res) => {
-  const folders = db.prepare('SELECT * FROM folders ORDER BY name ASC').all();
-  res.json(folders);
+router.get('/', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM folders ORDER BY name ASC');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/folders
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'name required' });
-  const result = db.prepare('INSERT INTO folders (name) VALUES (?)').run(name.trim());
-  res.status(201).json(db.prepare('SELECT * FROM folders WHERE id=?').get(result.lastInsertRowid));
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO folders (name) VALUES ($1) RETURNING id',
+      [name.trim()]
+    );
+    const { rows: folder } = await pool.query('SELECT * FROM folders WHERE id=$1', [rows[0].id]);
+    res.status(201).json(folder[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PUT /api/folders/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { name } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'name required' });
-  db.prepare('UPDATE folders SET name=? WHERE id=?').run(name.trim(), req.params.id);
-  res.json(db.prepare('SELECT * FROM folders WHERE id=?').get(req.params.id));
+  try {
+    await pool.query('UPDATE folders SET name=$1 WHERE id=$2', [name.trim(), req.params.id]);
+    const { rows } = await pool.query('SELECT * FROM folders WHERE id=$1', [req.params.id]);
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE /api/folders/:id — unassign projects first
-router.delete('/:id', (req, res) => {
-  db.prepare('UPDATE projects SET folderId=NULL WHERE folderId=?').run(req.params.id);
-  db.prepare('DELETE FROM folders WHERE id=?').run(req.params.id);
-  res.json({ ok: true });
+router.delete('/:id', async (req, res) => {
+  try {
+    await pool.query('UPDATE projects SET "folderId"=NULL WHERE "folderId"=$1', [req.params.id]);
+    await pool.query('DELETE FROM folders WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

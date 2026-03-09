@@ -1,7 +1,22 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(where git:*)",
+      "Bash(\"/c/Program Files/Git/bin/git\":*)",
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" install:*)",
+      "Bash(export:*)",
+      "Bash(node:*)",
+      "Bash(where node:*)",
+      "Bash(\"C:\\\\Program Files\\\\nodejs\\\\node.exe\":*)",
+      "Bash(powershell.exe:*)",
+      "Bash(\"/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe\":*)",
+      "Bash(/c/Windows/System32/cmd.exe:*)",
+      "Bash(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe:*)",
+      "Bash(/c/Windows/System32/wsl.exe:*)",
+      "Bash(\"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" uninstall:*)",
+      "Bash(\"/c/Program Files/nodejs/npm.cmd\" uninstall:*)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\":*)"
     ]
   }
 }

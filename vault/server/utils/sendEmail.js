@@ -1,16 +1,11 @@
 const nodemailer = require('nodemailer');
 const https = require('https');
 
-let _db;
-function getDb() {
-  if (!_db) _db = require('../db');
-  return _db;
-}
-
-function getMailChannelKey() {
+async function getMailChannelKey() {
   try {
-    const row = getDb().prepare("SELECT value FROM settings WHERE key='MAIL_CHANNEL_API_KEY'").get();
-    if (row?.value) return row.value;
+    const { pool } = require('../db');
+    const { rows } = await pool.query("SELECT value FROM settings WHERE key='MAIL_CHANNEL_API_KEY'");
+    if (rows[0]?.value) return rows[0].value;
   } catch (_) {}
   return process.env.MAIL_CHANNEL_API_KEY || null;
 }
@@ -20,7 +15,7 @@ function getMailChannelKey() {
  * @param {{ to: string, subject: string, html: string, from?: string }} opts
  */
 async function sendEmail({ to, subject, html, from }) {
-  const mailChannelKey = getMailChannelKey();
+  const mailChannelKey = await getMailChannelKey();
 
   if (mailChannelKey) {
     const payload = JSON.stringify({

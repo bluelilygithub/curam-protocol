@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const https = require('https');
 const rateLimit = require('express-rate-limit');
-const db = require('../db');
+const { pool } = require('../db');
 
 const searchLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -41,10 +41,10 @@ router.get('/', searchLimiter, async (req, res) => {
   let apiKey = process.env.SEARCH_API_KEY;
   let provider = (process.env.SEARCH_PROVIDER || '').toLowerCase();
   try {
-    const keyRow = db.prepare("SELECT value FROM settings WHERE key='SEARCH_API_KEY'").get();
-    if (keyRow?.value) apiKey = keyRow.value;
-    const provRow = db.prepare("SELECT value FROM settings WHERE key='SEARCH_PROVIDER'").get();
-    if (provRow?.value) provider = provRow.value.toLowerCase();
+    const { rows: keyRows } = await pool.query("SELECT value FROM settings WHERE key='SEARCH_API_KEY'");
+    if (keyRows[0]?.value) apiKey = keyRows[0].value;
+    const { rows: provRows } = await pool.query("SELECT value FROM settings WHERE key='SEARCH_PROVIDER'");
+    if (provRows[0]?.value) provider = provRows[0].value.toLowerCase();
   } catch (_) {}
   if (!apiKey) {
     return res.status(501).json({
@@ -53,7 +53,7 @@ router.get('/', searchLimiter, async (req, res) => {
   }
 
   try {
-    db.prepare('INSERT INTO search_logs (query) VALUES (?)').run(q.trim());
+    await pool.query('INSERT INTO search_logs (query) VALUES ($1)', [q.trim()]);
   } catch (_) {}
 
   // Auto-detect provider from key shape

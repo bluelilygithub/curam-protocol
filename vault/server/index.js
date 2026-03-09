@@ -19,7 +19,7 @@ app.use(express.json({ limit: '10mb' })); app.use(express.urlencoded({ extended:
 
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads'); if (!fs.existsSync(uploadDir)) { fs.mkdirSync(uploadDir, { recursive: true }); }
 
-async function seedInitialUser() { const { SEED_EMAIL, SEED_PASSWORD } = process.env; if (!SEED_EMAIL || !SEED_PASSWORD) return; const db = require('./db'); const existing = db.prepare('SELECT id FROM users WHERE 1').get(); if (existing) return; const bcrypt = require('bcryptjs'); const hash = await bcrypt.hash(SEED_PASSWORD, 12); db.prepare('INSERT INTO users (email, passwordHash) VALUES (?, ?)').run(SEED_EMAIL.toLowerCase(), hash); console.log('Initial user created:', SEED_EMAIL); } seedInitialUser().catch(err => console.error('Seed error:', err));
+async function seedInitialUser() { const { SEED_EMAIL, SEED_PASSWORD } = process.env; if (!SEED_EMAIL || !SEED_PASSWORD) return; const { pool } = require('./db'); const { rows } = await pool.query('SELECT id FROM users LIMIT 1'); if (rows[0]) return; const bcrypt = require('bcryptjs'); const hash = await bcrypt.hash(SEED_PASSWORD, 12); await pool.query('INSERT INTO users (email, "passwordHash") VALUES ($1, $2)', [SEED_EMAIL.toLowerCase(), hash]); console.log('Initial user created:', SEED_EMAIL); } seedInitialUser().catch(err => console.error('Seed error:', err));
 
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/shared', require('./routes/sharedTasks'));

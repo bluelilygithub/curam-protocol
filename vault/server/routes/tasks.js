@@ -1,35 +1,49 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
 const crypto = require('crypto');
 
-const client = new Anthropic();
+const anthropic = new Anthropic();
 
-function getTags(taskId) {
-  return db.prepare('SELECT tag FROM task_tags WHERE taskId=?').all(taskId).map(r => r.tag);
+async function getTags(taskId) {
+  const { rows } = await pool.query('SELECT tag FROM task_tags WHERE "taskId"=$1', [taskId]);
+  return rows.map(r => r.tag);
 }
 
-function getSubtaskStats(taskId) {
-  const subs = db.prepare('SELECT status FROM tasks WHERE parentTaskId=?').all(taskId);
-  return { subtaskCount: subs.length, subtaskDone: subs.filter(s => s.status === 'done').length };
+async function getSubtaskStats(taskId) {
+  const { rows } = await pool.query('SELECT status FROM tasks WHERE "parentTaskId"=$1', [taskId]);
+  return { subtaskCount: rows.length, subtaskDone: rows.filter(s => s.status === 'done').length };
 }
 
-function getKrInfo(keyResultId) {
+async function getKrInfo(keyResultId) {
   if (!keyResultId) return { keyResultTitle: null, objectiveTitle: null };
-  const kr = db.prepare('SELECT kr.title as krTitle, o.title as objTitle FROM key_results kr LEFT JOIN objectives o ON o.id = kr.objectiveId WHERE kr.id = ?').get(keyResultId);
+  const { rows } = await pool.query(
+    'SELECT kr.title as "krTitle", o.title as "objTitle" FROM key_results kr LEFT JOIN objectives o ON o.id = kr."objectiveId" WHERE kr.id = $1',
+    [keyResultId]
+  );
+  const kr = rows[0];
   return { keyResultTitle: kr?.krTitle || null, objectiveTitle: kr?.objTitle || null };
 }
 
-function getBlockerCount(taskId) {
-  const row = db.prepare(
-    "SELECT COUNT(*) as c FROM task_dependencies td JOIN tasks t ON t.id = td.blockedByTaskId WHERE td.taskId = ? AND t.status != 'done'"
-  ).get(taskId);
-  return row?.c || 0;
+async function getBlockerCount(taskId) {
+  const { rows } = await pool.query(
+    "SELECT COUNT(*) as c FROM task_dependencies td JOIN tasks t ON t.id = td.\"blockedByTaskId\" WHERE td.\"taskId\" = $1 AND t.status != 'done'",
+    [taskId]
+  );
+  return Number(rows[0]?.c || 0);
 }
 
-function buildTask(row) {
-  return { ...row, tags: getTags(row.id), ...getSubtaskStats(row.id), ...getKrInfo(row.keyResultId), blockerCount: getBlockerCount(row.id) };
+async function buildTask(row) {
+  const [tags, subtaskStats, krInfo, blockerCount] = await Promise.all([
+    getTags(row.id),
+    getSubtaskStats(row.id),
+    getKrInfo(row.keyResultId),
+    getBlockerCount(row.id),
+  ]);
+  return { ...row, tags, ...subtaskStats, ...krInfo, blockerCount };
 }
 
 function calculateNextDate(dateStr, recurrence) {
@@ -46,21 +60,23 @@ function calculateNextDate(dateStr, recurrence) {
 }
 
 // GET /api/tasks — top-level tasks with optional filters
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { status, priority, category, projectId, tag, dueBefore, dueAfter, search } = req.query;
-    let sql = 'SELECT * FROM tasks WHERE parentTaskId IS NULL';
+    let sql = 'SELECT * FROM tasks WHERE "parentTaskId" IS NULL';
     const p = [];
-    if (status) { sql += ' AND status=?'; p.push(status); }
-    if (priority) { sql += ' AND priority=?'; p.push(priority); }
-    if (category) { sql += ' AND category=?'; p.push(category); }
-    if (projectId) { sql += ' AND projectId=?'; p.push(Number(projectId)); }
-    if (dueBefore) { sql += ' AND dueDate<=?'; p.push(dueBefore); }
-    if (dueAfter) { sql += ' AND dueDate>=?'; p.push(dueAfter); }
-    if (search) { sql += ' AND (title LIKE ? OR notes LIKE ?)'; p.push(`%${search}%`, `%${search}%`); }
-    if (tag) { sql += ' AND id IN (SELECT taskId FROM task_tags WHERE tag=?)'; p.push(tag); }
-    sql += ' ORDER BY "order" ASC, CASE priority WHEN \'high\' THEN 1 WHEN \'medium\' THEN 2 ELSE 3 END, dueDate ASC, createdAt DESC';
-    res.json(db.prepare(sql).all(...p).map(buildTask));
+    let idx = 1;
+    if (status) { sql += ` AND status=$${idx++}`; p.push(status); }
+    if (priority) { sql += ` AND priority=$${idx++}`; p.push(priority); }
+    if (category) { sql += ` AND category=$${idx++}`; p.push(category); }
+    if (projectId) { sql += ` AND "projectId"=$${idx++}`; p.push(Number(projectId)); }
+    if (dueBefore) { sql += ` AND "dueDate"<=$${idx++}`; p.push(dueBefore); }
+    if (dueAfter) { sql += ` AND "dueDate">=$${idx++}`; p.push(dueAfter); }
+    if (search) { sql += ` AND (title ILIKE $${idx} OR notes ILIKE $${idx + 1})`; p.push(`%${search}%`, `%${search}%`); idx += 2; }
+    if (tag) { sql += ` AND id IN (SELECT "taskId" FROM task_tags WHERE tag=$${idx++})`; p.push(tag); }
+    sql += ' ORDER BY "order" ASC NULLS LAST, CASE priority WHEN \'high\' THEN 1 WHEN \'medium\' THEN 2 ELSE 3 END, "dueDate" ASC NULLS LAST, "createdAt" DESC';
+    const { rows } = await pool.query(sql, p);
+    res.json(await Promise.all(rows.map(buildTask)));
   } catch (err) {
     console.error('[tasks GET]', err);
     res.status(500).json({ error: err.message });
@@ -68,25 +84,33 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/tasks/:id/subtasks
-router.get('/:id/subtasks', (req, res) => {
+router.get('/:id/subtasks', async (req, res) => {
   try {
-    const subs = db.prepare('SELECT * FROM tasks WHERE parentTaskId=? ORDER BY createdAt ASC').all(req.params.id);
-    res.json(subs.map(buildTask));
+    const { rows } = await pool.query('SELECT * FROM tasks WHERE "parentTaskId"=$1 ORDER BY "createdAt" ASC', [req.params.id]);
+    res.json(await Promise.all(rows.map(buildTask)));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // PUT /api/tasks/reorder — must be before /:id to avoid route conflict
-router.put('/reorder', (req, res) => {
+router.put('/reorder', async (req, res) => {
   try {
     const { items } = req.body; // [{ id, order }]
     if (!Array.isArray(items)) return res.status(400).json({ error: 'items array required' });
-    const update = db.prepare('UPDATE tasks SET "order"=?, updatedAt=datetime(\'now\') WHERE id=?');
-    const transaction = db.transaction((items) => {
-      for (const { id, order } of items) update.run(order, id);
-    });
-    transaction(items);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const { id, order } of items) {
+        await client.query('UPDATE tasks SET "order"=$1, "updatedAt"=NOW() WHERE id=$2', [order, id]);
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('[tasks reorder]', err);
@@ -95,18 +119,32 @@ router.put('/reorder', (req, res) => {
 });
 
 // PUT /api/tasks/bulk — bulk update — must be before /:id to avoid route conflict
-router.put('/bulk', (req, res) => {
+router.put('/bulk', async (req, res) => {
   try {
     const { ids, updates } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
     const allowed = ['status', 'priority', 'category'];
     const sets = allowed.filter(k => k in updates);
     if (sets.length === 0) return res.status(400).json({ error: 'no valid update fields' });
-    const setClauses = sets.map(k => `${k}=?`).join(', ');
-    const values = sets.map(k => updates[k]);
-    const stmt = db.prepare(`UPDATE tasks SET ${setClauses}, updatedAt=datetime('now') WHERE id=?`);
-    const tx = db.transaction((ids) => { for (const id of ids) stmt.run(...values, id); });
-    tx(ids);
+    const setClauses = sets.map((k, i) => `${k}=$${i + 1}`).join(', ');
+    const setValues = sets.map(k => updates[k]);
+    const idPlaceholder = `$${sets.length + 1}`;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const id of ids) {
+        await client.query(
+          `UPDATE tasks SET ${setClauses}, "updatedAt"=NOW() WHERE id=${idPlaceholder}`,
+          [...setValues, id]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
     res.json({ ok: true, updated: ids.length });
   } catch (err) {
     console.error('[tasks bulk update]', err);
@@ -115,14 +153,24 @@ router.put('/bulk', (req, res) => {
 });
 
 // DELETE /api/tasks/bulk — bulk delete — must be before /:id to avoid route conflict
-router.delete('/bulk', (req, res) => {
+router.delete('/bulk', async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
-    const del = db.prepare('DELETE FROM tasks WHERE id=?');
-    const delSubs = db.prepare('DELETE FROM tasks WHERE parentTaskId=?');
-    const tx = db.transaction((ids) => { for (const id of ids) { delSubs.run(id); del.run(id); } });
-    tx(ids);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const id of ids) {
+        await client.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [id]);
+        await client.query('DELETE FROM tasks WHERE id=$1', [id]);
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
     res.json({ ok: true, deleted: ids.length });
   } catch (err) {
     console.error('[tasks bulk delete]', err);
@@ -135,12 +183,16 @@ router.get('/morning-digest', async (req, res) => {
   try {
     const todayStart = new Date().toISOString().slice(0, 10);
     const todayEnd = todayStart + 'T23:59:59';
-    const overdue = db.prepare(
-      "SELECT * FROM tasks WHERE parentTaskId IS NULL AND status IN ('todo','in-progress') AND dueDate IS NOT NULL AND dueDate < ? ORDER BY dueDate ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10"
-    ).all(todayStart).map(buildTask);
-    const today = db.prepare(
-      "SELECT * FROM tasks WHERE parentTaskId IS NULL AND status IN ('todo','in-progress') AND dueDate >= ? AND dueDate <= ? ORDER BY dueDate ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10"
-    ).all(todayStart, todayEnd).map(buildTask);
+    const { rows: overdueRows } = await pool.query(
+      "SELECT * FROM tasks WHERE \"parentTaskId\" IS NULL AND status IN ('todo','in-progress') AND \"dueDate\" IS NOT NULL AND \"dueDate\" < $1 ORDER BY \"dueDate\" ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10",
+      [todayStart]
+    );
+    const { rows: todayRows } = await pool.query(
+      "SELECT * FROM tasks WHERE \"parentTaskId\" IS NULL AND status IN ('todo','in-progress') AND \"dueDate\" >= $1 AND \"dueDate\" <= $2 ORDER BY \"dueDate\" ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10",
+      [todayStart, todayEnd]
+    );
+    const overdue = await Promise.all(overdueRows.map(buildTask));
+    const today = await Promise.all(todayRows.map(buildTask));
     let suggestion = '';
     if (overdue.length > 0 || today.length > 0) {
       const lines = [
@@ -148,7 +200,7 @@ router.get('/morning-digest', async (req, res) => {
         ...today.map(t => `[TODAY] ${t.title} (${t.priority} priority${t.dueDate?.includes('T') ? ', at ' + t.dueDate.slice(11, 16) : ''})`),
       ];
       try {
-        const response = await client.messages.create({
+        const response = await anthropic.messages.create({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 150,
           system: 'You are a productivity assistant. Given the user\'s task list, recommend what to focus on first today and explain briefly why in 2-3 sentences. Be direct and specific.',
@@ -167,9 +219,10 @@ router.get('/morning-digest', async (req, res) => {
 // POST /api/tasks/weekly-review-suggestions — SSE stream — must be before /:id routes
 router.post('/weekly-review-suggestions', async (req, res) => {
   try {
-    const tasks = db.prepare(
-      "SELECT * FROM tasks WHERE status != 'done' AND parentTaskId IS NULL ORDER BY CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, dueDate ASC LIMIT 20"
-    ).all().map(buildTask);
+    const { rows } = await pool.query(
+      "SELECT * FROM tasks WHERE status != 'done' AND \"parentTaskId\" IS NULL ORDER BY CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, \"dueDate\" ASC NULLS LAST LIMIT 20"
+    );
+    const tasks = await Promise.all(rows.map(buildTask));
     if (tasks.length === 0) {
       res.json({ text: 'No open tasks found. You\'re all caught up — use the new week to plan fresh goals!' });
       return;
@@ -180,7 +233,7 @@ router.post('/weekly-review-suggestions', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    const stream = client.messages.stream({
+    const stream = anthropic.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 400,
       system: 'You are a productivity coach. Based on the user\'s open tasks, give 3-5 concrete, actionable suggestions for the coming week. Be specific, encouraging, and prioritise by impact. Use bullet points.',
@@ -205,7 +258,7 @@ router.post('/weekly-review-suggestions', async (req, res) => {
 });
 
 // POST /api/tasks/import — bulk CSV import — must be before /:id routes
-router.post('/import', (req, res) => {
+router.post('/import', async (req, res) => {
   try {
     const { tasks: rows } = req.body;
     if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'tasks array required' });
@@ -213,37 +266,44 @@ router.post('/import', (req, res) => {
     const validPriorities = ['high', 'medium', 'low'];
     let created = 0, skipped = 0;
     const errors = [];
-    const insertTask = db.prepare(
-      "INSERT INTO tasks (title,notes,status,priority,category,projectId,dueDate,estimatedMinutes,timeSpentMinutes,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))"
-    );
-    const insertTag = db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)');
-    const tx = db.transaction(() => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
       for (let i = 0; i < rows.length; i++) {
         const t = rows[i];
         if (!t.title || !t.title.trim()) { errors.push({ row: i + 1, reason: 'title required' }); skipped++; continue; }
         const status = validStatuses.includes(t.status) ? t.status : 'todo';
         const priority = validPriorities.includes(t.priority) ? t.priority : 'medium';
-        // Validate projectId exists
         let projectId = null;
         if (t.projectId) {
-          const proj = db.prepare('SELECT id FROM projects WHERE id=?').get(Number(t.projectId));
-          projectId = proj ? Number(t.projectId) : null;
+          const { rows: projRows } = await client.query('SELECT id FROM projects WHERE id=$1', [Number(t.projectId)]);
+          projectId = projRows[0] ? Number(t.projectId) : null;
         }
-        const r = insertTask.run(
-          t.title.trim(), t.notes || null, status, priority,
-          t.category || null, projectId, t.dueDate || null,
-          t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null,
-          t.timeSpentMinutes != null ? Number(t.timeSpentMinutes) : 0
+        const { rows: inserted } = await client.query(
+          'INSERT INTO tasks (title,notes,status,priority,category,"projectId","dueDate","estimatedMinutes","timeSpentMinutes","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING id',
+          [
+            t.title.trim(), t.notes || null, status, priority,
+            t.category || null, projectId, t.dueDate || null,
+            t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null,
+            t.timeSpentMinutes != null ? Number(t.timeSpentMinutes) : 0,
+          ]
         );
-        const taskId = r.lastInsertRowid;
+        const taskId = inserted[0].id;
         if (t.tags) {
           const tags = String(t.tags).split(',').map(s => s.trim()).filter(Boolean);
-          tags.forEach(tag => insertTag.run(taskId, tag));
+          for (const tag of tags) {
+            await client.query('INSERT INTO task_tags ("taskId",tag) VALUES ($1,$2)', [taskId, tag]);
+          }
         }
         created++;
       }
-    });
-    tx();
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
     res.json({ created, skipped, errors });
   } catch (err) {
     console.error('[tasks import]', err);
@@ -252,13 +312,14 @@ router.post('/import', (req, res) => {
 });
 
 // POST /api/tasks/:id/share — generate share token — must be before /:id routes
-router.post('/:id/share', (req, res) => {
+router.post('/:id/share', async (req, res) => {
   try {
-    const task = db.prepare('SELECT id, shareToken FROM tasks WHERE id=?').get(req.params.id);
+    const { rows } = await pool.query('SELECT id, "shareToken" FROM tasks WHERE id=$1', [req.params.id]);
+    const task = rows[0];
     if (!task) return res.status(404).json({ error: 'not found' });
     const token = task.shareToken || crypto.randomBytes(16).toString('hex');
     if (!task.shareToken) {
-      db.prepare("UPDATE tasks SET shareToken=?, updatedAt=datetime('now') WHERE id=?").run(token, req.params.id);
+      await pool.query('UPDATE tasks SET "shareToken"=$1, "updatedAt"=NOW() WHERE id=$2', [token, req.params.id]);
     }
     const appUrl = process.env.APP_URL || 'https://curam-vault.up.railway.app';
     res.json({ shareUrl: `${appUrl}/shared/task/${token}`, token });
@@ -269,11 +330,11 @@ router.post('/:id/share', (req, res) => {
 });
 
 // DELETE /api/tasks/:id/share — revoke share token — must be before /:id routes
-router.delete('/:id/share', (req, res) => {
+router.delete('/:id/share', async (req, res) => {
   try {
-    const task = db.prepare('SELECT id FROM tasks WHERE id=?').get(req.params.id);
-    if (!task) return res.status(404).json({ error: 'not found' });
-    db.prepare("UPDATE tasks SET shareToken=NULL, updatedAt=datetime('now') WHERE id=?").run(req.params.id);
+    const { rows } = await pool.query('SELECT id FROM tasks WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'not found' });
+    await pool.query('UPDATE tasks SET "shareToken"=NULL, "updatedAt"=NOW() WHERE id=$1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[tasks unshare]', err);
@@ -286,12 +347,14 @@ router.post('/extract', async (req, res) => {
   try {
     const { sessionId, projectId } = req.body;
     if (!sessionId) return res.status(400).json({ error: 'sessionId required' });
-    const messages = db.prepare(
-      'SELECT role, content FROM messages WHERE sessionId=? ORDER BY createdAt DESC LIMIT 20'
-    ).all(sessionId).reverse();
-    if (messages.length === 0) return res.status(400).json({ error: 'no messages found' });
+    const { rows: msgRows } = await pool.query(
+      'SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" DESC LIMIT 20',
+      [sessionId]
+    );
+    if (msgRows.length === 0) return res.status(400).json({ error: 'no messages found' });
+    const messages = msgRows.reverse();
     const conversation = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
-    const response = await client.messages.create({
+    const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
       system: 'You are a task extraction assistant. Read this conversation and extract all action items, next steps, and tasks mentioned. Return ONLY a valid JSON array of task objects with fields: title, priority (high/medium/low), category, dueDate (ISO string or null), notes. No other text.',
@@ -309,10 +372,13 @@ router.post('/extract', async (req, res) => {
     const created = [];
     for (const t of extracted) {
       if (!t.title) continue;
-      const r = db.prepare(
-        "INSERT INTO tasks (title,notes,status,priority,category,projectId,dueDate,sourceSessionId,updatedAt) VALUES (?,?,'todo',?,?,?,?,?,datetime('now'))"
-      ).run(t.title, t.notes || null, t.priority || 'medium', t.category || null, projectId || null, t.dueDate || null, sessionId);
-      created.push(buildTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(r.lastInsertRowid)));
+      const { rows: inserted } = await pool.query(
+        "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",\"dueDate\",\"sourceSessionId\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,NOW()) RETURNING id",
+        [t.title, t.notes || null, t.priority || 'medium', t.category || null, projectId || null, t.dueDate || null, sessionId]
+      );
+      const id = inserted[0].id;
+      const { rows: newTask } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
+      created.push(await buildTask(newTask[0]));
     }
     res.json({ tasks: created, count: created.length });
   } catch (err) {
@@ -329,7 +395,7 @@ router.post('/ai-generate', async (req, res) => {
     const systemPrompt = aiParentId
       ? 'You are a task planning assistant. Generate subtasks for the given task. Return ONLY a valid JSON array of objects with fields: title, notes (optional), estimatedMinutes (number of minutes or null). No other text.'
       : 'You are a task planning assistant. Extract or generate a structured task list from the user input. Return ONLY a valid JSON array of task objects with fields: title, notes (optional), priority (high/medium/low), category (optional), dueDate (ISO date string or null), estimatedMinutes (number of minutes or null). No other text.';
-    const response = await client.messages.create({
+    const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
       system: systemPrompt,
@@ -347,17 +413,24 @@ router.post('/ai-generate', async (req, res) => {
     const created = [];
     for (const t of aiTasks) {
       if (!t.title) continue;
-      const r = db.prepare(
-        "INSERT INTO tasks (title,notes,status,priority,category,projectId,parentTaskId,dueDate,estimatedMinutes,updatedAt) VALUES (?,?,'todo',?,?,?,?,?,?,datetime('now'))"
-      ).run(t.title, t.notes||null, t.priority||'medium', t.category||null, projectId||null, aiParentId||null, t.dueDate||null, t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null);
-      const taskId = r.lastInsertRowid;
+      const { rows: inserted } = await pool.query(
+        "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",\"parentTaskId\",\"dueDate\",\"estimatedMinutes\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,NOW()) RETURNING id",
+        [t.title, t.notes || null, t.priority || 'medium', t.category || null, projectId || null, aiParentId || null, t.dueDate || null, t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null]
+      );
+      const taskId = inserted[0].id;
       if (!aiParentId && Array.isArray(t.subtasks)) {
         for (const sub of t.subtasks) {
           const title = typeof sub === 'string' ? sub : sub.title;
-          if (title) db.prepare("INSERT INTO tasks (title,status,priority,parentTaskId,updatedAt) VALUES (?,'todo','medium',?,datetime('now'))").run(title, taskId);
+          if (title) {
+            await pool.query(
+              "INSERT INTO tasks (title,status,priority,\"parentTaskId\",\"updatedAt\") VALUES ($1,'todo','medium',$2,NOW())",
+              [title, taskId]
+            );
+          }
         }
       }
-      created.push(buildTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(taskId)));
+      const { rows: newTask } = await pool.query('SELECT * FROM tasks WHERE id=$1', [taskId]);
+      created.push(await buildTask(newTask[0]));
     }
     res.json(created);
   } catch (err) {
@@ -367,20 +440,29 @@ router.post('/ai-generate', async (req, res) => {
 });
 
 // POST /api/tasks/:id/duplicate — must be before /:id routes
-router.post('/:id/duplicate', (req, res) => {
+router.post('/:id/duplicate', async (req, res) => {
   try {
-    const task = db.prepare('SELECT * FROM tasks WHERE id=?').get(req.params.id);
+    const { rows } = await pool.query('SELECT * FROM tasks WHERE id=$1', [req.params.id]);
+    const task = rows[0];
     if (!task) return res.status(404).json({ error: 'not found' });
-    const r = db.prepare(
-      "INSERT INTO tasks (title,notes,status,priority,category,projectId,recurrence,recurrenceConfig,dueDate,\"order\",updatedAt) VALUES (?,?,'todo',?,?,?,?,?,?,?,datetime('now'))"
-    ).run(task.title + ' (copy)', task.notes, task.priority, task.category, task.projectId, task.recurrence, task.recurrenceConfig, task.dueDate, task.order);
-    const newId = r.lastInsertRowid;
-    getTags(task.id).forEach(tag => db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)').run(newId, tag));
-    const subs = db.prepare('SELECT * FROM tasks WHERE parentTaskId=?').all(task.id);
-    for (const sub of subs) {
-      db.prepare("INSERT INTO tasks (title,status,priority,parentTaskId,updatedAt) VALUES (?,'todo',?,?,datetime('now'))").run(sub.title, sub.priority, newId);
+    const { rows: inserted } = await pool.query(
+      "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",recurrence,\"recurrenceConfig\",\"dueDate\",\"order\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING id",
+      [task.title + ' (copy)', task.notes, task.priority, task.category, task.projectId, task.recurrence, task.recurrenceConfig, task.dueDate, task.order]
+    );
+    const newId = inserted[0].id;
+    const tags = await getTags(task.id);
+    for (const tag of tags) {
+      await pool.query('INSERT INTO task_tags ("taskId",tag) VALUES ($1,$2)', [newId, tag]);
     }
-    res.json({ ...buildTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(newId)), _new: true });
+    const { rows: subsRows } = await pool.query('SELECT * FROM tasks WHERE "parentTaskId"=$1', [task.id]);
+    for (const sub of subsRows) {
+      await pool.query(
+        "INSERT INTO tasks (title,status,priority,\"parentTaskId\",\"updatedAt\") VALUES ($1,'todo',$2,$3,NOW())",
+        [sub.title, sub.priority, newId]
+      );
+    }
+    const { rows: newTaskRows } = await pool.query('SELECT * FROM tasks WHERE id=$1', [newId]);
+    res.json({ ...(await buildTask(newTaskRows[0])), _new: true });
   } catch (err) {
     console.error('[tasks duplicate]', err);
     res.status(500).json({ error: err.message });
@@ -388,32 +470,37 @@ router.post('/:id/duplicate', (req, res) => {
 });
 
 // GET /api/tasks/:id/comments — must be before /:id routes
-router.get('/:id/comments', (req, res) => {
+router.get('/:id/comments', async (req, res) => {
   try {
-    res.json(db.prepare('SELECT * FROM task_comments WHERE taskId=? ORDER BY createdAt ASC').all(req.params.id));
+    const { rows } = await pool.query('SELECT * FROM task_comments WHERE "taskId"=$1 ORDER BY "createdAt" ASC', [req.params.id]);
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // POST /api/tasks/:id/comments — must be before /:id routes
-router.post('/:id/comments', (req, res) => {
+router.post('/:id/comments', async (req, res) => {
   try {
-    const task = db.prepare('SELECT id FROM tasks WHERE id=?').get(req.params.id);
-    if (!task) return res.status(404).json({ error: 'not found' });
+    const { rows } = await pool.query('SELECT id FROM tasks WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'not found' });
     const { content, type = 'user' } = req.body;
     if (!content) return res.status(400).json({ error: 'content required' });
-    const r = db.prepare("INSERT INTO task_comments (taskId,type,content) VALUES (?,?,?)").run(req.params.id, type, content);
-    res.json(db.prepare('SELECT * FROM task_comments WHERE id=?').get(r.lastInsertRowid));
+    const { rows: inserted } = await pool.query(
+      'INSERT INTO task_comments ("taskId",type,content) VALUES ($1,$2,$3) RETURNING id',
+      [req.params.id, type, content]
+    );
+    const { rows: comment } = await pool.query('SELECT * FROM task_comments WHERE id=$1', [inserted[0].id]);
+    res.json(comment[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // DELETE /api/tasks/comments/:commentId — must be before /:id routes
-router.delete('/comments/:commentId', (req, res) => {
+router.delete('/comments/:commentId', async (req, res) => {
   try {
-    db.prepare('DELETE FROM task_comments WHERE id=?').run(req.params.commentId);
+    await pool.query('DELETE FROM task_comments WHERE id=$1', [req.params.commentId]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -421,14 +508,16 @@ router.delete('/comments/:commentId', (req, res) => {
 });
 
 // GET /api/tasks/:id/dependencies
-router.get('/:id/dependencies', (req, res) => {
+router.get('/:id/dependencies', async (req, res) => {
   try {
-    const blockers = db.prepare(
-      'SELECT t.id, t.title, t.status, t.priority FROM task_dependencies td JOIN tasks t ON t.id = td.blockedByTaskId WHERE td.taskId = ?'
-    ).all(req.params.id);
-    const dependents = db.prepare(
-      'SELECT t.id, t.title, t.status, t.priority FROM task_dependencies td JOIN tasks t ON t.id = td.taskId WHERE td.blockedByTaskId = ?'
-    ).all(req.params.id);
+    const { rows: blockers } = await pool.query(
+      'SELECT t.id, t.title, t.status, t.priority FROM task_dependencies td JOIN tasks t ON t.id = td."blockedByTaskId" WHERE td."taskId" = $1',
+      [req.params.id]
+    );
+    const { rows: dependents } = await pool.query(
+      'SELECT t.id, t.title, t.status, t.priority FROM task_dependencies td JOIN tasks t ON t.id = td."taskId" WHERE td."blockedByTaskId" = $1',
+      [req.params.id]
+    );
     res.json({ blockers, dependents });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -436,7 +525,7 @@ router.get('/:id/dependencies', (req, res) => {
 });
 
 // POST /api/tasks/:id/dependencies
-router.post('/:id/dependencies', (req, res) => {
+router.post('/:id/dependencies', async (req, res) => {
   try {
     const { blockedByTaskId } = req.body;
     if (!blockedByTaskId) return res.status(400).json({ error: 'blockedByTaskId required' });
@@ -451,10 +540,10 @@ router.post('/:id/dependencies', (req, res) => {
       if (current === taskId) return res.status(400).json({ error: 'circular dependency detected' });
       if (visited.has(current)) continue;
       visited.add(current);
-      const upstream = db.prepare('SELECT blockedByTaskId FROM task_dependencies WHERE taskId = ?').all(current);
+      const { rows: upstream } = await pool.query('SELECT "blockedByTaskId" FROM task_dependencies WHERE "taskId" = $1', [current]);
       upstream.forEach(r => queue.push(r.blockedByTaskId));
     }
-    db.prepare('INSERT OR IGNORE INTO task_dependencies (taskId, blockedByTaskId) VALUES (?,?)').run(taskId, blockerId);
+    await pool.query('INSERT INTO task_dependencies ("taskId", "blockedByTaskId") VALUES ($1,$2) ON CONFLICT DO NOTHING', [taskId, blockerId]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[task dependencies POST]', err);
@@ -463,9 +552,9 @@ router.post('/:id/dependencies', (req, res) => {
 });
 
 // DELETE /api/tasks/:id/dependencies/:blockedByTaskId
-router.delete('/:id/dependencies/:blockedByTaskId', (req, res) => {
+router.delete('/:id/dependencies/:blockedByTaskId', async (req, res) => {
   try {
-    db.prepare('DELETE FROM task_dependencies WHERE taskId=? AND blockedByTaskId=?').run(req.params.id, req.params.blockedByTaskId);
+    await pool.query('DELETE FROM task_dependencies WHERE "taskId"=$1 AND "blockedByTaskId"=$2', [req.params.id, req.params.blockedByTaskId]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -473,16 +562,22 @@ router.delete('/:id/dependencies/:blockedByTaskId', (req, res) => {
 });
 
 // POST /api/tasks
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId, isUrgent, renewalDimension } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
-    const r = db.prepare(
-      "INSERT INTO tasks (title,notes,status,priority,category,projectId,parentTaskId,dueDate,recurrence,recurrenceConfig,estimatedMinutes,keyResultId,isUrgent,renewalDimension,updatedAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))"
-    ).run(title, notes||null, status||'todo', priority||'medium', category||null, projectId||null, parentTaskId||null, dueDate||null, recurrence||'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId||null, isUrgent ? 1 : 0, renewalDimension||null);
-    const id = r.lastInsertRowid;
-    if (Array.isArray(tags)) tags.forEach(tag => { if (tag.trim()) db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)').run(id, tag.trim()); });
-    res.json(buildTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
+    const { rows } = await pool.query(
+      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW()) RETURNING id',
+      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null]
+    );
+    const id = rows[0].id;
+    if (Array.isArray(tags)) {
+      for (const tag of tags) {
+        if (tag.trim()) await pool.query('INSERT INTO task_tags ("taskId",tag) VALUES ($1,$2)', [id, tag.trim()]);
+      }
+    }
+    const { rows: newTask } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
+    res.json(await buildTask(newTask[0]));
   } catch (err) {
     console.error('[tasks POST]', err);
     res.status(500).json({ error: err.message });
@@ -490,10 +585,11 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/tasks/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const task = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
+    const { rows: existing } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
+    const task = existing[0];
     if (!task) return res.status(404).json({ error: 'not found' });
     const v = (k) => k in req.body ? req.body[k] : task[k];
     const rcfg = 'recurrenceConfig' in req.body
@@ -510,38 +606,50 @@ router.put('/:id', (req, res) => {
       : task.timeSpentMinutes;
     const newIsUrgent = 'isUrgent' in req.body ? (req.body.isUrgent ? 1 : 0) : (task.isUrgent || 0);
     const newRenewalDimension = 'renewalDimension' in req.body ? (req.body.renewalDimension || null) : task.renewalDimension;
-    db.prepare(
-      "UPDATE tasks SET title=?,notes=?,status=?,priority=?,category=?,projectId=?,parentTaskId=?,dueDate=?,recurrence=?,recurrenceConfig=?,estimatedMinutes=?,keyResultId=?,timeSpentMinutes=?,isUrgent=?,renewalDimension=?,updatedAt=datetime('now') WHERE id=?"
-    ).run(v('title'),v('notes'),v('status'),v('priority'),v('category'),v('projectId'),v('parentTaskId'),v('dueDate'),v('recurrence'),rcfg,newEstimated,newKeyResultId,newTimeSpent,newIsUrgent,newRenewalDimension,id);
+    await pool.query(
+      'UPDATE tasks SET title=$1,notes=$2,status=$3,priority=$4,category=$5,"projectId"=$6,"parentTaskId"=$7,"dueDate"=$8,recurrence=$9,"recurrenceConfig"=$10,"estimatedMinutes"=$11,"keyResultId"=$12,"timeSpentMinutes"=$13,"isUrgent"=$14,"renewalDimension"=$15,"updatedAt"=NOW() WHERE id=$16',
+      [v('title'), v('notes'), v('status'), v('priority'), v('category'), v('projectId'), v('parentTaskId'), v('dueDate'), v('recurrence'), rcfg, newEstimated, newKeyResultId, newTimeSpent, newIsUrgent, newRenewalDimension, id]
+    );
     if (Array.isArray(req.body.tags)) {
-      db.prepare('DELETE FROM task_tags WHERE taskId=?').run(id);
-      req.body.tags.forEach(tag => { if (tag.trim()) db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)').run(id, tag.trim()); });
+      await pool.query('DELETE FROM task_tags WHERE "taskId"=$1', [id]);
+      for (const tag of req.body.tags) {
+        if (tag.trim()) await pool.query('INSERT INTO task_tags ("taskId",tag) VALUES ($1,$2)', [id, tag.trim()]);
+      }
     }
     // Log activity for meaningful changes
-    const logActivity = (msg) => db.prepare("INSERT INTO task_comments (taskId,type,content) VALUES (?,'system',?)").run(id, msg);
+    const logActivity = async (msg) => {
+      await pool.query("INSERT INTO task_comments (\"taskId\",type,content) VALUES ($1,'system',$2)", [id, msg]);
+    };
     if ('status' in req.body && req.body.status !== task.status) {
       const labels = { todo: 'To Do', 'in-progress': 'In Progress', done: 'Done' };
-      logActivity(`Status changed from ${labels[task.status] || task.status} to ${labels[req.body.status] || req.body.status}`);
+      await logActivity(`Status changed from ${labels[task.status] || task.status} to ${labels[req.body.status] || req.body.status}`);
     }
     if ('priority' in req.body && req.body.priority !== task.priority) {
-      logActivity(`Priority changed from ${task.priority} to ${req.body.priority}`);
+      await logActivity(`Priority changed from ${task.priority} to ${req.body.priority}`);
     }
     if ('dueDate' in req.body && req.body.dueDate !== task.dueDate) {
-      logActivity(req.body.dueDate ? `Due date set to ${req.body.dueDate.slice(0,10)}` : 'Due date removed');
+      await logActivity(req.body.dueDate ? `Due date set to ${req.body.dueDate.slice(0, 10)}` : 'Due date removed');
     }
     // Handle recurrence: if marked done and has recurrence, create next occurrence
-    const updatedTask = db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
+    const { rows: updatedRows } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
+    const updatedTask = updatedRows[0];
     if (v('status') === 'done' && updatedTask.recurrence && updatedTask.recurrence !== 'none' && updatedTask.dueDate) {
       const nextDate = calculateNextDate(updatedTask.dueDate, updatedTask.recurrence);
       if (nextDate) {
         const newCount = (updatedTask.recurrenceCount || 0) + 1;
-        const newTask = db.prepare(
-          "INSERT INTO tasks (title,notes,status,priority,category,projectId,recurrence,recurrenceConfig,dueDate,\"order\",recurrenceCount,updatedAt) VALUES (?,?,'todo',?,?,?,?,?,?,?,?,datetime('now'))"
-        ).run(updatedTask.title, updatedTask.notes, updatedTask.priority, updatedTask.category, updatedTask.projectId, updatedTask.recurrence, updatedTask.recurrenceConfig, nextDate, updatedTask.order, newCount);
-        getTags(id).forEach(tag => db.prepare('INSERT INTO task_tags (taskId,tag) VALUES (?,?)').run(newTask.lastInsertRowid, tag));
+        const { rows: recurrInserted } = await pool.query(
+          "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",recurrence,\"recurrenceConfig\",\"dueDate\",\"order\",\"recurrenceCount\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,NOW()) RETURNING id",
+          [updatedTask.title, updatedTask.notes, updatedTask.priority, updatedTask.category, updatedTask.projectId, updatedTask.recurrence, updatedTask.recurrenceConfig, nextDate, updatedTask.order, newCount]
+        );
+        const newTaskId = recurrInserted[0].id;
+        const tags = await getTags(id);
+        for (const tag of tags) {
+          await pool.query('INSERT INTO task_tags ("taskId",tag) VALUES ($1,$2)', [newTaskId, tag]);
+        }
       }
     }
-    res.json(buildTask(db.prepare('SELECT * FROM tasks WHERE id=?').get(id)));
+    const { rows: finalRows } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
+    res.json(await buildTask(finalRows[0]));
   } catch (err) {
     console.error('[tasks PUT]', err);
     res.status(500).json({ error: err.message });
@@ -549,11 +657,10 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/tasks/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    // Subtasks cascade via FK, but also delete orphaned deeper nesting
-    db.prepare('DELETE FROM tasks WHERE parentTaskId=?').run(req.params.id);
-    db.prepare('DELETE FROM tasks WHERE id=?').run(req.params.id);
+    await pool.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [req.params.id]);
+    await pool.query('DELETE FROM tasks WHERE id=$1', [req.params.id]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[tasks DELETE]', err);
@@ -562,13 +669,17 @@ router.delete('/:id', (req, res) => {
 });
 
 // POST /api/tasks/:id/subtasks
-router.post('/:id/subtasks', (req, res) => {
+router.post('/:id/subtasks', async (req, res) => {
   try {
-    const parent = db.prepare('SELECT id FROM tasks WHERE id=?').get(req.params.id);
-    if (!parent) return res.status(404).json({ error: 'parent not found' });
+    const { rows } = await pool.query('SELECT id FROM tasks WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'parent not found' });
     if (!req.body.title) return res.status(400).json({ error: 'title required' });
-    const r = db.prepare("INSERT INTO tasks (title,status,priority,parentTaskId,updatedAt) VALUES (?,'todo','medium',?,datetime('now'))").run(req.body.title, req.params.id);
-    res.json(db.prepare('SELECT * FROM tasks WHERE id=?').get(r.lastInsertRowid));
+    const { rows: inserted } = await pool.query(
+      "INSERT INTO tasks (title,status,priority,\"parentTaskId\",\"updatedAt\") VALUES ($1,'todo','medium',$2,NOW()) RETURNING id",
+      [req.body.title, req.params.id]
+    );
+    const { rows: newTask } = await pool.query('SELECT * FROM tasks WHERE id=$1', [inserted[0].id]);
+    res.json(newTask[0]);
   } catch (err) {
     console.error('[tasks subtask POST]', err);
     res.status(500).json({ error: err.message });

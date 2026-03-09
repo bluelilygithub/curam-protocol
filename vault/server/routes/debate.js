@@ -1,9 +1,11 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
 const { randomUUID } = require('crypto');
 const multer = require('multer');
 const Anthropic = require('@anthropic-ai/sdk');
-const db = require('../db');
+const { pool } = require('../db');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -11,10 +13,10 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 const DEBATE_SYSTEM =
   'You are participating in a structured debate. Give your honest, well-reasoned response. Be concise but thorough.';
 
-function getGeminiKey() {
+async function getGeminiKey() {
   try {
-    const row = db.prepare("SELECT value FROM settings WHERE key='GEMINI_API_KEY'").get();
-    if (row?.value) return row.value;
+    const { rows } = await pool.query("SELECT value FROM settings WHERE key='GEMINI_API_KEY'");
+    if (rows[0]?.value) return rows[0].value;
   } catch (_) {}
   return process.env.GEMINI_API_KEY || null;
 }
@@ -55,7 +57,7 @@ function buildGeminiParts(text, sharedContextFiles) {
 
 async function callModel(modelId, userText, sharedContextFiles = []) {
   if (modelId.startsWith('gemini-')) {
-    const geminiKey = getGeminiKey();
+    const geminiKey = await getGeminiKey();
     if (!geminiKey) throw new Error('Gemini API key not configured. Add GEMINI_API_KEY in Settings.');
     let GoogleGenerativeAI;
     try {
@@ -137,9 +139,10 @@ router.post('/start', async (req, res) => {
     let debateId = null;
     if (save) {
       debateId = randomUUID();
-      db.prepare(
-        'INSERT INTO debates (debateId, topic, modelA, modelB, rounds, projectId) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(debateId, topic, modelA, modelB, JSON.stringify([{ round: 1, responseA, responseB }]), projectId || null);
+      await pool.query(
+        'INSERT INTO debates ("debateId", topic, "modelA", "modelB", rounds, "projectId") VALUES ($1, $2, $3, $4, $5, $6)',
+        [debateId, topic, modelA, modelB, JSON.stringify([{ round: 1, responseA, responseB }]), projectId || null]
+      );
     }
 
     res.json({ responseA, responseB, debateId });
@@ -176,11 +179,13 @@ router.post('/round', async (req, res) => {
     const newResponseB = noChangeB ? prevB : textB;
 
     if (debateId) {
-      const debate = db.prepare('SELECT rounds FROM debates WHERE debateId=?').get(debateId);
-      if (debate) {
-        const rounds = JSON.parse(debate.rounds || '[]');
+      const { rows: debates } = await pool.query(
+        'SELECT rounds FROM debates WHERE "debateId"=$1', [debateId]
+      );
+      if (debates[0]) {
+        const rounds = JSON.parse(debates[0].rounds || '[]');
         rounds.push({ round: roundNumber, responseA: newResponseA, responseB: newResponseB, noChangeA, noChangeB, userComment: userComment || null });
-        db.prepare('UPDATE debates SET rounds=? WHERE debateId=?').run(JSON.stringify(rounds), debateId);
+        await pool.query('UPDATE debates SET rounds=$1 WHERE "debateId"=$2', [JSON.stringify(rounds), debateId]);
       }
     }
 

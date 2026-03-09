@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { pool } = require('../db');
 const sendEmail = require('../utils/sendEmail');
 
 function escapeHtml(str) {
@@ -49,7 +49,7 @@ router.post('/', async (req, res) => {
   const { sessionId, to, subject } = req.body;
   if (!sessionId || !to) return res.status(400).json({ error: 'sessionId and to are required' });
 
-  const messages = db.prepare('SELECT * FROM messages WHERE sessionId=? ORDER BY createdAt ASC').all(sessionId);
+  const { rows: messages } = await pool.query('SELECT * FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC', [sessionId]);
   if (messages.length === 0) return res.status(404).json({ error: 'No messages found' });
 
   const emailSubject = subject || `Chat export – ${new Date().toLocaleDateString()}`;

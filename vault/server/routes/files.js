@@ -1,10 +1,12 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
-const db = require('../db');
+const { pool } = require('../db');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -115,45 +117,67 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
     }
   }
 
-  const result = db.prepare(`
-    INSERT INTO files (projectId, name, size, mimetype, path, extractedText, aiSummary)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(projectId, req.file.originalname, req.file.size, req.file.mimetype, req.file.path, extractedText, aiSummary);
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO files ("projectId", name, size, mimetype, path, "extractedText", "aiSummary")
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [projectId, req.file.originalname, req.file.size, req.file.mimetype, req.file.path, extractedText, aiSummary]
+    );
+    const { rows: file } = await pool.query('SELECT * FROM files WHERE id=$1', [rows[0].id]);
 
-  const file = db.prepare('SELECT * FROM files WHERE id=?').get(result.lastInsertRowid);
+    // Index for search
+    await pool.query(
+      'INSERT INTO search_index(type, "projectId", title, body) VALUES ($1, $2, $3, $4)',
+      ['file', String(projectId), req.file.originalname, extractedText.substring(0, 1000)]
+    );
 
-  // Index for search
-  db.prepare(`INSERT INTO search_index(type, projectId, title, body) VALUES (?, ?, ?, ?)`)
-    .run('file', String(projectId), req.file.originalname, extractedText.substring(0, 1000));
-
-  res.status(201).json(file);
+    res.status(201).json(file[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/files/:projectId
-router.get('/:projectId', requireNumericProjectId, (req, res) => {
-  const files = db.prepare('SELECT * FROM files WHERE projectId=? ORDER BY uploadedAt DESC').all(req.params.projectId);
-  res.json(files);
+router.get('/:projectId', requireNumericProjectId, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM files WHERE "projectId"=$1 ORDER BY "uploadedAt" DESC',
+      [req.params.projectId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PATCH /api/files/:id/pin — toggle pinned
-router.patch('/:id/pin', (req, res) => {
-  const file = db.prepare('SELECT id, pinned FROM files WHERE id=?').get(req.params.id);
-  if (!file) return res.status(404).json({ error: 'Not found' });
-  const newVal = file.pinned ? 0 : 1;
-  db.prepare('UPDATE files SET pinned=? WHERE id=?').run(newVal, req.params.id);
-  res.json({ pinned: !!newVal });
+router.patch('/:id/pin', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, pinned FROM files WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    const newVal = rows[0].pinned ? 0 : 1;
+    await pool.query('UPDATE files SET pinned=$1 WHERE id=$2', [newVal, req.params.id]);
+    res.json({ pinned: !!newVal });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE /api/files/:id
-router.delete('/:id', (req, res) => {
-  const file = db.prepare('SELECT * FROM files WHERE id=?').get(req.params.id);
-  if (!file) return res.status(404).json({ error: 'Not found' });
+router.delete('/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM files WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    const file = rows[0];
 
-  if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-  db.prepare('DELETE FROM files WHERE id=?').run(req.params.id);
-  db.prepare(`DELETE FROM search_index WHERE type='file' AND title=?`).run(file.name);
+    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    await pool.query('DELETE FROM files WHERE id=$1', [req.params.id]);
+    await pool.query(`DELETE FROM search_index WHERE type='file' AND title=$1`, [file.name]);
 
-  res.json({ ok: true });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

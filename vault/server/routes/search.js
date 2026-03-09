@@ -1,28 +1,31 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { pool } = require('../db');
 
 // GET /api/search?q=
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   const { q } = req.query;
   if (!q || q.trim().length < 2) return res.json([]);
 
   try {
-    const sanitized = q.replace(/['"]/g, '').trim();
-    const rows = db.prepare(`
-      SELECT type, projectId, title, snippet(search_index, 3, '<mark>', '</mark>', '...', 20) as snippet
+    const { rows } = await pool.query(`
+      SELECT type, "projectId", title,
+        ts_headline('english', COALESCE(body,''), plainto_tsquery('english', $1),
+          'MaxWords=20, MinWords=5, StartSel=<mark>, StopSel=</mark>, FragmentDelimiter=...') as snippet
       FROM search_index
-      WHERE search_index MATCH ?
+      WHERE to_tsvector('english', COALESCE(title,'') || ' ' || COALESCE(body,'')) @@ plainto_tsquery('english', $1)
       LIMIT 20
-    `).all(`"${sanitized}"`);
+    `, [q.trim()]);
 
     // For message results: extract sessionId from title ("Chat: <sessionId>") and
     // replace the raw title with the session's human-readable title if available.
-    const sessionStmt = db.prepare('SELECT title FROM sessions WHERE sessionId=?');
-    const processed = rows.map(r => {
+    const processed = await Promise.all(rows.map(async r => {
       if (r.type === 'message' && typeof r.title === 'string' && r.title.startsWith('Chat: ')) {
         const sessionId = r.title.slice(6);
-        const session = sessionStmt.get(sessionId);
+        const { rows: sessionRows } = await pool.query('SELECT title FROM sessions WHERE "sessionId"=$1', [sessionId]);
+        const session = sessionRows[0];
         return {
           ...r,
           sessionId,
@@ -30,7 +33,7 @@ router.get('/', (req, res) => {
         };
       }
       return r;
-    });
+    }));
 
     res.json(processed);
   } catch (err) {

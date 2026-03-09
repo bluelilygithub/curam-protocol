@@ -1,12 +1,16 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
 
-const client = new Anthropic();
+const anthropic = new Anthropic();
 
-function buildKeyResult(kr) {
-  const tasks = db.prepare('SELECT status FROM tasks WHERE keyResultId = ?').all(kr.id);
+async function buildKeyResult(kr) {
+  const { rows: tasks } = await pool.query(
+    'SELECT status FROM tasks WHERE "keyResultId" = $1', [kr.id]
+  );
   return {
     ...kr,
     linkedTaskCount: tasks.length,
@@ -15,8 +19,11 @@ function buildKeyResult(kr) {
   };
 }
 
-function buildObjective(row) {
-  const krs = db.prepare('SELECT * FROM key_results WHERE objectiveId = ? ORDER BY id').all(row.id).map(buildKeyResult);
+async function buildObjective(row) {
+  const { rows: krRows } = await pool.query(
+    'SELECT * FROM key_results WHERE "objectiveId" = $1 ORDER BY id', [row.id]
+  );
+  const krs = await Promise.all(krRows.map(buildKeyResult));
   const overallProgress = krs.length
     ? Math.round(krs.reduce((s, kr) => s + kr.progress, 0) / krs.length)
     : 0;
@@ -24,10 +31,10 @@ function buildObjective(row) {
 }
 
 // GET /api/goals — list all objectives with nested KRs
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const rows = db.prepare('SELECT * FROM objectives ORDER BY createdAt DESC').all();
-    res.json(rows.map(buildObjective));
+    const { rows } = await pool.query('SELECT * FROM objectives ORDER BY "createdAt" DESC');
+    res.json(await Promise.all(rows.map(buildObjective)));
   } catch (err) {
     console.error('[goals GET]', err);
     res.status(500).json({ error: err.message });
@@ -35,9 +42,10 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/goals/dashboard — summary for home widget (must be before /:id)
-router.get('/dashboard', (req, res) => {
+router.get('/dashboard', async (req, res) => {
   try {
-    const objectives = db.prepare("SELECT * FROM objectives WHERE status = 'active'").all().map(buildObjective);
+    const { rows: activeRows } = await pool.query("SELECT * FROM objectives WHERE status = 'active'");
+    const objectives = await Promise.all(activeRows.map(buildObjective));
     const activeCount = objectives.length;
     const avgProgress = activeCount
       ? Math.round(objectives.reduce((s, o) => s + o.overallProgress, 0) / activeCount)
@@ -48,9 +56,11 @@ router.get('/dashboard', (req, res) => {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-    const completedThisMonth = db.prepare(
-      "SELECT COUNT(*) as c FROM objectives WHERE status = 'completed' AND updatedAt >= ?"
-    ).get(startOfMonth.toISOString())?.c || 0;
+    const { rows: completedRows } = await pool.query(
+      "SELECT COUNT(*) as c FROM objectives WHERE status = 'completed' AND \"updatedAt\" >= $1",
+      [startOfMonth.toISOString()]
+    );
+    const completedThisMonth = Number(completedRows[0].c);
     res.json({ activeCount, avgProgress, topObjectives, completedThisMonth });
   } catch (err) {
     console.error('[goals dashboard]', err);
@@ -73,7 +83,7 @@ Suggest 3-5 SMART Key Results for this objective. For each, provide a JSON objec
 Output ONLY JSON objects, one per line, no explanations, no markdown, no array brackets. Example:
 {"title":"Increase monthly revenue","targetValue":50000,"unit":"$"}
 {"title":"Complete onboarding modules","targetValue":100,"unit":"%"}`;
-    const stream = client.messages.stream({
+    const stream = anthropic.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
       system: 'You are a goal-setting coach specialising in OKR frameworks. Output only JSON objects, one per line.',
@@ -98,23 +108,26 @@ Output ONLY JSON objects, one per line, no explanations, no markdown, no array b
 });
 
 // PUT /api/goals/key-results/:krId — update a KR (must be before /:id)
-router.put('/key-results/:krId', (req, res) => {
+router.put('/key-results/:krId', async (req, res) => {
   try {
+    const { rows: krs } = await pool.query('SELECT * FROM key_results WHERE id = $1', [req.params.krId]);
+    if (!krs[0]) return res.status(404).json({ error: 'Key result not found' });
+    const kr = krs[0];
     const { title, targetValue, currentValue, unit, dueDate, status } = req.body;
-    const kr = db.prepare('SELECT * FROM key_results WHERE id = ?').get(req.params.krId);
-    if (!kr) return res.status(404).json({ error: 'Key result not found' });
-    db.prepare(
-      "UPDATE key_results SET title=?, targetValue=?, currentValue=?, unit=?, dueDate=?, status=?, updatedAt=datetime('now') WHERE id=?"
-    ).run(
-      title ?? kr.title,
-      targetValue ?? kr.targetValue,
-      currentValue ?? kr.currentValue,
-      unit ?? kr.unit,
-      dueDate !== undefined ? dueDate : kr.dueDate,
-      status ?? kr.status,
-      kr.id
+    await pool.query(
+      `UPDATE key_results SET title=$1, "targetValue"=$2, "currentValue"=$3, unit=$4, "dueDate"=$5, status=$6, "updatedAt"=NOW() WHERE id=$7`,
+      [
+        title ?? kr.title,
+        targetValue ?? kr.targetValue,
+        currentValue ?? kr.currentValue,
+        unit ?? kr.unit,
+        dueDate !== undefined ? dueDate : kr.dueDate,
+        status ?? kr.status,
+        kr.id,
+      ]
     );
-    res.json(buildKeyResult(db.prepare('SELECT * FROM key_results WHERE id = ?').get(kr.id)));
+    const { rows: updated } = await pool.query('SELECT * FROM key_results WHERE id = $1', [kr.id]);
+    res.json(await buildKeyResult(updated[0]));
   } catch (err) {
     console.error('[goals KR PUT]', err);
     res.status(500).json({ error: err.message });
@@ -122,12 +135,12 @@ router.put('/key-results/:krId', (req, res) => {
 });
 
 // DELETE /api/goals/key-results/:krId — delete a KR (must be before /:id)
-router.delete('/key-results/:krId', (req, res) => {
+router.delete('/key-results/:krId', async (req, res) => {
   try {
-    const kr = db.prepare('SELECT * FROM key_results WHERE id = ?').get(req.params.krId);
-    if (!kr) return res.status(404).json({ error: 'Key result not found' });
-    db.prepare('UPDATE tasks SET keyResultId = NULL WHERE keyResultId = ?').run(kr.id);
-    db.prepare('DELETE FROM key_results WHERE id = ?').run(kr.id);
+    const { rows: krs } = await pool.query('SELECT * FROM key_results WHERE id = $1', [req.params.krId]);
+    if (!krs[0]) return res.status(404).json({ error: 'Key result not found' });
+    await pool.query('UPDATE tasks SET "keyResultId" = NULL WHERE "keyResultId" = $1', [krs[0].id]);
+    await pool.query('DELETE FROM key_results WHERE id = $1', [krs[0].id]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[goals KR DELETE]', err);
@@ -136,10 +149,10 @@ router.delete('/key-results/:krId', (req, res) => {
 });
 
 // GET /api/goals/mission — retrieve mission statement (must be before /:id)
-router.get('/mission', (req, res) => {
+router.get('/mission', async (req, res) => {
   try {
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'mission_statement'").get();
-    res.json({ statement: row ? row.value : null });
+    const { rows } = await pool.query("SELECT value FROM settings WHERE key = 'mission_statement'");
+    res.json({ statement: rows[0] ? rows[0].value : null });
   } catch (err) {
     console.error('[goals mission GET]', err);
     res.status(500).json({ error: err.message });
@@ -147,10 +160,13 @@ router.get('/mission', (req, res) => {
 });
 
 // PUT /api/goals/mission — upsert mission statement (must be before /:id)
-router.put('/mission', (req, res) => {
+router.put('/mission', async (req, res) => {
   try {
     const { statement } = req.body;
-    db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('mission_statement', ?)").run(statement || '');
+    await pool.query(
+      "INSERT INTO settings (key, value) VALUES ('mission_statement', $1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
+      [statement || '']
+    );
     res.json({ statement: statement || '' });
   } catch (err) {
     console.error('[goals mission PUT]', err);
@@ -169,18 +185,13 @@ router.post('/mission/generate', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     const prompt = `Based on these answers about a person's roles, character traits, lifetime contributions, and guiding principles, write a personal mission statement that is 2–4 sentences, inspiring, personal, and written in the first person. Focus on being and contributing, not just achieving. Return only the mission statement text with no preamble or explanation.\n\nAnswers:\n1. Roles: ${answers[0]}\n2. Character traits: ${answers[1]}\n3. Lifetime contributions: ${answers[2]}\n4. Guiding principles: ${answers[3]}`;
-    const stream = client.messages.stream({
+    const stream = anthropic.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 300,
       messages: [{ role: 'user', content: prompt }],
     });
-    stream.on('text', (text) => {
-      res.write(`data: ${JSON.stringify(text)}\n\n`);
-    });
-    stream.on('finalMessage', () => {
-      res.write('data: [DONE]\n\n');
-      res.end();
-    });
+    stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
+    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
     stream.on('error', (err) => {
       console.error('[goals mission generate]', err);
       res.write('data: [DONE]\n\n');
@@ -203,7 +214,7 @@ router.post('/renewal-assessment', async (req, res) => {
       .map(([k, v]) => `${k}: ${v.taskCount || 0} task(s), ${v.objectiveCount || 0} objective(s)`)
       .join('; ');
     const prompt = `A person's current renewal dimension balance (Habit 7 — Sharpen the Saw):\n${summary}\n\nThe 4 renewal dimensions: Physical (body, health, exercise), Mental (learning, reading, creativity), Social/Emotional (relationships, empathy, giving), Spiritual (mission, values, reflection).\n\nIn 2-3 sentences, give a warm and practical assessment of their balance. If one dimension is significantly lower than others, suggest one specific action they could take this week to strengthen it. Be encouraging and brief.`;
-    const stream = client.messages.stream({
+    const stream = anthropic.messages.stream({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 250,
       messages: [{ role: 'user', content: prompt }],
@@ -218,15 +229,16 @@ router.post('/renewal-assessment', async (req, res) => {
 });
 
 // POST /api/goals — create objective
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { title, description, timeframe, color, renewalDimension } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'title required' });
-    const r = db.prepare(
-      "INSERT INTO objectives (title, description, timeframe, color, renewalDimension) VALUES (?, ?, ?, ?, ?)"
-    ).run(title.trim(), description || null, timeframe || null, color || '#6366f1', renewalDimension || null);
-    const obj = db.prepare('SELECT * FROM objectives WHERE id = ?').get(r.lastInsertRowid);
-    res.status(201).json(buildObjective(obj));
+    const { rows } = await pool.query(
+      'INSERT INTO objectives (title, description, timeframe, color, "renewalDimension") VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [title.trim(), description || null, timeframe || null, color || '#6366f1', renewalDimension || null]
+    );
+    const { rows: obj } = await pool.query('SELECT * FROM objectives WHERE id = $1', [rows[0].id]);
+    res.status(201).json(await buildObjective(obj[0]));
   } catch (err) {
     console.error('[goals POST]', err);
     res.status(500).json({ error: err.message });
@@ -234,11 +246,11 @@ router.post('/', (req, res) => {
 });
 
 // GET /api/goals/:id — single objective with KRs
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const obj = db.prepare('SELECT * FROM objectives WHERE id = ?').get(req.params.id);
-    if (!obj) return res.status(404).json({ error: 'Objective not found' });
-    res.json(buildObjective(obj));
+    const { rows } = await pool.query('SELECT * FROM objectives WHERE id = $1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Objective not found' });
+    res.json(await buildObjective(rows[0]));
   } catch (err) {
     console.error('[goals GET /:id]', err);
     res.status(500).json({ error: err.message });
@@ -246,23 +258,26 @@ router.get('/:id', (req, res) => {
 });
 
 // PUT /api/goals/:id — update objective
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
-    const obj = db.prepare('SELECT * FROM objectives WHERE id = ?').get(req.params.id);
-    if (!obj) return res.status(404).json({ error: 'Objective not found' });
+    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1', [req.params.id]);
+    if (!existing[0]) return res.status(404).json({ error: 'Objective not found' });
+    const obj = existing[0];
     const { title, description, timeframe, color, status, renewalDimension } = req.body;
-    db.prepare(
-      "UPDATE objectives SET title=?, description=?, timeframe=?, color=?, status=?, renewalDimension=?, updatedAt=datetime('now') WHERE id=?"
-    ).run(
-      title ?? obj.title,
-      description !== undefined ? description : obj.description,
-      timeframe !== undefined ? timeframe : obj.timeframe,
-      color ?? obj.color,
-      status ?? obj.status,
-      renewalDimension !== undefined ? (renewalDimension || null) : obj.renewalDimension,
-      obj.id
+    await pool.query(
+      `UPDATE objectives SET title=$1, description=$2, timeframe=$3, color=$4, status=$5, "renewalDimension"=$6, "updatedAt"=NOW() WHERE id=$7`,
+      [
+        title ?? obj.title,
+        description !== undefined ? description : obj.description,
+        timeframe !== undefined ? timeframe : obj.timeframe,
+        color ?? obj.color,
+        status ?? obj.status,
+        renewalDimension !== undefined ? (renewalDimension || null) : obj.renewalDimension,
+        obj.id,
+      ]
     );
-    res.json(buildObjective(db.prepare('SELECT * FROM objectives WHERE id = ?').get(obj.id)));
+    const { rows: updated } = await pool.query('SELECT * FROM objectives WHERE id = $1', [obj.id]);
+    res.json(await buildObjective(updated[0]));
   } catch (err) {
     console.error('[goals PUT /:id]', err);
     res.status(500).json({ error: err.message });
@@ -270,16 +285,17 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/goals/:id — delete objective
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const obj = db.prepare('SELECT * FROM objectives WHERE id = ?').get(req.params.id);
-    if (!obj) return res.status(404).json({ error: 'Objective not found' });
+    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1', [req.params.id]);
+    if (!existing[0]) return res.status(404).json({ error: 'Objective not found' });
+    const obj = existing[0];
     // Unlink tasks from KRs belonging to this objective
-    const krs = db.prepare('SELECT id FROM key_results WHERE objectiveId = ?').all(obj.id);
+    const { rows: krs } = await pool.query('SELECT id FROM key_results WHERE "objectiveId" = $1', [obj.id]);
     for (const kr of krs) {
-      db.prepare('UPDATE tasks SET keyResultId = NULL WHERE keyResultId = ?').run(kr.id);
+      await pool.query('UPDATE tasks SET "keyResultId" = NULL WHERE "keyResultId" = $1', [kr.id]);
     }
-    db.prepare('DELETE FROM objectives WHERE id = ?').run(obj.id);
+    await pool.query('DELETE FROM objectives WHERE id = $1', [obj.id]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[goals DELETE /:id]', err);
@@ -288,17 +304,18 @@ router.delete('/:id', (req, res) => {
 });
 
 // POST /api/goals/:id/key-results — add KR to objective
-router.post('/:id/key-results', (req, res) => {
+router.post('/:id/key-results', async (req, res) => {
   try {
-    const obj = db.prepare('SELECT * FROM objectives WHERE id = ?').get(req.params.id);
-    if (!obj) return res.status(404).json({ error: 'Objective not found' });
+    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1', [req.params.id]);
+    if (!existing[0]) return res.status(404).json({ error: 'Objective not found' });
     const { title, targetValue, currentValue, unit, dueDate } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'title required' });
-    const r = db.prepare(
-      'INSERT INTO key_results (objectiveId, title, targetValue, currentValue, unit, dueDate) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(obj.id, title.trim(), targetValue ?? 100, currentValue ?? 0, unit || '%', dueDate || null);
-    const kr = db.prepare('SELECT * FROM key_results WHERE id = ?').get(r.lastInsertRowid);
-    res.status(201).json(buildKeyResult(kr));
+    const { rows } = await pool.query(
+      'INSERT INTO key_results ("objectiveId", title, "targetValue", "currentValue", unit, "dueDate") VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [existing[0].id, title.trim(), targetValue ?? 100, currentValue ?? 0, unit || '%', dueDate || null]
+    );
+    const { rows: kr } = await pool.query('SELECT * FROM key_results WHERE id = $1', [rows[0].id]);
+    res.status(201).json(await buildKeyResult(kr[0]));
   } catch (err) {
     console.error('[goals KR POST]', err);
     res.status(500).json({ error: err.message });

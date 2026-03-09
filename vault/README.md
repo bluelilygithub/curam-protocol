@@ -92,10 +92,10 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 
 ### Tech Stack
 
-- **Backend:** Node.js / Express, SQLite (`better-sqlite3`), Anthropic SDK, Google Generative AI SDK (`@google/generative-ai`)
+- **Backend:** Node.js / Express, PostgreSQL (`pg`), Anthropic SDK, Google Generative AI SDK (`@google/generative-ai`)
 - **Frontend:** React / Vite, Zustand (auth + project + settings state), React Router, Tailwind CSS
 - **Auth:** Token-based sessions (single-user via seed credentials); bcryptjs for password hashing
-- **Deploy:** Railway with persistent volume for SQLite DB and file uploads
+- **Deploy:** Railway with PostgreSQL service and persistent volume for file uploads
 
 ---
 
@@ -170,7 +170,7 @@ Run `node server/services/gmailNLP.test.js` to execute 45 test cases across 11 c
 vault/
 ├── server/
 │   ├── index.js                  # Express server entry point
-│   ├── db.js                     # SQLite schema + migrations
+│   ├── db.js                     # PostgreSQL schema + pool
 │   ├── typePrompts.js            # AI type-specific prompt helpers
 │   ├── seed.js                   # Initial user seeding from env vars
 │   ├── middleware/
@@ -286,8 +286,6 @@ vault/
 │           ├── ThemeProvider.jsx
 │           └── IconProvider.jsx
 │
-├── data/                         # SQLite database (gitignored)
-│   └── vault.db
 ├── uploads/                      # Uploaded files (gitignored)
 ├── railway.toml                  # Railway build + deploy config
 ├── .env.example                  # Environment variable template
@@ -327,8 +325,6 @@ vault/
 | `gmail_tokens` | Gmail OAuth tokens per user — `accessToken`, `refreshToken`, `tokenType`, `expiryDate`, `scope`, `email`; access token auto-refreshed and persisted via `googleapis` token event |
 | `notes` | User-scoped quick-capture notes — title, body, optional project link |
 
-> **Roadmap:** PostgreSQL migration is scoped and planned on branch `postgres-migration` (258 db calls across 24 files + FTS5 → tsvector). Currently deferred — SQLite on Railway mounted volume with daily backups.
-
 ---
 
 ## Environment Variables
@@ -338,7 +334,7 @@ vault/
 | `ANTHROPIC_API_KEY` | Yes | Claude API access |
 | `SEED_EMAIL` | Yes | Initial user email (created on first startup if no users exist) |
 | `SEED_PASSWORD` | Yes | Initial user password (change via Settings after first login) |
-| `DB_PATH` | Yes | Absolute path to SQLite database file |
+| `DATABASE_URL` | Yes | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/vault`) |
 | `UPLOAD_DIR` | Yes | Absolute path to file uploads directory |
 | `NODE_ENV` | Yes | `production` or `development` |
 | `APP_URL` | Yes | Base URL for password reset emails and task share links (e.g. `https://curam-vault.up.railway.app`) |
@@ -357,7 +353,7 @@ vault/
 
 ¹ Required together if `MAIL_CHANNEL_API_KEY` is not set and you want email features to work.
 
-² Strongly recommended in production. Without it Gmail OAuth tokens are stored unencrypted in the SQLite file.
+² Strongly recommended in production. Without it Gmail OAuth tokens are stored unencrypted in the database.
 
 ### `.env.example`
 
@@ -369,15 +365,15 @@ ANTHROPIC_API_KEY=your_anthropic_api_key_here
 PORT=3001
 NODE_ENV=development   # set to "production" on Railway (handled via railway.toml)
 
-# ── Storage ───────────────────────────────────────────────────────────────────
-# Local dev: relative paths work fine
-DB_PATH=./data/vault.db
-UPLOAD_DIR=./uploads
+# ── Database ───────────────────────────────────────────────────────────────────
+# Local dev
+DATABASE_URL=postgresql://vault:vault@localhost:5432/vault_dev
 
-# Railway production: point both at your mounted Volume path, e.g.
-#   DB_PATH=/data/vault.db
-#   UPLOAD_DIR=/data/uploads
-# Then mount the Volume at /data in the Railway dashboard.
+# Railway production: set DATABASE_URL to your Railway PostgreSQL service URL
+# (available under the PostgreSQL service → Variables → DATABASE_URL)
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+UPLOAD_DIR=./uploads
 
 # ── Google Gemini (optional — enables Gemini models in chat, compare, debate) ─
 # Get a key at https://aistudio.google.com/app/apikey
@@ -433,7 +429,7 @@ ENCRYPTION_KEY=
 | **XSS in email** | All user-generated content (message body, role, subject) is HTML-escaped via `escapeHtml()` before injection into the email template. |
 | **Change-password auth** | Route is at `/api/user/change-password` and protected by the standard `requireAuth` middleware. |
 | **Web search cost** | `/api/web-search` rate-limited to 20 requests per hour per IP. |
-| **SQL injection** | All database queries use `better-sqlite3` prepared statements with parameterised values — no string interpolation. |
+| **SQL injection** | All database queries use `pg` parameterised queries (`$1`, `$2`, …) — no string interpolation. |
 | **Auth sessions** | 32-byte random hex tokens; 24-hour expiry checked server-side on every request. |
 | **Passwords** | bcryptjs with SALT_ROUNDS=12. |
 | **Security headers** | `helmet` middleware applied in production (default CSP, HSTS, X-Frame-Options, etc.). |
@@ -454,9 +450,7 @@ npm install
 npm run dev
 ```
 
-**Node version:** `better-sqlite3` requires a pre-built native binary. **Node.js v22 LTS** has pre-built binaries and requires no compilation — this is the recommended version for a clean local setup. Node v23+ has no pre-built binaries and will fail on Windows without Visual Studio C++ Build Tools.
-
-> **Windows / Node v24 note:** Local dev is currently broken on machines running Node v24 — `better-sqlite3` was removed during a failed WASM migration attempt. See [`local-setup-issues.md`](../local-setup-issues.md) in the project root for the full history and recovery options. Railway deployment is unaffected.
+**Node version:** Node.js v22 LTS is recommended.
 
 **Production** is deployed on Railway: `https://curam-vault.up.railway.app`
 

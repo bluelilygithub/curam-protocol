@@ -1,38 +1,61 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const { pool } = require('../db');
 
 // GET /api/personas
-router.get('/', (req, res) => {
-  res.json(db.prepare('SELECT * FROM personas ORDER BY name ASC').all());
+router.get('/', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM personas ORDER BY name ASC');
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // POST /api/personas
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { name, description, systemPrompt } = req.body;
   if (!name?.trim() || !systemPrompt?.trim()) return res.status(400).json({ error: 'name and systemPrompt required' });
-  const result = db.prepare(
-    'INSERT INTO personas (name, description, systemPrompt) VALUES (?, ?, ?)'
-  ).run(name.trim(), description || '', systemPrompt.trim());
-  res.status(201).json(db.prepare('SELECT * FROM personas WHERE id=?').get(result.lastInsertRowid));
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO personas (name, description, "systemPrompt") VALUES ($1, $2, $3) RETURNING id',
+      [name.trim(), description || '', systemPrompt.trim()]
+    );
+    const { rows: persona } = await pool.query('SELECT * FROM personas WHERE id=$1', [rows[0].id]);
+    res.status(201).json(persona[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // PUT /api/personas/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   const { name, description, systemPrompt } = req.body;
   if (!name?.trim() || !systemPrompt?.trim()) return res.status(400).json({ error: 'name and systemPrompt required' });
-  db.prepare(
-    "UPDATE personas SET name=?, description=?, systemPrompt=?, updatedAt=datetime('now') WHERE id=?"
-  ).run(name.trim(), description || '', systemPrompt.trim(), req.params.id);
-  res.json(db.prepare('SELECT * FROM personas WHERE id=?').get(req.params.id));
+  try {
+    await pool.query(
+      'UPDATE personas SET name=$1, description=$2, "systemPrompt"=$3, "updatedAt"=NOW() WHERE id=$4',
+      [name.trim(), description || '', systemPrompt.trim(), req.params.id]
+    );
+    const { rows } = await pool.query('SELECT * FROM personas WHERE id=$1', [req.params.id]);
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // DELETE /api/personas/:id
-router.delete('/:id', (req, res) => {
-  db.prepare('UPDATE projects SET personaId=NULL WHERE personaId=?').run(req.params.id);
-  db.prepare('UPDATE sessions SET personaId=NULL WHERE personaId=?').run(req.params.id);
-  db.prepare('DELETE FROM personas WHERE id=?').run(req.params.id);
-  res.json({ ok: true });
+router.delete('/:id', async (req, res) => {
+  try {
+    await pool.query('UPDATE projects SET "personaId"=NULL WHERE "personaId"=$1', [req.params.id]);
+    await pool.query('UPDATE sessions SET "personaId"=NULL WHERE "personaId"=$1', [req.params.id]);
+    await pool.query('DELETE FROM personas WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;

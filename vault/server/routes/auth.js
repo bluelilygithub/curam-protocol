@@ -1,9 +1,11 @@
+'use strict';
+
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
-const db = require('../db');
+const { pool } = require('../db');
 
 const SALT_ROUNDS = 12;
 const SESSION_HOURS = 24;
@@ -31,15 +33,25 @@ router.post('/register', async (req, res) => {
   if (!inviteCode || inviteCode !== process.env.INVITE_CODE) {
     return res.status(403).json({ error: 'Invalid invite code' });
   }
-  const existing = db.prepare('SELECT id FROM users WHERE email=?').get(email.toLowerCase());
-  if (existing) return res.status(409).json({ error: 'Email already registered' });
 
   try {
+    const { rows: existing } = await pool.query(
+      'SELECT id FROM users WHERE email=$1', [email.toLowerCase()]
+    );
+    if (existing[0]) return res.status(409).json({ error: 'Email already registered' });
+
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
-    const result = db.prepare('INSERT INTO users (email, passwordHash) VALUES (?, ?)').run(email.toLowerCase(), passwordHash);
+    const { rows: newUser } = await pool.query(
+      'INSERT INTO users (email, "passwordHash") VALUES ($1, $2) RETURNING id',
+      [email.toLowerCase(), passwordHash]
+    );
+    const userId = newUser[0].id;
     const token = makeToken();
-    db.prepare('INSERT INTO auth_sessions (token, userId, expiresAt) VALUES (?, ?, ?)').run(token, result.lastInsertRowid, makeExpiry());
-    res.status(201).json({ token, user: { id: result.lastInsertRowid, email: email.toLowerCase() } });
+    await pool.query(
+      'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
+      [token, userId, makeExpiry()]
+    );
+    res.status(201).json({ token, user: { id: userId, email: email.toLowerCase() } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -50,15 +62,21 @@ router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
 
-  const user = db.prepare('SELECT * FROM users WHERE email=?').get(email.toLowerCase());
-  if (!user) return res.status(401).json({ error: 'Invalid email or password' });
-
   try {
+    const { rows: users } = await pool.query(
+      'SELECT * FROM users WHERE email=$1', [email.toLowerCase()]
+    );
+    const user = users[0];
+    if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return res.status(401).json({ error: 'Invalid email or password' });
 
     const token = makeToken();
-    db.prepare('INSERT INTO auth_sessions (token, userId, expiresAt) VALUES (?, ?, ?)').run(token, user.id, makeExpiry());
+    await pool.query(
+      'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
+      [token, user.id, makeExpiry()]
+    );
     res.json({ token, user: { id: user.id, email: user.email } });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -66,10 +84,12 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // POST /api/auth/logout
-router.post('/logout', (req, res) => {
+router.post('/logout', async (req, res) => {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (token) db.prepare('DELETE FROM auth_sessions WHERE token=?').run(token);
+  try {
+    if (token) await pool.query('DELETE FROM auth_sessions WHERE token=$1', [token]);
+  } catch (_) {}
   res.json({ ok: true });
 });
 
@@ -78,19 +98,25 @@ router.post('/reset-password-request', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'email required' });
 
-  const user = db.prepare('SELECT id FROM users WHERE email=?').get(email.toLowerCase());
-  // Always return ok to avoid email enumeration
-  if (!user) return res.json({ ok: true });
+  try {
+    const { rows: users } = await pool.query(
+      'SELECT id FROM users WHERE email=$1', [email.toLowerCase()]
+    );
+    // Always return ok to avoid email enumeration
+    if (!users[0]) return res.json({ ok: true });
 
-  const token = makeToken();
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    const token = makeToken();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
 
-  db.prepare('DELETE FROM password_resets WHERE email=?').run(email.toLowerCase());
-  db.prepare('INSERT INTO password_resets (token, email, expiresAt) VALUES (?, ?, ?)').run(token, email.toLowerCase(), expiresAt);
+    await pool.query('DELETE FROM password_resets WHERE email=$1', [email.toLowerCase()]);
+    await pool.query(
+      'INSERT INTO password_resets (token, email, "expiresAt") VALUES ($1, $2, $3)',
+      [token, email.toLowerCase(), expiresAt]
+    );
 
-  const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
-  const resetLink = `${appUrl}/reset-password?token=${token}`;
-  const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f0;padding:20px;">
+    const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const resetLink = `${appUrl}/reset-password?token=${token}`;
+    const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f0;padding:20px;">
 <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
 <h2 style="margin-top:0;">Reset your password</h2>
 <p>Click the link below to reset your Project Vault password. This link expires in 1 hour.</p>
@@ -98,11 +124,14 @@ router.post('/reset-password-request', async (req, res) => {
 <p style="margin-top:24px;font-size:12px;color:#888;">If you didn't request this, you can ignore this email.</p>
 </div></body></html>`;
 
-  try {
-    const sendEmail = require('../utils/sendEmail');
-    await sendEmail({ to: email.toLowerCase(), subject: 'Reset your Project Vault password', html });
+    try {
+      const sendEmail = require('../utils/sendEmail');
+      await sendEmail({ to: email.toLowerCase(), subject: 'Reset your Project Vault password', html });
+    } catch (err) {
+      console.error('Reset email error:', err.message);
+    }
   } catch (err) {
-    console.error('Reset email error:', err.message);
+    console.error('Reset password request error:', err.message);
   }
 
   res.json({ ok: true });
@@ -113,18 +142,21 @@ router.post('/reset-password-confirm', async (req, res) => {
   const { token, password } = req.body;
   if (!token || !password) return res.status(400).json({ error: 'token and password required' });
 
-  const reset = db.prepare('SELECT * FROM password_resets WHERE token=?').get(token);
-  if (!reset || new Date(reset.expiresAt) < new Date()) {
-    if (reset) db.prepare('DELETE FROM password_resets WHERE token=?').run(token);
-    return res.status(400).json({ error: 'Invalid or expired reset link' });
-  }
-
   try {
+    const { rows: resets } = await pool.query(
+      'SELECT * FROM password_resets WHERE token=$1', [token]
+    );
+    const reset = resets[0];
+    if (!reset || new Date(reset.expiresAt) < new Date()) {
+      if (reset) await pool.query('DELETE FROM password_resets WHERE token=$1', [token]);
+      return res.status(400).json({ error: 'Invalid or expired reset link' });
+    }
+
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
-    db.prepare('UPDATE users SET passwordHash=? WHERE email=?').run(hash, reset.email);
-    db.prepare('DELETE FROM password_resets WHERE token=?').run(token);
-    const user = db.prepare('SELECT id FROM users WHERE email=?').get(reset.email);
-    if (user) db.prepare('DELETE FROM auth_sessions WHERE userId=?').run(user.id);
+    await pool.query('UPDATE users SET "passwordHash"=$1 WHERE email=$2', [hash, reset.email]);
+    await pool.query('DELETE FROM password_resets WHERE token=$1', [token]);
+    const { rows: users } = await pool.query('SELECT id FROM users WHERE email=$1', [reset.email]);
+    if (users[0]) await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1', [users[0].id]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -132,20 +164,30 @@ router.post('/reset-password-confirm', async (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
 
-  const session = db.prepare('SELECT * FROM auth_sessions WHERE token=?').get(token);
-  if (!session || new Date(session.expiresAt) < new Date()) {
-    if (session) db.prepare('DELETE FROM auth_sessions WHERE token=?').run(token);
-    return res.status(401).json({ error: 'Session expired' });
-  }
+  try {
+    const { rows: sessions } = await pool.query(
+      'SELECT * FROM auth_sessions WHERE token=$1', [token]
+    );
+    const session = sessions[0];
+    if (!session || new Date(session.expiresAt) < new Date()) {
+      if (session) await pool.query('DELETE FROM auth_sessions WHERE token=$1', [token]);
+      return res.status(401).json({ error: 'Session expired' });
+    }
 
-  const user = db.prepare('SELECT id, email, createdAt FROM users WHERE id=?').get(session.userId);
-  if (!user) return res.status(401).json({ error: 'User not found' });
-  res.json({ user });
+    const { rows: users } = await pool.query(
+      'SELECT id, email, "createdAt" FROM users WHERE id=$1', [session.userId]
+    );
+    const user = users[0];
+    if (!user) return res.status(401).json({ error: 'User not found' });
+    res.json({ user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
