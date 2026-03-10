@@ -33,10 +33,12 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Require db early — triggers connection + schema creation automatically
+const { pool } = require('./db');
+
 async function seedInitialUser() {
   const { SEED_EMAIL, SEED_PASSWORD } = process.env;
   if (!SEED_EMAIL || !SEED_PASSWORD) return;
-  const { pool } = require('./db');
   const { rows } = await pool.query('SELECT id FROM users LIMIT 1');
   if (rows[0]) return;
   const bcrypt = require('bcryptjs');
@@ -96,11 +98,20 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server only after DB schema is ready, then seed
+// Poll until schema is ready, then seed and start listening
 async function start() {
-  const { initDb } = require('./db');
-  await initDb();
+  for (let i = 0; i < 10; i++) {
+    try {
+      await pool.query('SELECT 1 FROM users LIMIT 1');
+      break;
+    } catch (err) {
+      if (i === 9) throw new Error('Schema not ready after 10 attempts: ' + err.message);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+
   await seedInitialUser().catch(err => console.error('Seed error:', err));
+
   app.listen(PORT, () => {
     console.log('Vault server running on port ' + PORT);
   });
