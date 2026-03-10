@@ -34,6 +34,16 @@ function ProjectSidebar({ onClose }) {
     api.get('/api/chat/sessions/general').then(r => r.json()).then(setGeneralSessions).catch(() => {});
   }, []);
 
+  // Tour: expand 7 Habits section on request
+  useEffect(() => {
+    const handler = () => {
+      setHabitsOpen(true);
+      localStorage.setItem('sidebarHabitsOpen', 'true');
+    };
+    document.addEventListener('vault:expand-habits-sidebar', handler);
+    return () => document.removeEventListener('vault:expand-habits-sidebar', handler);
+  }, []);
+
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     await api.post('/api/folders', { name: newFolderName.trim() });
@@ -366,7 +376,7 @@ function ProjectSidebar({ onClose }) {
       </div>
 
       {/* 7 Habits section */}
-      <div className="px-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+      <div className="px-2 border-t" data-tour="habits-sidebar" style={{ borderColor: 'var(--color-border)' }}>
         <button
           onClick={() => {
             const next = !habitsOpen;

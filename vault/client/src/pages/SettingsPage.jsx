@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useSettingsStore from '../store/settingsStore';
 import useAuthStore from '../store/authStore';
 import { themes, fontOptions, iconPackOptions } from '../themes';
@@ -7,8 +8,11 @@ import { MODELS as DEFAULT_MODELS } from '../utils/models';
 import api from '../utils/apiClient';
 import { useModels } from '../hooks/useModels';
 import GmailConnect from '../components/GmailConnect';
+import { startGoalsTour, TOUR_KEY } from '../utils/tours/goalsTour';
+import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
 
 function SettingsPage() {
+  const navigate = useNavigate();
   const { font, theme, iconPack, setFont, setTheme, setIconPack, sessionBudget, setSessionBudget, allowedFileTypes, setAllowedFileTypes } = useSettingsStore();
   const [customBudget, setCustomBudget] = useState(
     sessionBudget && ![0.10, 0.25, 0.50, 1.00, 5.00].includes(sessionBudget)
@@ -565,6 +569,53 @@ function SettingsPage() {
       <section>
         <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Integrations</h2>
         <GmailConnect />
+      </section>
+
+      {/* Product Tours */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
+          Product Tours
+        </h2>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Goals &amp; 7 Habits Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                8-step walkthrough of Mission Statement, Renewal Balance, OKRs, and Eisenhower Matrix
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(TOUR_KEY);
+                navigate('/goals');
+                setTimeout(() => startGoalsTour(navigate), 800);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              Retake Tour
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Task Manager Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                10-step walkthrough of views, Quick Capture, Focus Mode, templates, and Weekly Review
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(TASKS_TOUR_KEY);
+                navigate('/tasks');
+                setTimeout(() => startTasksTour(navigate), 800);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              Retake Tour
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   );

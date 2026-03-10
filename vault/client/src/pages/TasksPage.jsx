@@ -10,6 +10,7 @@ import TaskTemplatesPanel from '../components/tasks/TaskTemplatesPanel';
 import TaskStatsBar from '../components/tasks/TaskStatsBar';
 import TaskFilters from '../components/tasks/TaskFilters';
 import { parseNaturalDate, formatDateForInput, toISOForAPI } from '../utils/parseDate';
+import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -258,6 +259,7 @@ export default function TasksPage() {
   const [editTask, setEditTask] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [goalsForForm, setGoalsForForm] = useState([]);
   const [formObjectiveId, setFormObjectiveId] = useState('');
 
@@ -377,6 +379,14 @@ export default function TasksPage() {
     document.addEventListener('vault:task-created', handler);
     return () => document.removeEventListener('vault:task-created', handler);
   }, [fetchTasks]);
+
+  // Auto-start Tasks tour on first visit
+  useEffect(() => {
+    if (!localStorage.getItem(TASKS_TOUR_KEY)) {
+      const t = setTimeout(() => startTasksTour(navigate), 1500);
+      return () => clearTimeout(t);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchSubtasks = async (taskId) => {
     if (subtasksCache[taskId]) return;
@@ -1019,7 +1029,7 @@ export default function TasksPage() {
   });
   const groupKeys = Object.keys(grouped).sort((a, b) => a === 'Uncategorised' ? 1 : b === 'Uncategorised' ? -1 : a.localeCompare(b));
 
-  const renderTask = (task) => {
+  const renderTask = (task, isFirst = false) => {
     const due = dueInfo(task.dueDate);
     const isExpanded = expandedId === task.id;
     const subs = subtasksCache[task.id] || [];
@@ -1031,6 +1041,7 @@ export default function TasksPage() {
     return (
       <div
         key={task.id}
+        {...(isFirst ? { 'data-tour': 'first-task-card' } : {})}
         draggable={task.status !== 'done'}
         onDragStart={(e) => task.status !== 'done' && handleDragStart(e, task)}
         onDragOver={(e) => task.status !== 'done' && handleDragOver(e, task.id)}
@@ -1548,6 +1559,7 @@ export default function TasksPage() {
           </button>
           <button
             onClick={() => setShowWeeklyReview(true)}
+            data-tour="weekly-review-btn"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
             title="Weekly Review (W)"
@@ -1565,6 +1577,7 @@ export default function TasksPage() {
             </button>
           )}
           <button
+            data-tour="import-btn"
             onClick={() => setShowImport(v => !v)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
             style={{ borderColor: showImport ? 'var(--color-primary)' : 'var(--color-border)', color: showImport ? 'var(--color-primary)' : 'var(--color-muted)' }}
@@ -1573,6 +1586,7 @@ export default function TasksPage() {
             {getIcon('upload', { size: 13 })} Import
           </button>
           <button
+            data-tour="templates-btn"
             onClick={() => { setShowTemplates(v => !v); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
             style={{ borderColor: showTemplates ? 'var(--color-primary)' : 'var(--color-border)', color: showTemplates ? 'var(--color-primary)' : 'var(--color-muted)' }}
@@ -1581,7 +1595,7 @@ export default function TasksPage() {
             {getIcon('book', { size: 13 })} Templates
           </button>
           {/* View toggle */}
-          <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+          <div data-tour="view-selector" className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
             {[
               { mode: 'list', icon: 'list-checks', title: 'List view' },
               { mode: 'board', icon: 'layout', title: 'Board view' },
@@ -1626,21 +1640,23 @@ export default function TasksPage() {
 
         {/* Stats bar */}
         {tasks.length > 0 && (
-          <TaskStatsBar
-            totalIncomplete={totalIncomplete}
-            completedThisWeek={completedThisWeek}
-            overdueCount={overdueCount}
-            highPriorityCount={highPriorityCount}
-            totalEffortFormatted={formatEffort(totalEffort)}
-            timeLoggedFormatted={timeLogged > 0 ? formatEffort(timeLogged) : '—'}
-            showChart={showChart}
-            onToggleChart={() => setShowChart(v => !v)}
-            onFilterOverdue={() => setQuickFilter('overdue')}
-            onFilterHigh={() => setQuickFilter('high')}
-            chartData={chartData}
-            chartMax={chartMax}
-            todayStr={todayStr}
-          />
+          <div data-tour="stats-bar">
+            <TaskStatsBar
+              totalIncomplete={totalIncomplete}
+              completedThisWeek={completedThisWeek}
+              overdueCount={overdueCount}
+              highPriorityCount={highPriorityCount}
+              totalEffortFormatted={formatEffort(totalEffort)}
+              timeLoggedFormatted={timeLogged > 0 ? formatEffort(timeLogged) : '—'}
+              showChart={showChart}
+              onToggleChart={() => setShowChart(v => !v)}
+              onFilterOverdue={() => setQuickFilter('overdue')}
+              onFilterHigh={() => setQuickFilter('high')}
+              chartData={chartData}
+              chartMax={chartMax}
+              todayStr={todayStr}
+            />
+          </div>
         )}
 
         {/* AI panel */}
@@ -1681,25 +1697,27 @@ export default function TasksPage() {
         )}
 
         {/* Filter bar */}
-        <TaskFilters
-          quickFilter={quickFilter}
-          onSetQuickFilter={setQuickFilter}
-          filterCategory={filterCategory}
-          onSetFilterCategory={setFilterCategory}
-          filterProject={filterProject}
-          onSetFilterProject={setFilterProject}
-          filterStatus={filterStatus}
-          onSetFilterStatus={setFilterStatus}
-          search={search}
-          onSetSearch={setSearch}
-          sortBy={sortBy}
-          onSetSortBy={setSortBy}
-          categories={categories}
-          projects={projects}
-          searchInputRef={searchInputRef}
-          filterDimension={filterDimension}
-          onSetFilterDimension={setFilterDimension}
-        />
+        <div data-tour="filter-chips">
+          <TaskFilters
+            quickFilter={quickFilter}
+            onSetQuickFilter={setQuickFilter}
+            filterCategory={filterCategory}
+            onSetFilterCategory={setFilterCategory}
+            filterProject={filterProject}
+            onSetFilterProject={setFilterProject}
+            filterStatus={filterStatus}
+            onSetFilterStatus={setFilterStatus}
+            search={search}
+            onSetSearch={setSearch}
+            sortBy={sortBy}
+            onSetSortBy={setSortBy}
+            categories={categories}
+            projects={projects}
+            searchInputRef={searchInputRef}
+            filterDimension={filterDimension}
+            onSetFilterDimension={setFilterDimension}
+          />
+        </div>
 
         {/* Bulk action toolbar */}
         {selectedIds.size > 0 && (
@@ -1744,7 +1762,7 @@ export default function TasksPage() {
               onUpdateEffort={handleUpdateEffort}
             />
           ) : viewMode === 'matrix' ? (
-            <div className="flex-1 flex flex-col min-h-0">
+            <div data-tour="matrix-grid" className="flex-1 flex flex-col min-h-0">
               <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                 <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Eisenhower Matrix</span>
                 <button
@@ -1841,7 +1859,7 @@ export default function TasksPage() {
                     </div>
                   )}
                   <div style={{ background: 'var(--color-bg)' }}>
-                    {grouped[group].map(task => renderTask(task))}
+                    {grouped[group].map((task, taskIdx) => renderTask(task, group === groupKeys[0] && taskIdx === 0))}
                   </div>
                 </div>
               ))}

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import { startGoalsTour, TOUR_KEY } from '../utils/tours/goalsTour';
 
 const PRESET_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#22c55e', '#3b82f6', '#ef4444'];
 
@@ -701,6 +703,7 @@ function MissionStatementCard() {
 
 export default function GoalsPage() {
   const getIcon = useIcon();
+  const navigate = useNavigate();
   const [objectives, setObjectives] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -754,6 +757,23 @@ export default function GoalsPage() {
     if (section === 'mission') { setTimeout(() => scrollTo(missionRef), 100); }
     if (section === 'renewal') { setShowRenewalBalance(true); setTimeout(() => scrollTo(renewalRef), 150); }
   }, []);
+
+  // Tour: expand Renewal Balance on request
+  useEffect(() => {
+    const handler = () => {
+      setShowRenewalBalance(true);
+      localStorage.setItem('goalsRenewalOpen', 'true');
+    };
+    document.addEventListener('vault:expand-renewal-balance', handler);
+    return () => document.removeEventListener('vault:expand-renewal-balance', handler);
+  }, []);
+
+  // Auto-start tour on first visit
+  useEffect(() => {
+    if (localStorage.getItem(TOUR_KEY)) return;
+    const timer = setTimeout(() => startGoalsTour(navigate), 1500);
+    return () => clearTimeout(timer);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedObj = selected ? objectives.find(o => o.id === selected.id) || null : null;
 
@@ -836,10 +856,10 @@ export default function GoalsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <div ref={missionRef}><MissionStatementCard /></div>
+      <div ref={missionRef} data-tour="mission-card"><MissionStatementCard /></div>
 
       {/* Renewal Balance Dashboard */}
-      <div ref={renewalRef} style={{ flexShrink: 0, borderBottom: '1px solid var(--color-border)' }}>
+      <div ref={renewalRef} data-tour="renewal-balance" style={{ flexShrink: 0, borderBottom: '1px solid var(--color-border)' }}>
         <button
           onClick={() => {
             const next = !showRenewalBalance;
@@ -916,6 +936,7 @@ export default function GoalsPage() {
           </div>
           <button
             onClick={() => setShowNew(true)}
+            data-tour="new-objective"
             title="New Objective"
             style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer' }}
           >
@@ -974,7 +995,7 @@ export default function GoalsPage() {
       </div>
 
       {/* Right panel — objective detail */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
+      <div data-tour="objectives-panel" style={{ flex: 1, overflow: 'auto', padding: '20px 24px' }}>
         {!selectedObj ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
             <div style={{ fontSize: 48 }}>🎯</div>

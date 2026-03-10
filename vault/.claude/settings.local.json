@@ -16,7 +16,10 @@
       "Bash(/c/Windows/System32/wsl.exe:*)",
       "Bash(\"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" uninstall:*)",
       "Bash(\"/c/Program Files/nodejs/npm.cmd\" uninstall:*)",
-      "Bash(\"/c/Program Files/nodejs/node.exe\":*)"
+      "Bash(\"/c/Program Files/nodejs/node.exe\":*)",
+      "Bash(cmd:*)",
+      "Bash(echo:*)",
+      "Bash(\"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" install:*)"
     ]
   }
 }

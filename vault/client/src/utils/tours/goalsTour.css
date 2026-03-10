@@ -1,0 +1,102 @@
+/* Vault Goals Tour — Shepherd.js style overrides */
+
+.shepherd-element.vault-tour {
+  max-width: 380px !important;
+  border-radius: 8px !important;
+  font-family: inherit;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18) !important;
+}
+
+/* Header */
+.shepherd-element.vault-tour .shepherd-has-title .shepherd-content .shepherd-header {
+  background: #1b3a5c;
+  border-radius: 8px 8px 0 0;
+  padding: 14px 18px 12px;
+}
+
+.shepherd-element.vault-tour .shepherd-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.3;
+}
+
+.shepherd-element.vault-tour .shepherd-cancel-icon {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 18px;
+}
+
+.shepherd-element.vault-tour .shepherd-cancel-icon:hover {
+  color: #fff;
+  background: transparent;
+}
+
+/* Body text */
+.shepherd-element.vault-tour .shepherd-text {
+  padding: 14px 18px 6px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #374151;
+}
+
+/* Step counter */
+.vault-tour-step-count {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: right;
+  padding: 0 18px 2px;
+}
+
+/* Footer / buttons */
+.shepherd-element.vault-tour .shepherd-footer {
+  padding: 6px 18px 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shepherd-element.vault-tour .shepherd-button {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  background: #0d7b8a;
+  color: #fff;
+  transition: opacity 0.15s;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.shepherd-element.vault-tour .shepherd-button:hover {
+  opacity: 0.85;
+}
+
+.shepherd-element.vault-tour .shepherd-button.vault-tour-btn-secondary {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.shepherd-element.vault-tour .shepherd-button.vault-tour-btn-secondary:hover {
+  background: #e2e8f0;
+  opacity: 1;
+}
+
+/* Arrow — match the header colour */
+.shepherd-element.vault-tour .shepherd-arrow::before {
+  background: #1b3a5c;
+}
+
+/* For steps without a title (welcome step) — arrow matches body */
+.shepherd-element.vault-tour:not(.shepherd-has-title) .shepherd-arrow::before {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+/* Modal overlay tint */
+.shepherd-modal-overlay-container .shepherd-modal-overlay {
+  fill: rgba(0, 0, 0, 0.5);
+}

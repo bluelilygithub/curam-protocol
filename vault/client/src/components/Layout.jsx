@@ -6,6 +6,7 @@ import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
 import QuickCapture from './QuickCapture';
 import MorningDigest from './MorningDigest';
+import TourButton from './TourButton';
 
 function Layout() {
   const isMobileNow = () => typeof window !== 'undefined' && window.innerWidth < 640;
@@ -304,6 +305,7 @@ function Layout() {
           <Outlet />
         </main>
       </div>
+      <TourButton />
       <QuickCapture />
       <MorningDigest />
     </div>
