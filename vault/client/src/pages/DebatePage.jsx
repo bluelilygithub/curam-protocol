@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useIcon } from '../providers/IconProvider';
+import { mdComponents } from '../utils/mdComponents';
 import useAuthStore from '../store/authStore';
 import useSettingsStore from '../store/settingsStore';
 import api from '../utils/apiClient';
@@ -25,41 +24,6 @@ function LoadingDots() {
   );
 }
 
-const mdComponents = {
-  code({ node, inline, className, children, ...props }) {
-    const match = /language-(\w+)/.exec(className || '');
-    return !inline && match ? (
-      <SyntaxHighlighter
-        style={oneDark}
-        language={match[1]}
-        PreTag="div"
-        customStyle={{ borderRadius: '10px', fontSize: '0.8em', margin: '0.75em 0' }}
-        {...props}
-      >
-        {String(children).replace(/\n$/, '')}
-      </SyntaxHighlighter>
-    ) : (
-      <code
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.83em' }}
-        {...props}
-      >
-        {children}
-      </code>
-    );
-  },
-  p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="mb-3 pl-4 space-y-1">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-3 pl-4 space-y-1">{children}</ol>,
-  li: ({ children }) => <li className="list-disc">{children}</li>,
-  h1: ({ children }) => <h1 className="text-base font-semibold mt-4 mb-2">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-sm font-semibold mt-3 mb-1.5">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-sm font-medium mt-2 mb-1">{children}</h3>,
-  blockquote: ({ children }) => (
-    <blockquote className="border-l-2 pl-3 my-2" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-muted)' }}>
-      {children}
-    </blockquote>
-  ),
-};
 
 function MarkdownContent({ text }) {
   return (

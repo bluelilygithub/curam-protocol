@@ -279,7 +279,7 @@ function ChatPage({ general = false }) {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && (e.shiftKey || e.ctrlKey)) { e.preventDefault(); handleSend(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   const handleInputChange = (e) => {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { X, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function ArtifactPanel({ artifacts, initialIndex = 0, onClose }) {
@@ -91,8 +91,8 @@ function ArtifactPanel({ artifacts, initialIndex = 0, onClose }) {
           <div className="h-full overflow-auto text-xs">
             <SyntaxHighlighter
               language={artifact.language || 'text'}
-              style={oneDark}
-              customStyle={{ margin: 0, height: '100%', borderRadius: 0, fontSize: '12px' }}
+              style={vscDarkPlus}
+              customStyle={{ margin: 0, height: '100%', borderRadius: 0, fontSize: '12px', backgroundColor: '#0F1923' }}
               showLineNumbers
             >
               {artifact.code}
