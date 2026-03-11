@@ -34,7 +34,7 @@ curam-protocol/
 ├── vault/                   # Node.js/React AI workspace app
 │   ├── server/
 │   │   ├── index.js         # Express entry point, route registration, seeding
-│   │   ├── db.js            # SQLite schema + idempotent migrations
+│   │   ├── db.js            # PostgreSQL schema + connection pool (pg)
 │   │   ├── middleware/
 │   │   │   └── auth.js      # requireAuth middleware
 │   │   ├── routes/          # API route handlers (one file per domain)
@@ -107,7 +107,7 @@ python main.py
 
 Internal AI workspace: projects, chat, files, tasks, goals, personas, prompts, memory, debates, document comparison, and Gmail integration.
 
-**Stack:** Node.js 22 LTS, Express, SQLite (`better-sqlite3`), React 18, Vite, Tailwind CSS
+**Stack:** Node.js 22 LTS, Express, PostgreSQL (`pg`), React 18, Vite, Tailwind CSS
 
 **Deployed on Railway:** auto-deploys on push to `version-7` branch.
 
@@ -125,7 +125,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 SEED_EMAIL=admin@example.com
 SEED_PASSWORD=yourpassword
 NODE_ENV=development
-DB_PATH=./data/vault.db
+DATABASE_URL=postgresql://vault:vault@localhost:5432/vault_dev
 UPLOAD_DIR=./uploads
 APP_URL=http://localhost:5173
 ```
@@ -136,7 +136,7 @@ npm run dev
 # Backend:  http://localhost:3001
 ```
 
-> **Node version:** Use **Node.js v22 LTS**. `better-sqlite3` has pre-built binaries for v22 and requires no compilation. Node v24+ has no pre-built Windows binaries and will fail without Visual Studio C++ Build Tools.
+> **Node version:** Node.js v22 LTS is recommended.
 
 ### Key Features
 
@@ -147,7 +147,7 @@ npm run dev
 | **Goals** | OKR-lite — Objectives → Key Results → Tasks; AI-suggested KRs; Personal Mission Statement wizard; Renewal Balance Dashboard |
 | **Document Compare** | Side-by-side SSE streaming comparison; 4 modes; save to project |
 | **Debate** | Multi-model debate (Anthropic + Gemini); round history; synthesis summary |
-| **Files** | Per-project file uploads with AI extraction and summaries |
+| **Files** | Per-project uploads — PDFs, images, text, and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example); text extracted and AI-summarised; code files stored as plain text, 500 KB limit, prompt-injection sanitised; pin files for automatic inclusion in every project chat; attach any library file to a single message without re-uploading |
 | **Prompts / Personas / Memory** | Reusable prompt library, AI personas, global memory snippets |
 | **Admin Dashboard** | Usage stats — messages, sessions, searches, debates, comparisons, tokens; period selector |
 | **Web Search** | `@search` in chat; Brave Search / Serper / SerpAPI auto-detected from key format |
@@ -165,7 +165,7 @@ The Gmail router handles its own `requireAuth` internally for all paths except `
 
 ### Database
 
-SQLite at `DB_PATH`. Schema + idempotent migrations in `vault/server/db.js`. WAL mode enabled. On Railway, the DB lives on a mounted volume (`/data/vault.db`).
+PostgreSQL. Schema and connection pool in `vault/server/db.js`. On Railway, connect via the Railway PostgreSQL service (`DATABASE_URL`). Uploaded files live on a mounted volume (`UPLOAD_DIR`).
 
 | Table | Purpose |
 |---|---|
@@ -195,9 +195,7 @@ SQLite at `DB_PATH`. Schema + idempotent migrations in `vault/server/db.js`. WAL
 | `key_results` | Key Results linked to an Objective |
 | `gmail_tokens` | Gmail OAuth tokens per user — auto-refreshed via `googleapis` token event |
 | `notes` | User-scoped quick-capture notes with optional project link |
-| `search_index` | FTS5 virtual table for full-text search across projects, files, and messages |
-
-> **Database Roadmap:** Vault currently uses SQLite. PostgreSQL migration is planned on a separate branch (`postgres-migration`) due to scope — 258 db calls across 24 files plus FTS5 → `tsvector` replacement required.
+| `search_index` | Full-text search index (tsvector + GIN index) across projects, files, and messages |
 
 ---
 
@@ -365,8 +363,8 @@ If you see refusal language despite the ownership framing, check the server log 
 | `ANTHROPIC_API_KEY` | **Yes** | — | Claude API key. All chat, compare, debate, Gmail ask, and AI-generation features. | `sk-ant-api03-...` |
 | `SEED_EMAIL` | **Yes** | — | Email for the initial admin user created on first startup. | `admin@example.com` |
 | `SEED_PASSWORD` | **Yes** | — | Password for the initial admin user. Change via Settings after first login. | `changeme123` |
-| `DB_PATH` | **Yes** | `../data/vault.db` | Absolute or relative path to the SQLite database file. On Railway: `/data/vault.db`. | `./data/vault.db` |
-| `UPLOAD_DIR` | **Yes** | `./uploads` | Directory for uploaded files. On Railway: `/data/uploads`. | `/data/uploads` |
+| `DATABASE_URL` | **Yes** | — | PostgreSQL connection string. On Railway: provided automatically by the PostgreSQL service. | `postgresql://vault:vault@localhost:5432/vault_dev` |
+| `UPLOAD_DIR` | **Yes** | `./uploads` | Directory for uploaded files. On Railway: `/data/uploads` (persistent volume). | `/data/uploads` |
 | `NODE_ENV` | **Yes** | — | `development` or `production`. Controls Helmet CSP, static file serving, and error verbosity. | `production` |
 | `APP_URL` | **Yes** | `http://localhost:5173` | Base URL for password-reset email links, OAuth redirects, and public task share URLs. No trailing slash. | `https://curam-vault.up.railway.app` |
 | `PORT` | Optional | `3001` | HTTP port. Railway sets this automatically — do not hardcode for production. | `3001` |
@@ -386,7 +384,7 @@ If you see refusal language despite the ownership framing, check the server log 
 
 ¹ `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASS` are required together when `MAIL_CHANNEL_API_KEY` is not set and you need email features.
 
-² Strongly recommended in production. Without it, Gmail OAuth tokens are stored unencrypted in the SQLite file.
+² Strongly recommended in production. Without it, Gmail OAuth tokens are stored unencrypted in the database.
 
 ### Flask Site — root `.env`
 
@@ -444,19 +442,21 @@ ANTHROPIC_API_KEY=sk-ant-...
 SEED_EMAIL=admin@example.com
 SEED_PASSWORD=your-password
 NODE_ENV=production
-DB_PATH=/data/vault.db
+DATABASE_URL=<Railway PostgreSQL service URL>
 UPLOAD_DIR=/data/uploads
 APP_URL=https://curam-vault.up.railway.app
 ENCRYPTION_KEY=...          # openssl rand -hex 32 — AES-256-GCM encryption of Gmail OAuth tokens at rest
 ```
 
-**Volume mount (critical for data persistence):**
+**Database:** Add a PostgreSQL service to your Railway project. Railway provides `DATABASE_URL` automatically — reference it as a shared variable in the Vault service environment.
+
+**Volume mount (for uploaded files):**
 
 1. In Railway dashboard → your Vault service → **Volumes** tab.
 2. Add a volume, mount path: `/data`.
-3. Set `DB_PATH=/data/vault.db` and `UPLOAD_DIR=/data/uploads`.
+3. Set `UPLOAD_DIR=/data/uploads`.
 
-Without the volume, the SQLite database and all uploaded files are lost on every redeploy.
+Without the volume, uploaded files are lost on every redeploy. The PostgreSQL database is persisted independently by the Railway PostgreSQL service.
 
 **Optional variables:**
 
@@ -486,17 +486,6 @@ git push origin version-7       # triggers Railway deploy for Vault
 
 ### Railway Deployment Issues
 
-**Build fails with `better-sqlite3` compilation error**
-
-`better-sqlite3` requires a native binary matching the Node.js version. Railway's build environment may differ from local.
-
-Fix: ensure `vault/railway.toml` does not override the Node version. Railway auto-detects Node from `package.json` engines field (if present) or uses its default LTS. Do not add a `nixpacks.toml` that specifies a Node version unless you know what you're doing. If the build continues to fail, add:
-
-```json
-// vault/package.json
-"engines": { "node": "22.x" }
-```
-
 **App starts but crashes immediately — `Cannot find module`**
 
 `npm install` ran but `node_modules` is missing a dependency. This can happen if `package.json` was edited manually and the lock file is out of sync.
@@ -509,57 +498,50 @@ The Vite build (`npm run build`) may have failed silently. Check the Railway bui
 
 Fix: run `npm run build` locally in `vault/` and fix any errors before pushing.
 
-**`ENOENT: no such file or directory, open '/data/vault.db'`**
-
-The Railway volume is not mounted, or `DB_PATH` points to a path outside the volume mount.
-
-Fix: in Railway dashboard → Vault service → Volumes → confirm the volume is attached at `/data`. Confirm `DB_PATH=/data/vault.db`.
-
 **Health check fails → service marked as crashed**
 
 Railway calls `GET /api/health` within 30 seconds of startup. If the server hasn't started (e.g., port binding failed), the service is killed.
 
-Common causes: `PORT` env var not set (Railway provides it automatically — do not hardcode); `DB_PATH` directory doesn't exist (create `uploads` on first boot — the server does this automatically, but the `/data` volume must be mounted first).
+Common causes: `PORT` env var not set (Railway provides it automatically — do not hardcode); `DATABASE_URL` not set or the PostgreSQL service not linked; `UPLOAD_DIR` directory doesn't exist (the server creates it automatically on first boot, but the `/data` volume must be mounted first).
 
-### SQLite Volume Mount on Railway
+### PostgreSQL on Railway
 
-SQLite requires a persistent volume because Railway's filesystem is ephemeral — every deploy or restart wipes the container. Without a volume, you lose all data on redeploy.
+Vault uses PostgreSQL. Add a **PostgreSQL** service to your Railway project and link its `DATABASE_URL` variable to the Vault service.
 
 **Step-by-step:**
 
-1. Railway dashboard → Vault service → **Volumes** tab → **Add Volume**.
-2. Set mount path to `/data`. Railway creates the directory.
-3. Set env vars: `DB_PATH=/data/vault.db`, `UPLOAD_DIR=/data/uploads`.
-4. Redeploy. On first boot, `db.js` creates `vault.db` and runs all schema migrations. Subsequent deploys find the existing DB and only run new migrations.
+1. Railway dashboard → **New** → **Database** → **PostgreSQL**.
+2. In the Vault service → **Variables** tab → **Add Reference** → select the PostgreSQL service's `DATABASE_URL`.
+3. On first boot, `db.js` connects and creates all 27 tables if they don't exist. Subsequent deploys are idempotent.
+
+**Volume mount for file uploads:**
+
+Railway's filesystem is ephemeral — add a volume for uploaded files:
+
+1. Vault service → **Volumes** tab → **Add Volume**, mount path `/data`.
+2. Set `UPLOAD_DIR=/data/uploads`.
 
 **Checking DB health after deploy:**
 
 ```bash
 # Railway CLI
 railway run --service vault node -e "
-  const db = require('./server/db');
-  console.log(db.prepare('SELECT COUNT(*) as n FROM users').get());
+  const { pool } = require('./server/db');
+  pool.query('SELECT COUNT(*) AS n FROM users').then(r => console.log(r.rows[0]));
 "
 ```
 
-**Backup the SQLite DB:**
+**Backup the PostgreSQL DB:**
 
 ```bash
-# Via Railway CLI — copies DB to local machine
-railway run --service vault sqlite3 /data/vault.db ".backup /data/vault.db.bak"
-railway volume cp vault:/data/vault.db ./vault_backup.db
+# Via Railway CLI — dumps DB to local file
+railway connect postgresql
+# Then from the psql prompt: \! pg_dump ... > vault_backup.sql
+# Or use pg_dump directly with the DATABASE_URL
+pg_dump "$DATABASE_URL" > vault_backup.sql
 ```
 
 ### Node.js Version Issues
-
-**`better-sqlite3` fails to load on Windows (`NODE_MODULE_VERSION` mismatch)**
-
-This happens when the installed `better-sqlite3` binary was compiled for a different Node.js ABI than the currently running version.
-
-Fix options:
-1. Use **Node.js v22 LTS** — has pre-built Windows binaries for `better-sqlite3`. No compilation required.
-2. If you must use another version: `npm rebuild better-sqlite3` from `vault/`. Requires Visual Studio C++ Build Tools on Windows.
-3. Node v24+ has no pre-built `better-sqlite3` Windows binaries as of March 2026. See `local-setup-issues.md` for the full history.
 
 **Checking your Node version:**
 
@@ -568,6 +550,8 @@ node -v          # should be v22.x.x
 npm -v           # should be 10.x
 nvm use 22       # if using nvm
 ```
+
+Node.js v22 LTS is recommended. See `local-setup-issues.md` for the full local environment history.
 
 **`npm install` fails with peer dependency errors**
 
@@ -604,3 +588,17 @@ The `SEARCH_API_KEY` format determines the provider. If the key format is unreco
 **Email password reset not working**
 
 Requires either `MAIL_CHANNEL_API_KEY` or all four SMTP vars. Check the server log for `[email]` errors. `APP_URL` must also be set to the correct domain — the reset link in the email will point to `${APP_URL}/reset-password?token=...`.
+
+---
+
+## Recent Changes
+
+### March 2026
+
+- **File library — attach from Project Files panel** — Attach button on every file in the chat's Project Files panel adds it to the current message without re-uploading; pin files for all-chat context, attach for single-message access
+- **Markdown table rendering** — tables in AI responses, compare, and debate now render correctly with styled borders and horizontal scroll
+- **Anthropic SDK upgraded to 0.78.0** — `@anthropic-ai/sdk` updated from 0.36.3 to 0.78.0
+- **Code file uploads** — `.js`, `.jsx`, `.ts`, `.tsx`, `.php`, `.py`, `.css`, `.html`, `.sql`, `.sh`, `.env.example` accepted; stored as plain text with 500 KB limit and prompt-injection sanitisation
+- **Settings file type persistence** — allowed file types now saved to the database and synced across devices
+- **Gmail integration** — `@gmail` in chat; OAuth 2.0; natural language search via Claude Haiku; email threads as chat context; Gmail tokens encrypted at rest (AES-256-GCM)
+- **Dynamic AI model management** — add, edit, delete, and test models from Settings without a code deploy

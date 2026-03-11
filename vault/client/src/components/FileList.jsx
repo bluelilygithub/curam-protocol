@@ -10,9 +10,10 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function FileCard({ file, onDelete, onChat, onTogglePin }) {
+function FileCard({ file, onDelete, onChat, onTogglePin, onAttach }) {
   const [expanded, setExpanded] = useState(false);
   const [pinned, setPinned] = useState(!!file.pinned);
+  const [attached, setAttached] = useState(false);
   const getIcon = useIcon();
   const isPdf = file.mimetype === 'application/pdf';
   const isImage = file.mimetype?.startsWith('image/');
@@ -70,6 +71,16 @@ function FileCard({ file, onDelete, onChat, onTogglePin }) {
           >
             {getIcon('pin', { size: 13 })}
           </button>
+          {onAttach && (
+            <button
+              onClick={() => { onAttach(file); setAttached(true); setTimeout(() => setAttached(false), 1500); }}
+              className="text-xs px-2 py-1 rounded border flex items-center gap-1"
+              style={{ borderColor: attached ? 'var(--color-primary)' : 'var(--color-border)', color: attached ? 'var(--color-primary)' : 'var(--color-text)' }}
+              title="Attach to current message"
+            >
+              {attached ? '✓ Added' : (<>{getIcon('paperclip', { size: 12 })} Attach</>)}
+            </button>
+          )}
           {isPdf && (
             <button
               onClick={() => onChat(file)}
@@ -115,7 +126,7 @@ function FileCard({ file, onDelete, onChat, onTogglePin }) {
   );
 }
 
-function FileList({ projectId }) {
+function FileList({ projectId, onAttach }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -151,7 +162,7 @@ function FileList({ projectId }) {
   return (
     <div>
       {files.map((file) => (
-        <FileCard key={file.id} file={file} onDelete={handleDelete} onChat={handleChat} onTogglePin={() => {}} />
+        <FileCard key={file.id} file={file} onDelete={handleDelete} onChat={handleChat} onTogglePin={() => {}} onAttach={onAttach} />
       ))}
     </div>
   );

@@ -24,7 +24,7 @@ Two separate applications in one repo (`version-7` branch, main branch for PRs):
 
 ## Key Files
 - `vault/server/index.js` — Express server entry point
-- `vault/server/db.js` — SQLite schema + migrations
+- `vault/server/db.js` — PostgreSQL schema + connection pool (pg)
 - `vault/server/routes/` — API routes
 - `vault/server/utils/sendEmail.js` — Shared email helper (MailChannels → SMTP fallback)
 - `vault/server/middleware/auth.js` — requireAuth middleware
@@ -41,7 +41,7 @@ Two separate applications in one repo (`version-7` branch, main branch for PRs):
 - Change password: Settings page → Change Password section
 - Password reset: `POST /api/auth/reset-password-request` + `/reset-password-confirm`; `APP_URL` env var for link domain
 
-## DB Tables (SQLite)
+## DB Tables (PostgreSQL — 27 tables)
 Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions`, `folders`, `personas`, `prompts`, `memory`, `pinned_urls`, `debates`, `settings`, `password_resets`
 - `settings` table: `key TEXT PRIMARY KEY, value TEXT` — stores GEMINI_API_KEY, SEARCH_API_KEY, MAIL_CHANNEL_API_KEY
 - `password_resets` table: token, email, expiresAt (1 hour TTL)
@@ -50,14 +50,15 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 - `ANTHROPIC_API_KEY` — Claude API key
 - `SEED_EMAIL` / `SEED_PASSWORD` — Initial user (change via Settings after first login)
 - `NODE_ENV=production` (set in railway.toml)
-- `DB_PATH`, `UPLOAD_DIR` — point to Railway volume mount path
+- `DATABASE_URL` — PostgreSQL connection string (provided by Railway PostgreSQL service)
+- `UPLOAD_DIR` — point to Railway volume mount path (e.g. `/data/uploads`)
 - `APP_URL` — base URL for password reset emails (e.g. `https://curam-vault.up.railway.app`)
 - Optional (can also be set in Settings UI): `GEMINI_API_KEY`, `SEARCH_API_KEY`, `MAIL_CHANNEL_API_KEY`
 
 ## Important Patterns
 - All frontend API calls must use `apiClient` (`import api from '../utils/apiClient'`)
 - Never use raw `fetch('/api/...')` without auth headers (exception: multipart uploads and unauthenticated endpoints)
-- SQLite DB on Railway volume — persists between deploys
+- PostgreSQL on Railway — persists between deploys via Railway's managed PostgreSQL service
 - Git: run all commands from project root `C:\Users\micha\Local Sites\Curam-Protocol`
 - Deploy: push to `version-7` branch → Railway auto-deploys
 - Settings API: `GET /api/settings` returns all keys, `POST /api/settings { key, value }` upserts (empty value deletes)
@@ -183,6 +184,9 @@ See `local-setup-issues.md` for details on the broken Node.js environment.
 - **Frontend:** `GmailConnect.jsx` in SettingsPage "Integrations" section; `@gmail` in AtMentionDropdown triggers Gmail search modal in ChatPage
 - **Thread attachment:** Gmail threads added via `addManual()` from `useUrlAttachment` as `gmail://thread/<id>` URLs; `buildMessageContent` in chat.js uses `[Email thread: ...]` label
 - **Package:** `googleapis` ^144.0.0 added to package.json dependencies
+
+## Response Formatting Rules
+Format responses in plain prose by default. Code blocks for actual code/commands/file contents only — never for filenames. **Bold** for filenames, key terms, UI labels, important instructions. *Italics* for emphasis/clarification only. Tables only when comparing 3+ items with clear categories. Bullet points only for 3+ related items. Headers only when a response has 3+ genuinely distinct sections. Never pad with formatting.
 
 ## Known Bugs / To Revisit
 - **Drag project into folder doesn't persist** — server `PUT /api/projects/:id` includes `folderId`, sidebar calls `fetchProjects()` after update. Still not working locally — suspect nodemon not picking up changes or local/Railway env difference. Needs network tab debugging.

@@ -104,6 +104,8 @@ async function buildMessageContent(text, attachmentIds, urlAttachments, inlineIm
       } catch (err) {
         console.error('Could not read image file:', err.message);
       }
+    } else if (file.anthropicFileId) {
+      blocks.push({ type: 'document', source: { type: 'file', file_id: file.anthropicFileId } });
     } else if (file.extractedText) {
       blocks.push({ type: 'text', text: `[Attached file: ${file.name}]\n\n${file.extractedText.substring(0, 8000)}` });
     } else {
@@ -212,6 +214,18 @@ router.post('/', chatLimiter, async (req, res) => {
   const { rows: sessionRows } = await pool.query('SELECT * FROM sessions WHERE "sessionId"=$1', [sid]);
   const sessionMeta = sessionRows[0] || null;
 
+  // Load all project Files API documents (PDFs uploaded to Anthropic) for persistent context
+  const projectFileBlocks = [];
+  if (projectId) {
+    const { rows: apiFiles } = await pool.query(
+      'SELECT id, name, "anthropicFileId" FROM files WHERE "projectId"=$1 AND "anthropicFileId" IS NOT NULL',
+      [projectId]
+    );
+    for (const f of apiFiles) {
+      projectFileBlocks.push({ type: 'document', source: { type: 'file', file_id: f.anthropicFileId } });
+    }
+  }
+
   let apiMessages;
   if (sessionMeta?.isSummarized && sessionMeta?.summaryContent) {
     let postSummaryMsgs = [];
@@ -242,6 +256,26 @@ router.post('/', chatLimiter, async (req, res) => {
       }
       return { role: m.role, content: m.content };
     }));
+  }
+
+  // Inject persistent project file blocks into the last user message (dedup against explicitly attached)
+  if (projectFileBlocks.length > 0 && apiMessages.length > 0) {
+    const lastMsg = apiMessages[apiMessages.length - 1];
+    if (lastMsg.role === 'user') {
+      const existingFileIds = new Set(
+        Array.isArray(lastMsg.content)
+          ? lastMsg.content.filter(b => b?.source?.type === 'file').map(b => b.source.file_id)
+          : []
+      );
+      const newBlocks = projectFileBlocks.filter(b => !existingFileIds.has(b.source.file_id));
+      if (newBlocks.length > 0) {
+        if (Array.isArray(lastMsg.content)) {
+          lastMsg.content = [...newBlocks, ...lastMsg.content];
+        } else {
+          lastMsg.content = [...newBlocks, { type: 'text', text: lastMsg.content }];
+        }
+      }
+    }
   }
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -316,7 +350,12 @@ router.post('/', chatLimiter, async (req, res) => {
       } else {
         streamParams.temperature = temperature;
       }
-      const stream = anthropic.messages.stream(streamParams);
+      // Files API references require the beta header passed as request options (not message params)
+      const hasFileRefs = apiMessages.some(m =>
+        Array.isArray(m.content) && m.content.some(b => b?.source?.type === 'file')
+      );
+      const streamOptions = hasFileRefs ? { headers: { 'anthropic-beta': 'files-api-2025-04-14' } } : {};
+      const stream = anthropic.messages.stream(streamParams, streamOptions);
 
       for await (const chunk of stream) {
         if (chunk.type === 'message_start') {

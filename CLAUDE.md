@@ -1,0 +1,3 @@
+# Response Formatting Rules
+
+Format responses using plain prose by default. Only use code blocks for actual code, terminal commands, or file contents — never for filenames or references. Use **bold** for filenames, key terms, UI labels, and important instructions. Use *italics* only for emphasis or clarification. Only use tables when comparing 3 or more items with clear categories — not for simple lists. Only use bullet points for 3 or more related items — never for single points dressed as lists. Only use headers when a response has 3 or more genuinely distinct sections. Never use formatting to appear thorough or pad a response. Prioritise readability above all else.

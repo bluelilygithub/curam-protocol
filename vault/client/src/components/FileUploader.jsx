@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useIcon } from '../providers/IconProvider';
-
-const ACCEPTED = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.txt,.json,.csv,.md';
+import useSettingsStore from '../store/settingsStore';
 
 function FileUploader({ projectId, onUpload }) {
   const [dragging, setDragging] = useState(false);
@@ -10,6 +9,7 @@ function FileUploader({ projectId, onUpload }) {
   const [error, setError] = useState('');
   const inputRef = useRef(null);
   const getIcon = useIcon();
+  const { allowedFileTypes } = useSettingsStore();
 
   const upload = (file) => {
     setUploading(true);
@@ -33,7 +33,12 @@ function FileUploader({ projectId, onUpload }) {
         setTimeout(() => setProgress(0), 1000);
         onUpload?.();
       } else {
-        setError('Upload failed. Please try again.');
+        try {
+          const data = JSON.parse(xhr.responseText);
+          setError(data.error || 'Upload failed. Please try again.');
+        } catch {
+          setError('Upload failed. Please try again.');
+        }
       }
     };
 
@@ -78,14 +83,14 @@ function FileUploader({ projectId, onUpload }) {
           Drop a file or <span style={{ color: 'var(--color-primary)' }}>browse</span>
         </p>
         <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-          PDF, images, text files up to 50MB
+          PDF, images, text, and code files (code files: 500KB limit)
         </p>
       </div>
 
       <input
         ref={inputRef}
         type="file"
-        accept={ACCEPTED}
+        accept={allowedFileTypes}
         className="hidden"
         onChange={handleFileInput}
       />

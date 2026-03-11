@@ -39,6 +39,30 @@ export const mdComponents = {
   h1: ({ children }) => <h1 className="text-base font-semibold mt-4 mb-2">{children}</h1>,
   h2: ({ children }) => <h2 className="text-sm font-semibold mt-3 mb-1.5">{children}</h2>,
   h3: ({ children }) => <h3 className="text-sm font-medium mt-2 mb-1">{children}</h3>,
+  table: ({ children }) => (
+    <div style={{ overflowX: 'auto', margin: '0.75em 0' }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875em' }}>
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({ children }) => (
+    <thead style={{ borderBottom: '2px solid var(--color-border)' }}>{children}</thead>
+  ),
+  tbody: ({ children }) => <tbody>{children}</tbody>,
+  tr: ({ children }) => (
+    <tr style={{ borderBottom: '1px solid var(--color-border)' }}>{children}</tr>
+  ),
+  th: ({ children }) => (
+    <th style={{ padding: '6px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--color-text)', whiteSpace: 'nowrap' }}>
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td style={{ padding: '6px 12px', color: 'var(--color-text)', verticalAlign: 'top' }}>
+      {children}
+    </td>
+  ),
   blockquote: ({ children }) => (
     <blockquote
       className="border-l-2 pl-3 my-2"

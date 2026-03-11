@@ -25,6 +25,7 @@ function SettingsPage() {
   const getIcon = useIcon();
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwStatus, setPwStatus] = useState(null);
+  const [fileTypesSaved, setFileTypesSaved] = useState(false);
   const [showPwFields, setShowPwFields] = useState({ current: false, next: false, confirm: false });
   const [modelStatus, setModelStatus] = useState(null);
   const { models, saveModels } = useModels();
@@ -33,6 +34,17 @@ function SettingsPage() {
 
   useEffect(() => {
     api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
+    // Load allowedFileTypes from DB. If no DB value exists yet, seed it with the
+    // current comprehensive default (also fixes stale localStorage values from older builds).
+    const DEFAULT_FILE_TYPES = '.pdf,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.php,.py,.css,.html,.sql,.sh,.env.example,image/*';
+    api.get('/api/settings').then(r => r.json()).then(data => {
+      if (data.allowedFileTypes) {
+        setAllowedFileTypes(data.allowedFileTypes);
+      } else {
+        setAllowedFileTypes(DEFAULT_FILE_TYPES);
+        api.post('/api/settings', { key: 'allowedFileTypes', value: DEFAULT_FILE_TYPES }).catch(() => {});
+      }
+    }).catch(() => {});
   }, []);
 
   const EMPTY_MODEL = { emoji: '🤖', name: '', label: '', id: '', provider: 'anthropic', tagline: '', desc: '' };
@@ -95,6 +107,21 @@ function SettingsPage() {
     } catch {
       setPwStatus({ ok: false, msg: 'Network error' });
     }
+  }
+
+  const DEFAULT_FILE_TYPES = '.pdf,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.php,.py,.css,.html,.sql,.sh,.env.example,image/*';
+
+  async function saveFileTypes() {
+    await api.post('/api/settings', { key: 'allowedFileTypes', value: allowedFileTypes }).catch(() => {});
+    setFileTypesSaved(true);
+    setTimeout(() => setFileTypesSaved(false), 2000);
+  }
+
+  async function resetFileTypes() {
+    setAllowedFileTypes(DEFAULT_FILE_TYPES);
+    await api.post('/api/settings', { key: 'allowedFileTypes', value: DEFAULT_FILE_TYPES }).catch(() => {});
+    setFileTypesSaved(true);
+    setTimeout(() => setFileTypesSaved(false), 2000);
   }
 
   return (
@@ -265,8 +292,27 @@ function SettingsPage() {
           onChange={(e) => setAllowedFileTypes(e.target.value)}
           className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none font-mono"
           style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          placeholder=".pdf,.txt,.md,.csv,.json,image/*"
+          placeholder=".pdf,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.php,.py,.css,.html,.sql,.sh,.env.example,image/*"
         />
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            onClick={saveFileTypes}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-opacity hover:opacity-80"
+            style={{ background: 'var(--color-primary)' }}
+          >
+            Save
+          </button>
+          <button
+            onClick={resetFileTypes}
+            className="px-3 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
+          >
+            Reset to defaults
+          </button>
+          {fileTypesSaved && (
+            <span className="text-xs" style={{ color: 'var(--color-primary)' }}>Saved ✓</span>
+          )}
+        </div>
         <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
           Examples: <code>.pdf,.docx,.xlsx</code> or <code>image/*</code> or <code>.pdf,image/*,.txt</code>
         </p>

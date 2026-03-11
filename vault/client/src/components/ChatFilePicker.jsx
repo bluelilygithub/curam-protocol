@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
-
-const ACCEPTED = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.txt,.json,.csv,.md';
+import useSettingsStore from '../store/settingsStore';
 
 function formatBytes(b) {
   if (b < 1024) return `${b}B`;
@@ -16,6 +15,7 @@ function ChatFilePicker({ projectId, onUpload, onAttachExisting, onClose, attach
   const fileInputRef = useRef(null);
   const panelRef = useRef(null);
   const getIcon = useIcon();
+  const { allowedFileTypes } = useSettingsStore();
 
   useEffect(() => {
     if (projectId) {
@@ -68,13 +68,13 @@ function ChatFilePicker({ projectId, onUpload, onAttachExisting, onClose, attach
             Upload to project
           </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            PDF, images, text · 50MB max
+            PDF, images, text, code files · 50MB max (code: 500KB)
           </p>
         </div>
         <input
           ref={fileInputRef}
           type="file"
-          accept={ACCEPTED}
+          accept={allowedFileTypes}
           multiple
           className="hidden"
           onChange={(e) => { handleFiles(e.target.files); e.target.value = ''; }}

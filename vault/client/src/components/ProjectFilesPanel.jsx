@@ -2,12 +2,12 @@ import React, { useRef, useState } from 'react';
 import FileList from './FileList';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
+import useSettingsStore from '../store/settingsStore';
 
-const ACCEPTED = '.pdf,.jpg,.jpeg,.png,.gif,.webp,.txt,.json,.csv,.md';
-
-function ProjectFilesPanel({ projectId, onClose }) {
+function ProjectFilesPanel({ projectId, onClose, onAttach }) {
   const getIcon = useIcon();
   const fileInputRef = useRef(null);
+  const { allowedFileTypes } = useSettingsStore();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [listKey, setListKey] = useState(0);
@@ -56,7 +56,7 @@ function ProjectFilesPanel({ projectId, onClose }) {
           <input
             ref={fileInputRef}
             type="file"
-            accept={ACCEPTED}
+            accept={allowedFileTypes}
             className="hidden"
             onChange={handleFileChange}
           />
@@ -90,7 +90,7 @@ function ProjectFilesPanel({ projectId, onClose }) {
 
       {/* File list */}
       <div className="flex-1 overflow-y-auto px-3 pb-3">
-        <FileList key={listKey} projectId={projectId} />
+        <FileList key={listKey} projectId={projectId} onAttach={onAttach} />
       </div>
     </div>
   );

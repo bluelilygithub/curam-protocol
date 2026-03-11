@@ -19,7 +19,10 @@
       "Bash(cmd:*)",
       "Bash(echo:*)",
       "Bash(export:*)",
-      "Bash(powershell.exe:*)"
+      "Bash(powershell.exe:*)",
+      "Bash(npm show:*)",
+      "Bash(netstat -ano | findstr :3001 | findstr LISTENING)",
+      "Bash(taskkill /PID 8876 /F)"
     ]
   }
 }

@@ -7,6 +7,7 @@ const path = require('path');
 const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { pool } = require('../db');
+const { sanitiseCodeFile } = require('../utils/sanitiseCodeFile');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -15,9 +16,24 @@ const ACCEPTED_MIMES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'text/plain', 'application/json', 'text/csv', 'text/markdown',
   'text/x-markdown',
+  // Code files — browsers may send various MIME types for these
+  'text/javascript', 'application/javascript', 'text/typescript',
+  'text/css', 'text/html', 'text/x-python', 'text/x-php',
+  'application/x-sh', 'text/x-shellscript', 'application/sql', 'text/x-sql',
 ];
 
 const ACCEPTED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.txt', '.json', '.csv', '.md'];
+
+// Code file extensions — stored as .txt on disk; original name preserved in DB
+const CODE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.php', '.py', '.css', '.html', '.sql', '.sh'];
+// .json already handled by ACCEPTED_EXTENSIONS; .env.example matched by filename suffix
+
+const CODE_SIZE_LIMIT = 500 * 1024; // 500 KB
+
+function isCodeFile(file) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  return CODE_EXTENSIONS.includes(ext) || file.originalname.toLowerCase().endsWith('.env.example');
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -28,7 +44,13 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    cb(null, `${unique}-${file.originalname}`);
+    if (isCodeFile(file)) {
+      // Append .txt so the file is never stored with an executable extension
+      const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+      cb(null, `${unique}-${safe}.txt`);
+    } else {
+      cb(null, `${unique}-${file.originalname}`);
+    }
   },
 });
 
@@ -37,6 +59,15 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
+    const nameLower = file.originalname.toLowerCase();
+
+    // Explicitly block bare .env files (secrets)
+    if (ext === '.env' || nameLower === '.env' || nameLower.endsWith('/.env')) {
+      return cb(new Error('File type not accepted'));
+    }
+
+    if (isCodeFile(file)) return cb(null, true);
+
     if (ACCEPTED_MIMES.includes(file.mimetype) ||
         (file.mimetype === 'application/octet-stream' && ACCEPTED_EXTENSIONS.includes(ext))) {
       cb(null, true);
@@ -69,6 +100,7 @@ async function generateAiSummary(text, filename) {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
+      store: false,
       messages: [{
         role: 'user',
         content: `Summarize the following document "${filename}" in 2-3 sentences:\n\n${text.substring(0, 4000)}`,
@@ -94,14 +126,44 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
   const { projectId } = req.params;
   let extractedText = '';
   let aiSummary = '';
+  let storedMimetype = req.file.mimetype;
 
   const ext = path.extname(req.file.originalname).toLowerCase();
   const isPdf = req.file.mimetype === 'application/pdf' || ext === '.pdf';
   const isText = [
     'text/plain', 'text/csv', 'text/markdown', 'text/x-markdown', 'application/json'
   ].includes(req.file.mimetype) || ['.txt', '.md', '.csv', '.json'].includes(ext);
+  const isCode = isCodeFile(req.file);
 
-  if (isPdf) {
+  if (isCode) {
+    // Enforce 500 KB hard limit for code files
+    if (req.file.size > CODE_SIZE_LIMIT) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'Code files must be under 500KB to prevent context overflow.' });
+    }
+
+    // Validate UTF-8 — reject binary files even if they have a code extension
+    let rawContent;
+    try {
+      rawContent = fs.readFileSync(req.file.path, 'utf8');
+    } catch {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ error: 'File must be valid UTF-8 text. Binary files are not accepted.' });
+    }
+
+    // Sanitise prompt injection attempts
+    const { sanitised, injectionFound, removedCount } = sanitiseCodeFile(rawContent, req.file.originalname);
+    if (injectionFound) {
+      console.warn(`[files] Prompt injection patterns removed from "${req.file.originalname}": ${removedCount} line(s)`);
+      fs.writeFileSync(req.file.path, sanitised, 'utf8');
+    }
+
+    extractedText = sanitised;
+    storedMimetype = 'text/plain'; // Never store code files under an executable MIME type
+    if (extractedText) {
+      aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+    }
+  } else if (isPdf) {
     extractedText = await extractPdfText(req.file.path);
     if (extractedText) {
       aiSummary = await generateAiSummary(extractedText, req.file.originalname);
@@ -121,9 +183,30 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
     const { rows } = await pool.query(
       `INSERT INTO files ("projectId", name, size, mimetype, path, "extractedText", "aiSummary")
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [projectId, req.file.originalname, req.file.size, req.file.mimetype, req.file.path, extractedText, aiSummary]
+      [projectId, req.file.originalname, req.file.size, storedMimetype, req.file.path, extractedText, aiSummary]
     );
-    const { rows: file } = await pool.query('SELECT * FROM files WHERE id=$1', [rows[0].id]);
+    const fileId = rows[0].id;
+
+    // Anthropic Files API — upload PDFs for persistent cross-session file references
+    const isPdf = storedMimetype === 'application/pdf' ||
+                  path.extname(req.file.originalname).toLowerCase() === '.pdf';
+    if (isPdf && process.env.ANTHROPIC_API_KEY) {
+      try {
+        console.log('[files] Uploading to Anthropic Files API:', req.file.originalname);
+        const fileStream = fs.createReadStream(req.file.path);
+        const anthropicFile = await anthropic.beta.files.upload({
+          file: await Anthropic.toFile(fileStream, req.file.originalname, { type: 'application/pdf' }),
+        });
+        console.log('[files] Anthropic Files API upload success, file_id:', anthropicFile.id);
+        await pool.query('UPDATE files SET "anthropicFileId"=$1 WHERE id=$2', [anthropicFile.id, fileId]);
+      } catch (anthropicErr) {
+        console.error('[files] Anthropic Files API upload failed:', anthropicErr.message, anthropicErr.status);
+      }
+    } else {
+      console.log('[files] Skipping Anthropic Files API upload — isPdf:', isPdf, 'hasKey:', !!process.env.ANTHROPIC_API_KEY);
+    }
+
+    const { rows: file } = await pool.query('SELECT * FROM files WHERE id=$1', [fileId]);
 
     // Index for search
     await pool.query(
@@ -173,6 +256,15 @@ router.delete('/:id', async (req, res) => {
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
     await pool.query('DELETE FROM files WHERE id=$1', [req.params.id]);
     await pool.query(`DELETE FROM search_index WHERE type='file' AND title=$1`, [file.name]);
+
+    // Best-effort cleanup from Anthropic Files API
+    if (file.anthropicFileId && process.env.ANTHROPIC_API_KEY) {
+      try {
+        await anthropic.beta.files.del(file.anthropicFileId);
+      } catch (anthropicErr) {
+        console.warn('[files] Anthropic Files API delete failed:', anthropicErr.message);
+      }
+    }
 
     res.json({ ok: true });
   } catch (err) {

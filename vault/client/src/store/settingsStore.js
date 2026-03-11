@@ -8,7 +8,7 @@ const useSettingsStore = create(
       theme: 'warm-sand',
       iconPack: 'lucide',
       sessionBudget: null, // null = off; number = USD limit per session
-      allowedFileTypes: '.pdf,.txt,.md,.csv,.json,image/*',
+      allowedFileTypes: '.pdf,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.php,.py,.css,.html,.sql,.sh,.env.example,image/*',
       setFont: (font) => set({ font }),
       setTheme: (theme) => set({ theme }),
       setIconPack: (iconPack) => set({ iconPack }),

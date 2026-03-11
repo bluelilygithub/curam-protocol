@@ -150,6 +150,9 @@ async function initSchema() {
       )
     `);
 
+    // Idempotent column additions — safe to run on every boot
+    await client.query(`ALTER TABLE files ADD COLUMN IF NOT EXISTS "anthropicFileId" TEXT`);
+
     // ── Chat ──────────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS sessions (

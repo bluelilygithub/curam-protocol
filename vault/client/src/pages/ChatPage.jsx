@@ -1412,6 +1412,7 @@ function ChatPage({ general = false }) {
             <ProjectFilesPanel
               projectId={projectId}
               onClose={() => setShowFilesPanel(false)}
+              onAttach={(file) => { attachExisting(file); setShowFilesPanel(false); }}
             />
           </div>
         )}
