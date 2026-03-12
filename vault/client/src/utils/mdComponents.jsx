@@ -6,9 +6,12 @@ import CodeBlock from '../components/CodeBlock';
  * Code blocks get the styled dark CodeBlock; inline code gets teal-on-navy styling.
  */
 export const mdComponents = {
-  code({ node, inline, className, children, ...props }) {
+  // react-markdown v9 removed the `inline` prop — detect block vs inline via className / newlines
+  pre: ({ children }) => <>{children}</>,
+  code({ node, className, children, ...props }) {
     const match = /language-(\w+)/.exec(className || '');
-    if (!inline) {
+    const isBlock = match || String(children).includes('\n');
+    if (isBlock) {
       return (
         <CodeBlock
           language={match ? match[1] : null}
@@ -18,6 +21,7 @@ export const mdComponents = {
     }
     return (
       <code
+        className="not-prose"
         style={{
           background: 'rgba(27, 58, 92, 0.12)',
           color: '#0D7B8A',

@@ -380,6 +380,14 @@ async function initSchema() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS session_files (
+        "sessionId" TEXT NOT NULL REFERENCES sessions("sessionId") ON DELETE CASCADE,
+        "fileId"    INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+        PRIMARY KEY ("sessionId", "fileId")
+      )
+    `);
+
     await client.query('COMMIT');
 
     // ── Post-commit: FK and indexes (idempotent) ──────────────────────────────

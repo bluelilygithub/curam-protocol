@@ -19,7 +19,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 
-async function buildSystemPrompt(project, personaId) {
+async function buildSystemPrompt(project, personaId, sid = null) {
   const parts = project
     ? [`You are an AI assistant for the project "${project.name}".`]
     : ['You are a helpful AI assistant.'];
@@ -42,12 +42,31 @@ async function buildSystemPrompt(project, personaId) {
       'SELECT * FROM files WHERE "projectId"=$1 AND pinned=1', [project.id]
     );
     if (pinnedFiles.length > 0) {
+      const fileList = pinnedFiles.map(f => `• ${f.name}`).join('\n');
+      parts.push(`\nThe following project files are pinned and their content is included below. These are the ONLY files in your context unless the user explicitly attaches others in the conversation:\n${fileList}`);
       const blocks = pinnedFiles.map(f =>
         f.extractedText
           ? `[Pinned file: ${f.name}]\n${f.extractedText.substring(0, 4000)}`
           : `[Pinned file: ${f.name} (${f.mimetype})]`
       );
-      parts.push(`\nPinned context files:\n${blocks.join('\n\n')}`);
+      parts.push(blocks.join('\n\n'));
+    }
+
+    // Session files — selected by the user for this session, injected after pinned files
+    if (sid) {
+      const { rows: sessionFileRows } = await pool.query(
+        `SELECT f.name, f."extractedText"
+         FROM session_files sf
+         JOIN files f ON f.id = sf."fileId"
+         WHERE sf."sessionId" = $1 AND f."extractedText" IS NOT NULL`,
+        [sid]
+      );
+      if (sessionFileRows.length > 0) {
+        const blocks = sessionFileRows.map(f =>
+          `[Session file: ${f.name}]\n${f.extractedText.substring(0, 4000)}`
+        );
+        parts.push(`\nFiles selected for this session:\n${blocks.join('\n\n')}`);
+      }
     }
 
     // Inject pinned URLs
@@ -207,8 +226,8 @@ router.post('/', chatLimiter, async (req, res) => {
     ? await pool.query('SELECT * FROM projects WHERE id=$1', [projectId])
     : { rows: [] };
   const project = projRows[0] || null;
-  const systemPrompt = await buildSystemPrompt(project, personaId);
   const sid = sessionId || `session-${Date.now()}`;
+  const systemPrompt = await buildSystemPrompt(project, personaId, sid);
 
   // Check if this session is summarized
   const { rows: sessionRows } = await pool.query('SELECT * FROM sessions WHERE "sessionId"=$1', [sid]);

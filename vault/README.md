@@ -18,8 +18,9 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Prompts** | Prompt library — save, tag, and reuse prompt templates across projects |
 | **Memory** | Global persistent notes injected into all chats (facts the AI should always know) |
 | **Pinned URLs** | Attach web URLs to a project; content is fetched and stored for AI context |
-| **Files** | Upload PDFs, images, text files (txt, md, csv, json), and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example) to a project; text and code are extracted and AI-summarised on upload; code files stored as plain text internally — never served as executable types |
+| **Files** | Upload PDFs, images, text files (txt, md, csv, json), spreadsheets (xlsx, xls, ods), Word documents (docx, doc), and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example) to a project; text is extracted and AI-summarised on upload for all supported formats; spreadsheets converted to CSV per sheet; Word docs extracted via mammoth; code files stored as plain text, 500 KB limit, prompt-injection sanitised |
 | **Pinned files** | Pinned files are automatically included in every chat's system prompt for that project |
+| **Session files** | Select any project file to include in the current chat session only; persisted to `session_files` table so context survives page refresh; visible in the context bar above the message list |
 | **Notes** | Quick-capture thought pad — title, date, free text body; optional project link; "Take to Chat →" opens note as a new chat session with full context preloaded |
 
 #### Chat & AI
@@ -29,7 +30,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Chat** | Claude and Gemini conversations scoped to a project's context; model and temperature switchable per session |
 | **General Chat** | Project-free chat workspace for ad-hoc questions; sessions are saved and searchable |
 | **Chat History** | Browse every session across all projects and General Chat, filterable by date range and searchable by content |
-| **Project Files panel** | Side panel in the chat interface — lists all project files, upload new files, pin/unpin files to inject into every chat's context, or click **Attach** on any file to add it to the current message without re-uploading |
+| **Project Files panel** | Side panel in the chat interface — lists all project files, upload new files, pin/unpin for permanent context, or click the paperclip icon on any file to add it to the current session; session files shown in the context bar above messages |
 | **Clipboard image paste** | Paste images directly from the clipboard into the chat input; sent as inline base64 to the AI, no file upload required |
 | **`@search` web search** | Type `@` in chat and select "Search the web"; results shown in a panel before attaching as URL context |
 | **`@gmail` email search** | Type `@` in chat and select "Search Gmail…"; natural language query translated to Gmail search syntax via Claude Haiku; browse results, attach email threads as context; ask follow-up questions about any thread via the `/ask` endpoint (SSE streaming) |
@@ -53,7 +54,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Eisenhower Matrix** | 4th task view — 2×2 Priority Matrix; Urgent (⚡ toggle) × Important (high priority); Q1 Do First / Q2 Schedule / Q3 Delegate / Q4 Eliminate; insight line + Show completed toggle; `m` shortcut; `?view=matrix` URL param |
 | **Renewal Dimension** | Tag any task with 🏃 Physical / 📚 Mental / 🤝 Social / 🌱 Spiritual (Habit 7 — Sharpen the Saw); four-button selector in the task form (below the Urgent toggle); emoji pill on list and board cards; second filter row in the filter bar (All Dimensions · 🏃 · 📚 · 🤝 · 🌱) |
 | **Task Dependencies** | Mark tasks as "blocked by" other tasks; 🔒 badge when incomplete blockers exist; dependency UI in expanded row; circular dependency detection |
-| **Recurring Tasks** | Daily / Weekly / Fortnightly / Monthly / Annually; new copy created automatically when marked done |
+| **Recurring Tasks** | Daily / Weekly / Fortnightly / Monthly / Annually; new copy created automatically when marked done; fires even without a due date (uses today as the base date); guarded against double-creation on already-done tasks |
 | **Task Comments & Activity** | Per-task comment thread; system events (status, priority, due date changes) auto-logged |
 | **Task Templates** | Save any task as a reusable template (with subtasks, priority, category, recurrence); apply in one click |
 | **Focus Mode (Pomodoro)** | Full-screen overlay with a 25/5/15-min Pomodoro timer; SVG ring progress; subtask checklist; Web Audio API beep; auto-start breaks; time logged to task on close |
@@ -324,6 +325,7 @@ vault/
 | `key_results` | Key Results linked to an Objective — numeric target/current values, unit, due date |
 | `gmail_tokens` | Gmail OAuth tokens per user — `accessToken`, `refreshToken`, `tokenType`, `expiryDate`, `scope`, `email`; access token auto-refreshed and persisted via `googleapis` token event |
 | `notes` | User-scoped quick-capture notes — title, body, optional project link |
+| `session_files` | Files selected for a specific chat session — `sessionId` + `fileId` composite PK; content injected into system prompt for that session only |
 
 ---
 
@@ -464,6 +466,12 @@ npm run dev
 
 ### March 2026
 
+- **Office file extraction** — `.xlsx`, `.xls`, `.ods` files parsed sheet-by-sheet into CSV text via the `xlsx` package; `.docx` and `.doc` files extracted via `mammoth`; extracted text stored as `extractedText` in the `files` table and AI-summarised on upload; works identically to PDFs for pinning and session context injection; `xlsx` and `mammoth` added to dependencies
+- **Session files** — select any project library file to include in the current chat session only; files persisted to `session_files` table (survives page refresh within the same session); shown in a context bar above the message list; paperclip icon on each file card (turns primary colour when active); `POST /api/session-files/:sessionId`, `GET`, and `DELETE` endpoints added; `session_files` table created in `db.js` with cascade deletes
+- **Project sidebar accordion** — clicking a project name now toggles its recent session list open/closed; only one project expanded at a time; sessions fetched lazily on first expand; chevron icon shows open/closed state; `+` button on hover starts a new chat for that project; clicking a session navigates directly into that chat
+- **Code block rendering fix** — `@tailwindcss/typography`'s `prose` class was injecting backtick pseudo-elements (`code::before/after`) onto `<code>` elements inside react-syntax-highlighter and inline code; fixed by adding `className="not-prose"` to `CodeBlock`'s outer div and to the inline `<code>` element in `mdComponents.jsx`
+- **Recurring tasks fix** — recurrence previously required a `dueDate` to fire; now uses today as the base date when none is set; added a `wasAlreadyDone` guard to prevent duplicate occurrences when updating an already-completed task
+- **File card layout** — filename now uses `flex-1 min-w-0` with a two-row layout (name on top, badges below) so it is always visible regardless of how many action buttons are present
 - **File library — attach from Project Files panel** — every file in the Project Files chat panel now has an **Attach** button; clicking it adds the file to the current message's attachments without re-uploading; use pin for files that should be present in all chats in a project, and Attach for on-demand per-message access; `ProjectFilesPanel`, `FileList`, and `FileCard` updated; `onAttach` callback wired from `ChatPage` via `attachExisting` in `useFileAttachment`
 - **Markdown table rendering** — tables in AI responses, document compare, and debate now render with proper styling; `mdComponents.jsx` updated with `table`, `thead`, `tbody`, `tr`, `th`, `td` renderers; tables scroll horizontally on overflow rather than breaking layout
 - **Anthropic SDK upgraded to 0.78.0** — `@anthropic-ai/sdk` updated from `^0.36.3` to `^0.78.0`; required for `anthropic.beta.files` API support; `beta.files.upload` and `beta.files.del` are now available

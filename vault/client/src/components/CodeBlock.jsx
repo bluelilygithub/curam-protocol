@@ -20,6 +20,7 @@ function CodeBlock({ language, code }) {
 
   return (
     <div
+      className="not-prose"
       style={{
         background: BG,
         border: `1px solid ${BORDER}`,

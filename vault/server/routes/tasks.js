@@ -633,8 +633,14 @@ router.put('/:id', async (req, res) => {
     // Handle recurrence: if marked done and has recurrence, create next occurrence
     const { rows: updatedRows } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
     const updatedTask = updatedRows[0];
-    if (v('status') === 'done' && updatedTask.recurrence && updatedTask.recurrence !== 'none' && updatedTask.dueDate) {
-      const nextDate = calculateNextDate(updatedTask.dueDate, updatedTask.recurrence);
+    const wasAlreadyDone = task.status === 'done';
+    const isNowDone = v('status') === 'done';
+    if (isNowDone && !wasAlreadyDone && updatedTask.recurrence && updatedTask.recurrence !== 'none') {
+      // Use dueDate if set, otherwise use today as the base for the next occurrence
+      const baseDate = updatedTask.dueDate
+        ? updatedTask.dueDate.slice(0, 10)
+        : new Date().toISOString().slice(0, 10);
+      const nextDate = calculateNextDate(baseDate, updatedTask.recurrence);
       if (nextDate) {
         const newCount = (updatedTask.recurrenceCount || 0) + 1;
         const { rows: recurrInserted } = await pool.query(

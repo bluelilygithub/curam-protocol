@@ -80,6 +80,9 @@ function ChatPage({ general = false }) {
 
   // Files panel
   const [showFilesPanel, setShowFilesPanel] = useState(false);
+  const [sessionFiles, setSessionFiles] = useState([]); // files attached from library this session
+  const [pinnedFiles, setPinnedFiles] = useState([]);   // project files pinned (always in context)
+  const [showContextBar, setShowContextBar] = useState(true);
 
   // Summarize
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -129,6 +132,40 @@ function ChatPage({ general = false }) {
       window.history.replaceState({}, '');
     }
   }, []);
+
+  // Fetch pinned files for context bar
+  useEffect(() => {
+    if (!projectId) { setPinnedFiles([]); return; }
+    api.get(`/api/files/${projectId}`)
+      .then(r => r.json())
+      .then(files => setPinnedFiles(files.filter(f => f.pinned)))
+      .catch(() => {});
+  }, [projectId]);
+
+  // Load session files from DB when sessionId becomes known
+  // Also flush any files selected before sessionId was established
+  useEffect(() => {
+    if (!sessionId) return;
+    // Flush any in-memory selections that couldn't be saved yet (sessionId was null)
+    setSessionFiles(prev => {
+      prev.forEach(f => {
+        api.post(`/api/session-files/${sessionId}`, { fileId: f.id }).catch(() => {});
+      });
+      return prev;
+    });
+    // Merge DB state (for page refresh / returning to session)
+    api.get(`/api/session-files/${sessionId}`)
+      .then(r => r.json())
+      .then(files => {
+        if (!Array.isArray(files) || files.length === 0) return;
+        setSessionFiles(prev => {
+          const existing = new Set(prev.map(f => f.id));
+          const incoming = files.filter(f => !existing.has(f.id)).map(f => ({ id: f.id, name: f.name }));
+          return incoming.length > 0 ? [...prev, ...incoming] : prev;
+        });
+      })
+      .catch(() => {});
+  }, [sessionId]);
 
   useEffect(() => {
     fetchProjects();
@@ -915,6 +952,56 @@ function ChatPage({ general = false }) {
         {/* Chat column */}
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 
+          {/* Context bar — shows files available to this chat */}
+          {(pinnedFiles.length > 0 || sessionFiles.length > 0) && (
+            <div
+              className="flex-shrink-0 border-b px-4 py-1.5"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+            >
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setShowContextBar(v => !v)}
+                  className="text-xs font-medium flex items-center gap-1 hover:opacity-70 flex-shrink-0"
+                  style={{ color: 'var(--color-muted)' }}
+                >
+                  {getIcon(showContextBar ? 'chevron-down' : 'chevron-right', { size: 11 })}
+                  Files in context
+                </button>
+                {showContextBar && (
+                  <>
+                    {pinnedFiles.map(f => (
+                      <span
+                        key={`pin-${f.id}`}
+                        className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                        title="Pinned — available in all chats in this project"
+                      >
+                        📌 {f.name}
+                      </span>
+                    ))}
+                    {sessionFiles.map(f => (
+                      <span
+                        key={`sess-${f.id}`}
+                        className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border"
+                        style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                        title="Attached this session"
+                      >
+                        📎 {f.name}
+                        <button
+                          onClick={() => {
+                            if (sessionId) api.delete(`/api/session-files/${sessionId}/${f.id}`).catch(() => {});
+                            setSessionFiles(prev => prev.filter(x => x.id !== f.id));
+                          }}
+                          className="hover:opacity-60 ml-0.5"
+                        >×</button>
+                      </span>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Messages */}
           <div className="flex-1 overflow-y-auto">
             {messages.length === 0 ? (
@@ -1412,7 +1499,14 @@ function ChatPage({ general = false }) {
             <ProjectFilesPanel
               projectId={projectId}
               onClose={() => setShowFilesPanel(false)}
-              onAttach={(file) => { attachExisting(file); setShowFilesPanel(false); }}
+              onAttach={(file) => {
+                attachExisting(file);
+                const sid = sessionId;
+                if (sid) api.post(`/api/session-files/${sid}`, { fileId: file.id }).catch(() => {});
+                setSessionFiles(prev => prev.some(f => f.id === file.id) ? prev : [...prev, { id: file.id, name: file.name }]);
+                setShowFilesPanel(false);
+              }}
+              sessionFileIds={sessionFiles.map(f => f.id)}
             />
           </div>
         )}

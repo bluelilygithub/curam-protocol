@@ -24,6 +24,11 @@ function ProjectSidebar({ onClose }) {
   const [newFolderName, setNewFolderName] = useState('');
   const [generalSessions, setGeneralSessions] = useState([]);
   const [generalExpanded, setGeneralExpanded] = useState(true);
+  const [expandedProjectId, setExpandedProjectId] = useState(() => {
+    const match = window.location.pathname.match(/\/projects\/(\d+)/);
+    return match ? Number(match[1]) : null;
+  });
+  const [projectSessions, setProjectSessions] = useState({});
   const [habitsOpen, setHabitsOpen] = useState(() => {
     try { return JSON.parse(localStorage.getItem('sidebarHabitsOpen') ?? 'false'); } catch { return false; }
   });
@@ -53,6 +58,17 @@ function ProjectSidebar({ onClose }) {
   };
 
   const toggleFolder = (folderId) => setCollapsedFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
+
+  const toggleProjectSessions = (projectId) => {
+    const opening = expandedProjectId !== projectId;
+    setExpandedProjectId(opening ? projectId : null);
+    if (opening && !projectSessions[projectId]) {
+      api.get(`/api/chat/sessions/${projectId}`)
+        .then(r => r.json())
+        .then(sessions => setProjectSessions(prev => ({ ...prev, [projectId]: sessions })))
+        .catch(() => {});
+    }
+  };
 
   const handleDragStart = (e, id) => { setDraggedId(id); e.dataTransfer.effectAllowed = 'move'; };
   const handleDragOver = (e, id) => { e.preventDefault(); if (id !== draggedId) setDragOverId(id); };
@@ -241,6 +257,8 @@ function ProjectSidebar({ onClose }) {
           const renderProject = (project, indent = false) => {
             const isActive = location.pathname.startsWith(`/projects/${project.id}`);
             const isRenaming = renamingId === project.id;
+            const isExpanded = expandedProjectId === project.id;
+            const sessions = projectSessions[project.id] || [];
             return (
               <div
                 key={project.id}
@@ -269,42 +287,79 @@ function ProjectSidebar({ onClose }) {
                     style={{ background: 'var(--color-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-text)' }}
                   />
                 ) : (
-                  <button
-                    onClick={() => { setActive(project.id); navigate(`/projects/${project.id}/chat`); }}
-                    className="w-full text-left rounded-lg text-sm flex items-center gap-2 transition-colors"
-                    style={{
-                      padding: indent ? '0.5rem 0.75rem 0.5rem 1.5rem' : '0.5rem 0.75rem',
-                      background: isActive ? 'var(--color-bg)' : 'transparent',
-                      color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-                      fontWeight: isActive ? 500 : 400,
-                    }}
-                  >
-                    <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.5 }}>
-                      {getIcon('folder', { size: 14 })}
-                    </span>
-                    <span className="truncate flex-1">{project.name}</span>
-                    {project.chatCount > 0 && (
-                      <span className="flex-shrink-0 text-xs tabular-nums" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
-                        {project.chatCount}
+                  <>
+                    <button
+                      onClick={() => toggleProjectSessions(project.id)}
+                      className="w-full text-left rounded-lg text-sm flex items-center gap-2 transition-colors"
+                      style={{
+                        padding: indent ? '0.5rem 0.75rem 0.5rem 1.5rem' : '0.5rem 0.75rem',
+                        background: isActive ? 'var(--color-bg)' : 'transparent',
+                        color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
+                        fontWeight: isActive ? 500 : 400,
+                      }}
+                    >
+                      <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.5 }}>
+                        {getIcon(isExpanded ? 'chevron-down' : 'chevron-right', { size: 12 })}
                       </span>
+                      <span style={{ flexShrink: 0, opacity: isActive ? 1 : 0.5 }}>
+                        {getIcon('folder', { size: 14 })}
+                      </span>
+                      <span className="truncate flex-1">{project.name}</span>
+                      {project.chatCount > 0 && !isExpanded && (
+                        <span className="flex-shrink-0 text-xs tabular-nums" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
+                          {project.chatCount}
+                        </span>
+                      )}
+                      <span
+                        onClick={(e) => { e.stopPropagation(); setActive(project.id); navigate(`/projects/${project.id}/chat`); if (onClose) onClose(); }}
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        style={{ color: 'var(--color-primary)' }}
+                        title="New chat"
+                      >
+                        {getIcon('plus', { size: 11 })}
+                      </span>
+                      <span
+                        onClick={(e) => startRename(e, project)}
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        style={{ color: 'var(--color-muted)' }}
+                        title="Rename"
+                      >
+                        {getIcon('edit', { size: 11 })}
+                      </span>
+                      <span
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        style={{ color: '#ef4444' }}
+                        title="Delete project"
+                      >
+                        {getIcon('trash', { size: 11 })}
+                      </span>
+                    </button>
+                    {isExpanded && (
+                      <div className="mt-0.5 space-y-0.5">
+                        {sessions.slice(0, 10).map(s => (
+                          <button
+                            key={s.sessionId}
+                            onClick={() => {
+                              setActive(project.id);
+                              navigate(`/projects/${project.id}/chat`);
+                              setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: s.sessionId })), 80);
+                              if (onClose) onClose();
+                            }}
+                            className="w-full text-left py-1 rounded-md text-xs truncate transition-colors hover:opacity-70"
+                            style={{ color: 'var(--color-muted)', paddingLeft: indent ? '3rem' : '2.25rem' }}
+                          >
+                            {s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}
+                          </button>
+                        ))}
+                        {sessions.length === 0 && (
+                          <p className="text-xs py-1" style={{ color: 'var(--color-muted)', paddingLeft: indent ? '3rem' : '2.25rem' }}>
+                            No chats yet
+                          </p>
+                        )}
+                      </div>
                     )}
-                    <span
-                      onClick={(e) => startRename(e, project)}
-                      className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
-                      style={{ color: 'var(--color-muted)' }}
-                      title="Rename"
-                    >
-                      {getIcon('edit', { size: 11 })}
-                    </span>
-                    <span
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
-                      className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
-                      style={{ color: '#ef4444' }}
-                      title="Delete project"
-                    >
-                      {getIcon('trash', { size: 11 })}
-                    </span>
-                  </button>
+                  </>
                 )}
               </div>
             );

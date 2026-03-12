@@ -20,9 +20,22 @@ const ACCEPTED_MIMES = [
   'text/javascript', 'application/javascript', 'text/typescript',
   'text/css', 'text/html', 'text/x-python', 'text/x-php',
   'application/x-sh', 'text/x-shellscript', 'application/sql', 'text/x-sql',
+  // Office / spreadsheet formats
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',     // .xlsx
+  'application/vnd.ms-excel',                                               // .xls
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/msword',                                                      // .doc
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+  'application/vnd.ms-powerpoint',                                           // .ppt
+  'application/vnd.oasis.opendocument.spreadsheet',                          // .ods
+  'application/vnd.oasis.opendocument.text',                                 // .odt
 ];
 
-const ACCEPTED_EXTENSIONS = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.txt', '.json', '.csv', '.md'];
+const ACCEPTED_EXTENSIONS = [
+  '.pdf', '.jpg', '.jpeg', '.png', '.gif', '.webp',
+  '.txt', '.json', '.csv', '.md',
+  '.xlsx', '.xls', '.docx', '.doc', '.pptx', '.ppt', '.ods', '.odt',
+];
 
 // Code file extensions — stored as .txt on disk; original name preserved in DB
 const CODE_EXTENSIONS = ['.js', '.jsx', '.ts', '.tsx', '.php', '.py', '.css', '.html', '.sql', '.sh'];
@@ -68,14 +81,43 @@ const upload = multer({
 
     if (isCodeFile(file)) return cb(null, true);
 
-    if (ACCEPTED_MIMES.includes(file.mimetype) ||
-        (file.mimetype === 'application/octet-stream' && ACCEPTED_EXTENSIONS.includes(ext))) {
+    if (ACCEPTED_MIMES.includes(file.mimetype) || ACCEPTED_EXTENSIONS.includes(ext)) {
       cb(null, true);
     } else {
       cb(new Error(`File type not accepted`));
     }
   },
 });
+
+function extractXlsxText(filePath) {
+  try {
+    const XLSX = require('xlsx');
+    const workbook = XLSX.readFile(filePath);
+    const parts = [];
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      const csv = XLSX.utils.sheet_to_csv(sheet, { skipHidden: true });
+      if (csv.trim()) {
+        parts.push(`## Sheet: ${sheetName}\n${csv}`);
+      }
+    }
+    return parts.join('\n\n');
+  } catch (err) {
+    console.error('XLSX extraction error:', err);
+    return '';
+  }
+}
+
+async function extractWordText(filePath) {
+  try {
+    const mammoth = require('mammoth');
+    const result = await mammoth.extractRawText({ path: filePath });
+    return result.value.trim();
+  } catch (err) {
+    console.error('Word extraction error:', err);
+    return '';
+  }
+}
 
 async function extractPdfText(filePath) {
   try {
@@ -133,6 +175,8 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
   const isText = [
     'text/plain', 'text/csv', 'text/markdown', 'text/x-markdown', 'application/json'
   ].includes(req.file.mimetype) || ['.txt', '.md', '.csv', '.json'].includes(ext);
+  const isSpreadsheet = ['.xlsx', '.xls', '.ods'].includes(ext);
+  const isWord = ['.docx', '.doc'].includes(ext);
   const isCode = isCodeFile(req.file);
 
   if (isCode) {
@@ -165,6 +209,16 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
     }
   } else if (isPdf) {
     extractedText = await extractPdfText(req.file.path);
+    if (extractedText) {
+      aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+    }
+  } else if (isSpreadsheet) {
+    extractedText = extractXlsxText(req.file.path);
+    if (extractedText) {
+      aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+    }
+  } else if (isWord) {
+    extractedText = await extractWordText(req.file.path);
     if (extractedText) {
       aiSummary = await generateAiSummary(extractedText, req.file.originalname);
     }

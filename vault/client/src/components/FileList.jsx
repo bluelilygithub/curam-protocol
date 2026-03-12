@@ -10,7 +10,7 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function FileCard({ file, onDelete, onChat, onTogglePin, onAttach }) {
+function FileCard({ file, onDelete, onChat, onTogglePin, onAttach, isAttached }) {
   const [expanded, setExpanded] = useState(false);
   const [pinned, setPinned] = useState(!!file.pinned);
   const [attached, setAttached] = useState(false);
@@ -30,36 +30,40 @@ function FileCard({ file, onDelete, onChat, onTogglePin, onAttach }) {
       className="p-3 rounded-lg border mb-2"
       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span style={{ color: 'var(--color-muted)', flexShrink: 0 }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 min-w-0 flex-1">
+          <span className="mt-0.5 flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
             {isImage ? getIcon('file-image', { size: 16 }) : getIcon('file-text', { size: 16 })}
           </span>
-          <span className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-            {file.name}
-          </span>
-          <span
-            className="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
-            style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
-          >
-            {formatBytes(file.size)}
-          </span>
-          {isPdf && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 text-white"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              PDF
+          <div className="min-w-0 flex-1">
+            <span className="text-sm font-medium block truncate" style={{ color: 'var(--color-text)' }}>
+              {file.name}
             </span>
-          )}
-          {pinned && (
-            <span
-              className="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
-              style={{ background: 'var(--color-primary)', color: '#fff', opacity: 0.85 }}
-            >
-              pinned
-            </span>
-          )}
+            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+              <span
+                className="text-xs px-1.5 py-0.5 rounded-full"
+                style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+              >
+                {formatBytes(file.size)}
+              </span>
+              {isPdf && (
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded-full text-white"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  PDF
+                </span>
+              )}
+              {pinned && (
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded-full"
+                  style={{ background: 'var(--color-primary)', color: '#fff', opacity: 0.85 }}
+                >
+                  pinned
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Pin toggle */}
@@ -74,11 +78,11 @@ function FileCard({ file, onDelete, onChat, onTogglePin, onAttach }) {
           {onAttach && (
             <button
               onClick={() => { onAttach(file); setAttached(true); setTimeout(() => setAttached(false), 1500); }}
-              className="text-xs px-2 py-1 rounded border flex items-center gap-1"
-              style={{ borderColor: attached ? 'var(--color-primary)' : 'var(--color-border)', color: attached ? 'var(--color-primary)' : 'var(--color-text)' }}
-              title="Attach to current message"
+              className="p-1 rounded hover:opacity-70 transition-opacity"
+              style={{ color: (attached || isAttached) ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title={isAttached ? 'Active in this session — click to add again' : 'Add to this session'}
             >
-              {attached ? '✓ Added' : (<>{getIcon('paperclip', { size: 12 })} Attach</>)}
+              {getIcon('paperclip', { size: 13 })}
             </button>
           )}
           {isPdf && (
@@ -126,7 +130,7 @@ function FileCard({ file, onDelete, onChat, onTogglePin, onAttach }) {
   );
 }
 
-function FileList({ projectId, onAttach }) {
+function FileList({ projectId, onAttach, sessionFileIds = [] }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -162,7 +166,7 @@ function FileList({ projectId, onAttach }) {
   return (
     <div>
       {files.map((file) => (
-        <FileCard key={file.id} file={file} onDelete={handleDelete} onChat={handleChat} onTogglePin={() => {}} onAttach={onAttach} />
+        <FileCard key={file.id} file={file} onDelete={handleDelete} onChat={handleChat} onTogglePin={() => {}} onAttach={onAttach} isAttached={sessionFileIds.includes(file.id)} />
       ))}
     </div>
   );

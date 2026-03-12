@@ -147,7 +147,7 @@ npm run dev
 | **Goals** | OKR-lite — Objectives → Key Results → Tasks; AI-suggested KRs; Personal Mission Statement wizard; Renewal Balance Dashboard |
 | **Document Compare** | Side-by-side SSE streaming comparison; 4 modes; save to project |
 | **Debate** | Multi-model debate (Anthropic + Gemini); round history; synthesis summary |
-| **Files** | Per-project uploads — PDFs, images, text, and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example); text extracted and AI-summarised; code files stored as plain text, 500 KB limit, prompt-injection sanitised; pin files for automatic inclusion in every project chat; attach any library file to a single message without re-uploading |
+| **Files** | Per-project uploads — PDFs, images, text, spreadsheets (xlsx, xls, ods), Word documents (docx, doc), and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example); text extracted and AI-summarised for all formats; spreadsheets converted to per-sheet CSV; Word docs extracted via mammoth; code files stored as plain text, 500 KB limit, prompt-injection sanitised; pin files for permanent context in every project chat; add files to the current session only via the session files feature |
 | **Prompts / Personas / Memory** | Reusable prompt library, AI personas, global memory snippets |
 | **Admin Dashboard** | Usage stats — messages, sessions, searches, debates, comparisons, tokens; period selector |
 | **Web Search** | `@search` in chat; Brave Search / Serper / SerpAPI auto-detected from key format |
@@ -595,6 +595,11 @@ Requires either `MAIL_CHANNEL_API_KEY` or all four SMTP vars. Check the server l
 
 ### March 2026
 
+- **Office file extraction** — `.xlsx`, `.xls`, `.ods` (via `xlsx` package) and `.docx`, `.doc` (via `mammoth`) files now have text extracted on upload and AI-summarised; content injected into AI context identically to PDFs
+- **Session files** — select project library files to include in the current chat session only; shown in a context bar; persisted to `session_files` table; paperclip icon per file card
+- **Project sidebar accordion** — click a project name to toggle its recent session list; one project expanded at a time; sessions loaded lazily
+- **Code block rendering fix** — Tailwind Typography prose backtick pseudo-elements were appearing on code blocks; fixed with `not-prose` class on CodeBlock and inline code elements
+- **Recurring tasks fix** — recurrence now fires without a due date (uses today as base); double-creation on already-done tasks prevented
 - **File library — attach from Project Files panel** — Attach button on every file in the chat's Project Files panel adds it to the current message without re-uploading; pin files for all-chat context, attach for single-message access
 - **Markdown table rendering** — tables in AI responses, compare, and debate now render correctly with styled borders and horizontal scroll
 - **Anthropic SDK upgraded to 0.78.0** — `@anthropic-ai/sdk` updated from 0.36.3 to 0.78.0
