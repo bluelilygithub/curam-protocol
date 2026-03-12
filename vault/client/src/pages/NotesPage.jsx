@@ -9,7 +9,7 @@ const AUTOSAVE_DELAY = 1000; // ms after last keystroke
 export default function NotesPage() {
   const getIcon = useIcon();
   const navigate = useNavigate();
-  const { projects, fetchProjects } = useProjectStore();
+  const { projects, fetchProjects, create: createProject } = useProjectStore();
 
   const [notes, setNotes] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -18,6 +18,9 @@ export default function NotesPage() {
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [showChatPicker, setShowChatPicker] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
 
   const autosaveTimer = useRef(null);
   const bodyRef = useRef(null);
@@ -90,10 +93,28 @@ export default function NotesPage() {
     loadNotes(e.target.value);
   }
 
-  function takeToChat() {
+  function takeToChatWith(projectId) {
     if (!selected) return;
     const text = [title !== 'Untitled' ? title : '', body].filter(Boolean).join('\n\n');
-    navigate('/chat', { state: { draft: text } });
+    setShowChatPicker(false);
+    setNewProjectName('');
+    setCreatingProject(false);
+    if (projectId) {
+      navigate(`/projects/${projectId}/chat`, { state: { draft: text } });
+    } else {
+      navigate('/chat', { state: { draft: text } });
+    }
+  }
+
+  async function handleCreateProjectAndChat() {
+    if (!newProjectName.trim()) return;
+    setCreatingProject(true);
+    try {
+      const project = await createProject({ name: newProjectName.trim() });
+      takeToChatWith(project.id);
+    } catch (_) {
+      setCreatingProject(false);
+    }
   }
 
   async function handleProjectChange(e) {
@@ -192,15 +213,109 @@ export default function NotesPage() {
               {!saving && !dirty && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Saved</span>}
             </div>
 
-            <button
-              onClick={takeToChat}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
-              style={{ background: 'var(--color-primary)', color: '#fff' }}
-              title="Open this note as a chat message"
-            >
-              {getIcon('chat', { size: 12 })}
-              Take to Chat
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => { setShowChatPicker(v => !v); setNewProjectName(''); setCreatingProject(false); }}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}
+                title="Open this note as a chat"
+              >
+                {getIcon('chat', { size: 12 })}
+                Take to Chat
+                {getIcon('chevron-down', { size: 11 })}
+              </button>
+
+              {showChatPicker && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowChatPicker(false)} />
+                  <div
+                    className="absolute right-0 top-full mt-1 z-40 rounded-xl border shadow-xl overflow-hidden"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '220px' }}
+                  >
+                    {/* Associated project shortcut */}
+                    {selected.project_id && (() => {
+                      const proj = projects.find(p => p.id === selected.project_id);
+                      return proj ? (
+                        <button
+                          onClick={() => takeToChatWith(proj.id)}
+                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity border-b"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', fontWeight: 500 }}
+                        >
+                          {getIcon('folder', { size: 12 })}
+                          {proj.name}
+                        </button>
+                      ) : null;
+                    })()}
+
+                    {/* Existing projects */}
+                    <div className="max-h-40 overflow-y-auto">
+                      {projects
+                        .filter(p => p.id !== selected.project_id)
+                        .map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => takeToChatWith(p.id)}
+                            className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity"
+                            style={{ color: 'var(--color-text)' }}
+                          >
+                            {getIcon('folder', { size: 12 })}
+                            {p.name}
+                          </button>
+                        ))}
+                    </div>
+
+                    {/* Create new project */}
+                    <div className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                      {!creatingProject ? (
+                        <button
+                          onClick={() => setCreatingProject(true)}
+                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity"
+                          style={{ color: 'var(--color-primary)' }}
+                        >
+                          {getIcon('plus', { size: 12 })}
+                          New project…
+                        </button>
+                      ) : (
+                        <div className="px-3 py-2 flex items-center gap-1.5">
+                          <input
+                            autoFocus
+                            value={newProjectName}
+                            onChange={e => setNewProjectName(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleCreateProjectAndChat();
+                              if (e.key === 'Escape') setCreatingProject(false);
+                            }}
+                            placeholder="Project name…"
+                            className="flex-1 text-xs px-2 py-1 rounded border outline-none"
+                            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-primary)', color: 'var(--color-text)' }}
+                          />
+                          <button
+                            onClick={handleCreateProjectAndChat}
+                            disabled={!newProjectName.trim()}
+                            className="text-xs px-2 py-1 rounded hover:opacity-80 disabled:opacity-40"
+                            style={{ background: 'var(--color-primary)', color: '#fff' }}
+                          >
+                            Go
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* General chat */}
+                    <div className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                      <button
+                        onClick={() => takeToChatWith(null)}
+                        className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:opacity-70 transition-opacity"
+                        style={{ color: 'var(--color-muted)' }}
+                      >
+                        {getIcon('message-circle', { size: 12 })}
+                        General Chat
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Title */}

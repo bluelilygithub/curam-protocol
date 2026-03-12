@@ -1,0 +1,18 @@
+Add session files, office extraction, sidebar accordion, and bug fixes
+
+- Session files: select project library files for current chat session only;
+  session_files table with cascade deletes; context bar in chat UI; persists
+  across page refresh within session
+- Office file extraction: xlsx/xls/ods via xlsx package; docx/doc via mammoth;
+  text extracted and AI-summarised; injected into AI context like PDFs
+- File upload filter: extension check now applies regardless of MIME type so
+  Office files are accepted on all platforms
+- Project sidebar accordion: click project name toggles session list; one open
+  at a time; sessions loaded lazily; plus button for new chat on hover
+- Code block rendering: fixed Tailwind Typography prose backtick pseudo-elements
+  on code blocks and inline code via not-prose class
+- Recurring tasks: fires without a due date (uses today as base); guard against
+  double-creation on already-done tasks
+- File card layout: filename always visible with flex-1 layout; badges on second line
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
