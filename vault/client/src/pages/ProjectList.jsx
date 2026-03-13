@@ -115,7 +115,8 @@ function TasksWidget() {
 
   function dueLabel(dateStr) {
     if (!dateStr) return null;
-    const d = new Date(dateStr + 'T00:00:00');
+    const datePart = dateStr.includes('T') ? dateStr.slice(0, 10) : dateStr;
+    const d = new Date(datePart + 'T00:00:00');
     const today = new Date(); today.setHours(0,0,0,0);
     const diff = Math.round((d - today) / 86400000);
     if (diff < 0) return { text: 'Overdue', color: '#ef4444' };
