@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useIcon } from '../providers/IconProvider';
 import { downloadResponseMd } from '../utils/exportMd';
 import { mdComponents } from '../utils/mdComponents';
+import { extractCodeBlocks } from './ArtifactPanel';
 
 // Parse "[Files: a.pdf, b.jpg]\nuser text" stored in history messages
 function parseFilesPrefix(content) {
@@ -15,11 +16,17 @@ function parseFilesPrefix(content) {
   };
 }
 
-function MessageBubble({ message, onDelete, onOpenArtifact, artifactCount, onBranch, messageIndex }) {
+function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageIndex, searching }) {
   const isUser = message.role === 'user';
   const [showThinking, setShowThinking] = useState(false);
   const getIcon = useIcon();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // Compute code blocks only when message content changes (not on every parent re-render)
+  const codeBlocks = useMemo(
+    () => message.role === 'assistant' ? extractCodeBlocks(message.content) : [],
+    [message.role, message.content]
+  );
 
   if (isUser) {
     // Live attachments (current session) take priority; fall back to parsing history text
@@ -104,7 +111,7 @@ function MessageBubble({ message, onDelete, onOpenArtifact, artifactCount, onBra
                 <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                   <span>Delete this exchange?</span>
                   <button
-                    onClick={() => { onDelete(); setConfirmingDelete(false); }}
+                    onClick={() => { onDelete(messageIndex); setConfirmingDelete(false); }}
                     className="font-medium"
                     style={{ color: '#ef4444' }}
                   >
@@ -143,15 +150,15 @@ function MessageBubble({ message, onDelete, onOpenArtifact, artifactCount, onBra
         {/* Action buttons — appear on hover */}
         {message.content && (
           <div className="absolute -top-1 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onOpenArtifact && artifactCount > 0 && (
+            {onOpenArtifact && codeBlocks.length > 0 && (
               <button
-                onClick={() => onOpenArtifact(0)}
+                onClick={() => onOpenArtifact(0, codeBlocks)}
                 className="flex items-center gap-1 h-6 px-2 rounded-md text-xs font-medium"
                 style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
                 title="Open in Artifacts panel"
               >
                 {getIcon('external-link', { size: 10 })}
-                {artifactCount > 1 ? `${artifactCount} artifacts` : 'Artifact'}
+                {codeBlocks.length > 1 ? `${codeBlocks.length} artifacts` : 'Artifact'}
               </button>
             )}
             <button
@@ -187,11 +194,18 @@ function MessageBubble({ message, onDelete, onOpenArtifact, artifactCount, onBra
         )}
 
         {message.content === '' && !message.thinking ? (
+          searching ? (
+            <div className="flex items-center gap-2 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>
+              {getIcon('globe', { size: 13 })}
+              Searching the web…
+            </div>
+          ) : (
           <div className="flex items-center gap-1.5 py-3" style={{ color: 'var(--color-muted)' }}>
             <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--color-primary)', animationDelay: '0ms' }} />
             <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--color-primary)', animationDelay: '150ms' }} />
             <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--color-primary)', animationDelay: '300ms' }} />
           </div>
+          )
         ) : message.content === '' ? null : (
           <div
             className="prose prose-sm max-w-none text-sm leading-relaxed"
@@ -210,4 +224,4 @@ function MessageBubble({ message, onDelete, onOpenArtifact, artifactCount, onBra
   );
 }
 
-export default MessageBubble;
+export default React.memo(MessageBubble);

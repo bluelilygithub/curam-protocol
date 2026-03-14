@@ -241,6 +241,34 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
     );
     const fileId = rows[0].id;
 
+    // ── RAG: chunk and embed the extracted text ────────────────────────────────
+    if (extractedText) {
+      if (!process.env.GEMINI_API_KEY) {
+        console.warn('[files] GEMINI_API_KEY not set — skipping RAG chunking for:', req.file.originalname);
+      } else {
+        try {
+          const { chunkText } = require('../services/chunker');
+          const { embedText } = require('../services/embeddings');
+          const chunks = chunkText(extractedText);
+          let embeddedCount = 0;
+          for (let i = 0; i < chunks.length; i++) {
+            const embedding = await embedText(chunks[i]);
+            if (embedding) {
+              await pool.query(
+                `INSERT INTO file_chunks (file_id, project_id, chunk_index, chunk_text, embedding)
+                 VALUES ($1, $2, $3, $4, $5::vector)`,
+                [fileId, projectId, i, chunks[i], `[${embedding.join(',')}]`]
+              );
+              embeddedCount++;
+            }
+          }
+          console.log(`[files] RAG: ${embeddedCount}/${chunks.length} chunks embedded for "${req.file.originalname}"`);
+        } catch (ragErr) {
+          console.error('[files] RAG chunking/embedding error (upload continues):', ragErr.message);
+        }
+      }
+    }
+
     // Anthropic Files API — upload PDFs for persistent cross-session file references
     const isPdf = storedMimetype === 'application/pdf' ||
                   path.extname(req.file.originalname).toLowerCase() === '.pdf';
@@ -308,6 +336,7 @@ router.delete('/:id', async (req, res) => {
     const file = rows[0];
 
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+    // file_chunks rows are cascade-deleted via the FK on files(id)
     await pool.query('DELETE FROM files WHERE id=$1', [req.params.id]);
     await pool.query(`DELETE FROM search_index WHERE type='file' AND title=$1`, [file.name]);
 

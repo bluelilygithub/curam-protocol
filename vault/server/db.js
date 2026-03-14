@@ -389,43 +389,91 @@ async function initSchema() {
     `);
 
     await client.query('COMMIT');
-
-    // ── Post-commit: FK and indexes (idempotent) ──────────────────────────────
-
-    // tasks.keyResultId → key_results (forward reference, added after both tables exist)
-    await pool.query(`
-      DO $$ BEGIN
-        ALTER TABLE tasks
-          ADD CONSTRAINT fk_tasks_keyresultid
-          FOREIGN KEY ("keyResultId") REFERENCES key_results(id) ON DELETE SET NULL;
-      EXCEPTION WHEN duplicate_object THEN NULL;
-      END $$
-    `);
-
-    await pool.query(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_sharetoken
-        ON tasks("shareToken") WHERE "shareToken" IS NOT NULL
-    `);
-
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_user_id    ON notes(user_id)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_project_id  ON notes(project_id)`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_session  ON messages("sessionId")`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_project     ON tasks("projectId")`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_project  ON sessions("projectId")`);
-
-    // ── Full-text search GIN index (Phase 5) ──────────────────────────────────
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_search_index_fts
-        ON search_index USING GIN (to_tsvector('english', COALESCE(title,'') || ' ' || COALESCE(body,'')))
-    `);
-
-    console.log('[db] Schema ready');
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
   } finally {
     client.release();
   }
+
+  // ── Post-commit: FKs, indexes, and RAG setup (all idempotent, best-effort) ──
+  // These run outside the main transaction. Any individual failure is logged as
+  // a warning so the server always starts, even without pgvector installed.
+
+  // tasks.keyResultId → key_results (forward reference, added after both tables exist)
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE tasks
+        ADD CONSTRAINT fk_tasks_keyresultid
+        FOREIGN KEY ("keyResultId") REFERENCES key_results(id) ON DELETE SET NULL;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_sharetoken
+      ON tasks("shareToken") WHERE "shareToken" IS NOT NULL
+  `);
+
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_user_id    ON notes(user_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_project_id  ON notes(project_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_session  ON messages("sessionId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_project     ON tasks("projectId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_project  ON sessions("projectId")`);
+
+  // Full-text search GIN index
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_search_index_fts
+      ON search_index USING GIN (to_tsvector('english', COALESCE(title,'') || ' ' || COALESCE(body,'')))
+  `);
+
+  // ── RAG: pgvector + file_chunks (best-effort — server starts without it) ──
+
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS vector');
+  } catch (vecErr) {
+    console.warn('[db] pgvector extension not available — RAG embeddings disabled:', vecErr.message);
+  }
+
+  try {
+    // text-embedding-004 produces 768-dimensional embeddings
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS file_chunks (
+        id          SERIAL PRIMARY KEY,
+        file_id     INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+        project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        chunk_index INTEGER NOT NULL,
+        chunk_text  TEXT NOT NULL,
+        embedding   vector(768),
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    // Migrate any existing installation that used a different dimension count
+    await pool.query(`
+      ALTER TABLE file_chunks ALTER COLUMN embedding TYPE vector(768)
+    `);
+  } catch (tblErr) {
+    console.warn('[db] Could not create/migrate file_chunks table (pgvector may be missing):', tblErr.message);
+  }
+
+  try {
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_file_chunks_file_id ON file_chunks(file_id)`);
+  } catch (idxErr) {
+    console.warn('[db] Could not create idx_file_chunks_file_id:', idxErr.message);
+  }
+
+  // IVFFlat index — requires data to exist to be useful; skipped on empty tables or without pgvector
+  try {
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_file_chunks_embedding
+        ON file_chunks USING ivfflat (embedding vector_cosine_ops)
+        WITH (lists = 100)
+    `);
+  } catch (idxErr) {
+    console.warn('[db] Could not create IVFFlat index on file_chunks (normal on empty table):', idxErr.message);
+  }
+
+  console.log('[db] Schema ready');
 }
 
 // ── Startup ───────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ export function useChat({ projectId }) {
   const [sessionId, setSessionId] = useState(null);
   const [sessionUsage, setSessionUsage] = useState({ inputTokens: 0, outputTokens: 0, model: null });
   const [streamError, setStreamError] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
   const abortRef = useRef(null);
   const timeoutRef = useRef(null);
 
@@ -22,8 +23,10 @@ export function useChat({ projectId }) {
     personaId = null,
     reasoning = false,
     inlineImages = [],
+    webSearch = true,
   ) => {
     setStreamError(null);
+    setIsSearching(false);
     const newMessages = [...messages, { role: 'user', content: userContent, attachments: attachmentMeta, urlAttachments }];
     setMessages(newMessages);
     setIsStreaming(true);
@@ -53,6 +56,7 @@ export function useChat({ projectId }) {
         temperature,
         personaId: personaId || undefined,
         reasoning: reasoning || undefined,
+        webSearch: webSearch,
       }, controller.signal);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -94,7 +98,15 @@ export function useChat({ projectId }) {
                 model: parsed.usage.model || u.model,
               }));
             }
+            if (parsed.searching) {
+              if (!gotFirstChunk) {
+                gotFirstChunk = true;
+                clearTimeout(timeoutRef.current);
+              }
+              setIsSearching(true);
+            }
             if (parsed.delta) {
+              setIsSearching(false);
               if (!gotFirstChunk) {
                 gotFirstChunk = true;
                 clearTimeout(timeoutRef.current);
@@ -142,6 +154,7 @@ export function useChat({ projectId }) {
     } finally {
       clearTimeout(timeoutRef.current);
       setIsStreaming(false);
+      setIsSearching(false);
       abortRef.current = null;
     }
   }, [messages, projectId, sessionId]);
@@ -171,7 +184,7 @@ export function useChat({ projectId }) {
   }, [sessionId]);
 
   // Regenerate: remove last assistant (and possibly user) pair, re-send last user message
-  const regenerate = useCallback(async (lastUserText, attachmentIds, attachmentMeta, model, urlAttachments, temperature, personaId, reasoning) => {
+  const regenerate = useCallback(async (lastUserText, attachmentIds, attachmentMeta, model, urlAttachments, temperature, personaId, reasoning, webSearch = true) => {
     if (isStreaming) return;
     // Remove last 2 messages (user + assistant)
     let lastUserContent = lastUserText;
@@ -197,9 +210,9 @@ export function useChat({ projectId }) {
     }
     // Re-send
     if (lastUserContent) {
-      await sendMessage(lastUserContent, attachmentIds || [], attachmentMeta || [], model, urlAttachments || [], temperature || 0.7, personaId, reasoning);
+      await sendMessage(lastUserContent, attachmentIds || [], attachmentMeta || [], model, urlAttachments || [], temperature || 0.7, personaId, reasoning, [], webSearch);
     }
   }, [isStreaming, sessionId, sendMessage]);
 
-  return { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError };
+  return { messages, isStreaming, isSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError };
 }

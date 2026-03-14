@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
@@ -14,7 +14,7 @@ import ExportMenu from '../components/ExportMenu';
 import ChatFileBar from '../components/ChatFileBar';
 import ChatFilePicker from '../components/ChatFilePicker';
 import UrlBar from '../components/UrlBar';
-import ArtifactPanel, { extractCodeBlocks } from '../components/ArtifactPanel';
+import ArtifactPanel from '../components/ArtifactPanel';
 import ProjectFilesPanel from '../components/ProjectFilesPanel';
 import FollowUpChips from '../components/FollowUpChips';
 import { downloadChatMd } from '../utils/exportMd';
@@ -27,13 +27,59 @@ const TEMPERATURES = [
   { label: 'Creative', value: 1.0, desc: 'Varied, imaginative' },
 ];
 
+// Memoised message list — only re-renders when messages, streaming state, or actions change,
+// not when the user types in the input field.
+const MemoMessageList = React.memo(function MemoMessageList({
+  messages, isStreaming, isAiSearching, sessionId,
+  suggestions, onDelete, onBranch, onOpenArtifact, onRegenerate, onSuggestionSelect,
+  messagesEndRef,
+}) {
+  const getIcon = useIcon();
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      {messages.map((msg, i) => {
+        const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
+        return (
+          <div key={i}>
+            <MessageBubble
+              message={msg}
+              messageIndex={i}
+              onDelete={msg.role === 'user' && !isStreaming ? onDelete : undefined}
+              onOpenArtifact={msg.role === 'assistant' ? onOpenArtifact : undefined}
+              onBranch={msg.role === 'user' && !!sessionId && !isStreaming ? onBranch : undefined}
+              searching={isLastAssistant && isAiSearching}
+            />
+            {isLastAssistant && !isStreaming && (
+              <>
+                <div className="flex justify-start mb-3 ml-10">
+                  <button
+                    onClick={onRegenerate}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
+                    title="Regenerate response"
+                  >
+                    {getIcon('refresh-cw', { size: 11 })}
+                    Regenerate
+                  </button>
+                </div>
+                <FollowUpChips suggestions={suggestions} onSelect={onSuggestionSelect} />
+              </>
+            )}
+          </div>
+        );
+      })}
+      <div ref={messagesEndRef} />
+    </div>
+  );
+});
+
 function ChatPage({ general = false }) {
   const { id: projectIdParam } = useParams();
   const location = useLocation();
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
-  const { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError } = useChat({ projectId });
+  const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError } = useChat({ projectId });
   const { models: MODELS } = useModels();
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, startListening, stopListening, speak } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
@@ -103,6 +149,9 @@ function ChatPage({ general = false }) {
   // Reasoning mode
   const [reasoning, setReasoning] = useState(false);
 
+  // Web search
+  const [webSearch, setWebSearch] = useState(true);
+
   // Model availability (null = unknown, true = configured, false = missing key)
   const [modelStatus, setModelStatus] = useState({ anthropic: null, gemini: null });
   const [preflightError, setPreflightError] = useState(null);
@@ -115,6 +164,8 @@ function ChatPage({ general = false }) {
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const titleInputRef = useRef(null);
+  const mentionTimerRef = useRef(null);
+  const handleSendRef = useRef(null);
 
   const project = projects.find((p) => p.id === projectId);
   const currentSession = sessions.find(s => s.sessionId === sessionId);
@@ -226,7 +277,7 @@ function ChatPage({ general = false }) {
     return () => document.removeEventListener('vault:load-session', handler);
   }, [loadHistory]);
 
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     if (general) {
       const res = await api.get('/api/chat/sessions/general');
       setSessions(await res.json());
@@ -234,7 +285,7 @@ function ChatPage({ general = false }) {
       const res = await api.get(`/api/chat/sessions/${projectId}`);
       setSessions(await res.json());
     }
-  };
+  }, [general, projectId]);
 
   const loadPrompts = async () => {
     const res = await api.get(`/api/prompts${projectId ? `?projectId=${projectId}` : ''}`);
@@ -311,9 +362,12 @@ function ChatPage({ general = false }) {
     setInlineImages([]);
     setSuggestions([]);
     setActiveArtifacts(null);
-    await sendMessage(text, ids, meta, effectiveModel, readyUrls, temperature, selectedPersonaId, reasoning, imgPayload);
+    await sendMessage(text, ids, meta, effectiveModel, readyUrls, temperature, selectedPersonaId, reasoning, imgPayload, webSearch);
     setTimeout(fetchSessions, 2000);
   };
+
+  handleSendRef.current = handleSend;
+  const stableSuggestionSelect = useCallback((s) => handleSendRef.current?.(s), []);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -327,9 +381,13 @@ function ChatPage({ general = false }) {
     const atIndex = textBefore.lastIndexOf('@');
     if (atIndex !== -1 && !textBefore.slice(atIndex + 1).includes(' ')) {
       setShowMention(true);
-      setMentionQuery(textBefore.slice(atIndex + 1));
+      clearTimeout(mentionTimerRef.current);
+      mentionTimerRef.current = setTimeout(() => {
+        setMentionQuery(textBefore.slice(atIndex + 1));
+      }, 150);
     } else {
       setShowMention(false);
+      clearTimeout(mentionTimerRef.current);
     }
   };
 
@@ -521,19 +579,19 @@ function ChatPage({ general = false }) {
     fetchSessions();
   };
 
-  const handleOpenArtifact = (artifactsArr, initialIndex = 0) => {
-    setActiveArtifacts({ artifacts: artifactsArr, initialIndex });
-  };
+  const handleOpenArtifact = useCallback((idx, blocks) => {
+    setActiveArtifacts({ artifacts: blocks, initialIndex: idx });
+  }, []);
 
-  const handleRegenerate = async () => {
+  const handleRegenerate = useCallback(async () => {
     if (isStreaming || messages.length < 2) return;
     const lastUser = [...messages].reverse().find(m => m.role === 'user');
     if (!lastUser) return;
-    await regenerate(lastUser.content, [], [], effectiveModel, [], temperature, selectedPersonaId, reasoning);
+    await regenerate(lastUser.content, [], [], effectiveModel, [], temperature, selectedPersonaId, reasoning, webSearch);
     setTimeout(fetchSessions, 2000);
-  };
+  }, [isStreaming, messages, effectiveModel, regenerate, temperature, selectedPersonaId, reasoning, webSearch, fetchSessions]);
 
-  const handleBranch = async (messageIndex) => {
+  const handleBranch = useCallback(async (messageIndex) => {
     if (!sessionId) return;
     try {
       const res = await api.post(`/api/chat/sessions/${sessionId}/branch`, { messageIndex });
@@ -547,7 +605,7 @@ function ChatPage({ general = false }) {
     } catch (err) {
       console.error('Branch error:', err);
     }
-  };
+  }, [sessionId, loadHistory, fetchSessions]);
 
   const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
   const hasInput = input.trim().length > 0;
@@ -784,6 +842,21 @@ function ChatPage({ general = false }) {
           </button>
         )}
 
+        {/* Web search toggle */}
+        <button
+          onClick={() => setWebSearch(v => !v)}
+          className="hidden sm:flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-all hover:opacity-70"
+          style={{
+            borderColor: webSearch ? 'var(--color-primary)' : 'var(--color-border)',
+            color: webSearch ? 'var(--color-primary)' : 'var(--color-muted)',
+            background: webSearch ? 'var(--color-primary)10' : 'var(--color-surface)',
+          }}
+          title={webSearch ? 'Disable web search' : 'Enable web search'}
+        >
+          {getIcon('globe', { size: 12 })}
+          Search
+        </button>
+
         {/* Persona picker — hidden on mobile */}
         <div className="relative hidden sm:block">
           <button
@@ -1017,44 +1090,19 @@ function ChatPage({ general = false }) {
                 </p>
               </div>
             ) : (
-              <div className="max-w-3xl mx-auto px-4 py-6">
-                {messages.map((msg, i) => {
-                  const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
-                  const codeBlocks = msg.role === 'assistant' ? extractCodeBlocks(msg.content) : [];
-                  return (
-                    <div key={i}>
-                      <MessageBubble
-                        message={msg}
-                        messageIndex={i}
-                        onDelete={msg.role === 'user' && !isStreaming ? () => deleteMessagePair(i) : undefined}
-                        onOpenArtifact={codeBlocks.length > 0 ? (idx) => handleOpenArtifact(codeBlocks, idx) : undefined}
-                        artifactCount={codeBlocks.length}
-                        onBranch={msg.role === 'user' && sessionId && !isStreaming ? handleBranch : undefined}
-                      />
-                      {isLastAssistant && !isStreaming && (
-                        <>
-                          <div className="flex justify-start mb-3 ml-10">
-                            <button
-                              onClick={handleRegenerate}
-                              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
-                              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
-                              title="Regenerate response"
-                            >
-                              {getIcon('refresh-cw', { size: 11 })}
-                              Regenerate
-                            </button>
-                          </div>
-                          <FollowUpChips
-                            suggestions={suggestions}
-                            onSelect={(s) => handleSend(s)}
-                          />
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
-              </div>
+              <MemoMessageList
+                messages={messages}
+                isStreaming={isStreaming}
+                isAiSearching={isAiSearching}
+                sessionId={sessionId}
+                suggestions={suggestions}
+                onDelete={deleteMessagePair}
+                onBranch={handleBranch}
+                onOpenArtifact={handleOpenArtifact}
+                onRegenerate={handleRegenerate}
+                onSuggestionSelect={stableSuggestionSelect}
+                messagesEndRef={messagesEndRef}
+              />
             )}
           </div>
 
