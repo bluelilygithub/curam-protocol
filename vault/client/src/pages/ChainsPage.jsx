@@ -445,6 +445,7 @@ function RunModal({ chain, onClose, token }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ChainsPage() {
+  console.log('[ChainsPage] rendering');
   const getIcon = useIcon();
   const { token } = useAuthStore();
 
