@@ -28,6 +28,7 @@ const SECTIONS = [
   { id: 'reasoning',       label: 'Reasoning Mode' },
   { id: 'tasks',           label: 'Tasks' },
   { id: 'goals',           label: 'Goals' },
+  { id: 'chains',          label: 'Prompt Chains' },
 ];
 
 // ─── Micro-components ────────────────────────────────────────────────────────
@@ -1247,6 +1248,53 @@ function UserGuidePage() {
 
         <Callout type="tip">
           The overall progress % on an Objective is the simple average of all its Key Results' individual progress percentages — not weighted by target value.
+        </Callout>
+
+        {/* ── Prompt Chains ── */}
+        <SectionHeading id="chains">Prompt Chains</SectionHeading>
+        <P>
+          Prompt Chains (<strong>/chains</strong>) let you build reusable multi-step AI pipelines where the output of each
+          step automatically becomes the input for the next. Use them for complex workflows that would be tedious to
+          run manually — blog posts, code reviews, meeting note processing, and more.
+        </P>
+
+        <SubHeading>Creating a Chain</SubHeading>
+        <P>
+          Click <strong>+</strong> in the Chains sidebar to create a new chain, or pick one of the three built-in
+          starter templates (Blog Post Generator, Code Review Pipeline, Meeting Notes Processor) that appear when
+          your list is empty. Give the chain a name, an optional description, and add steps using the <strong>Add step</strong> button.
+        </P>
+
+        <SubHeading>Building Steps</SubHeading>
+        <P>Each step has three fields:</P>
+        <UL>
+          <LI><strong>Label</strong> — a short name shown during the run (optional but helpful).</LI>
+          <LI><strong>Prompt</strong> — the instruction for this step. Use template variables to pass context between steps.</LI>
+          <LI><strong>Model</strong> — choose any available Claude or Gemini model per step. Use a faster/cheaper model for straightforward steps and a more capable model for complex ones.</LI>
+        </UL>
+        <P>
+          Reorder steps with the ↑ / ↓ arrows, or remove a step with ✕. Changes are saved when you click <strong>Save</strong>.
+        </P>
+
+        <SubHeading>Template Variables</SubHeading>
+        <UL>
+          <LI><strong>{'{{input}}'}</strong> — the initial content you provide when running the chain (available in every step).</LI>
+          <LI><strong>{'{{output}}'}</strong> — the full output of the immediately preceding step.</LI>
+          <LI><strong>{'{{step_1}}'}</strong>, <strong>{'{{step_2}}'}</strong>… — the output of a specific step by its position number. Useful when a later step needs to combine outputs from multiple earlier steps.</LI>
+        </UL>
+
+        <SubHeading>Running a Chain</SubHeading>
+        <P>
+          Click <strong>▶ Run</strong> in the editor toolbar to open the run modal. Paste or type your initial input,
+          then click <strong>Run Chain</strong>. Each step streams its output live — you can see progress in real time
+          as the chain works through every stage. When a step finishes, its output card shows a <strong>Copy</strong>
+          button so you can grab the result immediately. After the final step completes, a green <em>Chain complete ✓</em>
+          banner appears. Use <strong>Run Again</strong> to re-run with the same or different input.
+        </P>
+
+        <Callout type="tip">
+          Mix models within a chain — for example, use Claude Sonnet for complex reasoning steps and Claude Haiku for
+          fast formatting or summarisation steps to keep costs low and speed high.
         </Callout>
 
         <div className="h-16" /> {/* Bottom padding */}

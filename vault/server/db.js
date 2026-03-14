@@ -388,6 +388,17 @@ async function initSchema() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS prompt_chains (
+        id          SERIAL PRIMARY KEY,
+        name        TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        steps       TEXT NOT NULL DEFAULT '[]',
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');

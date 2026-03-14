@@ -83,6 +83,7 @@ app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/goals', require('./routes/goals'));
 app.use('/api/notes', require('./routes/notes'));
 app.use('/api/session-files', require('./routes/sessionFiles'));
+app.use('/api/chains', require('./routes/chains'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

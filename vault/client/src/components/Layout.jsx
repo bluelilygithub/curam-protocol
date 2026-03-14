@@ -237,6 +237,16 @@ function Layout() {
             {getIcon('clock', { size: 16 })}
           </Link>
 
+          {console.log('[Layout] rendering chains link, pathname:', location.pathname)}
+          <Link
+            to="/chains"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+            style={{ color: location.pathname === '/chains' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Prompt Chains"
+          >
+            ⛓
+          </Link>
+
           <Link
             to="/debate"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"

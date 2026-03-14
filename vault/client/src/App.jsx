@@ -18,6 +18,7 @@ import ChatHistoryPage from './pages/ChatHistoryPage';
 import TasksPage from './pages/TasksPage';
 import GoalsPage from './pages/GoalsPage';
 import NotesPage from './pages/NotesPage';
+import ChainsPage from './pages/ChainsPage';
 import SharedTaskPage from './pages/SharedTaskPage';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -76,6 +77,7 @@ function App() {
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/goals" element={<GoalsPage />} />
               <Route path="/notes" element={<NotesPage />} />
+              <Route path="/chains" element={<ChainsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

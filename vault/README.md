@@ -27,7 +27,8 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 
 | Feature | Description |
 |---|---|
-| **Chat** | Claude and Gemini conversations scoped to a project's context; model and temperature switchable per session; today's date injected into every system prompt so the model always knows the current date |
+| **Chat** | Claude and Gemini conversations scoped to a project's context; model and temperature switchable per session; today's date injected into every system prompt so the model always knows the current date; pinned file context served via RAG when `GEMINI_API_KEY` is set — only the most relevant chunks are injected rather than the full file text |
+| **RAG file context** | Pinned project files are chunked (~500 tokens, 50-token overlap at sentence boundaries) and embedded with Google `text-embedding-004` on upload; at chat time the user's message is embedded and the top-5 most semantically relevant chunks are retrieved via pgvector cosine similarity and injected under `## Relevant context from project files`; falls back to full-text injection if embeddings are unavailable; session files (explicitly attached by the user) are always injected in full |
 | **General Chat** | Project-free chat workspace for ad-hoc questions; sessions are saved and searchable |
 | **Chat History** | Browse every session across all projects and General Chat, filterable by date range and searchable by content |
 | **Project Files panel** | Side panel in the chat interface — lists all project files, upload new files, pin/unpin for permanent context, or click the paperclip icon on any file to add it to the current session; session files shown in the context bar above messages |
@@ -184,7 +185,7 @@ vault/
 │       ├── chat.js               # Claude/Gemini streaming chat + session management; GET /model-status (key config check); POST /test-model (live model probe)
 │       ├── compare.js            # Document comparison (Claude + Gemini, SSE streaming)
 │       ├── debate.js             # Multi-model debate rounds
-│       ├── files.js              # File upload, extraction, AI summary
+│       ├── files.js              # File upload, extraction, AI summary; RAG chunking + embedding pipeline runs after extraction (skipped silently if GEMINI_API_KEY absent)
 │       ├── personas.js           # Persona CRUD
 │       ├── prompts.js            # Prompt library CRUD
 │       ├── memory.js             # Global memory CRUD
@@ -205,8 +206,12 @@ vault/
 │       ├── settings.js           # App settings key/value store (API keys, config)
 │       └── health.js             # Health check endpoint
 │   ├── services/
+│   │   ├── embeddings.js         # RAG embedding service — embedText() calls Google text-embedding-004 (768-dim); retrieveRelevantChunks() queries file_chunks via pgvector cosine similarity; returns empty array on any error so callers fall back gracefully
+│   │   ├── chunker.js            # Text chunking — splits extracted text into ~500-token chunks at sentence boundaries with 50-token overlap; used by the file upload route and migration script
 │   │   ├── gmailNLP.js           # Natural language → Gmail query translator; calculateDates() pre-computes all date ranges; translateToGmailQuery() calls Claude Haiku; GMAIL_LIMITS constants
 │   │   └── gmailNLP.test.js      # 45-case test harness with scoring and ANSI colour output; run: node server/services/gmailNLP.test.js
+│   ├── scripts/
+│   │   └── migrateEmbeddings.js  # One-time idempotent backfill — chunks and embeds all existing files that have extracted text but no file_chunks rows; run: npm run migrate:embeddings
 │
 ├── client/
 │   ├── index.html
