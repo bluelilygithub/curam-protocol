@@ -20,6 +20,9 @@ import FollowUpChips from '../components/FollowUpChips';
 import { downloadChatMd } from '../utils/exportMd';
 import { calcCost, formatCost, formatTokens } from '../utils/pricing';
 import { useModels } from '../hooks/useModels';
+import SelectionToolbar from '../components/SelectionToolbar';
+import PromptVariableModal from '../components/PromptVariableModal';
+import { extractVariables } from '../utils/promptVariables';
 
 const TEMPERATURES = [
   { label: 'Precise', value: 0.2, desc: 'Focused, deterministic' },
@@ -146,6 +149,9 @@ function ChatPage({ general = false }) {
   const [prompts, setPrompts] = useState([]);
   const [promptSearch, setPromptSearch] = useState('');
 
+  // Prompt variable modal — { content, onInsert } or null
+  const [promptVarModal, setPromptVarModal] = useState(null);
+
   // Reasoning mode
   const [reasoning, setReasoning] = useState(false);
 
@@ -162,6 +168,7 @@ function ChatPage({ general = false }) {
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
 
   const messagesEndRef = useRef(null);
+  const messageListRef = useRef(null);
   const textareaRef = useRef(null);
   const titleInputRef = useRef(null);
   const mentionTimerRef = useRef(null);
@@ -276,6 +283,18 @@ function ChatPage({ general = false }) {
     document.addEventListener('vault:load-session', handler);
     return () => document.removeEventListener('vault:load-session', handler);
   }, [loadHistory]);
+
+  // Handle ?session= query param (e.g. from "Created from chat" links in TasksPage)
+  useEffect(() => {
+    const sessionParam = new URLSearchParams(location.search).get('session');
+    if (sessionParam) {
+      setShowSummaryPanel(false);
+      setSummaryText('');
+      setSuggestions([]);
+      setActiveArtifacts(null);
+      loadHistory(sessionParam);
+    }
+  }, [location.search, loadHistory]);
 
   const fetchSessions = useCallback(async () => {
     if (general) {
@@ -398,6 +417,29 @@ function ChatPage({ general = false }) {
     setInput(input.slice(0, atIndex) + replacement + input.slice(cursorPos));
     setShowMention(false);
     textareaRef.current?.focus();
+  };
+
+  // Resolve a prompt's content: if it has {{variables}}, open the fill-in modal;
+  // otherwise insert it immediately. The onInsert callback handles what to do with the text.
+  const resolvePrompt = (content, onInsert) => {
+    if (extractVariables(content).length > 0) {
+      setPromptVarModal({ content, onInsert });
+    } else {
+      onInsert(content);
+    }
+  };
+
+  // Called when user picks a prompt from the @mention dropdown
+  const handlePromptMentionSelect = (prompt) => {
+    setShowMention(false);
+    const cursorPos = textareaRef.current?.selectionStart || input.length;
+    const atIndex = input.lastIndexOf('@', cursorPos);
+    const before = input.slice(0, atIndex);
+    const after = input.slice(cursorPos);
+    resolvePrompt(prompt.content, (filled) => {
+      setInput(before + filled + after);
+      textareaRef.current?.focus();
+    });
   };
 
   const handleOpenSearch = () => {
@@ -1076,7 +1118,8 @@ function ChatPage({ general = false }) {
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto">
+          <SelectionToolbar projectId={projectId} sessionId={sessionId} contextRef={messageListRef} />
+          <div ref={messageListRef} className="flex-1 overflow-y-auto">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full pb-16 px-6 text-center">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'var(--color-surface)', color: 'var(--color-primary)' }}>
@@ -1366,7 +1409,7 @@ function ChatPage({ general = false }) {
                       ) : filteredPrompts.map(p => (
                         <button
                           key={p.id}
-                          onClick={() => { setInput(p.content); setShowPromptPicker(false); setPromptSearch(''); textareaRef.current?.focus(); }}
+                          onClick={() => { setShowPromptPicker(false); setPromptSearch(''); resolvePrompt(p.content, (filled) => { setInput(filled); textareaRef.current?.focus(); }); }}
                           className="w-full text-left px-3 py-2.5 hover:opacity-70 transition-opacity border-b last:border-0"
                           style={{ borderColor: 'var(--color-border)' }}
                         >
@@ -1381,7 +1424,7 @@ function ChatPage({ general = false }) {
                 {/* Mention dropdown */}
                 {showMention && (
                   <div className="absolute bottom-full mb-2 left-0 w-56 z-50">
-                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onSearch={handleOpenSearch} onGmailSearch={handleOpenGmailSearch} onClose={() => setShowMention(false)} />
+                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onSearch={handleOpenSearch} onGmailSearch={handleOpenGmailSearch} onPromptSelect={handlePromptMentionSelect} onClose={() => setShowMention(false)} />
                   </div>
                 )}
 
@@ -1559,6 +1602,15 @@ function ChatPage({ general = false }) {
           </div>
         )}
       </div>
+
+      {/* Prompt variable fill-in modal */}
+      {promptVarModal && (
+        <PromptVariableModal
+          content={promptVarModal.content}
+          onInsert={(filled) => { promptVarModal.onInsert(filled); setPromptVarModal(null); }}
+          onClose={() => setPromptVarModal(null)}
+        />
+      )}
     </div>
   );
 }

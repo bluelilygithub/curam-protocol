@@ -3,18 +3,23 @@ import useProjectStore from '../store/projectStore';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 
-function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onClose }) {
+function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onPromptSelect, onClose }) {
   const { projects, setActive } = useProjectStore();
   const getIcon = useIcon();
   const listRef = useRef(null);
   const [selected, setSelected] = useState(0);
   const [tasks, setTasks] = useState([]);
+  const [prompts, setPrompts] = useState([]);
 
   // Load incomplete tasks once on mount
   useEffect(() => {
     api.get('/api/tasks?limit=20')
       .then(r => r.json())
       .then(data => setTasks(Array.isArray(data) ? data.filter(t => t.status !== 'done').slice(0, 20) : []))
+      .catch(() => {});
+    api.get('/api/prompts')
+      .then(r => r.json())
+      .then(data => setPrompts(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 
@@ -26,15 +31,23 @@ function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onClose }
     ? tasks.filter(t => t.title.toLowerCase().includes(query.toLowerCase()))
     : tasks.slice(0, 5);
 
+  const filteredPrompts = query
+    ? prompts.filter(p =>
+        p.title.toLowerCase().includes(query.toLowerCase()) ||
+        'prompt'.startsWith(query.toLowerCase())
+      )
+    : prompts.slice(0, 5);
+
   const showSearch = query === '' || 'search the web'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('search');
   const showGmail = query === '' || 'search gmail'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('gmail');
 
-  // Build items list: search option + gmail option + projects + tasks
+  // Build items list: search option + gmail option + projects + tasks + prompts
   const items = [
     ...(showSearch ? [{ id: '__search__', isSearch: true }] : []),
     ...(showGmail ? [{ id: '__gmail__', isGmail: true }] : []),
     ...filteredProjects.map(p => ({ ...p, isProject: true })),
     ...filteredTasks.map(t => ({ ...t, isTask: true })),
+    ...filteredPrompts.map(p => ({ ...p, isPrompt: true })),
   ];
 
   useEffect(() => {
@@ -57,6 +70,7 @@ function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onClose }
         else if (item.isGmail) onGmailSearch?.();
         else if (item.isProject) handleSelectProject(item);
         else if (item.isTask) handleSelectTask(item);
+        else if (item.isPrompt) handleSelectPrompt(item);
       } else if (e.key === 'Escape') {
         onClose();
       }
@@ -76,14 +90,19 @@ function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onClose }
     onSelect(taskRef, taskContext);
   };
 
+  const handleSelectPrompt = (prompt) => {
+    onPromptSelect?.(prompt);
+  };
+
   if (items.length === 0) return null;
 
-  // Check if we have both projects and tasks to show a divider
   const hasProjects = filteredProjects.length > 0;
   const hasTasks = filteredTasks.length > 0;
+  const hasPrompts = filteredPrompts.length > 0;
   const specialCount = (showSearch ? 1 : 0) + (showGmail ? 1 : 0);
   const projectStartIdx = specialCount;
   const taskStartIdx = projectStartIdx + filteredProjects.length;
+  const promptStartIdx = taskStartIdx + filteredTasks.length;
 
   return (
     <div
@@ -165,6 +184,27 @@ function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onClose }
                     {item.dueDate.slice(5, 10)}
                   </span>
                 )}
+              </button>
+            </React.Fragment>
+          );
+        }
+
+        if (item.isPrompt) {
+          const showPromptHeader = i === promptStartIdx && hasPrompts;
+          return (
+            <React.Fragment key={`prompt-${item.id}`}>
+              {showPromptHeader && (
+                <div className="px-3 pt-2 pb-1 text-xs font-semibold uppercase tracking-wider border-t mt-1" style={{ color: 'var(--color-muted)', opacity: 0.6, borderColor: 'var(--color-border)' }}>
+                  Prompts
+                </div>
+              )}
+              <button
+                onClick={() => handleSelectPrompt(item)}
+                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors"
+                style={{ background: bg, color: 'var(--color-text)' }}
+              >
+                {getIcon('book', { size: 14 })}
+                <span className="truncate flex-1">{item.title}</span>
               </button>
             </React.Fragment>
           );

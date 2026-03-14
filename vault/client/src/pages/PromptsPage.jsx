@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Plus, Trash2, Copy, Check } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Copy, Check, Play } from 'lucide-react';
 import api from '../utils/apiClient';
+import PromptVariableModal from '../components/PromptVariableModal';
+import { extractVariables } from '../utils/promptVariables';
 
 function PromptsPage() {
   const [prompts, setPrompts] = useState([]);
@@ -9,6 +11,7 @@ function PromptsPage() {
   const [saving, setSaving] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [search, setSearch] = useState('');
+  const [varModal, setVarModal] = useState(null); // { content } or null
 
   const load = async () => {
     const res = await api.get('/api/prompts');
@@ -37,6 +40,14 @@ function PromptsPage() {
     navigator.clipboard.writeText(content);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
+  };
+
+  const handleUse = (content) => {
+    if (extractVariables(content).length > 0) {
+      setVarModal({ content });
+    } else {
+      navigator.clipboard.writeText(content);
+    }
   };
 
   const filtered = search
@@ -141,7 +152,17 @@ function PromptsPage() {
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             >
               <div className="flex items-start gap-2 mb-2">
-                <span className="flex-1 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{p.title}</span>
+                <span className="flex-1 text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {p.title}
+                  {extractVariables(p.content).length > 0 && (
+                    <span className="ml-2 text-xs px-1.5 py-0.5 rounded-full" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+                      template
+                    </span>
+                  )}
+                </span>
+                <button onClick={() => handleUse(p.content)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0" style={{ color: 'var(--color-primary)' }} title="Use prompt">
+                  <Play size={14} />
+                </button>
                 <button onClick={() => handleCopy(p.id, p.content)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0" style={{ color: 'var(--color-muted)' }} title="Copy">
                   {copiedId === p.id ? <Check size={14} style={{ color: 'var(--color-primary)' }} /> : <Copy size={14} />}
                 </button>
@@ -162,6 +183,13 @@ function PromptsPage() {
             </div>
           ))}
         </div>
+      )}
+      {varModal && (
+        <PromptVariableModal
+          content={varModal.content}
+          onInsert={(filled) => { navigator.clipboard.writeText(filled); setVarModal(null); }}
+          onClose={() => setVarModal(null)}
+        />
       )}
     </div>
   );

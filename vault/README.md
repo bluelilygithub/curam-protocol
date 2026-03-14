@@ -15,7 +15,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Projects** | Workspace containers with structured briefs — organise AI work by client or topic |
 | **Folders** | Group projects into folders; drag-and-drop projects in and out of folders from the sidebar |
 | **Personas** | Reusable AI roles with custom system prompts (e.g. "Senior Copywriter", "Legal Reviewer") |
-| **Prompts** | Prompt library — save, tag, and reuse prompt templates across projects |
+| **Prompts** | Prompt library — save, tag, and reuse prompt templates across projects; supports `{{variable}}` placeholders that turn any prompt into a fill-in-the-blanks template |
 | **Memory** | Global persistent notes injected into all chats (facts the AI should always know) |
 | **Pinned URLs** | Attach web URLs to a project; content is fetched and stored for AI context |
 | **Files** | Upload PDFs, images, text files (txt, md, csv, json), spreadsheets (xlsx, xls, ods), Word documents (docx, doc), and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example) to a project; text is extracted and AI-summarised on upload for all supported formats; spreadsheets converted to CSV per sheet; Word docs extracted via mammoth; code files stored as plain text, 500 KB limit, prompt-injection sanitised |
@@ -37,7 +37,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Native AI web search** | Globe/Search toggle in the chat header enables provider-native real-time web search — Anthropic's `web_search_20250305` tool for Claude models (capped at 3 searches per turn), Google Search grounding for Gemini models; the model decides when to search based on whether the query requires current information; a "Searching the web…" indicator replaces the loading dots while a search is in progress; on by default, toggleable per session |
 | **`@search` web search** | Type `@` in chat and select "Search the web"; results shown in a panel before attaching as URL context |
 | **`@gmail` email search** | Type `@` in chat and select "Search Gmail…"; natural language query translated to Gmail search syntax via Claude Haiku; browse results, attach email threads as context; ask follow-up questions about any thread via the `/ask` endpoint (SSE streaming) |
-| **@mention Tasks in Chat** | Type `@` in chat to attach a task's details as context; title, notes, and due date are injected into the conversation |
+| **@mention in Chat** | Type `@` in chat to insert context or trigger actions — attach a task's details (title, notes, due date), switch project context, insert a prompt from the library (with variable fill-in modal if placeholders are present), trigger web search, or query Gmail |
 | **Document Compare** | Compare two documents side by side using any Claude or Gemini model; 4 comparison modes; save results to a project |
 | **Multi-Model Debate** | Pit multiple AI models against each other on a topic; multi-file context upload; synthesis summary |
 | **Export** | Export chat conversations to Markdown, JSON, or PDF; email thread export |
@@ -67,6 +67,8 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Task Sharing** | Generate a public share link for any task; read-only view (no login required) with title, status, notes, tags, subtasks; revocable at any time |
 | **CSV Import** | Import tasks in bulk from a CSV file; download template, drag-drop upload, preview with row-level validation, selective import |
 | **Quick Capture** | Floating `+` button on every page (or `Ctrl+Shift+N`) — capture a task without leaving the current page |
+| **Inline task creation from chat** | Select any text in a chat message to reveal a floating "+ Task" button; Claude Haiku suggests a priority and due date based on the selected text and surrounding context (1.5s timeout with medium/null fallback); opens Quick Capture pre-filled; the created task records the source session ID so it links back to the conversation |
+| **Source chat link** | Tasks created from a chat selection show "Created from chat: [session title]" as a clickable link in the expanded task view; navigates directly to that chat session |
 | **Morning Digest** | Daily overlay on first visit — overdue + today's tasks with a Claude-generated focus suggestion |
 | **Weekly Review** | Guided 3-step modal (`w` shortcut) — north star mission statement banner in Step 1 (if set); last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions, Goals progress update, and 🌱 Renewal This Week row (4 dimension icons with per-dimension completed-task counts; red dot on any zero) |
 
@@ -275,6 +277,7 @@ vault/
 │       │   ├── TasksCalendar.jsx # Time-blocking calendar (day/week/month/agenda; drag-drop; block resize)
 │       │   ├── MorningDigest.jsx # Daily task digest overlay (once per day)
 │       │   ├── QuickCapture.jsx  # Floating quick-capture FAB (Ctrl+Shift+N)
+│       │   ├── PromptVariableModal.jsx  # Fill-in-the-blanks modal for {{variable}} prompt templates; live preview; used by ChatPage and PromptsPage
 │       │   └── tasks/            # Task-specific sub-components (extracted from TasksPage)
 │       │       ├── TaskFilters.jsx        # Quick-filter chips, category/project/status dropdowns, search, sort
 │       │       ├── TaskStatsBar.jsx       # 6-card stats bar + 14-day completion chart
@@ -298,6 +301,7 @@ vault/
 │       │   ├── apiClient.js      # Authenticated fetch wrapper (use for all /api/ calls)
 │       │   ├── models.js         # Default Claude + Gemini model definitions (static fallback); active list is managed via useModels hook and stored in settings.vault_models
 │       │   ├── pricing.js        # Token pricing helpers
+│       │   ├── promptVariables.js  # extractVariables(), fillVariables(), labelFor() — parse and resolve {{variable}} placeholders in prompt templates
 │       │   ├── parseDate.js      # Natural language date parser (pure frontend, no API calls)
 │       │   ├── exportMd.js       # Markdown export formatter
 │       │   └── exportHelpers.js

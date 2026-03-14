@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 
-const EMPTY = { title: '', priority: 'medium', dueDate: '', isUrgent: 0 };
+const EMPTY = { title: '', priority: 'medium', dueDate: '', isUrgent: 0, projectId: null, sessionId: null };
 
 export default function QuickCapture() {
   const getIcon = useIcon();
@@ -12,15 +12,24 @@ export default function QuickCapture() {
   const [toast, setToast] = useState(false);
 
   useEffect(() => {
-    const handler = (e) => {
+    const keyHandler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'n' || e.key === 'N')) {
         e.preventDefault();
         setOpen(v => !v);
       }
       if (e.key === 'Escape' && open) setOpen(false);
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const openHandler = (e) => {
+      const { title = '', priority = 'medium', dueDate = '', projectId = null, sessionId = null } = e.detail || {};
+      setForm({ ...EMPTY, title, priority, dueDate, projectId, sessionId });
+      setOpen(true);
+    };
+    window.addEventListener('keydown', keyHandler);
+    document.addEventListener('vault:open-quick-capture', openHandler);
+    return () => {
+      window.removeEventListener('keydown', keyHandler);
+      document.removeEventListener('vault:open-quick-capture', openHandler);
+    };
   }, [open]);
 
   const handleSave = async () => {
@@ -33,6 +42,8 @@ export default function QuickCapture() {
         dueDate: form.dueDate || null,
         status: 'todo',
         isUrgent: form.isUrgent ? 1 : 0,
+        ...(form.projectId ? { projectId: form.projectId } : {}),
+        ...(form.sessionId ? { sourceSessionId: form.sessionId } : {}),
       });
       document.dispatchEvent(new CustomEvent('vault:task-created'));
       setOpen(false);

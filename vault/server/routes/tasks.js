@@ -36,14 +36,21 @@ async function getBlockerCount(taskId) {
   return Number(rows[0]?.c || 0);
 }
 
+async function getSourceSessionTitle(sessionId) {
+  if (!sessionId) return null;
+  const { rows } = await pool.query('SELECT title FROM sessions WHERE "sessionId"=$1', [sessionId]);
+  return rows[0]?.title || null;
+}
+
 async function buildTask(row) {
-  const [tags, subtaskStats, krInfo, blockerCount] = await Promise.all([
+  const [tags, subtaskStats, krInfo, blockerCount, sourceSessionTitle] = await Promise.all([
     getTags(row.id),
     getSubtaskStats(row.id),
     getKrInfo(row.keyResultId),
     getBlockerCount(row.id),
+    getSourceSessionTitle(row.sourceSessionId),
   ]);
-  return { ...row, tags, ...subtaskStats, ...krInfo, blockerCount };
+  return { ...row, tags, ...subtaskStats, ...krInfo, blockerCount, sourceSessionTitle };
 }
 
 function calculateNextDate(dateStr, recurrence) {
@@ -254,6 +261,32 @@ router.post('/weekly-review-suggestions', async (req, res) => {
   } catch (err) {
     console.error('[weekly-review-suggestions]', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/tasks/suggest — infer priority and due date from selected text using Haiku
+router.post('/suggest', async (req, res) => {
+  const { text, context } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'text required' });
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const contextBlock = context ? `\n\nSurrounding context:\n${context.substring(0, 400)}` : '';
+    const result = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 60,
+      messages: [{
+        role: 'user',
+        content: `Today is ${today}. Based on this task: "${text.substring(0, 200)}"${contextBlock}\n\nSuggest a priority and due date. Reply with only valid JSON, no markdown: {"priority":"high"|"medium"|"low","dueDate":"YYYY-MM-DD"|null}`,
+      }],
+    });
+    const raw = result.content[0]?.text?.trim() || '{}';
+    const parsed = JSON.parse(raw);
+    res.json({
+      priority: ['high', 'medium', 'low'].includes(parsed.priority) ? parsed.priority : 'medium',
+      dueDate: parsed.dueDate || null,
+    });
+  } catch (err) {
+    res.json({ priority: 'medium', dueDate: null });
   }
 });
 
@@ -564,11 +597,11 @@ router.delete('/:id/dependencies/:blockedByTaskId', async (req, res) => {
 // POST /api/tasks
 router.post('/', async (req, res) => {
   try {
-    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId, isUrgent, renewalDimension } = req.body;
+    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId, isUrgent, renewalDimension, sourceSessionId } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const { rows } = await pool.query(
-      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW()) RETURNING id',
-      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null]
+      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","sourceSessionId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW()) RETURNING id',
+      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null, sourceSessionId || null]
     );
     const id = rows[0].id;
     if (Array.isArray(tags)) {

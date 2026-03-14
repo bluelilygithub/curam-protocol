@@ -1255,7 +1255,7 @@ export default function TasksPage() {
                   style={{ color: 'var(--color-primary)' }}
                 >
                   {getIcon('message-circle', { size: 13 })}
-                  View source chat
+                  Created from chat: {task.sourceSessionTitle || task.sourceSessionId.slice(-6)}
                 </button>
               </div>
             )}

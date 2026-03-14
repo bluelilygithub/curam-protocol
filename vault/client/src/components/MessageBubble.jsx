@@ -89,6 +89,7 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
             <div
               className="px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed"
               style={{ background: 'var(--color-primary)', color: '#fff' }}
+              data-message-content
             >
               <p className="whitespace-pre-wrap">{displayText}</p>
             </div>
@@ -210,6 +211,7 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
           <div
             className="prose prose-sm max-w-none text-sm leading-relaxed"
             style={{ color: 'var(--color-text)' }}
+            data-message-content
           >
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
