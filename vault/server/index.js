@@ -116,6 +116,7 @@ async function start() {
 
   app.listen(PORT, () => {
     console.log('Vault server running on port ' + PORT);
+    console.log('VERSION: chains-debug-1');
   });
 }
 
