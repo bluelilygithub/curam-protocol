@@ -498,16 +498,18 @@ router.post('/', chatLimiter, async (req, res) => {
             }
           }
 
-          // Auto-title new sessions (first message pair)
+          // Auto-title new sessions (first message pair only)
           const { rows: countRows } = await pool.query('SELECT COUNT(*) as cnt FROM messages WHERE "sessionId"=$1', [sid]);
           const msgCount = Number(countRows[0]?.cnt || 0);
           if (msgCount <= 2 && !sessionMeta?.title) {
+            const userSnippet = lastUser.content.substring(0, 300);
+            const aiSnippet = fullContent.substring(0, 300);
             anthropic.messages.create({
               model: 'claude-haiku-4-5-20251001',
-              max_tokens: 12,
+              max_tokens: 20,
               messages: [{
                 role: 'user',
-                content: `Give a 2–4 word title for a chat starting with: "${lastUser.content.substring(0, 250)}". Reply with only the title, no punctuation.`,
+                content: `Generate a concise 4-6 word title for this conversation. Return only the title, no punctuation, no quotes.\n\nUser: ${userSnippet}\n\nAssistant: ${aiSnippet}`,
               }],
             }).then(r => {
               const title = r.content[0]?.text?.trim() || '';

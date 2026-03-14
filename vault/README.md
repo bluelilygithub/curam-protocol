@@ -30,6 +30,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Chat** | Claude and Gemini conversations scoped to a project's context; model and temperature switchable per session; today's date injected into every system prompt so the model always knows the current date; pinned file context served via RAG when `GEMINI_API_KEY` is set — only the most relevant chunks are injected rather than the full file text |
 | **RAG file context** | Pinned project files are chunked (~500 tokens, 50-token overlap at sentence boundaries) and embedded with Google `text-embedding-004` on upload; at chat time the user's message is embedded and the top-5 most semantically relevant chunks are retrieved via pgvector cosine similarity and injected under `## Relevant context from project files`; falls back to full-text injection if embeddings are unavailable; session files (explicitly attached by the user) are always injected in full |
 | **General Chat** | Project-free chat workspace for ad-hoc questions; sessions are saved and searchable |
+| **Auto-generated session titles** | After the first AI response in a new session, Claude Haiku automatically generates a concise 4-6 word title using both the user message and AI response as context; saved in the background without blocking the chat response; sidebar updates within ~2 seconds; never overwrites a title the user has manually set |
 | **Chat History** | Browse every session across all projects and General Chat, filterable by date range and searchable by content |
 | **Project Files panel** | Side panel in the chat interface — lists all project files, upload new files, pin/unpin for permanent context, or click the paperclip icon on any file to add it to the current session; session files shown in the context bar above messages |
 | **Clipboard image paste** | Paste images directly from the clipboard into the chat input; sent as inline base64 to the AI, no file upload required |
@@ -79,6 +80,17 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **7 Habits Sidebar** | Collapsible section in the project sidebar; 3 quick-links: 🧭 Mission Statement, ⚡ Priority Matrix, 🌱 Renewal Balance |
 | **Goals Widget** | Home page summary showing active objective count, average progress, and top 3 progress bars |
 | **Goals in Weekly Review** | Step 3 of Weekly Review shows active objectives + 🌱 Renewal This Week row (4 dimension icons with completed task counts; red dot if zero) |
+
+#### Prompt Chains
+
+| Feature | Description |
+|---|---|
+| **Prompt Chains** | Build reusable multi-step AI pipelines — each step's output feeds into the next; accessible via the ⛓ icon in the top nav |
+| **Template variables** | Use `{{input}}` for the initial run input, `{{output}}` for the previous step's output, or `{{step_N}}` to reference any specific step by number |
+| **Per-step model selection** | Each step in a chain can use a different model — mix Claude and Gemini models within a single pipeline |
+| **Starter templates** | Three built-in starter chains (Blog Post Generator, Code Review Pipeline, Meeting Notes Processor) shown when no chains exist yet |
+| **SSE streaming** | Chain runs stream output step-by-step in real time; each step shows a progress indicator, live output, and a copy button on completion |
+| **Stop & re-run** | Abort a running chain mid-stream; re-run from the beginning with new input once complete |
 
 #### Admin & Account
 

@@ -26,11 +26,6 @@ import AuthGuard from './components/AuthGuard';
 import SearchPalette from './components/SearchPalette';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 
-function WildcardRedirect() {
-  console.log('[App] wildcard route caught, redirecting to / — current path was:', window.location.pathname);
-  return <Navigate to="/" replace />;
-}
-
 function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
 
@@ -83,7 +78,7 @@ function App() {
               <Route path="/goals" element={<GoalsPage />} />
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/chains" element={<ChainsPage />} />
-              <Route path="*" element={<WildcardRedirect />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
         </BrowserRouter>
