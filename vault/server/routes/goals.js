@@ -228,6 +228,141 @@ router.post('/renewal-assessment', async (req, res) => {
   }
 });
 
+// ── Getting Started Wizard endpoints (must be before /:id) ────────────────────
+
+// GET /api/goals/wizard/status
+router.get('/wizard/status', async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT value FROM settings WHERE key = 'getting_started_completed'");
+    res.json({ completed: rows[0] ? rows[0].value === 'true' : false });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/goals/wizard/complete
+router.post('/wizard/complete', async (req, res) => {
+  try {
+    await pool.query(
+      "INSERT INTO settings (key, value) VALUES ('getting_started_completed', 'true') ON CONFLICT (key) DO UPDATE SET value='true'",
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/goals/wizard/reset (for Settings page "Redo setup")
+router.post('/wizard/reset', async (req, res) => {
+  try {
+    await pool.query(
+      "INSERT INTO settings (key, value) VALUES ('getting_started_completed', 'false') ON CONFLICT (key) DO UPDATE SET value='false'",
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/goals/wizard/generate-mission — SSE stream using personal context
+router.post('/wizard/generate-mission', async (req, res) => {
+  try {
+    const { mattersMost, betterAt, lifeStage } = req.body;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    const prompt = `Based on what this person has shared, write a personal mission statement (2–4 sentences, inspiring, first person, focused on being and contributing, not just achieving). Return only the mission statement text.
+
+What matters most to them: ${mattersMost || '(not provided)'}
+What they are getting better at: ${betterAt || '(not provided)'}
+Their current life stage / context: ${lifeStage || '(not provided)'}`;
+    const stream = anthropic.messages.stream({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
+    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
+    stream.on('error', (err) => { console.error('[wizard generate-mission]', err); res.write('data: [DONE]\n\n'); res.end(); });
+  } catch (err) {
+    console.error('[wizard generate-mission]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/goals/wizard/suggest-objective — returns a single objective suggestion
+router.post('/wizard/suggest-objective', async (req, res) => {
+  try {
+    const { mission, mattersMost } = req.body;
+    const prompt = `Mission statement: "${mission || '(none yet)'}"
+What matters most: "${mattersMost || '(not provided)'}"
+
+Suggest ONE concrete, achievable objective for the next 90 days that aligns with this mission. Return a JSON object with fields: title (string, max 60 chars), description (string, 1 sentence), timeframe (string, e.g. "Q2 2026"), color (one of: #6366f1, #3b82f6, #22c55e, #f59e0b, #ef4444, #8b5cf6). Output only the JSON object, no explanation.`;
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const text = message.content[0]?.text || '{}';
+    const match = text.match(/\{[\s\S]*\}/);
+    const suggestion = match ? JSON.parse(match[0]) : {};
+    res.json(suggestion);
+  } catch (err) {
+    console.error('[wizard suggest-objective]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/goals/wizard/suggest-krs — returns 3 KR suggestions
+router.post('/wizard/suggest-krs', async (req, res) => {
+  try {
+    const { objectiveTitle, objectiveDescription } = req.body;
+    const prompt = `Objective: "${objectiveTitle}"${objectiveDescription ? `\n${objectiveDescription}` : ''}
+
+Suggest exactly 3 SMART Key Results. Output only 3 JSON objects, one per line, with fields: title (string), targetValue (number), unit (string like "%", "tasks", "sessions", "hours", "items"). No markdown, no explanation.`;
+    const message = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const text = message.content[0]?.text || '';
+    const lines = text.split('\n').filter(l => l.trim().startsWith('{'));
+    const krs = [];
+    for (const line of lines) {
+      try { krs.push(JSON.parse(line)); } catch {}
+    }
+    res.json(krs.slice(0, 3));
+  } catch (err) {
+    console.error('[wizard suggest-krs]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/goals/wizard/renewal-observation — SSE, takes slider scores
+router.post('/wizard/renewal-observation', async (req, res) => {
+  try {
+    const { physical, mental, social, spiritual } = req.body;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    const prompt = `A person has rated their renewal dimensions (0–10):
+Physical: ${physical ?? 5}/10, Mental: ${mental ?? 5}/10, Social: ${social ?? 5}/10, Spiritual: ${spiritual ?? 5}/10
+
+In 2–3 sentences, give a warm personalised observation about their balance. Name the dimension that scored lowest and suggest one small, specific thing they could add to their life this week to strengthen it. Be warm, brief, and encouraging.`;
+    const stream = anthropic.messages.stream({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
+    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
+    stream.on('error', (err) => { console.error('[wizard renewal-observation]', err); res.write('data: [DONE]\n\n'); res.end(); });
+  } catch (err) {
+    console.error('[wizard renewal-observation]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/goals — create objective
 router.post('/', async (req, res) => {
   try {

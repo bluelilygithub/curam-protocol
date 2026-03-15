@@ -15,6 +15,7 @@ import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasks
 import { startChainsTour, TOUR_KEY as CHAINS_TOUR_KEY } from '../utils/tours/chainsTour';
 import { startRagTour, TOUR_KEY as RAG_TOUR_KEY } from '../utils/tours/ragTour';
 import { startIntegrationsTour, TOUR_KEY as INTEGRATIONS_TOUR_KEY } from '../utils/tours/integrationsTour';
+import { startGettingStartedTour, TOUR_KEY as GETTING_STARTED_TOUR_KEY } from '../utils/tours/gettingStartedTour';
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -802,6 +803,25 @@ function SettingsPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
             <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Getting Started Wizard Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step preparation tour — understand the wizard, the 7 Habits framework, and what gets created before you begin
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(GETTING_STARTED_TOUR_KEY);
+                navigate('/goals');
+                setTimeout(() => startGettingStartedTour(navigate), 800);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(GETTING_STARTED_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
               <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Goals &amp; 7 Habits Tour</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
                 8-step walkthrough of Mission Statement, Renewal Balance, OKRs, and Eisenhower Matrix
@@ -817,6 +837,24 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               Retake Tour
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Getting Started Wizard</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                7-step guided setup for your mission, objectives, key results, and renewal balance
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                await fetch('/api/goals/wizard/reset', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } }).catch(() => {});
+                navigate('/goals');
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              Redo Setup
             </button>
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>

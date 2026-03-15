@@ -85,6 +85,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **7 Habits Sidebar** | Collapsible section in the project sidebar; 3 quick-links: 🧭 Mission Statement, ⚡ Priority Matrix, 🌱 Renewal Balance |
 | **Goals Widget** | Home page summary showing active objective count, average progress, and top 3 progress bars |
 | **Goals in Weekly Review** | Step 3 of Weekly Review shows active objectives + 🌱 Renewal This Week row (4 dimension icons with completed task counts; red dot if zero) |
+| **Getting Started Wizard** | 7-step full-screen guided setup triggered automatically on first visit when no objectives exist; steps: Personal Context → Mission Statement (Claude drafts from context, editable) → First Objective (AI-suggested with colour picker) → Key Results (3 AI-suggested, toggle/edit) → Connect Tasks (link existing open tasks to the new objective) → Renewal Balance (four 0–10 sliders + streaming AI observation) → Review & Save; draft auto-saved to `localStorage`; ✨ button in Goals header reopens the wizard at any time; Settings page "Redo Setup" button resets the completion flag |
 
 #### Prompt Chains
 
@@ -96,6 +97,21 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Starter templates** | Three built-in starter chains (Blog Post Generator, Code Review Pipeline, Meeting Notes Processor) shown when no chains exist yet |
 | **SSE streaming** | Chain runs stream output step-by-step in real time; each step shows a progress indicator, live output, and a copy button on completion |
 | **Stop & re-run** | Abort a running chain mid-stream; re-run from the beginning with new input once complete |
+
+#### Knowledge Graph
+
+| Feature | Description |
+|---|---|
+| **Canvas** | Full-screen D3 force-simulation canvas at `/graph`; accessible via the 🕸 share-2 icon in the top nav (desktop) or directly by URL on mobile |
+| **Node types** | Projects (large indigo circle), Files (blue rectangle), Notes (amber rounded rect), Chat Sessions (green circle), Tasks (orange diamond), Goals (purple hexagon), Pinned URLs (teal circle) |
+| **Explicit edges** | Structural connections drawn automatically: `contains` (project→file/note/session), `subtask` (task→task), `branch` (session→session), `created` (session→task), `tracks` (task→key result), `key_result` (objective→KR), `blocks` (task dependency) |
+| **Semantic edges** | AI-computed dashed pink lines via pgvector + Gemini embeddings; computed on demand via the "Find connections" button; cached in the `graph_edges` table; similarity threshold 0.82 |
+| **Interactions** | Zoom and pan the canvas; drag nodes to reposition; click any node to open a detail side panel showing the node type, title, and a "Go to →" button for direct in-app navigation; hover a node to highlight its immediate neighbours and dim everything else |
+| **Search** | Search bar in the toolbar filters nodes by name; matched nodes glow amber; unmatched nodes dim |
+| **Type filters** | Per-type colour-coded checkboxes hide/show node categories without recomputing the graph |
+| **Insights panel** | Claude Haiku analyses the graph structure (orphaned nodes, cross-project clusters, top-connected nodes) and generates 4–6 specific observations; each insight has a "Show me" button that highlights and zooms to the relevant nodes; cached in the `settings` table and refreshed on demand |
+| **Label behaviour** | Node labels hidden when zoomed out below threshold; always shown on hover, search match, or selection |
+| **Scale-aware layout** | Logarithmic force scaling — charge and link distance computed from `ln(n)` so the graph looks correct at 5 nodes or 50+ nodes without manual tuning |
 
 #### Admin & Account
 
@@ -115,7 +131,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 ### Tech Stack
 
 - **Backend:** Node.js / Express, PostgreSQL (`pg`), Anthropic SDK, Google Generative AI SDK (`@google/generative-ai`)
-- **Frontend:** React / Vite, Zustand (auth + project + settings state), React Router, Tailwind CSS
+- **Frontend:** React / Vite, Zustand (auth + project + settings state), React Router, Tailwind CSS, `react-force-graph-2d` (D3 force simulation — Knowledge Graph)
 - **Auth:** Token-based sessions (single-user via seed credentials); bcryptjs for password hashing
 - **Deploy:** Railway with PostgreSQL service and persistent volume for file uploads
 
@@ -515,6 +531,11 @@ npm run dev
 
 ### March 2026
 
+- **Getting Started Wizard** — 7-step full-screen guided setup for the Goals page; steps: Personal Context (what matters most, what you're improving, life stage) → Mission Statement (Claude drafts from context, editable + regenerate) → First Objective (AI-suggested with colour picker, fully editable) → Key Results (3 AI-suggested, toggle/edit/add) → Connect Tasks (link existing open tasks to the objective) → Renewal Balance (four 0–10 sliders + streaming AI observation) → Review & Save (sequential save of mission, objective, KRs, task links, and completion flag); draft auto-saved to `localStorage`; wizard triggered automatically on first visit when no objectives exist; ✨ button in Goals header to reopen; Settings page "Redo Setup" button resets completion flag; `GET /api/goals/wizard/status`, `POST /api/goals/wizard/complete`, `POST /api/goals/wizard/reset`, `POST /api/goals/wizard/generate-mission`, `POST /api/goals/wizard/suggest-objective`, `POST /api/goals/wizard/suggest-krs`, `POST /api/goals/wizard/renewal-observation` — completion state stored in the `settings` table
+- **Knowledge Graph — Phase 3: Proactive Insights** — Insights panel powered by Claude Haiku; analyses graph structure (orphaned nodes, cross-project semantic clusters, top-connected nodes) and generates 4–6 specific observations; each insight has a "Show me" button that highlights and zooms to the relevant nodes; insights cached in the `settings` table and refreshed on demand
+- **Knowledge Graph — Phase 2: Semantic Connections** — `POST /api/graph/compute-semantic` SSE endpoint; file↔file similarity via pgvector SQL; note and session embeddings via Gemini; note↔note, file↔note, and session↔note comparisons; connections cached in the `graph_edges` table; dashed pink lines on canvas; "Find connections" / "Re-compute" button with live progress bar
+- **Knowledge Graph — Phase 1** — New `/graph` route with a full-screen `react-force-graph-2d` canvas; all vault content (projects, files, notes, sessions, tasks, goals, pinned URLs) rendered as typed, shaped nodes; explicit structural edges; hover highlights adjacency; click opens node detail panel with "Go to" navigation; search, type filters, Insights panel, scale-aware logarithmic force layout
+- **Prompt Chains** — New `/chains` page for building and running multi-step prompt sequences; output from each step passed as context to the next; per-step model selection; starter templates; SSE streaming
 - **RAG (Retrieval-Augmented Generation) for file context** — replaces full pinned-file injection with semantic chunk retrieval; `pgvector` extension enabled on PostgreSQL; new `file_chunks` table stores text chunks with 768-dimensional embeddings from Google's `text-embedding-004` model (reuses the existing `GEMINI_API_KEY`); `server/services/chunker.js` splits extracted text into ~500-token chunks at sentence boundaries with 50-token overlap; `server/services/embeddings.js` calls the Google Generative AI SDK for embedding and exposes `retrieveRelevantChunks(queryText, projectId, topK)` which queries `file_chunks` using pgvector cosine similarity (`<=>` operator); file upload route chunks and embeds text immediately after extraction; chat route calls RAG first and injects the top-5 relevant chunks under `## Relevant context from project files`, falling back to full-text injection if `GEMINI_API_KEY` is absent or no chunks exist yet; session files (user-selected per session) continue to be injected in full as before; `server/scripts/migrateEmbeddings.js` back-fills embeddings for all existing files (`npm run migrate:embeddings`); requires no new environment variables — completely optional, zero behaviour change without `GEMINI_API_KEY`
 - **Chat input performance** — eliminated keyboard input lag as conversations grow; `MemoMessageList` extracted as a module-level `React.memo` component so the message list bails out of re-rendering when only the input state changes; `handleOpenArtifact` signature changed to `(idx, blocks)` and memoised with `useCallback([], [])` — `extractCodeBlocks` is now computed inside `MessageBubble` via `useMemo` so no per-message closure is created in the parent; `handleRegenerate` and `handleBranch` wrapped in `useCallback` with explicit deps; `stableSuggestionSelect` uses a latest-ref pattern (`handleSendRef.current = handleSend` each render; stable `useCallback` reads through the ref) so `FollowUpChips` gets a stable prop without stale-closure risk; `@mention` query debounced 150 ms — `setShowMention` remains immediate while `setMentionQuery` (which triggers filtering) fires only after the user pauses typing; `extractCodeBlocks` import removed from `ChatPage` since it is now encapsulated in `MessageBubble`
 - **Native AI web search** — Globe/Search toggle added to the chat header (on by default); Anthropic models use the `web_search_20250305` built-in tool with `max_uses: 3` and the `web-search-2025-03-05` beta header; Gemini models use Google Search grounding (`{ googleSearch: {} }` tool); provider detected automatically from the active model — no manual switching required; a `{ searching: true }` SSE event is emitted when the Anthropic model initiates a search, replacing the loading dots with a globe icon + "Searching the web…" in the message bubble; `isSearching` state exposed from `useChat` and aliased to `isAiSearching` in `ChatPage` to avoid collision with the existing `isSearching` search-UI state; system prompt includes a prompt-injection security notice when web search is on, instructing the model to treat all search results as untrusted external data and never follow instructions found in them

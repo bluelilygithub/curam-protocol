@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import { startGoalsTour, TOUR_KEY } from '../utils/tours/goalsTour';
+import GettingStartedWizard from '../components/GettingStartedWizard';
 
 const PRESET_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#22c55e', '#3b82f6', '#ef4444'];
 
@@ -708,6 +709,8 @@ export default function GoalsPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [showNew, setShowNew] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardCompleted, setWizardCompleted] = useState(null); // null=loading, true/false
   const [showAddKr, setShowAddKr] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [editingObjective, setEditingObjective] = useState(null); // field being edited
@@ -737,6 +740,10 @@ export default function GoalsPage() {
   }, []);
 
   useEffect(() => { loadObjectives(); }, [loadObjectives]);
+
+  useEffect(() => {
+    api.get('/api/goals/wizard/status').then(r => r.json()).then(d => setWizardCompleted(d.completed)).catch(() => setWizardCompleted(true));
+  }, []);
 
   useEffect(() => {
     api.get('/api/tasks').then(r => r.json()).then(data => setRenewalTasks(Array.isArray(data) ? data : [])).catch(() => {});
@@ -856,6 +863,16 @@ export default function GoalsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {showWizard && (
+        <GettingStartedWizard
+          onClose={() => setShowWizard(false)}
+          onComplete={() => {
+            setWizardCompleted(true);
+            loadObjectives();
+            setShowWizard(false);
+          }}
+        />
+      )}
       <div ref={missionRef} data-tour="mission-card"><MissionStatementCard /></div>
 
       {/* Renewal Balance Dashboard */}
@@ -934,25 +951,57 @@ export default function GoalsPage() {
             {getIcon('target', { size: 14, style: { color: 'var(--color-primary)' } })}
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text)' }}>Goals</span>
           </div>
-          <button
-            onClick={() => setShowNew(true)}
-            data-tour="new-objective"
-            title="New Objective"
-            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer' }}
-          >
-            {getIcon('plus', { size: 12 })} New
-          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {wizardCompleted && (
+              <button
+                onClick={() => setShowWizard(true)}
+                title="Redo setup wizard"
+                style={{ display: 'flex', alignItems: 'center', fontSize: 11, padding: '4px 8px', borderRadius: 6, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', cursor: 'pointer' }}
+              >
+                ✨
+              </button>
+            )}
+            <button
+              onClick={() => setShowNew(true)}
+              data-tour="new-objective"
+              title="New Objective"
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer' }}
+            >
+              {getIcon('plus', { size: 12 })} New
+            </button>
+          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
           {loading && <p style={{ fontSize: 12, color: 'var(--color-muted)', textAlign: 'center', padding: 16 }}>Loading…</p>}
           {!loading && objectives.length === 0 && (
             <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
-              <p style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 12 }}>No objectives yet. Create one to start tracking your goals.</p>
-              <button onClick={() => setShowNew(true)} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer' }}>
-                Create Objective
-              </button>
+              {wizardCompleted === false ? (
+                <>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🧭</div>
+                  <p style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 12 }}>
+                    Build your life foundation in 7 guided steps — mission, objectives, key results, and more.
+                  </p>
+                  <button
+                    onClick={() => setShowWizard(true)}
+                    data-tour="getting-started-trigger"
+                    style={{ fontSize: 12, fontWeight: 500, padding: '7px 16px', borderRadius: 8, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer', marginBottom: 8, width: '100%' }}
+                  >
+                    ✨ Get Started
+                  </button>
+                  <button onClick={() => setShowNew(true)} style={{ fontSize: 11, padding: '5px 12px', borderRadius: 7, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', cursor: 'pointer', width: '100%' }}>
+                    Or create manually
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
+                  <p style={{ fontSize: 12, color: 'var(--color-muted)', marginBottom: 12 }}>No objectives yet. Create one to start tracking your goals.</p>
+                  <button onClick={() => setShowNew(true)} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 8, background: 'var(--color-primary)', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                    Create Objective
+                  </button>
+                </>
+              )}
             </div>
           )}
           {objectives.map(obj => {
