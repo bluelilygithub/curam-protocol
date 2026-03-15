@@ -11,11 +11,16 @@ router.get('/', async (req, res) => {
 
   try {
     const { rows } = await pool.query(`
-      SELECT type, "projectId", title,
-        ts_headline('english', COALESCE(body,''), plainto_tsquery('english', $1),
+      SELECT si.type, si."projectId", si.title,
+        ts_headline('english', COALESCE(si.body,''), plainto_tsquery('english', $1),
           'MaxWords=20, MinWords=5, StartSel=<mark>, StopSel=</mark>, FragmentDelimiter=...') as snippet
-      FROM search_index
-      WHERE to_tsvector('english', COALESCE(title,'') || ' ' || COALESCE(body,'')) @@ plainto_tsquery('english', $1)
+      FROM search_index si
+      WHERE to_tsvector('english', COALESCE(si.title,'') || ' ' || COALESCE(si.body,'')) @@ plainto_tsquery('english', $1)
+        AND NOT EXISTS (
+          SELECT 1 FROM projects ap
+          WHERE ap.id::text = si."projectId"
+            AND ap."archived_at" IS NOT NULL
+        )
       LIMIT 20
     `, [q.trim()]);
 

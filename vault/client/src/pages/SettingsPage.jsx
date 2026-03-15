@@ -21,6 +21,8 @@ function SettingsPage() {
     budgetCriticalThreshold, setBudgetCriticalThreshold,
     budgetReAlertFrequency, setBudgetReAlertFrequency,
     allowedFileTypes, setAllowedFileTypes,
+    taskReminderTimes, setTaskReminderTimes,
+    taskRemindersPaused, setTaskRemindersPaused,
   } = useSettingsStore();
   const [customBudget, setCustomBudget] = useState(
     sessionBudget && ![0.10, 0.25, 0.50, 1.00, 5.00].includes(sessionBudget)
@@ -55,6 +57,12 @@ function SettingsPage() {
       if (data.budgetAlertThreshold) setBudgetAlertThreshold(Number(data.budgetAlertThreshold));
       if (data.budgetCriticalThreshold) setBudgetCriticalThreshold(Number(data.budgetCriticalThreshold));
       if (data.budgetReAlertFrequency) setBudgetReAlertFrequency(data.budgetReAlertFrequency);
+      if (data.task_reminder_times) {
+        try { setTaskReminderTimes(JSON.parse(data.task_reminder_times)); } catch {}
+      }
+      if (data.task_reminders_paused !== undefined) {
+        setTaskRemindersPaused(data.task_reminders_paused === 'true');
+      }
     }).catch(() => {});
   }, []);
 
@@ -700,6 +708,75 @@ function SettingsPage() {
             Primary Action
           </button>
         </div>
+      </section>
+
+      {/* Task Reminders */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Task Reminders
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Show a reminder popup at selected times of day if you have overdue or today's tasks.
+        </p>
+
+        {taskRemindersPaused && (
+          <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg text-xs font-medium"
+            style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fde68a' }}>
+            ⏸ Reminders are currently paused
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          {[
+            { value: '05:00', label: '5 AM' },
+            { value: '08:00', label: '8 AM' },
+            { value: '10:00', label: '10 AM' },
+            { value: '12:00', label: '12 PM' },
+            { value: '14:00', label: '2 PM' },
+            { value: '17:00', label: '5 PM' },
+            { value: '20:00', label: '8 PM' },
+          ].map(({ value, label }) => {
+            const active = taskReminderTimes.includes(value);
+            return (
+              <button
+                key={value}
+                onClick={() => {
+                  const updated = active
+                    ? taskReminderTimes.filter(t => t !== value)
+                    : [...taskReminderTimes, value].sort();
+                  setTaskReminderTimes(updated);
+                  api.post('/api/settings', { key: 'task_reminder_times', value: JSON.stringify(updated) }).catch(() => {});
+                }}
+                className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                style={{
+                  background: active ? 'var(--color-primary)' : 'var(--color-surface)',
+                  borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+                  color: active ? '#fff' : 'var(--color-text)',
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <div
+            onClick={() => {
+              const next = !taskRemindersPaused;
+              setTaskRemindersPaused(next);
+              api.post('/api/settings', { key: 'task_reminders_paused', value: String(next) }).catch(() => {});
+            }}
+            className="relative w-9 h-5 rounded-full transition-colors flex-shrink-0"
+            style={{ background: taskRemindersPaused ? 'var(--color-border)' : 'var(--color-primary)', cursor: 'pointer' }}
+          >
+            <span
+              className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+              style={{ transform: taskRemindersPaused ? 'translateX(1px)' : 'translateX(17px)' }}
+            />
+          </div>
+          <span className="text-sm" style={{ color: 'var(--color-text)' }}>Pause all reminders</span>
+        </label>
       </section>
 
       {/* Integrations */}

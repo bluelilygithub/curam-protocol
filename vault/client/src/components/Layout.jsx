@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import ProjectSidebar from './ProjectSidebar';
 import { useIcon } from '../providers/IconProvider';
@@ -6,7 +6,9 @@ import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
 import QuickCapture from './QuickCapture';
 import MorningDigest from './MorningDigest';
+import TaskReminderModal from './TaskReminderModal';
 import TourButton from './TourButton';
+import useSettingsStore from '../store/settingsStore';
 
 function Layout() {
   const isMobileNow = () => typeof window !== 'undefined' && window.innerWidth < 640;
@@ -16,10 +18,12 @@ function Layout() {
   const [isMobile, setIsMobile] = useState(isMobileNow());
 
   const { token, clearAuth } = useAuthStore();
+  const { taskReminderTimes, taskRemindersPaused } = useSettingsStore();
   const navigate = useNavigate();
   const location = useLocation();
   const getIcon = useIcon();
 
+  const [reminderModal, setReminderModal] = useState(null); // { time, overdue, today }
   const [dueTodayCount, setDueTodayCount] = useState(0);
   const [showDueBanner, setShowDueBanner] = useState(false);
   const [bookmarkCount, setBookmarkCount] = useState(0);
@@ -53,6 +57,57 @@ function Layout() {
     window.addEventListener('vault:bookmark-changed', fetchBookmarkCount);
     return () => window.removeEventListener('vault:bookmark-changed', fetchBookmarkCount);
   }, []);
+
+  // Task reminder logic
+  const showReminderForTime = useCallback(async (time) => {
+    try {
+      const res = await api.get('/api/tasks/morning-digest');
+      const data = await res.json();
+      if ((data.today?.length || 0) + (data.overdue?.length || 0) > 0) {
+        setReminderModal({ time, overdue: data.overdue || [], today: data.today || [] });
+      }
+    } catch {}
+  }, []);
+
+  // On mount: show most recent missed reminder from the past 4 hours
+  useEffect(() => {
+    if (taskRemindersPaused || !taskReminderTimes.length) return;
+    const now = new Date();
+    const todayKey = now.toISOString().slice(0, 10);
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+
+    const missed = taskReminderTimes
+      .filter(time => {
+        const diff = currentMinutes - toMin(time);
+        return diff >= 0 && diff <= 240 && !localStorage.getItem(`vault:reminder:${todayKey}_${time}`);
+      })
+      .sort((a, b) => toMin(b) - toMin(a));
+
+    if (missed.length > 0) {
+      localStorage.setItem(`vault:reminder:${todayKey}_${missed[0]}`, '1');
+      showReminderForTime(missed[0]);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Periodic check every minute for scheduled reminders
+  useEffect(() => {
+    if (taskRemindersPaused || !taskReminderTimes.length) return;
+    const interval = setInterval(() => {
+      const now = new Date();
+      const todayKey = now.toISOString().slice(0, 10);
+      const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      for (const time of taskReminderTimes) {
+        if (time !== currentHHMM) continue;
+        const storageKey = `vault:reminder:${todayKey}_${time}`;
+        if (localStorage.getItem(storageKey)) continue;
+        localStorage.setItem(storageKey, '1');
+        showReminderForTime(time);
+        break;
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [taskReminderTimes, taskRemindersPaused, showReminderForTime]);
 
   // Track mobile/desktop on resize
   useEffect(() => {
@@ -334,6 +389,14 @@ function Layout() {
       <TourButton />
       <QuickCapture />
       <MorningDigest />
+      {reminderModal && (
+        <TaskReminderModal
+          time={reminderModal.time}
+          overdue={reminderModal.overdue}
+          today={reminderModal.today}
+          onDismiss={() => setReminderModal(null)}
+        />
+      )}
     </div>
   );
 }

@@ -12,6 +12,8 @@ const useSettingsStore = create(
       budgetCriticalThreshold: 100, // % — red critical alert appears at this level
       budgetReAlertFrequency: 'session', // 'session' | 'every10' | 'every20' | 'at95'
       allowedFileTypes: '.pdf,.txt,.md,.csv,.json,.js,.jsx,.ts,.tsx,.php,.py,.css,.html,.sql,.sh,.env.example,image/*',
+      taskReminderTimes: [],
+      taskRemindersPaused: false,
       setFont: (font) => set({ font }),
       setTheme: (theme) => set({ theme }),
       setIconPack: (iconPack) => set({ iconPack }),
@@ -20,6 +22,8 @@ const useSettingsStore = create(
       setBudgetCriticalThreshold: (v) => set({ budgetCriticalThreshold: v }),
       setBudgetReAlertFrequency: (v) => set({ budgetReAlertFrequency: v }),
       setAllowedFileTypes: (v) => set({ allowedFileTypes: v }),
+      setTaskReminderTimes: (v) => set({ taskReminderTimes: v }),
+      setTaskRemindersPaused: (v) => set({ taskRemindersPaused: v }),
     }),
     {
       name: 'vault-settings',

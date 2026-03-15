@@ -44,6 +44,21 @@ const useProjectStore = create((set, get) => ({
       activeProjectId: s.activeProjectId === id ? null : s.activeProjectId,
     }));
   },
+
+  archive: async (id) => {
+    await api.patch(`/api/projects/${id}/archive`);
+    set((s) => ({
+      projects: s.projects.filter((p) => p.id !== id),
+      activeProjectId: s.activeProjectId === id ? null : s.activeProjectId,
+    }));
+  },
+
+  unarchive: async (id) => {
+    const res = await api.patch(`/api/projects/${id}/unarchive`);
+    const project = await res.json();
+    set((s) => ({ projects: [...s.projects, project] }));
+    return project;
+  },
 }));
 
 export default useProjectStore;

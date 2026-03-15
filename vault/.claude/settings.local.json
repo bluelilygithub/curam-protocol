@@ -20,7 +20,8 @@
       "Bash(cmd:*)",
       "Bash(echo:*)",
       "Bash(\"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" install:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(python3:*)"
     ]
   }
 }

@@ -73,6 +73,8 @@ const semanticMap = {
   'target': { lucide: 'Target' },
   'compass': { lucide: 'Compass' },
   'pen-line': { lucide: 'PenLine' },
+  'archive': { lucide: 'Archive' },
+  'chevron-left': { lucide: 'ChevronLeft' },
 };
 
 const IconContext = createContext(null);

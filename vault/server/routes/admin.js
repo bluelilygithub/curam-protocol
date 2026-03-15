@@ -13,6 +13,7 @@ router.get('/stats', async (req, res) => {
   try {
     const [
       projectsRes,
+      archivedProjectsRes,
       sessionsRes,
       messagesRes,
       searchesRes,
@@ -20,7 +21,8 @@ router.get('/stats', async (req, res) => {
       comparisonsRes,
       tokensRes,
     ] = await Promise.all([
-      pool.query('SELECT COUNT(*) as n FROM projects WHERE "createdAt" >= $1 AND "createdAt" <= $2', [from, toDate]),
+      pool.query('SELECT COUNT(*) as n FROM projects WHERE "archived_at" IS NULL AND "createdAt" >= $1 AND "createdAt" <= $2', [from, toDate]),
+      pool.query('SELECT COUNT(*) as n FROM projects WHERE "archived_at" IS NOT NULL', []),
       pool.query('SELECT COUNT(*) as n FROM sessions WHERE "createdAt" >= $1 AND "createdAt" <= $2', [from, toDate]),
       pool.query('SELECT COUNT(*) as n FROM messages WHERE "createdAt" >= $1 AND "createdAt" <= $2', [from, toDate]),
       pool.query('SELECT COUNT(*) as n FROM search_logs WHERE "createdAt" >= $1 AND "createdAt" <= $2', [from, toDate]),
@@ -33,7 +35,8 @@ router.get('/stats', async (req, res) => {
     ]);
 
     // pg returns COUNT/SUM as strings — convert to numbers
-    const projects    = Number(projectsRes.rows[0].n);
+    const projects         = Number(projectsRes.rows[0].n);
+    const archivedProjects = Number(archivedProjectsRes.rows[0].n);
     const sessions    = Number(sessionsRes.rows[0].n);
     const messages    = Number(messagesRes.rows[0].n);
     const searches    = Number(searchesRes.rows[0].n);
@@ -42,7 +45,7 @@ router.get('/stats', async (req, res) => {
     const inputTokens  = Number(tokensRes.rows[0].inp);
     const outputTokens = Number(tokensRes.rows[0].out);
 
-    res.json({ projects, sessions, messages, searches, debates, comparisons, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens });
+    res.json({ projects, archivedProjects, sessions, messages, searches, debates, comparisons, inputTokens, outputTokens, totalTokens: inputTokens + outputTokens });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

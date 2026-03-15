@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import useProjectStore from '../store/projectStore';
 import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from '../components/NewProjectModal';
@@ -238,15 +238,60 @@ function TasksWidget() {
 }
 
 function ProjectList() {
-  const { projects, fetchProjects, create, setActive, reorder, remove } = useProjectStore();
+  const { projects, fetchProjects, create, setActive, reorder, remove, archive, unarchive } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  const [showArchive, setShowArchive] = useState(false);
+  const [archivedProjects, setArchivedProjects] = useState([]);
+  const [archivedLoading, setArchivedLoading] = useState(false);
+  const [toast, setToast] = useState(null); // { message, action?: { label, fn } }
+  const toastTimer = useRef(null);
+
+  const showToast = (message, action) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message, action });
+    toastTimer.current = setTimeout(() => setToast(null), 5000);
+  };
+
+  // Fetch archived count on mount (for the "View archived" link)
+  const fetchArchived = useCallback(async () => {
+    setArchivedLoading(true);
+    try {
+      const res = await api.get('/api/projects?archived=true');
+      const data = await res.json();
+      setArchivedProjects(data);
+    } catch {}
+    setArchivedLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchProjects();
+    fetchArchived();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleConfirmDelete = async () => {
     await remove(deleteTarget.id);
     setDeleteTarget(null);
+  };
+
+  const handleConfirmArchive = async () => {
+    const project = archiveTarget;
+    setArchiveTarget(null);
+    await archive(project.id);
+    await fetchArchived();
+    showToast(`"${project.name}" archived`, {
+      label: 'View archive',
+      fn: () => setShowArchive(true),
+    });
+  };
+
+  const handleUnarchive = async (project) => {
+    await unarchive(project.id);
+    setArchivedProjects(prev => prev.filter(p => p.id !== project.id));
+    showToast(`"${project.name}" restored to workspace`);
   };
 
   const handleDrop = (targetId) => {
@@ -261,10 +306,15 @@ function ProjectList() {
     setDraggedId(null);
     setDragOverId(null);
   };
+
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const getIcon = useIcon();
 
-  useEffect(() => { fetchProjects(); }, []);
+  // Open archive view directly when navigated here with ?archive=1
+  useEffect(() => {
+    if (searchParams.get('archive') === '1') setShowArchive(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreate = async (data) => {
     const project = await create(data);
@@ -272,10 +322,111 @@ function ProjectList() {
     navigate(`/projects/${project.id}`);
   };
 
+  // ── Archive view ─────────────────────────────────────────────────────────────
+  if (showArchive) {
+    return (
+      <div className="flex-1 overflow-auto p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center gap-3 mb-6">
+            <button
+              onClick={() => setShowArchive(false)}
+              className="flex items-center gap-1.5 text-sm hover:opacity-70 transition-opacity"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              {getIcon('chevron-left', { size: 14 })}
+              Back to projects
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Archived Projects</h1>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                Archived projects are hidden from your workspace. All data is preserved.
+              </p>
+            </div>
+          </div>
+
+          {archivedLoading ? (
+            <p className="text-sm text-center py-12" style={{ color: 'var(--color-muted)' }}>Loading…</p>
+          ) : archivedProjects.length === 0 ? (
+            <div className="text-center py-16">
+              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No archived projects.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {archivedProjects.map(project => (
+                <div key={project.id} className="relative group rounded-xl border overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', opacity: 0.75 }}>
+                  <button
+                    onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
+                    className="w-full text-left p-4"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}>
+                          {getIcon('folder', { size: 15 })}
+                        </div>
+                        <span className="text-xs font-medium px-1.5 py-0.5 rounded" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                          Archived
+                        </span>
+                      </div>
+                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {new Date(project.archived_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <h3 className="font-medium text-sm mb-1 truncate" style={{ color: 'var(--color-muted)' }}>
+                      {project.name}
+                    </h3>
+                    {project.goal ? (
+                      <p className="text-xs line-clamp-2" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>{project.goal}</p>
+                    ) : (
+                      <p className="text-xs italic" style={{ color: 'var(--color-muted)', opacity: 0.5 }}>No description</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      {project.chatCount > 0 && (
+                        <span className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.6 }}>
+                          {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                  <div className="px-4 pb-3">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleUnarchive(project); }}
+                      className="w-full px-3 py-1.5 rounded-lg border text-xs font-medium transition-opacity hover:opacity-70"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+                    >
+                      Unarchive
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Toast */}
+        {toast && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium text-white z-50"
+            style={{ background: 'var(--color-primary)' }}>
+            <span>{toast.message}</span>
+            {toast.action && (
+              <button onClick={() => { toast.action.fn(); setToast(null); }} className="underline opacity-80 hover:opacity-100 text-xs">
+                {toast.action.label}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Active projects view ──────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full">
       {showModal && <NewProjectModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
 
+      {/* Delete confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
           <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
@@ -290,6 +441,35 @@ function ProjectList() {
               <button onClick={handleConfirmDelete} className="px-4 py-2 rounded-xl text-xs font-medium text-white bg-red-500 hover:opacity-80 transition-opacity">Delete project</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Archive confirmation */}
+      {archiveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Archive "{archiveTarget.name}"?</h3>
+            <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
+              It will be hidden from your workspace but all data will be kept. You can unarchive it at any time.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setArchiveTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button onClick={handleConfirmArchive} className="px-4 py-2 rounded-xl text-xs font-medium text-white transition-opacity hover:opacity-80" style={{ background: 'var(--color-primary)' }}>Archive project</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium text-white z-50"
+          style={{ background: 'var(--color-primary)' }}>
+          <span>{toast.message}</span>
+          {toast.action && (
+            <button onClick={() => { toast.action.fn(); setToast(null); }} className="underline opacity-80 hover:opacity-100 text-xs">
+              {toast.action.label}
+            </button>
+          )}
         </div>
       )}
 
@@ -350,59 +530,85 @@ function ProjectList() {
                     cursor: 'grab',
                   }}
                 >
-                <button
-                  onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
-                  className="w-full text-left p-4 rounded-xl border transition-all hover:shadow-sm"
-                  style={{
-                    background: 'var(--color-surface)',
-                    borderColor: 'var(--color-border)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center"
-                      style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}
-                    >
-                      {getIcon('folder', { size: 15 })}
+                  <button
+                    onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
+                    className="w-full text-left p-4 rounded-xl border transition-all hover:shadow-sm"
+                    style={{
+                      background: 'var(--color-surface)',
+                      borderColor: 'var(--color-border)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center"
+                        style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}
+                      >
+                        {getIcon('folder', { size: 15 })}
+                      </div>
+                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {new Date(project.updatedAt).toLocaleDateString()}
+                      </span>
                     </div>
-                    <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                      {new Date(project.updatedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <h3 className="font-medium text-sm mb-1 truncate" style={{ color: 'var(--color-text)' }}>
-                    {project.name}
-                  </h3>
-                  {project.goal ? (
-                    <p className="text-xs line-clamp-2" style={{ color: 'var(--color-muted)' }}>{project.goal}</p>
-                  ) : (
-                    <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>No description</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-2">
-                    {project.model && (
-                      <span className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.8 }}>
-                        {getModelShortName(project.model)}
-                      </span>
+                    <h3 className="font-medium text-sm mb-1 truncate" style={{ color: 'var(--color-text)' }}>
+                      {project.name}
+                    </h3>
+                    {project.goal ? (
+                      <p className="text-xs line-clamp-2" style={{ color: 'var(--color-muted)' }}>{project.goal}</p>
+                    ) : (
+                      <p className="text-xs italic" style={{ color: 'var(--color-muted)' }}>No description</p>
                     )}
-                    {project.chatCount > 0 && (
-                      <span className="text-xs ml-auto" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
-                        {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 mt-2">
+                      {project.model && (
+                        <span className="text-xs" style={{ color: 'var(--color-muted)', opacity: 0.8 }}>
+                          {getModelShortName(project.model)}
+                        </span>
+                      )}
+                      {project.chatCount > 0 && (
+                        <span className="text-xs ml-auto" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
+                          {project.chatCount} {project.chatCount === 1 ? 'chat' : 'chats'}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Hover action buttons */}
+                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setArchiveTarget(project); }}
+                      className="w-6 h-6 flex items-center justify-center rounded-lg"
+                      style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+                      title="Archive project"
+                    >
+                      {getIcon('archive', { size: 12 })}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
+                      className="w-6 h-6 flex items-center justify-center rounded-lg"
+                      style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
+                      title="Delete project"
+                    >
+                      {getIcon('trash', { size: 12 })}
+                    </button>
                   </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
-                  className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ background: 'var(--color-bg)', color: 'var(--color-muted)' }}
-                  title="Delete project"
-                >
-                  {getIcon('trash', { size: 12 })}
-                </button>
                 </div>
               ))}
             </div>
+
+            {/* View archived link */}
+            {archivedProjects.length > 0 && (
+              <div className="mt-8 text-center">
+                <button
+                  onClick={() => setShowArchive(true)}
+                  className="text-xs hover:opacity-70 transition-opacity"
+                  style={{ color: 'var(--color-muted)' }}
+                >
+                  View archived projects ({archivedProjects.length})
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

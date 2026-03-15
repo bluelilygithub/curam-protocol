@@ -6,7 +6,7 @@ import NewProjectModal from './NewProjectModal';
 import api from '../utils/apiClient';
 
 function ProjectSidebar({ onClose }) {
-  const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder, remove } = useProjectStore();
+  const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder, remove, archive } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
@@ -327,6 +327,14 @@ function ProjectSidebar({ onClose }) {
                         {getIcon('edit', { size: 11 })}
                       </span>
                       <span
+                        onClick={async (e) => { e.stopPropagation(); await archive(project.id); if (activeProjectId === project.id) navigate('/'); }}
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        style={{ color: 'var(--color-muted)' }}
+                        title="Archive project"
+                      >
+                        {getIcon('archive', { size: 11 })}
+                      </span>
+                      <span
                         onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
                         className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
                         style={{ color: '#ef4444' }}
@@ -478,6 +486,14 @@ function ProjectSidebar({ onClose }) {
         >
           {getIcon('clock', { size: 14 })}
           Chat History
+        </button>
+        <button
+          onClick={() => { navigate('/?archive=1'); if (onClose) onClose(); }}
+          className="w-full text-left px-3 py-2 rounded-lg text-sm flex items-center gap-2.5 transition-colors hover:opacity-70"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          {getIcon('archive', { size: 14 })}
+          Archived Projects
         </button>
         <button
           onClick={() => { navigate('/settings'); if (onClose) onClose(); }}

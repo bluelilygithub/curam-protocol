@@ -107,7 +107,7 @@ function AdminPage() {
   }, [period]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const CARDS = stats ? [
-    { iconName: 'folder',     label: 'Projects',       value: stats.projects,      color: '#f59e0b' },
+    { iconName: 'folder',     label: 'Projects',       value: stats.projects,      sub: stats.archivedProjects > 0 ? `${stats.archivedProjects} archived` : undefined, color: '#f59e0b' },
     { iconName: 'chat',       label: 'Chat Sessions',  value: stats.sessions,      color: '#10b981' },
     { iconName: 'send',       label: 'Messages',       value: stats.messages,      color: '#3b82f6' },
     { iconName: 'search',     label: 'Searches',       value: stats.searches,      color: '#8b5cf6' },

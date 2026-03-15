@@ -72,6 +72,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Inline task creation from chat** | Select any text in a chat message to reveal a floating "+ Task" button; Claude Haiku suggests a priority and due date based on the selected text and surrounding context (1.5s timeout with medium/null fallback); opens Quick Capture pre-filled; the created task records the source session ID so it links back to the conversation |
 | **Source chat link** | Tasks created from a chat selection show "Created from chat: [session title]" as a clickable link in the expanded task view; navigates directly to that chat session |
 | **Morning Digest** | Daily overlay on first visit — overdue + today's tasks with a Claude-generated focus suggestion |
+| **Task Reminder Popups** | Configurable time-of-day reminder popups — select up to 7 daily times (5 AM, 8 AM, 10 AM, 12 PM, 2 PM, 5 PM, 8 PM) in Settings → Task Reminders; at each scheduled time a modal overlay lists overdue tasks (red) and today's tasks (amber) if any exist; tasks are clickable and navigate to the Tasks page; "Go to Tasks" and "Dismiss" buttons; reminders are tracked per-day in localStorage so they never double-show; on login, the most recent missed reminder from the past 4 hours is shown automatically; a "Pause all reminders" toggle suppresses all popups without clearing the schedule; settings persisted to both `settings` table (DB) and Zustand localStorage |
 | **Weekly Review** | Guided 3-step modal (`w` shortcut) — north star mission statement banner in Step 1 (if set); last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions, Goals progress update, and 🌱 Renewal This Week row (4 dimension icons with per-dimension completed-task counts; red dot on any zero) |
 
 #### Goals
@@ -101,6 +102,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | Feature | Description |
 |---|---|
 | **Token Budget Settings** | Settings → Token Budget Alerts — configure initial alert threshold, critical threshold, and re-alert frequency after dismissal; settings persisted to DB and take effect immediately without page refresh |
+| **Task Reminder Settings** | Settings → Task Reminders — toggle any of 7 reminder times on/off; pause all reminders with a single toggle; yellow banner shown when paused; times saved as JSON to `task_reminder_times` in the settings table; pause state saved to `task_reminders_paused` |
 | **Admin Dashboard** | Usage stats — sessions, messages, tokens, searches, debates, comparisons; filterable by date range |
 | **Search** | Global search palette across projects, chats, files, and tasks |
 | **Password reset** | Email-based password reset flow with 1-hour expiry tokens |
@@ -297,6 +299,7 @@ vault/
 │       │   ├── KeyboardShortcutsModal.jsx
 │       │   ├── TasksCalendar.jsx # Time-blocking calendar (day/week/month/agenda; drag-drop; block resize)
 │       │   ├── MorningDigest.jsx # Daily task digest overlay (once per day)
+│       │   ├── TaskReminderModal.jsx # Scheduled task reminder overlay — shows overdue + today tasks at configured times; localStorage-keyed per day/time to prevent double-show; "Go to Tasks" + "Dismiss" buttons
 │       │   ├── QuickCapture.jsx  # Floating quick-capture FAB (Ctrl+Shift+N)
 │       │   ├── PromptVariableModal.jsx  # Fill-in-the-blanks modal for {{variable}} prompt templates; live preview; used by ChatPage and PromptsPage
 │       │   └── tasks/            # Task-specific sub-components (extracted from TasksPage)
@@ -309,7 +312,7 @@ vault/
 │       ├── store/
 │       │   ├── authStore.js      # Zustand auth state (persisted)
 │       │   ├── projectStore.js   # Zustand project state
-│       │   └── settingsStore.js  # Zustand settings state
+│       │   └── settingsStore.js  # Zustand settings state — persists font, theme, icon pack, session budget, file types, task reminder times + paused flag
 │       ├── hooks/
 │       │   ├── useChat.js        # Chat logic + streaming (Anthropic + Gemini)
 │       │   ├── useModels.js      # Dynamic model list — loads from DB (settings.vault_models), falls back to static defaults; used by ChatPage and SettingsPage
@@ -357,7 +360,7 @@ vault/
 | `debates` | Multi-model debate rounds and results |
 | `comparisons` | Saved document comparison results linked to projects |
 | `search_logs` | Web search query log (powers admin dashboard search count) |
-| `settings` | Key/value store for API keys and app config — includes `vault_models` (JSON array of active AI models); if `vault_models` is absent the app uses the built-in defaults from `utils/models.js` |
+| `settings` | Key/value store for API keys and app config — includes `vault_models` (JSON array of active AI models); if `vault_models` is absent the app uses the built-in defaults from `utils/models.js`; `task_reminder_times` (JSON array of HH:MM strings); `task_reminders_paused` (boolean string) |
 | `tasks` | Task records — status, priority, urgency (`isUrgent`), renewal dimension (`renewalDimension`), due date, category, tags, recurrence, estimated effort, time spent, share token, parent task link, key result link |
 | `task_tags` | Many-to-many tag associations for tasks |
 | `task_comments` | Per-task comments and auto-logged activity events (status/priority/due-date changes) |

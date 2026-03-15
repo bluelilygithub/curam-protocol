@@ -156,6 +156,7 @@ async function initSchema() {
     await client.query(`ALTER TABLE files ADD COLUMN IF NOT EXISTS "anthropicFileId" TEXT`);
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "lastFetchedAt" TIMESTAMPTZ DEFAULT NOW()`);
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "isYoutube" BOOLEAN DEFAULT FALSE`);
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "archived_at" TIMESTAMPTZ DEFAULT NULL`);
 
     // ── Chat ──────────────────────────────────────────────────────────────────
     await client.query(`

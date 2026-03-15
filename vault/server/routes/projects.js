@@ -21,12 +21,15 @@ async function syncSearchIndex(project) {
 }
 
 // GET /api/projects
+// ?archived=true returns only archived projects; default returns only active
 router.get('/', async (req, res) => {
+  const archived = req.query.archived === 'true';
   try {
     const { rows } = await pool.query(`
       SELECT p.*, COUNT(DISTINCT m."sessionId") as "chatCount"
       FROM projects p
       LEFT JOIN messages m ON m."projectId" = p.id
+      WHERE ${archived ? 'p."archived_at" IS NOT NULL' : 'p."archived_at" IS NULL'}
       GROUP BY p.id
       ORDER BY p."sortOrder" ASC, p."updatedAt" DESC
     `);
@@ -77,11 +80,47 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/projects/:id
+// GET /api/projects/:id  (works for both active and archived)
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/projects/:id/archive
+router.patch('/:id/archive', async (req, res) => {
+  try {
+    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    if (!existing[0]) return res.status(404).json({ error: 'Not found' });
+
+    await pool.query(`UPDATE projects SET "archived_at"=NOW(), "updatedAt"=NOW() WHERE id=$1`, [req.params.id]);
+
+    // Remove from search index so the project doesn't appear in Ctrl+K search
+    try { await pool.query(`DELETE FROM search_index WHERE "projectId"=$1`, [String(req.params.id)]); } catch {}
+
+    const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /api/projects/:id/unarchive
+router.patch('/:id/unarchive', async (req, res) => {
+  try {
+    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    if (!existing[0]) return res.status(404).json({ error: 'Not found' });
+
+    await pool.query(`UPDATE projects SET "archived_at"=NULL, "updatedAt"=NOW() WHERE id=$1`, [req.params.id]);
+
+    const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    // Re-add to search index
+    try { await syncSearchIndex(rows[0]); } catch {}
+
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
