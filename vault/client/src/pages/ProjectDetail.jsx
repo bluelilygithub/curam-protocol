@@ -182,7 +182,7 @@ function ProjectDetail() {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSave} className="space-y-5">
+        <form data-tour="rag-project-form" onSubmit={handleSave} className="space-y-5">
           {FIELDS.map((field) => (
             <div key={field.key}>
               <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>
@@ -224,7 +224,7 @@ function ProjectDetail() {
         </form>
 
         {/* AI Model */}
-        <div className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <div data-tour="rag-model-picker" className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>AI Model</h2>
           <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
             Default model used when chatting in this project. You can override it per chat in the chat header.
@@ -292,7 +292,7 @@ function ProjectDetail() {
         )}
 
         {/* Pinned URLs */}
-        <div className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <div data-tour="rag-pinned-urls" className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>Pinned Web Pages</h2>
           <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
             Paste any URL and the content will be fetched and included in Claude's context for every chat in this project. YouTube URLs are automatically transcribed — paste a <code>youtube.com</code> or <code>youtu.be</code> link to store the video transcript as context.
@@ -411,7 +411,7 @@ function ProjectDetail() {
         )}
 
         {/* Files */}
-        <div className="mt-10">
+        <div data-tour="rag-files" className="mt-10">
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>Files</h2>
           <FileUploader projectId={id} onUpload={() => setFilesKey((k) => k + 1)} />
           <FileList key={filesKey} projectId={id} />

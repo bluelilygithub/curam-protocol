@@ -121,6 +121,25 @@ router.get('/status', async (req, res) => {
   }
 });
 
+// POST /api/calendar/disconnect
+router.post('/disconnect', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT "accessToken" FROM gmail_tokens WHERE "userId"=$1', [req.user.id]
+    );
+    if (rows[0]) {
+      try {
+        const oauth2Client = getOAuth2Client();
+        oauth2Client.revokeToken(decrypt(rows[0].accessToken)).catch(() => {});
+      } catch (_) {}
+      await pool.query('DELETE FROM gmail_tokens WHERE "userId"=$1', [req.user.id]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/calendar/search?q=
 router.get('/search', calendarSearchLimiter, async (req, res) => {
   const { q } = req.query;

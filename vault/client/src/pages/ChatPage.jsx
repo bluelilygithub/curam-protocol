@@ -22,6 +22,7 @@ import { calcCost, formatCost, formatTokens } from '../utils/pricing';
 import { useModels } from '../hooks/useModels';
 import SelectionToolbar from '../components/SelectionToolbar';
 import PromptVariableModal from '../components/PromptVariableModal';
+import ConfirmModal from '../components/ConfirmModal';
 import { extractVariables } from '../utils/promptVariables';
 
 const TEMPERATURES = [
@@ -151,6 +152,7 @@ function ChatPage({ general = false }) {
   // Summarize
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [showSummaryPanel, setShowSummaryPanel] = useState(false);
+  const [confirmRevert, setConfirmRevert] = useState(false);
   const [summaryText, setSummaryText] = useState('');
   const [saveSummaryToNote, setSaveSummaryToNote] = useState(true);
   const [summaryNoteSaved, setSummaryNoteSaved] = useState(false);
@@ -733,9 +735,6 @@ function ChatPage({ general = false }) {
 
   const handleRevertSummary = async () => {
     if (!sessionId) return;
-    if (totalContentSize > 150000) {
-      if (!window.confirm('This is a very long conversation. Reverting may approach context limits. Continue?')) return;
-    }
     await api.delete(`/api/chat/sessions/${sessionId}/summary`);
     setSummaryText('');
     setShowSummaryPanel(false);
@@ -1161,7 +1160,16 @@ function ChatPage({ general = false }) {
           <span style={{ color: 'var(--color-primary)' }}>✦</span>
           <span className="flex-1" style={{ color: 'var(--color-text)' }}>Conversation summarized — Claude is working from the summary.</span>
           <button onClick={handleViewSummary} className="font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>{showSummaryPanel ? 'Hide' : 'View'}</button>
-          <button onClick={handleRevertSummary} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Revert to full thread</button>
+          <button onClick={() => totalContentSize > 150000 ? setConfirmRevert(true) : handleRevertSummary()} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Revert to full thread</button>
+          {confirmRevert && (
+            <ConfirmModal
+              title="Revert to full thread"
+              message="This is a very long conversation. Reverting may approach context limits."
+              confirmLabel="Continue"
+              onConfirm={() => { setConfirmRevert(false); handleRevertSummary(); }}
+              onCancel={() => setConfirmRevert(false)}
+            />
+          )}
         </div>
       )}
 

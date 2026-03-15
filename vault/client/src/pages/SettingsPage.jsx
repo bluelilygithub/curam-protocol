@@ -9,8 +9,12 @@ import api from '../utils/apiClient';
 import { useModels } from '../hooks/useModels';
 import GmailConnect from '../components/GmailConnect';
 import CalendarConnect from '../components/CalendarConnect';
+import DriveConnect from '../components/DriveConnect';
 import { startGoalsTour, TOUR_KEY } from '../utils/tours/goalsTour';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
+import { startChainsTour, TOUR_KEY as CHAINS_TOUR_KEY } from '../utils/tours/chainsTour';
+import { startRagTour, TOUR_KEY as RAG_TOUR_KEY } from '../utils/tours/ragTour';
+import { startIntegrationsTour, TOUR_KEY as INTEGRATIONS_TOUR_KEY } from '../utils/tours/integrationsTour';
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -33,6 +37,7 @@ function SettingsPage() {
   const BUDGET_PRESETS = [0.10, 0.25, 0.50, 1.00, 5.00];
   const { token } = useAuthStore();
   const getIcon = useIcon();
+
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwStatus, setPwStatus] = useState(null);
   const [fileTypesSaved, setFileTypesSaved] = useState(false);
@@ -780,11 +785,12 @@ function SettingsPage() {
       </section>
 
       {/* Integrations */}
-      <section>
+      <section data-tour="integrations-section">
         <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Integrations</h2>
         <div className="space-y-3">
-          <GmailConnect />
-          <CalendarConnect />
+          <div data-tour="gmail-connect"><GmailConnect /></div>
+          <div data-tour="calendar-connect"><CalendarConnect /></div>
+          <DriveConnect />
         </div>
       </section>
 
@@ -825,6 +831,63 @@ function SettingsPage() {
                 localStorage.removeItem(TASKS_TOUR_KEY);
                 navigate('/tasks');
                 setTimeout(() => startTasksTour(navigate), 800);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              Retake Tour
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Prompt Chains Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step walkthrough of building, editing, and running multi-step AI pipelines
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(CHAINS_TOUR_KEY);
+                navigate('/chains');
+                setTimeout(() => startChainsTour(navigate), 800);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              Retake Tour
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Project Context & RAG Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step walkthrough of project context fields, AI model selection, pinned URLs, and file uploads
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(RAG_TOUR_KEY);
+                navigate('/');
+                setTimeout(() => startRagTour(navigate, null), 800);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              Retake Tour
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Gmail & Calendar Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                7-step walkthrough of connecting Google, using @gmail and @calendar in chat
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(INTEGRATIONS_TOUR_KEY);
+                navigate('/settings');
+                setTimeout(() => startIntegrationsTour(navigate), 800);
               }}
               className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}

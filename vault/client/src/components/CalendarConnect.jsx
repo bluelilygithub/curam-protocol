@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import api from '../utils/apiClient';
+import ConfirmModal from './ConfirmModal';
 
 function CalendarConnect() {
   const [status, setStatus] = useState(null); // null = loading
   const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -38,6 +41,20 @@ function CalendarConnect() {
     }
   };
 
+  const handleDisconnect = async () => {
+    setConfirmOpen(false);
+    setDisconnecting(true);
+    setError('');
+    try {
+      await api.post('/api/calendar/disconnect');
+      await load();
+    } catch (err) {
+      setError(err.message || 'Failed to disconnect Google Calendar');
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
   if (status === null) {
     return <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
   }
@@ -68,7 +85,26 @@ function CalendarConnect() {
             }
           </div>
         </div>
-        {!status.connected && (
+        {confirmOpen && (
+          <ConfirmModal
+            title="Disconnect Google Calendar"
+            message="This also disconnects Gmail as they share the same Google account. You can reconnect at any time."
+            confirmLabel="Disconnect"
+            danger
+            onConfirm={handleDisconnect}
+            onCancel={() => setConfirmOpen(false)}
+          />
+        )}
+        {status.connected ? (
+          <button
+            onClick={() => setConfirmOpen(true)}
+            disabled={disconnecting}
+            className="text-xs px-3 py-1.5 rounded-lg border transition-opacity"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', opacity: disconnecting ? 0.5 : 1 }}
+          >
+            {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+          </button>
+        ) : (
           <button
             onClick={handleConnect}
             disabled={connecting}

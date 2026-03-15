@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import api from '../utils/apiClient';
+import ConfirmModal from './ConfirmModal';
 
 function GmailConnect() {
   const [status, setStatus] = useState(null); // null = loading
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState('');
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -52,7 +54,7 @@ function GmailConnect() {
   };
 
   const handleDisconnect = async () => {
-    if (!window.confirm('Disconnect Gmail? You can reconnect at any time.')) return;
+    setConfirmOpen(false);
     setDisconnecting(true);
     setError('');
     try {
@@ -91,9 +93,19 @@ function GmailConnect() {
             }
           </div>
         </div>
+        {confirmOpen && (
+          <ConfirmModal
+            title="Disconnect Gmail"
+            message="You can reconnect at any time."
+            confirmLabel="Disconnect"
+            danger
+            onConfirm={handleDisconnect}
+            onCancel={() => setConfirmOpen(false)}
+          />
+        )}
         {status.connected ? (
           <button
-            onClick={handleDisconnect}
+            onClick={() => setConfirmOpen(true)}
             disabled={disconnecting}
             className="text-xs px-3 py-1.5 rounded-lg border transition-opacity"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', opacity: disconnecting ? 0.5 : 1 }}

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import useSettingsStore from '../store/settingsStore';
+import useAuthStore from '../store/authStore';
 
 function FileUploader({ projectId, onUpload }) {
   const [dragging, setDragging] = useState(false);
@@ -19,8 +20,10 @@ function FileUploader({ projectId, onUpload }) {
     const formData = new FormData();
     formData.append('file', file);
 
+    const token = useAuthStore.getState().token;
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `/api/files/upload/${projectId}`);
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));

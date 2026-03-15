@@ -319,6 +319,15 @@ function Layout() {
           </Link>
 
           <Link
+            to="/graph"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname === '/graph' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Knowledge Graph"
+          >
+            {getIcon('share-2', { size: 16 })}
+          </Link>
+
+          <Link
             to="/debate"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/debate' ? 'var(--color-primary)' : 'var(--color-muted)' }}

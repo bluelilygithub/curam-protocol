@@ -453,6 +453,20 @@ async function initSchema() {
       ON search_index USING GIN (to_tsvector('english', COALESCE(title,'') || ' ' || COALESCE(body,'')))
   `);
 
+  // ── Knowledge graph edges (semantic connections cache) ────────────────────
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS graph_edges (
+      id          SERIAL PRIMARY KEY,
+      source_id   TEXT NOT NULL,
+      target_id   TEXT NOT NULL,
+      edge_type   TEXT NOT NULL DEFAULT 'semantic',
+      similarity  FLOAT,
+      computed_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (source_id, target_id)
+    )
+  `);
+
   // ── RAG: pgvector + file_chunks (best-effort — server starts without it) ──
 
   try {

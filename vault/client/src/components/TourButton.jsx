@@ -1,31 +1,49 @@
 import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 import { startGoalsTour, TOUR_KEY as GOALS_TOUR_KEY } from '../utils/tours/goalsTour';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
+import { startChainsTour, TOUR_KEY as CHAINS_TOUR_KEY } from '../utils/tours/chainsTour';
+import { startRagTour, TOUR_KEY as RAG_TOUR_KEY } from '../utils/tours/ragTour';
+import { startIntegrationsTour, TOUR_KEY as INTEGRATIONS_TOUR_KEY } from '../utils/tours/integrationsTour';
 
 export default function TourButton() {
   const location = useLocation();
   const navigate = useNavigate();
+  const params = useParams();
   const getIcon = useIcon();
 
   const isGoals = location.pathname.startsWith('/goals');
   const isTasks = location.pathname.startsWith('/tasks');
+  const isChains = location.pathname.startsWith('/chains');
+  const isProject = /^\/projects\/\d+$/.test(location.pathname);
+  const isSettings = location.pathname === '/settings';
 
-  if (!isGoals && !isTasks) return null;
+  if (!isGoals && !isTasks && !isChains && !isProject && !isSettings) return null;
 
-  const isDone = isGoals
-    ? !!localStorage.getItem(GOALS_TOUR_KEY)
-    : !!localStorage.getItem(TASKS_TOUR_KEY);
+  let tourKey;
+  if (isGoals) tourKey = GOALS_TOUR_KEY;
+  else if (isTasks) tourKey = TASKS_TOUR_KEY;
+  else if (isChains) tourKey = CHAINS_TOUR_KEY;
+  else if (isProject) tourKey = RAG_TOUR_KEY;
+  else if (isSettings) tourKey = INTEGRATIONS_TOUR_KEY;
 
-  if (isDone) return null;
+  if (localStorage.getItem(tourKey)) return null;
 
   const handleClick = () => {
     if (isGoals) startGoalsTour(navigate);
-    else startTasksTour(navigate);
+    else if (isTasks) startTasksTour(navigate);
+    else if (isChains) startChainsTour(navigate);
+    else if (isProject) startRagTour(navigate, params.id);
+    else if (isSettings) startIntegrationsTour(navigate);
   };
 
-  const label = isGoals ? 'Goals Tour' : 'Tasks Tour';
+  let label;
+  if (isGoals) label = 'Goals Tour';
+  else if (isTasks) label = 'Tasks Tour';
+  else if (isChains) label = 'Chains Tour';
+  else if (isProject) label = 'Project Tour';
+  else if (isSettings) label = 'Integrations Tour';
 
   return (
     <button
@@ -59,7 +77,7 @@ export default function TourButton() {
         e.currentTarget.style.color = 'var(--color-muted)';
       }}
     >
-      {getIcon('map', { size: 13 })}
+      {getIcon('compass', { size: 13 })}
       Tour
     </button>
   );

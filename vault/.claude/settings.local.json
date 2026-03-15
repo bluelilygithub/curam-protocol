@@ -21,7 +21,8 @@
       "Bash(echo:*)",
       "Bash(\"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" install:*)",
       "Bash(cd:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(grep:*)"
     ]
   }
 }

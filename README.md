@@ -105,9 +105,9 @@ python main.py
 
 ## App 2 — Vault (`vault/`)
 
-Internal AI workspace: projects, chat, files, tasks, goals, personas, prompts, memory, debates, document comparison, and Gmail integration.
+Internal AI workspace: projects, chat, files, tasks, goals, personas, prompts, memory, debates, document comparison, Gmail integration, prompt chains, and an interactive knowledge graph.
 
-**Stack:** Node.js 22 LTS, Express, PostgreSQL (`pg`), React 18, Vite, Tailwind CSS
+**Stack:** Node.js 22 LTS, Express, PostgreSQL (`pg`), React 18, Vite, Tailwind CSS, `react-force-graph-2d` (D3 force simulation)
 
 **Deployed on Railway:** auto-deploys on push to `version-7` branch.
 
@@ -153,6 +153,8 @@ npm run dev
 | **Web Search** | `@search` in chat; Brave Search / Serper / SerpAPI auto-detected from key format |
 | **Gmail** | `@gmail` in chat; connect personal Gmail via OAuth 2.0; natural language search with Claude Haiku query translation; attach email threads as context; ask questions about threads via SSE streaming |
 | **Notes** | Quick-capture thought pad — title, date, free text; link to projects; one-click "Take to Chat" to open note as chat context |
+| **Prompt Chains** | Build reusable multi-step prompt sequences; run sequentially with output passed as context between steps |
+| **Knowledge Graph** | Full-screen D3 force-simulation canvas at `/graph` (🕸 share icon in top nav, desktop; navigate directly on mobile). Maps all vault content as interactive nodes: Projects (indigo circle, large), Files (blue rect), Notes (amber rounded rect), Chat Sessions (green circle), Tasks (orange diamond), Goals (purple hexagon), Pinned URLs (teal circle). Explicit structural edges: `contains`, `subtask`, `branch`, `created`, `tracks`, `key_result`, `blocks`. AI-computed semantic edges (dashed pink lines) via pgvector + Gemini embeddings — `contains` links orbit wide (180 px), collision radius prevents overlap. Interactions: zoom/pan, drag nodes, click a node to open a detail panel with type badge and "Go to" button for direct navigation, hover to highlight adjacency. Toolbar: search bar (amber glow on match), type-filter panel (per-colour checkboxes), "Find connections" / "Re-compute" semantic button, live node and edge count. Labels hidden when zoomed out, shown on zoom-in or hover. Proactive Insights panel (Claude Haiku) surfaces cross-project patterns, orphaned content, and semantic clusters — each insight has a "Show me" button that highlights and zooms to the relevant nodes. |
 
 ### API Auth
 
@@ -195,6 +197,8 @@ PostgreSQL. Schema and connection pool in `vault/server/db.js`. On Railway, conn
 | `key_results` | Key Results linked to an Objective |
 | `gmail_tokens` | Gmail OAuth tokens per user — auto-refreshed via `googleapis` token event |
 | `notes` | User-scoped quick-capture notes with optional project link |
+| `graph_edges` | Cached semantic connection pairs (`source_id`, `target_id`, similarity score, `computed_at`) with unique constraint enabling upsert |
+| `chains` | Prompt chain definitions (name, steps JSON) |
 | `search_index` | Full-text search index (tsvector + GIN index) across projects, files, and messages |
 
 ---
@@ -595,6 +599,14 @@ Requires either `MAIL_CHANNEL_API_KEY` or all four SMTP vars. Check the server l
 
 ### March 2026
 
+- **Knowledge Graph — Phase 3: Proactive Insights** — Insights panel on the graph page powered by Claude Haiku; analyses graph structure (node counts, orphaned content, cross-project semantic clusters, top connected nodes) and generates 4–6 specific observations; each insight has a "Show me" button that highlights and zooms to the relevant nodes; insights cached in the `settings` table and refreshed on demand
+- **Knowledge Graph — Phase 2: Semantic Connections** — `POST /api/graph/compute-semantic` SSE endpoint; file↔file similarity via pgvector SQL (`avg(embedding) <=> avg(embedding)`); note and session embeddings via Gemini; note↔note, file↔note, and session↔note comparisons in Node.js; connections cached in the new `graph_edges` table; dashed pink lines on the canvas; "Find connections" / "Re-compute" button with live progress bar
+- **Knowledge Graph — Phase 1** — New `/graph` route with a full-screen `react-force-graph-2d` canvas; all vault content (projects, files, notes, sessions, tasks, goals, pinned URLs) rendered as typed, shaped nodes; explicit structural edges (contains, subtask, branch, created, tracks, key_result, blocks); hover highlights adjacency; click opens node detail panel with "Go to" navigation; search, type filters, legend
+- **Prompt Chains** — New `/chains` page for building and running multi-step prompt sequences; output from each step passed as context to the next
+- **Modal confirmations** — All `window.confirm()` calls replaced with a new `ConfirmModal` component; affects Gmail/Drive/Calendar disconnect and chain/session delete actions
+- **Google Drive backup fix** — Backup was creating an empty `files/` folder in Drive because `fs.readdirSync(UPLOAD_DIR)` only scanned the top level; files are stored in `UPLOAD_DIR/{projectId}/filename` subdirectories; fixed with a recursive `walkDir()` helper and matching Drive subfolder creation on backup; restore uses a recursive Drive listing + `fs.mkdirSync({ recursive: true })` to recreate the directory structure
+- **File upload auth fix** — Project Files panel was showing "Not authenticated"; the XHR upload in `FileUploader.jsx` was missing the `Authorization` header; fixed by reading the token from `useAuthStore` and calling `xhr.setRequestHeader`
+- **Backup moved to Dashboard** — Google Drive backup section restored to the Admin Dashboard (`/admin`) after being temporarily moved to Settings caused a global auth-clearing bug (any 401 from the backup status call on Settings mount wiped the session via `apiClient`)
 - **Office file extraction** — `.xlsx`, `.xls`, `.ods` (via `xlsx` package) and `.docx`, `.doc` (via `mammoth`) files now have text extracted on upload and AI-summarised; content injected into AI context identically to PDFs
 - **Session files** — select project library files to include in the current chat session only; shown in a context bar; persisted to `session_files` table; paperclip icon per file card
 - **Project sidebar accordion** — click a project name to toggle its recent session list; one project expanded at a time; sessions loaded lazily

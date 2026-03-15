@@ -86,6 +86,8 @@ app.use('/api/notes', require('./routes/notes'));
 app.use('/api/session-files', require('./routes/sessionFiles'));
 app.use('/api/chains', require('./routes/chains'));
 app.use('/api/bookmarks', require('./routes/bookmarks'));
+app.use('/api/backup', require('./routes/backup'));
+app.use('/api/graph',  require('./routes/graph'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
+import ConfirmModal from '../components/ConfirmModal';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -453,6 +454,7 @@ const getIcon = useIcon();
   const [selected, setSelected] = useState(null); // chain being edited
   const [saving, setSaving] = useState(false);
   const [runTarget, setRunTarget] = useState(null); // chain to run
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   // Edited state
   const [editName, setEditName] = useState('');
@@ -528,7 +530,6 @@ const getIcon = useIcon();
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this chain?')) return;
     await api.delete(`/api/chains/${id}`);
     await fetchChains();
     if (selected?.id === id) {
@@ -563,8 +564,19 @@ const getIcon = useIcon();
 
   return (
     <div className="flex h-full" style={{ color: 'var(--color-text)' }}>
+      {confirmDeleteId && (
+        <ConfirmModal
+          title="Delete chain"
+          message="This chain will be permanently deleted."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => { handleDelete(confirmDeleteId); setConfirmDeleteId(null); }}
+          onCancel={() => setConfirmDeleteId(null)}
+        />
+      )}
       {/* Left panel — chain list */}
       <div
+        data-tour="chains-list"
         className="flex flex-col flex-shrink-0 border-r"
         style={{ width: '260px', borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
       >
@@ -620,7 +632,7 @@ const getIcon = useIcon();
                 </p>
               </div>
               <button
-                onClick={e => { e.stopPropagation(); handleDelete(c.id); }}
+                onClick={e => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
                 className="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity flex-shrink-0"
                 style={{ color: 'var(--color-muted)' }}
                 title="Delete"
@@ -653,7 +665,7 @@ const getIcon = useIcon();
         ) : (
           <>
             {/* Editor toolbar */}
-            <div className="flex items-center gap-2 px-5 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div data-tour="chains-editor-toolbar" className="flex items-center gap-2 px-5 py-3 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
               <div className="flex-1 min-w-0">
                 <input
                   className="w-full text-base font-semibold bg-transparent border-none outline-none"
@@ -683,6 +695,7 @@ const getIcon = useIcon();
                 )}
                 {selected?.id && (
                   <button
+                    data-tour="chains-run-btn"
                     onClick={() => setRunTarget(selected)}
                     disabled={editSteps.length === 0}
                     className="px-3 py-1.5 rounded-md text-xs font-medium border disabled:opacity-40"
@@ -695,7 +708,7 @@ const getIcon = useIcon();
             </div>
 
             {/* Steps editor */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            <div data-tour="chains-steps-editor" className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               {editSteps.map((step, i) => (
                 <StepCard
                   key={step.id || i}
@@ -719,7 +732,7 @@ const getIcon = useIcon();
               </button>
 
               {/* Template hints */}
-              <div className="rounded-lg p-4 text-xs space-y-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+              <div data-tour="chains-template-hints" className="rounded-lg p-4 text-xs space-y-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
                 <p className="font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Template variables</p>
                 <p style={{ color: 'var(--color-muted)' }}><code>{'{{input}}'}</code> — the initial input provided when the chain is run</p>
                 <p style={{ color: 'var(--color-muted)' }}><code>{'{{output}}'}</code> — the output of the previous step</p>

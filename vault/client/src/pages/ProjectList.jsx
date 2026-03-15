@@ -314,7 +314,7 @@ function ProjectList() {
   // Open archive view directly when navigated here with ?archive=1
   useEffect(() => {
     if (searchParams.get('archive') === '1') setShowArchive(true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleCreate = async (data) => {
     const project = await create(data);

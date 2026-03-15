@@ -53,13 +53,19 @@ router.use((req, res, next) => {
 // GET /api/gmail/status
 router.get('/status', async (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID) {
-    return res.json({ connected: false, configured: false, email: null });
+    return res.json({ connected: false, configured: false, email: null, hasDriveScope: false });
   }
   try {
     const { rows } = await pool.query(
-      'SELECT email FROM gmail_tokens WHERE "userId"=$1', [req.user.id]
+      'SELECT email, scope FROM gmail_tokens WHERE "userId"=$1', [req.user.id]
     );
-    res.json({ connected: !!rows[0], configured: true, email: rows[0]?.email || null });
+    const row = rows[0];
+    res.json({
+      connected: !!row,
+      configured: true,
+      email: row?.email || null,
+      hasDriveScope: !!(row?.scope && row.scope.includes('drive')),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -89,6 +95,7 @@ router.get('/auth', gmailAuthLimiter, async (req, res) => {
       'https://www.googleapis.com/auth/gmail.readonly',
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/drive.file',
     ],
     state,
     prompt: 'consent',
