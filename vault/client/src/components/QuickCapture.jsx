@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 
-const EMPTY = { title: '', priority: 'medium', dueDate: '', isUrgent: 0, projectId: null, sessionId: null };
+const EMPTY = { title: '', priority: 'medium', dueDate: '', isUrgent: 0, projectId: null, sessionId: null, notes: '' };
 
 export default function QuickCapture() {
   const getIcon = useIcon();
@@ -10,6 +10,7 @@ export default function QuickCapture() {
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(false);
+  const [toastText, setToastText] = useState('Task captured ✓');
 
   useEffect(() => {
     const keyHandler = (e) => {
@@ -20,8 +21,9 @@ export default function QuickCapture() {
       if (e.key === 'Escape' && open) setOpen(false);
     };
     const openHandler = (e) => {
-      const { title = '', priority = 'medium', dueDate = '', projectId = null, sessionId = null } = e.detail || {};
-      setForm({ ...EMPTY, title, priority, dueDate, projectId, sessionId });
+      const { title = '', priority = 'medium', dueDate = '', projectId = null, sessionId = null, notes = '', toastMessage = '' } = e.detail || {};
+      setForm({ ...EMPTY, title, priority, dueDate, projectId, sessionId, notes });
+      if (toastMessage) setToastText(toastMessage);
       setOpen(true);
     };
     window.addEventListener('keydown', keyHandler);
@@ -42,6 +44,7 @@ export default function QuickCapture() {
         dueDate: form.dueDate || null,
         status: 'todo',
         isUrgent: form.isUrgent ? 1 : 0,
+        ...(form.notes ? { notes: form.notes } : {}),
         ...(form.projectId ? { projectId: form.projectId } : {}),
         ...(form.sessionId ? { sourceSessionId: form.sessionId } : {}),
       });
@@ -49,7 +52,7 @@ export default function QuickCapture() {
       setOpen(false);
       setForm(EMPTY);
       setToast(true);
-      setTimeout(() => setToast(false), 2500);
+      setTimeout(() => { setToast(false); setToastText('Task captured ✓'); }, 2500);
     } catch (err) {
       console.error(err);
     } finally {
@@ -99,6 +102,16 @@ export default function QuickCapture() {
                 className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               />
+              {form.notes !== '' && (
+                <textarea
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Notes (optional)"
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-xl border text-sm resize-none outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              )}
               <div className="flex gap-2">
                 <select
                   value={form.priority}
@@ -158,7 +171,7 @@ export default function QuickCapture() {
           className="fixed bottom-20 right-6 z-50 px-4 py-2 rounded-xl shadow-lg text-sm font-medium text-white pointer-events-none"
           style={{ background: 'var(--color-primary)' }}
         >
-          Task captured ✓
+          {toastText}
         </div>
       )}
     </>

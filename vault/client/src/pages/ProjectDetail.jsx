@@ -36,6 +36,9 @@ function ProjectDetail() {
   const [pinnedUrls, setPinnedUrls] = useState([]);
   const [urlInput, setUrlInput] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
+  const [refreshingUrls, setRefreshingUrls] = useState({}); // { [id]: true }
+  const [urlErrors, setUrlErrors] = useState({});           // { [id]: errorString }
+  const [urlRefreshed, setUrlRefreshed] = useState({});     // { [id]: true } — brief success state
 
   const project = projects.find((p) => p.id === Number(id));
 
@@ -73,6 +76,35 @@ function ProjectDetail() {
     await api.delete(`/api/pinned-urls/${urlId}`);
     setPinnedUrls(prev => prev.filter(u => u.id !== urlId));
   };
+
+  const handleRefreshUrl = async (urlId) => {
+    setRefreshingUrls(prev => ({ ...prev, [urlId]: true }));
+    setUrlErrors(prev => ({ ...prev, [urlId]: null }));
+    setUrlRefreshed(prev => ({ ...prev, [urlId]: false }));
+    try {
+      const res = await api.patch(`/api/pinned-urls/${urlId}/refresh`);
+      const data = await res.json();
+      if (data.error) {
+        setUrlErrors(prev => ({ ...prev, [urlId]: data.error }));
+      } else {
+        setPinnedUrls(prev => prev.map(u => u.id === urlId ? data : u));
+        setUrlRefreshed(prev => ({ ...prev, [urlId]: true }));
+        setTimeout(() => setUrlRefreshed(prev => ({ ...prev, [urlId]: false })), 2500);
+      }
+    } catch (_) {
+      setUrlErrors(prev => ({ ...prev, [urlId]: 'Refresh failed — URL may be unreachable' }));
+    } finally {
+      setRefreshingUrls(prev => ({ ...prev, [urlId]: false }));
+    }
+  };
+
+  function formatLastFetched(ts) {
+    if (!ts) return 'Last fetched: unknown';
+    const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
+    if (diff === 0) return 'Last fetched: today';
+    if (diff === 1) return 'Last fetched: yesterday';
+    return `Last fetched: ${diff} days ago`;
+  }
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -263,7 +295,7 @@ function ProjectDetail() {
         <div className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>Pinned Web Pages</h2>
           <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
-            These pages are fetched and included in Claude's context for every chat in this project.
+            Paste any URL and the content will be fetched and included in Claude's context for every chat in this project. YouTube URLs are automatically transcribed — paste a <code>youtube.com</code> or <code>youtu.be</code> link to store the video transcript as context.
           </p>
           <div className="flex gap-2 mb-3">
             <input
@@ -287,24 +319,46 @@ function ProjectDetail() {
           </div>
           <div className="space-y-2">
             {pinnedUrls.map(u => (
-              <div
-                key={u.id}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl border"
-                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-              >
-                {getIcon('pin', { size: 13, color: 'var(--color-primary)' })}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{u.title || u.url}</p>
-                  <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{u.url}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleRemovePinnedUrl(u.id)}
-                  className="flex-shrink-0 p-1 rounded hover:opacity-60 transition-opacity"
-                  style={{ color: 'var(--color-muted)' }}
+              <div key={u.id}>
+                <div
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border"
+                  style={{
+                    background: 'var(--color-surface)',
+                    borderColor: urlErrors[u.id] ? '#fca5a5' : 'var(--color-border)',
+                  }}
                 >
-                  {getIcon('x', { size: 13 })}
-                </button>
+                  <span className="flex-shrink-0" style={{ fontSize: 13 }}>{u.isYoutube ? '📺' : '🌐'}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{u.title || u.url}</p>
+                    <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{u.url}</p>
+                    <p className="text-xs mt-0.5" style={{ color: urlRefreshed[u.id] ? 'var(--color-primary)' : 'var(--color-muted)', opacity: 0.8 }}>
+                      {urlRefreshed[u.id] ? 'Refreshed ✓' : formatLastFetched(u.lastFetchedAt)}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRefreshUrl(u.id)}
+                    disabled={refreshingUrls[u.id]}
+                    className="flex-shrink-0 p-1 rounded hover:opacity-60 transition-opacity disabled:opacity-40"
+                    style={{ color: 'var(--color-muted)' }}
+                    title="Refresh URL content"
+                  >
+                    <span className={refreshingUrls[u.id] ? 'animate-spin inline-flex' : 'inline-flex'}>
+                      {getIcon('refresh-cw', { size: 13 })}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePinnedUrl(u.id)}
+                    className="flex-shrink-0 p-1 rounded hover:opacity-60 transition-opacity"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    {getIcon('x', { size: 13 })}
+                  </button>
+                </div>
+                {urlErrors[u.id] && (
+                  <p className="text-xs mt-1 px-1" style={{ color: '#ef4444' }}>{urlErrors[u.id]}</p>
+                )}
               </div>
             ))}
             {pinnedUrls.length === 0 && (

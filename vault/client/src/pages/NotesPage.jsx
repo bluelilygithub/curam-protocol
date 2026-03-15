@@ -4,6 +4,8 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useProjectStore from '../store/projectStore';
 
+const NOTE_BODY_LIMIT = 500;
+
 const AUTOSAVE_DELAY = 1000; // ms after last keystroke
 
 export default function NotesPage() {
@@ -21,11 +23,24 @@ export default function NotesPage() {
   const [showChatPicker, setShowChatPicker] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
+  const [convertedNoteIds, setConvertedNoteIds] = useState(new Set());
+  const pendingConvertNoteIdRef = useRef(null);
 
   const autosaveTimer = useRef(null);
   const bodyRef = useRef(null);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
+
+  useEffect(() => {
+    const handler = () => {
+      if (pendingConvertNoteIdRef.current) {
+        setConvertedNoteIds(prev => new Set([...prev, pendingConvertNoteIdRef.current]));
+        pendingConvertNoteIdRef.current = null;
+      }
+    };
+    document.addEventListener('vault:task-created', handler);
+    return () => document.removeEventListener('vault:task-created', handler);
+  }, []);
 
   const loadNotes = useCallback(async (q = '') => {
     const url = q ? `/api/notes?q=${encodeURIComponent(q)}` : '/api/notes';
@@ -91,6 +106,19 @@ export default function NotesPage() {
   function handleSearchChange(e) {
     setSearch(e.target.value);
     loadNotes(e.target.value);
+  }
+
+  function convertToTask(note, e) {
+    if (e) e.stopPropagation();
+    pendingConvertNoteIdRef.current = note.id;
+    document.dispatchEvent(new CustomEvent('vault:open-quick-capture', {
+      detail: {
+        title: note.title === 'Untitled' ? '' : note.title,
+        notes: (note.body || '').substring(0, NOTE_BODY_LIMIT),
+        projectId: note.project_id || null,
+        toastMessage: 'Task created from note ✓',
+      },
+    }));
   }
 
   function takeToChatWith(projectId) {
@@ -165,27 +193,46 @@ export default function NotesPage() {
           {notes.map(note => (
             <div
               key={note.id}
-              onClick={() => selectNote(note)}
-              className="group flex items-start justify-between px-3 py-2 cursor-pointer border-b"
+              className="group cursor-pointer border-b"
               style={{
                 borderColor: 'var(--color-border)',
                 background: selected?.id === note.id ? 'var(--color-surface-2)' : 'transparent',
               }}
+              onClick={() => selectNote(note)}
             >
-              <div className="min-w-0">
-                <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{note.title}</div>
-                <div className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                  {note.body ? note.body.slice(0, 60) : <span className="italic">empty</span>}
+              <div className="flex items-start justify-between px-3 py-2">
+                <div className="min-w-0">
+                  <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{note.title}</div>
+                  <div className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    {note.body ? note.body.slice(0, 60) : <span className="italic">empty</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 ml-1 mt-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100">
+                  <button
+                    onClick={(e) => convertToTask(note, e)}
+                    className="hover:opacity-60 transition-opacity"
+                    style={{ color: 'var(--color-primary)' }}
+                    title="Convert to task"
+                  >
+                    {getIcon('list-checks', { size: 13 })}
+                  </button>
+                  <button
+                    onClick={(e) => deleteNote(note.id, e)}
+                    className="hover:opacity-60 transition-opacity"
+                    style={{ color: 'var(--color-muted)' }}
+                    title="Delete"
+                  >
+                    {getIcon('trash', { size: 13 })}
+                  </button>
                 </div>
               </div>
-              <button
-                onClick={(e) => deleteNote(note.id, e)}
-                className="opacity-0 group-hover:opacity-100 ml-1 mt-0.5 flex-shrink-0 hover:opacity-60 transition-opacity"
-                style={{ color: 'var(--color-muted)' }}
-                title="Delete"
-              >
-                {getIcon('trash', { size: 13 })}
-              </button>
+              {convertedNoteIds.has(note.id) && (
+                <div className="px-3 pb-1.5">
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-primary)22', color: 'var(--color-primary)' }}>
+                    ↳ task created
+                  </span>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -212,6 +259,17 @@ export default function NotesPage() {
               {saving && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Saving…</span>}
               {!saving && !dirty && <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Saved</span>}
             </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => convertToTask(selected, e)}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+                title="Convert to task"
+              >
+                {getIcon('list-checks', { size: 12 })}
+                Convert to Task
+              </button>
 
             <div className="relative">
               <button
@@ -315,6 +373,7 @@ export default function NotesPage() {
                   </div>
                 </>
               )}
+            </div>
             </div>
           </div>
 

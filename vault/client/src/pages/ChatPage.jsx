@@ -35,7 +35,7 @@ const TEMPERATURES = [
 const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
   suggestions, onDelete, onBranch, onOpenArtifact, onRegenerate, onSuggestionSelect,
-  messagesEndRef,
+  messagesEndRef, bookmarkedMap, onToggleBookmark,
 }) {
   const getIcon = useIcon();
   return (
@@ -51,6 +51,9 @@ const MemoMessageList = React.memo(function MemoMessageList({
               onOpenArtifact={msg.role === 'assistant' ? onOpenArtifact : undefined}
               onBranch={msg.role === 'user' && !!sessionId && !isStreaming ? onBranch : undefined}
               searching={isLastAssistant && isAiSearching}
+              bookmarked={msg.id ? !!bookmarkedMap[msg.id] : false}
+              onToggleBookmark={onToggleBookmark}
+              isLatest={isLastAssistant}
             />
             {isLastAssistant && !isStreaming && (
               <>
@@ -109,6 +112,18 @@ function ChatPage({ general = false }) {
   const [gmailResults, setGmailResults] = useState([]);
   const [gmailAttached, setGmailAttached] = useState([]); // threadIds already attached
   const [gmailTranslatedQuery, setGmailTranslatedQuery] = useState('');
+
+  // Calendar search state
+  const [showCalendarSearch, setShowCalendarSearch] = useState(false);
+  const [calendarQuery, setCalendarQuery] = useState('');
+  const [isCalendarSearching, setIsCalendarSearching] = useState(false);
+  const [calendarError, setCalendarError] = useState('');
+  const [calendarResults, setCalendarResults] = useState([]);
+  const [calendarAttached, setCalendarAttached] = useState([]); // eventIds already attached
+  const [calendarAskEventId, setCalendarAskEventId] = useState(null);
+  const [calendarAskQuestion, setCalendarAskQuestion] = useState('');
+  const [calendarAskAnswer, setCalendarAskAnswer] = useState('');
+  const [isCalendarAsking, setIsCalendarAsking] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [inlineImages, setInlineImages] = useState([]);
 
@@ -137,6 +152,12 @@ function ChatPage({ general = false }) {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [showSummaryPanel, setShowSummaryPanel] = useState(false);
   const [summaryText, setSummaryText] = useState('');
+  const [saveSummaryToNote, setSaveSummaryToNote] = useState(true);
+  const [summaryNoteSaved, setSummaryNoteSaved] = useState(false);
+
+  // Budget alert dismiss state (resets on session change)
+  const [alertDismissed, setAlertDismissed] = useState(false);
+  const [alertDismissedMsgCount, setAlertDismissedMsgCount] = useState(0);
 
   // Artifacts
   const [activeArtifacts, setActiveArtifacts] = useState(null); // { artifacts, initialIndex }
@@ -151,6 +172,9 @@ function ChatPage({ general = false }) {
 
   // Prompt variable modal — { content, onInsert } or null
   const [promptVarModal, setPromptVarModal] = useState(null);
+
+  // Bookmarks — { [messageId]: true } map for current session
+  const [bookmarkedMap, setBookmarkedMap] = useState({});
 
   // Reasoning mode
   const [reasoning, setReasoning] = useState(false);
@@ -232,6 +256,9 @@ function ChatPage({ general = false }) {
     api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
   }, [projectId, general]);
 
+  // Reset alert dismiss state when switching sessions
+  useEffect(() => { setAlertDismissed(false); setAlertDismissedMsgCount(0); }, [sessionId]);
+
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   useEffect(() => {
     if (transcript) {
@@ -311,6 +338,32 @@ function ChatPage({ general = false }) {
     setPrompts(await res.json());
   };
 
+  // Load bookmark state for the active session
+  useEffect(() => {
+    if (!sessionId) { setBookmarkedMap({}); return; }
+    api.get(`/api/bookmarks/session/${sessionId}`)
+      .then(r => r.json())
+      .then(ids => {
+        const map = {};
+        ids.forEach(id => { map[id] = true; });
+        setBookmarkedMap(map);
+      })
+      .catch(() => {});
+  }, [sessionId]);
+
+  const handleToggleBookmark = useCallback(async (messageId) => {
+    if (!sessionId || !messageId) return;
+    const res = await api.post(`/api/bookmarks/${messageId}`, { sessionId });
+    const data = await res.json();
+    setBookmarkedMap(prev => {
+      const next = { ...prev };
+      if (data.bookmarked) { next[messageId] = true; } else { delete next[messageId]; }
+      return next;
+    });
+    // Notify Layout to refresh badge
+    window.dispatchEvent(new CustomEvent('vault:bookmark-changed'));
+  }, [sessionId]);
+
   const loadPersonas = async () => {
     const res = await api.get('/api/personas');
     setPersonas(await res.json());
@@ -375,6 +428,10 @@ function ChatPage({ general = false }) {
     setGmailResults([]);
     setGmailAttached([]);
     setGmailTranslatedQuery('');
+    setShowCalendarSearch(false);
+    setCalendarQuery('');
+    setCalendarResults([]);
+    setCalendarAttached([]);
     setShowPromptPicker(false);
     clearAttachments();
     clearUrls();
@@ -552,6 +609,61 @@ function ChatPage({ general = false }) {
     textareaRef.current?.focus();
   };
 
+  const handleOpenCalendarSearch = () => {
+    const cursorPos = textareaRef.current?.selectionStart || input.length;
+    const atIndex = input.lastIndexOf('@', cursorPos);
+    if (atIndex !== -1) setInput(input.slice(0, atIndex) + input.slice(cursorPos));
+    setShowMention(false);
+    setCalendarQuery('');
+    setCalendarError('');
+    setCalendarResults([]);
+    setShowCalendarSearch(true);
+  };
+
+  const handleCalendarSearch = async () => {
+    if (!calendarQuery.trim() || isCalendarSearching) return;
+    setIsCalendarSearching(true);
+    setCalendarError('');
+    setCalendarResults([]);
+    try {
+      const res = await api.get(`/api/calendar/search?q=${encodeURIComponent(calendarQuery.trim())}&max=10`);
+      const data = await res.json();
+      if (data.error) { setCalendarError(data.error); return; }
+      const results = data.results || [];
+      if (results.length === 0) { setCalendarError('No events found. Try rephrasing.'); return; }
+      setCalendarResults(results);
+    } catch (err) {
+      setCalendarError(err.message || 'Calendar search failed');
+    } finally {
+      setIsCalendarSearching(false);
+    }
+  };
+
+  const handleCalendarAttachEvent = async (event) => {
+    if (calendarAttached.includes(event.id)) return;
+    try {
+      const res = await api.get(`/api/calendar/event/${event.id}`);
+      const data = await res.json();
+      if (data.error) { setCalendarError(data.error); return; }
+      addManualAttachment({
+        url: `calendar://event/${event.id}`,
+        title: `📅 ${event.title || 'Event'}`,
+        content: data.text || '',
+      });
+      setCalendarAttached(prev => [...prev, event.id]);
+    } catch (err) {
+      setCalendarError(err.message || 'Failed to load event');
+    }
+  };
+
+  const handleCalendarDone = () => {
+    setShowCalendarSearch(false);
+    setCalendarQuery('');
+    setCalendarResults([]);
+    setCalendarAttached([]);
+    textareaRef.current?.focus();
+  };
+
   const startEditTitle = () => {
     setTitleInput(sessionTitle);
     setEditingTitle(true);
@@ -596,6 +708,15 @@ function ChatPage({ general = false }) {
         setSummaryText(data.summary);
         await fetchSessions();
         setShowSummaryPanel(true);
+        if (saveSummaryToNote && projectId) {
+          try {
+            const today = new Date().toISOString().slice(0, 10);
+            const noteTitle = `${sessionTitle || 'Chat'} — Summary ${today}`;
+            await api.post('/api/notes', { title: noteTitle, body: data.summary, project_id: projectId });
+            setSummaryNoteSaved(true);
+            setTimeout(() => setSummaryNoteSaved(false), 3500);
+          } catch (_) {}
+        }
       }
     } finally {
       setIsSummarizing(false);
@@ -654,10 +775,24 @@ function ChatPage({ general = false }) {
 
   // Token budget
   const sessionBudget = useSettingsStore(s => s.sessionBudget);
+  const budgetAlertThreshold = useSettingsStore(s => s.budgetAlertThreshold ?? 80);
+  const budgetCriticalThreshold = useSettingsStore(s => s.budgetCriticalThreshold ?? 100);
+  const budgetReAlertFrequency = useSettingsStore(s => s.budgetReAlertFrequency ?? 'session');
   const sessionCost = sessionUsage.inputTokens > 0
     ? calcCost(sessionUsage.model || effectiveModel, sessionUsage.inputTokens, sessionUsage.outputTokens)
     : 0;
   const budgetPct = sessionBudget ? (sessionCost / sessionBudget) * 100 : 0;
+
+  const shouldShowBudgetAlert = (() => {
+    if (!alertDismissed) return true;
+    if (budgetReAlertFrequency === 'session') return false;
+    if (budgetReAlertFrequency === 'every10') return messages.length >= alertDismissedMsgCount + 10;
+    if (budgetReAlertFrequency === 'every20') return messages.length >= alertDismissedMsgCount + 20;
+    if (budgetReAlertFrequency === 'at95') return budgetPct >= 95;
+    return false;
+  })();
+
+  const dismissBudgetAlert = () => { setAlertDismissed(true); setAlertDismissedMsgCount(messages.length); };
 
   const currentTempLabel = TEMPERATURES.find(t => t.value === temperature)?.label || 'Balanced';
   const costDisplay = sessionUsage.inputTokens > 0
@@ -1037,10 +1172,21 @@ function ChatPage({ general = false }) {
       )}
 
       {/* Session budget banners */}
-      {sessionBudget && budgetPct >= 100 && (
+      {sessionBudget && shouldShowBudgetAlert && budgetPct >= budgetCriticalThreshold && (
         <div className="flex-shrink-0 mx-4 mt-3 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 text-xs" style={{ background: '#fff1f2', borderColor: '#fca5a5', color: '#991b1b' }}>
           <span>💸</span>
           <span className="flex-1">Session budget reached ({formatCost(sessionCost)} of {formatCost(sessionBudget)}) — consider summarising this chat.</span>
+          {messages.length >= 4 && !isSummarized && (
+            <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0" style={{ color: '#991b1b' }}>
+              <input
+                type="checkbox"
+                checked={saveSummaryToNote}
+                onChange={e => setSaveSummaryToNote(e.target.checked)}
+                className="cursor-pointer"
+              />
+              Save to Notes
+            </label>
+          )}
           {messages.length >= 4 && !isSummarized && (
             <button
               onClick={handleSummarize}
@@ -1051,13 +1197,22 @@ function ChatPage({ general = false }) {
               {isSummarizing ? 'Summarising…' : 'Summarise now'}
             </button>
           )}
+          <button onClick={dismissBudgetAlert} className="flex-shrink-0 hover:opacity-60 transition-opacity font-bold" style={{ color: '#991b1b' }} title="Dismiss">✕</button>
         </div>
       )}
 
-      {sessionBudget && budgetPct >= 80 && budgetPct < 100 && (
+      {sessionBudget && shouldShowBudgetAlert && budgetPct >= budgetAlertThreshold && budgetPct < budgetCriticalThreshold && (
         <div className="flex-shrink-0 mx-4 mt-3 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 text-xs" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#78350f' }}>
           <span>⚠️</span>
-          <span>You've used {Math.round(budgetPct)}% of your session budget ({formatCost(sessionCost)} of {formatCost(sessionBudget)}).</span>
+          <span className="flex-1">You've used {Math.round(budgetPct)}% of your session budget ({formatCost(sessionCost)} of {formatCost(sessionBudget)}).</span>
+          <button onClick={dismissBudgetAlert} className="flex-shrink-0 hover:opacity-60 transition-opacity font-bold" style={{ color: '#78350f' }} title="Dismiss">✕</button>
+        </div>
+      )}
+
+      {/* Summary saved to Notes toast */}
+      {summaryNoteSaved && (
+        <div className="fixed bottom-20 right-6 z-50 px-4 py-2 rounded-xl shadow-lg text-sm font-medium text-white pointer-events-none" style={{ background: 'var(--color-primary)' }}>
+          Summary saved to Notes ✓
         </div>
       )}
 
@@ -1145,6 +1300,8 @@ function ChatPage({ general = false }) {
                 onRegenerate={handleRegenerate}
                 onSuggestionSelect={stableSuggestionSelect}
                 messagesEndRef={messagesEndRef}
+                bookmarkedMap={bookmarkedMap}
+                onToggleBookmark={handleToggleBookmark}
               />
             )}
           </div>
@@ -1303,6 +1460,9 @@ function ChatPage({ general = false }) {
 
                 {/* Gmail search */}
                 {showGmailSearch && (
+                  <div className="fixed inset-0 z-40" onClick={() => { setShowGmailSearch(false); setGmailQuery(''); setGmailResults([]); setGmailAttached([]); setGmailTranslatedQuery(''); }} />
+                )}
+                {showGmailSearch && (
                   <div
                     className="absolute bottom-full mb-2 left-0 right-0 sm:right-auto z-50 rounded-xl border shadow-lg overflow-hidden"
                     style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '340px', maxWidth: '520px' }}
@@ -1385,7 +1545,93 @@ function ChatPage({ general = false }) {
                   </div>
                 )}
 
+                {/* Calendar search */}
+                {showCalendarSearch && (
+                  <div className="fixed inset-0 z-40" onClick={() => { setShowCalendarSearch(false); setCalendarQuery(''); setCalendarResults([]); setCalendarAttached([]); }} />
+                )}
+                {showCalendarSearch && (
+                  <div
+                    className="absolute bottom-full mb-2 left-0 right-0 sm:right-auto z-50 rounded-xl border shadow-lg overflow-hidden"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '340px', maxWidth: '520px' }}
+                  >
+                    <div className="flex items-center gap-2 px-3 py-2.5">
+                      <span style={{ fontSize: 13, flexShrink: 0 }}>📅</span>
+                      <input
+                        autoFocus
+                        type="text"
+                        value={calendarQuery}
+                        onChange={e => { setCalendarQuery(e.target.value); setCalendarError(''); setCalendarResults([]); }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') { e.preventDefault(); calendarResults.length > 0 ? handleCalendarDone() : handleCalendarSearch(); }
+                          if (e.key === 'Escape') { setShowCalendarSearch(false); setCalendarQuery(''); setCalendarResults([]); setCalendarAttached([]); }
+                        }}
+                        placeholder="Search Calendar (e.g. meetings next week)"
+                        className="flex-1 bg-transparent outline-none text-sm"
+                        style={{ color: 'var(--color-text)' }}
+                        disabled={isCalendarSearching}
+                      />
+                      {isCalendarSearching ? (
+                        <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14 })}</span>
+                      ) : calendarResults.length > 0 ? (
+                        <button type="button" onClick={handleCalendarDone}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                          style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                          Done
+                        </button>
+                      ) : calendarQuery.trim() ? (
+                        <button type="button" onClick={handleCalendarSearch}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                          style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                          Search
+                        </button>
+                      ) : null}
+                    </div>
+                    {calendarError && (
+                      <p className="px-3 pb-2.5 text-xs" style={{ color: '#ef4444' }}>{calendarError}</p>
+                    )}
+                    {calendarResults.length > 0 ? (
+                      <div className="border-t" style={{ borderColor: 'var(--color-border)', maxHeight: '260px', overflowY: 'auto' }}>
+                        {calendarResults.map((event) => {
+                          const attached = calendarAttached.includes(event.id);
+                          const start = event.start?.dateTime || event.start?.date || '';
+                          const startLabel = start ? new Date(start).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                          return (
+                            <button
+                              key={event.id}
+                              onClick={() => handleCalendarAttachEvent(event)}
+                              disabled={attached}
+                              className="w-full text-left px-3 py-2.5 border-b last:border-b-0 transition-opacity"
+                              style={{ borderColor: 'var(--color-border)', opacity: attached ? 0.5 : 1 }}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{event.title || '(No title)'}</p>
+                                {attached
+                                  ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>✓ Added</span>
+                                  : <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>Attach</span>
+                                }
+                              </div>
+                              {startLabel && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{startLabel}{event.location ? ` · ${event.location}` : ''}</p>}
+                            </button>
+                          );
+                        })}
+                        {calendarAttached.length > 0 && (
+                          <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                            {calendarAttached.length} event{calendarAttached.length !== 1 ? 's' : ''} added to context · press Done or Enter
+                          </p>
+                        )}
+                      </div>
+                    ) : !calendarError && (
+                      <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                        Search your calendar and attach events as context · Esc to cancel
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Prompt picker */}
+                {showPromptPicker && (
+                  <div className="fixed inset-0 z-40" onClick={() => { setShowPromptPicker(false); setPromptSearch(''); }} />
+                )}
                 {showPromptPicker && (
                   <div
                     className="absolute bottom-full mb-2 left-0 z-50 rounded-xl border shadow-lg overflow-hidden"
@@ -1424,7 +1670,7 @@ function ChatPage({ general = false }) {
                 {/* Mention dropdown */}
                 {showMention && (
                   <div className="absolute bottom-full mb-2 left-0 w-56 z-50">
-                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onSearch={handleOpenSearch} onGmailSearch={handleOpenGmailSearch} onPromptSelect={handlePromptMentionSelect} onClose={() => setShowMention(false)} />
+                    <AtMentionDropdown query={mentionQuery} onSelect={handleMentionSelect} onSearch={handleOpenSearch} onGmailSearch={handleOpenGmailSearch} onCalendarSearch={handleOpenCalendarSearch} onPromptSelect={handlePromptMentionSelect} onClose={() => setShowMention(false)} />
                   </div>
                 )}
 
@@ -1595,6 +1841,10 @@ function ChatPage({ general = false }) {
                 const sid = sessionId;
                 if (sid) api.post(`/api/session-files/${sid}`, { fileId: file.id }).catch(() => {});
                 setSessionFiles(prev => prev.some(f => f.id === file.id) ? prev : [...prev, { id: file.id, name: file.name }]);
+                setShowFilesPanel(false);
+              }}
+              onAttachUrl={(attachment) => {
+                addManualAttachment(attachment);
                 setShowFilesPanel(false);
               }}
               sessionFileIds={sessionFiles.map(f => f.id)}

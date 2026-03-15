@@ -56,6 +56,10 @@ const PERIODS = [
 export default function ChatHistoryPage() {
   const navigate = useNavigate();
   const getIcon = useIcon();
+
+  const [tab, setTab] = useState('history');
+
+  // ── History ──────────────────────────────────────────────────────────────────
   const [period, setPeriod] = useState('all');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -63,7 +67,12 @@ export default function ChatHistoryPage() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
 
-  const load = useCallback(async () => {
+  // ── Bookmarks ─────────────────────────────────────────────────────────────
+  const [bookmarks, setBookmarks] = useState([]);
+  const [bookmarksLoading, setBookmarksLoading] = useState(false);
+
+  // ── Data loading ──────────────────────────────────────────────────────────
+  const loadHistory = useCallback(async () => {
     setLoading(true);
     try {
       let from, to;
@@ -71,34 +80,54 @@ export default function ChatHistoryPage() {
         from = customFrom || '2000-01-01';
         to = customTo ? customTo + 'T23:59:59' : '2099-12-31';
       } else if (period === 'all') {
-        from = '2000-01-01';
-        to = '2099-12-31';
+        from = '2000-01-01'; to = '2099-12-31';
       } else {
         ({ from, to } = getPeriodDates(period));
       }
       const res = await api.get(`/api/chat/all-history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
       const data = await res.json();
       setSessions(Array.isArray(data) ? data : []);
-    } catch (e) {
+    } catch (_) {
       setSessions([]);
     } finally {
       setLoading(false);
     }
   }, [period, customFrom, customTo]);
 
-  useEffect(() => { load(); }, [load]);
-
-  function handleRowClick(s) {
-    if (s.projectId) {
-      navigate(`/projects/${s.projectId}/chat`);
-      setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: s.sessionId })), 80);
-    } else {
-      navigate('/chat');
-      setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: s.sessionId })), 80);
+  const loadBookmarks = useCallback(async () => {
+    setBookmarksLoading(true);
+    try {
+      const res = await api.get('/api/bookmarks');
+      const data = await res.json();
+      setBookmarks(Array.isArray(data) ? data : []);
+    } catch (_) {
+      setBookmarks([]);
+    } finally {
+      setBookmarksLoading(false);
     }
+  }, []);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
+
+  useEffect(() => {
+    if (tab === 'bookmarks') loadBookmarks();
+  }, [tab, loadBookmarks]);
+
+  useEffect(() => {
+    const handler = () => { if (tab === 'bookmarks') loadBookmarks(); };
+    window.addEventListener('vault:bookmark-changed', handler);
+    return () => window.removeEventListener('vault:bookmark-changed', handler);
+  }, [tab, loadBookmarks]);
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+  function goToSession(sessionId, projectId) {
+    const target = projectId ? `/projects/${projectId}/chat` : '/chat';
+    navigate(target);
+    setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: sessionId })), 80);
   }
 
-  const filtered = search.trim()
+  // ── Derived data ──────────────────────────────────────────────────────────
+  const filteredSessions = search.trim()
     ? sessions.filter(s =>
         (s.title || '').toLowerCase().includes(search.toLowerCase()) ||
         (s.projectName || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -106,124 +135,273 @@ export default function ChatHistoryPage() {
       )
     : sessions;
 
+  // Group bookmarks by sessionId preserving order of first occurrence
+  const bookmarkGroups = bookmarks.reduce((groups, bm) => {
+    const existing = groups.find(g => g.sessionId === bm.sessionId);
+    if (existing) {
+      existing.messages.push(bm);
+    } else {
+      groups.push({
+        sessionId: bm.sessionId,
+        sessionTitle: bm.sessionTitle,
+        projectId: bm.projectId,
+        projectName: bm.projectName,
+        messages: [bm],
+      });
+    }
+    return groups;
+  }, []);
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Chat History</h1>
 
-      {/* Period filter chips */}
-      <div className="flex flex-wrap gap-2">
-        {PERIODS.map(p => (
+      {/* Header + tab switcher */}
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>Chat History</h1>
+        <div className="flex rounded-xl border overflow-hidden flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
           <button
-            key={p.key}
-            onClick={() => setPeriod(p.key)}
-            className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+            onClick={() => setTab('history')}
+            className="px-4 py-1.5 text-xs font-medium transition-colors"
             style={{
-              background: period === p.key ? 'var(--color-primary)' : 'var(--color-surface)',
-              borderColor: period === p.key ? 'var(--color-primary)' : 'var(--color-border)',
-              color: period === p.key ? '#fff' : 'var(--color-text)',
+              background: tab === 'history' ? 'var(--color-primary)' : 'var(--color-surface)',
+              color: tab === 'history' ? '#fff' : 'var(--color-text)',
             }}
           >
-            {p.label}
+            History
           </button>
-        ))}
-      </div>
-
-      {/* Custom date pickers */}
-      {period === 'custom' && (
-        <div className="flex items-center gap-3 text-sm">
-          <input
-            type="date"
-            value={customFrom}
-            onChange={e => setCustomFrom(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border text-xs outline-none"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
-          <span style={{ color: 'var(--color-muted)' }}>to</span>
-          <input
-            type="date"
-            value={customTo}
-            onChange={e => setCustomTo(e.target.value)}
-            className="px-3 py-1.5 rounded-lg border text-xs outline-none"
-            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
+          <button
+            onClick={() => setTab('bookmarks')}
+            className="px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5"
+            style={{
+              background: tab === 'bookmarks' ? 'var(--color-primary)' : 'var(--color-surface)',
+              color: tab === 'bookmarks' ? '#fff' : 'var(--color-text)',
+              borderLeft: '1px solid var(--color-border)',
+            }}
+          >
+            ★ Bookmarks
+            {bookmarks.length > 0 && (
+              <span
+                className="px-1.5 py-0.5 rounded-full text-xs font-bold leading-none"
+                style={{
+                  background: tab === 'bookmarks' ? 'rgba(255,255,255,0.3)' : '#f59e0b',
+                  color: '#fff',
+                }}
+              >
+                {bookmarks.length}
+              </span>
+            )}
+          </button>
         </div>
-      )}
-
-      {/* Search */}
-      <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-muted)' }}>
-          {getIcon('search', { size: 14 })}
-        </span>
-        <input
-          type="text"
-          placeholder="Filter by title, project, or content…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 rounded-xl border text-sm outline-none"
-          style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-        />
       </div>
 
-      {/* Results */}
-      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-        {loading ? (
-          <div className="space-y-px">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="px-4 py-3 animate-pulse flex gap-3 items-start" style={{ background: 'var(--color-surface)' }}>
-                <div className="rounded w-24 h-3 mt-1" style={{ background: 'var(--color-border)' }} />
-                <div className="flex-1 space-y-2">
-                  <div className="rounded w-1/2 h-3" style={{ background: 'var(--color-border)' }} />
-                  <div className="rounded w-3/4 h-2.5" style={{ background: 'var(--color-border)' }} />
-                </div>
-              </div>
+      {/* ── HISTORY TAB ─────────────────────────────────────────────────── */}
+      {tab === 'history' && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {PERIODS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                style={{
+                  background: period === p.key ? 'var(--color-primary)' : 'var(--color-surface)',
+                  borderColor: period === p.key ? 'var(--color-primary)' : 'var(--color-border)',
+                  color: period === p.key ? '#fff' : 'var(--color-text)',
+                }}
+              >
+                {p.label}
+              </button>
             ))}
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="px-4 py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>
-            No chat sessions found for this period.
-          </div>
-        ) : (
-          filtered.map((s, i) => (
-            <button
-              key={s.sessionId}
-              onClick={() => handleRowClick(s)}
-              className="w-full text-left px-4 py-3 flex items-start gap-4 hover:opacity-80 transition-opacity border-b last:border-b-0"
-              style={{
-                background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-bg)',
-                borderColor: 'var(--color-border)',
-              }}
-            >
-              <div className="flex-shrink-0 w-28 text-right">
-                <div className="text-xs font-medium truncate" style={{ color: 'var(--color-primary)' }}>
-                  {s.projectName || 'General'}
-                </div>
-                <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                  {s.lastAt ? new Date(s.lastAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                  {s.title || `Session ${s.sessionId.slice(-8)}`}
-                </div>
-                {s.lastMsg && (
-                  <div className="text-xs mt-0.5 line-clamp-2" style={{ color: 'var(--color-muted)' }}>
-                    {s.lastMsg.substring(0, 160)}
-                  </div>
-                )}
-              </div>
-              <div className="flex-shrink-0 self-center" style={{ color: 'var(--color-muted)' }}>
-                {getIcon('chevron-right', { size: 14 })}
-              </div>
-            </button>
-          ))
-        )}
-      </div>
 
-      {!loading && filtered.length > 0 && (
-        <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
-          {filtered.length} session{filtered.length !== 1 ? 's' : ''}
-          {search ? ` matching "${search}"` : ''}
-        </p>
+          {period === 'custom' && (
+            <div className="flex items-center gap-3">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={e => setCustomFrom(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border text-xs outline-none"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>to</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={e => setCustomTo(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border text-xs outline-none"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </div>
+          )}
+
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-muted)' }}>
+              {getIcon('search', { size: 14 })}
+            </span>
+            <input
+              type="text"
+              placeholder="Filter by title, project, or content…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-xl border text-sm outline-none"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </div>
+
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+            {loading ? (
+              <div className="space-y-px">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="px-4 py-3 animate-pulse flex gap-3 items-start" style={{ background: 'var(--color-surface)' }}>
+                    <div className="rounded w-24 h-3 mt-1" style={{ background: 'var(--color-border)' }} />
+                    <div className="flex-1 space-y-2">
+                      <div className="rounded w-1/2 h-3" style={{ background: 'var(--color-border)' }} />
+                      <div className="rounded w-3/4 h-2.5" style={{ background: 'var(--color-border)' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredSessions.length === 0 ? (
+              <div className="px-4 py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>
+                No chat sessions found for this period.
+              </div>
+            ) : (
+              filteredSessions.map((s, i) => (
+                <button
+                  key={s.sessionId}
+                  onClick={() => goToSession(s.sessionId, s.projectId)}
+                  className="w-full text-left px-4 py-3 flex items-start gap-4 hover:opacity-80 transition-opacity border-b last:border-b-0"
+                  style={{
+                    background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-bg)',
+                    borderColor: 'var(--color-border)',
+                  }}
+                >
+                  <div className="flex-shrink-0 w-28 text-right">
+                    <div className="text-xs font-medium truncate" style={{ color: 'var(--color-primary)' }}>
+                      {s.projectName || 'General'}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                      {s.lastAt ? new Date(s.lastAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                      {s.title || `Session ${s.sessionId.slice(-8)}`}
+                    </div>
+                    {s.lastMsg && (
+                      <div className="text-xs mt-0.5 line-clamp-2" style={{ color: 'var(--color-muted)' }}>
+                        {s.lastMsg.substring(0, 160)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-shrink-0 self-center" style={{ color: 'var(--color-muted)' }}>
+                    {getIcon('chevron-right', { size: 14 })}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          {!loading && filteredSessions.length > 0 && (
+            <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
+              {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''}
+              {search ? ` matching "${search}"` : ''}
+            </p>
+          )}
+        </>
+      )}
+
+      {/* ── BOOKMARKS TAB ───────────────────────────────────────────────── */}
+      {tab === 'bookmarks' && (
+        <>
+          {bookmarksLoading ? (
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="rounded-2xl border p-4 animate-pulse space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                  <div className="rounded w-1/3 h-3" style={{ background: 'var(--color-border)' }} />
+                  <div className="rounded w-full h-2.5" style={{ background: 'var(--color-border)' }} />
+                  <div className="rounded w-2/3 h-2.5" style={{ background: 'var(--color-border)' }} />
+                </div>
+              ))}
+            </div>
+          ) : bookmarkGroups.length === 0 ? (
+            <div
+              className="py-16 text-center rounded-2xl border"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              <div className="text-4xl mb-3 opacity-30">★</div>
+              <p className="text-sm font-medium">No bookmarked messages yet</p>
+              <p className="text-xs mt-1">Hover any message in a chat and click the ★ to save it here.</p>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {bookmarkGroups.map(group => (
+                <div
+                  key={group.sessionId}
+                  className="rounded-2xl border overflow-hidden"
+                  style={{ borderColor: 'var(--color-border)' }}
+                >
+                  {/* Session header — click to open that chat */}
+                  <button
+                    onClick={() => goToSession(group.sessionId, group.projectId)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:opacity-80 transition-opacity"
+                    style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}
+                  >
+                    <span style={{ color: '#f59e0b', fontSize: '14px' }}>★</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-semibold block truncate" style={{ color: 'var(--color-text)' }}>
+                        {group.sessionTitle || `Session ${group.sessionId.slice(-8)}`}
+                      </span>
+                      {group.projectName && (
+                        <span className="text-xs" style={{ color: 'var(--color-primary)' }}>
+                          {group.projectName}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+                      {group.messages.length} bookmark{group.messages.length !== 1 ? 's' : ''} →
+                    </span>
+                  </button>
+
+                  {/* Bookmarked messages */}
+                  {group.messages.map((bm, i) => (
+                    <button
+                      key={bm.id}
+                      onClick={() => goToSession(group.sessionId, group.projectId)}
+                      className="w-full text-left px-4 py-3 hover:opacity-80 transition-opacity border-b last:border-b-0"
+                      style={{
+                        background: i % 2 === 0 ? 'var(--color-bg)' : 'var(--color-surface)',
+                        borderColor: 'var(--color-border)',
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span
+                          className="text-xs font-medium px-1.5 py-0.5 rounded"
+                          style={{
+                            background: bm.role === 'user' ? 'var(--color-primary)' : 'transparent',
+                            color: bm.role === 'user' ? '#fff' : 'var(--color-muted)',
+                            border: bm.role === 'assistant' ? '1px solid var(--color-border)' : 'none',
+                          }}
+                        >
+                          {bm.role === 'user' ? 'You' : 'AI'}
+                        </span>
+                        {bm.messageCreatedAt && (
+                          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                            {new Date(bm.messageCreatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>
+                        {bm.content.substring(0, 100)}{bm.content.length > 100 ? '…' : ''}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

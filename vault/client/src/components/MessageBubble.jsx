@@ -16,7 +16,10 @@ function parseFilesPrefix(content) {
   };
 }
 
-function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageIndex, searching }) {
+const COLLAPSE_CHAR_THRESHOLD = 2500;
+const COLLAPSED_HEIGHT = 220; // px
+
+function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageIndex, searching, bookmarked, onToggleBookmark, isLatest }) {
   const isUser = message.role === 'user';
   const [showThinking, setShowThinking] = useState(false);
   const getIcon = useIcon();
@@ -27,6 +30,14 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
     () => message.role === 'assistant' ? extractCodeBlocks(message.content) : [],
     [message.role, message.content]
   );
+
+  // Collapse logic — never collapse if content has a code block or is the latest message
+  const hasCodeBlock = useMemo(() => /```/.test(message.content ?? ''), [message.content]);
+  const canCollapse = !isUser && !hasCodeBlock && (message.content?.length ?? 0) > COLLAPSE_CHAR_THRESHOLD;
+
+  // null = use default (collapse non-latest long messages); true/false = explicit user toggle
+  const [userCollapsed, setUserCollapsed] = useState(null);
+  const collapsed = canCollapse && (userCollapsed !== null ? userCollapsed : !isLatest);
 
   if (isUser) {
     // Live attachments (current session) take priority; fall back to parsing history text
@@ -95,8 +106,18 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
             </div>
           ) : null}
 
-          {/* Delete + Branch controls */}
+          {/* Delete + Branch + Bookmark controls */}
           <div className="flex items-center gap-2">
+            {message.id && onToggleBookmark && (
+              <button
+                onClick={() => onToggleBookmark(message.id)}
+                className="self-end opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity flex items-center gap-1 text-xs"
+                style={{ color: bookmarked ? '#f59e0b' : 'var(--color-muted)' }}
+                title={bookmarked ? 'Remove bookmark' : 'Bookmark this message'}
+              >
+                {getIcon('star', { size: 11, fill: bookmarked ? 'currentColor' : 'none' })}
+              </button>
+            )}
             {onBranch && (
               <button
                 onClick={() => onBranch(messageIndex)}
@@ -162,6 +183,20 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
                 {codeBlocks.length > 1 ? `${codeBlocks.length} artifacts` : 'Artifact'}
               </button>
             )}
+            {message.id && onToggleBookmark && (
+              <button
+                onClick={() => onToggleBookmark(message.id)}
+                className="w-6 h-6 flex items-center justify-center rounded-md"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  color: bookmarked ? '#f59e0b' : 'var(--color-muted)',
+                }}
+                title={bookmarked ? 'Remove bookmark' : 'Bookmark this message'}
+              >
+                {getIcon('star', { size: 11, fill: bookmarked ? 'currentColor' : 'none' })}
+              </button>
+            )}
             <button
               onClick={() => downloadResponseMd(message.content)}
               className="w-6 h-6 flex items-center justify-center rounded-md"
@@ -208,17 +243,41 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
           </div>
           )
         ) : message.content === '' ? null : (
-          <div
-            className="prose prose-sm max-w-none text-sm leading-relaxed"
-            style={{ color: 'var(--color-text)' }}
-            data-message-content
-          >
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={mdComponents}
-            >
-              {message.content}
-            </ReactMarkdown>
+          <div data-message-content>
+            <div className="relative">
+              <div
+                className="prose prose-sm max-w-none text-sm leading-relaxed"
+                style={{
+                  color: 'var(--color-text)',
+                  ...(collapsed ? { maxHeight: `${COLLAPSED_HEIGHT}px`, overflow: 'hidden' } : {}),
+                }}
+              >
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={mdComponents}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              </div>
+              {collapsed && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
+                  style={{ background: 'linear-gradient(to bottom, transparent, var(--color-bg))' }}
+                />
+              )}
+            </div>
+            {canCollapse && (
+              <button
+                onClick={() => setUserCollapsed(!collapsed)}
+                className="mt-2 flex items-center gap-1 text-xs font-medium transition-opacity hover:opacity-70"
+                style={{ color: 'var(--color-primary)' }}
+              >
+                {collapsed ? 'Show more' : 'Show less'}
+                {collapsed
+                  ? getIcon('chevron-down', { size: 12 })
+                  : getIcon('chevron-up', { size: 12 })}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -125,12 +125,14 @@ async function initSchema() {
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS pinned_urls (
-        id          SERIAL PRIMARY KEY,
-        "projectId" INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-        url         TEXT NOT NULL,
-        title       TEXT,
-        content     TEXT,
-        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+        id              SERIAL PRIMARY KEY,
+        "projectId"     INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        url             TEXT NOT NULL,
+        title           TEXT,
+        content         TEXT,
+        "isYoutube"     BOOLEAN DEFAULT FALSE,
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
+        "lastFetchedAt" TIMESTAMPTZ DEFAULT NOW()
       )
     `);
 
@@ -152,6 +154,8 @@ async function initSchema() {
 
     // Idempotent column additions — safe to run on every boot
     await client.query(`ALTER TABLE files ADD COLUMN IF NOT EXISTS "anthropicFileId" TEXT`);
+    await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "lastFetchedAt" TIMESTAMPTZ DEFAULT NOW()`);
+    await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "isYoutube" BOOLEAN DEFAULT FALSE`);
 
     // ── Chat ──────────────────────────────────────────────────────────────────
     await client.query(`
@@ -396,6 +400,16 @@ async function initSchema() {
         steps       TEXT NOT NULL DEFAULT '[]',
         "createdAt" TIMESTAMPTZ DEFAULT NOW(),
         "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        id          SERIAL PRIMARY KEY,
+        "messageId" INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+        "sessionId" TEXT NOT NULL REFERENCES sessions("sessionId") ON DELETE CASCADE,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE("messageId")
       )
     `);
 

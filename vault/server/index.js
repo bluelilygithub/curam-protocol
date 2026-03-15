@@ -54,6 +54,7 @@ async function seedInitialUser() {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/shared', require('./routes/sharedTasks'));
 app.use('/api/gmail', require('./routes/gmail'));
+app.use('/api/calendar', require('./routes/calendar'));
 
 const { requireAuth } = require('./middleware/auth');
 app.use('/api', requireAuth);
@@ -84,6 +85,7 @@ app.use('/api/goals', require('./routes/goals'));
 app.use('/api/notes', require('./routes/notes'));
 app.use('/api/session-files', require('./routes/sessionFiles'));
 app.use('/api/chains', require('./routes/chains'));
+app.use('/api/bookmarks', require('./routes/bookmarks'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

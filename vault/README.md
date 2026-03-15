@@ -17,33 +17,35 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Personas** | Reusable AI roles with custom system prompts (e.g. "Senior Copywriter", "Legal Reviewer") |
 | **Prompts** | Prompt library — save, tag, and reuse prompt templates across projects; supports `{{variable}}` placeholders that turn any prompt into a fill-in-the-blanks template |
 | **Memory** | Global persistent notes injected into all chats (facts the AI should always know) |
-| **Pinned URLs** | Attach web URLs to a project; content is fetched and stored for AI context |
+| **Pinned URLs** | Attach web URLs to a project; content is fetched and stored for AI context; YouTube URLs (`youtube.com/watch`, `youtu.be`) are automatically detected — the full video transcript is fetched directly from YouTube's InnerTube API (no third-party service), stored up to 50,000 chars, and injected into Claude's context up to 40,000 chars per transcript; regular pages use the SSRF-protected fetch route (4,000 chars in context); 📺 icon for YouTube, 🌐 for web pages; each card shows "Last fetched: today / yesterday / X days ago" and a refresh button; the Project Files Panel in chat lists all pinned pages with a paperclip attach button |
 | **Files** | Upload PDFs, images, text files (txt, md, csv, json), spreadsheets (xlsx, xls, ods), Word documents (docx, doc), and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example) to a project; text is extracted and AI-summarised on upload for all supported formats; spreadsheets converted to CSV per sheet; Word docs extracted via mammoth; code files stored as plain text, 500 KB limit, prompt-injection sanitised |
 | **Pinned files** | Pinned files are automatically included in every chat's system prompt for that project |
 | **Session files** | Select any project file to include in the current chat session only; persisted to `session_files` table so context survives page refresh; visible in the context bar above the message list |
-| **Notes** | Quick-capture thought pad — title, date, free text body; optional project link; "Take to Chat →" opens note as a new chat session with full context preloaded |
+| **Notes** | Quick-capture thought pad — title, date, free text body; optional project link; "Take to Chat →" opens note as a new chat session with full context preloaded; "Convert to Task" button on each note card and in the editor toolbar opens Quick Capture pre-filled with the note title, body (truncated to 500 chars), and linked project; a "↳ task created" pill appears on the note card after conversion |
 
 #### Chat & AI
 
 | Feature | Description |
 |---|---|
-| **Chat** | Claude and Gemini conversations scoped to a project's context; model and temperature switchable per session; today's date injected into every system prompt so the model always knows the current date; pinned file context served via RAG when `GEMINI_API_KEY` is set — only the most relevant chunks are injected rather than the full file text |
+| **Chat** | Claude and Gemini conversations scoped to a project's context; model and temperature switchable per session; today's date injected into every system prompt so the model always knows the current date; pinned file context served via RAG when `GEMINI_API_KEY` is set — only the most relevant chunks are injected rather than the full file text; AI responses exceeding 2500 characters auto-collapse with a fade-out and "Show more" toggle — messages containing code blocks are always shown in full; the most recent response is always expanded |
 | **RAG file context** | Pinned project files are chunked (~500 tokens, 50-token overlap at sentence boundaries) and embedded with Google `text-embedding-004` on upload; at chat time the user's message is embedded and the top-5 most semantically relevant chunks are retrieved via pgvector cosine similarity and injected under `## Relevant context from project files`; falls back to full-text injection if embeddings are unavailable; session files (explicitly attached by the user) are always injected in full |
 | **General Chat** | Project-free chat workspace for ad-hoc questions; sessions are saved and searchable |
 | **Auto-generated session titles** | After the first AI response in a new session, Claude Haiku automatically generates a concise 4-6 word title using both the user message and AI response as context; saved in the background without blocking the chat response; sidebar updates within ~2 seconds; never overwrites a title the user has manually set |
 | **Chat History** | Browse every session across all projects and General Chat, filterable by date range and searchable by content |
+| **Message bookmarks** | Star any individual message (user or AI) in a chat by hovering and clicking the ★ icon; bookmarks are persisted to the database; a Bookmarks tab on the Chat History page shows all bookmarked messages grouped by session with a 100-character preview, each clickable to navigate back to that session; an amber dot badge appears on the Chat History nav icon when any bookmarks exist |
 | **Project Files panel** | Side panel in the chat interface — lists all project files, upload new files, pin/unpin for permanent context, or click the paperclip icon on any file to add it to the current session; session files shown in the context bar above messages |
 | **Clipboard image paste** | Paste images directly from the clipboard into the chat input; sent as inline base64 to the AI, no file upload required |
 | **Native AI web search** | Globe/Search toggle in the chat header enables provider-native real-time web search — Anthropic's `web_search_20250305` tool for Claude models (capped at 3 searches per turn), Google Search grounding for Gemini models; the model decides when to search based on whether the query requires current information; a "Searching the web…" indicator replaces the loading dots while a search is in progress; on by default, toggleable per session |
 | **`@search` web search** | Type `@` in chat and select "Search the web"; results shown in a panel before attaching as URL context |
 | **`@gmail` email search** | Type `@` in chat and select "Search Gmail…"; natural language query translated to Gmail search syntax via Claude Haiku; browse results, attach email threads as context; ask follow-up questions about any thread via the `/ask` endpoint (SSE streaming) |
-| **@mention in Chat** | Type `@` in chat to insert context or trigger actions — attach a task's details (title, notes, due date), switch project context, insert a prompt from the library (with variable fill-in modal if placeholders are present), trigger web search, or query Gmail |
+| **`@calendar` event search** | Type `@` in chat and select "Search Calendar…"; natural language query (e.g. "meetings next week", "party time") translated to Google Calendar API parameters via Claude Haiku; time-based queries search a 30-day forward window; name-based searches automatically use a 90-day past/future window to find events regardless of date; browse results, attach events as context with title, time, and location; click outside the modal to dismiss |
+| **@mention in Chat** | Type `@` in chat to insert context or trigger actions — attach a task's details (title, notes, due date), switch project context, insert a prompt from the library (with variable fill-in modal if placeholders are present), trigger web search, query Gmail, or search Calendar |
 | **Document Compare** | Compare two documents side by side using any Claude or Gemini model; 4 comparison modes; save results to a project |
 | **Multi-Model Debate** | Pit multiple AI models against each other on a topic; multi-file context upload; synthesis summary |
 | **Export** | Export chat conversations to Markdown, JSON, or PDF; email thread export |
 | **Voice input** | Mic button in chat toolbar starts browser-native speech recognition (Web Speech API); live interim transcript preview; hidden in unsupported browsers |
 | **Read aloud** | Speaker button reads the last assistant message via browser text-to-speech; no external service required |
-| **Token budget alerts** | Set a per-session cost limit in Settings; amber warning at 80%, red at 100% with a direct "Summarise now" button |
+| **Token budget alerts** | Set a per-session cost limit in Settings; configurable amber warning threshold (50–90%, default 80%) and red critical threshold (90/95/100%, default 100%); both banners are dismissible with an ✕ button; re-alert frequency configurable (don't show again / every 10 messages / every 20 messages / at 95%); red banner includes a "Save to Notes" checkbox (checked by default) — on summarisation, automatically creates a note titled "[Session title] — Summary [date]" linked to the current project with a confirmation toast |
 | **Model error handling** | Stream errors classified by type and shown in a banner: 🔑 auth (key missing/invalid), 💳 billing (credit exhausted — links to Anthropic billing), 🤖 model not found, ⏳ rate limit, ⚠️ timeout/unknown; pre-send check blocks requests immediately if the provider key is confirmed absent |
 
 #### Tasks
@@ -98,6 +100,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 
 | Feature | Description |
 |---|---|
+| **Token Budget Settings** | Settings → Token Budget Alerts — configure initial alert threshold, critical threshold, and re-alert frequency after dismissal; settings persisted to DB and take effect immediately without page refresh |
 | **Admin Dashboard** | Usage stats — sessions, messages, tokens, searches, debates, comparisons; filterable by date range |
 | **Search** | Global search palette across projects, chats, files, and tasks |
 | **Password reset** | Email-based password reset flow with 1-hour expiry tokens |
@@ -150,11 +153,11 @@ No server restart or code deploy is required.
 
 ---
 
-## Gmail Integration
+## Gmail & Calendar Integration
 
-Users can connect their personal Gmail account via Google OAuth 2.0 and query their inbox using natural language directly from the chat `@gmail` mention.
+Users can connect their personal Gmail account via Google OAuth 2.0 and query their inbox using natural language directly from the chat `@gmail` mention. The same single OAuth flow also grants read-only Google Calendar access, enabling `@calendar` event search. Both integrations share the `gmail_tokens` table.
 
-### How it works end-to-end
+### Gmail — how it works end-to-end
 
 1. **OAuth flow** — `GET /api/gmail/auth` generates an OAuth URL with a short-lived state nonce stored in the `settings` table. Google redirects back to `GET /api/gmail/callback` (registered *before* `requireAuth` — no session cookie required during callback). Tokens are stored in `gmail_tokens`.
 
@@ -164,16 +167,29 @@ Users can connect their personal Gmail account via Google OAuth 2.0 and query th
 
 4. **Ask endpoint** — `POST /api/gmail/ask` streams a Claude Haiku answer about a specific thread via SSE. The system prompt strongly asserts inbox ownership to prevent content-policy refusals on financial/legal/personal emails. Any suspected refusal is logged to the console with the email subject and question for prompt tuning.
 
+### Calendar — how it works end-to-end
+
+1. **Shared OAuth** — the same Google OAuth flow requests `calendar.readonly` alongside `gmail.readonly`. If a user connected Gmail before Calendar was added, the Settings page shows a "Reconnect Google" prompt. Calendar access is confirmed by checking `scope.includes('calendar')` on the stored token.
+
+2. **Natural language → Calendar query** — `GET /api/calendar/search?q=` passes the query through `translateToCalendarQuery()` in `server/services/calendarNLP.js`, which calls Claude Haiku and returns `{ timeMin, timeMax, searchQuery, maxResults, calendarId, intent }`. All date ranges are pre-computed in JavaScript — Claude never calculates dates. Two default range strategies: time-based queries use today → +30 days; name-based searches (no time context) use −90 → +90 days so past and future events are both found.
+
+3. **Event attachment** — selecting a result fetches the full event via `GET /api/calendar/event/:eventId` and injects it as a `calendar://event/<id>` URL attachment with pre-formatted plain text (title, date/time, location, organiser, attendees, description).
+
+4. **Dismiss on outside click** — the search modal closes when clicking anywhere outside it, same as the Gmail and web search modals.
+
 ### Date ranges supported
 
 The `gmailNLP` service pre-computes all commonly needed date ranges from today's date: today, yesterday, this/last week (Mon-Sun), this/last month, this/last year, last 7/14/30/90 days, this/last quarter, current and last Australian financial year (Jul–Jun), and the most recent January.
 
+The `calendarNLP` service pre-computes the same ranges plus named weekdays for the current week (Monday–Sunday) and time-of-day boundaries (morning 06:00–12:00, afternoon 12:00–17:00, evening 17:00–22:00 UTC).
+
 ### Setup
 
 1. Enable the **Gmail API** in [Google Cloud Console](https://console.cloud.google.com/) and create an OAuth 2.0 Client ID (Web application type).
-2. Add the redirect URI: `https://your-app.up.railway.app/api/gmail/callback` (and `http://localhost:3001/api/gmail/callback` for local dev).
-3. Add the three env vars (see Environment Variables below).
-4. Connect from **Settings → Integrations → Connect Gmail**.
+2. Enable the **Google Calendar API** in the same Google Cloud project.
+3. Add the redirect URI: `https://your-app.up.railway.app/api/gmail/callback` (and `http://localhost:3001/api/gmail/callback` for local dev).
+4. Add the three env vars (see Environment Variables below).
+5. Connect from **Settings → Integrations → Connect Google** (one flow covers both Gmail and Calendar).
 
 ### NLP test harness
 
@@ -204,7 +220,7 @@ vault/
 │       ├── prompts.js            # Prompt library CRUD
 │       ├── memory.js             # Global memory CRUD
 │       ├── folders.js            # Folder management
-│       ├── pinnedUrls.js         # URL pinning + content fetch (SSRF-protected)
+│       ├── pinnedUrls.js         # URL pinning + content fetch; YouTube URLs detected and routed to youtubeTranscript.js (InnerTube API); SSRF-protected for all other URLs
 │       ├── fetchUrl.js           # URL content fetching (SSRF-protected)
 │       ├── webSearch.js          # Web search — Brave / Serper.dev / SerpAPI (rate-limited)
 │       ├── search.js             # Global search (vault-internal full-text)
@@ -216,14 +232,18 @@ vault/
 │       ├── taskTemplates.js      # Task template CRUD + apply
 │       ├── goals.js              # Objectives + Key Results CRUD + dashboard + AI KR suggestions (SSE)
 │       ├── gmail.js              # Gmail OAuth flow + search + thread fetch + ask (SSE); registered before requireAuth; applies auth internally for all paths except /callback
+│       ├── calendar.js           # Google Calendar search + event fetch + ask (SSE); shares gmail_tokens table; scope check ensures calendar.readonly was granted
 │       ├── sharedTasks.js        # Public shared task view — no auth (registered before requireAuth)
 │       ├── settings.js           # App settings key/value store (API keys, config)
+│       ├── bookmarks.js          # Bookmark CRUD — toggle, session lookup, all-bookmarks with message+session context, count endpoint
 │       └── health.js             # Health check endpoint
 │   ├── services/
 │   │   ├── embeddings.js         # RAG embedding service — embedText() calls Google text-embedding-004 (768-dim); retrieveRelevantChunks() queries file_chunks via pgvector cosine similarity; returns empty array on any error so callers fall back gracefully
 │   │   ├── chunker.js            # Text chunking — splits extracted text into ~500-token chunks at sentence boundaries with 50-token overlap; used by the file upload route and migration script
 │   │   ├── gmailNLP.js           # Natural language → Gmail query translator; calculateDates() pre-computes all date ranges; translateToGmailQuery() calls Claude Haiku; GMAIL_LIMITS constants
-│   │   └── gmailNLP.test.js      # 45-case test harness with scoring and ANSI colour output; run: node server/services/gmailNLP.test.js
+│   │   ├── gmailNLP.test.js      # 45-case test harness with scoring and ANSI colour output; run: node server/services/gmailNLP.test.js
+│   │   ├── calendarNLP.js        # Natural language → Calendar API query translator; calculateDates() pre-computes ISO 8601 time ranges for named days/weeks/time-of-day; translateToCalendarQuery() calls Claude Haiku; CALENDAR_LIMITS constants
+│   │   └── youtubeTranscript.js  # YouTube transcript fetcher — no npm dependency; isYoutubeUrl() detects YT links; fetchYoutubeTranscript() POSTs to InnerTube API for caption tracks, fetches caption XML, strips timestamps, fetches title via oEmbed; stores up to 50,000 chars; chat.js injects up to 40,000 chars per transcript; falls back to webpage fetch on failure
 │   ├── scripts/
 │   │   └── migrateEmbeddings.js  # One-time idempotent backfill — chunks and embeds all existing files that have extracted text but no file_chunks rows; run: npm run migrate:embeddings
 │
@@ -242,7 +262,7 @@ vault/
 │       │   ├── ProjectList.jsx   # Home — projects + Goals widget + Tasks widget
 │       │   ├── ProjectDetail.jsx # Project brief + files + pinned URLs
 │       │   ├── ChatPage.jsx      # Main chat interface (project and general); uses useModels for dynamic model list; MemoMessageList defined at module level and wrapped in React.memo so the message list only re-renders on message/streaming changes, not on every keystroke; handleOpenArtifact/handleRegenerate/handleBranch wrapped in useCallback; stableSuggestionSelect uses latest-ref pattern for stable FollowUpChips callback; @mention query debounced 150ms
-│       │   ├── ChatHistoryPage.jsx    # Browse all sessions by date / search
+│       │   ├── ChatHistoryPage.jsx    # Browse all sessions by date / search; Bookmarks tab shows all starred messages grouped by session
 │       │   ├── ComparisonPage.jsx     # Document compare tool
 │       │   ├── DebatePage.jsx         # Multi-model debate tool
 │       │   ├── PersonasPage.jsx  # Manage AI personas
@@ -258,7 +278,7 @@ vault/
 │       │   ├── Layout.jsx        # App shell with sidebar + top nav
 │       │   ├── ProjectSidebar.jsx
 │       │   ├── AuthGuard.jsx     # Route protection
-│       │   ├── MessageBubble.jsx # Chat message rendering
+│       │   ├── MessageBubble.jsx # Chat message rendering; ★ bookmark button on hover for both user and assistant messages
 │       │   ├── ArtifactPanel.jsx # Rendered code/content panel
 │       │   ├── ChatFileBar.jsx   # Files attached to a chat
 │       │   ├── ChatFilePicker.jsx
@@ -269,6 +289,7 @@ vault/
 │       │   ├── SearchPalette.jsx # Global search modal
 │       │   ├── AtMentionDropdown.jsx  # @file/@prompt/@search/@task/@gmail mentions in chat
 │       │   ├── GmailConnect.jsx   # Gmail OAuth connect/disconnect component (used in SettingsPage → Integrations)
+│       │   ├── CalendarConnect.jsx # Calendar OAuth status/connect component (used in SettingsPage → Integrations; shares Gmail OAuth flow)
 │       │   ├── FollowUpChips.jsx # Suggested follow-up prompts
 │       │   ├── ExportMenu.jsx
 │       │   ├── EmailModal.jsx
@@ -331,7 +352,7 @@ vault/
 | `personas` | Saved AI personas with system prompts |
 | `prompts` | Reusable prompt templates |
 | `memory` | Global persistent memory entries |
-| `pinned_urls` | URLs pinned to projects with fetched content |
+| `pinned_urls` | URLs pinned to projects with fetched content, `lastFetchedAt` timestamp, and `isYoutube` boolean (drives 📺/🌐 icon and transcript vs webpage fetch) |
 | `folders` | Folder organisation |
 | `debates` | Multi-model debate rounds and results |
 | `comparisons` | Saved document comparison results linked to projects |
@@ -345,9 +366,10 @@ vault/
 | `template_subtasks` | Subtask definitions belonging to a task template |
 | `objectives` | OKR Objectives — title, description, timeframe, colour, status, renewal dimension (`renewalDimension`) |
 | `key_results` | Key Results linked to an Objective — numeric target/current values, unit, due date |
-| `gmail_tokens` | Gmail OAuth tokens per user — `accessToken`, `refreshToken`, `tokenType`, `expiryDate`, `scope`, `email`; access token auto-refreshed and persisted via `googleapis` token event |
+| `gmail_tokens` | Gmail + Calendar OAuth tokens per user — `accessToken`, `refreshToken`, `tokenType`, `expiryDate`, `scope`, `email`; access token auto-refreshed and persisted via `googleapis` token event; `scope` field used to detect whether `calendar.readonly` was granted |
 | `notes` | User-scoped quick-capture notes — title, body, optional project link |
 | `session_files` | Files selected for a specific chat session — `sessionId` + `fileId` composite PK; content injected into system prompt for that session only |
+| `bookmarks` | Starred messages — `messageId` (FK → messages, unique), `sessionId` (FK → sessions); cascade-deleted when the message or session is deleted |
 | `file_chunks` | RAG chunk store — each row holds a ~500-token chunk of a file's extracted text, its chunk index, and a 768-dimensional Google `text-embedding-004` embedding (`vector(768)`); queried at chat time via pgvector cosine similarity to retrieve the top-5 most relevant chunks for the user's message; cascade-deleted when the parent file is deleted |
 
 ---
@@ -366,7 +388,7 @@ vault/
 | `PORT` | Optional | HTTP port (default `3001` in dev; Railway sets this automatically) |
 | `GEMINI_API_KEY` | Optional | Google Gemini API access — enables Gemini 2.0 Flash and Gemini 2.5 Pro models |
 | `SEARCH_API_KEY` | Optional | Web search API key — supports Brave Search (`BSA…` prefix), Serper.dev (40-char hex), or SerpAPI (default) |
-| `GOOGLE_CLIENT_ID` | Optional | Google OAuth 2.0 client ID — enables Gmail integration (`@gmail` in chat, Settings → Integrations) |
+| `GOOGLE_CLIENT_ID` | Optional | Google OAuth 2.0 client ID — enables Gmail + Calendar integration (`@gmail`, `@calendar` in chat, Settings → Integrations) |
 | `GOOGLE_CLIENT_SECRET` | Optional | Google OAuth 2.0 client secret |
 | `GOOGLE_REDIRECT_URI` | Optional | OAuth redirect URI — must match exactly in Google Cloud Console (e.g. `https://your-app.up.railway.app/api/gmail/callback`) |
 | `ENCRYPTION_KEY` | Optional² | 64 hex char key (32 bytes) for AES-256-GCM encryption of Gmail OAuth tokens at rest. Generate: `openssl rand -hex 32`. If absent, tokens stored plaintext with a startup warning. |

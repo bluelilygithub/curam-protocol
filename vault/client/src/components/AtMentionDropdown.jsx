@@ -3,7 +3,7 @@ import useProjectStore from '../store/projectStore';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 
-function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onPromptSelect, onClose }) {
+function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onCalendarSearch, onPromptSelect, onClose }) {
   const { projects, setActive } = useProjectStore();
   const getIcon = useIcon();
   const listRef = useRef(null);
@@ -38,13 +38,15 @@ function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onPromptS
       )
     : prompts.slice(0, 5);
 
-  const showSearch = query === '' || 'search the web'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('search');
-  const showGmail = query === '' || 'search gmail'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('gmail');
+  const showSearch   = query === '' || 'search the web'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('search');
+  const showGmail    = query === '' || 'search gmail'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('gmail');
+  const showCalendar = query === '' || 'search calendar'.startsWith(query.toLowerCase()) || query.toLowerCase().includes('calendar');
 
-  // Build items list: search option + gmail option + projects + tasks + prompts
+  // Build items list: search option + gmail option + calendar option + projects + tasks + prompts
   const items = [
-    ...(showSearch ? [{ id: '__search__', isSearch: true }] : []),
-    ...(showGmail ? [{ id: '__gmail__', isGmail: true }] : []),
+    ...(showSearch   ? [{ id: '__search__',   isSearch: true }]   : []),
+    ...(showGmail    ? [{ id: '__gmail__',    isGmail: true }]    : []),
+    ...(showCalendar ? [{ id: '__calendar__', isCalendar: true }] : []),
     ...filteredProjects.map(p => ({ ...p, isProject: true })),
     ...filteredTasks.map(t => ({ ...t, isTask: true })),
     ...filteredPrompts.map(p => ({ ...p, isPrompt: true })),
@@ -68,6 +70,7 @@ function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onPromptS
         if (!item) return;
         if (item.isSearch) onSearch?.();
         else if (item.isGmail) onGmailSearch?.();
+        else if (item.isCalendar) onCalendarSearch?.();
         else if (item.isProject) handleSelectProject(item);
         else if (item.isTask) handleSelectTask(item);
         else if (item.isPrompt) handleSelectPrompt(item);
@@ -99,7 +102,7 @@ function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onPromptS
   const hasProjects = filteredProjects.length > 0;
   const hasTasks = filteredTasks.length > 0;
   const hasPrompts = filteredPrompts.length > 0;
-  const specialCount = (showSearch ? 1 : 0) + (showGmail ? 1 : 0);
+  const specialCount = (showSearch ? 1 : 0) + (showGmail ? 1 : 0) + (showCalendar ? 1 : 0);
   const projectStartIdx = specialCount;
   const taskStartIdx = projectStartIdx + filteredProjects.length;
   const promptStartIdx = taskStartIdx + filteredTasks.length;
@@ -138,6 +141,20 @@ function AtMentionDropdown({ query, onSelect, onSearch, onGmailSearch, onPromptS
             >
               <span style={{ fontSize: 13 }}>✉️</span>
               <span>Search Gmail…</span>
+            </button>
+          );
+        }
+
+        if (item.isCalendar) {
+          return (
+            <button
+              key="__calendar__"
+              onClick={() => onCalendarSearch?.()}
+              className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors"
+              style={{ background: bg, color: 'var(--color-primary)' }}
+            >
+              <span style={{ fontSize: 13 }}>📅</span>
+              <span>Search Calendar…</span>
             </button>
           );
         }

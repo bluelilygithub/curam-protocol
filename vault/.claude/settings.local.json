@@ -19,7 +19,8 @@
       "Bash(\"/c/Program Files/nodejs/node.exe\":*)",
       "Bash(cmd:*)",
       "Bash(echo:*)",
-      "Bash(\"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" install:*)"
+      "Bash(\"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" install:*)",
+      "Bash(cd:*)"
     ]
   }
 }

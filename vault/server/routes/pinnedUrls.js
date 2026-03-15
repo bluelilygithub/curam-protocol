@@ -5,6 +5,7 @@ const http = require('http');
 const https = require('https');
 const dns = require('dns');
 const { URL } = require('url');
+const { isYoutubeUrl, fetchYoutubeTranscript } = require('../services/youtubeTranscript');
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
 
@@ -102,17 +103,66 @@ router.get('/:projectId', async (req, res) => {
 router.post('/', async (req, res) => {
   const { projectId, url } = req.body;
   if (!projectId || !url) return res.status(400).json({ error: 'projectId and url required' });
+
+  const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+  let title, content, youtube = false;
+
   try {
-    const raw = await fetchUrl(url.startsWith('http') ? url : `https://${url}`);
-    const { title, content } = parseHtml(raw, url);
+    if (isYoutubeUrl(fullUrl)) {
+      youtube = true;
+      try {
+        ({ title, content } = await fetchYoutubeTranscript(fullUrl));
+      } catch (ytErr) {
+        console.warn('[pinnedUrls] YouTube transcript failed, falling back to webpage:', ytErr.message);
+        const raw = await fetchUrl(fullUrl);
+        ({ title, content } = parseHtml(raw, url));
+      }
+    } else {
+      const raw = await fetchUrl(fullUrl);
+      ({ title, content } = parseHtml(raw, url));
+    }
+
     const { rows } = await pool.query(
-      'INSERT INTO pinned_urls ("projectId", url, title, content) VALUES ($1, $2, $3, $4) RETURNING id',
-      [projectId, url, title, content]
+      'INSERT INTO pinned_urls ("projectId", url, title, content, "isYoutube", "lastFetchedAt") VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id',
+      [projectId, url, title, content, youtube]
     );
     const { rows: pinned } = await pool.query('SELECT * FROM pinned_urls WHERE id=$1', [rows[0].id]);
     res.status(201).json(pinned[0]);
   } catch (err) {
     const status = (err.message.includes('private') || err.message.includes('DNS') || err.message.includes('too large')) ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// PATCH /api/pinned-urls/:id/refresh — re-fetch and update content
+router.patch('/:id/refresh', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM pinned_urls WHERE id=$1', [req.params.id]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const { url, isYoutube } = rows[0];
+    const fullUrl = url.startsWith('http') ? url : `https://${url}`;
+
+    let title, content;
+    if (isYoutube) {
+      try {
+        ({ title, content } = await fetchYoutubeTranscript(fullUrl));
+      } catch (ytErr) {
+        console.warn('[pinnedUrls] YouTube transcript refresh failed, falling back to webpage:', ytErr.message);
+        const raw = await fetchUrl(fullUrl);
+        ({ title, content } = parseHtml(raw, url));
+      }
+    } else {
+      const raw = await fetchUrl(fullUrl);
+      ({ title, content } = parseHtml(raw, url));
+    }
+
+    const { rows: updated } = await pool.query(
+      'UPDATE pinned_urls SET title=$1, content=$2, "lastFetchedAt"=NOW() WHERE id=$3 RETURNING *',
+      [title, content, req.params.id]
+    );
+    res.json(updated[0]);
+  } catch (err) {
+    const status = (err.message.includes('private') || err.message.includes('DNS') || err.message.includes('too large') || err.message.includes('timed out') || err.message.includes('Too many')) ? 400 : 500;
     res.status(status).json({ error: err.message });
   }
 });

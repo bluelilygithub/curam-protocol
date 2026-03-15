@@ -22,6 +22,7 @@ function Layout() {
 
   const [dueTodayCount, setDueTodayCount] = useState(0);
   const [showDueBanner, setShowDueBanner] = useState(false);
+  const [bookmarkCount, setBookmarkCount] = useState(0);
 
   useEffect(() => {
     if (sessionStorage.getItem('tasksAlertDismissed')) return;
@@ -42,6 +43,16 @@ function Layout() {
     sessionStorage.setItem('tasksAlertDismissed', '1');
     setShowDueBanner(false);
   };
+
+  const fetchBookmarkCount = () => {
+    api.get('/api/bookmarks/count').then(r => r.json()).then(d => setBookmarkCount(d.count || 0)).catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchBookmarkCount();
+    window.addEventListener('vault:bookmark-changed', fetchBookmarkCount);
+    return () => window.removeEventListener('vault:bookmark-changed', fetchBookmarkCount);
+  }, []);
 
   // Track mobile/desktop on resize
   useEffect(() => {
@@ -230,11 +241,17 @@ function Layout() {
 
           <Link
             to="/history"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
             style={{ color: location.pathname === '/history' ? 'var(--color-primary)' : 'var(--color-muted)' }}
             title="Chat History"
           >
             {getIcon('clock', { size: 16 })}
+            {bookmarkCount > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+                style={{ background: '#f59e0b' }}
+              />
+            )}
           </Link>
 
 <Link

@@ -93,9 +93,11 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
       'SELECT * FROM pinned_urls WHERE "projectId"=$1', [project.id]
     );
     if (pinnedUrls.length > 0) {
-      const blocks = pinnedUrls.map(u =>
-        `[Pinned web page: ${u.url}]\nTitle: ${u.title || '(no title)'}\n${(u.content || '').substring(0, 4000)}`
-      );
+      const blocks = pinnedUrls.map(u => {
+        const limit = u.isYoutube ? 40000 : 4000;
+        const label = u.isYoutube ? 'YouTube transcript' : 'Pinned web page';
+        return `[${label}: ${u.url}]\nTitle: ${u.title || '(no title)'}\n${(u.content || '').substring(0, limit)}`;
+      });
       parts.push(`\nPinned web pages:\n${blocks.join('\n\n')}`);
     }
   }

@@ -3,6 +3,7 @@ const router = express.Router();
 const http = require('http');
 const https = require('https');
 const dns = require('dns');
+const { isYoutubeUrl, fetchYoutubeTranscript } = require('../services/youtubeTranscript');
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
 
@@ -123,6 +124,17 @@ router.post('/', async (req, res) => {
   try { new URL(normalised); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
 
   try {
+    // YouTube URLs — fetch transcript instead of webpage
+    if (isYoutubeUrl(normalised)) {
+      try {
+        const { title, content } = await fetchYoutubeTranscript(normalised);
+        return res.json({ url: normalised, title, content });
+      } catch (ytErr) {
+        console.warn('[fetch-url] YouTube transcript failed, falling back to webpage:', ytErr.message);
+        // Fall through to regular HTML fetch
+      }
+    }
+
     const { body, statusCode } = await doGet(normalised);
     if (statusCode >= 400) {
       return res.json({ url: normalised, error: `Server returned ${statusCode}`, title: '', content: '' });

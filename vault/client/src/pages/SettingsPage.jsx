@@ -8,12 +8,20 @@ import { MODELS as DEFAULT_MODELS } from '../utils/models';
 import api from '../utils/apiClient';
 import { useModels } from '../hooks/useModels';
 import GmailConnect from '../components/GmailConnect';
+import CalendarConnect from '../components/CalendarConnect';
 import { startGoalsTour, TOUR_KEY } from '../utils/tours/goalsTour';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
 
 function SettingsPage() {
   const navigate = useNavigate();
-  const { font, theme, iconPack, setFont, setTheme, setIconPack, sessionBudget, setSessionBudget, allowedFileTypes, setAllowedFileTypes } = useSettingsStore();
+  const {
+    font, theme, iconPack, setFont, setTheme, setIconPack,
+    sessionBudget, setSessionBudget,
+    budgetAlertThreshold, setBudgetAlertThreshold,
+    budgetCriticalThreshold, setBudgetCriticalThreshold,
+    budgetReAlertFrequency, setBudgetReAlertFrequency,
+    allowedFileTypes, setAllowedFileTypes,
+  } = useSettingsStore();
   const [customBudget, setCustomBudget] = useState(
     sessionBudget && ![0.10, 0.25, 0.50, 1.00, 5.00].includes(sessionBudget)
       ? String(sessionBudget)
@@ -44,6 +52,9 @@ function SettingsPage() {
         setAllowedFileTypes(DEFAULT_FILE_TYPES);
         api.post('/api/settings', { key: 'allowedFileTypes', value: DEFAULT_FILE_TYPES }).catch(() => {});
       }
+      if (data.budgetAlertThreshold) setBudgetAlertThreshold(Number(data.budgetAlertThreshold));
+      if (data.budgetCriticalThreshold) setBudgetCriticalThreshold(Number(data.budgetCriticalThreshold));
+      if (data.budgetReAlertFrequency) setBudgetReAlertFrequency(data.budgetReAlertFrequency);
     }).catch(() => {});
   }, []);
 
@@ -272,9 +283,89 @@ function SettingsPage() {
           />
           {sessionBudget !== null && (
             <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Warn at ${(sessionBudget * 0.8).toFixed(3)} (80%) and ${sessionBudget.toFixed(2)} (100%)
+              Warn at ${(sessionBudget * (budgetAlertThreshold / 100)).toFixed(3)} ({budgetAlertThreshold}%) and ${(sessionBudget * (budgetCriticalThreshold / 100)).toFixed(3)} ({budgetCriticalThreshold}%)
             </span>
           )}
+        </div>
+      </section>
+
+      {/* Token Budget Alert Controls */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Token Budget Alerts
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Control when and how often budget alerts appear in the chat interface.
+        </p>
+
+        <div className="space-y-4">
+          {/* Initial alert threshold */}
+          <div>
+            <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text)' }}>Initial alert threshold</p>
+            <div className="flex flex-wrap gap-2">
+              {[50, 60, 70, 80, 90].map(pct => (
+                <button
+                  key={pct}
+                  onClick={() => { setBudgetAlertThreshold(pct); api.post('/api/settings', { key: 'budgetAlertThreshold', value: String(pct) }).catch(() => {}); }}
+                  className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                  style={{
+                    background: budgetAlertThreshold === pct ? 'var(--color-primary)' : 'var(--color-surface)',
+                    borderColor: budgetAlertThreshold === pct ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: budgetAlertThreshold === pct ? '#fff' : 'var(--color-text)',
+                  }}
+                >
+                  {pct}%
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Critical threshold */}
+          <div>
+            <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text)' }}>Critical threshold</p>
+            <div className="flex flex-wrap gap-2">
+              {[90, 95, 100].map(pct => (
+                <button
+                  key={pct}
+                  onClick={() => { setBudgetCriticalThreshold(pct); api.post('/api/settings', { key: 'budgetCriticalThreshold', value: String(pct) }).catch(() => {}); }}
+                  className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                  style={{
+                    background: budgetCriticalThreshold === pct ? '#ef4444' : 'var(--color-surface)',
+                    borderColor: budgetCriticalThreshold === pct ? '#ef4444' : 'var(--color-border)',
+                    color: budgetCriticalThreshold === pct ? '#fff' : 'var(--color-text)',
+                  }}
+                >
+                  {pct}%
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Re-alert frequency */}
+          <div>
+            <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-text)' }}>Re-alert frequency after dismissal</p>
+            <div className="flex flex-col gap-1.5">
+              {[
+                { value: 'session', label: "Don't show again this session" },
+                { value: 'every10', label: 'Every 10 messages' },
+                { value: 'every20', label: 'Every 20 messages' },
+                { value: 'at95', label: 'When I hit 95%' },
+              ].map(opt => (
+                <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="reAlertFreq"
+                    value={opt.value}
+                    checked={budgetReAlertFrequency === opt.value}
+                    onChange={() => { setBudgetReAlertFrequency(opt.value); api.post('/api/settings', { key: 'budgetReAlertFrequency', value: opt.value }).catch(() => {}); }}
+                    className="accent-current"
+                    style={{ accentColor: 'var(--color-primary)' }}
+                  />
+                  <span className="text-xs" style={{ color: 'var(--color-text)' }}>{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -614,7 +705,10 @@ function SettingsPage() {
       {/* Integrations */}
       <section>
         <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Integrations</h2>
-        <GmailConnect />
+        <div className="space-y-3">
+          <GmailConnect />
+          <CalendarConnect />
+        </div>
       </section>
 
       {/* Product Tours */}
