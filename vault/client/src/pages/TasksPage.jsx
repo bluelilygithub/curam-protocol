@@ -127,7 +127,98 @@ function TaskShortcutsModal({ onClose }) {
   );
 }
 
-function MatrixTaskRow({ task, onToggle, onEdit, onOpen, prominent }) {
+// Describes the attribute changes and rationale for each target quadrant
+const QUADRANT_MOVE_INFO = {
+  q1: {
+    label: 'Do First', color: '#ef4444',
+    implication: 'Tackle this right away — it\'s both pressing and important.',
+    getChanges: () => ({ isUrgent: 1, priority: 'high' }),
+    changeDesc: () => 'Marked ⚡ Urgent · Priority → High',
+  },
+  q2: {
+    label: 'Schedule', color: '#6366f1',
+    implication: 'Block dedicated time for this — it matters but doesn\'t need to happen today.',
+    getChanges: () => ({ isUrgent: 0, priority: 'high' }),
+    changeDesc: () => 'Urgent flag removed · Priority → High',
+  },
+  q3: {
+    label: 'Delegate', color: '#f59e0b',
+    implication: 'It\'s pressing but not your highest-value work. Consider handing it off.',
+    getChanges: (task) => ({ isUrgent: 1, priority: task.priority === 'high' ? 'medium' : task.priority }),
+    changeDesc: (task) => task.priority === 'high'
+      ? 'Marked ⚡ Urgent · Priority → Medium'
+      : 'Marked ⚡ Urgent',
+  },
+  q4: {
+    label: 'Eliminate', color: '#6b7280',
+    implication: 'Ask yourself: does this task actually need to exist?',
+    getChanges: (task) => ({ isUrgent: 0, priority: task.priority === 'high' ? 'medium' : task.priority }),
+    changeDesc: (task) => task.priority === 'high'
+      ? 'Urgent flag removed · Priority → Medium'
+      : 'Urgent flag removed',
+  },
+};
+
+function MatrixMoveModal({ task, fromQuadrant, toQuadrant, onConfirm, onCancel }) {
+  const from = QUADRANT_MOVE_INFO[fromQuadrant];
+  const to = QUADRANT_MOVE_INFO[toQuadrant];
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onCancel]);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl border shadow-2xl p-6 space-y-4"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
+        {/* Quadrant transition header */}
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <span className="px-2 py-0.5 rounded-lg text-xs font-bold" style={{ background: from.color + '22', color: from.color }}>{from.label}</span>
+          <span style={{ color: 'var(--color-muted)' }}>→</span>
+          <span className="px-2 py-0.5 rounded-lg text-xs font-bold" style={{ background: to.color + '22', color: to.color }}>{to.label}</span>
+        </div>
+
+        {/* Task title */}
+        <p className="text-sm font-medium leading-snug" style={{ color: 'var(--color-text)' }}>"{task.title}"</p>
+
+        {/* What will change */}
+        <div className="rounded-xl px-3 py-2.5 text-xs space-y-1" style={{ background: to.color + '12', border: `1px solid ${to.color}33` }}>
+          <p className="font-semibold" style={{ color: to.color }}>What changes</p>
+          <p style={{ color: 'var(--color-text)' }}>{to.changeDesc(task)}</p>
+        </div>
+
+        {/* Implication */}
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{to.implication}</p>
+
+        {/* Actions */}
+        <div className="flex gap-2 justify-end pt-1">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-xl text-sm border"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
+            style={{ background: to.color }}
+          >
+            Move to {to.label}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MatrixTaskRow({ task, quadrantKey, onToggle, onEdit, onOpen, onDragStart, prominent }) {
   const getIcon = useIcon();
   const due = dueInfo(task.dueDate);
   const isDone = task.status === 'done';
@@ -135,12 +226,18 @@ function MatrixTaskRow({ task, onToggle, onEdit, onOpen, prominent }) {
     <div
       className="group flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
       style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+      draggable={!isDone}
+      onDragStart={(e) => {
+        e.stopPropagation();
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', JSON.stringify({ taskId: task.id, fromQuadrant: quadrantKey }));
+        onDragStart?.();
+      }}
       onClick={onOpen}
     >
       <button onClick={(e) => { e.stopPropagation(); onToggle(); }} style={{ color: isDone ? '#22c55e' : 'var(--color-muted)', flexShrink: 0 }}>
         {getIcon(isDone ? 'check-circle' : 'circle', { size: prominent ? 15 : 13 })}
       </button>
-      {/* Q2 task titles are slightly larger and bolder to reinforce visual priority */}
       <span
         className={`flex-1 leading-snug ${prominent ? 'text-sm font-medium' : 'text-xs'}`}
         style={{ color: 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none', opacity: isDone ? 0.6 : 1 }}
@@ -162,12 +259,57 @@ const MATRIX_QUADRANTS = [
   { key: 'q4', label: 'Eliminate', sublabel: 'Not Urgent + Not Important', color: '#6b7280', test: t => !t.isUrgent && t.priority !== 'high' },
 ];
 
-function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, dimensionLabel }) {
+function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, onMoveTask, dimensionLabel }) {
   const q1Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && t.isUrgent && t.priority === 'high');
   const q2Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && !t.isUrgent && t.priority === 'high');
   const q3Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && t.isUrgent && t.priority !== 'high');
   const q4Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && !t.isUrgent && t.priority !== 'high');
   const qTasksMap = { q1: q1Tasks, q2: q2Tasks, q3: q3Tasks, q4: q4Tasks };
+
+  // Drag-and-drop state
+  const [dragOverQuadrant, setDragOverQuadrant] = useState(null);
+  const [pendingMove, setPendingMove] = useState(null); // { task, fromQuadrant, toQuadrant }
+  const dragCounters = useRef({}); // per-quadrant enter/leave counters to handle child elements
+
+  function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function handleDragEnter(e, quadrantKey) {
+    e.preventDefault();
+    dragCounters.current[quadrantKey] = (dragCounters.current[quadrantKey] || 0) + 1;
+    setDragOverQuadrant(quadrantKey);
+  }
+
+  function handleDragLeave(e, quadrantKey) {
+    dragCounters.current[quadrantKey] = (dragCounters.current[quadrantKey] || 0) - 1;
+    if (dragCounters.current[quadrantKey] <= 0) {
+      dragCounters.current[quadrantKey] = 0;
+      setDragOverQuadrant(prev => prev === quadrantKey ? null : prev);
+    }
+  }
+
+  function handleDrop(e, toQuadrant) {
+    e.preventDefault();
+    setDragOverQuadrant(null);
+    dragCounters.current = {};
+    try {
+      const { taskId, fromQuadrant } = JSON.parse(e.dataTransfer.getData('text/plain'));
+      if (fromQuadrant === toQuadrant) return;
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+      setPendingMove({ task, fromQuadrant, toQuadrant });
+    } catch { /* malformed drag data */ }
+  }
+
+  function confirmMove() {
+    if (!pendingMove) return;
+    const { task, toQuadrant } = pendingMove;
+    const changes = QUADRANT_MOVE_INFO[toQuadrant].getChanges(task);
+    onMoveTask?.(task, changes);
+    setPendingMove(null);
+  }
 
   const urgentImportant = tasks.filter(t => t.status !== 'done' && t.isUrgent && t.priority === 'high').length;
   const notUrgentImportant = tasks.filter(t => t.status !== 'done' && !t.isUrgent && t.priority === 'high').length;
@@ -185,36 +327,38 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, di
   return (
     <div className="flex-1 overflow-auto p-4 flex flex-col gap-3" style={{ minHeight: 0 }}>
 
-      {/* Insight bar — unchanged */}
+      {pendingMove && (
+        <MatrixMoveModal
+          task={pendingMove.task}
+          fromQuadrant={pendingMove.fromQuadrant}
+          toQuadrant={pendingMove.toQuadrant}
+          onConfirm={confirmMove}
+          onCancel={() => setPendingMove(null)}
+        />
+      )}
+
+      {/* Insight bar */}
       <div className="flex-shrink-0 text-xs px-3 py-2 rounded-xl flex items-center gap-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
         <span style={{ color: 'var(--color-primary)' }}>📊</span>
         {dimensionLabel && <span style={{ fontWeight: 600 }}>{dimensionLabel} ·</span>}
         <span>{insight}</span>
-        <span style={{ marginLeft: 'auto', opacity: 0.5 }}>Urgent = tagged ⚡ · Important = High priority</span>
+        <span style={{ marginLeft: 'auto', opacity: 0.5 }}>Urgent = tagged ⚡ · Important = High priority · Drag tasks between quadrants</span>
       </div>
 
-      {/*
-        Two-column layout — Q2 (Schedule / deep work) gets the wider right column
-        to make it the primary visual focal point. Q1, Q3, Q4 stack in the left column.
-        On mobile (<640px) the columns stack vertically with Q2 shown first.
-      */}
       <div className="flex flex-col sm:flex-row gap-3" style={{ flex: 1, minHeight: 0 }}>
 
-        {/* ── Right column: Q2 — Schedule (Not Urgent + Important) ───────────────
-            Rendered first in DOM so it appears at top on mobile.
-            On sm+ it appears on the right via `order-last sm:order-none`.
-            Width: ~58% on desktop. Enhanced background, border, and shadow
-            signal this as the primary quadrant (Habit 3: Put First Things First).
-        */}
+        {/* ── Right column: Q2 — Schedule ─────────────────────────────────────── */}
         <section
           aria-label="Q2 — Schedule: Not Urgent, Important"
-          className="rounded-2xl border flex flex-col overflow-hidden order-first sm:order-last w-full sm:w-[58%] flex-shrink-0"
+          className="rounded-2xl border flex flex-col overflow-hidden order-first sm:order-last w-full sm:w-[58%] flex-shrink-0 transition-all duration-150"
+          onDragOver={handleDragOver}
+          onDragEnter={(e) => handleDragEnter(e, 'q2')}
+          onDragLeave={(e) => handleDragLeave(e, 'q2')}
+          onDrop={(e) => handleDrop(e, 'q2')}
           style={{
-            borderColor: q2Color + '66',
-            /* Slightly richer tint than the secondary quadrants */
-            background: q2Color + '10',
-            /* Subtle glow to visually lift Q2 above the grid */
-            boxShadow: `0 4px 20px ${q2Color}1a`,
+            borderColor: dragOverQuadrant === 'q2' ? q2Color : q2Color + '66',
+            background: dragOverQuadrant === 'q2' ? q2Color + '1a' : q2Color + '10',
+            boxShadow: dragOverQuadrant === 'q2' ? `0 0 0 2px ${q2Color}, 0 4px 20px ${q2Color}2a` : `0 4px 20px ${q2Color}1a`,
             minHeight: 200,
           }}
         >
@@ -222,7 +366,6 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, di
             className="px-4 py-3 border-b flex items-center gap-2 flex-shrink-0"
             style={{ borderColor: q2Color + '44' }}
           >
-            {/* Slightly larger label text than secondary quadrants */}
             <span className="text-base font-bold" style={{ color: q2Color }}>Schedule</span>
             <span className="text-xs font-medium" style={{ color: q2Color, opacity: 0.75 }}>Not Urgent + Important</span>
             <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full font-semibold" style={{ background: q2Color + '22', color: q2Color }}>{q2Tasks.length}</span>
@@ -232,6 +375,7 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, di
               <MatrixTaskRow
                 key={task.id}
                 task={task}
+                quadrantKey="q2"
                 prominent
                 onToggle={() => onToggleStatus(task)}
                 onEdit={() => onEdit(task)}
@@ -239,26 +383,33 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, di
               />
             ))}
             {q2Tasks.length === 0 && (
-              <div className="py-8 text-center text-xs" style={{ color: q2Color, opacity: 0.35 }}>
-                No important tasks scheduled
+              <div className="py-8 text-center text-xs" style={{ color: q2Color, opacity: dragOverQuadrant === 'q2' ? 0.7 : 0.35 }}>
+                {dragOverQuadrant === 'q2' ? 'Drop to schedule' : 'No important tasks scheduled'}
               </div>
             )}
           </div>
         </section>
 
-        {/* ── Left column: Q1, Q3, Q4 stacked vertically ────────────────────────
-            Secondary quadrants share the narrower left column (~42% on desktop).
-            They retain their original styling at reduced visual weight.
-        */}
+        {/* ── Left column: Q1, Q3, Q4 ─────────────────────────────────────────── */}
         <div className="flex flex-col gap-3 order-last sm:order-first w-full sm:w-[42%] flex-shrink-0">
           {MATRIX_QUADRANTS.filter(q => q.key !== 'q2').map(({ key, label, sublabel, color }) => {
             const qTasks = qTasksMap[key];
+            const isOver = dragOverQuadrant === key;
             return (
               <section
                 key={key}
                 aria-label={`${key.toUpperCase()} — ${label}: ${sublabel}`}
-                className="rounded-2xl border flex flex-col overflow-hidden"
-                style={{ borderColor: color + '44', background: color + '08', minHeight: 140 }}
+                className="rounded-2xl border flex flex-col overflow-hidden transition-all duration-150"
+                onDragOver={handleDragOver}
+                onDragEnter={(e) => handleDragEnter(e, key)}
+                onDragLeave={(e) => handleDragLeave(e, key)}
+                onDrop={(e) => handleDrop(e, key)}
+                style={{
+                  borderColor: isOver ? color : color + '44',
+                  background: isOver ? color + '14' : color + '08',
+                  boxShadow: isOver ? `0 0 0 2px ${color}` : 'none',
+                  minHeight: 140,
+                }}
               >
                 <div className="px-4 py-2.5 border-b flex items-center gap-2 flex-shrink-0" style={{ borderColor: color + '33' }}>
                   <span className="text-sm font-semibold" style={{ color }}>{label}</span>
@@ -270,13 +421,16 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, di
                     <MatrixTaskRow
                       key={task.id}
                       task={task}
+                      quadrantKey={key}
                       onToggle={() => onToggleStatus(task)}
                       onEdit={() => onEdit(task)}
                       onOpen={() => onExpand(task.id)}
                     />
                   ))}
                   {qTasks.length === 0 && (
-                    <div className="py-6 text-center text-xs" style={{ color: 'var(--color-muted)', opacity: 0.4 }}>Empty</div>
+                    <div className="py-6 text-center text-xs" style={{ color: 'var(--color-muted)', opacity: isOver ? 0.7 : 0.4 }}>
+                      {isOver ? 'Drop here' : 'Empty'}
+                    </div>
                   )}
                 </div>
               </section>
@@ -536,6 +690,11 @@ export default function TasksPage() {
   const handleDeleteComment = async (taskId, commentId) => {
     await api.delete(`/api/tasks/comments/${commentId}`);
     setCommentsCache(prev => ({ ...prev, [taskId]: (prev[taskId] || []).filter(c => c.id !== commentId) }));
+  };
+
+  const handleMoveMatrixTask = async (task, changes) => {
+    const updated = await api.put(`/api/tasks/${task.id}`, changes).then(r => r.json());
+    setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
   };
 
   const handleDelete = async (id, { stopSeries = false } = {}) => {
@@ -1915,6 +2074,7 @@ export default function TasksPage() {
                 onToggleStatus={handleToggleStatus}
                 onEdit={openEdit}
                 onExpand={handleExpand}
+                onMoveTask={handleMoveMatrixTask}
                 dimensionLabel={filterDimension ? RENEWAL_DIMS.find(d => d.key === filterDimension)?.label : null}
               />
             </div>
