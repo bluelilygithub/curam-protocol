@@ -35,7 +35,7 @@ const TEMPERATURES = [
 // not when the user types in the input field.
 const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
-  suggestions, onDelete, onBranch, onOpenArtifact, onRegenerate, onSuggestionSelect,
+  suggestions, onDelete, onBranch, onOpenArtifact, onSuggestionSelect,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
 }) {
   const getIcon = useIcon();
@@ -57,20 +57,7 @@ const MemoMessageList = React.memo(function MemoMessageList({
               isLatest={isLastAssistant}
             />
             {isLastAssistant && !isStreaming && (
-              <>
-                <div className="flex justify-start mb-3 ml-10">
-                  <button
-                    onClick={onRegenerate}
-                    className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-opacity hover:opacity-70"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
-                    title="Regenerate response"
-                  >
-                    {getIcon('refresh-cw', { size: 11 })}
-                    Regenerate
-                  </button>
-                </div>
-                <FollowUpChips suggestions={suggestions} onSelect={onSuggestionSelect} />
-              </>
+              <FollowUpChips suggestions={suggestions} onSelect={onSuggestionSelect} />
             )}
           </div>
         );
@@ -86,7 +73,7 @@ function ChatPage({ general = false }) {
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
-  const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
+  const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
   const { models: MODELS } = useModels();
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, startListening, stopListening, speak } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
@@ -745,14 +732,6 @@ function ChatPage({ general = false }) {
     setActiveArtifacts({ artifacts: blocks, initialIndex: idx });
   }, []);
 
-  const handleRegenerate = useCallback(async () => {
-    if (isStreaming || messages.length < 2) return;
-    const lastUser = [...messages].reverse().find(m => m.role === 'user');
-    if (!lastUser) return;
-    await regenerate(lastUser.content, [], [], effectiveModel, [], temperature, selectedPersonaId, reasoning, webSearch);
-    setTimeout(fetchSessions, 2000);
-  }, [isStreaming, messages, effectiveModel, regenerate, temperature, selectedPersonaId, reasoning, webSearch, fetchSessions]);
-
   const handleBranch = useCallback(async (messageIndex) => {
     if (!sessionId) return;
     try {
@@ -1314,7 +1293,6 @@ function ChatPage({ general = false }) {
                 onDelete={deleteMessagePair}
                 onBranch={handleBranch}
                 onOpenArtifact={handleOpenArtifact}
-                onRegenerate={handleRegenerate}
                 onSuggestionSelect={stableSuggestionSelect}
                 messagesEndRef={messagesEndRef}
                 bookmarkedMap={bookmarkedMap}

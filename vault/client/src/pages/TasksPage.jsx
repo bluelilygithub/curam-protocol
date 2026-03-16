@@ -2401,6 +2401,7 @@ export default function TasksPage() {
                     <option value="weekly">Weekly</option>
                     <option value="fortnightly">Fortnightly</option>
                     <option value="monthly">Monthly</option>
+                    <option value="quarterly">Quarterly</option>
                     <option value="annually">Annually</option>
                   </select>
                 </div>

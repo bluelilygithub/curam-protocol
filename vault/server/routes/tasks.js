@@ -60,6 +60,7 @@ function calculateNextDate(dateStr, recurrence) {
     case 'weekly': d.setUTCDate(d.getUTCDate() + 7); break;
     case 'fortnightly': d.setUTCDate(d.getUTCDate() + 14); break;
     case 'monthly': d.setUTCMonth(d.getUTCMonth() + 1); break;
+    case 'quarterly': d.setUTCMonth(d.getUTCMonth() + 3); break;
     case 'annually': d.setUTCFullYear(d.getUTCFullYear() + 1); break;
     default: return null;
   }

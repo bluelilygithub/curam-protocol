@@ -168,45 +168,7 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
         ✦
       </div>
 
-      <div className="flex-1 min-w-0 relative">
-        {/* Action buttons — appear on hover */}
-        {message.content && (
-          <div className="absolute -top-1 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onOpenArtifact && codeBlocks.length > 0 && (
-              <button
-                onClick={() => onOpenArtifact(0, codeBlocks)}
-                className="flex items-center gap-1 h-6 px-2 rounded-md text-xs font-medium"
-                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
-                title="Open in Artifacts panel"
-              >
-                {getIcon('external-link', { size: 10 })}
-                {codeBlocks.length > 1 ? `${codeBlocks.length} artifacts` : 'Artifact'}
-              </button>
-            )}
-            {message.id && onToggleBookmark && (
-              <button
-                onClick={() => onToggleBookmark(message.id)}
-                className="w-6 h-6 flex items-center justify-center rounded-md"
-                style={{
-                  background: 'var(--color-surface)',
-                  border: '1px solid var(--color-border)',
-                  color: bookmarked ? '#f59e0b' : 'var(--color-muted)',
-                }}
-                title={bookmarked ? 'Remove bookmark' : 'Bookmark this message'}
-              >
-                {getIcon('star', { size: 11, fill: bookmarked ? 'currentColor' : 'none' })}
-              </button>
-            )}
-            <button
-              onClick={() => downloadResponseMd(message.content)}
-              className="w-6 h-6 flex items-center justify-center rounded-md"
-              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
-              title="Save response as Markdown"
-            >
-              {getIcon('file-down', { size: 11 })}
-            </button>
-          </div>
-        )}
+      <div className="flex-1 min-w-0">
         {/* Reasoning / thinking block */}
         {message.thinking && (
           <div className="mb-2">
@@ -278,6 +240,45 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
                   : getIcon('chevron-up', { size: 12 })}
               </button>
             )}
+          </div>
+        )}
+
+        {/* Action buttons — appear on hover, rendered below message content */}
+        {message.content && (
+          <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {onOpenArtifact && codeBlocks.length > 0 && (
+              <button
+                onClick={() => onOpenArtifact(0, codeBlocks)}
+                className="flex items-center gap-1 h-6 px-2 rounded-md text-xs font-medium"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-primary)' }}
+                title="Open in Artifacts panel"
+              >
+                {getIcon('external-link', { size: 10 })}
+                {codeBlocks.length > 1 ? `${codeBlocks.length} artifacts` : 'Artifact'}
+              </button>
+            )}
+            {message.id && onToggleBookmark && (
+              <button
+                onClick={() => onToggleBookmark(message.id)}
+                className="w-6 h-6 flex items-center justify-center rounded-md"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  color: bookmarked ? '#f59e0b' : 'var(--color-muted)',
+                }}
+                title={bookmarked ? 'Remove bookmark' : 'Bookmark this message'}
+              >
+                {getIcon('star', { size: 11, fill: bookmarked ? 'currentColor' : 'none' })}
+              </button>
+            )}
+            <button
+              onClick={() => downloadResponseMd(message.content)}
+              className="w-6 h-6 flex items-center justify-center rounded-md"
+              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+              title="Save response as Markdown"
+            >
+              {getIcon('file-down', { size: 11 })}
+            </button>
           </div>
         )}
       </div>
