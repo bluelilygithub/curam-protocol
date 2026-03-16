@@ -8,6 +8,7 @@ export function useChat({ projectId }) {
   const [sessionUsage, setSessionUsage] = useState({ inputTokens: 0, outputTokens: 0, model: null });
   const [streamError, setStreamError] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [ragFallbackActive, setRagFallbackActive] = useState(false);
   const abortRef = useRef(null);
   const timeoutRef = useRef(null);
 
@@ -97,6 +98,7 @@ export function useChat({ projectId }) {
                 outputTokens: u.outputTokens + (parsed.usage.outputTokens || 0),
                 model: parsed.usage.model || u.model,
               }));
+              if (parsed.usage.ragFallbackActive) setRagFallbackActive(true);
             }
             if (parsed.searching) {
               if (!gotFirstChunk) {
@@ -214,5 +216,5 @@ export function useChat({ projectId }) {
     }
   }, [isStreaming, sessionId, sendMessage]);
 
-  return { messages, isStreaming, isSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError };
+  return { messages, isStreaming, isSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError, ragFallbackActive };
 }

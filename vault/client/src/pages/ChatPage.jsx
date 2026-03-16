@@ -86,7 +86,7 @@ function ChatPage({ general = false }) {
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
-  const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError } = useChat({ projectId });
+  const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
   const { models: MODELS } = useModels();
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, startListening, stopListening, speak } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
@@ -1231,7 +1231,7 @@ function ChatPage({ general = false }) {
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 
           {/* Context bar — shows files available to this chat */}
-          {(pinnedFiles.length > 0 || sessionFiles.length > 0) && (
+          {(pinnedFiles.length > 0 || sessionFiles.length > 0 || ragFallbackActive) && (
             <div
               className="flex-shrink-0 border-b px-4 py-1.5"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
@@ -1247,6 +1247,15 @@ function ChatPage({ general = false }) {
                 </button>
                 {showContextBar && (
                   <>
+                    {ragFallbackActive && (
+                      <span
+                        className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border"
+                        style={{ borderColor: '#f59e0b', color: '#f59e0b', background: '#f59e0b11' }}
+                        title="Embeddings unavailable — full file text is being injected instead of semantic chunks. Re-upload files to restore RAG context."
+                      >
+                        ⚠ RAG unavailable — full-text fallback active
+                      </span>
+                    )}
                     {pinnedFiles.map(f => (
                       <span
                         key={`pin-${f.id}`}

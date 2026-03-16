@@ -127,7 +127,7 @@ function TaskShortcutsModal({ onClose }) {
   );
 }
 
-function MatrixTaskRow({ task, onToggle, onEdit, onOpen }) {
+function MatrixTaskRow({ task, onToggle, onEdit, onOpen, prominent }) {
   const getIcon = useIcon();
   const due = dueInfo(task.dueDate);
   const isDone = task.status === 'done';
@@ -138,9 +138,15 @@ function MatrixTaskRow({ task, onToggle, onEdit, onOpen }) {
       onClick={onOpen}
     >
       <button onClick={(e) => { e.stopPropagation(); onToggle(); }} style={{ color: isDone ? '#22c55e' : 'var(--color-muted)', flexShrink: 0 }}>
-        {getIcon(isDone ? 'check-circle' : 'circle', { size: 13 })}
+        {getIcon(isDone ? 'check-circle' : 'circle', { size: prominent ? 15 : 13 })}
       </button>
-      <span className="flex-1 text-xs leading-snug" style={{ color: 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none', opacity: isDone ? 0.6 : 1 }}>{task.title}</span>
+      {/* Q2 task titles are slightly larger and bolder to reinforce visual priority */}
+      <span
+        className={`flex-1 leading-snug ${prominent ? 'text-sm font-medium' : 'text-xs'}`}
+        style={{ color: 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none', opacity: isDone ? 0.6 : 1 }}
+      >
+        {task.title}
+      </span>
       {due && <span className="text-xs font-medium flex-shrink-0" style={{ color: due.color }}>{due.label}</span>}
       <button onClick={(e) => { e.stopPropagation(); onEdit(); }} style={{ color: 'var(--color-muted)', flexShrink: 0 }} className="opacity-0 group-hover:opacity-100 transition-opacity">
         {getIcon('edit', { size: 11 })}
@@ -174,41 +180,110 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, di
     ? `${urgentNotImportant} urgent task${urgentNotImportant !== 1 ? 's' : ''} to delegate or defer — none are high priority`
     : 'All clear — no urgent tasks pending';
 
+  const q2Color = '#6366f1';
+
   return (
     <div className="flex-1 overflow-auto p-4 flex flex-col gap-3" style={{ minHeight: 0 }}>
+
+      {/* Insight bar — unchanged */}
       <div className="flex-shrink-0 text-xs px-3 py-2 rounded-xl flex items-center gap-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
         <span style={{ color: 'var(--color-primary)' }}>📊</span>
         {dimensionLabel && <span style={{ fontWeight: 600 }}>{dimensionLabel} ·</span>}
         <span>{insight}</span>
         <span style={{ marginLeft: 'auto', opacity: 0.5 }}>Urgent = tagged ⚡ · Important = High priority</span>
       </div>
-      <div className="grid grid-cols-2 gap-3" style={{ flex: 1, minHeight: 0 }}>
-        {MATRIX_QUADRANTS.map(({ key, label, sublabel, color }) => {
-          const qTasks = qTasksMap[key];
-          return (
-            <div key={key} className="rounded-2xl border flex flex-col overflow-hidden" style={{ borderColor: color + '44', background: color + '08', minHeight: 200 }}>
-              <div className="px-4 py-2.5 border-b flex items-center gap-2 flex-shrink-0" style={{ borderColor: color + '33' }}>
-                <span className="text-sm font-semibold" style={{ color }}>{label}</span>
-                <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{sublabel}</span>
-                <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ background: color + '22', color }}>{qTasks.length}</span>
+
+      {/*
+        Two-column layout — Q2 (Schedule / deep work) gets the wider right column
+        to make it the primary visual focal point. Q1, Q3, Q4 stack in the left column.
+        On mobile (<640px) the columns stack vertically with Q2 shown first.
+      */}
+      <div className="flex flex-col sm:flex-row gap-3" style={{ flex: 1, minHeight: 0 }}>
+
+        {/* ── Right column: Q2 — Schedule (Not Urgent + Important) ───────────────
+            Rendered first in DOM so it appears at top on mobile.
+            On sm+ it appears on the right via `order-last sm:order-none`.
+            Width: ~58% on desktop. Enhanced background, border, and shadow
+            signal this as the primary quadrant (Habit 3: Put First Things First).
+        */}
+        <section
+          aria-label="Q2 — Schedule: Not Urgent, Important"
+          className="rounded-2xl border flex flex-col overflow-hidden order-first sm:order-last w-full sm:w-[58%] flex-shrink-0"
+          style={{
+            borderColor: q2Color + '66',
+            /* Slightly richer tint than the secondary quadrants */
+            background: q2Color + '10',
+            /* Subtle glow to visually lift Q2 above the grid */
+            boxShadow: `0 4px 20px ${q2Color}1a`,
+            minHeight: 200,
+          }}
+        >
+          <div
+            className="px-4 py-3 border-b flex items-center gap-2 flex-shrink-0"
+            style={{ borderColor: q2Color + '44' }}
+          >
+            {/* Slightly larger label text than secondary quadrants */}
+            <span className="text-base font-bold" style={{ color: q2Color }}>Schedule</span>
+            <span className="text-xs font-medium" style={{ color: q2Color, opacity: 0.75 }}>Not Urgent + Important</span>
+            <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full font-semibold" style={{ background: q2Color + '22', color: q2Color }}>{q2Tasks.length}</span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+            {q2Tasks.map(task => (
+              <MatrixTaskRow
+                key={task.id}
+                task={task}
+                prominent
+                onToggle={() => onToggleStatus(task)}
+                onEdit={() => onEdit(task)}
+                onOpen={() => onExpand(task.id)}
+              />
+            ))}
+            {q2Tasks.length === 0 && (
+              <div className="py-8 text-center text-xs" style={{ color: q2Color, opacity: 0.35 }}>
+                No important tasks scheduled
               </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                {qTasks.map(task => (
-                  <MatrixTaskRow
-                    key={task.id}
-                    task={task}
-                    onToggle={() => onToggleStatus(task)}
-                    onEdit={() => onEdit(task)}
-                    onOpen={() => onExpand(task.id)}
-                  />
-                ))}
-                {qTasks.length === 0 && (
-                  <div className="py-6 text-center text-xs" style={{ color: 'var(--color-muted)', opacity: 0.4 }}>Empty</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            )}
+          </div>
+        </section>
+
+        {/* ── Left column: Q1, Q3, Q4 stacked vertically ────────────────────────
+            Secondary quadrants share the narrower left column (~42% on desktop).
+            They retain their original styling at reduced visual weight.
+        */}
+        <div className="flex flex-col gap-3 order-last sm:order-first w-full sm:w-[42%] flex-shrink-0">
+          {MATRIX_QUADRANTS.filter(q => q.key !== 'q2').map(({ key, label, sublabel, color }) => {
+            const qTasks = qTasksMap[key];
+            return (
+              <section
+                key={key}
+                aria-label={`${key.toUpperCase()} — ${label}: ${sublabel}`}
+                className="rounded-2xl border flex flex-col overflow-hidden"
+                style={{ borderColor: color + '44', background: color + '08', minHeight: 140 }}
+              >
+                <div className="px-4 py-2.5 border-b flex items-center gap-2 flex-shrink-0" style={{ borderColor: color + '33' }}>
+                  <span className="text-sm font-semibold" style={{ color }}>{label}</span>
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{sublabel}</span>
+                  <span className="ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ background: color + '22', color }}>{qTasks.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                  {qTasks.map(task => (
+                    <MatrixTaskRow
+                      key={task.id}
+                      task={task}
+                      onToggle={() => onToggleStatus(task)}
+                      onEdit={() => onEdit(task)}
+                      onOpen={() => onExpand(task.id)}
+                    />
+                  ))}
+                  {qTasks.length === 0 && (
+                    <div className="py-6 text-center text-xs" style={{ color: 'var(--color-muted)', opacity: 0.4 }}>Empty</div>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
       </div>
     </div>
   );
@@ -228,6 +303,7 @@ export default function TasksPage() {
   const [newSubtask, setNewSubtask] = useState({});
   const [newComment, setNewComment] = useState({});
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [recurringDeleteModal, setRecurringDeleteModal] = useState(null); // { task }
   const [completedOpen, setCompletedOpen] = useState(false);
   const [newlyAddedIds, setNewlyAddedIds] = useState(new Set());
 
@@ -462,10 +538,23 @@ export default function TasksPage() {
     setCommentsCache(prev => ({ ...prev, [taskId]: (prev[taskId] || []).filter(c => c.id !== commentId) }));
   };
 
-  const handleDelete = async (id) => {
-    await api.delete(`/api/tasks/${id}`);
-    setTasks(prev => prev.filter(t => t.id !== id));
+  const handleDelete = async (id, { stopSeries = false } = {}) => {
+    const url = stopSeries ? `/api/tasks/${id}?stopSeries=true` : `/api/tasks/${id}`;
+    await api.delete(url);
+    if (stopSeries) {
+      // Remove all tasks that share the same recurrenceGroupId (non-done ones were deleted server-side)
+      const targetTask = tasks.find(t => t.id === id);
+      const groupId = targetTask?.recurrenceGroupId;
+      if (groupId) {
+        setTasks(prev => prev.filter(t => t.recurrenceGroupId !== groupId || t.status === 'done'));
+      } else {
+        setTasks(prev => prev.filter(t => t.id !== id));
+      }
+    } else {
+      setTasks(prev => prev.filter(t => t.id !== id));
+    }
     setConfirmDeleteId(null);
+    setRecurringDeleteModal(null);
     if (expandedId === id) setExpandedId(null);
   };
 
@@ -1210,7 +1299,7 @@ export default function TasksPage() {
                 </button>
                 <button onClick={() => handleDuplicate(task)} style={{ color: 'var(--color-muted)' }} title="Duplicate" className="hover:opacity-60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">{getIcon('copy', { size: 13 })}</button>
                 <button onClick={() => openEdit(task)} style={{ color: 'var(--color-muted)' }} title="Edit" className="hover:opacity-60 p-0.5">{getIcon('edit', { size: 13 })}</button>
-                <button onClick={() => setConfirmDeleteId(task.id)} style={{ color: 'var(--color-muted)' }} title="Delete" className="hover:opacity-60 p-0.5">{getIcon('trash', { size: 13 })}</button>
+                <button onClick={() => task.recurrence && task.recurrence !== 'none' ? setRecurringDeleteModal({ task }) : setConfirmDeleteId(task.id)} style={{ color: 'var(--color-muted)' }} title="Delete" className="hover:opacity-60 p-0.5">{getIcon('trash', { size: 13 })}</button>
               </>
             )}
           </div>
@@ -1465,6 +1554,7 @@ export default function TasksPage() {
           <span className="text-sm font-medium leading-snug" style={{ color: 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none', opacity: isDone ? 0.7 : 1 }}>{task.title}</span>
           <div className="flex gap-0.5 flex-shrink-0">
             <button onClick={() => handleToggleStatus(task)} style={{ color: isDone ? '#22c55e' : 'var(--color-muted)' }} title={isDone ? 'Unmark' : 'Done'} className="hover:opacity-60 p-0.5">{getIcon(isDone ? 'check-circle' : 'circle', { size: 13 })}</button>
+            <button onClick={(e) => { e.stopPropagation(); handleDuplicate(task); }} style={{ color: 'var(--color-muted)' }} title="Duplicate" className="opacity-0 group-hover:opacity-100 hover:opacity-60 transition-opacity p-0.5">{getIcon('copy', { size: 12 })}</button>
             <button onClick={() => openEdit(task)} style={{ color: 'var(--color-muted)' }} className="hover:opacity-60 p-0.5">{getIcon('edit', { size: 12 })}</button>
           </div>
         </div>
@@ -1530,6 +1620,48 @@ export default function TasksPage() {
           </p>
         </div>
       )}
+      {/* Recurring delete modal */}
+      {recurringDeleteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setRecurringDeleteModal(null); }}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border p-6 space-y-4"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+          >
+            <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Delete recurring task</p>
+            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+              "{recurringDeleteModal.task.title}" repeats {recurringDeleteModal.task.recurrence}. What would you like to delete?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => handleDelete(recurringDeleteModal.task.id, { stopSeries: true })}
+                className="w-full px-4 py-2 rounded-lg text-sm font-medium text-white text-left"
+                style={{ background: '#ef4444' }}
+              >
+                Delete this and all future recurrences
+              </button>
+              <button
+                onClick={() => handleDelete(recurringDeleteModal.task.id)}
+                className="w-full px-4 py-2 rounded-lg text-sm border text-left"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                Delete this task only
+              </button>
+              <button
+                onClick={() => setRecurringDeleteModal(null)}
+                className="w-full px-4 py-2 rounded-lg text-sm text-left"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Templates side panel */}
       {showTemplates && (
         <TaskTemplatesPanel

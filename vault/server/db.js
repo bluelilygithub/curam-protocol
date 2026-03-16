@@ -157,6 +157,8 @@ async function initSchema() {
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "lastFetchedAt" TIMESTAMPTZ DEFAULT NOW()`);
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "isYoutube" BOOLEAN DEFAULT FALSE`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "archived_at" TIMESTAMPTZ DEFAULT NULL`);
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "recurrenceGroupId" TEXT DEFAULT NULL`);
+    await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "transcript_summary" TEXT DEFAULT NULL`);
 
     // ── Chat ──────────────────────────────────────────────────────────────────
     await client.query(`

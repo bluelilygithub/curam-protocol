@@ -479,19 +479,27 @@ router.post('/:id/duplicate', async (req, res) => {
     const task = rows[0];
     if (!task) return res.status(404).json({ error: 'not found' });
     const { rows: inserted } = await pool.query(
-      "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",recurrence,\"recurrenceConfig\",\"dueDate\",\"order\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING id",
-      [task.title + ' (copy)', task.notes, task.priority, task.category, task.projectId, task.recurrence, task.recurrenceConfig, task.dueDate, task.order]
+      `INSERT INTO tasks
+        (title,notes,status,priority,category,"projectId",recurrence,"recurrenceConfig",
+         "dueDate","estimatedMinutes","isUrgent","renewalDimension","keyResultId","order","updatedAt")
+       VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW()) RETURNING id`,
+      [
+        task.title + ' (copy)', task.notes, task.priority, task.category, task.projectId,
+        task.recurrence, task.recurrenceConfig,
+        task.dueDate, task.estimatedMinutes, task.isUrgent, task.renewalDimension, task.keyResultId,
+        task.order,
+      ]
     );
     const newId = inserted[0].id;
     const tags = await getTags(task.id);
     for (const tag of tags) {
       await pool.query('INSERT INTO task_tags ("taskId",tag) VALUES ($1,$2)', [newId, tag]);
     }
-    const { rows: subsRows } = await pool.query('SELECT * FROM tasks WHERE "parentTaskId"=$1', [task.id]);
+    const { rows: subsRows } = await pool.query('SELECT * FROM tasks WHERE "parentTaskId"=$1 ORDER BY id', [task.id]);
     for (const sub of subsRows) {
       await pool.query(
-        "INSERT INTO tasks (title,status,priority,\"parentTaskId\",\"updatedAt\") VALUES ($1,'todo',$2,$3,NOW())",
-        [sub.title, sub.priority, newId]
+        "INSERT INTO tasks (title,status,priority,\"estimatedMinutes\",\"parentTaskId\",\"updatedAt\") VALUES ($1,'todo',$2,$3,$4,NOW())",
+        [sub.title, sub.priority, sub.estimatedMinutes, newId]
       );
     }
     const { rows: newTaskRows } = await pool.query('SELECT * FROM tasks WHERE id=$1', [newId]);
@@ -599,9 +607,10 @@ router.post('/', async (req, res) => {
   try {
     const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId, isUrgent, renewalDimension, sourceSessionId } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
+    const recurrenceGroupId = (recurrence && recurrence !== 'none') ? crypto.randomUUID() : null;
     const { rows } = await pool.query(
-      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","sourceSessionId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW()) RETURNING id',
-      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null, sourceSessionId || null]
+      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","sourceSessionId","recurrenceGroupId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW()) RETURNING id',
+      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null, sourceSessionId || null, recurrenceGroupId]
     );
     const id = rows[0].id;
     if (Array.isArray(tags)) {
@@ -677,8 +686,8 @@ router.put('/:id', async (req, res) => {
       if (nextDate) {
         const newCount = (updatedTask.recurrenceCount || 0) + 1;
         const { rows: recurrInserted } = await pool.query(
-          "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",recurrence,\"recurrenceConfig\",\"dueDate\",\"order\",\"recurrenceCount\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,NOW()) RETURNING id",
-          [updatedTask.title, updatedTask.notes, updatedTask.priority, updatedTask.category, updatedTask.projectId, updatedTask.recurrence, updatedTask.recurrenceConfig, nextDate, updatedTask.order, newCount]
+          "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",recurrence,\"recurrenceConfig\",\"dueDate\",\"order\",\"recurrenceCount\",\"recurrenceGroupId\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW()) RETURNING id",
+          [updatedTask.title, updatedTask.notes, updatedTask.priority, updatedTask.category, updatedTask.projectId, updatedTask.recurrence, updatedTask.recurrenceConfig, nextDate, updatedTask.order, newCount, updatedTask.recurrenceGroupId || null]
         );
         const newTaskId = recurrInserted[0].id;
         const tags = await getTags(id);
@@ -698,6 +707,22 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/tasks/:id
 router.delete('/:id', async (req, res) => {
   try {
+    if (req.query.stopSeries === 'true') {
+      // Find the recurrenceGroupId for this task, then delete all non-done tasks in the series
+      const { rows } = await pool.query('SELECT "recurrenceGroupId" FROM tasks WHERE id=$1', [req.params.id]);
+      const groupId = rows[0]?.recurrenceGroupId;
+      if (groupId) {
+        // Get all non-done sibling task IDs (excluding the task itself) to delete their subtasks first
+        const { rows: siblings } = await pool.query(
+          'SELECT id FROM tasks WHERE "recurrenceGroupId"=$1 AND status!=\'done\' AND id!=$2',
+          [groupId, req.params.id]
+        );
+        for (const s of siblings) {
+          await pool.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [s.id]);
+        }
+        await pool.query('DELETE FROM tasks WHERE "recurrenceGroupId"=$1 AND status!=\'done\'', [groupId]);
+      }
+    }
     await pool.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [req.params.id]);
     await pool.query('DELETE FROM tasks WHERE id=$1', [req.params.id]);
     res.json({ ok: true });

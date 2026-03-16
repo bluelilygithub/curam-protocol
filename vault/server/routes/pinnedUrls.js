@@ -6,6 +6,28 @@ const https = require('https');
 const dns = require('dns');
 const { URL } = require('url');
 const { isYoutubeUrl, fetchYoutubeTranscript } = require('../services/youtubeTranscript');
+const Anthropic = require('@anthropic-ai/sdk');
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// Returns the transcript as-is if under 5,000 chars; otherwise summarises to ~20%
+// using Claude Haiku. Gracefully returns the raw text on any error.
+async function summariseTranscript(rawTranscript) {
+  if (!rawTranscript || rawTranscript.length < 5000) return rawTranscript;
+  if (!process.env.ANTHROPIC_API_KEY) return rawTranscript;
+  try {
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      system: 'Summarise the following video transcript to approximately 20% of its original length. Preserve key points, specific details, names, numbers, and conclusions. Write in flowing prose, not bullet points.',
+      messages: [{ role: 'user', content: rawTranscript }],
+    });
+    return response.content[0]?.text || rawTranscript;
+  } catch (err) {
+    console.warn('[pinnedUrls] summariseTranscript failed:', err.message);
+    return rawTranscript;
+  }
+}
 
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB
 
@@ -108,6 +130,7 @@ router.post('/', async (req, res) => {
   let title, content, youtube = false;
 
   try {
+    let transcriptSummary = null;
     if (isYoutubeUrl(fullUrl)) {
       youtube = true;
       try {
@@ -117,14 +140,15 @@ router.post('/', async (req, res) => {
         const raw = await fetchUrl(fullUrl);
         ({ title, content } = parseHtml(raw, url));
       }
+      if (content) transcriptSummary = await summariseTranscript(content);
     } else {
       const raw = await fetchUrl(fullUrl);
       ({ title, content } = parseHtml(raw, url));
     }
 
     const { rows } = await pool.query(
-      'INSERT INTO pinned_urls ("projectId", url, title, content, "isYoutube", "lastFetchedAt") VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING id',
-      [projectId, url, title, content, youtube]
+      'INSERT INTO pinned_urls ("projectId", url, title, content, "isYoutube", "transcript_summary", "lastFetchedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING id',
+      [projectId, url, title, content, youtube, transcriptSummary]
     );
     const { rows: pinned } = await pool.query('SELECT * FROM pinned_urls WHERE id=$1', [rows[0].id]);
     res.status(201).json(pinned[0]);
@@ -142,7 +166,7 @@ router.patch('/:id/refresh', async (req, res) => {
     const { url, isYoutube } = rows[0];
     const fullUrl = url.startsWith('http') ? url : `https://${url}`;
 
-    let title, content;
+    let title, content, transcriptSummary = null;
     if (isYoutube) {
       try {
         ({ title, content } = await fetchYoutubeTranscript(fullUrl));
@@ -151,14 +175,15 @@ router.patch('/:id/refresh', async (req, res) => {
         const raw = await fetchUrl(fullUrl);
         ({ title, content } = parseHtml(raw, url));
       }
+      if (content) transcriptSummary = await summariseTranscript(content);
     } else {
       const raw = await fetchUrl(fullUrl);
       ({ title, content } = parseHtml(raw, url));
     }
 
     const { rows: updated } = await pool.query(
-      'UPDATE pinned_urls SET title=$1, content=$2, "lastFetchedAt"=NOW() WHERE id=$3 RETURNING *',
-      [title, content, req.params.id]
+      'UPDATE pinned_urls SET title=$1, content=$2, "transcript_summary"=$3, "lastFetchedAt"=NOW() WHERE id=$4 RETURNING *',
+      [title, content, transcriptSummary, req.params.id]
     );
     res.json(updated[0]);
   } catch (err) {
