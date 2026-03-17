@@ -58,6 +58,7 @@ export function useChat({ projectId }) {
         personaId: personaId || undefined,
         reasoning: reasoning || undefined,
         webSearch: webSearch,
+        userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }, controller.signal);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

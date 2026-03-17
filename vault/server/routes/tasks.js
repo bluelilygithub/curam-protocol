@@ -71,9 +71,9 @@ function calculateNextDate(dateStr, recurrence) {
 router.get('/', async (req, res) => {
   try {
     const { status, priority, category, projectId, tag, dueBefore, dueAfter, search, activityStatus } = req.query;
-    let sql = 'SELECT * FROM tasks WHERE "parentTaskId" IS NULL';
-    const p = [];
-    let idx = 1;
+    let sql = 'SELECT * FROM tasks WHERE "parentTaskId" IS NULL AND "userId"=$1';
+    const p = [req.user.id];
+    let idx = 2;
     if (status) { sql += ` AND status=$${idx++}`; p.push(status); }
     if (priority) { sql += ` AND priority=$${idx++}`; p.push(priority); }
     if (category) { sql += ` AND category=$${idx++}`; p.push(category); }
@@ -193,12 +193,12 @@ router.get('/morning-digest', async (req, res) => {
     const todayStart = new Date().toISOString().slice(0, 10);
     const todayEnd = todayStart + 'T23:59:59';
     const { rows: overdueRows } = await pool.query(
-      "SELECT * FROM tasks WHERE \"parentTaskId\" IS NULL AND status IN ('todo','in-progress') AND \"dueDate\" IS NOT NULL AND \"dueDate\" < $1 ORDER BY \"dueDate\" ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10",
-      [todayStart]
+      "SELECT * FROM tasks WHERE \"parentTaskId\" IS NULL AND \"userId\"=$1 AND status IN ('todo','in-progress') AND \"dueDate\" IS NOT NULL AND \"dueDate\" < $2 ORDER BY \"dueDate\" ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10",
+      [req.user.id, todayStart]
     );
     const { rows: todayRows } = await pool.query(
-      "SELECT * FROM tasks WHERE \"parentTaskId\" IS NULL AND status IN ('todo','in-progress') AND \"dueDate\" >= $1 AND \"dueDate\" <= $2 ORDER BY \"dueDate\" ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10",
-      [todayStart, todayEnd]
+      "SELECT * FROM tasks WHERE \"parentTaskId\" IS NULL AND \"userId\"=$1 AND status IN ('todo','in-progress') AND \"dueDate\" >= $2 AND \"dueDate\" <= $3 ORDER BY \"dueDate\" ASC, CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END LIMIT 10",
+      [req.user.id, todayStart, todayEnd]
     );
     const overdue = await Promise.all(overdueRows.map(buildTask));
     const today = await Promise.all(todayRows.map(buildTask));
@@ -229,7 +229,8 @@ router.get('/morning-digest', async (req, res) => {
 router.post('/weekly-review-suggestions', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      "SELECT * FROM tasks WHERE status != 'done' AND \"parentTaskId\" IS NULL ORDER BY CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, \"dueDate\" ASC NULLS LAST LIMIT 20"
+      "SELECT * FROM tasks WHERE status != 'done' AND \"parentTaskId\" IS NULL AND \"userId\"=$1 ORDER BY CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, \"dueDate\" ASC NULLS LAST LIMIT 20",
+      [req.user.id]
     );
     const tasks = await Promise.all(rows.map(buildTask));
     if (tasks.length === 0) {
@@ -315,12 +316,13 @@ router.post('/import', async (req, res) => {
           projectId = projRows[0] ? Number(t.projectId) : null;
         }
         const { rows: inserted } = await client.query(
-          'INSERT INTO tasks (title,notes,status,priority,category,"projectId","dueDate","estimatedMinutes","timeSpentMinutes","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING id',
+          'INSERT INTO tasks (title,notes,status,priority,category,"projectId","dueDate","estimatedMinutes","timeSpentMinutes","userId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW()) RETURNING id',
           [
             t.title.trim(), t.notes || null, status, priority,
             t.category || null, projectId, t.dueDate || null,
             t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null,
             t.timeSpentMinutes != null ? Number(t.timeSpentMinutes) : 0,
+            req.user.id,
           ]
         );
         const taskId = inserted[0].id;
@@ -408,8 +410,8 @@ router.post('/extract', async (req, res) => {
     for (const t of extracted) {
       if (!t.title) continue;
       const { rows: inserted } = await pool.query(
-        "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",\"dueDate\",\"sourceSessionId\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,NOW()) RETURNING id",
-        [t.title, t.notes || null, t.priority || 'medium', t.category || null, projectId || null, t.dueDate || null, sessionId]
+        "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",\"dueDate\",\"sourceSessionId\",\"userId\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,NOW()) RETURNING id",
+        [t.title, t.notes || null, t.priority || 'medium', t.category || null, projectId || null, t.dueDate || null, sessionId, req.user.id]
       );
       const id = inserted[0].id;
       const { rows: newTask } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
@@ -449,8 +451,8 @@ router.post('/ai-generate', async (req, res) => {
     for (const t of aiTasks) {
       if (!t.title) continue;
       const { rows: inserted } = await pool.query(
-        "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",\"parentTaskId\",\"dueDate\",\"estimatedMinutes\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,NOW()) RETURNING id",
-        [t.title, t.notes || null, t.priority || 'medium', t.category || null, projectId || null, aiParentId || null, t.dueDate || null, t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null]
+        "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",\"parentTaskId\",\"dueDate\",\"estimatedMinutes\",\"userId\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,NOW()) RETURNING id",
+        [t.title, t.notes || null, t.priority || 'medium', t.category || null, projectId || null, aiParentId || null, t.dueDate || null, t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null, req.user.id]
       );
       const taskId = inserted[0].id;
       if (!aiParentId && Array.isArray(t.subtasks)) {
@@ -483,13 +485,13 @@ router.post('/:id/duplicate', async (req, res) => {
     const { rows: inserted } = await pool.query(
       `INSERT INTO tasks
         (title,notes,status,priority,category,"projectId",recurrence,"recurrenceConfig",
-         "dueDate","estimatedMinutes","isUrgent","renewalDimension","keyResultId","order","updatedAt")
-       VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW()) RETURNING id`,
+         "dueDate","estimatedMinutes","isUrgent","renewalDimension","keyResultId","order","userId","updatedAt")
+       VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW()) RETURNING id`,
       [
         task.title + ' (copy)', task.notes, task.priority, task.category, task.projectId,
         task.recurrence, task.recurrenceConfig,
         task.dueDate, task.estimatedMinutes, task.isUrgent, task.renewalDimension, task.keyResultId,
-        task.order,
+        task.order, req.user.id,
       ]
     );
     const newId = inserted[0].id;
@@ -613,8 +615,8 @@ router.post('/', async (req, res) => {
     const validActivityStatuses = ['none', 'started', 'paused', 'waiting'];
     const safeActivityStatus = validActivityStatuses.includes(activityStatus) ? activityStatus : 'none';
     const { rows } = await pool.query(
-      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","sourceSessionId","recurrenceGroupId","activityStatus","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW()) RETURNING id',
-      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null, sourceSessionId || null, recurrenceGroupId, safeActivityStatus]
+      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","sourceSessionId","recurrenceGroupId","activityStatus","userId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW()) RETURNING id',
+      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null, sourceSessionId || null, recurrenceGroupId, safeActivityStatus, req.user.id]
     );
     const id = rows[0].id;
     if (Array.isArray(tags)) {
@@ -634,7 +636,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { rows: existing } = await pool.query('SELECT * FROM tasks WHERE id=$1', [id]);
+    const { rows: existing } = await pool.query('SELECT * FROM tasks WHERE id=$1 AND "userId"=$2', [id, req.user.id]);
     const task = existing[0];
     if (!task) return res.status(404).json({ error: 'not found' });
     const v = (k) => k in req.body ? req.body[k] : task[k];
@@ -692,8 +694,8 @@ router.put('/:id', async (req, res) => {
       if (nextDate) {
         const newCount = (updatedTask.recurrenceCount || 0) + 1;
         const { rows: recurrInserted } = await pool.query(
-          "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",recurrence,\"recurrenceConfig\",\"dueDate\",\"order\",\"recurrenceCount\",\"recurrenceGroupId\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW()) RETURNING id",
-          [updatedTask.title, updatedTask.notes, updatedTask.priority, updatedTask.category, updatedTask.projectId, updatedTask.recurrence, updatedTask.recurrenceConfig, nextDate, updatedTask.order, newCount, updatedTask.recurrenceGroupId || null]
+          "INSERT INTO tasks (title,notes,status,priority,category,\"projectId\",recurrence,\"recurrenceConfig\",\"dueDate\",\"order\",\"recurrenceCount\",\"recurrenceGroupId\",\"userId\",\"updatedAt\") VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW()) RETURNING id",
+          [updatedTask.title, updatedTask.notes, updatedTask.priority, updatedTask.category, updatedTask.projectId, updatedTask.recurrence, updatedTask.recurrenceConfig, nextDate, updatedTask.order, newCount, updatedTask.recurrenceGroupId || null, req.user.id]
         );
         const newTaskId = recurrInserted[0].id;
         const tags = await getTags(id);
@@ -730,7 +732,7 @@ router.delete('/:id', async (req, res) => {
       }
     }
     await pool.query('DELETE FROM tasks WHERE "parentTaskId"=$1', [req.params.id]);
-    await pool.query('DELETE FROM tasks WHERE id=$1', [req.params.id]);
+    await pool.query('DELETE FROM tasks WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     res.json({ ok: true });
   } catch (err) {
     console.error('[tasks DELETE]', err);
@@ -745,8 +747,8 @@ router.post('/:id/subtasks', async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'parent not found' });
     if (!req.body.title) return res.status(400).json({ error: 'title required' });
     const { rows: inserted } = await pool.query(
-      "INSERT INTO tasks (title,status,priority,\"parentTaskId\",\"updatedAt\") VALUES ($1,'todo','medium',$2,NOW()) RETURNING id",
-      [req.body.title, req.params.id]
+      "INSERT INTO tasks (title,status,priority,\"parentTaskId\",\"userId\",\"updatedAt\") VALUES ($1,'todo','medium',$2,$3,NOW()) RETURNING id",
+      [req.body.title, req.params.id, req.user.id]
     );
     const { rows: newTask } = await pool.query('SELECT * FROM tasks WHERE id=$1', [inserted[0].id]);
     res.json(newTask[0]);

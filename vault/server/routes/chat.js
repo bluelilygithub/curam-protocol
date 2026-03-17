@@ -31,7 +31,7 @@ const RAG_FALLBACK_CAP = 32_000; // max chars injected when RAG is unavailable
 // The date block is the 5th block and intentionally has no cache_control.
 //
 // Callers on the Gemini path should join blocks: blocks.map(b => b.text).join('\n')
-async function buildSystemPrompt(project, personaId, sid = null, webSearch = false, userMessage = '') {
+async function buildSystemPrompt(project, personaId, sid = null, webSearch = false, userMessage = '', userId = null, userTimezone = null) {
   // Helper — only pushes non-empty blocks
   const blocks = [];
   let ragFallbackActive = false;
@@ -76,7 +76,9 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
 
   // ── Block 3: Memory / global notes (cache_control) ───────────────────────────
   {
-    const { rows: memories } = await pool.query('SELECT content FROM memory ORDER BY "createdAt" DESC LIMIT 30');
+    const { rows: memories } = userId
+      ? await pool.query('SELECT content FROM memory WHERE "userId"=$1 ORDER BY "createdAt" DESC LIMIT 30', [userId])
+      : await pool.query('SELECT content FROM memory ORDER BY "createdAt" DESC LIMIT 30');
     if (memories.length > 0) {
       pushBlock(`Persistent user memory:\n${memories.map(m => `• ${m.content}`).join('\n')}`, true);
     }
@@ -171,8 +173,39 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
 
   // ── Block 5: Today's date + web search notice (no cache_control — dynamic) ──
   {
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const todayStr = userTimezone
+      ? new Intl.DateTimeFormat('en-CA', { timeZone: userTimezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+      : now.toISOString().slice(0, 10);
     const parts = [`Today's date is ${todayStr}.`];
+
+    if (userId) {
+      const { rows: profileRows } = await pool.query(
+        `SELECT key, value FROM settings WHERE "userId"=$1 AND key IN ('user_name','user_city','user_state','user_country')`,
+        [userId]
+      );
+      const profile = {};
+      profileRows.forEach(r => { profile[r.key] = r.value; });
+      const location = [profile.user_city, profile.user_state, profile.user_country].filter(Boolean).join(', ');
+      if (profile.user_name || location) {
+        let sentence = 'You are speaking with';
+        if (profile.user_name) sentence += ` ${profile.user_name}`;
+        if (location) sentence += `, located in ${location}`;
+        sentence += '. Default all research, prices and recommendations to their country and currency.';
+        if (userTimezone) {
+          try {
+            const localTimeStr = now.toLocaleString('en-AU', {
+              timeZone: userTimezone,
+              hour: 'numeric',
+              minute: '2-digit',
+              timeZoneName: 'short',
+            });
+            sentence += ` Their current local time is ${localTimeStr}.`;
+          } catch {}
+        }
+        parts.push(sentence);
+      }
+    }
 
     if (webSearch) {
       parts.push([
@@ -303,7 +336,7 @@ router.post('/test-model', async (req, res) => {
 
 // POST /api/chat
 router.post('/', chatLimiter, async (req, res) => {
-  const { messages, projectId, sessionId, attachmentIds, urlAttachments, inlineImages, model: reqModel, temperature: reqTemp, personaId, reasoning, webSearch } = req.body;
+  const { messages, projectId, sessionId, attachmentIds, urlAttachments, inlineImages, model: reqModel, temperature: reqTemp, personaId, reasoning, webSearch, userTimezone } = req.body;
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
@@ -325,7 +358,7 @@ router.post('/', chatLimiter, async (req, res) => {
 
   // Array of { type, text, cache_control? } blocks — used directly by Anthropic;
   // joined to a plain string for Gemini (which does not support content-block system params).
-  const { blocks: systemBlocks, ragFallbackActive } = await buildSystemPrompt(project, personaId, sid, !!webSearch, userMessage);
+  const { blocks: systemBlocks, ragFallbackActive } = await buildSystemPrompt(project, personaId, sid, !!webSearch, userMessage, req.user?.id ?? null, userTimezone || null);
 
   // Check if this session is summarized
   const { rows: sessionRows } = await pool.query('SELECT * FROM sessions WHERE "sessionId"=$1', [sid]);
@@ -559,8 +592,8 @@ router.post('/', chatLimiter, async (req, res) => {
               );
             } else {
               await pool.query(
-                'INSERT INTO sessions ("sessionId","projectId","inputTokens","outputTokens") VALUES ($1,$2,$3,$4)',
-                [sid, projectId, inputTokens, outputTokens]
+                'INSERT INTO sessions ("sessionId","projectId","userId","inputTokens","outputTokens") VALUES ($1,$2,$3,$4,$5)',
+                [sid, projectId, req.user?.id ?? null, inputTokens, outputTokens]
               );
             }
           }
@@ -614,11 +647,11 @@ router.get('/sessions/general', async (req, res) => {
         COALESCE(s."outputTokens", 0) as "outputTokens"
       FROM messages m
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
-      WHERE m."projectId" IS NULL
+      WHERE m."projectId" IS NULL AND s."userId"=$1
       GROUP BY m."sessionId", s."sessionId"
       ORDER BY COALESCE(s.starred,0) DESC, MIN(m."createdAt") DESC
       LIMIT 30
-    `);
+    `, [req.user.id]);
     res.json(rows);
   } catch (err) {
     console.error('[sessions/general]', err);
@@ -644,10 +677,11 @@ router.get('/all-history', async (req, res) => {
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
       LEFT JOIN projects p ON p.id = m."projectId"
       WHERE m."createdAt" >= $1 AND m."createdAt" <= $2
+        AND (s."userId" = $3 OR (m."projectId" IS NOT NULL AND p."userId" = $3))
       GROUP BY m."sessionId"
       ORDER BY MAX(m."createdAt") DESC
       LIMIT 300
-    `, [fromDate, toDate]);
+    `, [fromDate, toDate, req.user.id]);
     res.json(rows);
   } catch (err) {
     console.error('[all-history]', err);
@@ -715,7 +749,7 @@ router.patch('/sessions/:sessionId/title', async (req, res) => {
     if (rows[0]) {
       await pool.query('UPDATE sessions SET title=$1,"updatedAt"=NOW() WHERE "sessionId"=$2', [title || '', req.params.sessionId]);
     } else {
-      await pool.query('INSERT INTO sessions ("sessionId",title) VALUES ($1,$2)', [req.params.sessionId, title || '']);
+      await pool.query('INSERT INTO sessions ("sessionId","userId",title) VALUES ($1,$2,$3)', [req.params.sessionId, req.user?.id ?? null, title || '']);
     }
     res.json({ ok: true });
   } catch (err) {

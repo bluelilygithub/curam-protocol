@@ -33,7 +33,7 @@ async function buildObjective(row) {
 // GET /api/goals — list all objectives with nested KRs
 router.get('/', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM objectives ORDER BY "createdAt" DESC');
+    const { rows } = await pool.query('SELECT * FROM objectives WHERE "userId"=$1 ORDER BY "createdAt" DESC', [req.user.id]);
     res.json(await Promise.all(rows.map(buildObjective)));
   } catch (err) {
     console.error('[goals GET]', err);
@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
 // GET /api/goals/dashboard — summary for home widget (must be before /:id)
 router.get('/dashboard', async (req, res) => {
   try {
-    const { rows: activeRows } = await pool.query("SELECT * FROM objectives WHERE status = 'active'");
+    const { rows: activeRows } = await pool.query("SELECT * FROM objectives WHERE status = 'active' AND \"userId\"=$1", [req.user.id]);
     const objectives = await Promise.all(activeRows.map(buildObjective));
     const activeCount = objectives.length;
     const avgProgress = activeCount
@@ -57,8 +57,8 @@ router.get('/dashboard', async (req, res) => {
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
     const { rows: completedRows } = await pool.query(
-      "SELECT COUNT(*) as c FROM objectives WHERE status = 'completed' AND \"updatedAt\" >= $1",
-      [startOfMonth.toISOString()]
+      "SELECT COUNT(*) as c FROM objectives WHERE status = 'completed' AND \"userId\"=$1 AND \"updatedAt\" >= $2",
+      [req.user.id, startOfMonth.toISOString()]
     );
     const completedThisMonth = Number(completedRows[0].c);
     res.json({ activeCount, avgProgress, topObjectives, completedThisMonth });
@@ -151,7 +151,7 @@ router.delete('/key-results/:krId', async (req, res) => {
 // GET /api/goals/mission — retrieve mission statement (must be before /:id)
 router.get('/mission', async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT value FROM settings WHERE key = 'mission_statement'");
+    const { rows } = await pool.query("SELECT value FROM settings WHERE \"userId\"=$1 AND key = 'mission_statement'", [req.user.id]);
     res.json({ statement: rows[0] ? rows[0].value : null });
   } catch (err) {
     console.error('[goals mission GET]', err);
@@ -164,8 +164,8 @@ router.put('/mission', async (req, res) => {
   try {
     const { statement } = req.body;
     await pool.query(
-      "INSERT INTO settings (key, value) VALUES ('mission_statement', $1) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value",
-      [statement || '']
+      "INSERT INTO settings (\"userId\", key, value) VALUES ($1, 'mission_statement', $2) ON CONFLICT (\"userId\", key) DO UPDATE SET value=EXCLUDED.value",
+      [req.user.id, statement || '']
     );
     res.json({ statement: statement || '' });
   } catch (err) {
@@ -233,7 +233,7 @@ router.post('/renewal-assessment', async (req, res) => {
 // GET /api/goals/wizard/status
 router.get('/wizard/status', async (req, res) => {
   try {
-    const { rows } = await pool.query("SELECT value FROM settings WHERE key = 'getting_started_completed'");
+    const { rows } = await pool.query("SELECT value FROM settings WHERE \"userId\"=$1 AND key = 'getting_started_completed'", [req.user.id]);
     res.json({ completed: rows[0] ? rows[0].value === 'true' : false });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -244,7 +244,8 @@ router.get('/wizard/status', async (req, res) => {
 router.post('/wizard/complete', async (req, res) => {
   try {
     await pool.query(
-      "INSERT INTO settings (key, value) VALUES ('getting_started_completed', 'true') ON CONFLICT (key) DO UPDATE SET value='true'",
+      "INSERT INTO settings (\"userId\", key, value) VALUES ($1, 'getting_started_completed', 'true') ON CONFLICT (\"userId\", key) DO UPDATE SET value='true'",
+      [req.user.id]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -256,7 +257,8 @@ router.post('/wizard/complete', async (req, res) => {
 router.post('/wizard/reset', async (req, res) => {
   try {
     await pool.query(
-      "INSERT INTO settings (key, value) VALUES ('getting_started_completed', 'false') ON CONFLICT (key) DO UPDATE SET value='false'",
+      "INSERT INTO settings (\"userId\", key, value) VALUES ($1, 'getting_started_completed', 'false') ON CONFLICT (\"userId\", key) DO UPDATE SET value='false'",
+      [req.user.id]
     );
     res.json({ ok: true });
   } catch (err) {
@@ -369,8 +371,8 @@ router.post('/', async (req, res) => {
     const { title, description, timeframe, color, renewalDimension } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'title required' });
     const { rows } = await pool.query(
-      'INSERT INTO objectives (title, description, timeframe, color, "renewalDimension") VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [title.trim(), description || null, timeframe || null, color || '#6366f1', renewalDimension || null]
+      'INSERT INTO objectives (title, description, timeframe, color, "renewalDimension", "userId") VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [title.trim(), description || null, timeframe || null, color || '#6366f1', renewalDimension || null, req.user.id]
     );
     const { rows: obj } = await pool.query('SELECT * FROM objectives WHERE id = $1', [rows[0].id]);
     res.status(201).json(await buildObjective(obj[0]));
@@ -383,7 +385,7 @@ router.post('/', async (req, res) => {
 // GET /api/goals/:id — single objective with KRs
 router.get('/:id', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM objectives WHERE id = $1', [req.params.id]);
+    const { rows } = await pool.query('SELECT * FROM objectives WHERE id = $1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Objective not found' });
     res.json(await buildObjective(rows[0]));
   } catch (err) {
@@ -395,7 +397,7 @@ router.get('/:id', async (req, res) => {
 // PUT /api/goals/:id — update objective
 router.put('/:id', async (req, res) => {
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Objective not found' });
     const obj = existing[0];
     const { title, description, timeframe, color, status, renewalDimension } = req.body;
@@ -422,7 +424,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/goals/:id — delete objective
 router.delete('/:id', async (req, res) => {
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Objective not found' });
     const obj = existing[0];
     // Unlink tasks from KRs belonging to this objective
@@ -441,7 +443,7 @@ router.delete('/:id', async (req, res) => {
 // POST /api/goals/:id/key-results — add KR to objective
 router.post('/:id/key-results', async (req, res) => {
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT * FROM objectives WHERE id = $1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Objective not found' });
     const { title, targetValue, currentValue, unit, dueDate } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: 'title required' });

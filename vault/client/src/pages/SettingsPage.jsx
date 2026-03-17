@@ -39,6 +39,11 @@ function SettingsPage() {
   const { token } = useAuthStore();
   const getIcon = useIcon();
 
+  const [profileName, setProfileName] = useState('');
+  const [profileCity, setProfileCity] = useState('');
+  const [profileState, setProfileState] = useState('');
+  const [profileCountry, setProfileCountry] = useState('');
+
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwStatus, setPwStatus] = useState(null);
   const [fileTypesSaved, setFileTypesSaved] = useState(false);
@@ -69,6 +74,10 @@ function SettingsPage() {
       if (data.task_reminders_paused !== undefined) {
         setTaskRemindersPaused(data.task_reminders_paused === 'true');
       }
+      if (data.user_name) setProfileName(data.user_name);
+      if (data.user_city) setProfileCity(data.user_city);
+      if (data.user_state) setProfileState(data.user_state);
+      if (data.user_country) setProfileCountry(data.user_country);
     }).catch(() => {});
   }, []);
 
@@ -154,6 +163,84 @@ function SettingsPage() {
       <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
         Settings
       </h1>
+
+      {/* Profile Section */}
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
+          Profile
+        </h2>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>First name</label>
+            <input
+              type="text"
+              value={profileName}
+              onChange={e => setProfileName(e.target.value)}
+              onBlur={() => api.post('/api/settings', { key: 'user_name', value: profileName }).catch(() => {})}
+              placeholder="e.g. James"
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>City</label>
+              <input
+                type="text"
+                value={profileCity}
+                onChange={e => setProfileCity(e.target.value)}
+                onBlur={() => api.post('/api/settings', { key: 'user_city', value: profileCity }).catch(() => {})}
+                placeholder="e.g. Sydney"
+                className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>State / Region</label>
+              <input
+                type="text"
+                value={profileState}
+                onChange={e => setProfileState(e.target.value)}
+                onBlur={() => api.post('/api/settings', { key: 'user_state', value: profileState }).catch(() => {})}
+                placeholder="e.g. NSW"
+                className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Country</label>
+            <select
+              value={profileCountry}
+              onChange={e => {
+                setProfileCountry(e.target.value);
+                api.post('/api/settings', { key: 'user_country', value: e.target.value }).catch(() => {});
+              }}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">Select country…</option>
+              {[
+                'Afghanistan','Albania','Algeria','Argentina','Armenia','Australia','Austria',
+                'Azerbaijan','Bahrain','Bangladesh','Belarus','Belgium','Bolivia','Bosnia and Herzegovina',
+                'Brazil','Bulgaria','Cambodia','Cameroon','Canada','Chile','China','Colombia',
+                'Costa Rica','Croatia','Cuba','Cyprus','Czech Republic','Denmark','Dominican Republic',
+                'Ecuador','Egypt','El Salvador','Estonia','Ethiopia','Finland','France','Georgia',
+                'Germany','Ghana','Greece','Guatemala','Honduras','Hong Kong','Hungary','India',
+                'Indonesia','Iran','Iraq','Ireland','Israel','Italy','Japan','Jordan','Kazakhstan',
+                'Kenya','Kuwait','Latvia','Lebanon','Libya','Lithuania','Luxembourg','Malaysia',
+                'Mexico','Morocco','Myanmar','Nepal','Netherlands','New Zealand','Nigeria','North Korea',
+                'Norway','Oman','Pakistan','Panama','Paraguay','Peru','Philippines','Poland',
+                'Portugal','Qatar','Romania','Russia','Saudi Arabia','Serbia','Singapore',
+                'Slovakia','Slovenia','South Africa','South Korea','Spain','Sri Lanka','Sudan',
+                'Sweden','Switzerland','Syria','Taiwan','Thailand','Tunisia','Turkey','Ukraine',
+                'United Arab Emirates','United Kingdom','United States','Uruguay','Uzbekistan',
+                'Venezuela','Vietnam','Yemen','Zimbabwe',
+              ].map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+      </section>
 
       {/* Theme Section */}
       <section>

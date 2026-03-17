@@ -21,8 +21,16 @@ router.get('/', async (req, res) => {
           WHERE ap.id::text = si."projectId"
             AND ap."archived_at" IS NOT NULL
         )
+        AND (
+          si."projectId" IS NULL
+          OR EXISTS (
+            SELECT 1 FROM projects up
+            WHERE up.id::text = si."projectId"
+              AND up."userId" = $2
+          )
+        )
       LIMIT 20
-    `, [q.trim()]);
+    `, [q.trim(), req.user.id]);
 
     // For message results: extract sessionId from title ("Chat: <sessionId>") and
     // replace the raw title with the session's human-readable title if available.

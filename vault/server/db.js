@@ -516,6 +516,46 @@ async function initSchema() {
     console.warn('[db] Could not create IVFFlat index on file_chunks (normal on empty table):', idxErr.message);
   }
 
+  // ── Multi-user: idempotent userId column additions ─────────────────────────
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE personas ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE memory ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE prompts ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE task_templates ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE objectives ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE prompt_chains ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+
+  // Backfill existing rows to user 1
+  await pool.query(`UPDATE projects SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE folders SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE personas SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE memory SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE prompts SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE tasks SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE task_templates SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE objectives SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE sessions SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE prompt_chains SET "userId" = 1 WHERE "userId" IS NULL`);
+
+  // Settings: change PK to composite (userId, key) for per-user settings
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'settings' AND column_name = 'userId'
+      ) THEN
+        ALTER TABLE settings ADD COLUMN "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE;
+        UPDATE settings SET "userId" = 1;
+        ALTER TABLE settings DROP CONSTRAINT settings_pkey;
+        ALTER TABLE settings ADD PRIMARY KEY ("userId", key);
+      END IF;
+    END $$
+  `);
+
   console.log('[db] Schema ready');
 }
 

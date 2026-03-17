@@ -20,7 +20,7 @@ async function buildTemplate(row) {
 // GET /api/task-templates
 router.get('/', async (req, res) => {
   try {
-    const { rows: templates } = await pool.query('SELECT * FROM task_templates ORDER BY "updatedAt" DESC');
+    const { rows: templates } = await pool.query('SELECT * FROM task_templates WHERE "userId"=$1 ORDER BY "updatedAt" DESC', [req.user.id]);
     res.json(await Promise.all(templates.map(buildTemplate)));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -33,10 +33,10 @@ router.post('/', async (req, res) => {
     const { name, description, category, priority, recurrence, tags, subtasks } = req.body;
     if (!name) return res.status(400).json({ error: 'name required' });
     const { rows } = await pool.query(
-      `INSERT INTO task_templates (name,description,category,priority,recurrence,tags,"updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,NOW()) RETURNING id`,
+      `INSERT INTO task_templates (name,description,category,priority,recurrence,tags,"userId","updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING id`,
       [name, description || null, category || null, priority || 'medium', recurrence || 'none',
-       Array.isArray(tags) ? tags.join(',') : (tags || '')]
+       Array.isArray(tags) ? tags.join(',') : (tags || ''), req.user.id]
     );
     const id = rows[0].id;
     if (Array.isArray(subtasks)) {
@@ -58,7 +58,7 @@ router.post('/', async (req, res) => {
 // PUT /api/task-templates/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM task_templates WHERE id=$1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT * FROM task_templates WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'not found' });
     const tmpl = existing[0];
     const { name, description, category, priority, recurrence, tags, subtasks } = req.body;
@@ -87,7 +87,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/task-templates/:id
 router.delete('/:id', async (req, res) => {
   try {
-    await pool.query('DELETE FROM task_templates WHERE id=$1', [req.params.id]);
+    await pool.query('DELETE FROM task_templates WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -97,15 +97,15 @@ router.delete('/:id', async (req, res) => {
 // POST /api/task-templates/:id/apply — creates tasks from template
 router.post('/:id/apply', async (req, res) => {
   try {
-    const { rows: tmpls } = await pool.query('SELECT * FROM task_templates WHERE id=$1', [req.params.id]);
+    const { rows: tmpls } = await pool.query('SELECT * FROM task_templates WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!tmpls[0]) return res.status(404).json({ error: 'not found' });
     const tmpl = tmpls[0];
     const { projectId, category } = req.body;
 
     const { rows: taskRows } = await pool.query(
-      `INSERT INTO tasks (title,notes,status,priority,category,"projectId",recurrence,"updatedAt")
-       VALUES ($1,$2,'todo',$3,$4,$5,$6,NOW()) RETURNING id`,
-      [tmpl.name, tmpl.description, tmpl.priority, category || tmpl.category, projectId || null, tmpl.recurrence]
+      `INSERT INTO tasks (title,notes,status,priority,category,"projectId",recurrence,"userId","updatedAt")
+       VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,NOW()) RETURNING id`,
+      [tmpl.name, tmpl.description, tmpl.priority, category || tmpl.category, projectId || null, tmpl.recurrence, req.user.id]
     );
     const taskId = taskRows[0].id;
 

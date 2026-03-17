@@ -29,10 +29,10 @@ router.get('/', async (req, res) => {
       SELECT p.*, COUNT(DISTINCT m."sessionId") as "chatCount"
       FROM projects p
       LEFT JOIN messages m ON m."projectId" = p.id
-      WHERE ${archived ? 'p."archived_at" IS NOT NULL' : 'p."archived_at" IS NULL'}
+      WHERE p."userId"=$1 AND ${archived ? 'p."archived_at" IS NOT NULL' : 'p."archived_at" IS NULL'}
       GROUP BY p.id
       ORDER BY p."sortOrder" ASC, p."updatedAt" DESC
-    `);
+    `, [req.user.id]);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -66,11 +66,11 @@ router.post('/', async (req, res) => {
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO projects (name, goal, problem, audience, "techStack", constraints, "successCriteria", tone, notes, model, "projectType", "typeConfig")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+      `INSERT INTO projects (name, goal, problem, audience, "techStack", constraints, "successCriteria", tone, notes, model, "projectType", "typeConfig", "userId")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
       [name, goal || '', problem || '', audience || '', techStack || '', constraints || '',
        successCriteria || '', tone || '', notes || '', model || 'claude-sonnet-4-6',
-       projectType || null, typeConfig ? JSON.stringify(typeConfig) : null]
+       projectType || null, typeConfig ? JSON.stringify(typeConfig) : null, req.user.id]
     );
     const { rows: project } = await pool.query('SELECT * FROM projects WHERE id=$1', [rows[0].id]);
     await syncSearchIndex(project[0]);
@@ -83,7 +83,7 @@ router.post('/', async (req, res) => {
 // GET /api/projects/:id  (works for both active and archived)
 router.get('/:id', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (err) {
@@ -94,7 +94,7 @@ router.get('/:id', async (req, res) => {
 // PATCH /api/projects/:id/archive
 router.patch('/:id/archive', async (req, res) => {
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
 
     await pool.query(`UPDATE projects SET "archived_at"=NOW(), "updatedAt"=NOW() WHERE id=$1`, [req.params.id]);
@@ -112,7 +112,7 @@ router.patch('/:id/archive', async (req, res) => {
 // PATCH /api/projects/:id/unarchive
 router.patch('/:id/unarchive', async (req, res) => {
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
 
     await pool.query(`UPDATE projects SET "archived_at"=NULL, "updatedAt"=NOW() WHERE id=$1`, [req.params.id]);
@@ -131,7 +131,7 @@ router.patch('/:id/unarchive', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, folderId } = req.body;
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
     const p = existing[0];
 
@@ -171,7 +171,7 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const fs = require('fs');
   try {
-    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
 
     // Delete files from disk

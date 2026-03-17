@@ -28,7 +28,8 @@ function resolveTemplate(template, initialInput, outputs) {
 router.get('/', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT * FROM prompt_chains ORDER BY "createdAt" DESC'
+      'SELECT * FROM prompt_chains WHERE "userId"=$1 ORDER BY "createdAt" DESC',
+      [req.user.id]
     );
     res.json(rows);
   } catch (err) {
@@ -39,7 +40,7 @@ router.get('/', async (req, res) => {
 // GET /api/chains/:id
 router.get('/:id', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM prompt_chains WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query('SELECT * FROM prompt_chains WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (err) {
@@ -53,9 +54,9 @@ router.post('/', async (req, res) => {
   if (!name?.trim()) return res.status(400).json({ error: 'name is required' });
   try {
     const { rows } = await pool.query(
-      `INSERT INTO prompt_chains (name, description, steps)
-       VALUES ($1, $2, $3) RETURNING *`,
-      [name.trim(), description, JSON.stringify(steps)]
+      `INSERT INTO prompt_chains (name, description, steps, "userId")
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [name.trim(), description, JSON.stringify(steps), req.user.id]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -67,7 +68,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { name, description, steps } = req.body;
   try {
-    const { rows: existing } = await pool.query('SELECT id FROM prompt_chains WHERE id=$1', [req.params.id]);
+    const { rows: existing } = await pool.query('SELECT id FROM prompt_chains WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
     const { rows } = await pool.query(
       `UPDATE prompt_chains SET name=$1, description=$2, steps=$3, "updatedAt"=NOW()
@@ -83,7 +84,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/chains/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const { rows } = await pool.query('DELETE FROM prompt_chains WHERE id=$1 RETURNING id', [req.params.id]);
+    const { rows } = await pool.query('DELETE FROM prompt_chains WHERE id=$1 AND "userId"=$2 RETURNING id', [req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) {
@@ -95,7 +96,7 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/run', async (req, res) => {
   let chain;
   try {
-    const { rows } = await pool.query('SELECT * FROM prompt_chains WHERE id=$1', [req.params.id]);
+    const { rows } = await pool.query('SELECT * FROM prompt_chains WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     chain = rows[0];
   } catch (err) {
