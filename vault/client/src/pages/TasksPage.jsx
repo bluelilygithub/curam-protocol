@@ -9,6 +9,7 @@ import FocusMode from '../components/tasks/FocusMode';
 import TaskTemplatesPanel from '../components/tasks/TaskTemplatesPanel';
 import TaskStatsBar from '../components/tasks/TaskStatsBar';
 import TaskFilters from '../components/tasks/TaskFilters';
+import TasksTree from '../components/tasks/TasksTree';
 import { parseNaturalDate, formatDateForInput, toISOForAPI } from '../utils/parseDate';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
 
@@ -93,8 +94,9 @@ const TASK_SHORTCUTS = [
   { keys: ['1'], desc: 'Filter: To Do' },
   { keys: ['2'], desc: 'Filter: In Progress' },
   { keys: ['3'], desc: 'Filter: Done' },
-  { keys: ['b'], desc: 'Cycle view: List → Board → Calendar → Matrix' },
+  { keys: ['b'], desc: 'Cycle view: List → Board → Calendar → Matrix → Tree' },
   { keys: ['m'], desc: 'Eisenhower Matrix view' },
+  { keys: ['t'], desc: 'Tree view' },
   { keys: ['Shift+F'], desc: 'Focus mode on expanded task' },
   { keys: ['?'], desc: 'Show keyboard shortcuts' },
 ];
@@ -199,6 +201,13 @@ function MatrixMoveModal({ task, fromQuadrant, toQuadrant, onConfirm, onCancel }
           <p style={{ color: 'var(--color-text)' }}>{to.changeDesc(task)}</p>
         </div>
 
+        {/* Subtask note */}
+        {task.subtaskCount > 0 && (
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            ↳ {task.subtaskCount} subtask{task.subtaskCount !== 1 ? 's' : ''} will move with this task.
+          </p>
+        )}
+
         {/* Implication */}
         <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>{to.implication}</p>
 
@@ -270,6 +279,31 @@ function MatrixTaskRow({ task, quadrantKey, onToggle, onEdit, onOpen, onDragStar
   );
 }
 
+function MatrixSubtaskRow({ task, onToggle, onEdit }) {
+  const getIcon = useIcon();
+  const isDone = task.status === 'done';
+  return (
+    <div
+      className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg ml-4"
+      style={{ background: 'transparent', border: '1px solid var(--color-border)', opacity: isDone ? 0.55 : 1 }}
+    >
+      <span style={{ color: 'var(--color-muted)', flexShrink: 0, fontSize: 10 }}>↳</span>
+      <button onClick={(e) => { e.stopPropagation(); onToggle(); }} style={{ color: isDone ? '#22c55e' : 'var(--color-muted)', flexShrink: 0 }}>
+        {getIcon(isDone ? 'check-circle' : 'circle', { size: 12 })}
+      </button>
+      <span
+        className="flex-1 text-xs leading-snug"
+        style={{ color: 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none' }}
+      >
+        {task.title}
+      </span>
+      <button onClick={(e) => { e.stopPropagation(); onEdit(); }} style={{ color: 'var(--color-muted)', flexShrink: 0 }} className="opacity-0 group-hover:opacity-100 transition-opacity">
+        {getIcon('edit', { size: 10 })}
+      </button>
+    </div>
+  );
+}
+
 const MATRIX_QUADRANTS = [
   { key: 'q1', label: 'Do First', sublabel: 'Urgent + Important', color: '#ef4444', test: t => t.isUrgent && t.priority === 'high' },
   { key: 'q2', label: 'Schedule', sublabel: 'Not Urgent + Important', color: '#6366f1', test: t => !t.isUrgent && t.priority === 'high' },
@@ -277,12 +311,17 @@ const MATRIX_QUADRANTS = [
   { key: 'q4', label: 'Eliminate', sublabel: 'Not Urgent + Not Important', color: '#6b7280', test: t => !t.isUrgent && t.priority !== 'high' },
 ];
 
-function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, onMoveTask, dimensionLabel, activeTimerTaskId }) {
+function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, onMoveTask, dimensionLabel, activeTimerTaskId, subtasksCache, onFetchSubtasks }) {
   const q1Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && t.isUrgent && t.priority === 'high');
   const q2Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && !t.isUrgent && t.priority === 'high');
   const q3Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && t.isUrgent && t.priority !== 'high');
   const q4Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && !t.isUrgent && t.priority !== 'high');
   const qTasksMap = { q1: q1Tasks, q2: q2Tasks, q3: q3Tasks, q4: q4Tasks };
+
+  // Auto-fetch subtasks for tasks that have them
+  useEffect(() => {
+    tasks.forEach(t => { if (t.subtaskCount > 0) onFetchSubtasks?.(t.id); });
+  }, [tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Drag-and-drop state
   const [dragOverQuadrant, setDragOverQuadrant] = useState(null);
@@ -390,16 +429,25 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, on
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
             {q2Tasks.map(task => (
-              <MatrixTaskRow
-                key={task.id}
-                task={task}
-                quadrantKey="q2"
-                prominent
-                onToggle={() => onToggleStatus(task)}
-                onEdit={() => onEdit(task)}
-                onOpen={() => onExpand(task.id)}
-                isTimerRunning={activeTimerTaskId === task.id}
-              />
+              <div key={task.id}>
+                <MatrixTaskRow
+                  task={task}
+                  quadrantKey="q2"
+                  prominent
+                  onToggle={() => onToggleStatus(task)}
+                  onEdit={() => onEdit(task)}
+                  onOpen={() => onExpand(task.id)}
+                  isTimerRunning={activeTimerTaskId === task.id}
+                />
+                {(subtasksCache?.[task.id] || []).map(sub => (
+                  <MatrixSubtaskRow
+                    key={sub.id}
+                    task={sub}
+                    onToggle={() => onToggleStatus(sub)}
+                    onEdit={() => onEdit(sub)}
+                  />
+                ))}
+              </div>
             ))}
             {q2Tasks.length === 0 && (
               <div className="py-8 text-center text-xs" style={{ color: q2Color, opacity: dragOverQuadrant === 'q2' ? 0.7 : 0.35 }}>
@@ -437,15 +485,24 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, on
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-1">
                   {qTasks.map(task => (
-                    <MatrixTaskRow
-                      key={task.id}
-                      task={task}
-                      quadrantKey={key}
-                      onToggle={() => onToggleStatus(task)}
-                      onEdit={() => onEdit(task)}
-                      onOpen={() => onExpand(task.id)}
-                      isTimerRunning={activeTimerTaskId === task.id}
-                    />
+                    <div key={task.id}>
+                      <MatrixTaskRow
+                        task={task}
+                        quadrantKey={key}
+                        onToggle={() => onToggleStatus(task)}
+                        onEdit={() => onEdit(task)}
+                        onOpen={() => onExpand(task.id)}
+                        isTimerRunning={activeTimerTaskId === task.id}
+                      />
+                      {(subtasksCache?.[task.id] || []).map(sub => (
+                        <MatrixSubtaskRow
+                          key={sub.id}
+                          task={sub}
+                          onToggle={() => onToggleStatus(sub)}
+                          onEdit={() => onEdit(sub)}
+                        />
+                      ))}
+                    </div>
                   ))}
                   {qTasks.length === 0 && (
                     <div className="py-6 text-center text-xs" style={{ color: 'var(--color-muted)', opacity: isOver ? 0.7 : 0.4 }}>
@@ -614,7 +671,7 @@ export default function TasksPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const v = params.get('view');
-    if (v && ['list', 'board', 'calendar', 'matrix'].includes(v)) {
+    if (v && ['list', 'board', 'calendar', 'matrix', 'tree'].includes(v)) {
       setViewMode(v);
       localStorage.setItem('tasksViewMode', v);
     }
@@ -668,12 +725,21 @@ export default function TasksPage() {
   const handleToggleStatus = async (task) => {
     const next = task.status === 'done' ? 'todo' : 'done';
     const updated = await api.put(`/api/tasks/${task.id}`, { status: next }).then(r => r.json());
-    setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
-    if (next === 'done') setCompletedOpen(true);
-    // Refresh comments if expanded (activity log was added)
-    if (expandedId === task.id) {
-      setCommentsCache(prev => ({ ...prev, [task.id]: undefined }));
-      fetchComments(task.id);
+    if (task.parentTaskId) {
+      // Subtask — update cache and recalculate parent's done count
+      const newSubs = (subtasksCache[task.parentTaskId] || []).map(s => s.id === task.id ? updated : s);
+      setSubtasksCache(prev => ({ ...prev, [task.parentTaskId]: newSubs }));
+      setTasks(prev => prev.map(t => t.id === task.parentTaskId
+        ? { ...t, subtaskDone: newSubs.filter(s => s.status === 'done').length }
+        : t
+      ));
+    } else {
+      setTasks(prev => prev.map(t => t.id === task.id ? updated : t));
+      if (next === 'done') setCompletedOpen(true);
+      if (expandedId === task.id) {
+        setCommentsCache(prev => ({ ...prev, [task.id]: undefined }));
+        fetchComments(task.id);
+      }
     }
   };
 
@@ -938,7 +1004,57 @@ export default function TasksPage() {
       };
       if (editTask) {
         const updated = await api.put(`/api/tasks/${editTask.id}`, payload).then(r => r.json());
-        setTasks(prev => prev.map(t => t.id === editTask.id ? updated : t));
+        const wasSubtask = !!editTask.parentTaskId;
+        const isNowSubtask = !!updated.parentTaskId;
+
+        if (!wasSubtask && isNowSubtask) {
+          // Top-level → subtask: remove from tasks list, add to parent's cache
+          setTasks(prev => prev
+            .filter(t => t.id !== editTask.id)
+            .map(t => t.id === updated.parentTaskId ? { ...t, subtaskCount: (t.subtaskCount || 0) + 1 } : t)
+          );
+          setSubtasksCache(prev => ({
+            ...prev,
+            [updated.parentTaskId]: [...(prev[updated.parentTaskId] || []), updated],
+          }));
+        } else if (wasSubtask && !isNowSubtask) {
+          // Subtask → top-level: remove from cache, add to tasks list
+          setSubtasksCache(prev => ({
+            ...prev,
+            [editTask.parentTaskId]: (prev[editTask.parentTaskId] || []).filter(s => s.id !== editTask.id),
+          }));
+          setTasks(prev => [
+            updated,
+            ...prev.map(t => t.id === editTask.parentTaskId
+              ? { ...t, subtaskCount: Math.max(0, (t.subtaskCount || 1) - 1) }
+              : t
+            ),
+          ]);
+        } else if (wasSubtask && isNowSubtask) {
+          // Subtask edited (still a subtask)
+          if (editTask.parentTaskId === updated.parentTaskId) {
+            setSubtasksCache(prev => ({
+              ...prev,
+              [updated.parentTaskId]: (prev[updated.parentTaskId] || []).map(s => s.id === updated.id ? updated : s),
+            }));
+          } else {
+            // Moved to a different parent
+            setSubtasksCache(prev => ({
+              ...prev,
+              [editTask.parentTaskId]: (prev[editTask.parentTaskId] || []).filter(s => s.id !== editTask.id),
+              [updated.parentTaskId]: [...(prev[updated.parentTaskId] || []), updated],
+            }));
+            setTasks(prev => prev.map(t => {
+              if (t.id === editTask.parentTaskId) return { ...t, subtaskCount: Math.max(0, (t.subtaskCount || 1) - 1) };
+              if (t.id === updated.parentTaskId) return { ...t, subtaskCount: (t.subtaskCount || 0) + 1 };
+              return t;
+            }));
+          }
+        } else {
+          // Normal top-level edit
+          setTasks(prev => prev.map(t => t.id === editTask.id ? updated : t));
+        }
+
         // Refresh activity log
         setCommentsCache(prev => ({ ...prev, [editTask.id]: undefined }));
         if (expandedId === editTask.id) fetchComments(editTask.id);
@@ -1179,7 +1295,7 @@ export default function TasksPage() {
         case 'b': {
           e.preventDefault();
           setViewMode(prev => {
-            const modes = ['list', 'board', 'calendar', 'matrix'];
+            const modes = ['list', 'board', 'calendar', 'matrix', 'tree'];
             const next = modes[(modes.indexOf(prev) + 1) % modes.length];
             localStorage.setItem('tasksViewMode', next);
             return next;
@@ -1190,6 +1306,12 @@ export default function TasksPage() {
           e.preventDefault();
           setViewMode('matrix');
           localStorage.setItem('tasksViewMode', 'matrix');
+          break;
+        }
+        case 't': {
+          e.preventDefault();
+          setViewMode('tree');
+          localStorage.setItem('tasksViewMode', 'tree');
           break;
         }
         case '1': setFilterStatus('todo'); break;
@@ -1944,6 +2066,7 @@ export default function TasksPage() {
               { mode: 'board', icon: 'layout', title: 'Board view' },
               { mode: 'calendar', icon: 'calendar', title: 'Calendar view' },
               { mode: 'matrix', icon: 'target', title: 'Eisenhower Matrix (m)' },
+              { mode: 'tree', icon: 'git-branch', title: 'Tree view (t)' },
             ].map((v, i) => (
               <button
                 key={v.mode}
@@ -2096,7 +2219,19 @@ export default function TasksPage() {
 
         {/* Task content area */}
         <div className="flex-1 overflow-hidden flex flex-col">
-          {viewMode === 'calendar' ? (
+          {viewMode === 'tree' ? (
+            <div className="flex-1 overflow-auto">
+              <TasksTree
+                tasks={sortTasks(filtered.filter(t => !t.parentTaskId && t.status !== 'done'))}
+                subtasksCache={subtasksCache}
+                onFetchSubtasks={fetchSubtasks}
+                onToggleStatus={handleToggleStatus}
+                onEdit={openEdit}
+                onExpand={handleExpand}
+                activeTimerTaskId={focusTask?.id ?? activeTimer?.taskId ?? null}
+              />
+            </div>
+          ) : viewMode === 'calendar' ? (
             <TasksCalendar
               tasks={tasks}
               projects={projects}
@@ -2131,6 +2266,8 @@ export default function TasksPage() {
                 onMoveTask={handleMoveMatrixTask}
                 dimensionLabel={filterDimension ? RENEWAL_DIMS.find(d => d.key === filterDimension)?.label : null}
                 activeTimerTaskId={focusTask?.id ?? activeTimer?.taskId ?? null}
+                subtasksCache={subtasksCache}
+                onFetchSubtasks={fetchSubtasks}
               />
             </div>
           ) : (
@@ -2256,8 +2393,9 @@ export default function TasksPage() {
                 <li><strong>Board</strong> — Kanban (To Do / In Progress / Done); drag within column to reorder, across to change status</li>
                 <li><strong>Calendar</strong> — Day / Week / Month / Range; drag pills between dates to reschedule</li>
                 <li><strong>Matrix</strong> — Eisenhower 2×2 grid (Urgent/Important); mark tasks ⚡ Urgent in the form</li>
+                <li><strong>Tree</strong> — hierarchical view; expand tasks to reveal subtasks inline</li>
               </ul>
-              <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Press <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>b</kbd> to cycle views · <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>m</kbd> for Matrix.</p>
+              <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Press <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>b</kbd> to cycle views · <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>m</kbd> for Matrix · <kbd className="px-1 py-0.5 rounded text-xs border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}>t</kbd> for Tree.</p>
             </div>
 
             {/* Creating */}
@@ -2333,8 +2471,9 @@ export default function TasksPage() {
                   ['/', 'Focus search'],
                   ['f', 'Cycle quick filters'],
                   ['1 / 2 / 3', 'Filter by status'],
-                  ['b', 'Cycle view (List→Board→Calendar→Matrix)'],
+                  ['b', 'Cycle view (List→Board→Calendar→Matrix→Tree)'],
                   ['m', 'Matrix view'],
+                  ['t', 'Tree view'],
                   ['?', 'All shortcuts'],
                   ['Ctrl+Shift+N', 'Quick capture'],
                   ['Esc', 'Close / deselect'],
