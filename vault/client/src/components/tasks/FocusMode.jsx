@@ -60,11 +60,11 @@ function formatMinutes(totalMinutes) {
   return `${m}m`;
 }
 
-export default function FocusMode({ task, onClose, onTaskUpdate }) {
+export default function FocusMode({ task, initialMinutes, onClose, onTaskUpdate }) {
   const [settings, setSettings] = useState(loadSettings);
   const [showSettings, setShowSettings] = useState(false);
   const [modeKey, setModeKey] = useState('focus');
-  const [secondsLeft, setSecondsLeft] = useState(() => loadSettings().focusMin * 60);
+  const [secondsLeft, setSecondsLeft] = useState(() => (initialMinutes ?? loadSettings().focusMin) * 60);
   const [running, setRunning] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
   const [message, setMessage] = useState('');
@@ -74,7 +74,7 @@ export default function FocusMode({ task, onClose, onTaskUpdate }) {
 
   const intervalRef = useRef(null);
   const elapsedFocusSeconds = useRef(0);
-  const totalSecondsForMode = useRef(settings.focusMin * 60);
+  const totalSecondsForMode = useRef((initialMinutes ?? settings.focusMin) * 60);
 
   // Fetch subtasks on mount
   useEffect(() => {

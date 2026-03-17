@@ -68,8 +68,14 @@ const EFFORT_PRESETS = [
 const EMPTY_FORM = {
   title: '', notes: '', status: 'todo', priority: 'medium', isUrgent: 0, category: '', tags: '',
   dueDate: '', dueTime: '', dueDateRaw: '', projectId: '', parentTaskId: '', recurrence: 'none',
-  estimatedMinutes: null, keyResultId: null, renewalDimension: null,
+  estimatedMinutes: null, keyResultId: null, renewalDimension: null, activityStatus: 'none',
 };
+
+const ACTIVITY_STATUSES = [
+  { key: 'started', label: 'Started',  color: '#22c55e' },
+  { key: 'paused',  label: 'Paused',   color: '#6b7280' },
+  { key: 'waiting', label: 'Waiting',  color: '#f59e0b' },
+];
 
 const RENEWAL_DIMS = [
   { key: 'physical', label: '🏃 Physical', color: '#3b82f6' },
@@ -218,10 +224,13 @@ function MatrixMoveModal({ task, fromQuadrant, toQuadrant, onConfirm, onCancel }
   );
 }
 
-function MatrixTaskRow({ task, quadrantKey, onToggle, onEdit, onOpen, onDragStart, prominent }) {
+function MatrixTaskRow({ task, quadrantKey, onToggle, onEdit, onOpen, onDragStart, prominent, isTimerRunning }) {
   const getIcon = useIcon();
   const due = dueInfo(task.dueDate);
   const isDone = task.status === 'done';
+  const hasStarted = !isDone && (task.subtaskDone > 0 || task.timeSpentMinutes > 0);
+  const activityInfo = !isDone && task.activityStatus && task.activityStatus !== 'none'
+    ? ACTIVITY_STATUSES.find(s => s.key === task.activityStatus) : null;
   return (
     <div
       className="group flex items-center gap-2 px-2.5 py-2 rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
@@ -244,6 +253,15 @@ function MatrixTaskRow({ task, quadrantKey, onToggle, onEdit, onOpen, onDragStar
       >
         {task.title}
       </span>
+      {isTimerRunning && (
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 animate-pulse" style={{ background: '#f59e0b' }} title="Timer running" />
+      )}
+      {!isTimerRunning && hasStarted && (
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: '#22c55e' }} title="Action started" />
+      )}
+      {activityInfo && (
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: activityInfo.color }} title={activityInfo.label} />
+      )}
       {due && <span className="text-xs font-medium flex-shrink-0" style={{ color: due.color }}>{due.label}</span>}
       <button onClick={(e) => { e.stopPropagation(); onEdit(); }} style={{ color: 'var(--color-muted)', flexShrink: 0 }} className="opacity-0 group-hover:opacity-100 transition-opacity">
         {getIcon('edit', { size: 11 })}
@@ -259,7 +277,7 @@ const MATRIX_QUADRANTS = [
   { key: 'q4', label: 'Eliminate', sublabel: 'Not Urgent + Not Important', color: '#6b7280', test: t => !t.isUrgent && t.priority !== 'high' },
 ];
 
-function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, onMoveTask, dimensionLabel }) {
+function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, onMoveTask, dimensionLabel, activeTimerTaskId }) {
   const q1Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && t.isUrgent && t.priority === 'high');
   const q2Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && !t.isUrgent && t.priority === 'high');
   const q3Tasks = tasks.filter(t => (showCompleted || t.status !== 'done') && t.isUrgent && t.priority !== 'high');
@@ -380,6 +398,7 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, on
                 onToggle={() => onToggleStatus(task)}
                 onEdit={() => onEdit(task)}
                 onOpen={() => onExpand(task.id)}
+                isTimerRunning={activeTimerTaskId === task.id}
               />
             ))}
             {q2Tasks.length === 0 && (
@@ -425,6 +444,7 @@ function MatrixView({ tasks, showCompleted, onToggleStatus, onEdit, onExpand, on
                       onToggle={() => onToggleStatus(task)}
                       onEdit={() => onEdit(task)}
                       onOpen={() => onExpand(task.id)}
+                      isTimerRunning={activeTimerTaskId === task.id}
                     />
                   ))}
                   {qTasks.length === 0 && (
@@ -471,6 +491,7 @@ export default function TasksPage() {
   const [filterProject, setFilterProject] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterDimension, setFilterDimension] = useState(null);
+  const [filterActivityStatus, setFilterActivityStatus] = useState('');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('due');
 
@@ -879,6 +900,7 @@ export default function TasksPage() {
       keyResultId: task.keyResultId || null,
       isUrgent: task.isUrgent || 0,
       renewalDimension: task.renewalDimension || null,
+      activityStatus: task.activityStatus || 'none',
     });
     setShowForm(true);
     loadGoalsForForm();
@@ -912,6 +934,7 @@ export default function TasksPage() {
         keyResultId: form.keyResultId || null,
         isUrgent: form.isUrgent ? 1 : 0,
         renewalDimension: form.renewalDimension || null,
+        activityStatus: form.activityStatus || 'none',
       };
       if (editTask) {
         const updated = await api.put(`/api/tasks/${editTask.id}`, payload).then(r => r.json());
@@ -1235,6 +1258,7 @@ export default function TasksPage() {
     if (filterCategory && t.category !== filterCategory) return false;
     if (filterProject && t.projectId !== Number(filterProject)) return false;
     if (filterDimension && t.renewalDimension !== filterDimension) return false;
+    if (filterActivityStatus && t.activityStatus !== filterActivityStatus) return false;
     if (search) {
       const q = search.toLowerCase();
       if (!t.title.toLowerCase().includes(q) && !(t.notes || '').toLowerCase().includes(q)) return false;
@@ -1285,6 +1309,10 @@ export default function TasksPage() {
     const project = projects.find(p => p.id === task.projectId);
     const isDone = task.status === 'done';
     const isNew = newlyAddedIds.has(task.id);
+    const hasStarted = !isDone && (task.subtaskDone > 0 || task.timeSpentMinutes > 0);
+    const isTimerRunning = !isDone && (focusTask?.id === task.id || activeTimer?.taskId === task.id);
+    const activityInfo = !isDone && task.activityStatus && task.activityStatus !== 'none'
+      ? ACTIVITY_STATUSES.find(s => s.key === task.activityStatus) : null;
 
     return (
       <div
@@ -1339,6 +1367,17 @@ export default function TasksPage() {
               >
                 {task.title}
               </span>
+              {isTimerRunning && (
+                <span className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse" style={{ background: '#f59e0b' }} title="Timer running" />
+              )}
+              {!isTimerRunning && hasStarted && (
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#22c55e' }} title="Action started" />
+              )}
+              {activityInfo && (
+                <span className="text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0" style={{ background: activityInfo.color + '22', color: activityInfo.color, border: `1px solid ${activityInfo.color}55` }} title="Activity status">
+                  {activityInfo.label}
+                </span>
+              )}
               <span
                 className="text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0"
                 style={{ background: PRIORITY_COLOR[task.priority] + '22', color: PRIORITY_COLOR[task.priority], border: `1px solid ${PRIORITY_COLOR[task.priority]}55` }}
@@ -1688,6 +1727,10 @@ export default function TasksPage() {
     const due = dueInfo(task.dueDate);
     const isDone = task.status === 'done';
     const isOver = dragOverId === task.id;
+    const hasStarted = !isDone && (task.subtaskDone > 0 || task.timeSpentMinutes > 0);
+    const isTimerRunning = !isDone && (focusTask?.id === task.id || activeTimer?.taskId === task.id);
+    const activityInfo = !isDone && task.activityStatus && task.activityStatus !== 'none'
+      ? ACTIVITY_STATUSES.find(s => s.key === task.activityStatus) : null;
     return (
       <div
         key={task.id}
@@ -1710,7 +1753,16 @@ export default function TasksPage() {
         }}
       >
         <div className="flex items-start justify-between gap-2 mb-2">
-          <span className="text-sm font-medium leading-snug" style={{ color: 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none', opacity: isDone ? 0.7 : 1 }}>{task.title}</span>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <span className="text-sm font-medium leading-snug" style={{ color: 'var(--color-text)', textDecoration: isDone ? 'line-through' : 'none', opacity: isDone ? 0.7 : 1 }}>{task.title}</span>
+            {isTimerRunning && <span className="w-2 h-2 rounded-full flex-shrink-0 animate-pulse" style={{ background: '#f59e0b' }} title="Timer running" />}
+            {!isTimerRunning && hasStarted && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#22c55e' }} title="Action started" />}
+          </div>
+          {activityInfo && (
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium inline-block mt-0.5" style={{ background: activityInfo.color + '22', color: activityInfo.color, border: `1px solid ${activityInfo.color}55` }}>
+              {activityInfo.label}
+            </span>
+          )}
           <div className="flex gap-0.5 flex-shrink-0">
             <button onClick={() => handleToggleStatus(task)} style={{ color: isDone ? '#22c55e' : 'var(--color-muted)' }} title={isDone ? 'Unmark' : 'Done'} className="hover:opacity-60 p-0.5">{getIcon(isDone ? 'check-circle' : 'circle', { size: 13 })}</button>
             <button onClick={(e) => { e.stopPropagation(); handleDuplicate(task); }} style={{ color: 'var(--color-muted)' }} title="Duplicate" className="opacity-0 group-hover:opacity-100 hover:opacity-60 transition-opacity p-0.5">{getIcon('copy', { size: 12 })}</button>
@@ -2007,6 +2059,8 @@ export default function TasksPage() {
             searchInputRef={searchInputRef}
             filterDimension={filterDimension}
             onSetFilterDimension={setFilterDimension}
+            filterActivityStatus={filterActivityStatus}
+            onSetFilterActivityStatus={setFilterActivityStatus}
           />
         </div>
 
@@ -2076,6 +2130,7 @@ export default function TasksPage() {
                 onExpand={handleExpand}
                 onMoveTask={handleMoveMatrixTask}
                 dimensionLabel={filterDimension ? RENEWAL_DIMS.find(d => d.key === filterDimension)?.label : null}
+                activeTimerTaskId={focusTask?.id ?? activeTimer?.taskId ?? null}
               />
             </div>
           ) : (
@@ -2322,6 +2377,24 @@ export default function TasksPage() {
                 />
               </div>
               <div>
+                <label className="text-xs font-medium block mb-1.5" style={{ color: 'var(--color-muted)' }}>Activity Status</label>
+                <div className="flex gap-2">
+                  {ACTIVITY_STATUSES.map(s => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, activityStatus: f.activityStatus === s.key ? 'none' : s.key }))}
+                      className="flex-1 text-xs py-1.5 rounded-lg border transition-all text-center"
+                      style={{
+                        borderColor: form.activityStatus === s.key ? s.color : 'var(--color-border)',
+                        background: form.activityStatus === s.key ? s.color + '22' : 'transparent',
+                        color: form.activityStatus === s.key ? s.color : 'var(--color-muted)',
+                      }}
+                    >{s.label}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
                 <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>Notes</label>
                 <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={3} className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
               </div>
@@ -2429,7 +2502,7 @@ export default function TasksPage() {
                   <label className="text-xs font-medium block mb-1" style={{ color: 'var(--color-muted)' }}>Parent task</label>
                   <select value={form.parentTaskId} onChange={e => setForm(f => ({ ...f, parentTaskId: e.target.value }))} className="w-full px-3 py-2 rounded-lg border text-sm outline-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                     <option value="">None (top-level)</option>
-                    {tasks.filter(t => !editTask || t.id !== editTask.id).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                    {tasks.filter(t => t.status !== 'done' && (!editTask || t.id !== editTask.id)).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
                   </select>
                 </div>
               </div>
@@ -2569,6 +2642,7 @@ export default function TasksPage() {
       {focusTask && (
         <FocusMode
           task={focusTask}
+          initialMinutes={focusTask?.estimatedMinutes > 0 ? focusTask.estimatedMinutes : undefined}
           onClose={() => setFocusTask(null)}
           onTaskUpdate={(updates) => {
             api.put(`/api/tasks/${focusTask.id}`, updates).then(r => r.json()).then(updated => {

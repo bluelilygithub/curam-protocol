@@ -70,7 +70,7 @@ function calculateNextDate(dateStr, recurrence) {
 // GET /api/tasks — top-level tasks with optional filters
 router.get('/', async (req, res) => {
   try {
-    const { status, priority, category, projectId, tag, dueBefore, dueAfter, search } = req.query;
+    const { status, priority, category, projectId, tag, dueBefore, dueAfter, search, activityStatus } = req.query;
     let sql = 'SELECT * FROM tasks WHERE "parentTaskId" IS NULL';
     const p = [];
     let idx = 1;
@@ -82,6 +82,7 @@ router.get('/', async (req, res) => {
     if (dueAfter) { sql += ` AND "dueDate">=$${idx++}`; p.push(dueAfter); }
     if (search) { sql += ` AND (title ILIKE $${idx} OR notes ILIKE $${idx + 1})`; p.push(`%${search}%`, `%${search}%`); idx += 2; }
     if (tag) { sql += ` AND id IN (SELECT "taskId" FROM task_tags WHERE tag=$${idx++})`; p.push(tag); }
+    if (activityStatus) { sql += ` AND "activityStatus"=$${idx++}`; p.push(activityStatus); }
     sql += ' ORDER BY "order" ASC NULLS LAST, CASE priority WHEN \'high\' THEN 1 WHEN \'medium\' THEN 2 ELSE 3 END, "dueDate" ASC NULLS LAST, "createdAt" DESC';
     const { rows } = await pool.query(sql, p);
     res.json(await Promise.all(rows.map(buildTask)));
@@ -606,12 +607,14 @@ router.delete('/:id/dependencies/:blockedByTaskId', async (req, res) => {
 // POST /api/tasks
 router.post('/', async (req, res) => {
   try {
-    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId, isUrgent, renewalDimension, sourceSessionId } = req.body;
+    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId, isUrgent, renewalDimension, sourceSessionId, activityStatus } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const recurrenceGroupId = (recurrence && recurrence !== 'none') ? crypto.randomUUID() : null;
+    const validActivityStatuses = ['none', 'started', 'paused', 'waiting'];
+    const safeActivityStatus = validActivityStatuses.includes(activityStatus) ? activityStatus : 'none';
     const { rows } = await pool.query(
-      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","sourceSessionId","recurrenceGroupId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW()) RETURNING id',
-      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null, sourceSessionId || null, recurrenceGroupId]
+      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","sourceSessionId","recurrenceGroupId","activityStatus","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW()) RETURNING id',
+      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null, sourceSessionId || null, recurrenceGroupId, safeActivityStatus]
     );
     const id = rows[0].id;
     if (Array.isArray(tags)) {
@@ -649,9 +652,11 @@ router.put('/:id', async (req, res) => {
       : task.timeSpentMinutes;
     const newIsUrgent = 'isUrgent' in req.body ? (req.body.isUrgent ? 1 : 0) : (task.isUrgent || 0);
     const newRenewalDimension = 'renewalDimension' in req.body ? (req.body.renewalDimension || null) : task.renewalDimension;
+    const validActivityStatuses = ['none', 'started', 'paused', 'waiting'];
+    const newActivityStatus = 'activityStatus' in req.body && validActivityStatuses.includes(req.body.activityStatus) ? req.body.activityStatus : (task.activityStatus || 'none');
     await pool.query(
-      'UPDATE tasks SET title=$1,notes=$2,status=$3,priority=$4,category=$5,"projectId"=$6,"parentTaskId"=$7,"dueDate"=$8,recurrence=$9,"recurrenceConfig"=$10,"estimatedMinutes"=$11,"keyResultId"=$12,"timeSpentMinutes"=$13,"isUrgent"=$14,"renewalDimension"=$15,"updatedAt"=NOW() WHERE id=$16',
-      [v('title'), v('notes'), v('status'), v('priority'), v('category'), v('projectId'), v('parentTaskId'), v('dueDate'), v('recurrence'), rcfg, newEstimated, newKeyResultId, newTimeSpent, newIsUrgent, newRenewalDimension, id]
+      'UPDATE tasks SET title=$1,notes=$2,status=$3,priority=$4,category=$5,"projectId"=$6,"parentTaskId"=$7,"dueDate"=$8,recurrence=$9,"recurrenceConfig"=$10,"estimatedMinutes"=$11,"keyResultId"=$12,"timeSpentMinutes"=$13,"isUrgent"=$14,"renewalDimension"=$15,"activityStatus"=$16,"updatedAt"=NOW() WHERE id=$17',
+      [v('title'), v('notes'), v('status'), v('priority'), v('category'), v('projectId'), v('parentTaskId'), v('dueDate'), v('recurrence'), rcfg, newEstimated, newKeyResultId, newTimeSpent, newIsUrgent, newRenewalDimension, newActivityStatus, id]
     );
     if (Array.isArray(req.body.tags)) {
       await pool.query('DELETE FROM task_tags WHERE "taskId"=$1', [id]);

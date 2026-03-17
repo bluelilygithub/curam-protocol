@@ -159,6 +159,7 @@ async function initSchema() {
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "archived_at" TIMESTAMPTZ DEFAULT NULL`);
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "recurrenceGroupId" TEXT DEFAULT NULL`);
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "transcript_summary" TEXT DEFAULT NULL`);
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "activityStatus" TEXT NOT NULL DEFAULT 'none' CHECK("activityStatus" IN ('none','started','paused','waiting'))`);
 
     // ── Chat ──────────────────────────────────────────────────────────────────
     await client.query(`

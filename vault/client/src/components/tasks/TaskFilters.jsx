@@ -27,6 +27,8 @@ export default function TaskFilters({
   searchInputRef,
   filterDimension,
   onSetFilterDimension,
+  filterActivityStatus,
+  onSetFilterActivityStatus,
 }) {
   const getIcon = useIcon();
 
@@ -60,6 +62,13 @@ export default function TaskFilters({
       <select value={filterProject} onChange={e => onSetFilterProject(e.target.value)} className="text-xs px-2 py-1 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
         <option value="">All projects</option>
         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+
+      <select value={filterActivityStatus} onChange={e => onSetFilterActivityStatus(e.target.value)} className="text-xs px-2 py-1 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+        <option value="">All activity</option>
+        <option value="started">Started</option>
+        <option value="paused">Paused</option>
+        <option value="waiting">Waiting</option>
       </select>
 
       <select value={filterStatus} onChange={e => onSetFilterStatus(e.target.value)} className="text-xs px-2 py-1 rounded-lg border outline-none" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
