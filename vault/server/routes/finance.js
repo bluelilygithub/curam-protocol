@@ -1127,14 +1127,109 @@ router.post('/bas/:quarterId/paid', async (req, res) => {
   }
 });
 
+// ── BAS — annual summary & warnings ───────────────────────────────────────────
+
+router.get('/bas/annual', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const year   = parseInt(req.query.year) || new Date().getFullYear();
+    const prev   = year - 1;
+
+    const quarterDefs = [
+      { q: 1, label: `Q1 Jul–Sep ${prev}`, from: `${prev}-07-01`, to: `${prev}-09-30` },
+      { q: 2, label: `Q2 Oct–Dec ${prev}`, from: `${prev}-10-01`, to: `${prev}-12-31` },
+      { q: 3, label: `Q3 Jan–Mar ${year}`, from: `${year}-01-01`, to: `${year}-03-31` },
+      { q: 4, label: `Q4 Apr–Jun ${year}`, from: `${year}-04-01`, to: `${year}-06-30` },
+    ];
+
+    const quarters = await Promise.all(quarterDefs.map(async (qd) => {
+      const [invRow, expRow, qRow] = await Promise.all([
+        pool.query(
+          `SELECT COALESCE(SUM(subtotal),0) AS income, COALESCE(SUM(gst),0) AS "gstCollected"
+           FROM fin_invoices
+           WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
+          [userId, qd.from, qd.to]
+        ),
+        pool.query(
+          `SELECT COALESCE(SUM(gst),0) AS "gstPaid"
+           FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+          [userId, qd.from, qd.to]
+        ),
+        pool.query(
+          `SELECT id, status FROM fin_bas_quarters WHERE "userId"=$1 AND from_date=$2`,
+          [userId, qd.from]
+        ),
+      ]);
+
+      const income     = parseFloat(invRow.rows[0].income);
+      const gstOnSales = parseFloat(invRow.rows[0].gstCollected);
+      const gstCredits = parseFloat(expRow.rows[0].gstPaid);
+      const g1         = parseFloat((income + gstOnSales).toFixed(2));
+      const netGst     = parseFloat((gstOnSales - gstCredits).toFixed(2));
+      const qRecord    = qRow.rows[0] || null;
+
+      return {
+        quarterId:   qRecord ? qRecord.id : null,
+        quarter:     qd.q,
+        label:       qd.label,
+        periodStart: qd.from,
+        periodEnd:   qd.to,
+        g1,
+        gstOnSales,
+        gstCredits,
+        netGst,
+        status: qRecord ? qRecord.status : null,
+      };
+    }));
+
+    const totals = {
+      g1:         parseFloat(quarters.reduce((s, q) => s + q.g1, 0).toFixed(2)),
+      gstOnSales: parseFloat(quarters.reduce((s, q) => s + q.gstOnSales, 0).toFixed(2)),
+      gstCredits: parseFloat(quarters.reduce((s, q) => s + q.gstCredits, 0).toFixed(2)),
+      netGst:     parseFloat(quarters.reduce((s, q) => s + q.netGst, 0).toFixed(2)),
+    };
+
+    res.json({ financialYear: `${prev}-${year}`, quarters, totals });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/bas/:quarterId/warnings', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { rows: qRows } = await pool.query(
+      `SELECT from_date, to_date FROM fin_bas_quarters WHERE id=$1 AND "userId"=$2`,
+      [req.params.quarterId, userId]
+    );
+    if (!qRows[0]) return res.status(404).json({ error: 'Quarter not found' });
+
+    const { from_date, to_date } = qRows[0];
+    const { rows: unpaidInvoices } = await pool.query(
+      `SELECT i.id, i.number, c.name AS "clientName", i.total, i.status, i."dueDate"
+       FROM fin_invoices i
+       LEFT JOIN fin_clients c ON c.id = i."clientId"
+       WHERE i."userId"=$1 AND i."issueDate"::date BETWEEN $2 AND $3
+         AND i.status IN ('draft','sent')
+       ORDER BY i."issueDate", i.id`,
+      [userId, from_date, to_date]
+    );
+
+    res.json({ unpaidInvoices });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 router.get('/dashboard', async (req, res) => {
   try {
     const userId    = req.user.id;
     const yearStart = `${new Date().getFullYear()}-01-01`;
+    const today     = new Date().toISOString().slice(0, 10);
 
-    const [paid, outstanding, expenses, wages] = await Promise.all([
+    const [paid, outstanding, overdue, expenses, wages] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
          FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt">=$2`,
@@ -1142,8 +1237,14 @@ router.get('/dashboard', async (req, res) => {
       ),
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
-         FROM fin_invoices WHERE "userId"=$1 AND status IN ('draft','sent')`,
-        [userId]
+         FROM fin_invoices WHERE "userId"=$1
+           AND (status='draft' OR (status='sent' AND ("dueDate" IS NULL OR "dueDate"::date >= $2)))`,
+        [userId, today]
+      ),
+      pool.query(
+        `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
+         FROM fin_invoices WHERE "userId"=$1 AND status='sent' AND "dueDate"::date < $2`,
+        [userId, today]
       ),
       pool.query(
         `SELECT COALESCE(SUM(amount),0) AS total FROM fin_expenses WHERE "userId"=$1 AND date>=$2`,
@@ -1160,6 +1261,8 @@ router.get('/dashboard', async (req, res) => {
       paidInvoices:      parseInt(paid.rows[0].count),
       outstandingAmount: parseFloat(outstanding.rows[0].total),
       outstandingCount:  parseInt(outstanding.rows[0].count),
+      overdueAmount:     parseFloat(overdue.rows[0].total),
+      overdueCount:      parseInt(overdue.rows[0].count),
       yearExpenses:      parseFloat(expenses.rows[0].total),
       yearWages:         parseFloat(wages.rows[0].total),
     });

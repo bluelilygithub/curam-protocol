@@ -12,7 +12,7 @@ function ConfirmModal({ title, message, confirmLabel = 'Confirm', danger = false
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
         <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{title}</p>
-        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{message}</p>
+        <div className="text-sm" style={{ color: 'var(--color-muted)' }}>{message}</div>
         <div className="flex gap-3 justify-end">
           <button
             onClick={onCancel}

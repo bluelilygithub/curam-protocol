@@ -99,16 +99,25 @@ function Sel({ value, onChange, children }) {
   );
 }
 
+function displayStatus(inv) {
+  if (inv.status === 'sent' && inv.dueDate) {
+    const due = new Date(String(inv.dueDate).slice(0, 10) + 'T00:00:00');
+    if (due < new Date()) return 'overdue';
+  }
+  return inv.status;
+}
+
 function StatusBadge({ status }) {
   const map = {
-    draft: { bg: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' },
-    sent:  { bg: '#dbeafe', color: '#1e40af' },
-    paid:  { bg: '#d1fae5', color: '#065f46' },
-    void:  { bg: '#fee2e2', color: '#991b1b' },
+    draft:   { bg: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' },
+    sent:    { bg: '#dbeafe', color: '#1e40af' },
+    paid:    { bg: '#d1fae5', color: '#065f46' },
+    void:    { bg: '#fee2e2', color: '#991b1b' },
+    overdue: { bg: '#fee2e2', color: '#991b1b' },
   };
   const s = map[status] || map.draft;
   return (
-    <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={s}>
+    <span className="text-xs px-2 py-0.5 rounded-full font-medium capitalize" style={s}>
       {status}
     </span>
   );
@@ -195,11 +204,12 @@ function DashboardTab() {
   const net = parseFloat((data.yearRevenue - data.yearExpenses - data.yearWages).toFixed(2));
 
   const cards = [
-    { label: 'Revenue YTD',      value: fmt(data.yearRevenue),       sub: `${data.paidInvoices} paid invoices`          },
-    { label: 'Outstanding',      value: fmt(data.outstandingAmount), sub: `${data.outstandingCount} unpaid`, warn: data.outstandingCount > 0 },
-    { label: 'Expenses YTD',     value: fmt(data.yearExpenses),      sub: 'ex GST'                                       },
-    { label: 'Wages YTD',        value: fmt(data.yearWages),         sub: 'gross wages'                                  },
-    { label: 'Net Profit (est)', value: fmt(net),                    sub: 'revenue − expenses − wages', neg: net < 0    },
+    { label: 'Revenue YTD',      value: fmt(data.yearRevenue),       sub: `${data.paidInvoices} paid invoices`                           },
+    { label: 'Outstanding',      value: fmt(data.outstandingAmount), sub: `${data.outstandingCount} sent, not yet due`, warn: data.outstandingCount > 0 },
+    { label: 'Overdue',          value: fmt(data.overdueAmount),     sub: `${data.overdueCount} past due date`,         neg: data.overdueCount > 0    },
+    { label: 'Expenses YTD',     value: fmt(data.yearExpenses),      sub: 'ex GST'                                                        },
+    { label: 'Wages YTD',        value: fmt(data.yearWages),         sub: 'gross wages'                                                   },
+    { label: 'Net Profit (est)', value: fmt(net),                    sub: 'revenue − expenses − wages',                 neg: net < 0                  },
   ];
 
   return (
@@ -369,6 +379,7 @@ function InvoicesTab() {
   const [error, setError] = useState('');
   const [confirmModal, setConfirmModal] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(null);
+  const [filterStatus, setFilterStatus] = useState('all');
   const addToast = useToastStore(s => s.addToast);
 
   const blankForm = () => ({ clientId: '', issueDate: todayStr(), dueDate: '', notes: '', items: [{ ...BLANK_ITEM }] });
@@ -517,9 +528,28 @@ function InvoicesTab() {
         <Btn onClick={openNew}>+ New Invoice</Btn>
       </div>
 
-      {invoices.length === 0 ? (
-        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No invoices yet.</p>
-      ) : (
+      <div className="flex gap-1 mb-3 flex-wrap">
+        {['all','draft','sent','overdue','paid'].map(s => (
+          <button
+            key={s}
+            onClick={() => setFilterStatus(s)}
+            className="text-xs px-2.5 py-1 rounded-md capitalize transition-colors"
+            style={{
+              background:  filterStatus === s ? 'var(--color-primary)' : 'var(--color-surface)',
+              color:       filterStatus === s ? '#fff' : 'var(--color-muted)',
+              border:      '1px solid var(--color-border)',
+            }}
+          >{s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}</button>
+        ))}
+      </div>
+
+      {(() => {
+        const filtered = invoices.filter(inv =>
+          filterStatus === 'all' ? true : displayStatus(inv) === filterStatus
+        );
+        return filtered.length === 0 ? (
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No invoices match this filter.</p>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -530,7 +560,7 @@ function InvoicesTab() {
               </tr>
             </thead>
             <tbody>
-              {invoices.map(inv => (
+              {filtered.map(inv => (
                 <tr key={inv.id} className="border-b hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--color-border)' }}>
                   <td className="py-2 px-2">
                     <button onClick={() => viewDetail(inv)} className="font-medium hover:underline" style={{ color: 'var(--color-primary)' }}>
@@ -541,7 +571,7 @@ function InvoicesTab() {
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(inv.issueDate)}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(inv.dueDate)}</td>
                   <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>{fmt(inv.total)}</td>
-                  <td className="py-2 px-2"><StatusBadge status={inv.status} /></td>
+                  <td className="py-2 px-2"><StatusBadge status={displayStatus(inv)} /></td>
                   <td className="py-2 px-2">
                     <div className="flex gap-1 flex-wrap">
                       {inv.status === 'draft' && (
@@ -572,7 +602,8 @@ function InvoicesTab() {
             </tbody>
           </table>
         </div>
-      )}
+        );
+      })()}
 
       {/* Invoice builder modal */}
       {modal && (
@@ -1235,8 +1266,8 @@ function BASStatusBar({ status }) {
   return (
     <div className="flex items-center gap-0 mb-5">
       {BAS_STEPS.map((step, i) => {
-        const done    = i < current;
-        const active  = i === current;
+        const done   = i < current;
+        const active = i === current;
         return (
           <React.Fragment key={step}>
             <div className="flex flex-col items-center gap-1">
@@ -1262,30 +1293,205 @@ function BASStatusBar({ status }) {
   );
 }
 
+function WarningsModal({ warnings, unpaidInvoices, onProceed, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 px-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+      <div className="relative w-full max-w-lg rounded-xl shadow-xl overflow-y-auto" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', maxHeight: '85vh' }}>
+        <div className="flex items-center gap-2 px-5 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
+          <span style={{ color: '#f59e0b' }}>⚠</span>
+          <span className="font-semibold text-sm" style={{ color: '#f59e0b' }}>Reconciliation Warnings</span>
+        </div>
+        <div className="p-5 flex flex-col gap-4">
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            The following issues were found for this quarter. You can proceed anyway or go back to investigate.
+          </p>
+          {warnings.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {warnings.map((w, i) => (
+                <div key={i} className="flex gap-2 items-start">
+                  <span className="flex-shrink-0" style={{ color: '#f59e0b' }}>⚠</span>
+                  <span className="text-sm" style={{ color: 'var(--color-text)' }}>{w}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {unpaidInvoices.length > 0 && (
+            <div>
+              <p className="text-sm mb-2 font-medium" style={{ color: 'var(--color-text)' }}>
+                The following invoices were raised this quarter but have not been paid:
+              </p>
+              <table className="w-full text-xs border-collapse mb-2">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    {['Invoice', 'Client', 'Amount', 'Status'].map(h => (
+                      <th key={h} className="py-1.5 text-left font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {unpaidInvoices.map(inv => (
+                    <tr key={inv.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <td className="py-1.5 pr-3">{inv.number}</td>
+                      <td className="py-1.5 pr-3">{inv.clientName || '—'}</td>
+                      <td className="py-1.5 pr-3">{fmt(inv.total)}</td>
+                      <td className="py-1.5 capitalize">{inv.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                These will not appear in your BAS figures until marked paid.
+              </p>
+            </div>
+          )}
+          <div className="flex gap-2 justify-end pt-1">
+            <Btn variant="secondary" onClick={onCancel}>Go Back</Btn>
+            <button
+              onClick={onProceed}
+              className="px-3 py-1.5 text-sm rounded-lg font-medium transition-opacity hover:opacity-80"
+              style={{ background: '#f59e0b', color: '#fff' }}
+            >Proceed Anyway</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnnualBASPanel({ fy, setFy, onSelectQuarter }) {
+  const [annual, setAnnual]   = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    setAnnual(null);
+    api.get(`/api/finance/bas/annual?year=${fy}`)
+      .then(r => r.json())
+      .then(d => setAnnual(d))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [fy]);
+
+  const statusStyle = (s) => {
+    if (!s) return {};
+    const map = {
+      open:       { background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' },
+      reconciled: { background: '#fef3c7', color: '#92400e' },
+      lodged:     { background: '#ffedd5', color: '#9a3412' },
+      paid:       { background: '#d1fae5', color: '#065f46' },
+    };
+    return map[s] || map.open;
+  };
+
+  return (
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center justify-between mb-5">
+        <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Annual Summary</span>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setFy(f => f - 1)} className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60" style={{ color: 'var(--color-muted)' }}>←</button>
+          <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>FY {fy - 1}–{fy}</span>
+          <button onClick={() => setFy(f => f + 1)} className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60" style={{ color: 'var(--color-muted)' }}>→</button>
+        </div>
+      </div>
+
+      {loading && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading...</p>}
+
+      {annual && (
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--color-border)', background: 'var(--color-surface)' }}>
+                {['Quarter', 'G1 Sales', '1A GST', '1B Credits', 'Net GST', 'Status'].map(h => (
+                  <th key={h} className="text-left py-2 px-3 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {annual.quarters.map((q) => {
+                const hasData = q.status !== null || q.g1 > 0 || q.gstOnSales > 0;
+                return (
+                  <tr
+                    key={q.quarter}
+                    className={`border-b ${hasData ? 'cursor-pointer hover:opacity-75' : ''}`}
+                    style={{ borderColor: 'var(--color-border)' }}
+                    onClick={() => {
+                      if (!hasData) return;
+                      // Match the quarter label to qIdx in the parent's quarters array
+                      const prev = fy - 1;
+                      const labels = [
+                        `Q1 Jul–Sep ${prev}`, `Q2 Oct–Dec ${prev}`,
+                        `Q3 Jan–Mar ${fy}`,   `Q4 Apr–Jun ${fy}`,
+                      ];
+                      const idx = labels.indexOf(q.label);
+                      if (idx >= 0) onSelectQuarter(idx);
+                    }}
+                  >
+                    <td className="py-2 px-3 text-xs font-medium" style={{ color: 'var(--color-text)' }}>{q.label}</td>
+                    <td className="py-2 px-3" style={{ color: 'var(--color-text)' }}>{fmt(q.g1)}</td>
+                    <td className="py-2 px-3" style={{ color: 'var(--color-text)' }}>{fmt(q.gstOnSales)}</td>
+                    <td className="py-2 px-3" style={{ color: 'var(--color-text)' }}>{fmt(q.gstCredits)}</td>
+                    <td className="py-2 px-3" style={{ color: 'var(--color-text)' }}>{fmt(q.netGst)}</td>
+                    <td className="py-2 px-3">
+                      {q.status ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium capitalize" style={statusStyle(q.status)}>{q.status}</span>
+                      ) : (
+                        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr style={{ borderTop: '2px solid var(--color-border)', background: 'var(--color-surface)' }}>
+                <td className="py-2 px-3 text-xs font-bold" style={{ color: 'var(--color-text)' }}>FY Total</td>
+                <td className="py-2 px-3 font-bold text-xs" style={{ color: 'var(--color-text)' }}>{fmt(annual.totals.g1)}</td>
+                <td className="py-2 px-3 font-bold text-xs" style={{ color: 'var(--color-text)' }}>{fmt(annual.totals.gstOnSales)}</td>
+                <td className="py-2 px-3 font-bold text-xs" style={{ color: 'var(--color-text)' }}>{fmt(annual.totals.gstCredits)}</td>
+                <td className="py-2 px-3 font-bold text-xs" style={{ color: 'var(--color-text)' }}>{fmt(annual.totals.netGst)}</td>
+                <td className="py-2 px-3" />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function buildBasWarnings(d) {
+  const warns = [];
+  const incTotal = parseFloat(d.income || 0) + parseFloat(d.gstCollected || 0);
+  const expTotal = parseFloat(d.expenses || 0) + parseFloat(d.gstPaid || 0);
+  if (incTotal === 0) warns.push('No paid invoices recorded for this quarter. G1 is $0.00.');
+  if (expTotal === 0) warns.push('No expenses recorded for this quarter. G11 is $0.00.');
+  if ((d.netGst || 0) < 0) warns.push('GST credits (1B) exceed GST on sales (1A). Net GST payable is negative — this is unusual. Verify your expenses.');
+  if (incTotal > 0 && Math.abs(parseFloat((incTotal / 11).toFixed(2)) - (d.gstCollected || 0)) > 0.02)
+    warns.push('GST on Sales (1A) does not equal G1 ÷ 11. Possible calculation anomaly — verify your figures.');
+  return warns;
+}
+
 function BASTab() {
-  const now  = new Date();
-  const yr   = now.getMonth() < 6 ? now.getFullYear() : now.getFullYear() + 1;
-  const prev = yr - 1;
+  const now        = new Date();
+  const defaultFY  = now.getMonth() >= 6 ? now.getFullYear() + 1 : now.getFullYear();
+
+  const [fy, setFy]   = useState(defaultFY);
+  const prev           = fy - 1;
 
   const quarters = [
     { label: `Q1 Jul–Sep ${prev}`, from: `${prev}-07-01`, to: `${prev}-09-30` },
     { label: `Q2 Oct–Dec ${prev}`, from: `${prev}-10-01`, to: `${prev}-12-31` },
-    { label: `Q3 Jan–Mar ${yr}`,   from: `${yr}-01-01`,   to: `${yr}-03-31`   },
-    { label: `Q4 Apr–Jun ${yr}`,   from: `${yr}-04-01`,   to: `${yr}-06-30`   },
+    { label: `Q3 Jan–Mar ${fy}`,   from: `${fy}-01-01`,   to: `${fy}-03-31`   },
+    { label: `Q4 Apr–Jun ${fy}`,   from: `${fy}-04-01`,   to: `${fy}-06-30`   },
   ];
 
-  const [qIdx, setQIdx]     = useState(() => {
-    const m = now.getMonth();
-    if (m >= 0 && m <= 2) return 2;
-    if (m >= 3 && m <= 5) return 3;
-    if (m >= 6 && m <= 8) return 0;
-    return 1;
-  });
-  const [data, setData]         = useState(null);
-  const [loading, setLoading]   = useState(false);
-  const [stepping, setStepping] = useState(false);
+  const [qIdx, setQIdx]           = useState(() => { const m = now.getMonth(); return m<=2?2:m<=5?3:m<=8?0:1; });
+  const [data, setData]           = useState(null);
+  const [loading, setLoading]     = useState(false);
+  const [stepping, setStepping]   = useState(false);
   const [stepError, setStepError] = useState('');
-  const [confirmPay, setConfirmPay] = useState(false);
+  const [warningsModal, setWarningsModal]       = useState(null);
+  const [confirmReconcile, setConfirmReconcile] = useState(false);
+  const [confirmLodge, setConfirmLodge]         = useState(false);
+  const [confirmPay, setConfirmPay]             = useState(false);
   const addToast = useToastStore(s => s.addToast);
 
   const calc = useCallback(async () => {
@@ -1296,20 +1502,17 @@ function BASTab() {
     try {
       const result = await api.get(`/api/finance/bas?from=${q.from}&to=${q.to}`).then(r => r.json());
       setData(result);
-    } catch {}
-    finally { setLoading(false); }
-  }, [qIdx]); // eslint-disable-line react-hooks/exhaustive-deps
+    } catch {} finally { setLoading(false); }
+  }, [qIdx, fy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { calc(); }, [calc]);
 
-  const doStep = async (confirmed = false) => {
-    if (!data?.quarterId) return;
-    if (data.status === 'lodged' && !confirmed) { setConfirmPay(true); return; }
+  const executeStep = async () => {
     setStepping(true);
     setStepError('');
     try {
       const id = data.quarterId;
-      if (data.status === 'open')       await api.post(`/api/finance/bas/${id}/reconcile`, {});
+      if (data.status === 'open')            await api.post(`/api/finance/bas/${id}/reconcile`, {});
       else if (data.status === 'reconciled') await api.post(`/api/finance/bas/${id}/lodge`, {});
       else if (data.status === 'lodged')     await api.post(`/api/finance/bas/${id}/paid`, {});
       const labels = { open: 'Marked reconciled', reconciled: 'Lodged with ATO', lodged: 'BAS payment recorded' };
@@ -1319,6 +1522,28 @@ function BASTab() {
       setStepError(e.message);
     } finally {
       setStepping(false);
+    }
+  };
+
+  const doStep = async () => {
+    if (!data?.quarterId) return;
+    if (data.status === 'open') {
+      setStepping(true);
+      try {
+        const warns   = buildBasWarnings(data);
+        const r       = await api.get(`/api/finance/bas/${data.quarterId}/warnings`).then(r => r.json());
+        const unpaid  = r.unpaidInvoices || [];
+        if (warns.length > 0 || unpaid.length > 0) {
+          setWarningsModal({ warnings: warns, unpaidInvoices: unpaid });
+        } else {
+          setConfirmReconcile(true);
+        }
+      } catch { setConfirmReconcile(true); }
+      finally { setStepping(false); }
+    } else if (data.status === 'reconciled') {
+      setConfirmLodge(true);
+    } else if (data.status === 'lodged') {
+      setConfirmPay(true);
     }
   };
 
@@ -1338,72 +1563,121 @@ function BASTab() {
   ] : [];
 
   const actionLabels = { open: 'Mark Reconciled', reconciled: 'Lodge with ATO', lodged: 'Record Payment' };
-  const timestamps = data ? [
+  const timestamps   = data ? [
     data.reconciledAt && `Reconciled ${new Date(data.reconciledAt).toLocaleString('en-AU')}`,
     data.lodgedAt     && `Lodged ${new Date(data.lodgedAt).toLocaleString('en-AU')}`,
     data.paidAt       && `Paid ${new Date(data.paidAt).toLocaleString('en-AU')}`,
   ].filter(Boolean) : [];
 
+  const lodgeMessage = data ? (
+    <div>
+      <p className="mb-3">Confirm you have submitted this BAS to the ATO for <strong>{quarters[qIdx]?.label}</strong>.</p>
+      <div className="rounded-lg p-3 mb-3 text-xs font-mono flex flex-col gap-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+        <div className="flex justify-between"><span>G1  Total Sales (inc GST)</span><span>{fmt(incTotal)}</span></div>
+        <div className="flex justify-between"><span>1A  GST on Sales</span><span>{fmt(data.gstCollected)}</span></div>
+        <div className="flex justify-between"><span>1B  GST Credits</span><span>{fmt(data.gstPaid)}</span></div>
+        <div className="flex justify-between font-bold" style={{ borderTop: '1px solid var(--color-border)', paddingTop: 4, marginTop: 2 }}><span>Net GST Payable</span><span>{fmt(data.netGst)}</span></div>
+      </div>
+      <p>This action cannot be undone.</p>
+    </div>
+  ) : '';
+
   return (
-    <div className="p-6 max-w-xl">
+    <div className="p-6">
       <h2 className="font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Business Activity Statement</h2>
 
-      <div className="mb-5">
-        <Field label="Quarter">
-          <Sel value={qIdx} onChange={v => { setQIdx(Number(v)); }}>
-            {quarters.map((q, i) => <option key={i} value={i}>{q.label}</option>)}
-          </Sel>
-        </Field>
-      </div>
-
-      {loading && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Calculating...</p>}
-
-      {data && (
-        <>
-          <BASStatusBar status={data.status} />
-
-          <div className="rounded-xl border overflow-hidden mb-4" style={{ borderColor: 'var(--color-border)' }}>
-            {rows.map((row, i) =>
-              row === null ? (
-                <div key={i} className="border-t" style={{ borderColor: 'var(--color-border)' }} />
-              ) : (
-                <div
-                  key={i}
-                  className="flex items-center justify-between px-4 py-2.5 border-b last:border-0"
-                  style={{ borderColor: 'var(--color-border)', background: row.bold ? 'var(--color-surface)' : 'transparent' }}
-                >
-                  <span className="text-sm" style={{ color: 'var(--color-text)', fontWeight: row.bold ? 600 : 400 }}>{row.label}</span>
-                  <span className="text-sm font-medium" style={{ color: row.warn ? '#f59e0b' : 'var(--color-text)' }}>{row.value}</span>
-                </div>
-              )
-            )}
+      <div className="flex flex-col xl:flex-row gap-8">
+        {/* Left: quarterly detail */}
+        <div className="flex-1 min-w-0 max-w-xl">
+          <div className="mb-5">
+            <Field label="Quarter">
+              <Sel value={qIdx} onChange={v => setQIdx(Number(v))}>
+                {quarters.map((q, i) => <option key={i} value={i}>{q.label}</option>)}
+              </Sel>
+            </Field>
           </div>
 
-          {timestamps.length > 0 && (
-            <div className="mb-3 flex flex-col gap-0.5">
-              {timestamps.map(t => (
-                <p key={t} className="text-xs" style={{ color: 'var(--color-muted)' }}>{t}</p>
-              ))}
-            </div>
-          )}
+          {loading && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Calculating...</p>}
 
-          {data.status === 'paid' ? (
-            <div
-              className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
-              style={{ background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0' }}
-            >
-              <span>✓</span>
-              <span>This BAS quarter is locked — payment has been recorded and journal entries created.</span>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {stepError && <p className="text-xs" style={{ color: '#ef4444' }}>{stepError}</p>}
-              <Btn onClick={() => doStep()} disabled={stepping}>
-                {stepping ? 'Updating…' : actionLabels[data.status]}
-              </Btn>
-            </div>
+          {data && (
+            <>
+              <BASStatusBar status={data.status} />
+
+              <div className="rounded-xl border overflow-hidden mb-4" style={{ borderColor: 'var(--color-border)' }}>
+                {rows.map((row, i) =>
+                  row === null ? (
+                    <div key={i} className="border-t" style={{ borderColor: 'var(--color-border)' }} />
+                  ) : (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between px-4 py-2.5 border-b last:border-0"
+                      style={{ borderColor: 'var(--color-border)', background: row.bold ? 'var(--color-surface)' : 'transparent' }}
+                    >
+                      <span className="text-sm" style={{ color: 'var(--color-text)', fontWeight: row.bold ? 600 : 400 }}>{row.label}</span>
+                      <span className="text-sm font-medium" style={{ color: row.warn ? '#f59e0b' : 'var(--color-text)' }}>{row.value}</span>
+                    </div>
+                  )
+                )}
+              </div>
+
+              {timestamps.length > 0 && (
+                <div className="mb-3 flex flex-col gap-0.5">
+                  {timestamps.map(t => <p key={t} className="text-xs" style={{ color: 'var(--color-muted)' }}>{t}</p>)}
+                </div>
+              )}
+
+              {data.status === 'paid' ? (
+                <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm" style={{ background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0' }}>
+                  <span>✓</span>
+                  <span>This BAS quarter is locked — payment has been recorded and journal entries created.</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {stepError && <p className="text-xs" style={{ color: '#ef4444' }}>{stepError}</p>}
+                  <Btn onClick={doStep} disabled={stepping}>
+                    {stepping ? 'Checking…' : actionLabels[data.status]}
+                  </Btn>
+                </div>
+              )}
+            </>
           )}
-        </>
+        </div>
+
+        {/* Right: annual summary */}
+        <AnnualBASPanel
+          fy={fy}
+          setFy={setFy}
+          onSelectQuarter={idx => setQIdx(idx)}
+        />
+      </div>
+
+      {warningsModal && (
+        <WarningsModal
+          warnings={warningsModal.warnings}
+          unpaidInvoices={warningsModal.unpaidInvoices}
+          onProceed={() => { setWarningsModal(null); setConfirmReconcile(true); }}
+          onCancel={() => setWarningsModal(null)}
+        />
+      )}
+
+      {confirmReconcile && (
+        <ConfirmModal
+          title="Mark as Reconciled"
+          message="Confirm this quarter's figures have been reviewed and reconciled. You can still lodge and pay after this step."
+          confirmLabel="Mark Reconciled"
+          onConfirm={() => { setConfirmReconcile(false); executeStep(); }}
+          onCancel={() => setConfirmReconcile(false)}
+        />
+      )}
+
+      {confirmLodge && (
+        <ConfirmModal
+          title="Lodge with ATO"
+          message={lodgeMessage}
+          confirmLabel="Confirm Lodge"
+          onConfirm={() => { setConfirmLodge(false); executeStep(); }}
+          onCancel={() => setConfirmLodge(false)}
+        />
       )}
 
       {confirmPay && (
@@ -1411,7 +1685,7 @@ function BASTab() {
           title="Record BAS Payment"
           message={`This will create a journal entry for the GST settlement (${fmt(data?.netGst)}) and lock this quarter. Continue?`}
           confirmLabel="Record Payment"
-          onConfirm={() => { setConfirmPay(false); doStep(true); }}
+          onConfirm={() => { setConfirmPay(false); executeStep(); }}
           onCancel={() => setConfirmPay(false)}
         />
       )}
