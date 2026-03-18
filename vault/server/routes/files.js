@@ -302,6 +302,22 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
   }
 });
 
+// GET /api/files/:id/raw — serve raw binary for client-side preview (pdfjs-dist etc.)
+router.get('/:id/raw', async (req, res) => {
+  if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'Invalid file ID' });
+  try {
+    const { rows } = await pool.query('SELECT path, mimetype, name FROM files WHERE id=$1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    const { path: filePath, mimetype, name } = rows[0];
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not on disk' });
+    res.setHeader('Content-Type', mimetype || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(name)}"`);
+    fs.createReadStream(filePath).pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/files/:projectId
 router.get('/:projectId', requireNumericProjectId, async (req, res) => {
   try {

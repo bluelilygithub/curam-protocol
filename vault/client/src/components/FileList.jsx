@@ -10,7 +10,7 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function FileCard({ file, onDelete, onChat, onTogglePin, onAttach, isAttached }) {
+function FileCard({ file, onDelete, onChat, onTogglePin, onAttach, onPreview, isAttached }) {
   const [expanded, setExpanded] = useState(false);
   const [pinned, setPinned] = useState(!!file.pinned);
   const [attached, setAttached] = useState(false);
@@ -66,6 +66,17 @@ function FileCard({ file, onDelete, onChat, onTogglePin, onAttach, isAttached })
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Preview */}
+          {onPreview && (
+            <button
+              onClick={() => onPreview(file)}
+              className="p-1 rounded hover:opacity-70 transition-opacity"
+              style={{ color: 'var(--color-muted)' }}
+              title="Preview file"
+            >
+              {getIcon('eye', { size: 13 })}
+            </button>
+          )}
           {/* Pin toggle */}
           <button
             onClick={handlePin}
@@ -130,7 +141,7 @@ function FileCard({ file, onDelete, onChat, onTogglePin, onAttach, isAttached })
   );
 }
 
-function FileList({ projectId, onAttach, sessionFileIds = [] }) {
+function FileList({ projectId, onAttach, onPreview, sessionFileIds = [] }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -166,7 +177,7 @@ function FileList({ projectId, onAttach, sessionFileIds = [] }) {
   return (
     <div>
       {files.map((file) => (
-        <FileCard key={file.id} file={file} onDelete={handleDelete} onChat={handleChat} onTogglePin={() => {}} onAttach={onAttach} isAttached={sessionFileIds.includes(file.id)} />
+        <FileCard key={file.id} file={file} onDelete={handleDelete} onChat={handleChat} onTogglePin={() => {}} onAttach={onAttach} onPreview={onPreview} isAttached={sessionFileIds.includes(file.id)} />
       ))}
     </div>
   );

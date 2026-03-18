@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import FileList from './FileList';
+import FilePreviewDrawer from './FilePreviewDrawer';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useSettingsStore from '../store/settingsStore';
@@ -25,6 +26,7 @@ function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionF
   const [uploadError, setUploadError] = useState('');
   const [listKey, setListKey] = useState(0);
   const [pinnedUrls, setPinnedUrls] = useState([]);
+  const [previewFile, setPreviewFile] = useState(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -62,6 +64,7 @@ function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionF
   };
 
   return (
+    <>
     <div
       className="flex-shrink-0 flex flex-col border-l overflow-hidden w-full sm:w-72 h-full"
       style={{ borderColor: 'var(--color-border)' }}
@@ -112,7 +115,7 @@ function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionF
 
       {/* File list + pinned pages */}
       <div className="flex-1 overflow-y-auto px-3 pb-3">
-        <FileList key={listKey} projectId={projectId} onAttach={onAttach} sessionFileIds={sessionFileIds} />
+        <FileList key={listKey} projectId={projectId} onAttach={onAttach} onPreview={f => setPreviewFile(f)} sessionFileIds={sessionFileIds} />
 
         {pinnedUrls.length > 0 && (
           <div className="mt-3">
@@ -153,6 +156,13 @@ function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionF
         )}
       </div>
     </div>
+
+    <FilePreviewDrawer
+      file={previewFile}
+      onClose={() => setPreviewFile(null)}
+      onAttach={onAttach}
+    />
+    </>
   );
 }
 

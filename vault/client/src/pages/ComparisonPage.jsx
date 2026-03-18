@@ -7,6 +7,7 @@ import useAuthStore from '../store/authStore';
 import useSettingsStore from '../store/settingsStore';
 import api from '../utils/apiClient';
 import { MODELS } from '../utils/models';
+import FilePreviewDrawer from '../components/FilePreviewDrawer';
 
 const MODES = [
   { id: 'diff',      label: 'Diff',       description: 'Detailed line-by-line comparison' },
@@ -37,6 +38,7 @@ function FileDropZone({ label, doc, onDoc, onClear }) {
   const [projects, setProjects] = useState([]);
   const [projectId, setProjectId] = useState('');
   const [files, setFiles] = useState([]);
+  const [previewFile, setPreviewFile] = useState(null);
 
   useEffect(() => {
     if (!vaultOpen || projects.length > 0) return;
@@ -152,18 +154,29 @@ function FileDropZone({ label, doc, onDoc, onClear }) {
           {projectId && files.length > 0 && (
             <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
               {files.map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => handleVaultFile(f.id, f.name)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left hover:opacity-70 transition-opacity border"
-                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-                >
-                  {getIcon('file-text', { size: 12 })}
-                  <span className="truncate">{f.name}</span>
-                </button>
+                <div key={f.id} className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleVaultFile(f.id, f.name)}
+                    className="flex-1 flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-left hover:opacity-70 transition-opacity border"
+                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+                  >
+                    {getIcon('file-text', { size: 12 })}
+                    <span className="truncate">{f.name}</span>
+                  </button>
+                  <button
+                    onClick={() => setPreviewFile(f)}
+                    className="flex-shrink-0 p-1.5 rounded hover:opacity-70 transition-opacity"
+                    style={{ color: 'var(--color-muted)' }}
+                    title="Preview file"
+                  >
+                    {getIcon('eye', { size: 12 })}
+                  </button>
+                </div>
               ))}
             </div>
           )}
+
+          <FilePreviewDrawer file={previewFile} onClose={() => setPreviewFile(null)} />
 
           {projectId && files.length === 0 && (
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>No files in this project.</p>
