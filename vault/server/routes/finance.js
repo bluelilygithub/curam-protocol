@@ -1,7 +1,32 @@
 'use strict';
 
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
+const multer  = require('multer');
+const path    = require('path');
+const fs      = require('fs');
+
+const UPLOAD_DIR   = process.env.UPLOAD_DIR || path.join(__dirname, '../../uploads');
+const RECEIPT_DIR  = path.join(UPLOAD_DIR, 'receipts');
+
+const receiptUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdirSync(RECEIPT_DIR, { recursive: true });
+      cb(null, RECEIPT_DIR);
+    },
+    filename: (_req, file, cb) => {
+      const unique = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const ext    = path.extname(file.originalname).toLowerCase();
+      cb(null, `${unique}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = ['image/jpeg','image/png','image/gif','image/webp','application/pdf'];
+    cb(null, ok.includes(file.mimetype));
+  },
+});
 const { pool } = require('../db');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -81,7 +106,7 @@ async function deleteJournalForSource(dbClient, userId, sourceId, type) {
 
 router.get('/settings', async (req, res) => {
   try {
-    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms'];
+    const keys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms'];
     const { rows } = await pool.query(
       `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
       [req.user.id, keys]
@@ -96,7 +121,7 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', async (req, res) => {
   try {
-    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms'];
+    const allowed = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number','fin_gst_registered','fin_payment_terms'];
     for (const [key, value] of Object.entries(req.body)) {
       if (!allowed.includes(key)) continue;
       await pool.query(
@@ -281,6 +306,53 @@ router.get('/invoices/:id', async (req, res) => {
     invoice.items = items;
     res.json(invoice);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/invoices/:id/pdf', async (req, res) => {
+  try {
+    const userId    = req.user.id;
+    const invoiceId = req.params.id;
+
+    const { rows } = await pool.query(
+      `SELECT i.*, c.name AS "clientName", c.email AS "clientEmail",
+              c.address AS "clientAddress", c.abn AS "clientAbn"
+       FROM fin_invoices i
+       LEFT JOIN fin_clients c ON c.id = i."clientId"
+       WHERE i.id=$1 AND i."userId"=$2`,
+      [invoiceId, userId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    const invoice = rows[0];
+
+    const { rows: items } = await pool.query(
+      `SELECT * FROM fin_invoice_items WHERE "invoiceId"=$1 ORDER BY id`, [invoice.id]
+    );
+
+    const client = {
+      name:    invoice.clientName,
+      email:   invoice.clientEmail,
+      address: invoice.clientAddress,
+      abn:     invoice.clientAbn,
+    };
+
+    const settingKeys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number'];
+    const { rows: settingRows } = await pool.query(
+      `SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)`,
+      [userId, settingKeys]
+    );
+    const cfg = {};
+    for (const r of settingRows) cfg[r.key] = r.value;
+
+    const { generateInvoicePdf } = require('../services/invoicePdf');
+    const buffer = await generateInvoicePdf(invoice, items, client, cfg);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.number}.pdf"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('[PDF]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -717,6 +789,69 @@ router.delete('/expenses/:id', async (req, res) => {
   }
 });
 
+// ── Expense receipts ──────────────────────────────────────────────────────────
+
+router.post('/expenses/:id/receipt', receiptUpload.single('receipt'), async (req, res) => {
+  try {
+    const userId    = req.user.id;
+    const expenseId = req.params.id;
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    // Delete old receipt file if one exists
+    const { rows } = await pool.query(
+      `SELECT receipt_path FROM fin_expenses WHERE id=$1 AND "userId"=$2`, [expenseId, userId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (rows[0].receipt_path) {
+      const old = path.join(RECEIPT_DIR, rows[0].receipt_path);
+      if (fs.existsSync(old)) fs.unlinkSync(old);
+    }
+
+    const filename = req.file.filename;
+    await pool.query(
+      `UPDATE fin_expenses SET receipt_path=$1,"updatedAt"=NOW() WHERE id=$2 AND "userId"=$3`,
+      [filename, expenseId, userId]
+    );
+    res.json({ ok: true, filename });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/expenses/:id/receipt', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT receipt_path FROM fin_expenses WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]
+    );
+    if (!rows[0] || !rows[0].receipt_path) return res.status(404).json({ error: 'No receipt' });
+    const filePath = path.join(RECEIPT_DIR, rows[0].receipt_path);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+    res.sendFile(filePath);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/expenses/:id/receipt', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT receipt_path FROM fin_expenses WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    if (rows[0].receipt_path) {
+      const filePath = path.join(RECEIPT_DIR, rows[0].receipt_path);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+    await pool.query(
+      `UPDATE fin_expenses SET receipt_path=NULL,"updatedAt"=NOW() WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Wages ─────────────────────────────────────────────────────────────────────
 
 router.get('/wages', async (req, res) => {
@@ -867,9 +1002,24 @@ router.get('/bas', async (req, res) => {
     const gstCollected = parseFloat(invRows.rows[0].gstCollected);
     const gstPaid      = parseFloat(expRows.rows[0].gstPaid);
 
+    // Upsert the quarter record so we can track status
+    const { rows: qRows } = await pool.query(
+      `INSERT INTO fin_bas_quarters ("userId", from_date, to_date, status)
+       VALUES ($1,$2,$3,'open')
+       ON CONFLICT ("userId", from_date) DO UPDATE SET to_date=EXCLUDED.to_date
+       RETURNING id, status, reconciled_at, lodged_at, paid_at`,
+      [userId, from, to]
+    );
+    const quarter = qRows[0];
+
     res.json({
       from,
       to,
+      quarterId:       quarter.id,
+      status:          quarter.status,
+      reconciledAt:    quarter.reconciled_at,
+      lodgedAt:        quarter.lodged_at,
+      paidAt:          quarter.paid_at,
       income:          parseFloat(invRows.rows[0].income),
       gstCollected,
       expenses:        parseFloat(expRows.rows[0].expenses),
@@ -880,6 +1030,100 @@ router.get('/bas', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/bas/:quarterId/reconcile', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE fin_bas_quarters SET status='reconciled', reconciled_at=NOW(), "updatedAt"=NOW()
+       WHERE id=$1 AND "userId"=$2 AND status='open' RETURNING *`,
+      [req.params.quarterId, req.user.id]
+    );
+    if (!rows[0]) return res.status(400).json({ error: 'Quarter not found or not in open status' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/bas/:quarterId/lodge', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE fin_bas_quarters SET status='lodged', lodged_at=NOW(), "updatedAt"=NOW()
+       WHERE id=$1 AND "userId"=$2 AND status='reconciled' RETURNING *`,
+      [req.params.quarterId, req.user.id]
+    );
+    if (!rows[0]) return res.status(400).json({ error: 'Quarter not found or not in reconciled status' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/bas/:quarterId/paid', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+
+    const { rows: qRows } = await dbClient.query(
+      `UPDATE fin_bas_quarters SET status='paid', paid_at=NOW(), "updatedAt"=NOW()
+       WHERE id=$1 AND "userId"=$2 AND status='lodged' RETURNING *`,
+      [req.params.quarterId, userId]
+    );
+    if (!qRows[0]) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: 'Quarter not found or not in lodged status' });
+    }
+    const quarter = qRows[0];
+
+    // Recalculate net GST for journal entry
+    const [invRows, expRows] = await Promise.all([
+      dbClient.query(
+        `SELECT COALESCE(SUM(gst),0) AS "gstCollected"
+         FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
+        [userId, quarter.from_date, quarter.to_date]
+      ),
+      dbClient.query(
+        `SELECT COALESCE(SUM(gst),0) AS "gstPaid"
+         FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+        [userId, quarter.from_date, quarter.to_date]
+      ),
+    ]);
+    const gstCollected = parseFloat(invRows.rows[0].gstCollected);
+    const gstPaid      = parseFloat(expRows.rows[0].gstPaid);
+    const netGst       = parseFloat((gstCollected - gstPaid).toFixed(2));
+
+    // Journal: DR GST Collected, CR GST Paid, CR Bank (net settlement)
+    if (netGst !== 0) {
+      await ensureAccounts(userId);
+      const gstColId  = await accountByCode(userId, '2200');
+      const gstPaidId = await accountByCode(userId, '1200');
+      const bankId    = await accountByCode(userId, '1000');
+      if (gstColId && gstPaidId && bankId) {
+        const lines = [];
+        if (gstCollected > 0) lines.push({ accountId: gstColId,  debit: gstCollected, credit: 0 });
+        if (gstPaid > 0)      lines.push({ accountId: gstPaidId, debit: 0, credit: gstPaid });
+        if (netGst > 0)       lines.push({ accountId: bankId,    debit: 0, credit: netGst });
+        else                  lines.push({ accountId: bankId,    debit: Math.abs(netGst), credit: 0 });
+        await createJournalEntry(dbClient, userId, {
+          date:        new Date().toISOString().slice(0, 10),
+          description: `BAS payment — ${quarter.from_date} to ${quarter.to_date}`,
+          type:        'bas',
+          sourceId:    quarter.id,
+          lines,
+        });
+      }
+    }
+
+    await dbClient.query('COMMIT');
+    res.json(qRows[0]);
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
 

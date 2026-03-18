@@ -368,6 +368,7 @@ function InvoicesTab() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [confirmModal, setConfirmModal] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(null);
   const addToast = useToastStore(s => s.addToast);
 
   const blankForm = () => ({ clientId: '', issueDate: todayStr(), dueDate: '', notes: '', items: [{ ...BLANK_ITEM }] });
@@ -492,6 +493,23 @@ function InvoicesTab() {
     setViewInvoice(data);
   };
 
+  const downloadPdf = async (inv) => {
+    setPdfLoading(inv.id);
+    try {
+      const res = await api.get(`/api/finance/invoices/${inv.id}/pdf`);
+      if (!res.ok) throw new Error('PDF generation failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${inv.number}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setPdfLoading(null);
+    }
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -541,6 +559,12 @@ function InvoicesTab() {
                       {inv.status !== 'paid' && (
                         <button onClick={() => del(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#ef4444', borderColor: '#fca5a5' }}>Del</button>
                       )}
+                      <button
+                        onClick={() => downloadPdf(inv)}
+                        disabled={pdfLoading === inv.id}
+                        className="text-xs px-2 py-0.5 rounded border hover:opacity-70 disabled:opacity-40"
+                        style={{ color: '#6b7280', borderColor: '#d1d5db' }}
+                      >{pdfLoading === inv.id ? '…' : 'PDF'}</button>
                     </div>
                   </td>
                 </tr>
@@ -732,11 +756,15 @@ const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true
 function ExpensesTab() {
   const [expenses, setExpenses]     = useState([]);
   const [showForm, setShowForm]     = useState(false);
-  const [editingExpense, setEditing] = useState(null); // null = new, obj = editing
+  const [editingExpense, setEditing] = useState(null);
   const [form, setForm]             = useState({ ...BLANK_EXPENSE, date: todayStr() });
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState('');
   const [confirmModal, setConfirmModal] = useState(null);
+  const [receiptModal, setReceiptModal] = useState(null);   // { expense } — upload modal
+  const [viewReceiptModal, setViewReceiptModal] = useState(null); // { expense, url, isPdf }
+  const [receiptUploading, setReceiptUploading] = useState(false);
+  const receiptInputRef = useRef(null);
   const addToast = useToastStore(s => s.addToast);
 
   const autoGst = form.gstIncluded && form.amount
@@ -806,6 +834,56 @@ function ExpensesTab() {
     });
   };
 
+  const openUploadModal = (exp) => { setReceiptModal({ expense: exp }); };
+
+  const uploadReceipt = async (file) => {
+    if (!receiptModal || !file) return;
+    setReceiptUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('receipt', file);
+      const res = await api.postForm(`/api/finance/expenses/${receiptModal.expense.id}/receipt`, fd);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      addToast('Receipt uploaded');
+      setReceiptModal(null);
+      load();
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setReceiptUploading(false);
+    }
+  };
+
+  const openViewReceipt = async (exp) => {
+    try {
+      const res = await api.get(`/api/finance/expenses/${exp.id}/receipt`);
+      if (!res.ok) { addToast('Receipt not found', 'error'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const isPdf = exp.receipt_path?.toLowerCase().endsWith('.pdf') || blob.type === 'application/pdf';
+      setViewReceiptModal({ expense: exp, url, isPdf });
+    } catch (e) {
+      addToast(e.message, 'error');
+    }
+  };
+
+  const removeReceipt = (exp) => {
+    setConfirmModal({
+      message: `Remove receipt for "${exp.description}"?`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        await api.delete(`/api/finance/expenses/${exp.id}/receipt`);
+        addToast('Receipt removed');
+        if (viewReceiptModal?.expense?.id === exp.id) {
+          URL.revokeObjectURL(viewReceiptModal.url);
+          setViewReceiptModal(null);
+        }
+        load();
+      },
+    });
+  };
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -852,7 +930,7 @@ function ExpensesTab() {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                {['Date', 'Description', 'Supplier', 'Ex-GST', 'GST', 'Total', 'Category', ''].map(h => (
+                {['Date', 'Description', 'Supplier', 'Ex-GST', 'GST', 'Total', 'Category', '', ''].map(h => (
                   <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -867,6 +945,14 @@ function ExpensesTab() {
                   <td className="py-2 px-2" style={{ color: 'var(--color-muted)' }}>{fmt(e.gst)}</td>
                   <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>{fmt(parseFloat(e.amount) + parseFloat(e.gst || 0))}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{e.category || '—'}</td>
+                  <td className="py-2 px-1">
+                    <button
+                      onClick={() => e.receipt_path ? openViewReceipt(e) : openUploadModal(e)}
+                      title={e.receipt_path ? 'View receipt' : 'Attach receipt'}
+                      className="text-sm hover:opacity-60 transition-opacity"
+                      style={{ color: e.receipt_path ? '#f59e0b' : 'var(--color-muted)' }}
+                    >📎</button>
+                  </td>
                   <td className="py-2 px-2">
                     <div className="flex gap-2">
                       <button onClick={() => openEdit(e)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
@@ -882,13 +968,67 @@ function ExpensesTab() {
 
       {confirmModal && (
         <ConfirmModal
-          title="Delete Expense"
+          title="Confirm"
           message={confirmModal.message}
           confirmLabel="Delete"
           danger
           onConfirm={confirmModal.onConfirm}
           onCancel={() => setConfirmModal(null)}
         />
+      )}
+
+      {/* Upload receipt modal */}
+      {receiptModal && (
+        <Modal title="Attach Receipt" onClose={() => setReceiptModal(null)}>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+              Upload a receipt for "{receiptModal.expense.description}". Accepted: JPG, PNG, GIF, WebP, PDF (max 5 MB).
+            </p>
+            <input
+              ref={receiptInputRef}
+              type="file"
+              accept="image/*,.pdf"
+              style={{ display: 'none' }}
+              onChange={e => { if (e.target.files[0]) uploadReceipt(e.target.files[0]); }}
+            />
+            <div
+              className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed cursor-pointer hover:opacity-70 transition-opacity"
+              style={{ borderColor: 'var(--color-border)' }}
+              onClick={() => receiptInputRef.current?.click()}
+              onDrop={e => { e.preventDefault(); if (e.dataTransfer.files[0]) uploadReceipt(e.dataTransfer.files[0]); }}
+              onDragOver={e => e.preventDefault()}
+            >
+              <span className="text-2xl">📎</span>
+              <span className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                {receiptUploading ? 'Uploading…' : 'Click or drag & drop a file'}
+              </span>
+            </div>
+            <div className="flex justify-end">
+              <Btn variant="secondary" onClick={() => setReceiptModal(null)}>Cancel</Btn>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* View receipt modal */}
+      {viewReceiptModal && (
+        <Modal title={`Receipt — ${viewReceiptModal.expense.description}`} onClose={() => { URL.revokeObjectURL(viewReceiptModal.url); setViewReceiptModal(null); }} wide>
+          <div className="flex flex-col gap-3">
+            {viewReceiptModal.isPdf ? (
+              <iframe src={viewReceiptModal.url} title="Receipt" className="w-full rounded border" style={{ height: 500, borderColor: 'var(--color-border)' }} />
+            ) : (
+              <img src={viewReceiptModal.url} alt="Receipt" className="w-full rounded border object-contain" style={{ maxHeight: 500, borderColor: 'var(--color-border)' }} />
+            )}
+            <div className="flex gap-2 justify-between">
+              <button
+                onClick={() => removeReceipt(viewReceiptModal.expense)}
+                className="text-xs px-2 py-1 rounded border hover:opacity-70"
+                style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+              >Remove Receipt</button>
+              <Btn variant="secondary" onClick={() => { URL.revokeObjectURL(viewReceiptModal.url); setViewReceiptModal(null); }}>Close</Btn>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -1087,10 +1227,45 @@ function JournalTab() {
 
 // ── BAS ───────────────────────────────────────────────────────────────────────
 
+const BAS_STEPS = ['open', 'reconciled', 'lodged', 'paid'];
+const BAS_STEP_LABELS = { open: 'Open', reconciled: 'Reconciled', lodged: 'Lodged', paid: 'Paid' };
+
+function BASStatusBar({ status }) {
+  const current = BAS_STEPS.indexOf(status);
+  return (
+    <div className="flex items-center gap-0 mb-5">
+      {BAS_STEPS.map((step, i) => {
+        const done    = i < current;
+        const active  = i === current;
+        return (
+          <React.Fragment key={step}>
+            <div className="flex flex-col items-center gap-1">
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors"
+                style={{
+                  background: done ? '#065f46' : active ? 'var(--color-primary)' : 'var(--color-surface)',
+                  color:      done || active ? '#fff' : 'var(--color-muted)',
+                  border:     done || active ? 'none' : '2px solid var(--color-border)',
+                }}
+              >{done ? '✓' : i + 1}</div>
+              <span className="text-xs whitespace-nowrap" style={{ color: active ? 'var(--color-primary)' : done ? '#065f46' : 'var(--color-muted)', fontWeight: active ? 600 : 400 }}>
+                {BAS_STEP_LABELS[step]}
+              </span>
+            </div>
+            {i < BAS_STEPS.length - 1 && (
+              <div className="flex-1 h-0.5 mx-1 mb-5" style={{ background: i < current ? '#065f46' : 'var(--color-border)' }} />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 function BASTab() {
-  const now    = new Date();
-  const yr     = now.getMonth() < 6 ? now.getFullYear() : now.getFullYear() + 1;
-  const prev   = yr - 1;
+  const now  = new Date();
+  const yr   = now.getMonth() < 6 ? now.getFullYear() : now.getFullYear() + 1;
+  const prev = yr - 1;
 
   const quarters = [
     { label: `Q1 Jul–Sep ${prev}`, from: `${prev}-07-01`, to: `${prev}-09-30` },
@@ -1099,19 +1274,24 @@ function BASTab() {
     { label: `Q4 Apr–Jun ${yr}`,   from: `${yr}-04-01`,   to: `${yr}-06-30`   },
   ];
 
-  const [qIdx, setQIdx]   = useState(() => {
+  const [qIdx, setQIdx]     = useState(() => {
     const m = now.getMonth();
     if (m >= 0 && m <= 2) return 2;
     if (m >= 3 && m <= 5) return 3;
     if (m >= 6 && m <= 8) return 0;
     return 1;
   });
-  const [data, setData]     = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [stepping, setStepping] = useState(false);
+  const [stepError, setStepError] = useState('');
+  const [confirmPay, setConfirmPay] = useState(false);
+  const addToast = useToastStore(s => s.addToast);
 
   const calc = useCallback(async () => {
     setLoading(true);
     setData(null);
+    setStepError('');
     const q = quarters[qIdx];
     try {
       const result = await api.get(`/api/finance/bas?from=${q.from}&to=${q.to}`).then(r => r.json());
@@ -1122,20 +1302,47 @@ function BASTab() {
 
   useEffect(() => { calc(); }, [calc]);
 
+  const doStep = async (confirmed = false) => {
+    if (!data?.quarterId) return;
+    if (data.status === 'lodged' && !confirmed) { setConfirmPay(true); return; }
+    setStepping(true);
+    setStepError('');
+    try {
+      const id = data.quarterId;
+      if (data.status === 'open')       await api.post(`/api/finance/bas/${id}/reconcile`, {});
+      else if (data.status === 'reconciled') await api.post(`/api/finance/bas/${id}/lodge`, {});
+      else if (data.status === 'lodged')     await api.post(`/api/finance/bas/${id}/paid`, {});
+      const labels = { open: 'Marked reconciled', reconciled: 'Lodged with ATO', lodged: 'BAS payment recorded' };
+      addToast(labels[data.status] || 'Updated');
+      await calc();
+    } catch (e) {
+      setStepError(e.message);
+    } finally {
+      setStepping(false);
+    }
+  };
+
   const incTotal = data ? parseFloat(data.income || 0) + parseFloat(data.gstCollected || 0) : 0;
   const expTotal = data ? parseFloat(data.expenses || 0) + parseFloat(data.gstPaid || 0) : 0;
 
   const rows = data ? [
-    { label: 'G1 — Total Sales (inc GST)',          value: fmt(incTotal) },
-    { label: 'G11 — Non-capital Purchases (inc GST)', value: fmt(expTotal) },
+    { label: 'G1 — Total Sales (inc GST)',             value: fmt(incTotal) },
+    { label: 'G11 — Non-capital Purchases (inc GST)',  value: fmt(expTotal) },
     null,
-    { label: '1A — GST on Sales',                   value: fmt(data.gstCollected), bold: true },
-    { label: '1B — GST Credits',                    value: fmt(data.gstPaid) },
-    { label: 'Net GST Payable (1A − 1B)',            value: fmt(data.netGst), bold: true, warn: data.netGst > 0 },
+    { label: '1A — GST on Sales',                      value: fmt(data.gstCollected), bold: true },
+    { label: '1B — GST Credits',                       value: fmt(data.gstPaid) },
+    { label: 'Net GST Payable (1A − 1B)',               value: fmt(data.netGst), bold: true, warn: data.netGst > 0 },
     null,
-    { label: 'W1 — Total Wages',                    value: fmt(data.wages) },
-    { label: 'W2 — Tax Withheld (PAYG)',             value: fmt(data.withholdingTax), bold: true },
+    { label: 'W1 — Total Wages',                       value: fmt(data.wages) },
+    { label: 'W2 — Tax Withheld (PAYG)',                value: fmt(data.withholdingTax), bold: true },
   ] : [];
+
+  const actionLabels = { open: 'Mark Reconciled', reconciled: 'Lodge with ATO', lodged: 'Record Payment' };
+  const timestamps = data ? [
+    data.reconciledAt && `Reconciled ${new Date(data.reconciledAt).toLocaleString('en-AU')}`,
+    data.lodgedAt     && `Lodged ${new Date(data.lodgedAt).toLocaleString('en-AU')}`,
+    data.paidAt       && `Paid ${new Date(data.paidAt).toLocaleString('en-AU')}`,
+  ].filter(Boolean) : [];
 
   return (
     <div className="p-6 max-w-xl">
@@ -1143,7 +1350,7 @@ function BASTab() {
 
       <div className="mb-5">
         <Field label="Quarter">
-          <Sel value={qIdx} onChange={v => setQIdx(Number(v))}>
+          <Sel value={qIdx} onChange={v => { setQIdx(Number(v)); }}>
             {quarters.map((q, i) => <option key={i} value={i}>{q.label}</option>)}
           </Sel>
         </Field>
@@ -1152,22 +1359,61 @@ function BASTab() {
       {loading && <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Calculating...</p>}
 
       {data && (
-        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-          {rows.map((row, i) =>
-            row === null ? (
-              <div key={i} className="border-t" style={{ borderColor: 'var(--color-border)' }} />
-            ) : (
-              <div
-                key={i}
-                className="flex items-center justify-between px-4 py-2.5 border-b last:border-0"
-                style={{ borderColor: 'var(--color-border)', background: row.bold ? 'var(--color-surface)' : 'transparent' }}
-              >
-                <span className="text-sm" style={{ color: 'var(--color-text)', fontWeight: row.bold ? 600 : 400 }}>{row.label}</span>
-                <span className="text-sm font-medium" style={{ color: row.warn ? '#f59e0b' : 'var(--color-text)' }}>{row.value}</span>
-              </div>
-            )
+        <>
+          <BASStatusBar status={data.status} />
+
+          <div className="rounded-xl border overflow-hidden mb-4" style={{ borderColor: 'var(--color-border)' }}>
+            {rows.map((row, i) =>
+              row === null ? (
+                <div key={i} className="border-t" style={{ borderColor: 'var(--color-border)' }} />
+              ) : (
+                <div
+                  key={i}
+                  className="flex items-center justify-between px-4 py-2.5 border-b last:border-0"
+                  style={{ borderColor: 'var(--color-border)', background: row.bold ? 'var(--color-surface)' : 'transparent' }}
+                >
+                  <span className="text-sm" style={{ color: 'var(--color-text)', fontWeight: row.bold ? 600 : 400 }}>{row.label}</span>
+                  <span className="text-sm font-medium" style={{ color: row.warn ? '#f59e0b' : 'var(--color-text)' }}>{row.value}</span>
+                </div>
+              )
+            )}
+          </div>
+
+          {timestamps.length > 0 && (
+            <div className="mb-3 flex flex-col gap-0.5">
+              {timestamps.map(t => (
+                <p key={t} className="text-xs" style={{ color: 'var(--color-muted)' }}>{t}</p>
+              ))}
+            </div>
           )}
-        </div>
+
+          {data.status === 'paid' ? (
+            <div
+              className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
+              style={{ background: '#d1fae5', color: '#065f46', border: '1px solid #a7f3d0' }}
+            >
+              <span>✓</span>
+              <span>This BAS quarter is locked — payment has been recorded and journal entries created.</span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {stepError && <p className="text-xs" style={{ color: '#ef4444' }}>{stepError}</p>}
+              <Btn onClick={() => doStep()} disabled={stepping}>
+                {stepping ? 'Updating…' : actionLabels[data.status]}
+              </Btn>
+            </div>
+          )}
+        </>
+      )}
+
+      {confirmPay && (
+        <ConfirmModal
+          title="Record BAS Payment"
+          message={`This will create a journal entry for the GST settlement (${fmt(data?.netGst)}) and lock this quarter. Continue?`}
+          confirmLabel="Record Payment"
+          onConfirm={() => { setConfirmPay(false); doStep(true); }}
+          onCancel={() => setConfirmPay(false)}
+        />
       )}
     </div>
   );
@@ -1178,7 +1424,7 @@ function BASTab() {
 function SettingsTab() {
   const [form, setForm] = useState({
     fin_biz_name: '', fin_abn: '', fin_address: '',
-    fin_bank_name: '', fin_bsb: '', fin_account_number: '',
+    fin_bank_name: '', fin_account_name: '', fin_bsb: '', fin_account_number: '',
     fin_gst_registered: 'true', fin_payment_terms: '14',
   });
   const [saving, setSaving] = useState(false);
@@ -1216,6 +1462,7 @@ function SettingsTab() {
           <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Bank Details</p>
           <div className="flex flex-col gap-3">
             <Field label="Bank Name"><Input value={f('fin_bank_name')} onChange={set('fin_bank_name')} placeholder="e.g. Commonwealth Bank" /></Field>
+            <Field label="Account Name"><Input value={f('fin_account_name')} onChange={set('fin_account_name')} placeholder="Your Business Name Pty Ltd" /></Field>
             <Field label="BSB"><Input value={f('fin_bsb')} onChange={set('fin_bsb')} placeholder="000-000" /></Field>
             <Field label="Account Number"><Input value={f('fin_account_number')} onChange={set('fin_account_number')} placeholder="123456789" /></Field>
           </div>

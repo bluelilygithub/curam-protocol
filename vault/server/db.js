@@ -528,6 +528,22 @@ async function initSchema() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_bas_quarters (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        from_date      DATE NOT NULL,
+        to_date        DATE NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','reconciled','lodged','paid')),
+        reconciled_at  TIMESTAMPTZ,
+        lodged_at      TIMESTAMPTZ,
+        paid_at        TIMESTAMPTZ,
+        "createdAt"    TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"    TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE("userId", from_date)
+      )
+    `);
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -664,6 +680,23 @@ async function initSchema() {
         ALTER TABLE settings DROP CONSTRAINT settings_pkey;
         ALTER TABLE settings ADD PRIMARY KEY ("userId", key);
       END IF;
+    END $$
+  `);
+
+  // Finance: idempotent column additions
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS receipt_path TEXT`);
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW()`);
+  await pool.query(`ALTER TABLE fin_accounts ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW()`);
+
+  // Fix journal entries type CHECK to include 'bas'
+  await pool.query(`
+    DO $$
+    BEGIN
+      ALTER TABLE fin_journal_entries DROP CONSTRAINT IF EXISTS fin_journal_entries_type_check;
+      ALTER TABLE fin_journal_entries
+        ADD CONSTRAINT fin_journal_entries_type_check
+        CHECK(type IN ('manual','invoice','payment','expense','wage','bas'));
+    EXCEPTION WHEN OTHERS THEN NULL;
     END $$
   `);
 

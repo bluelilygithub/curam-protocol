@@ -55,6 +55,16 @@ const api = {
     });
     return handleResponse(res);
   },
+  // For multipart/form-data uploads — do NOT set Content-Type (browser sets it with boundary)
+  postForm: async (url, formData) => {
+    const token = useAuthStore.getState().token;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    return handleResponse(res);
+  },
   // For streaming (SSE) — returns raw Response so caller can read the stream
   stream: async (url, body, signal) => {
     const token = useAuthStore.getState().token;
