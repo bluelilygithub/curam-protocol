@@ -787,7 +787,10 @@ function ChatPage({ general = false }) {
       {/* Header */}
       <div
         className="flex-shrink-0 px-4 h-12 flex items-center gap-2 border-b"
-        style={{ borderColor: 'var(--color-border)' }}
+        style={{
+          borderColor: 'var(--color-border)',
+          background: MODELS.find(x => x.id === effectiveModel)?.label === 'Premium' ? '#fee2e2' : undefined,
+        }}
       >
         {general ? (
           <span className="text-sm font-medium flex-shrink-0" style={{ color: 'var(--color-text)' }}>

@@ -31,7 +31,7 @@ export function useChat({ projectId }) {
     const newMessages = [...messages, { role: 'user', content: userContent, attachments: attachmentMeta, urlAttachments }];
     setMessages(newMessages);
     setIsStreaming(true);
-    setMessages((prev) => [...prev, { role: 'assistant', content: '', thinking: '' }]);
+    setMessages((prev) => [...prev, { role: 'assistant', content: '', thinking: '', receivedAt: new Date().toISOString() }]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -167,7 +167,7 @@ export function useChat({ projectId }) {
   const loadHistory = useCallback(async (sid) => {
     const res = await api.get(`/api/chat/history/${sid}`);
     const history = await res.json();
-    setMessages(history.map((m) => ({ role: m.role, content: m.content, id: m.id })));
+    setMessages(history.map((m) => ({ role: m.role, content: m.content, id: m.id, receivedAt: m.createdAt })));
     setSessionId(sid);
   }, []);
 

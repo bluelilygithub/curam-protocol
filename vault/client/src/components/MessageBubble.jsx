@@ -243,6 +243,13 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
           </div>
         )}
 
+        {/* Timestamp — always visible below content */}
+        {message.content && message.receivedAt && (
+          <div className="mt-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+            {new Date(message.receivedAt).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+          </div>
+        )}
+
         {/* Action buttons — appear on hover, rendered below message content */}
         {message.content && (
           <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
