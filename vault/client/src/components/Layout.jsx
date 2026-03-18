@@ -8,6 +8,7 @@ import QuickCapture from './QuickCapture';
 import MorningDigest from './MorningDigest';
 import TaskReminderModal from './TaskReminderModal';
 import TourButton from './TourButton';
+import Toast from './Toast';
 import useSettingsStore from '../store/settingsStore';
 
 function Layout() {
@@ -346,6 +347,15 @@ function Layout() {
           </Link>
 
           <Link
+            to="/finance"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+            style={{ color: location.pathname === '/finance' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Finance"
+          >
+            💰
+          </Link>
+
+          <Link
             to="/admin"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/admin' ? 'var(--color-primary)' : 'var(--color-muted)' }}
@@ -396,6 +406,7 @@ function Layout() {
         </main>
       </div>
       <TourButton />
+      <Toast />
       <QuickCapture />
       <MorningDigest />
       {reminderModal && (

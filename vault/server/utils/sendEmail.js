@@ -33,7 +33,7 @@ async function sendEmail({ to, subject, html, from }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${mailChannelKey}`,
+            'X-Api-Key': mailChannelKey,
             'Content-Length': Buffer.byteLength(payload),
           },
         },

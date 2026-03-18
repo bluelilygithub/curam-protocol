@@ -19,6 +19,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Memory** | Global persistent notes injected into all chats (facts the AI should always know) |
 | **Pinned URLs** | Attach web URLs to a project; content is fetched and stored for AI context; YouTube URLs (`youtube.com/watch`, `youtu.be`) are automatically detected — the full video transcript is fetched directly from YouTube's InnerTube API (no third-party service), stored up to 50,000 chars; on pin and refresh, Claude Haiku summarises the transcript to ~20% of its original length (prose, not bullets) and stores the summary in `transcript_summary`; the summary is injected into chat context instead of the raw transcript, reducing token usage significantly; transcripts under 5,000 chars are injected as-is; raw transcript is always preserved; regular pages use the SSRF-protected fetch route (4,000 chars in context); 📺 icon for YouTube, 🌐 for web pages; each card shows "Last fetched: today / yesterday / X days ago" and a refresh button; the Project Files Panel in chat lists all pinned pages with a paperclip attach button |
 | **Files** | Upload PDFs, images, text files (txt, md, csv, json), spreadsheets (xlsx, xls, ods), Word documents (docx, doc), and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example) to a project; text is extracted and AI-summarised on upload for all supported formats; spreadsheets converted to CSV per sheet; Word docs extracted via mammoth; code files stored as plain text, 500 KB limit, prompt-injection sanitised |
+| **File Preview** | Eye icon on every file card opens a right-side drawer (full-screen on mobile, 640 px panel on desktop); PDF pages rendered visually via pdfjs-dist with lazy loading (3 pages on open, 3 more per scroll); XLSX/ODS spreadsheets rendered as a sortable table with a tab per sheet; CSV rendered as a flat table; Word/DOCX rendered as formatted text; all other files shown in a styled `<pre>` block; "Attach" button inside the drawer adds the file to the current session context; ESC or backdrop click closes and restores focus to the previous element; also available in the Document Compare vault file picker |
 | **Pinned files** | Pinned files are automatically included in every chat's system prompt for that project |
 | **Session files** | Select any project file to include in the current chat session only; persisted to `session_files` table so context survives page refresh; visible in the context bar above the message list |
 | **Notes** | Quick-capture thought pad — title, date, free text body; optional project link; "Take to Chat →" opens note as a new chat session with full context preloaded; "Convert to Task" button on each note card and in the editor toolbar opens Quick Capture pre-filled with the note title, body (truncated to 500 chars), and linked project; a "↳ task created" pill appears on the note card after conversion |
@@ -117,6 +118,17 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Label behaviour** | Node labels hidden when zoomed out below threshold; always shown on hover, search match, or selection |
 | **Scale-aware layout** | Logarithmic force scaling — charge and link distance computed from `ln(n)` so the graph looks correct at 5 nodes or 50+ nodes without manual tuning |
 
+#### Finance
+
+| Feature | Description |
+|---|---|
+| **Curam Finance** | Lightweight bookkeeping and invoicing at `/finance` — Dashboard, Invoices, Clients, Expenses, Wages, Journal, BAS, and Finance Settings tabs |
+| **Invoice builder** | Line-item invoice builder with GST toggle per item; auto-numbered `INV-YYYY###`; Draft → Sent → Paid workflow; edit Draft and Sent invoices; Paid invoices are read-only |
+| **Invoice email** | Send invoices as styled HTML emails via MailChannels TX API (or SMTP fallback); Resend available for Sent invoices |
+| **Expense GST auto-calc** | Enter total paid; when "GST Included" is ticked, GST is auto-calculated as amount ÷ 11; category field autocompletes from past entries |
+| **Double-entry journal** | Auto-generated balanced journal entries for every invoice, payment, expense, and wage; viewable in the Journal tab |
+| **Cash-basis BAS** | Australian BAS calculator — GST collected from paid invoices only (by `paidAt` date); Australian quarterly periods; G1/G11/1A/1B/W1/W2 fields |
+
 #### Admin & Account
 
 | Feature | Description |
@@ -135,10 +147,82 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 
 ### Tech Stack
 
-- **Backend:** Node.js / Express, PostgreSQL (`pg`), Anthropic SDK, Google Generative AI SDK (`@google/generative-ai`)
-- **Frontend:** React / Vite, Zustand (auth + project + settings state), React Router, Tailwind CSS, `react-force-graph-2d` (D3 force simulation — Knowledge Graph)
-- **Auth:** Token-based sessions (single-user via seed credentials); bcryptjs for password hashing
-- **Deploy:** Railway with PostgreSQL service and persistent volume for file uploads
+- **Backend:** Node.js / Express, PostgreSQL (`pg`), Anthropic SDK (`@anthropic-ai/sdk`), Google Generative AI SDK (`@google/generative-ai`), multer (file uploads), mammoth (DOCX extraction), xlsx (spreadsheet extraction), pdfjs-dist (PDF extraction + client-side rendering), bcryptjs, express-rate-limit
+- **Frontend:** React 18 / Vite, Zustand (auth + project + settings state), React Router, Tailwind CSS, ReactMarkdown + remark-gfm, `react-force-graph-2d` (D3 force simulation — Knowledge Graph)
+- **Auth:** Token-based sessions — random hex token stored in `auth_sessions` table; `requireAuth` middleware on all `/api/*` routes; bcryptjs for password hashing
+- **Deploy:** Railway with managed PostgreSQL service and persistent volume for file uploads (`UPLOAD_DIR` env var)
+
+### Database Schema (35 tables)
+
+#### Core / Auth
+| Table | Key columns |
+|---|---|
+| `users` | id, email, passwordHash |
+| `auth_sessions` | token, userId, createdAt |
+| `password_resets` | token, email, expiresAt |
+| `settings` | userId, key, value — key/value store for all user preferences, API keys, and feature flags |
+
+#### Projects & Files
+| Table | Key columns |
+|---|---|
+| `projects` | id, userId, name, goal, problem, audience, techStack, constraints, tone, notes, personaId, folderId, projectType, typeConfig |
+| `folders` | id, userId, name |
+| `files` | id, projectId, name, size, mimetype, path, extractedText, aiSummary, anthropicFileId, pinned, uploadedAt |
+| `file_chunks` | id, fileId, projectId, chunkIndex, chunkText, embedding (vector 768 — pgvector) |
+| `session_files` | sessionId, fileId — files attached to a specific chat session |
+| `pinned_urls` | id, projectId, url, title, content, isYoutube, transcript_summary, lastFetchedAt |
+
+#### Chat & AI
+| Table | Key columns |
+|---|---|
+| `sessions` | sessionId, projectId, userId, title, starred, createdAt |
+| `messages` | id, sessionId, projectId, role, content, createdAt |
+| `comparisons` | id, projectId, docAName, docBName, mode, model, result, createdAt |
+| `debates` | id, projectId, topic, result, createdAt |
+
+#### Personas, Prompts & Memory
+| Table | Key columns |
+|---|---|
+| `personas` | id, userId, name, description, systemPrompt, createdAt, updatedAt |
+| `prompts` | id, userId, title, content, tags, createdAt |
+| `memory` | id, userId, content, createdAt |
+| `notes` | id, userId, projectId, title, body, createdAt |
+
+#### Tasks
+| Table | Key columns |
+|---|---|
+| `tasks` | id, title, notes, status, priority, isUrgent, activityStatus, renewalDimension, category, projectId, parentTaskId, dueDate, recurrence, recurrenceConfig, recurrenceGroupId, order, shareToken, estimatedMinutes, timeSpentMinutes, keyResultId |
+| `task_tags` | taskId, tag |
+| `task_comments` | id, taskId, type (user/system), content, createdAt |
+| `task_templates` | id, name, description, category, priority, recurrence, tags |
+| `template_subtasks` | id, templateId, title, order |
+| `task_dependencies` | taskId, blockerTaskId |
+
+#### Goals (OKR)
+| Table | Key columns |
+|---|---|
+| `objectives` | id, userId, title, description, timeframe, status, color, renewalDimension |
+| `key_results` | id, objectiveId (FK → objectives CASCADE), title, targetValue, currentValue, unit, status, dueDate |
+
+#### Finance
+| Table | Key columns |
+|---|---|
+| `fin_accounts` | userId, code, name, type (asset/liability/equity/income/expense), isSystem |
+| `fin_clients` | userId, name, email, phone, address, abn |
+| `fin_invoices` | userId, clientId, number (UNIQUE per user+number), status (draft/sent/paid/void), issueDate, dueDate, subtotal, gst, total, notes, paidAt |
+| `fin_invoice_items` | invoiceId (CASCADE), description, qty, unitPrice, gst, amount |
+| `fin_expenses` | userId, date, description, amount (ex-GST), gst, category, supplier |
+| `fin_wages` | userId, date, employee, gross, tax, superannuation, net |
+| `fin_journal_entries` | userId, date, description, reference, type CHECK (invoice/payment/expense/wage/manual), sourceId |
+| `fin_journal_lines` | entryId (CASCADE), accountId (RESTRICT), debit, credit |
+
+#### Integrations & Search
+| Table | Key columns |
+|---|---|
+| `gmail_tokens` | userId, accessToken, refreshToken, expiryDate, scope, email (tokens AES-256-GCM encrypted at rest) |
+| `search_logs` | id, userId, query, createdAt |
+| `search_index` | type, projectId, title, body |
+| `graph_edges` | source, target, type, weight — cached semantic connections for Knowledge Graph |
 
 ---
 
@@ -254,6 +338,7 @@ vault/
 │       ├── tasks.js              # Task CRUD + subtasks + comments + templates + AI generate/extract + SSE weekly review + CSV import + share
 │       ├── taskTemplates.js      # Task template CRUD + apply
 │       ├── goals.js              # Objectives + Key Results CRUD + dashboard + AI KR suggestions (SSE)
+│       ├── finance.js            # Finance module — clients, invoices (send via MailChannels), expenses, wages, journal, BAS, dashboard; fin_* tables; double-entry journal auto-generation
 │       ├── gmail.js              # Gmail OAuth flow + search + thread fetch + ask (SSE); registered before requireAuth; applies auth internally for all paths except /callback
 │       ├── calendar.js           # Google Calendar search + event fetch + ask (SSE); shares gmail_tokens table; scope check ensures calendar.readonly was granted
 │       ├── sharedTasks.js        # Public shared task view — no auth (registered before requireAuth)
@@ -296,6 +381,7 @@ vault/
 │       │   ├── UserGuidePage.jsx # In-app user guide
 │       │   ├── TasksPage.jsx     # Full task manager — List / Kanban / Calendar / Matrix views
 │       │   ├── GoalsPage.jsx     # OKR Goals — Objectives + Key Results
+│       │   ├── FinancePage.jsx   # Finance module — 8-tab layout (Dashboard/Invoices/Clients/Expenses/Wages/Journal/BAS/Settings); CategoryInput autocomplete; ConfirmModal + Toast throughout
 │       │   └── SharedTaskPage.jsx     # Public read-only task view (no auth required)
 │       ├── components/
 │       │   ├── Layout.jsx        # App shell with sidebar + top nav
@@ -323,6 +409,8 @@ vault/
 │       │   ├── TaskReminderModal.jsx # Scheduled task reminder overlay — shows overdue + today tasks at configured times; localStorage-keyed per day/time to prevent double-show; "Go to Tasks" + "Dismiss" buttons
 │       │   ├── QuickCapture.jsx  # Floating quick-capture FAB (Ctrl+Shift+N)
 │       │   ├── PromptVariableModal.jsx  # Fill-in-the-blanks modal for {{variable}} prompt templates; live preview; used by ChatPage and PromptsPage
+│       │   ├── Toast.jsx         # Fixed-position toast notification renderer; reads from toastStore; auto-dismiss; success (green) / error (red) / warn (amber) variants; mounted globally in Layout
+│       │   ├── ConfirmModal.jsx  # Reusable confirmation dialog — title, message, confirm label, danger variant (red button); used for all destructive actions across the app
 │       │   └── tasks/            # Task-specific sub-components (extracted from TasksPage)
 │       │       ├── TaskFilters.jsx        # Quick-filter chips, category/project/status dropdowns, search, sort
 │       │       ├── TaskStatsBar.jsx       # 6-card stats bar + 14-day completion chart
@@ -333,7 +421,8 @@ vault/
 │       ├── store/
 │       │   ├── authStore.js      # Zustand auth state (persisted)
 │       │   ├── projectStore.js   # Zustand project state
-│       │   └── settingsStore.js  # Zustand settings state — persists font, theme, icon pack, session budget, file types, task reminder times + paused flag
+│       │   ├── settingsStore.js  # Zustand settings state — persists font, theme, icon pack, session budget, file types, task reminder times + paused flag
+│       │   └── toastStore.js     # Zustand toast store — addToast(message, type, duration); auto-removes after timeout; used by Finance and other modules
 │       ├── hooks/
 │       │   ├── useChat.js        # Chat logic + streaming (Anthropic + Gemini)
 │       │   ├── useModels.js      # Dynamic model list — loads from DB (settings.vault_models), falls back to static defaults; used by ChatPage and SettingsPage
@@ -536,6 +625,8 @@ npm run dev
 
 ### March 2026
 
+- **Curam Finance module** — full bookkeeping and invoicing module at `/finance`; 8-tab layout (Dashboard, Invoices, Clients, Expenses, Wages, Journal, BAS, Settings); double-entry journal auto-generated for every transaction; invoice numbers auto-sequenced `INV-YYYY###`; invoice email via MailChannels TX API with styled HTML template (or SMTP fallback); Draft + Sent invoices editable (journal deleted and recreated on save); Paid invoices read-only; Resend button for Sent invoices; expense GST auto-calculated as total ÷ 11 when "GST Included" ticked; category autocomplete from `GET /expenses/categories` (no hardcoded list); expense edit with journal reversal; BAS on **cash basis** — GST collected from `paidAt` date not issue date; all destructive actions use `ConfirmModal`; success/error feedback via `Toast` (new `toastStore.js` Zustand store + `Toast.jsx` component mounted in `Layout`); 8 `fin_*` tables added to `db.js` init schema; route registered at `app.use('/api/finance', ...)`; 💰 nav icon added to top bar
+- **File Preview Drawer** — eye icon on every file card in the Project Files panel and Compare vault picker opens a `FilePreviewDrawer` component; PDF pages rendered visually via pdfjs-dist (lazy loads 3 pages at a time on scroll); XLSX/ODS multi-sheet spreadsheets rendered as tables with sheet tabs; CSV as a flat table; DOCX/Word as plain text; all other files as a styled `<pre>`; "Attach" button inside the drawer adds the file to the session context bar; full-screen on mobile, 640 px fixed panel on desktop; ESC / backdrop closes and restores keyboard focus; `GET /api/files/:id/raw` endpoint added to serve the raw file binary for client-side rendering
 - **User profile & LLM personalisation** — new Profile section at the top of Settings (first name, city, state, country); stored as `user_name`, `user_city`, `user_state`, `user_country` in the `settings` table; each field saves on blur (country saves on change); on every chat request the browser sends `userTimezone` (from `Intl.DateTimeFormat().resolvedOptions().timeZone`); Block 5 of `buildSystemPrompt` queries these four keys and injects "You are speaking with [name], located in [city, state, country]. Default all research, prices and recommendations to their country and currency. Their current local time is [time]." — only the fields that are set are included; today's date in the system prompt also uses the user's local timezone rather than UTC
 - **AI message timestamps** — each assistant response bubble shows the receive time in the hover action row (same row as bookmark/copy/download buttons); live messages are stamped with `receivedAt` at stream start; sessions loaded from history use the DB `createdAt`; time is formatted in the browser's local timezone via `toLocaleTimeString`
 - **Quarterly recurring tasks** — "Quarterly" added as a recurrence option alongside Daily / Weekly / Fortnightly / Monthly / Annually; server advances the due date by 3 months on each completion
@@ -623,3 +714,47 @@ npm run dev
 
 - **Security hardening** — SSRF blocked in all URL-fetch routes (DNS-based private IP check); path traversal fixed in file upload; login brute-force rate-limited; HTML escaping in email export; web search rate-limited; 2 MB response cap on URL fetching
 - **Mobile-responsive** — sidebar becomes a slide-over drawer; chat header collapses on small screens; artifact and file panels open full-screen on mobile; iOS keyboard zoom prevented; safe-area insets for notch and home bar
+
+---
+
+## Curam Finance
+
+A lightweight bookkeeping and invoicing module built into Curam Vault. Purpose-built for a single-person Australian services business — not a replacement for MYOB or Xero. Accessible via the 💰 icon in the top nav at `/finance`.
+
+### Features
+
+| Feature | Description |
+|---|---|
+| **Dashboard** | YTD revenue (paid invoices), outstanding amount + count, YTD expenses, YTD wages, estimated net profit |
+| **Invoices** | Create invoices with line items (description, qty, unit price, GST toggle); auto-generated invoice numbers (`INV-YYYY###`, resets each year); Draft → Sent → Paid workflow |
+| **Invoice email** | "Send" button opens a recipient email modal; invoice rendered as a styled HTML email and sent via MailChannels TX API (or SMTP fallback); marks invoice as Sent on delivery; "Resend" available for Sent invoices |
+| **Invoice editing** | Draft and Sent invoices are fully editable; journal entry deleted and recreated on each save to keep the ledger in sync; Paid invoices are read-only |
+| **Mark Paid** | Marks invoice as paid with today's date; auto-generates a journal entry (DR Bank, CR Accounts Receivable) |
+| **Clients** | Client directory with name, email, phone, ABN, address; client email pre-filled in invoice send modal |
+| **Expenses** | Record expenses with total-paid amount; GST auto-calculated as amount ÷ 11 when "GST Included" is ticked; ex-GST amount and GST stored separately; edit mode with full journal reversal |
+| **Category autocomplete** | Expense category field shows a live dropdown of previously used categories pulled from `GET /expenses/categories` — no hardcoded list |
+| **Wages** | Record wage payments with gross, tax withheld, superannuation, and net pay; gross/net auto-calculated as tax changes |
+| **Double-entry journal** | Every invoice, expense, and wage auto-generates balanced journal entries; viewer tab shows all entries with debit/credit breakdown by account |
+| **BAS (cash basis)** | Australian Business Activity Statement — calculates GST collected from *paid* invoices in the quarter (`paidAt` date, not issue date); GST credits from expenses; PAYG withholding from wages; displays G1/G11/1A/1B/W1/W2 fields |
+| **Chart of accounts** | 9 default accounts seeded per user on first use: Bank/Cash (1000), AR (1100), GST Paid (1200), AP (2000), GST Collected (2200), Equity (3000), Income (4000), Expenses (5000), Wages (6000) |
+| **Finance Settings** | Business name, ABN, address, bank details (BSB, account number, bank name) stored as `fin_*` keys in the existing `settings` table; injected into invoice emails |
+| **Confirm modals + toasts** | All destructive actions (delete invoice, expense, wage, client) use `ConfirmModal`; success/error feedback via `Toast` component (bottom-right, auto-dismiss) |
+
+### Database Schema (`fin_` prefix)
+
+| Table | Key columns |
+|---|---|
+| `fin_accounts` | userId, code, name, type (asset/liability/equity/income/expense), isSystem |
+| `fin_clients` | userId, name, email, phone, address, abn |
+| `fin_invoices` | userId, clientId, number (UNIQUE per user), status (draft/sent/paid/void), issueDate, dueDate, subtotal, gst, total, notes, paidAt |
+| `fin_invoice_items` | invoiceId (CASCADE), description, qty, unitPrice, gst, amount |
+| `fin_expenses` | userId, date, description, amount (ex-GST), gst, category, supplier |
+| `fin_wages` | userId, date, employee, gross, tax, superannuation, net |
+| `fin_journal_entries` | userId, date, description, reference, type (invoice/payment/expense/wage/manual), sourceId |
+| `fin_journal_lines` | entryId (CASCADE), accountId (RESTRICT), debit, credit |
+
+**Auto-generated journal entries:**
+- Invoice created → DR Accounts Receivable, CR Income, CR GST Collected
+- Invoice paid → DR Bank, CR Accounts Receivable
+- Expense recorded → DR Expenses (ex-GST), DR GST Paid, CR Bank (total paid)
+- Wage payment → DR Wages, CR Bank (net), CR Accounts Payable (tax withheld)

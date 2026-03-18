@@ -417,6 +417,117 @@ async function initSchema() {
       )
     `);
 
+    // ── Finance ───────────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_accounts (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        code        TEXT NOT NULL,
+        name        TEXT NOT NULL,
+        type        TEXT NOT NULL CHECK(type IN ('asset','liability','equity','income','expense')),
+        "isSystem"  BOOLEAN DEFAULT FALSE,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE("userId", code)
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_clients (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name        TEXT NOT NULL,
+        email       TEXT,
+        phone       TEXT,
+        address     TEXT,
+        abn         TEXT,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_invoices (
+        id           SERIAL PRIMARY KEY,
+        "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "clientId"   INTEGER REFERENCES fin_clients(id) ON DELETE SET NULL,
+        number       TEXT NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'draft' CHECK(status IN ('draft','sent','paid','void')),
+        "issueDate"  DATE NOT NULL DEFAULT CURRENT_DATE,
+        "dueDate"    DATE,
+        subtotal     NUMERIC(10,2) NOT NULL DEFAULT 0,
+        gst          NUMERIC(10,2) NOT NULL DEFAULT 0,
+        total        NUMERIC(10,2) NOT NULL DEFAULT 0,
+        notes        TEXT,
+        "paidAt"     TIMESTAMPTZ,
+        "createdAt"  TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"  TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE("userId", number)
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_invoice_items (
+        id           SERIAL PRIMARY KEY,
+        "invoiceId"  INTEGER NOT NULL REFERENCES fin_invoices(id) ON DELETE CASCADE,
+        description  TEXT NOT NULL,
+        qty          NUMERIC(10,2) NOT NULL DEFAULT 1,
+        "unitPrice"  NUMERIC(10,2) NOT NULL DEFAULT 0,
+        gst          NUMERIC(10,2) NOT NULL DEFAULT 0,
+        amount       NUMERIC(10,2) NOT NULL DEFAULT 0
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_expenses (
+        id           SERIAL PRIMARY KEY,
+        "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date         DATE NOT NULL DEFAULT CURRENT_DATE,
+        description  TEXT NOT NULL,
+        amount       NUMERIC(10,2) NOT NULL,
+        gst          NUMERIC(10,2) NOT NULL DEFAULT 0,
+        category     TEXT,
+        supplier     TEXT,
+        "createdAt"  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_wages (
+        id             SERIAL PRIMARY KEY,
+        "userId"       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date           DATE NOT NULL DEFAULT CURRENT_DATE,
+        employee       TEXT NOT NULL,
+        gross          NUMERIC(10,2) NOT NULL,
+        tax            NUMERIC(10,2) NOT NULL DEFAULT 0,
+        superannuation NUMERIC(10,2) NOT NULL DEFAULT 0,
+        net            NUMERIC(10,2) NOT NULL,
+        "createdAt"    TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_journal_entries (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date        DATE NOT NULL DEFAULT CURRENT_DATE,
+        description TEXT NOT NULL,
+        reference   TEXT,
+        type        TEXT NOT NULL DEFAULT 'manual' CHECK(type IN ('manual','invoice','payment','expense','wage')),
+        "sourceId"  INTEGER,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fin_journal_lines (
+        id          SERIAL PRIMARY KEY,
+        "entryId"   INTEGER NOT NULL REFERENCES fin_journal_entries(id) ON DELETE CASCADE,
+        "accountId" INTEGER NOT NULL REFERENCES fin_accounts(id) ON DELETE RESTRICT,
+        debit       NUMERIC(10,2) NOT NULL DEFAULT 0,
+        credit      NUMERIC(10,2) NOT NULL DEFAULT 0
+      )
+    `);
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
