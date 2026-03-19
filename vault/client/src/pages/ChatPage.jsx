@@ -24,6 +24,7 @@ import SelectionToolbar from '../components/SelectionToolbar';
 import PromptVariableModal from '../components/PromptVariableModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { extractVariables } from '../utils/promptVariables';
+import ModelAdvisorModal from '../components/ModelAdvisorModal';
 
 const TEMPERATURES = [
   { label: 'Precise', value: 0.2, desc: 'Focused, deterministic' },
@@ -179,6 +180,12 @@ function ChatPage({ general = false }) {
   const [personas, setPersonas] = useState([]);
   const [selectedPersonaId, setSelectedPersonaId] = useState(null);
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
+
+  // Smart Model Advisor
+  const [advisorOpen, setAdvisorOpen] = useState(false);
+  const [advisorData, setAdvisorData] = useState(null);
+  const [pendingSendPayload, setPendingSendPayload] = useState(null);
+  const [advisorPendingSwitch, setAdvisorPendingSwitch] = useState(null);
 
   const messagesEndRef = useRef(null);
   const messageListRef = useRef(null);
@@ -434,8 +441,39 @@ function ChatPage({ general = false }) {
   handleSendRef.current = handleSend;
   const stableSuggestionSelect = useCallback((s) => handleSendRef.current?.(s), []);
 
+  // After a model switch from the advisor, fire the send once the new chatModel value has committed
+  useEffect(() => {
+    if (advisorPendingSwitch !== null && chatModel === advisorPendingSwitch) {
+      setAdvisorPendingSwitch(null);
+      handleSendRef.current?.();
+    }
+  }, [chatModel, advisorPendingSwitch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const checkModelBeforeSend = async () => {
+    const text = input.trim();
+    if (!text && inlineImages.length === 0) { handleSend(); return; }
+    if (isStreaming) { handleSend(); return; }
+    const currentPersona = personas.find(p => p.id === selectedPersonaId);
+    const personaModelHint = currentPersona?.model || undefined;
+    try {
+      const res = await api.post('/api/chat/analyse-prompt', {
+        prompt: text,
+        currentModelId: effectiveModel,
+        sessionId,
+        ...(personaModelHint ? { personaModelHint } : {}),
+      });
+      const data = await res.json();
+      if (data?.mismatch) {
+        setAdvisorData(data);
+        setAdvisorOpen(true);
+        return;
+      }
+    } catch { /* fall through */ }
+    handleSend();
+  };
+
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); checkModelBeforeSend(); }
   };
 
   const handleInputChange = (e) => {
@@ -1795,7 +1833,7 @@ function ChatPage({ general = false }) {
 
                     <button
                       type="button"
-                      onClick={isStreaming ? stopStreaming : () => handleSend()}
+                      onClick={isStreaming ? stopStreaming : () => checkModelBeforeSend()}
                       disabled={!isStreaming && !hasInput}
                       className="w-8 h-8 flex items-center justify-center rounded-xl transition-all"
                       style={{
@@ -1859,6 +1897,18 @@ function ChatPage({ general = false }) {
           onClose={() => setPromptVarModal(null)}
         />
       )}
+
+      {/* Smart Model Advisor modal */}
+      <ModelAdvisorModal
+        isOpen={advisorOpen}
+        currentModelName={MODELS.find(m => m.id === effectiveModel)?.name || effectiveModel}
+        reason={advisorData?.reason || ''}
+        needsImage={advisorData?.needsImage || false}
+        suggestedModels={advisorData?.suggestedModels || []}
+        onSwitch={(id) => { setAdvisorOpen(false); setChatModel(id); setAdvisorPendingSwitch(id); }}
+        onConfirm={() => { setAdvisorOpen(false); setPendingSendPayload(null); handleSend(); }}
+        onDismiss={() => { setAdvisorOpen(false); setPendingSendPayload(null); }}
+      />
     </div>
   );
 }

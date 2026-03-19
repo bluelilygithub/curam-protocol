@@ -21,6 +21,7 @@ import NotesPage from './pages/NotesPage';
 import ChainsPage from './pages/ChainsPage';
 import GraphPage from './pages/GraphPage';
 import FinancePage from './pages/FinancePage';
+import UsagePage from './pages/UsagePage';
 import SharedTaskPage from './pages/SharedTaskPage';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -82,6 +83,7 @@ function App() {
               <Route path="/chains" element={<ChainsPage />} />
               <Route path="/graph"    element={<GraphPage />} />
               <Route path="/finance" element={<FinancePage />} />
+              <Route path="/usage" element={<UsagePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

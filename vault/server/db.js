@@ -703,6 +703,25 @@ async function initSchema() {
     END $$
   `);
 
+  // ── Usage logs ────────────────────────────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS usage_logs (
+      id BIGSERIAL PRIMARY KEY,
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      session_id TEXT,
+      model_id TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      estimated_cost_usd NUMERIC(10,8) NOT NULL DEFAULT 0,
+      feature TEXT NOT NULL DEFAULT 'chat',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS usage_logs_user_created
+    ON usage_logs(user_id, created_at DESC)
+  `);
+
   console.log('[db] Schema ready');
 }
 

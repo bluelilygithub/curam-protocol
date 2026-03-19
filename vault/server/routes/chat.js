@@ -8,6 +8,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { buildTypeConfigPrompt } = require('../typePrompts');
+const { calculateCost } = require('../services/costCalculator');
 
 const chatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -598,6 +599,16 @@ router.post('/', chatLimiter, async (req, res) => {
             }
           }
 
+          // Log token usage
+          if ((inputTokens || outputTokens) && req.user?.id) {
+            const cost = calculateCost(model, inputTokens, outputTokens);
+            pool.query(
+              `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              [req.user.id, sid, model, inputTokens, outputTokens, cost, 'chat']
+            ).catch(err => console.error('[usage] log error:', err.message));
+          }
+
           // Auto-title new sessions (first message pair only)
           const { rows: countRows } = await pool.query('SELECT COUNT(*) as cnt FROM messages WHERE "sessionId"=$1', [sid]);
           const msgCount = Number(countRows[0]?.cnt || 0);
@@ -935,6 +946,111 @@ router.post('/suggestions', async (req, res) => {
     res.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 3) : [] });
   } catch {
     res.json({ suggestions: [] });
+  }
+});
+
+// ── POST /api/chat/analyse-prompt — Smart Model Advisor pre-send classifier ────
+router.post('/analyse-prompt', async (req, res) => {
+  const FALLBACK_MODELS = [
+    { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5', emoji: '⚡' },
+    { id: 'claude-sonnet-4-6',         name: 'Claude Sonnet 4.6', emoji: '🎯' },
+    { id: 'claude-opus-4-6',           name: 'Claude Opus 4.6',   emoji: '🧠' },
+    { id: 'gemini-2.0-flash',                     name: 'Gemini 2.0 Flash', emoji: '⚡' },
+    { id: 'gemini-2.5-pro-preview-05-06',         name: 'Gemini 2.5 Pro',   emoji: '🌟' },
+  ];
+
+  const TIER_HINTS = {
+    light:    ['haiku', 'flash'],
+    standard: ['sonnet', 'flash'],
+    premium:  ['opus', 'pro'],
+    image:    ['studio', 'imagen'],
+  };
+
+  try {
+    const { prompt, currentModelId, personaModelHint } = req.body;
+    console.log('[ModelAdvisor] analyse-prompt hit', { currentModelId, prompt: prompt?.slice(0, 50) });
+
+    // Persona hint overrides complexity analysis
+    if (personaModelHint && currentModelId !== personaModelHint) {
+      return res.json({
+        complexity: null,
+        needsImage: false,
+        reason: "This project's persona is configured for a different model.",
+        suggestedTier: null,
+        mismatch: true,
+        suggestedModels: [],
+      });
+    }
+
+    // Fetch live model list from settings, fall back to defaults
+    let enabledModels = FALLBACK_MODELS;
+    try {
+      const { rows } = await pool.query(
+        "SELECT value FROM settings WHERE \"userId\"=$1 AND key='vault_models'",
+        [req.user.id]
+      );
+      if (rows[0]?.value) {
+        const parsed = JSON.parse(rows[0].value);
+        if (Array.isArray(parsed) && parsed.length > 0) enabledModels = parsed;
+      }
+    } catch { /* use fallback */ }
+
+    // Ask Haiku to classify the prompt
+    let classification;
+    try {
+      const msg = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 256,
+        system: `You are a prompt complexity classifier. Analyse the user's message and return ONLY valid JSON with no preamble, explanation, or markdown.\n\nReturn this exact shape:\n{\n  "complexity": "simple" | "moderate" | "complex",\n  "needsImage": true | false,\n  "reason": "one sentence plain English explanation",\n  "suggestedTier": "light" | "standard" | "premium"\n}\n\nRules:\n- "simple": casual questions, short factual lookups, quick rewrites, greetings, single-sentence tasks\n- "moderate": multi-step explanations, summarisation, short code tasks, structured output\n- "complex": long-form code, architecture, deep analysis, multi-document reasoning, debugging, legal/financial content\n- "needsImage": true only if the user is explicitly asking to generate, create, draw, or produce an image or visual\n- "suggestedTier": "light" for simple, "standard" for moderate, "premium" for complex\n- If needsImage is true, set suggestedTier to "image" regardless of complexity`,
+        messages: [{ role: 'user', content: String(prompt || '').slice(0, 2000) }],
+      });
+      const rawText = msg.content[0].text.trim();
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      classification = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
+    } catch (classifyErr) {
+      console.log('[ModelAdvisor] classify failed', classifyErr?.message);
+      return res.json({ mismatch: false });
+    }
+
+    const { complexity, needsImage, reason, suggestedTier } = classification;
+
+    // Image generation — always a mismatch; AI Studio is external
+    if (needsImage) {
+      return res.json({
+        complexity,
+        needsImage: true,
+        reason: reason || 'This prompt is asking for image generation.',
+        suggestedTier: 'image',
+        mismatch: true,
+        suggestedModels: [],
+      });
+    }
+
+    // Check whether the current model already satisfies the suggested tier
+    const tierHints = TIER_HINTS[suggestedTier] || [];
+    const currentMatchesTier = tierHints.some(hint => (currentModelId || '').toLowerCase().includes(hint));
+    if (currentMatchesTier) {
+      return res.json({ mismatch: false });
+    }
+
+    // Build the suggested model list from the live-fetched model list
+    const suggestedModels = enabledModels
+      .filter(m => tierHints.some(hint => (m.id || '').toLowerCase().includes(hint)))
+      .map(m => ({ id: m.id, name: m.name, emoji: m.emoji || '🤖' }));
+
+    const mismatch = suggestedModels.length > 0;
+    console.log('[ModelAdvisor] result', { mismatch, suggestedTier, complexity });
+    return res.json({
+      complexity,
+      needsImage: false,
+      reason,
+      suggestedTier,
+      mismatch,
+      suggestedModels,
+    });
+  } catch (err) {
+    console.error('[analyse-prompt]', err);
+    return res.json({ mismatch: false });
   }
 });
 
