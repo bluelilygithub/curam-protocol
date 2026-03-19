@@ -49,6 +49,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Read aloud** | Speaker button reads the last assistant message via browser text-to-speech; no external service required |
 | **Token budget alerts** | Set a per-session cost limit in Settings; configurable amber warning threshold (50–90%, default 80%) and red critical threshold (90/95/100%, default 100%); both banners are dismissible with an ✕ button; re-alert frequency configurable (don't show again / every 10 messages / every 20 messages / at 95%); red banner includes a "Save to Notes" checkbox (checked by default) — on summarisation, automatically creates a note titled "[Session title] — Summary [date]" linked to the current project with a confirmation toast |
 | **Model error handling** | Stream errors classified by type and shown in a banner: 🔑 auth (key missing/invalid), 💳 billing (credit exhausted — links to Anthropic billing), 🤖 model not found, ⏳ rate limit, ⚠️ timeout/unknown; pre-send check blocks requests immediately if the provider key is confirmed absent |
+| **Smart Model Advisor** | Pre-send intercept that analyses every prompt before it is sent — calls `POST /api/chat/analyse-prompt` using Claude Haiku to classify the prompt's complexity tier (simple/moderate/complex/image) and checks whether the currently selected model is a good fit; if there is a mismatch a **Model Advisor** modal appears with the reason, the current model, and up to three suggested alternatives (selectable cards); user can **Switch & Send** (changes the model then sends immediately) or **Keep & Send** (sends with the current model unchanged); image-generation requests show an amber notice directing to AI Studio instead of a switch option; Haiku response is parsed with a regex JSON extractor to handle markdown-wrapped output; classification mismatch threshold is conservative — only fires when the model tier difference is meaningful |
 
 #### Tasks
 
@@ -143,6 +144,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Password show/hide** | Eye icon on all password fields (login, change password, reset password) toggles visibility |
 | **Model management** | Add, edit, delete, and test AI models from Settings → AI Models; changes persist to DB and are reflected immediately across the entire app (chat selector, compare, project settings); Reset to defaults button restores the built-in 5 models |
 | **Model availability** | Settings page shows API key status (✓ configured / ⚠️ key missing) per model; Test button sends a live probe to each model and reports success or the exact error (auth, billing, model not found, rate limit) |
+| **Usage & Cost Log** | Every completed AI chat call writes a row to `usage_logs` — model, session, input tokens, output tokens, and estimated cost in USD (calculated server-side from a pricing map in `costCalculator.js`); accessible at `/usage` (⚡ icon in the top nav); period selector: **Today / Week / Month / Quarter / Year / Custom / All Time**; Custom shows From/To date pickers; each view shows four stat cards (est. cost, total tokens, input tokens, API calls), a per-model cost breakdown with inline bar chart, an over-time bar chart (daily for short periods, weekly for Year, monthly for All Time), and a paginated raw call log (time, model, feature, in/out tokens, cost); all data scoped to the logged-in user |
 
 > **Detailed feature docs:** [TASKS.md](TASKS.md) · [GOALS.md](GOALS.md)
 
@@ -153,7 +155,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 - **Auth:** Token-based sessions — random hex token stored in `auth_sessions` table; `requireAuth` middleware on all `/api/*` routes; bcryptjs for password hashing
 - **Deploy:** Railway with managed PostgreSQL service and persistent volume for file uploads (`UPLOAD_DIR` env var)
 
-### Database Schema (35 tables)
+### Database Schema (36 tables)
 
 #### Core / Auth
 | Table | Key columns |
@@ -180,6 +182,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | `messages` | id, sessionId, projectId, role, content, createdAt |
 | `comparisons` | id, projectId, docAName, docBName, mode, model, result, createdAt |
 | `debates` | id, projectId, topic, result, createdAt |
+| `usage_logs` | id, user_id (FK → users CASCADE), session_id, model_id, input_tokens, output_tokens, estimated_cost_usd (NUMERIC 10,8), feature (default 'chat'), created_at; indexed on (user_id, created_at DESC) |
 
 #### Personas, Prompts & Memory
 | Table | Key columns |
@@ -340,6 +343,7 @@ vault/
 │       ├── taskTemplates.js      # Task template CRUD + apply
 │       ├── goals.js              # Objectives + Key Results CRUD + dashboard + AI KR suggestions (SSE)
 │       ├── finance.js            # Finance module — clients, invoices (send via MailChannels), expenses, wages, journal, BAS, dashboard; fin_* tables; double-entry journal auto-generation
+│       ├── usage.js              # Usage & Cost — GET /summary (period-scoped totals + per-model breakdown + daily series) and GET /log (paginated raw call log); period param: today/week/month/quarter/year/custom/all; custom accepts from/to date params; all boundaries computed in Australia/Sydney timezone
 │       ├── gmail.js              # Gmail OAuth flow + search + thread fetch + ask (SSE); registered before requireAuth; applies auth internally for all paths except /callback
 │       ├── calendar.js           # Google Calendar search + event fetch + ask (SSE); shares gmail_tokens table; scope check ensures calendar.readonly was granted
 │       ├── sharedTasks.js        # Public shared task view — no auth (registered before requireAuth)
@@ -347,6 +351,7 @@ vault/
 │       ├── bookmarks.js          # Bookmark CRUD — toggle, session lookup, all-bookmarks with message+session context, count endpoint
 │       └── health.js             # Health check endpoint
 │   ├── services/
+│   │   ├── costCalculator.js     # Token cost estimator — pricing map for all current Anthropic and Gemini models ($/1M tokens); calculateCost(modelId, inputTokens, outputTokens) returns USD float; substring fallback for unknown model IDs; called by chat.js after each completed request
 │   │   ├── embeddings.js         # RAG embedding service — embedText() calls Google text-embedding-004 (768-dim); retrieveRelevantChunks() queries file_chunks via pgvector cosine similarity; returns empty array on any error so callers fall back gracefully
 │   │   ├── chunker.js            # Text chunking — splits extracted text into ~500-token chunks at sentence boundaries with 50-token overlap; used by the file upload route and migration script
 │   │   ├── gmailNLP.js           # Natural language → Gmail query translator; calculateDates() pre-computes all date ranges; translateToGmailQuery() calls Claude Haiku; GMAIL_LIMITS constants
@@ -383,6 +388,7 @@ vault/
 │       │   ├── TasksPage.jsx     # Full task manager — List / Kanban / Calendar / Matrix views
 │       │   ├── GoalsPage.jsx     # OKR Goals — Objectives + Key Results
 │       │   ├── FinancePage.jsx   # Finance module — 8-tab layout (Dashboard/Invoices/Clients/Expenses/Wages/Journal/BAS/Settings); CategoryInput autocomplete; ConfirmModal + Toast throughout
+│       │   ├── UsagePage.jsx     # Usage & Cost — period selector (Today/Week/Month/Quarter/Year/Custom/All Time), stat cards, per-model bar breakdown, over-time bar chart, paginated call log
 │       │   └── SharedTaskPage.jsx     # Public read-only task view (no auth required)
 │       ├── components/
 │       │   ├── Layout.jsx        # App shell with sidebar + top nav
@@ -411,7 +417,8 @@ vault/
 │       │   ├── QuickCapture.jsx  # Floating quick-capture FAB (Ctrl+Shift+N)
 │       │   ├── PromptVariableModal.jsx  # Fill-in-the-blanks modal for {{variable}} prompt templates; live preview; used by ChatPage and PromptsPage
 │       │   ├── Toast.jsx         # Fixed-position toast notification renderer; reads from toastStore; auto-dismiss; success (green) / error (red) / warn (amber) variants; mounted globally in Layout
-│       │   ├── ConfirmModal.jsx  # Reusable confirmation dialog — title, message, confirm label, danger variant (red button); used for all destructive actions across the app
+│       │   ├── ConfirmModal.jsx  # Reusable confirmation dialog — title, message, confirm label, danger variant (red button); optional confirmText prop requires user to type a specific string before confirming (used for destructive resets)
+│       │   ├── ModelAdvisorModal.jsx  # Smart Model Advisor modal — shows when a pre-send prompt analysis detects a model mismatch; displays reason, current model chip, selectable suggested model cards, and Switch & Send / Keep & Send buttons; amber AI Studio notice for image-generation requests; Escape key dismissal
 │       │   └── tasks/            # Task-specific sub-components (extracted from TasksPage)
 │       │       ├── TaskFilters.jsx        # Quick-filter chips, category/project/status dropdowns, search, sort
 │       │       ├── TaskStatsBar.jsx       # 6-card stats bar + 14-day completion chart
@@ -485,6 +492,7 @@ vault/
 | `session_files` | Files selected for a specific chat session — `sessionId` + `fileId` composite PK; content injected into system prompt for that session only |
 | `bookmarks` | Starred messages — `messageId` (FK → messages, unique), `sessionId` (FK → sessions); cascade-deleted when the message or session is deleted |
 | `file_chunks` | RAG chunk store — each row holds a ~500-token chunk of a file's extracted text, its chunk index, and a 768-dimensional Google `text-embedding-004` embedding (`vector(768)`); queried at chat time via pgvector cosine similarity to retrieve the top-5 most relevant chunks for the user's message; cascade-deleted when the parent file is deleted |
+| `usage_logs` | AI call log — one row per completed chat request; stores model ID, session ID, input/output token counts, and estimated cost in USD calculated by `costCalculator.js`; used to power the Usage & Cost page at `/usage` |
 
 ---
 

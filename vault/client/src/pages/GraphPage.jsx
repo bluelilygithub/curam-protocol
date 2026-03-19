@@ -285,7 +285,7 @@ function GraphPage() {
   const [filters, setFilters] = useState(
     Object.fromEntries(FILTER_ORDER.map(t => [t, true]))
   );
-  const [dimensions,  setDimensions]  = useState({ width: 800, height: 600 });
+  const [dimensions,  setDimensions]  = useState(null);
   const [useMockData, setUseMockData] = useState(false);
 
   // ── Insights state ────────────────────────────────────────────────────────
@@ -337,13 +337,7 @@ function GraphPage() {
     }
   }, []);
 
-  // ── Container resize — read eagerly on mount, then track changes ──────────
-  useLayoutEffect(() => {
-    if (!containerRef.current) return;
-    const { width, height } = containerRef.current.getBoundingClientRect();
-    if (width > 0 && height > 0) setDimensions({ width, height });
-  }, []);
-
+  // ── Container resize — measure via ResizeObserver only; renders graph once measured ─
   useEffect(() => {
     if (!containerRef.current) return;
     const obs = new ResizeObserver(entries => {
@@ -1040,8 +1034,8 @@ function GraphPage() {
           </div>
         )}
 
-        {/* Force graph */}
-        <ForceGraph2D
+        {/* Force graph — only rendered once container size is known */}
+        {dimensions && <ForceGraph2D
           ref={fgRef}
           graphData={filteredData}
           width={dimensions.width}
@@ -1073,7 +1067,7 @@ function GraphPage() {
             handleNodeTick();
             fgRef.current?.zoomToFit(500, 60);
           }}
-        />
+        />}
       </div>
 
       {/* ── Side panel ───────────────────────────────────────────────────── */}
