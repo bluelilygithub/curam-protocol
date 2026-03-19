@@ -99,6 +99,7 @@ export default function TasksTree({
               }}
             >
               {depth > 0 && <span style={{ color: 'var(--color-muted)', marginRight: 4 }}>↳</span>}
+              {task.isMilestone === 1 && <span style={{ marginRight: 4 }} title="Milestone">🏁</span>}
               {task.title}
             </span>
           </button>

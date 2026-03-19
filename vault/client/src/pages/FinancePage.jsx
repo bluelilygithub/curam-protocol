@@ -213,7 +213,7 @@ function DashboardTab() {
   ];
 
   return (
-    <div className="p-6">
+    <div data-tour="finance-dashboard" className="p-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {cards.map(c => (
           <div
@@ -522,7 +522,7 @@ function InvoicesTab() {
   };
 
   return (
-    <div className="p-6">
+    <div data-tour="finance-invoices" className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Invoices</h2>
         <Btn onClick={openNew}>+ New Invoice</Btn>
@@ -916,7 +916,7 @@ function ExpensesTab() {
   };
 
   return (
-    <div className="p-6">
+    <div data-tour="finance-expenses" className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Expenses</h2>
         <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Expense'}</Btn>
@@ -1203,7 +1203,7 @@ function JournalTab() {
   if (loading) return <div className="p-6 text-sm" style={{ color: 'var(--color-muted)' }}>Loading...</div>;
 
   return (
-    <div className="p-6">
+    <div data-tour="finance-journal" className="p-6">
       <h2 className="font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Journal</h2>
 
       {entries.length === 0 ? (
@@ -1583,7 +1583,7 @@ function BASTab() {
   ) : '';
 
   return (
-    <div className="p-6">
+    <div data-tour="finance-bas" className="p-6">
       <h2 className="font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Business Activity Statement</h2>
 
       <div className="flex flex-col xl:flex-row gap-8">
@@ -1783,10 +1783,11 @@ export default function FinancePage() {
             <span style={{ fontSize: 20 }}>💰</span>
             <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Curam Finance</h1>
           </div>
-          <div className="flex gap-0 overflow-x-auto">
+          <div data-tour="finance-tabs" className="flex gap-0 overflow-x-auto">
             {TABS.map(t => (
               <button
                 key={t}
+                data-finance-tab={t}
                 onClick={() => setTab(t)}
                 className="flex-shrink-0 text-sm px-4 py-2 border-b-2 transition-colors"
                 style={{

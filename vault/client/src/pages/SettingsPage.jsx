@@ -16,6 +16,8 @@ import { startChainsTour, TOUR_KEY as CHAINS_TOUR_KEY } from '../utils/tours/cha
 import { startRagTour, TOUR_KEY as RAG_TOUR_KEY } from '../utils/tours/ragTour';
 import { startIntegrationsTour, TOUR_KEY as INTEGRATIONS_TOUR_KEY } from '../utils/tours/integrationsTour';
 import { startGettingStartedTour, TOUR_KEY as GETTING_STARTED_TOUR_KEY } from '../utils/tours/gettingStartedTour';
+import { startMilestonesTour, TOUR_KEY as MILESTONES_TOUR_KEY } from '../utils/tours/milestonesTour';
+import { startFinanceTour, TOUR_KEY as FINANCE_TOUR_KEY } from '../utils/tours/financeTour';
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -924,6 +926,44 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               Retake Tour
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Milestones Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step walkthrough of milestone flags, Calendar diamonds, Goals timeline, and Weekly Review awareness
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(MILESTONES_TOUR_KEY);
+                navigate('/tasks');
+                setTimeout(() => startMilestonesTour(navigate), 800);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(MILESTONES_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Finance Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                7-step walkthrough of invoicing, expenses, GST auto-calc, BAS workflow, and the double-entry journal
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(FINANCE_TOUR_KEY);
+                navigate('/finance');
+                setTimeout(() => startFinanceTour(navigate), 800);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(FINANCE_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>

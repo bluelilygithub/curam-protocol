@@ -431,7 +431,13 @@ export default function WeeklyReview({ tasks, onClose, onTasksChanged }) {
                     <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading goals…</p>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      {goals.map(obj => (
+                      {goals.map(obj => {
+                        const today = toDateKey(new Date());
+                        const relevantMilestones = (obj.milestones || [])
+                          .filter(m => m.status !== 'done' && m.dueDate)
+                          .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+                          .slice(0, 2);
+                        return (
                         <div key={obj.id} className="rounded-xl p-3" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
@@ -471,8 +477,23 @@ export default function WeeklyReview({ tasks, onClose, onTasksChanged }) {
                               ))}
                             </div>
                           )}
+                          {/* Milestone awareness */}
+                          {relevantMilestones.length > 0 && (
+                            <div className="mt-2 flex flex-col gap-1">
+                              {relevantMilestones.map(m => {
+                                const isOverdue = m.dueDate.slice(0, 10) < today;
+                                const dateLabel = m.dueDate ? new Date(m.dueDate.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : '';
+                                return (
+                                  <span key={m.id} className="text-xs" style={{ color: isOverdue ? '#ef4444' : '#f59e0b' }}>
+                                    🏁 {m.title}{dateLabel ? (isOverdue ? ` — overdue` : ` — due ${dateLabel}`) : ''}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>

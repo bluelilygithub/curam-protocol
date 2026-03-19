@@ -139,6 +139,37 @@ function TaskBlock({ task, top, height, leftPct, widthPct, onEdit, onToggleStatu
 
   const done = task.status === 'done';
 
+  // Milestone: render as a diamond marker instead of a block
+  if (task.isMilestone) {
+    const DIAMOND_SIZE = 14;
+    return (
+      <div
+        onClick={e => {
+          e.stopPropagation();
+          if (popoverPos) { setPopoverPos(null); return; }
+          const r = e.currentTarget.getBoundingClientRect();
+          setPopoverPos({ top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 240) });
+        }}
+        style={{ position: 'absolute', top: `${top - DIAMOND_SIZE / 2}px`, left: `calc(${leftPct * 100}% + 4px)`, width: `calc(${widthPct * 100}% - 8px)`, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', zIndex: popoverPos ? 50 : 10, userSelect: 'none', opacity: done ? 0.5 : 1 }}
+        title={task.title}
+      >
+        <div style={{ width: DIAMOND_SIZE, height: DIAMOND_SIZE, flexShrink: 0, background: done ? '#9ca3af' : '#f59e0b', transform: 'rotate(45deg)', borderRadius: 2 }} />
+        <span style={{ fontSize: '0.65rem', fontWeight: 600, color: done ? 'var(--color-muted)' : '#f59e0b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: done ? 'line-through' : 'none' }}>
+          {task.title}
+        </span>
+        {popoverPos && (
+          <TaskPopover
+            task={task}
+            onClose={() => setPopoverPos(null)}
+            onEdit={t => { onEdit(t); setPopoverPos(null); }}
+            onToggleStatus={t => { onToggleStatus(t); setPopoverPos(null); }}
+            style={popoverPos}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       ref={blockRef}
@@ -426,15 +457,15 @@ function TimeGrid({ days, tasks, onNew, onReschedule, onEdit, onToggleStatus, on
                   style={{
                     fontSize: '0.62rem', fontWeight: 600,
                     padding: '1px 5px', borderRadius: '999px',
-                    background: priorityBg[task.priority] || 'rgba(99,102,241,0.15)',
-                    borderLeft: `2px solid ${priorityBorder[task.priority] || '#6366f1'}`,
-                    color: 'var(--color-text)',
+                    background: task.isMilestone ? '#f59e0b22' : (priorityBg[task.priority] || 'rgba(99,102,241,0.15)'),
+                    borderLeft: `2px solid ${task.isMilestone ? '#f59e0b' : (priorityBorder[task.priority] || '#6366f1')}`,
+                    color: task.isMilestone ? '#f59e0b' : 'var(--color-text)',
                     cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: '98%',
                     overflow: 'hidden', textOverflow: 'ellipsis',
                     textDecoration: task.status === 'done' ? 'line-through' : 'none',
                     opacity: task.status === 'done' ? 0.5 : 1,
                   }}
-                >{task.title}</span>
+                >{task.isMilestone ? `🏁 ${task.title}` : task.title}</span>
               ))}
               {untimedByDay[dIdx].length > 2 && (
                 <span style={{ fontSize: '0.6rem', color: 'var(--color-muted)', padding: '1px 3px' }}>
@@ -851,7 +882,7 @@ export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus,
   const showSidebar = subView !== 'agenda' && sidebarOpen;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--color-bg)' }}>
+    <div data-tour="calendar-view" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--color-bg)' }}>
 
       {/* ── Toolbar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--color-border)', flexShrink: 0, flexWrap: 'wrap' }}>

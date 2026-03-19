@@ -54,7 +54,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 
 | Feature | Description |
 |---|---|
-| **Tasks** | Full personal task manager — List, Kanban, Calendar, Eisenhower Matrix, and Tree views; drag-to-reorder; priority, urgency, due date, category, tags, project link; keyboard shortcuts |
+| **Tasks** | Full personal task manager — List, Kanban, Calendar, Eisenhower Matrix, and Tree views; drag-to-reorder; priority, urgency, due date, category, tags, project link; keyboard shortcuts; milestone flag (`isMilestone`) — 🏁 badge on List, Kanban, Matrix, and Tree views; amber diamond marker in Calendar view |
 | **Kanban Board** | Three-column board (To Do / In Progress / Done); drag cards within or across columns to reorder and change status |
 | **Time-Blocking Calendar** | Day/week/month/agenda sub-views; task blocks absolutely positioned on a 24-hour CSS Grid; drag-drop to reschedule; resize bottom edge to change estimated effort; current-time indicator |
 | **Subtasks** | Nested subtasks with completion tracking; AI-generate subtasks from task title and notes |
@@ -64,7 +64,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Renewal Dimension** | Tag any task with 🏃 Physical / 📚 Mental / 🤝 Social / 🌱 Spiritual (Habit 7 — Sharpen the Saw); four-button selector in the task form (below the Urgent toggle); emoji pill on list and board cards; second filter row in the filter bar (All Dimensions · 🏃 · 📚 · 🤝 · 🌱) |
 | **Task Dependencies** | Mark tasks as "blocked by" other tasks; 🔒 badge when incomplete blockers exist; dependency UI in expanded row; circular dependency detection |
 | **Recurring Tasks** | Daily / Weekly / Fortnightly / Monthly / Annually; new copy created automatically when marked done; fires even without a due date (uses today as the base date); guarded against double-creation on already-done tasks; all instances in a series share a `recurrenceGroupId` UUID; deleting a recurring task shows a 3-option modal — cancel, delete this task only, or delete this and all future (non-done) recurrences |
-| **Task Duplication** | Duplicate any task via the copy icon on kanban cards and list rows; copies all fields including recurrence, renewal dimension, key result link, and estimated effort; subtasks are also duplicated |
+| **Task Duplication** | Duplicate any task via the copy icon on kanban cards and list rows; copies all fields including recurrence, renewal dimension, key result link, estimated effort, and milestone flag; subtasks are also duplicated |
 | **Task Comments & Activity** | Per-task comment thread; system events (status, priority, due date changes) auto-logged |
 | **Task Templates** | Save any task as a reusable template (with subtasks, priority, category, recurrence); apply in one click |
 | **Focus Mode (Pomodoro)** | Full-screen overlay with a 25/5/15-min Pomodoro timer; SVG ring progress; subtask checklist; Web Audio API beep; auto-start breaks; time logged to task on close |
@@ -72,13 +72,13 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Effort Estimation** | Set estimated effort per task (quick-select presets or custom input); effort pills on cards; Total Effort stat in toolbar |
 | **Natural Language Due Dates** | Type `"tomorrow 3pm"`, `"next friday"`, `"Mar 15"` in the due date field; live resolved-date preview; 📅 calendar picker fallback |
 | **Task Sharing** | Generate a public share link for any task; read-only view (no login required) with title, status, notes, tags, subtasks; revocable at any time |
-| **CSV Import** | Import tasks in bulk from a CSV file; download template, drag-drop upload, preview with row-level validation, selective import |
-| **Quick Capture** | Floating `+` button on every page (or `Ctrl+Shift+N`) — capture a task without leaving the current page |
+| **CSV Import** | Import tasks in bulk from a CSV file; download template, drag-drop upload, preview with row-level validation, selective import; template includes `isMilestone` column (0/1) |
+| **Quick Capture** | Floating `+` button on every page (or `Ctrl+Shift+N`) — capture a task without leaving the current page; includes Urgent and Milestone toggles side-by-side |
 | **Inline task creation from chat** | Select any text in a chat message to reveal a floating "+ Task" button; Claude Haiku suggests a priority and due date based on the selected text and surrounding context (1.5s timeout with medium/null fallback); opens Quick Capture pre-filled; the created task records the source session ID so it links back to the conversation |
 | **Source chat link** | Tasks created from a chat selection show "Created from chat: [session title]" as a clickable link in the expanded task view; navigates directly to that chat session |
 | **Morning Digest** | Daily overlay on first visit — overdue + today's tasks with a Claude-generated focus suggestion |
 | **Task Reminder Popups** | Configurable time-of-day reminder popups — select up to 7 daily times (5 AM, 8 AM, 10 AM, 12 PM, 2 PM, 5 PM, 8 PM) in Settings → Task Reminders; at each scheduled time a modal overlay lists overdue tasks (red) and today's tasks (amber) if any exist; tasks are clickable and navigate to the Tasks page; "Go to Tasks" and "Dismiss" buttons; reminders are tracked per-day in localStorage so they never double-show; on login, the most recent missed reminder from the past 4 hours is shown automatically; a "Pause all reminders" toggle suppresses all popups without clearing the schedule; settings persisted to both `settings` table (DB) and Zustand localStorage |
-| **Weekly Review** | Guided 3-step modal (`w` shortcut) — north star mission statement banner in Step 1 (if set); last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions, Goals progress update, and 🌱 Renewal This Week row (4 dimension icons with per-dimension completed-task counts; red dot on any zero) |
+| **Weekly Review** | Guided 3-step modal (`w` shortcut) — north star mission statement banner in Step 1 (if set); last week recap, overdue carry-forward with reschedule actions, week-ahead with Claude suggestions, Goals progress update, milestone awareness per objective (up to 2 non-done milestones shown, amber=upcoming, red=overdue), and 🌱 Renewal This Week row (4 dimension icons with per-dimension completed-task counts; red dot on any zero) |
 
 #### Goals
 
@@ -91,6 +91,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Goals Widget** | Home page summary showing active objective count, average progress, and top 3 progress bars |
 | **Goals in Weekly Review** | Step 3 of Weekly Review shows active objectives + 🌱 Renewal This Week row (4 dimension icons with completed task counts; red dot if zero) |
 | **Getting Started Wizard** | 7-step full-screen guided setup triggered automatically on first visit when no objectives exist; steps: Personal Context → Mission Statement (Claude drafts from context, editable) → First Objective (AI-suggested with colour picker) → Key Results (3 AI-suggested, toggle/edit) → Connect Tasks (link existing open tasks to the new objective) → Renewal Balance (four 0–10 sliders + streaming AI observation) → Review & Save; draft auto-saved to `localStorage`; ✨ button in Goals header reopens the wizard at any time; Settings page "Redo Setup" button resets the completion flag |
+| **Milestone Timeline** | Collapsible timeline per objective (collapsed by default) showing all tasks marked as milestones across that objective's Key Results; chevron label shows total count and a red badge if any are overdue; each row shows 🏁 or ✓, title, due date, and coloured status (done=muted+strikethrough, overdue=red, other=amber); empty state shows a hint to add milestones via the task form |
 
 #### Prompt Chains
 
@@ -191,7 +192,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 #### Tasks
 | Table | Key columns |
 |---|---|
-| `tasks` | id, title, notes, status, priority, isUrgent, activityStatus, renewalDimension, category, projectId, parentTaskId, dueDate, recurrence, recurrenceConfig, recurrenceGroupId, order, shareToken, estimatedMinutes, timeSpentMinutes, keyResultId |
+| `tasks` | id, title, notes, status, priority, isUrgent, isMilestone, activityStatus, renewalDimension, category, projectId, parentTaskId, dueDate, recurrence, recurrenceConfig, recurrenceGroupId, order, shareToken, estimatedMinutes, timeSpentMinutes, keyResultId |
 | `task_tags` | taskId, tag |
 | `task_comments` | id, taskId, type (user/system), content, createdAt |
 | `task_templates` | id, name, description, category, priority, recurrence, tags |
@@ -471,7 +472,7 @@ vault/
 | `comparisons` | Saved document comparison results linked to projects |
 | `search_logs` | Web search query log (powers admin dashboard search count) |
 | `settings` | Key/value store for API keys and app config — includes `vault_models` (JSON array of active AI models); if `vault_models` is absent the app uses the built-in defaults from `utils/models.js`; `task_reminder_times` (JSON array of HH:MM strings); `task_reminders_paused` (boolean string) |
-| `tasks` | Task records — status, priority, urgency (`isUrgent`), renewal dimension (`renewalDimension`), due date, category, tags, recurrence, estimated effort, time spent, share token, parent task link, key result link, `recurrenceGroupId` (UUID linking all non-done instances in a recurring series) |
+| `tasks` | Task records — status, priority, urgency (`isUrgent`), milestone flag (`isMilestone INTEGER DEFAULT 0`), renewal dimension (`renewalDimension`), due date, category, tags, recurrence, estimated effort, time spent, share token, parent task link, key result link, `recurrenceGroupId` (UUID linking all non-done instances in a recurring series); partial index `idx_tasks_milestone` on `(userId, isMilestone) WHERE isMilestone = 1` |
 | `task_tags` | Many-to-many tag associations for tasks |
 | `task_comments` | Per-task comments and auto-logged activity events (status/priority/due-date changes) |
 | `task_dependencies` | Directed blocker relationships between tasks — `taskId` is blocked by `blockedByTaskId`; unique constraint prevents duplicates; circular dependency detection on insert |
@@ -626,6 +627,7 @@ npm run dev
 ### March 2026
 
 - **Curam Finance module** — full bookkeeping and invoicing module at `/finance`; 8-tab layout (Dashboard, Invoices, Clients, Expenses, Wages, Journal, BAS, Settings); double-entry journal auto-generated for every transaction; invoice numbers auto-sequenced `INV-YYYY###`; invoice email via MailChannels TX API with styled HTML template (or SMTP fallback); Draft + Sent invoices editable (journal deleted and recreated on save); Paid invoices read-only; Resend button for Sent invoices; expense GST auto-calculated as total ÷ 11 when "GST Included" ticked; category autocomplete from `GET /expenses/categories` (no hardcoded list); expense edit with journal reversal; BAS on **cash basis** — GST collected from `paidAt` date not issue date; all destructive actions use `ConfirmModal`; success/error feedback via `Toast` (new `toastStore.js` Zustand store + `Toast.jsx` component mounted in `Layout`); 8 `fin_*` tables added to `db.js` init schema; route registered at `app.use('/api/finance', ...)`; 💰 nav icon added to top bar
+- **Finance — PDF invoices, BAS workflow, receipt uploads, overdue flagging** — PDF invoice download generated server-side via `@react-pdf/renderer` (ESM, loaded with dynamic `await import()` from CJS server); gold-branded A4 layout with logo, line-item table, GST subtotals and bank payment footer; served from `GET /api/finance/invoices/:id/pdf`; BAS reconciliation status bar (Open → Reconciled → Lodged → Paid) with timestamps and locked notice on paid quarters; BAS paid auto-generates a `bas` journal entry; pre-reconcile warnings modal (amber) checks for G1/G11=0, negative net GST, 1A mismatch, and unpaid invoices raised in the quarter (`GET /bas/:quarterId/warnings`); lodge confirmation shows G1/1A/1B/net GST figures; Annual BAS Summary panel (right side of BAS tab) with financial-year navigation and a row-click that syncs the left panel's quarter; receipt upload on expenses — multer disk storage under `uploads/receipts/`, `receipt_path` column on `fin_expenses`, drag-and-drop upload modal, PDF iframe / image viewer modal, remove with ConfirmModal; paperclip icon on expense rows (amber = has receipt); overdue invoice badge — `displayStatus()` helper returns `'overdue'` for `sent` invoices past their due date; filter tabs on the invoice list (All / Draft / Sent / Overdue / Paid); Dashboard splits Outstanding into Outstanding and Overdue cards; Finance Settings adds Account Name field; `apiClient.js` extended with `postForm()` for multipart uploads; `ConfirmModal` message prop changed from `<p>` to `<div>` to support JSX content
 - **File Preview Drawer** — eye icon on every file card in the Project Files panel and Compare vault picker opens a `FilePreviewDrawer` component; PDF pages rendered visually via pdfjs-dist (lazy loads 3 pages at a time on scroll); XLSX/ODS multi-sheet spreadsheets rendered as tables with sheet tabs; CSV as a flat table; DOCX/Word as plain text; all other files as a styled `<pre>`; "Attach" button inside the drawer adds the file to the session context bar; full-screen on mobile, 640 px fixed panel on desktop; ESC / backdrop closes and restores keyboard focus; `GET /api/files/:id/raw` endpoint added to serve the raw file binary for client-side rendering
 - **User profile & LLM personalisation** — new Profile section at the top of Settings (first name, city, state, country); stored as `user_name`, `user_city`, `user_state`, `user_country` in the `settings` table; each field saves on blur (country saves on change); on every chat request the browser sends `userTimezone` (from `Intl.DateTimeFormat().resolvedOptions().timeZone`); Block 5 of `buildSystemPrompt` queries these four keys and injects "You are speaking with [name], located in [city, state, country]. Default all research, prices and recommendations to their country and currency. Their current local time is [time]." — only the fields that are set are included; today's date in the system prompt also uses the user's local timezone rather than UTC
 - **AI message timestamps** — each assistant response bubble shows the receive time in the hover action row (same row as bookmark/copy/download buttons); live messages are stamped with `receivedAt` at stream start; sessions loaded from history use the DB `createdAt`; time is formatted in the browser's local timezone via `toLocaleTimeString`
@@ -652,6 +654,7 @@ npm run dev
 - **Office file extraction** — `.xlsx`, `.xls`, `.ods` files parsed sheet-by-sheet into CSV text via the `xlsx` package; `.docx` and `.doc` files extracted via `mammoth`; extracted text stored as `extractedText` in the `files` table and AI-summarised on upload; works identically to PDFs for pinning and session context injection; `xlsx` and `mammoth` added to dependencies
 - **Session files** — select any project library file to include in the current chat session only; files persisted to `session_files` table (survives page refresh within the same session); shown in a context bar above the message list; paperclip icon on each file card (turns primary colour when active); `POST /api/session-files/:sessionId`, `GET`, and `DELETE` endpoints added; `session_files` table created in `db.js` with cascade deletes
 - **Project sidebar accordion** — clicking a project name now toggles its recent session list open/closed; only one project expanded at a time; sessions fetched lazily on first expand; chevron icon shows open/closed state; `+` button on hover starts a new chat for that project; clicking a session navigates directly into that chat
+- **Milestones (CR04)** — `isMilestone INTEGER DEFAULT 0` column added to `tasks` table with partial index; milestone toggle in task form (amber pill, warns if no due date set) and Quick Capture (side-by-side with Urgent toggle); 🏁 badge on List, Kanban, and Tree view rows; amber diamond marker (rotated square) in Calendar view for milestone tasks — not draggable or resizable, done milestones grey; `isMilestone` copied on task duplication and included in CSV bulk import template; Goals page gains a **Milestone Timeline** per objective — collapsible (collapsed by default), sources milestones from tasks linked to that objective's Key Results via `WHERE keyResultId IN (...) AND isMilestone = 1`, overdue count badge on the chevron; Weekly Review Step 3 shows up to 2 non-done milestones per objective (amber=upcoming, red=overdue)
 - **Code block rendering fix** — `@tailwindcss/typography`'s `prose` class was injecting backtick pseudo-elements (`code::before/after`) onto `<code>` elements inside react-syntax-highlighter and inline code; fixed by adding `className="not-prose"` to `CodeBlock`'s outer div and to the inline `<code>` element in `mdComponents.jsx`
 - **Recurring tasks fix** — recurrence previously required a `dueDate` to fire; now uses today as the base date when none is set; added a `wasAlreadyDone` guard to prevent duplicate occurrences when updating an already-completed task
 - **File card layout** — filename now uses `flex-1 min-w-0` with a two-row layout (name on top, badges below) so it is always visible regardless of how many action buttons are present
@@ -725,20 +728,27 @@ A lightweight bookkeeping and invoicing module built into Curam Vault. Purpose-b
 
 | Feature | Description |
 |---|---|
-| **Dashboard** | YTD revenue (paid invoices), outstanding amount + count, YTD expenses, YTD wages, estimated net profit |
+| **Dashboard** | YTD revenue (paid invoices), outstanding amount + count, overdue amount + count (sent past due date), YTD expenses, YTD wages, estimated net profit |
 | **Invoices** | Create invoices with line items (description, qty, unit price, GST toggle); auto-generated invoice numbers (`INV-YYYY###`, resets each year); Draft → Sent → Paid workflow |
 | **Invoice email** | "Send" button opens a recipient email modal; invoice rendered as a styled HTML email and sent via MailChannels TX API (or SMTP fallback); marks invoice as Sent on delivery; "Resend" available for Sent invoices |
 | **Invoice editing** | Draft and Sent invoices are fully editable; journal entry deleted and recreated on each save to keep the ledger in sync; Paid invoices are read-only |
+| **Invoice PDF download** | Download button on each invoice row generates a branded PDF (gold header, logo, line-item table, GST subtotal, payment instructions) server-side via `@react-pdf/renderer`; served from `GET /api/finance/invoices/:id/pdf` |
+| **Overdue invoice flagging** | Invoices in `sent` status with a `dueDate` in the past show a red `Overdue` badge (computed `displayStatus()` — not stored in DB); filter tabs across the invoice list: All / Draft / Sent / Overdue / Paid |
 | **Mark Paid** | Marks invoice as paid with today's date; auto-generates a journal entry (DR Bank, CR Accounts Receivable) |
 | **Clients** | Client directory with name, email, phone, ABN, address; client email pre-filled in invoice send modal |
 | **Expenses** | Record expenses with total-paid amount; GST auto-calculated as amount ÷ 11 when "GST Included" is ticked; ex-GST amount and GST stored separately; edit mode with full journal reversal |
 | **Category autocomplete** | Expense category field shows a live dropdown of previously used categories pulled from `GET /expenses/categories` — no hardcoded list |
+| **Receipt uploads** | Attach a receipt image or PDF to any expense; paperclip icon on each expense row (amber = has receipt); upload modal with drag-and-drop; viewer modal (PDF iframe or image); remove with ConfirmModal; stored under `uploads/receipts/` via multer; `receipt_path` column on `fin_expenses` |
 | **Wages** | Record wage payments with gross, tax withheld, superannuation, and net pay; gross/net auto-calculated as tax changes |
 | **Double-entry journal** | Every invoice, expense, and wage auto-generates balanced journal entries; viewer tab shows all entries with debit/credit breakdown by account |
 | **BAS (cash basis)** | Australian Business Activity Statement — calculates GST collected from *paid* invoices in the quarter (`paidAt` date, not issue date); GST credits from expenses; PAYG withholding from wages; displays G1/G11/1A/1B/W1/W2 fields |
+| **BAS reconciliation workflow** | Status bar shows current quarter status (Open → Reconciled → Lodged → Paid) with timestamps; action button advances the status; Paid quarters are locked (read-only notice); BAS paid auto-generates a journal entry (type `bas`); status and timestamps stored in `fin_bas_quarters` table |
+| **BAS warnings** | Before reconciling, frontend checks (G1=0, G11=0, negative net GST, 1A≠G1÷11) and a backend query for unpaid `draft`/`sent` invoices raised in the quarter period; `WarningsModal` shows amber warnings and a table of at-risk invoices; user can Go Back or Proceed Anyway |
+| **BAS lodge confirmation** | Lodge-with-ATO step shows a summary of G1, 1A, 1B and net GST figures inside the confirmation modal before the user commits |
+| **Annual BAS summary** | Panel to the right of the BAS form; prev/next financial year navigation; table of all 4 quarters with cash-basis figures, GST owed, and colour-coded status badges; clicking a quarter row syncs the left panel to that quarter |
 | **Chart of accounts** | 9 default accounts seeded per user on first use: Bank/Cash (1000), AR (1100), GST Paid (1200), AP (2000), GST Collected (2200), Equity (3000), Income (4000), Expenses (5000), Wages (6000) |
-| **Finance Settings** | Business name, ABN, address, bank details (BSB, account number, bank name) stored as `fin_*` keys in the existing `settings` table; injected into invoice emails |
-| **Confirm modals + toasts** | All destructive actions (delete invoice, expense, wage, client) use `ConfirmModal`; success/error feedback via `Toast` component (bottom-right, auto-dismiss) |
+| **Finance Settings** | Business name, ABN, address, bank details (BSB, account number, account name, bank name) stored as `fin_*` keys in the existing `settings` table; injected into invoice emails and PDF footer |
+| **Confirm modals + toasts** | All destructive actions (delete invoice, expense, wage, client, remove receipt) use `ConfirmModal`; success/error feedback via `Toast` component (bottom-right, auto-dismiss) |
 
 ### Database Schema (`fin_` prefix)
 
@@ -748,13 +758,15 @@ A lightweight bookkeeping and invoicing module built into Curam Vault. Purpose-b
 | `fin_clients` | userId, name, email, phone, address, abn |
 | `fin_invoices` | userId, clientId, number (UNIQUE per user), status (draft/sent/paid/void), issueDate, dueDate, subtotal, gst, total, notes, paidAt |
 | `fin_invoice_items` | invoiceId (CASCADE), description, qty, unitPrice, gst, amount |
-| `fin_expenses` | userId, date, description, amount (ex-GST), gst, category, supplier |
+| `fin_expenses` | userId, date, description, amount (ex-GST), gst, category, supplier, receipt_path (nullable — path to uploaded receipt file) |
 | `fin_wages` | userId, date, employee, gross, tax, superannuation, net |
-| `fin_journal_entries` | userId, date, description, reference, type (invoice/payment/expense/wage/manual), sourceId |
+| `fin_journal_entries` | userId, date, description, reference, type (invoice/payment/expense/wage/bas/manual), sourceId |
 | `fin_journal_lines` | entryId (CASCADE), accountId (RESTRICT), debit, credit |
+| `fin_bas_quarters` | userId, year, quarter (1–4), status (open/reconciled/lodged/paid), reconciledAt, lodgedAt, paidAt; upserted on every BAS page load |
 
 **Auto-generated journal entries:**
 - Invoice created → DR Accounts Receivable, CR Income, CR GST Collected
 - Invoice paid → DR Bank, CR Accounts Receivable
 - Expense recorded → DR Expenses (ex-GST), DR GST Paid, CR Bank (total paid)
 - Wage payment → DR Wages, CR Bank (net), CR Accounts Payable (tax withheld)
+- BAS paid → DR GST Collected (1A), CR GST Paid (1B), CR Bank (net GST owed)

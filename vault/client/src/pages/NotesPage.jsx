@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useProjectStore from '../store/projectStore';
+import AtMentionDropdown from '../components/AtMentionDropdown';
 
 const NOTE_BODY_LIMIT = 500;
 
@@ -28,6 +29,36 @@ export default function NotesPage() {
 
   const autosaveTimer = useRef(null);
   const bodyRef = useRef(null);
+  const mentionTimerRef = useRef(null);
+  const mentionAtIndexRef = useRef(-1);
+
+  // @mention state
+  const [showMention, setShowMention] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+
+  // Web search state
+  const [showSearchInput, setShowSearchInput] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+
+  // Gmail state
+  const [showGmailSearch, setShowGmailSearch] = useState(false);
+  const [gmailQuery, setGmailQuery] = useState('');
+  const [isGmailSearching, setIsGmailSearching] = useState(false);
+  const [gmailError, setGmailError] = useState('');
+  const [gmailResults, setGmailResults] = useState([]);
+  const [gmailAttached, setGmailAttached] = useState([]);
+  const [gmailTranslatedQuery, setGmailTranslatedQuery] = useState('');
+
+  // Calendar state
+  const [showCalendarSearch, setShowCalendarSearch] = useState(false);
+  const [calendarQuery, setCalendarQuery] = useState('');
+  const [isCalendarSearching, setIsCalendarSearching] = useState(false);
+  const [calendarError, setCalendarError] = useState('');
+  const [calendarResults, setCalendarResults] = useState([]);
+  const [calendarAttached, setCalendarAttached] = useState([]);
 
   useEffect(() => { fetchProjects(); }, [fetchProjects]);
 
@@ -98,10 +129,219 @@ export default function NotesPage() {
   }
 
   function handleBodyChange(e) {
-    setBody(e.target.value);
+    const val = e.target.value;
+    setBody(val);
     setDirty(true);
-    scheduleAutosave(selected.id, title, e.target.value);
+    scheduleAutosave(selected.id, title, val);
+
+    // @mention detection
+    const cursorPos = e.target.selectionStart;
+    const textBefore = val.slice(0, cursorPos);
+    const atIndex = textBefore.lastIndexOf('@');
+    if (atIndex !== -1 && !textBefore.slice(atIndex + 1).includes(' ')) {
+      mentionAtIndexRef.current = atIndex;
+      setShowMention(true);
+      clearTimeout(mentionTimerRef.current);
+      mentionTimerRef.current = setTimeout(() => {
+        setMentionQuery(textBefore.slice(atIndex + 1));
+      }, 150);
+    } else {
+      setShowMention(false);
+      clearTimeout(mentionTimerRef.current);
+    }
   }
+
+  // Insert text at the @ position, replacing the @query
+  function insertAtMention(text) {
+    const atIndex = mentionAtIndexRef.current;
+    const cursorPos = bodyRef.current?.selectionStart || body.length;
+    const newBody = body.slice(0, atIndex) + text + body.slice(cursorPos);
+    setBody(newBody);
+    setShowMention(false);
+    setDirty(true);
+    scheduleAutosave(selected.id, title, newBody);
+    setTimeout(() => bodyRef.current?.focus(), 0);
+  }
+
+  // Append text at the end of the body
+  function appendToBody(text) {
+    const newBody = body + (body && !body.endsWith('\n') ? '\n' : '') + text;
+    setBody(newBody);
+    setDirty(true);
+    scheduleAutosave(selected.id, title, newBody);
+  }
+
+  const handleMentionSelect = (token, extraContext = '') => {
+    insertAtMention(token + extraContext);
+  };
+
+  // Web search
+  const handleOpenSearch = () => {
+    const atIndex = mentionAtIndexRef.current;
+    const cursorPos = bodyRef.current?.selectionStart || body.length;
+    if (atIndex !== -1) {
+      const newBody = body.slice(0, atIndex) + body.slice(cursorPos);
+      setBody(newBody);
+    }
+    setShowMention(false);
+    setSearchQuery('');
+    setSearchError('');
+    setSearchResults([]);
+    setShowSearchInput(true);
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim() || isSearching) return;
+    setIsSearching(true);
+    setSearchError('');
+    setSearchResults([]);
+    try {
+      const res = await api.get(`/api/web-search?q=${encodeURIComponent(searchQuery.trim())}`);
+      const data = await res.json();
+      if (data.error) { setSearchError(data.error); return; }
+      const results = data.results || [];
+      if (results.length === 0) { setSearchError('No results found. Try a different query.'); return; }
+      setSearchResults(results);
+    } catch (err) {
+      setSearchError(err.message || 'Search failed');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchDone = () => {
+    if (searchResults.length > 0) {
+      const block = '\n\n**Web Search: ' + searchQuery + '**\n' +
+        searchResults.map(r => `- [${r.title}](${r.url})${r.snippet ? '\n  ' + r.snippet : ''}`).join('\n');
+      appendToBody(block);
+    }
+    setShowSearchInput(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    setTimeout(() => bodyRef.current?.focus(), 0);
+  };
+
+  // Gmail
+  const handleOpenGmailSearch = () => {
+    const atIndex = mentionAtIndexRef.current;
+    const cursorPos = bodyRef.current?.selectionStart || body.length;
+    if (atIndex !== -1) {
+      const newBody = body.slice(0, atIndex) + body.slice(cursorPos);
+      setBody(newBody);
+    }
+    setShowMention(false);
+    setGmailQuery('');
+    setGmailError('');
+    setGmailResults([]);
+    setGmailAttached([]);
+    setGmailTranslatedQuery('');
+    setShowGmailSearch(true);
+  };
+
+  const handleGmailSearch = async () => {
+    if (!gmailQuery.trim() || isGmailSearching) return;
+    setIsGmailSearching(true);
+    setGmailError('');
+    setGmailResults([]);
+    setGmailTranslatedQuery('');
+    try {
+      const res = await api.get(`/api/gmail/search?q=${encodeURIComponent(gmailQuery.trim())}&max=10`);
+      const data = await res.json();
+      if (data.error) { setGmailError(data.error); return; }
+      if (data.translatedQuery && data.translatedQuery !== gmailQuery.trim()) {
+        setGmailTranslatedQuery(data.translatedQuery);
+      }
+      const results = data.results || [];
+      if (results.length === 0) { setGmailError(`No emails found${data.translatedQuery ? ` for: ${data.translatedQuery}` : ''}. Try rephrasing.`); return; }
+      setGmailResults(results);
+    } catch (err) {
+      setGmailError(err.message || 'Gmail search failed');
+    } finally {
+      setIsGmailSearching(false);
+    }
+  };
+
+  const handleGmailAttachThread = async (result) => {
+    if (gmailAttached.includes(result.threadId)) return;
+    try {
+      const res = await api.get(`/api/gmail/thread/${result.threadId}`);
+      const data = await res.json();
+      if (data.error) { setGmailError(data.error); return; }
+      const threadText = '\n\n**Email: ' + result.subject + '**\n' +
+        (data.messages || []).map(m =>
+          `From: ${m.from}\nDate: ${m.date}\n\n${m.body}`
+        ).join('\n\n---\n\n');
+      appendToBody(threadText);
+      setGmailAttached(prev => [...prev, result.threadId]);
+    } catch (err) {
+      setGmailError(err.message || 'Failed to load email thread');
+    }
+  };
+
+  const handleGmailDone = () => {
+    setShowGmailSearch(false);
+    setGmailQuery('');
+    setGmailResults([]);
+    setGmailAttached([]);
+    setGmailTranslatedQuery('');
+    setTimeout(() => bodyRef.current?.focus(), 0);
+  };
+
+  // Calendar
+  const handleOpenCalendarSearch = () => {
+    const atIndex = mentionAtIndexRef.current;
+    const cursorPos = bodyRef.current?.selectionStart || body.length;
+    if (atIndex !== -1) {
+      const newBody = body.slice(0, atIndex) + body.slice(cursorPos);
+      setBody(newBody);
+    }
+    setShowMention(false);
+    setCalendarQuery('');
+    setCalendarError('');
+    setCalendarResults([]);
+    setCalendarAttached([]);
+    setShowCalendarSearch(true);
+  };
+
+  const handleCalendarSearch = async () => {
+    if (!calendarQuery.trim() || isCalendarSearching) return;
+    setIsCalendarSearching(true);
+    setCalendarError('');
+    setCalendarResults([]);
+    try {
+      const res = await api.get(`/api/calendar/search?q=${encodeURIComponent(calendarQuery.trim())}&max=10`);
+      const data = await res.json();
+      if (data.error) { setCalendarError(data.error); return; }
+      const results = data.results || [];
+      if (results.length === 0) { setCalendarError('No events found. Try rephrasing.'); return; }
+      setCalendarResults(results);
+    } catch (err) {
+      setCalendarError(err.message || 'Calendar search failed');
+    } finally {
+      setIsCalendarSearching(false);
+    }
+  };
+
+  const handleCalendarAttachEvent = async (event) => {
+    if (calendarAttached.includes(event.id)) return;
+    try {
+      const res = await api.get(`/api/calendar/event/${event.id}`);
+      const data = await res.json();
+      if (data.error) { setCalendarError(data.error); return; }
+      appendToBody('\n\n' + (data.text || ''));
+      setCalendarAttached(prev => [...prev, event.id]);
+    } catch (err) {
+      setCalendarError(err.message || 'Failed to load event');
+    }
+  };
+
+  const handleCalendarDone = () => {
+    setShowCalendarSearch(false);
+    setCalendarQuery('');
+    setCalendarResults([]);
+    setCalendarAttached([]);
+    setTimeout(() => bodyRef.current?.focus(), 0);
+  };
 
   function handleSearchChange(e) {
     setSearch(e.target.value);
@@ -387,14 +627,270 @@ export default function NotesPage() {
           />
 
           {/* Body */}
-          <textarea
-            ref={bodyRef}
-            value={body}
-            onChange={handleBodyChange}
-            placeholder="Start writing…"
-            className="flex-1 px-4 py-2 bg-transparent outline-none resize-none text-sm leading-relaxed"
-            style={{ color: 'var(--color-text)' }}
-          />
+          <div className="flex-1 relative overflow-hidden flex flex-col">
+            <textarea
+              ref={bodyRef}
+              value={body}
+              onChange={handleBodyChange}
+              onKeyDown={e => { if (e.key === 'Escape' && showMention) { setShowMention(false); e.preventDefault(); } }}
+              placeholder="Start writing… type @ to search emails, calendar, tasks & web"
+              className="flex-1 px-4 py-2 bg-transparent outline-none resize-none text-sm leading-relaxed"
+              style={{ color: 'var(--color-text)' }}
+            />
+
+            {/* @mention dropdown */}
+            {showMention && (
+              <div className="absolute bottom-2 left-4 z-50">
+                <AtMentionDropdown
+                  query={mentionQuery}
+                  onSelect={handleMentionSelect}
+                  onSearch={handleOpenSearch}
+                  onGmailSearch={handleOpenGmailSearch}
+                  onCalendarSearch={handleOpenCalendarSearch}
+                  onPromptSelect={(prompt) => insertAtMention(prompt.content || prompt.title)}
+                  onClose={() => setShowMention(false)}
+                />
+              </div>
+            )}
+            {showMention && (
+              <div className="fixed inset-0 z-40" onClick={() => setShowMention(false)} />
+            )}
+
+            {/* Web search modal */}
+            {showSearchInput && (
+              <div className="fixed inset-0 z-40" onClick={() => { setShowSearchInput(false); setSearchQuery(''); setSearchResults([]); }} />
+            )}
+            {showSearchInput && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ pointerEvents: 'none' }}>
+                <div
+                  className="rounded-xl border shadow-xl overflow-hidden"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: '520px', pointerEvents: 'auto' }}
+                >
+                  <div className="flex items-center gap-2 px-3 py-2.5">
+                    {getIcon('search', { size: 14, style: { color: 'var(--color-primary)', flexShrink: 0 } })}
+                    <input
+                      autoFocus
+                      type="text"
+                      value={searchQuery}
+                      onChange={e => { setSearchQuery(e.target.value); setSearchError(''); setSearchResults([]); }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); searchResults.length > 0 ? handleSearchDone() : handleSearch(); }
+                        if (e.key === 'Escape') { setShowSearchInput(false); setSearchQuery(''); setSearchResults([]); }
+                      }}
+                      placeholder="What do you want to search for?"
+                      className="flex-1 bg-transparent outline-none text-sm"
+                      style={{ color: 'var(--color-text)' }}
+                      disabled={isSearching}
+                    />
+                    {isSearching ? (
+                      <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14 })}</span>
+                    ) : searchResults.length > 0 ? (
+                      <button type="button" onClick={handleSearchDone}
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        Insert
+                      </button>
+                    ) : searchQuery.trim() ? (
+                      <button type="button" onClick={handleSearch}
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        Search
+                      </button>
+                    ) : null}
+                  </div>
+                  {searchError && <p className="px-3 pb-2.5 text-xs" style={{ color: '#ef4444' }}>{searchError}</p>}
+                  {searchResults.length > 0 ? (
+                    <div className="border-t" style={{ borderColor: 'var(--color-border)', maxHeight: '260px', overflowY: 'auto' }}>
+                      {searchResults.map((r, i) => (
+                        <div key={i} className="px-3 py-2.5 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+                          <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.title}</p>
+                          {r.snippet && <p className="text-xs mt-0.5 line-clamp-2" style={{ color: 'var(--color-muted)' }}>{r.snippet}</p>}
+                          <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-primary)', opacity: 0.7 }}>{r.url}</p>
+                        </div>
+                      ))}
+                      <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} · press Insert or Enter to add to note
+                      </p>
+                    </div>
+                  ) : !searchError && (
+                    <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      Search the web and insert results into your note · Esc to cancel
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Gmail search modal */}
+            {showGmailSearch && (
+              <div className="fixed inset-0 z-40" onClick={() => { setShowGmailSearch(false); setGmailQuery(''); setGmailResults([]); setGmailAttached([]); setGmailTranslatedQuery(''); }} />
+            )}
+            {showGmailSearch && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ pointerEvents: 'none' }}>
+                <div
+                  className="rounded-xl border shadow-xl overflow-hidden"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: '520px', pointerEvents: 'auto' }}
+                >
+                  <div className="flex items-center gap-2 px-3 py-2.5">
+                    <span style={{ fontSize: 13, flexShrink: 0 }}>✉️</span>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={gmailQuery}
+                      onChange={e => { setGmailQuery(e.target.value); setGmailError(''); setGmailResults([]); }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); gmailResults.length > 0 ? handleGmailDone() : handleGmailSearch(); }
+                        if (e.key === 'Escape') { setShowGmailSearch(false); setGmailQuery(''); setGmailResults([]); setGmailAttached([]); }
+                      }}
+                      placeholder="Search Gmail (e.g. from:boss@company.com invoice)"
+                      className="flex-1 bg-transparent outline-none text-sm"
+                      style={{ color: 'var(--color-text)' }}
+                      disabled={isGmailSearching}
+                    />
+                    {isGmailSearching ? (
+                      <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14 })}</span>
+                    ) : gmailResults.length > 0 ? (
+                      <button type="button" onClick={handleGmailDone}
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        Done
+                      </button>
+                    ) : gmailQuery.trim() ? (
+                      <button type="button" onClick={handleGmailSearch}
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        Search
+                      </button>
+                    ) : null}
+                  </div>
+                  {gmailError && <p className="px-3 pb-2.5 text-xs" style={{ color: '#ef4444' }}>{gmailError}</p>}
+                  {gmailTranslatedQuery && (
+                    <p className="px-3 pb-1 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      Query: <code style={{ color: 'var(--color-primary)' }}>{gmailTranslatedQuery}</code>
+                    </p>
+                  )}
+                  {gmailResults.length > 0 ? (
+                    <div className="border-t" style={{ borderColor: 'var(--color-border)', maxHeight: '260px', overflowY: 'auto' }}>
+                      {gmailResults.map((r) => {
+                        const attached = gmailAttached.includes(r.threadId);
+                        return (
+                          <button
+                            key={r.id}
+                            onClick={() => handleGmailAttachThread(r)}
+                            disabled={attached}
+                            className="w-full text-left px-3 py-2.5 border-b last:border-b-0 transition-opacity"
+                            style={{ borderColor: 'var(--color-border)', opacity: attached ? 0.5 : 1 }}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.subject}</p>
+                              {attached
+                                ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>✓ Added</span>
+                                : <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>Insert</span>
+                              }
+                            </div>
+                            <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-muted)' }}>{r.from} · {r.date ? new Date(r.date).toLocaleDateString() : ''}</p>
+                            {r.snippet && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--color-muted)' }}>{r.snippet}</p>}
+                          </button>
+                        );
+                      })}
+                      {gmailAttached.length > 0 && (
+                        <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                          {gmailAttached.length} thread{gmailAttached.length !== 1 ? 's' : ''} inserted into note · press Done or Enter
+                        </p>
+                      )}
+                    </div>
+                  ) : !gmailError && (
+                    <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      Search your inbox and insert emails into your note · Esc to cancel
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Calendar search modal */}
+            {showCalendarSearch && (
+              <div className="fixed inset-0 z-40" onClick={() => { setShowCalendarSearch(false); setCalendarQuery(''); setCalendarResults([]); setCalendarAttached([]); }} />
+            )}
+            {showCalendarSearch && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ pointerEvents: 'none' }}>
+                <div
+                  className="rounded-xl border shadow-xl overflow-hidden"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', width: '100%', maxWidth: '520px', pointerEvents: 'auto' }}
+                >
+                  <div className="flex items-center gap-2 px-3 py-2.5">
+                    <span style={{ fontSize: 13, flexShrink: 0 }}>📅</span>
+                    <input
+                      autoFocus
+                      type="text"
+                      value={calendarQuery}
+                      onChange={e => { setCalendarQuery(e.target.value); setCalendarError(''); setCalendarResults([]); }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { e.preventDefault(); calendarResults.length > 0 ? handleCalendarDone() : handleCalendarSearch(); }
+                        if (e.key === 'Escape') { setShowCalendarSearch(false); setCalendarQuery(''); setCalendarResults([]); setCalendarAttached([]); }
+                      }}
+                      placeholder="Search Calendar (e.g. meetings next week)"
+                      className="flex-1 bg-transparent outline-none text-sm"
+                      style={{ color: 'var(--color-text)' }}
+                      disabled={isCalendarSearching}
+                    />
+                    {isCalendarSearching ? (
+                      <span style={{ color: 'var(--color-primary)' }}>{getIcon('loader', { size: 14 })}</span>
+                    ) : calendarResults.length > 0 ? (
+                      <button type="button" onClick={handleCalendarDone}
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        Done
+                      </button>
+                    ) : calendarQuery.trim() ? (
+                      <button type="button" onClick={handleCalendarSearch}
+                        className="text-xs font-medium px-2.5 py-1 rounded-lg flex-shrink-0"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                        Search
+                      </button>
+                    ) : null}
+                  </div>
+                  {calendarError && <p className="px-3 pb-2.5 text-xs" style={{ color: '#ef4444' }}>{calendarError}</p>}
+                  {calendarResults.length > 0 ? (
+                    <div className="border-t" style={{ borderColor: 'var(--color-border)', maxHeight: '260px', overflowY: 'auto' }}>
+                      {calendarResults.map((event) => {
+                        const attached = calendarAttached.includes(event.id);
+                        const start = event.start?.dateTime || event.start?.date || '';
+                        const startLabel = start ? new Date(start).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                        return (
+                          <button
+                            key={event.id}
+                            onClick={() => handleCalendarAttachEvent(event)}
+                            disabled={attached}
+                            className="w-full text-left px-3 py-2.5 border-b last:border-b-0 transition-opacity"
+                            style={{ borderColor: 'var(--color-border)', opacity: attached ? 0.5 : 1 }}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{event.title || '(No title)'}</p>
+                              {attached
+                                ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>✓ Added</span>
+                                : <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>Insert</span>
+                              }
+                            </div>
+                            {startLabel && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{startLabel}{event.location ? ` · ${event.location}` : ''}</p>}
+                          </button>
+                        );
+                      })}
+                      {calendarAttached.length > 0 && (
+                        <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                          {calendarAttached.length} event{calendarAttached.length !== 1 ? 's' : ''} inserted into note · press Done or Enter
+                        </p>
+                      )}
+                    </div>
+                  ) : !calendarError && (
+                    <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      Search your calendar and insert events into your note · Esc to cancel
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center" style={{ color: 'var(--color-muted)' }}>

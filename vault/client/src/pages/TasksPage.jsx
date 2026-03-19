@@ -70,6 +70,7 @@ const EMPTY_FORM = {
   title: '', notes: '', status: 'todo', priority: 'medium', isUrgent: 0, category: '', tags: '',
   dueDate: '', dueTime: '', dueDateRaw: '', projectId: '', parentTaskId: '', recurrence: 'none',
   estimatedMinutes: null, keyResultId: null, renewalDimension: null, activityStatus: 'none',
+  isMilestone: false,
 };
 
 const ACTIVITY_STATUSES = [
@@ -270,6 +271,9 @@ function MatrixTaskRow({ task, quadrantKey, onToggle, onEdit, onOpen, onDragStar
       )}
       {activityInfo && (
         <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: activityInfo.color }} title={activityInfo.label} />
+      )}
+      {task.isMilestone === 1 && (
+        <span style={{ fontSize: 11, flexShrink: 0 }} title="Milestone">🏁</span>
       )}
       {due && <span className="text-xs font-medium flex-shrink-0" style={{ color: due.color }}>{due.label}</span>}
       <button onClick={(e) => { e.stopPropagation(); onEdit(); }} style={{ color: 'var(--color-muted)', flexShrink: 0 }} className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -967,6 +971,7 @@ export default function TasksPage() {
       isUrgent: task.isUrgent || 0,
       renewalDimension: task.renewalDimension || null,
       activityStatus: task.activityStatus || 'none',
+      isMilestone: !!task.isMilestone,
     });
     setShowForm(true);
     loadGoalsForForm();
@@ -1001,6 +1006,7 @@ export default function TasksPage() {
         isUrgent: form.isUrgent ? 1 : 0,
         renewalDimension: form.renewalDimension || null,
         activityStatus: form.activityStatus || 'none',
+        isMilestone: form.isMilestone ? 1 : 0,
       };
       if (editTask) {
         const updated = await api.put(`/api/tasks/${editTask.id}`, payload).then(r => r.json());
@@ -1553,6 +1559,11 @@ export default function TasksPage() {
                   ⚡ Urgent
                 </span>
               )}
+              {task.isMilestone === 1 && (
+                <span className="text-xs px-1.5 py-0.5 rounded font-medium flex-shrink-0" style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b55' }} title="Milestone">
+                  🏁 Milestone
+                </span>
+              )}
               {task.timeSpentMinutes > 0 && (
                 <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }} title="Time logged">
                   ⏱ {formatEffort(task.timeSpentMinutes)}
@@ -1905,6 +1916,9 @@ export default function TasksPage() {
           )}
           {task.isUrgent === 1 && !isDone && (
             <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b55' }} title="Urgent">⚡</span>
+          )}
+          {task.isMilestone === 1 && (
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium" style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b55' }} title="Milestone">🏁</span>
           )}
           {task.renewalDimension && (() => {
             const rd = RENEWAL_DIMS.find(d => d.key === task.renewalDimension);
@@ -2601,6 +2615,23 @@ export default function TasksPage() {
                   )}
                   {form.dueTime && (
                     <input type="time" value={form.dueTime} onChange={e => { setForm(f => ({ ...f, dueTime: e.target.value, dueDateRaw: f.dueDate ? formatDateForInput(new Date(f.dueDate + 'T' + e.target.value)) : '' })); }} className="w-full mt-1.5 px-3 py-1.5 rounded-lg border text-sm outline-none" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                  )}
+                  {/* Milestone toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, isMilestone: !f.isMilestone }))}
+                    className="mt-1.5 w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                    style={{
+                      background: form.isMilestone ? '#f59e0b22' : 'transparent',
+                      borderColor: form.isMilestone ? '#f59e0b' : 'var(--color-border)',
+                      color: form.isMilestone ? '#f59e0b' : 'var(--color-muted)',
+                    }}
+                    title="Mark as a milestone — appears on the Goals page timeline"
+                  >
+                    🏁 {form.isMilestone ? 'Milestone' : 'Not a milestone'}
+                  </button>
+                  {form.isMilestone && !form.dueDate && (
+                    <p className="text-xs mt-1" style={{ color: '#f59e0b' }}>Milestones should have a due date so they appear on the timeline.</p>
                   )}
                 </div>
               </div>

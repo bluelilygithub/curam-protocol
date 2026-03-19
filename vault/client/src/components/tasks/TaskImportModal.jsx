@@ -2,11 +2,11 @@ import React, { useState, useRef } from 'react';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 
-const CSV_HEADERS = ['title', 'notes', 'priority', 'status', 'category', 'dueDate', 'tags', 'projectId'];
+const CSV_HEADERS = ['title', 'notes', 'priority', 'status', 'category', 'dueDate', 'tags', 'projectId', 'isMilestone'];
 
 const TEMPLATE_ROWS = [
-  ['Write project brief', 'Document the project goals and constraints', 'high', 'todo', 'Planning', '2026-03-15', 'planning,docs', ''],
-  ['Review pull requests', 'Check open PRs in the repo', 'medium', 'in-progress', 'Development', '', 'dev', ''],
+  ['Write project brief', 'Document the project goals and constraints', 'high', 'todo', 'Planning', '2026-03-15', 'planning,docs', '', '0'],
+  ['Review pull requests', 'Check open PRs in the repo', 'medium', 'in-progress', 'Development', '', 'dev', '', '0'],
 ];
 
 function generateTemplate() {
@@ -133,6 +133,7 @@ export default function TaskImport({ onClose, onImported }) {
           dueDate: r.dueDate?.trim() || null,
           tags: r.tags?.trim() || null,
           projectId: r.projectid ? Number(r.projectid) : (r.projectId ? Number(r.projectId) : null),
+          isMilestone: r.isMilestone === '1' ? 1 : 0,
         };
       });
       const data = await api.post('/api/tasks/import', { tasks }).then(r => r.json());

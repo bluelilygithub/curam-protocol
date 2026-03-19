@@ -27,7 +27,23 @@ async function buildObjective(row) {
   const overallProgress = krs.length
     ? Math.round(krs.reduce((s, kr) => s + kr.progress, 0) / krs.length)
     : 0;
-  return { ...row, keyResults: krs, overallProgress };
+
+  // Milestones: tasks marked isMilestone=1 linked to any of this objective's KRs
+  const krIds = krRows.map(kr => kr.id);
+  let milestones = [];
+  if (krIds.length > 0) {
+    const placeholders = krIds.map((_, i) => `$${i + 1}`).join(',');
+    const { rows: msRows } = await pool.query(
+      `SELECT id, title, status, "dueDate", "isMilestone"
+       FROM tasks
+       WHERE "keyResultId" IN (${placeholders}) AND "isMilestone" = 1
+       ORDER BY "dueDate" ASC NULLS LAST`,
+      krIds
+    );
+    milestones = msRows;
+  }
+
+  return { ...row, keyResults: krs, overallProgress, milestones };
 }
 
 // GET /api/goals — list all objectives with nested KRs

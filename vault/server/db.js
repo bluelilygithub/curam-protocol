@@ -160,6 +160,8 @@ async function initSchema() {
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "recurrenceGroupId" TEXT DEFAULT NULL`);
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "transcript_summary" TEXT DEFAULT NULL`);
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "activityStatus" TEXT NOT NULL DEFAULT 'none' CHECK("activityStatus" IN ('none','started','paused','waiting'))`);
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "isMilestone" INTEGER DEFAULT 0`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON tasks("userId", "isMilestone") WHERE "isMilestone" = 1`);
 
     // ── Chat ──────────────────────────────────────────────────────────────────
     await client.query(`
@@ -290,7 +292,8 @@ async function initSchema() {
         "keyResultId"       INTEGER,
         "timeSpentMinutes"  INTEGER DEFAULT 0,
         "isUrgent"          INTEGER DEFAULT 0,
-        "renewalDimension"  TEXT DEFAULT NULL
+        "renewalDimension"  TEXT DEFAULT NULL,
+        "isMilestone"       INTEGER DEFAULT 0
       )
     `);
 

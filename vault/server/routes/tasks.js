@@ -316,12 +316,13 @@ router.post('/import', async (req, res) => {
           projectId = projRows[0] ? Number(t.projectId) : null;
         }
         const { rows: inserted } = await client.query(
-          'INSERT INTO tasks (title,notes,status,priority,category,"projectId","dueDate","estimatedMinutes","timeSpentMinutes","userId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW()) RETURNING id',
+          'INSERT INTO tasks (title,notes,status,priority,category,"projectId","dueDate","estimatedMinutes","timeSpentMinutes","isMilestone","userId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW()) RETURNING id',
           [
             t.title.trim(), t.notes || null, status, priority,
             t.category || null, projectId, t.dueDate || null,
             t.estimatedMinutes != null ? Number(t.estimatedMinutes) : null,
             t.timeSpentMinutes != null ? Number(t.timeSpentMinutes) : 0,
+            t.isMilestone ? 1 : 0,
             req.user.id,
           ]
         );
@@ -485,13 +486,13 @@ router.post('/:id/duplicate', async (req, res) => {
     const { rows: inserted } = await pool.query(
       `INSERT INTO tasks
         (title,notes,status,priority,category,"projectId",recurrence,"recurrenceConfig",
-         "dueDate","estimatedMinutes","isUrgent","renewalDimension","keyResultId","order","userId","updatedAt")
-       VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW()) RETURNING id`,
+         "dueDate","estimatedMinutes","isUrgent","renewalDimension","keyResultId","isMilestone","order","userId","updatedAt")
+       VALUES ($1,$2,'todo',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW()) RETURNING id`,
       [
         task.title + ' (copy)', task.notes, task.priority, task.category, task.projectId,
         task.recurrence, task.recurrenceConfig,
         task.dueDate, task.estimatedMinutes, task.isUrgent, task.renewalDimension, task.keyResultId,
-        task.order, req.user.id,
+        task.isMilestone || 0, task.order, req.user.id,
       ]
     );
     const newId = inserted[0].id;
@@ -609,14 +610,14 @@ router.delete('/:id/dependencies/:blockedByTaskId', async (req, res) => {
 // POST /api/tasks
 router.post('/', async (req, res) => {
   try {
-    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId, isUrgent, renewalDimension, sourceSessionId, activityStatus } = req.body;
+    const { title, notes, status, priority, category, projectId, parentTaskId, dueDate, tags, recurrence, recurrenceConfig, estimatedMinutes, keyResultId, isUrgent, renewalDimension, sourceSessionId, activityStatus, isMilestone } = req.body;
     if (!title) return res.status(400).json({ error: 'title required' });
     const recurrenceGroupId = (recurrence && recurrence !== 'none') ? crypto.randomUUID() : null;
     const validActivityStatuses = ['none', 'started', 'paused', 'waiting'];
     const safeActivityStatus = validActivityStatuses.includes(activityStatus) ? activityStatus : 'none';
     const { rows } = await pool.query(
-      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","sourceSessionId","recurrenceGroupId","activityStatus","userId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW()) RETURNING id',
-      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null, sourceSessionId || null, recurrenceGroupId, safeActivityStatus, req.user.id]
+      'INSERT INTO tasks (title,notes,status,priority,category,"projectId","parentTaskId","dueDate",recurrence,"recurrenceConfig","estimatedMinutes","keyResultId","isUrgent","renewalDimension","sourceSessionId","recurrenceGroupId","activityStatus","isMilestone","userId","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW()) RETURNING id',
+      [title, notes || null, status || 'todo', priority || 'medium', category || null, projectId || null, parentTaskId || null, dueDate || null, recurrence || 'none', recurrenceConfig ? JSON.stringify(recurrenceConfig) : null, estimatedMinutes != null ? Number(estimatedMinutes) : null, keyResultId || null, isUrgent ? 1 : 0, renewalDimension || null, sourceSessionId || null, recurrenceGroupId, safeActivityStatus, isMilestone ? 1 : 0, req.user.id]
     );
     const id = rows[0].id;
     if (Array.isArray(tags)) {
@@ -656,9 +657,10 @@ router.put('/:id', async (req, res) => {
     const newRenewalDimension = 'renewalDimension' in req.body ? (req.body.renewalDimension || null) : task.renewalDimension;
     const validActivityStatuses = ['none', 'started', 'paused', 'waiting'];
     const newActivityStatus = 'activityStatus' in req.body && validActivityStatuses.includes(req.body.activityStatus) ? req.body.activityStatus : (task.activityStatus || 'none');
+    const newIsMilestone = 'isMilestone' in req.body ? (req.body.isMilestone ? 1 : 0) : (task.isMilestone || 0);
     await pool.query(
-      'UPDATE tasks SET title=$1,notes=$2,status=$3,priority=$4,category=$5,"projectId"=$6,"parentTaskId"=$7,"dueDate"=$8,recurrence=$9,"recurrenceConfig"=$10,"estimatedMinutes"=$11,"keyResultId"=$12,"timeSpentMinutes"=$13,"isUrgent"=$14,"renewalDimension"=$15,"activityStatus"=$16,"updatedAt"=NOW() WHERE id=$17',
-      [v('title'), v('notes'), v('status'), v('priority'), v('category'), v('projectId'), v('parentTaskId'), v('dueDate'), v('recurrence'), rcfg, newEstimated, newKeyResultId, newTimeSpent, newIsUrgent, newRenewalDimension, newActivityStatus, id]
+      'UPDATE tasks SET title=$1,notes=$2,status=$3,priority=$4,category=$5,"projectId"=$6,"parentTaskId"=$7,"dueDate"=$8,recurrence=$9,"recurrenceConfig"=$10,"estimatedMinutes"=$11,"keyResultId"=$12,"timeSpentMinutes"=$13,"isUrgent"=$14,"renewalDimension"=$15,"activityStatus"=$16,"isMilestone"=$17,"updatedAt"=NOW() WHERE id=$18',
+      [v('title'), v('notes'), v('status'), v('priority'), v('category'), v('projectId'), v('parentTaskId'), v('dueDate'), v('recurrence'), rcfg, newEstimated, newKeyResultId, newTimeSpent, newIsUrgent, newRenewalDimension, newActivityStatus, newIsMilestone, id]
     );
     if (Array.isArray(req.body.tags)) {
       await pool.query('DELETE FROM task_tags WHERE "taskId"=$1', [id]);

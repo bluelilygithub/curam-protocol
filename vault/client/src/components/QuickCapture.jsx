@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 
-const EMPTY = { title: '', priority: 'medium', dueDate: '', isUrgent: 0, projectId: null, sessionId: null, notes: '' };
+const EMPTY = { title: '', priority: 'medium', dueDate: '', isUrgent: 0, isMilestone: 0, projectId: null, sessionId: null, notes: '' };
 
 export default function QuickCapture() {
   const getIcon = useIcon();
@@ -44,6 +44,7 @@ export default function QuickCapture() {
         dueDate: form.dueDate || null,
         status: 'todo',
         isUrgent: form.isUrgent ? 1 : 0,
+        isMilestone: form.isMilestone ? 1 : 0,
         ...(form.notes ? { notes: form.notes } : {}),
         ...(form.projectId ? { projectId: form.projectId } : {}),
         ...(form.sessionId ? { sourceSessionId: form.sessionId } : {}),
@@ -131,18 +132,32 @@ export default function QuickCapture() {
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => setForm(f => ({ ...f, isUrgent: f.isUrgent ? 0 : 1 }))}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-all"
-                style={{
-                  background: form.isUrgent ? '#f59e0b22' : 'transparent',
-                  borderColor: form.isUrgent ? '#f59e0b' : 'var(--color-border)',
-                  color: form.isUrgent ? '#f59e0b' : 'var(--color-muted)',
-                }}
-              >
-                ⚡ {form.isUrgent ? 'Urgent — Do First' : 'Not urgent'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, isUrgent: f.isUrgent ? 0 : 1 }))}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-all"
+                  style={{
+                    background: form.isUrgent ? '#f59e0b22' : 'transparent',
+                    borderColor: form.isUrgent ? '#f59e0b' : 'var(--color-border)',
+                    color: form.isUrgent ? '#f59e0b' : 'var(--color-muted)',
+                  }}
+                >
+                  ⚡ {form.isUrgent ? 'Urgent' : 'Not urgent'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, isMilestone: f.isMilestone ? 0 : 1 }))}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-all"
+                  style={{
+                    background: form.isMilestone ? '#f59e0b22' : 'transparent',
+                    borderColor: form.isMilestone ? '#f59e0b' : 'var(--color-border)',
+                    color: form.isMilestone ? '#f59e0b' : 'var(--color-muted)',
+                  }}
+                >
+                  🏁 {form.isMilestone ? 'Milestone' : 'Not a milestone'}
+                </button>
+              </div>
             </div>
             <div className="flex justify-end gap-2 px-5 pb-4">
               <button

@@ -7,6 +7,72 @@ import GettingStartedWizard from '../components/GettingStartedWizard';
 
 const PRESET_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#22c55e', '#3b82f6', '#ef4444'];
 
+const TODAY = new Date().toISOString().slice(0, 10);
+
+function milestoneStatus(m) {
+  if (m.status === 'done') return 'done';
+  if (m.dueDate && m.dueDate.slice(0, 10) < TODAY) return 'overdue';
+  if (m.status === 'in-progress') return 'in-progress';
+  return 'todo';
+}
+
+function MilestoneTimeline({ milestones }) {
+  const [open, setOpen] = useState(false);
+  const overdue = milestones.filter(m => milestoneStatus(m) === 'overdue');
+  const label = overdue.length > 0
+    ? `Milestones (${overdue.length} overdue)`
+    : `Milestones (${milestones.length})`;
+
+  return (
+    <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: overdue.length > 0 ? '#ef4444' : 'var(--color-muted)' }}>
+          🏁 {label}
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--color-muted)', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block', transition: 'transform 0.15s' }}>▾</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          {milestones.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--color-muted)', fontStyle: 'italic' }}>
+              No milestones yet. Mark any task as 🏁 Milestone and link it to this objective to see it here.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {milestones.map(m => {
+                const ms = milestoneStatus(m);
+                const isDone = ms === 'done';
+                const isOverdue = ms === 'overdue';
+                const dateLabel = m.dueDate ? new Date(m.dueDate.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+                return (
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12 }}>{isDone ? '✓' : '🏁'}</span>
+                    <span style={{ fontSize: 13, flex: 1, textDecoration: isDone ? 'line-through' : 'none', color: isOverdue ? '#ef4444' : isDone ? 'var(--color-muted)' : 'var(--color-text)', opacity: isDone ? 0.6 : 1 }}>
+                      {m.title}
+                    </span>
+                    {dateLabel && (
+                      <span style={{ fontSize: 11, color: isOverdue ? '#ef4444' : 'var(--color-muted)', whiteSpace: 'nowrap' }}>
+                        {isOverdue ? 'Overdue · ' : ''}{dateLabel}
+                      </span>
+                    )}
+                    <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: isDone ? '#22c55e22' : isOverdue ? '#ef444422' : 'var(--color-border)', color: isDone ? '#22c55e' : isOverdue ? '#ef4444' : 'var(--color-muted)', whiteSpace: 'nowrap' }}>
+                      {isDone ? 'Done' : isOverdue ? 'Overdue' : ms === 'in-progress' ? 'In Progress' : 'To Do'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function progressColor(pct) {
   if (pct >= 70) return '#22c55e';
   if (pct >= 30) return '#f59e0b';
@@ -1198,6 +1264,11 @@ export default function GoalsPage() {
                   />
                 )}
               </div>
+            </div>
+
+            {/* Milestone Timeline */}
+            <div data-tour="milestone-timeline">
+              <MilestoneTimeline milestones={selectedObj.milestones || []} />
             </div>
 
             {/* Delete objective */}
