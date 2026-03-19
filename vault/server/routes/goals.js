@@ -282,6 +282,45 @@ router.post('/wizard/reset', async (req, res) => {
   }
 });
 
+// POST /api/goals/reset-setup — reset wizard flag, optionally delete all objectives/KRs
+router.post('/reset-setup', async (req, res) => {
+  const { deleteObjectives = false } = req.body;
+  try {
+    // Always reset the completion flag
+    await pool.query(
+      "INSERT INTO settings (\"userId\", key, value) VALUES ($1, 'getting_started_completed', 'false') ON CONFLICT (\"userId\", key) DO UPDATE SET value='false'",
+      [req.user.id]
+    );
+
+    if (deleteObjectives) {
+      // Unlink tasks from KRs belonging to this user's objectives before deleting
+      await pool.query(
+        `UPDATE tasks SET "keyResultId" = NULL
+         WHERE "keyResultId" IN (
+           SELECT kr.id FROM key_results kr
+           JOIN objectives o ON kr."objectiveId" = o.id
+           WHERE o."userId" = $1
+         )`,
+        [req.user.id]
+      );
+      // Delete all key results for this user's objectives
+      await pool.query(
+        `DELETE FROM key_results WHERE "objectiveId" IN (
+           SELECT id FROM objectives WHERE "userId" = $1
+         )`,
+        [req.user.id]
+      );
+      // Delete all objectives
+      await pool.query('DELETE FROM objectives WHERE "userId" = $1', [req.user.id]);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[goals reset-setup]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/goals/wizard/generate-mission — SSE stream using personal context
 router.post('/wizard/generate-mission', async (req, res) => {
   try {

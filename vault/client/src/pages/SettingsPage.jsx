@@ -18,6 +18,7 @@ import { startIntegrationsTour, TOUR_KEY as INTEGRATIONS_TOUR_KEY } from '../uti
 import { startGettingStartedTour, TOUR_KEY as GETTING_STARTED_TOUR_KEY } from '../utils/tours/gettingStartedTour';
 import { startMilestonesTour, TOUR_KEY as MILESTONES_TOUR_KEY } from '../utils/tours/milestonesTour';
 import { startFinanceTour, TOUR_KEY as FINANCE_TOUR_KEY } from '../utils/tours/financeTour';
+import ConfirmModal from '../components/ConfirmModal';
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -54,6 +55,16 @@ function SettingsPage() {
   const { models, saveModels } = useModels();
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
   const [modelForm, setModelForm] = useState({});
+  const [showReopenWizardConfirm, setShowReopenWizardConfirm] = useState(false);
+  const [showResetGoalsConfirm, setShowResetGoalsConfirm] = useState(false);
+  const [tab, setTab] = useState(() => localStorage.getItem('settingsTab') || 'Appearance');
+
+  const TABS = ['Appearance', 'Profile', 'AI & Chat', 'Tasks', 'Goals', 'Integrations', 'Tours'];
+
+  function selectTab(t) {
+    setTab(t);
+    localStorage.setItem('settingsTab', t);
+  }
 
   useEffect(() => {
     api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
@@ -161,12 +172,40 @@ function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-10">
+    <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
         Settings
       </h1>
 
+      {/* Tab bar */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginTop: 16, marginBottom: 28, overflowX: 'auto' }}>
+        {TABS.map(t => (
+          <button
+            key={t}
+            onClick={() => selectTab(t)}
+            style={{
+              padding: '8px 14px',
+              fontSize: 13,
+              fontWeight: tab === t ? 600 : 400,
+              color: tab === t ? 'var(--color-primary)' : 'var(--color-muted)',
+              background: 'none',
+              border: 'none',
+              borderBottom: `2px solid ${tab === t ? 'var(--color-primary)' : 'transparent'}`,
+              marginBottom: -1,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              transition: 'color 0.15s',
+            }}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-10">
+
       {/* Profile Section */}
+      {tab === 'Profile' && (
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
           Profile
@@ -243,8 +282,10 @@ function SettingsPage() {
           </div>
         </div>
       </section>
+      )}
 
-      {/* Theme Section */}
+      {/* Theme, Font, Icon Pack — Appearance tab */}
+      {tab === 'Appearance' && (<>
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
           Theme
@@ -326,8 +367,10 @@ function SettingsPage() {
           ))}
         </div>
       </section>
+      </>)}
 
-      {/* Session Budget */}
+      {/* Session Budget, Token Budget, File Types, AI Models — AI & Chat tab */}
+      {tab === 'AI & Chat' && (<>
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
           Session Budget
@@ -716,8 +759,10 @@ function SettingsPage() {
           )}
         </div>
       </section>
+      </>)}
 
-      {/* Change Password */}
+      {/* Change Password — Profile tab */}
+      {tab === 'Profile' && (
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
           Change Password
@@ -771,8 +816,10 @@ function SettingsPage() {
           </button>
         </form>
       </section>
+      )}
 
-      {/* Live Preview */}
+      {/* Live Preview — Appearance tab */}
+      {tab === 'Appearance' && (
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
           Preview
@@ -804,8 +851,10 @@ function SettingsPage() {
           </button>
         </div>
       </section>
+      )}
 
-      {/* Task Reminders */}
+      {/* Task Reminders — Tasks tab */}
+      {tab === 'Tasks' && (
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
           Task Reminders
@@ -873,8 +922,10 @@ function SettingsPage() {
           <span className="text-sm" style={{ color: 'var(--color-text)' }}>Pause all reminders</span>
         </label>
       </section>
+      )}
 
-      {/* Integrations */}
+      {/* Integrations tab */}
+      {tab === 'Integrations' && (
       <section data-tour="integrations-section">
         <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Integrations</h2>
         <div className="space-y-3">
@@ -883,8 +934,10 @@ function SettingsPage() {
           <DriveConnect />
         </div>
       </section>
+      )}
 
-      {/* Product Tours */}
+      {/* Product Tours — Tours tab */}
+      {tab === 'Tours' && (
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>
           Product Tours
@@ -1062,6 +1115,78 @@ function SettingsPage() {
           </div>
         </div>
       </section>
+      )}
+
+      {/* Goals Setup — Goals tab */}
+      {tab === 'Goals' && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>Goals Setup</h2>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Reopen Setup Wizard</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                Reopen the Getting Started Wizard — your existing goals and tasks will not be affected
+              </p>
+            </div>
+            <button
+              onClick={() => setShowReopenWizardConfirm(true)}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: '#f59e0b', color: '#f59e0b', background: 'transparent' }}
+            >
+              Reopen Wizard
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: '#ef444433', background: '#ef44440a' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: '#ef4444' }}>Reset Goals & Rerun Setup</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                Permanently delete all objectives and key results, then rerun the wizard. Tasks are never deleted.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowResetGoalsConfirm(true)}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: '#ef4444', color: '#ef4444', background: 'transparent' }}
+            >
+              Reset Goals
+            </button>
+          </div>
+        </div>
+      </section>
+      )}
+
+      </div>{/* end space-y-10 content area */}
+
+      {showReopenWizardConfirm && (
+        <ConfirmModal
+          title="Reopen Setup Wizard?"
+          message="This will reopen the Getting Started Wizard. Your existing goals and tasks will not be affected."
+          confirmLabel="Reopen Wizard"
+          onConfirm={async () => {
+            setShowReopenWizardConfirm(false);
+            await fetch('/api/goals/reset-setup', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ deleteObjectives: false }) }).catch(() => {});
+            navigate('/goals?wizard=true');
+          }}
+          onCancel={() => setShowReopenWizardConfirm(false)}
+        />
+      )}
+
+      {showResetGoalsConfirm && (
+        <ConfirmModal
+          title="Reset Goals & Rerun Setup?"
+          message="This will permanently delete all your objectives and key results. Your tasks will not be deleted but will be unlinked from any goals. This cannot be undone."
+          confirmLabel="Delete & Reset"
+          danger
+          confirmText="RESET"
+          onConfirm={async () => {
+            setShowResetGoalsConfirm(false);
+            await fetch('/api/goals/reset-setup', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ deleteObjectives: true }) }).catch(() => {});
+            navigate('/goals?wizard=true');
+          }}
+          onCancel={() => setShowResetGoalsConfirm(false)}
+        />
+      )}
     </div>
   );
 }

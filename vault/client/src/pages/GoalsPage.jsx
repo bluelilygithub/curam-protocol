@@ -815,6 +815,16 @@ export default function GoalsPage() {
     api.get('/api/tasks').then(r => r.json()).then(data => setRenewalTasks(Array.isArray(data) ? data : [])).catch(() => {});
   }, []);
 
+  // Open wizard immediately when navigated to /goals?wizard=true
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('wizard') === 'true') {
+      setShowWizard(true);
+      // Clean the query param from the URL without a re-render
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const section = params.get('section');
@@ -1020,8 +1030,12 @@ export default function GoalsPage() {
           <div style={{ display: 'flex', gap: 6 }}>
             {wizardCompleted && (
               <button
-                onClick={() => setShowWizard(true)}
-                title="Redo setup wizard"
+                onClick={async () => {
+                  await api.post('/api/goals/reset-setup', { deleteObjectives: false }).catch(() => {});
+                  setWizardCompleted(false);
+                  setShowWizard(true);
+                }}
+                title="Reopen Setup Wizard"
                 style={{ display: 'flex', alignItems: 'center', fontSize: 11, padding: '4px 8px', borderRadius: 6, background: 'none', border: '1px solid var(--color-border)', color: 'var(--color-muted)', cursor: 'pointer' }}
               >
                 ✨
