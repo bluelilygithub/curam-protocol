@@ -45,8 +45,8 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Document Compare** | Compare two documents side by side using any Claude or Gemini model; 4 comparison modes; save results to a project |
 | **Multi-Model Debate** | Pit multiple AI models against each other on a topic; multi-file context upload; synthesis summary |
 | **Export** | Export chat conversations to Markdown, JSON, or PDF; email thread export |
-| **Voice input** | Mic button in chat toolbar starts browser-native speech recognition (Web Speech API); live interim transcript preview; hidden in unsupported browsers |
-| **Read aloud** | Speaker button reads the last assistant message via browser text-to-speech; no external service required |
+| **Voice input** | Mic button in chat toolbar starts browser-native speech recognition (Web Speech API); `continuous: true` so dictation keeps running across natural pauses — a red pulsing dot indicates recording is active; a separate **Stop** button (red pill) commits the full accumulated transcript to the input and ends the session; live interim text shown while recording; hidden in unsupported browsers |
+| **Read aloud** | Speaker icon in the action row below the last assistant message reads it via browser text-to-speech (no external service); while playing, the icon is replaced by a **Pause/Resume** toggle (pause icon → play icon) and an **✕ Stop** button in the same row; the action row stays fully visible while audio is playing (not hover-only); only the most recent AI response is ever passed to `speechSynthesis` |
 | **Token budget alerts** | Set a per-session cost limit in Settings; configurable amber warning threshold (50–90%, default 80%) and red critical threshold (90/95/100%, default 100%); both banners are dismissible with an ✕ button; re-alert frequency configurable (don't show again / every 10 messages / every 20 messages / at 95%); red banner includes a "Save to Notes" checkbox (checked by default) — on summarisation, automatically creates a note titled "[Session title] — Summary [date]" linked to the current project with a confirmation toast |
 | **Model error handling** | Stream errors classified by type and shown in a banner: 🔑 auth (key missing/invalid), 💳 billing (credit exhausted — links to Anthropic billing), 🤖 model not found, ⏳ rate limit, ⚠️ timeout/unknown; pre-send check blocks requests immediately if the provider key is confirmed absent |
 | **Smart Model Advisor** | Pre-send intercept that analyses every prompt before it is sent — calls `POST /api/chat/analyse-prompt` using Claude Haiku to classify the prompt's complexity tier (simple/moderate/complex/image) and checks whether the currently selected model is a good fit; if there is a mismatch a **Model Advisor** modal appears with the reason, the current model, and up to three suggested alternatives (selectable cards); user can **Switch & Send** (changes the model then sends immediately) or **Keep & Send** (sends with the current model unchanged); image-generation requests show an amber notice directing to AI Studio instead of a switch option; Haiku response is parsed with a regex JSON extractor to handle markdown-wrapped output; classification mismatch threshold is conservative — only fires when the model tier difference is meaningful |
@@ -115,7 +115,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Semantic edges** | AI-computed dashed pink lines via pgvector + Gemini embeddings; computed on demand via the "Find connections" button; cached in the `graph_edges` table; similarity threshold 0.82 |
 | **Interactions** | Zoom and pan the canvas; drag nodes to reposition; click any node to open a detail side panel showing the node type, title, and a "Go to →" button for direct in-app navigation; hover a node to highlight its immediate neighbours and dim everything else |
 | **Search** | Search bar in the toolbar filters nodes by name; matched nodes glow amber; unmatched nodes dim |
-| **Type filters** | Per-type colour-coded checkboxes hide/show node categories without recomputing the graph |
+| **Type filters** | Per-type colour-coded checkboxes hide/show node categories without recomputing the graph; filter choices persisted to `localStorage` under `graph_filter_prefs` and restored on next visit; Finance-related node types default to hidden on first visit; preset buttons above the checkboxes provide one-click views — **All** (everything), **Work** (Projects + Files + Notes + Pinned URLs), **Tasks & Goals** (Tasks + Goals only), **This Project** (enabled when a project node is selected — filters to connected node types and highlights the subgraph); active preset highlighted with primary-colour border |
 | **Insights panel** | Claude Haiku analyses the graph structure (orphaned nodes, cross-project clusters, top-connected nodes) and generates 4–6 specific observations; each insight has a "Show me" button that highlights and zooms to the relevant nodes; cached in the `settings` table and refreshed on demand |
 | **Label behaviour** | Node labels hidden when zoomed out below threshold; always shown on hover, search match, or selection |
 | **Scale-aware layout** | Logarithmic force scaling — charge and link distance computed from `ln(n)` so the graph looks correct at 5 nodes or 50+ nodes without manual tuning |
@@ -151,7 +151,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 ### Tech Stack
 
 - **Backend:** Node.js / Express, PostgreSQL (`pg`), Anthropic SDK (`@anthropic-ai/sdk`), Google Generative AI SDK (`@google/generative-ai`), multer (file uploads), mammoth (DOCX extraction), xlsx (spreadsheet extraction), pdfjs-dist (PDF extraction + client-side rendering), bcryptjs, express-rate-limit
-- **Frontend:** React 18 / Vite, Zustand (auth + project + settings state), React Router, Tailwind CSS, ReactMarkdown + remark-gfm, `react-force-graph-2d` (D3 force simulation — Knowledge Graph)
+- **Frontend:** React 18 / Vite, Zustand (auth + project + settings state), React Router, Tailwind CSS, ReactMarkdown + remark-gfm, `react-force-graph-2d` (D3 force simulation — Knowledge Graph), `remove-markdown` (strips markdown formatting from text before passing to browser TTS)
 - **Auth:** Token-based sessions — random hex token stored in `auth_sessions` table; `requireAuth` middleware on all `/api/*` routes; bcryptjs for password hashing
 - **Deploy:** Railway with managed PostgreSQL service and persistent volume for file uploads (`UPLOAD_DIR` env var)
 
@@ -394,7 +394,7 @@ vault/
 │       │   ├── Layout.jsx        # App shell with sidebar + top nav
 │       │   ├── ProjectSidebar.jsx
 │       │   ├── AuthGuard.jsx     # Route protection
-│       │   ├── MessageBubble.jsx # Chat message rendering; ★ bookmark button on hover for both user and assistant messages
+│       │   ├── MessageBubble.jsx # Chat message rendering; ★ bookmark button on hover for both user and assistant messages; TTS controls (speaker → pause/play toggle + ✕ stop) rendered in the action row of the last assistant message when `onSpeak` prop is present; action row stays fully visible (`opacity-100`) while audio is playing
 │       │   ├── ArtifactPanel.jsx # Rendered code/content panel
 │       │   ├── ChatFileBar.jsx   # Files attached to a chat
 │       │   ├── ChatFilePicker.jsx
@@ -438,7 +438,7 @@ vault/
 │       │   ├── useUrlAttachment.js
 │       │   ├── useSearch.js
 │       │   ├── useSystemPrompt.js
-│       │   └── useVoice.js       # Browser speech recognition + TTS
+│       │   └── useVoice.js       # Browser speech recognition + TTS; STT uses `continuous: true` — finals accumulated in a ref across pauses, committed on `stopListening()`; `no-speech` errors suppressed; TTS exposes `isSpeaking`/`isPaused` states and `pauseSpeaking()`/`resumeSpeaking()`/`stopSpeaking()` in addition to `speak()`; `speak()` pre-processes text through `stripForSpeech()` which strips fenced code blocks, inline code, URLs, HTML tags, and all markdown formatting via `remove-markdown` before passing to `SpeechSynthesisUtterance`
 │       ├── utils/
 │       │   ├── apiClient.js      # Authenticated fetch wrapper (use for all /api/ calls)
 │       │   ├── models.js         # Default Claude + Gemini model definitions (static fallback); active list is managed via useModels hook and stored in settings.vault_models
@@ -718,8 +718,9 @@ npm run dev
 - **Password reset** — email-based flow at `/reset-password`; token stored in `password_resets` table with 1-hour expiry; `APP_URL` env var controls the link domain
 - **Token budget alerts** — set a per-session cost limit in Settings; amber warning at 80%, red at 100% with a direct "Summarise now" button
 - **Password show/hide** — eye icon toggles visibility on all password fields (login, change password, reset password)
-- **Voice input** — mic button in chat toolbar starts browser-native speech recognition (Web Speech API, no API key needed); pulses red with a live transcript preview; hidden in unsupported browsers
-- **Read aloud** — speaker button reads the last assistant message via browser text-to-speech; no external service required
+- **Voice input** — mic button in chat toolbar starts browser-native speech recognition (`continuous: true`); dictation persists across natural pauses; red pulsing dot + live accumulated transcript shown while recording; separate **Stop** button commits the full session transcript to the input field; `no-speech` errors suppressed in continuous mode; hidden in unsupported browsers
+- **Read aloud** — speaker icon in the action row below the last assistant message reads it via browser TTS; **Pause/Resume** toggle (pause ↔ play icon) and **✕ Stop** button replace the speaker icon while audio is active; action row stays fully visible during playback; only the most recent AI response is ever spoken; no external service required
+- **Knowledge Graph filter improvements** — filter state persisted to `localStorage` (`graph_filter_prefs`); Finance node types default to hidden; preset buttons (**All / Work / Tasks & Goals / This Project**) set filter state in one click; active preset highlighted; "This Project" traverses graph edges to isolate a project's connected subgraph
 
 ### Earlier
 

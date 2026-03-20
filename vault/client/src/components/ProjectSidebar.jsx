@@ -142,13 +142,13 @@ function ProjectSidebar({ onClose }) {
             </span>
             <span className="flex-1 truncate">General</span>
             {generalSessions.length > 0 && (
-              <button
+              <span
                 onClick={(e) => { e.stopPropagation(); setGeneralExpanded(v => !v); }}
-                className="text-xs tabular-nums hover:opacity-60"
+                className="text-xs tabular-nums hover:opacity-60 cursor-pointer"
                 style={{ color: 'var(--color-muted)' }}
               >
                 {generalSessions.length}
-              </button>
+              </span>
             )}
           </button>
           <button

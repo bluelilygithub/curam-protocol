@@ -19,7 +19,7 @@ function parseFilesPrefix(content) {
 const COLLAPSE_CHAR_THRESHOLD = 2500;
 const COLLAPSED_HEIGHT = 220; // px
 
-function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageIndex, searching, bookmarked, onToggleBookmark, isLatest }) {
+function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isPaused, onSpeak, onPause, onResume, onStop }) {
   const isUser = message.role === 'user';
   const [showThinking, setShowThinking] = useState(false);
   const getIcon = useIcon();
@@ -250,9 +250,9 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
           </div>
         )}
 
-        {/* Action buttons — appear on hover, rendered below message content */}
+        {/* Action buttons — appear on hover (always visible while speaking) */}
         {message.content && (
-          <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className={`flex items-center gap-1 mt-1.5 transition-opacity${isSpeaking ? ' opacity-100' : ' opacity-0 group-hover:opacity-100'}`}>
             {onOpenArtifact && codeBlocks.length > 0 && (
               <button
                 onClick={() => onOpenArtifact(0, codeBlocks)}
@@ -286,6 +286,39 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
             >
               {getIcon('file-down', { size: 11 })}
             </button>
+
+            {/* Read aloud controls — only on latest assistant message */}
+            {onSpeak && (
+              isSpeaking ? (
+                <>
+                  <button
+                    onClick={isPaused ? onResume : onPause}
+                    className="w-6 h-6 flex items-center justify-center rounded-md"
+                    style={{ background: 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))', border: '1px solid var(--color-primary)', color: 'var(--color-primary)' }}
+                    title={isPaused ? 'Resume' : 'Pause'}
+                  >
+                    {isPaused ? getIcon('play', { size: 11 }) : getIcon('pause', { size: 11 })}
+                  </button>
+                  <button
+                    onClick={onStop}
+                    className="w-6 h-6 flex items-center justify-center rounded-md"
+                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+                    title="Stop reading"
+                  >
+                    {getIcon('x', { size: 11 })}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={onSpeak}
+                  className="w-6 h-6 flex items-center justify-center rounded-md"
+                  style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+                  title="Read aloud"
+                >
+                  {getIcon('speaker', { size: 11 })}
+                </button>
+              )
+            )}
           </div>
         )}
       </div>

@@ -28,6 +28,7 @@
     "pdfjs-dist": "^3.11.174",
     "pg": "^8.20.0",
     "react-force-graph-2d": "^1.29.1",
+    "remove-markdown": "^0.6.3",
     "sql.js": "^1.14.1",
     "xlsx": "^0.18.5"
   },

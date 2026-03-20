@@ -38,6 +38,7 @@ const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
   suggestions, onDelete, onBranch, onOpenArtifact, onSuggestionSelect,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
+  isTTSAvailable, isSpeaking, isPaused, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
 }) {
   const getIcon = useIcon();
   return (
@@ -56,6 +57,12 @@ const MemoMessageList = React.memo(function MemoMessageList({
               bookmarked={msg.id ? !!bookmarkedMap[msg.id] : false}
               onToggleBookmark={onToggleBookmark}
               isLatest={isLastAssistant}
+              isSpeaking={isLastAssistant && isTTSAvailable ? isSpeaking : false}
+              isPaused={isLastAssistant && isTTSAvailable ? isPaused : false}
+              onSpeak={isLastAssistant && isTTSAvailable && msg.role === 'assistant' ? () => speak(msg.content) : undefined}
+              onPause={isLastAssistant && isTTSAvailable ? pauseSpeaking : undefined}
+              onResume={isLastAssistant && isTTSAvailable ? resumeSpeaking : undefined}
+              onStop={isLastAssistant && isTTSAvailable ? stopSpeaking : undefined}
             />
             {isLastAssistant && !isStreaming && (
               <FollowUpChips suggestions={suggestions} onSelect={onSuggestionSelect} />
@@ -76,7 +83,7 @@ function ChatPage({ general = false }) {
 
   const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
   const { models: MODELS } = useModels();
-  const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, startListening, stopListening, speak } = useVoice();
+  const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, isSpeaking, isPaused, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
   const { urlAttachments, addUrl, addManual: addManualAttachment, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
   const getIcon = useIcon();
@@ -1338,6 +1345,13 @@ function ChatPage({ general = false }) {
                 messagesEndRef={messagesEndRef}
                 bookmarkedMap={bookmarkedMap}
                 onToggleBookmark={handleToggleBookmark}
+                isTTSAvailable={isTTSAvailable}
+                isSpeaking={isSpeaking}
+                isPaused={isPaused}
+                speak={speak}
+                pauseSpeaking={pauseSpeaking}
+                resumeSpeaking={resumeSpeaking}
+                stopSpeaking={stopSpeaking}
               />
             )}
           </div>
@@ -1800,33 +1814,55 @@ function ChatPage({ general = false }) {
 
                       {isSTTAvailable && (
                         <>
+                          {/* Mic — starts recording; pulsing red dot while active */}
                           <button
-                            onClick={isListening ? stopListening : startListening}
-                            className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all${isListening ? ' animate-pulse' : ''}`}
+                            onClick={startListening}
+                            disabled={isListening}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg transition-all relative"
                             style={{
                               color: isListening ? '#ef4444' : 'var(--color-muted)',
-                              background: isListening ? '#fee2e2' : 'transparent',
+                              background: 'transparent',
+                              opacity: isListening ? 1 : undefined,
                             }}
-                            title={isListening ? 'Stop recording' : 'Voice input'}
+                            title="Voice input"
                           >
                             {getIcon('mic', { size: 14 })}
+                            {isListening && (
+                              <span
+                                className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse"
+                                style={{ background: '#ef4444' }}
+                              />
+                            )}
                           </button>
+
+                          {/* Live transcript preview + Stop button */}
                           {isListening && (
-                            <span
-                              className="text-xs max-w-[140px] truncate"
-                              style={{ color: '#ef4444' }}
-                            >
-                              {interimText || 'Listening…'}
-                            </span>
+                            <>
+                              <span
+                                className="text-xs max-w-[120px] truncate"
+                                style={{ color: '#ef4444' }}
+                              >
+                                {interimText || 'Listening…'}
+                              </span>
+                              <button
+                                onClick={stopListening}
+                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all"
+                                style={{
+                                  background: '#ef4444',
+                                  color: '#fff',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                }}
+                                title="Stop recording"
+                              >
+                                {getIcon('square', { size: 10 })}
+                                Stop
+                              </button>
+                            </>
                           )}
                         </>
                       )}
 
-                      {isTTSAvailable && lastAssistantMsg && (
-                        <button onClick={() => speak(lastAssistantMsg.content)} className="w-7 h-7 flex items-center justify-center rounded-lg" style={{ color: 'var(--color-muted)' }} title="Read last response aloud">
-                          {getIcon('speaker', { size: 14 })}
-                        </button>
-                      )}
 
                       {attachError && <span className="text-xs ml-1" style={{ color: '#ef4444' }}>{attachError}</span>}
                     </div>
