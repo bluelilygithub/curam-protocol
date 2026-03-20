@@ -1,8 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import CheckinModal from './mood/CheckinModal';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
+
+const EMOTION_COLOURS = {
+  joy: '#FFD700', trust: '#7CFC00', fear: '#228B22', surprise: '#87CEEB',
+  sadness: '#4169E1', disgust: '#800080', anger: '#FF4500', anticipation: '#FF8C00',
+};
+
+const MOOD_PILLS = [
+  { id: 'joy', label: 'Joy', color: '#FFD700' },
+  { id: 'trust', label: 'Trust', color: '#7CFC00' },
+  { id: 'fear', label: 'Fear', color: '#228B22' },
+  { id: 'surprise', label: 'Surprise', color: '#87CEEB' },
+  { id: 'sadness', label: 'Sadness', color: '#4169E1' },
+  { id: 'disgust', label: 'Disgust', color: '#800080' },
+  { id: 'anger', label: 'Anger', color: '#FF4500' },
+  { id: 'anticipation', label: 'Anticipation', color: '#FF8C00' },
+];
 
 export default function MorningDigest() {
   const getIcon = useIcon();
@@ -12,6 +29,9 @@ export default function MorningDigest() {
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
+  const [morningCheckedIn, setMorningCheckedIn] = useState(false);
+  const [showMoodModal, setShowMoodModal] = useState(false);
+  const [moodDismissed, setMoodDismissed] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem(storageKey)) return;
@@ -107,6 +127,39 @@ export default function MorningDigest() {
               <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{data.suggestion}</p>
             </div>
           )}
+
+          {/* Morning mood check-in */}
+          {!moodDismissed && (
+            <div className="border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
+              {morningCheckedIn ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium" style={{ color: 'var(--color-primary)' }}>
+                    Morning feeling logged ✓
+                  </span>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>How are you feeling this morning?</p>
+                    <button onClick={() => setMoodDismissed(true)} className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Skip</button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {MOOD_PILLS.map(em => (
+                      <button
+                        key={em.id}
+                        onClick={() => setShowMoodModal(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-opacity hover:opacity-80"
+                        style={{ background: em.color + '33', color: 'var(--color-text)', border: `1.5px solid ${em.color}` }}
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ background: em.color }} />
+                        {em.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -120,6 +173,19 @@ export default function MorningDigest() {
           </button>
         </div>
       </div>
+
+      {showMoodModal && (
+        <CheckinModal
+          entityType="general"
+          entityId={null}
+          entityTitle="Morning check-in"
+          onClose={() => setShowMoodModal(false)}
+          onSave={() => {
+            setMorningCheckedIn(true);
+            setShowMoodModal(false);
+          }}
+        />
+      )}
     </div>
   );
 }

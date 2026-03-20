@@ -25,6 +25,12 @@ import PromptVariableModal from '../components/PromptVariableModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { extractVariables } from '../utils/promptVariables';
 import ModelAdvisorModal from '../components/ModelAdvisorModal';
+import CheckinModal from '../components/mood/CheckinModal';
+
+const EMOTION_COLOURS = {
+  joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
+  sadness: '#5B6FAD', disgust: '#8A5C8A', anger: '#A85C5C', anticipation: '#C48B3C',
+};
 
 const TEMPERATURES = [
   { label: 'Precise', value: 0.2, desc: 'Focused, deterministic' },
@@ -187,6 +193,10 @@ function ChatPage({ general = false }) {
   const [personas, setPersonas] = useState([]);
   const [selectedPersonaId, setSelectedPersonaId] = useState(null);
   const [showPersonaPicker, setShowPersonaPicker] = useState(false);
+
+  // Project feeling
+  const [projectDominant, setProjectDominant] = useState(null);
+  const [showFeelingModal, setShowFeelingModal] = useState(false);
 
   // Smart Model Advisor
   const [advisorOpen, setAdvisorOpen] = useState(false);
@@ -371,6 +381,14 @@ function ChatPage({ general = false }) {
     const res = await api.get('/api/personas');
     setPersonas(await res.json());
   };
+
+  useEffect(() => {
+    if (!projectId) { setProjectDominant(null); return; }
+    api.get(`/api/mood/dominant/project/${projectId}`)
+      .then(r => r.json())
+      .then(d => setProjectDominant(d.coreEmotion ? d : null))
+      .catch(() => {});
+  }, [projectId]);
 
   const effectiveModel = chatModel || project?.model || 'claude-sonnet-4-6';
   // Clear preflight error when model changes
@@ -1109,6 +1127,49 @@ function ChatPage({ general = false }) {
             </div>
           )}
         </div>
+
+        {/* Feeling button — project chats only, hidden on mobile */}
+        {projectId && (
+          <>
+            <button
+              onClick={() => setShowFeelingModal(true)}
+              className="hidden sm:flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
+              style={{
+                borderColor: projectDominant ? (EMOTION_COLOURS[projectDominant.coreEmotion] || 'var(--color-border)') : 'var(--color-border)',
+                color: projectDominant ? (EMOTION_COLOURS[projectDominant.coreEmotion] || 'var(--color-muted)') : 'var(--color-muted)',
+                background: 'var(--color-surface)',
+              }}
+              title="Log how you're feeling about this project"
+            >
+              {projectDominant ? (
+                <>
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: EMOTION_COLOURS[projectDominant.coreEmotion] || '#888' }} />
+                  <span className="capitalize">{projectDominant.coreEmotion}</span>
+                </>
+              ) : (
+                <>
+                  {getIcon('smile', { size: 12 })}
+                  Feeling
+                </>
+              )}
+            </button>
+            {showFeelingModal && (
+              <CheckinModal
+                entityType="project"
+                entityId={projectId}
+                entityTitle={project?.name || 'Project'}
+                onClose={() => setShowFeelingModal(false)}
+                onSave={() => {
+                  setShowFeelingModal(false);
+                  api.get(`/api/mood/dominant/project/${projectId}`)
+                    .then(r => r.json())
+                    .then(d => setProjectDominant(d.coreEmotion ? d : null))
+                    .catch(() => {});
+                }}
+              />
+            )}
+          </>
+        )}
 
         {/* Star — hidden on mobile */}
         {sessionId && (

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import MoodDot from '../components/mood/MoodDot';
 
 function getPeriodDates(key) {
   const now = new Date();
@@ -86,13 +87,28 @@ export default function ChatHistoryPage() {
       }
       const res = await api.get(`/api/chat/all-history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
       const data = await res.json();
-      setSessions(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setSessions(list);
     } catch (_) {
       setSessions([]);
     } finally {
       setLoading(false);
     }
   }, [period, customFrom, customTo]);
+
+  const [moodMap, setMoodMap] = useState(null);
+  useEffect(() => {
+    if (sessions.length === 0) { setMoodMap({}); return; }
+    const entities = sessions.map(s => ({ entityType: 'session', entityId: String(s.sessionId) }));
+    api.post('/api/mood/dominant/batch', { entities })
+      .then(r => r.json())
+      .then(batch => {
+        const map = {};
+        for (const s of sessions) map[`session:${s.sessionId}`] = batch[`session:${s.sessionId}`] || null;
+        setMoodMap(map);
+      })
+      .catch(() => setMoodMap({}));
+  }, [sessions]);
 
   const loadBookmarks = useCallback(async () => {
     setBookmarksLoading(true);
@@ -268,14 +284,14 @@ export default function ChatHistoryPage() {
               </div>
             ) : (
               filteredSessions.map((s, i) => (
-                <button
+                <div
                   key={s.sessionId}
-                  onClick={() => goToSession(s.sessionId, s.projectId)}
-                  className="w-full text-left px-4 py-3 flex items-start gap-4 hover:opacity-80 transition-opacity border-b last:border-b-0"
+                  className="w-full text-left px-4 py-3 flex items-start gap-4 hover:opacity-80 transition-opacity border-b last:border-b-0 cursor-pointer"
                   style={{
                     background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-bg)',
                     borderColor: 'var(--color-border)',
                   }}
+                  onClick={() => goToSession(s.sessionId, s.projectId)}
                 >
                   <div className="flex-shrink-0 w-28 text-right">
                     <div className="text-xs font-medium truncate" style={{ color: 'var(--color-primary)' }}>
@@ -295,10 +311,11 @@ export default function ChatHistoryPage() {
                       </div>
                     )}
                   </div>
-                  <div className="flex-shrink-0 self-center" style={{ color: 'var(--color-muted)' }}>
+                  <div className="flex-shrink-0 self-center flex items-center gap-2" style={{ color: 'var(--color-muted)' }}>
+                    {moodMap !== null && <MoodDot entityType="session" entityId={s.sessionId} entityTitle={s.title} dominantEmotion={moodMap[`session:${s.sessionId}`]} />}
                     {getIcon('chevron-right', { size: 14 })}
                   </div>
-                </button>
+                </div>
               ))
             )}
           </div>

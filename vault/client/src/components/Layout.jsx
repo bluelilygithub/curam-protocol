@@ -365,6 +365,15 @@ function Layout() {
           </Link>
 
           <Link
+            to="/mood"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+            style={{ color: location.pathname === '/mood' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Mood"
+          >
+            🫀
+          </Link>
+
+          <Link
             to="/admin"
             className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/admin' ? 'var(--color-primary)' : 'var(--color-muted)' }}

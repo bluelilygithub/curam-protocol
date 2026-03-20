@@ -22,6 +22,7 @@ import ChainsPage from './pages/ChainsPage';
 import GraphPage from './pages/GraphPage';
 import FinancePage from './pages/FinancePage';
 import UsagePage from './pages/UsagePage';
+import MoodPage from './pages/MoodPage';
 import SharedTaskPage from './pages/SharedTaskPage';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
@@ -84,6 +85,7 @@ function App() {
               <Route path="/graph"    element={<GraphPage />} />
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/usage" element={<UsagePage />} />
+              <Route path="/mood" element={<MoodPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

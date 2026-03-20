@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import MoodDot from '../components/mood/MoodDot';
 import TasksCalendar from '../components/TasksCalendar';
 import WeeklyReview from '../components/tasks/WeeklyReviewModal';
 import TaskImport from '../components/tasks/TaskImportModal';
@@ -642,6 +643,21 @@ export default function TasksPage() {
       setTasks(await res.json());
     } catch { setTasks([]); } finally { setLoading(false); }
   }, []);
+
+  // Batch mood fetch — one request for all tasks instead of one per dot
+  const [moodMap, setMoodMap] = useState(null); // null = pending
+  useEffect(() => {
+    if (tasks.length === 0) { setMoodMap({}); return; }
+    const entities = tasks.map(t => ({ entityType: 'task', entityId: String(t.id) }));
+    api.post('/api/mood/dominant/batch', { entities })
+      .then(r => r.json())
+      .then(batch => {
+        const map = {};
+        for (const t of tasks) map[`task:${t.id}`] = batch[`task:${t.id}`] || null;
+        setMoodMap(map);
+      })
+      .catch(() => setMoodMap({}));
+  }, [tasks]);
 
   // Timer tick
   useEffect(() => {
@@ -1631,6 +1647,7 @@ export default function TasksPage() {
                 <button onClick={() => handleDuplicate(task)} style={{ color: 'var(--color-muted)' }} title="Duplicate" className="hover:opacity-60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">{getIcon('copy', { size: 13 })}</button>
                 <button onClick={() => openEdit(task)} style={{ color: 'var(--color-muted)' }} title="Edit" className="hover:opacity-60 p-0.5">{getIcon('edit', { size: 13 })}</button>
                 <button onClick={() => task.recurrence && task.recurrence !== 'none' ? setRecurringDeleteModal({ task }) : setConfirmDeleteId(task.id)} style={{ color: 'var(--color-muted)' }} title="Delete" className="hover:opacity-60 p-0.5">{getIcon('trash', { size: 13 })}</button>
+                {moodMap !== null && <MoodDot entityType="task" entityId={task.id} entityTitle={task.title} dominantEmotion={moodMap[`task:${task.id}`]} />}
               </>
             )}
           </div>

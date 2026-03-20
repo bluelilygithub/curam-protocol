@@ -547,6 +547,33 @@ async function initSchema() {
       )
     `);
 
+    // ── Mood check-ins ────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS mood_wheel_config (
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        config     TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS mood_checkins (
+        id                SERIAL PRIMARY KEY,
+        user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        entity_type       TEXT NOT NULL,
+        entity_id         TEXT,
+        core_emotion      TEXT NOT NULL,
+        secondary_emotion TEXT,
+        tertiary_emotion  TEXT,
+        intensity         INTEGER NOT NULL DEFAULT 5 CHECK(intensity BETWEEN 1 AND 10),
+        body_locations    TEXT,
+        note              TEXT,
+        created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -721,6 +748,9 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS usage_logs_user_created
     ON usage_logs(user_id, created_at DESC)
   `);
+
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_mood_checkins_user ON mood_checkins(user_id, created_at DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_mood_checkins_entity ON mood_checkins(entity_type, entity_id)`);
 
   console.log('[db] Schema ready');
 }

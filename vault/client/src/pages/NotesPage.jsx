@@ -4,6 +4,7 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useProjectStore from '../store/projectStore';
 import AtMentionDropdown from '../components/AtMentionDropdown';
+import MoodDot from '../components/mood/MoodDot';
 
 const NOTE_BODY_LIMIT = 500;
 
@@ -80,6 +81,20 @@ export default function NotesPage() {
   }, []);
 
   useEffect(() => { loadNotes(); }, [loadNotes]);
+
+  const [moodMap, setMoodMap] = useState(null);
+  useEffect(() => {
+    if (notes.length === 0) { setMoodMap({}); return; }
+    const entities = notes.map(n => ({ entityType: 'note', entityId: String(n.id) }));
+    api.post('/api/mood/dominant/batch', { entities })
+      .then(r => r.json())
+      .then(batch => {
+        const map = {};
+        for (const n of notes) map[`note:${n.id}`] = batch[`note:${n.id}`] || null;
+        setMoodMap(map);
+      })
+      .catch(() => setMoodMap({}));
+  }, [notes]);
 
   const scheduleAutosave = useCallback((noteId, newTitle, newBody) => {
     clearTimeout(autosaveTimer.current);
@@ -448,6 +463,7 @@ export default function NotesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 ml-1 mt-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100">
+                  {moodMap !== null && <MoodDot entityType="note" entityId={note.id} entityTitle={note.title} dominantEmotion={moodMap[`note:${note.id}`]} />}
                   <button
                     onClick={(e) => convertToTask(note, e)}
                     className="hover:opacity-60 transition-opacity"

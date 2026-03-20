@@ -7,6 +7,13 @@ import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
 import { downloadProjectMd } from '../utils/exportMd';
 import { MODELS, TYPE_FIELDS, getModelById } from '../utils/models';
+import EmotionWheel from '../components/mood/EmotionWheel';
+import MoodDot from '../components/mood/MoodDot';
+
+const EMOTION_COLOURS = {
+  joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
+  sadness: '#5B6FAD', disgust: '#8A5C8A', anger: '#A85C5C', anticipation: '#C48B3C',
+};
 
 const FIELDS = [
   { key: 'name', label: 'Project Name', placeholder: 'My Project', required: true },
@@ -33,6 +40,8 @@ function ProjectDetail() {
   const [filesKey, setFilesKey] = useState(0);
   const [folders, setFolders] = useState([]);
   const [personas, setPersonas] = useState([]);
+  const [emotionalOpen, setEmotionalOpen] = useState(false);
+  const [projectEmotions, setProjectEmotions] = useState([]);
   const [pinnedUrls, setPinnedUrls] = useState([]);
   const [urlInput, setUrlInput] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
@@ -48,6 +57,10 @@ function ProjectDetail() {
     api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
     api.get('/api/personas').then(r => r.json()).then(setPersonas).catch(() => {});
     api.get(`/api/pinned-urls/${id}`).then(r => r.json()).then(setPinnedUrls).catch(() => {});
+    api.get(`/api/mood/summary/project/${id}`)
+      .then(r => r.json())
+      .then(d => setProjectEmotions(d.emotions || []))
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -141,6 +154,7 @@ function ProjectDetail() {
               Updated {new Date(project.updatedAt).toLocaleDateString()}
             </p>
           </div>
+          <MoodDot entityType="project" entityId={project.id} entityTitle={project.name} />
           <button
             onClick={() => navigate(`/projects/${id}/chat`)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
@@ -409,6 +423,40 @@ function ProjectDetail() {
             </div>
           </div>
         )}
+
+        {/* Emotional Overview */}
+        <div className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <button
+            onClick={() => setEmotionalOpen(v => !v)}
+            className="w-full flex items-center justify-between text-xs font-semibold uppercase tracking-widest mb-0"
+            style={{ color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            <span>Emotional Overview</span>
+            <span style={{ fontSize: 16, transform: emotionalOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', display: 'inline-block' }}>›</span>
+          </button>
+          {emotionalOpen && (
+            <div className="mt-4">
+              {projectEmotions.length === 0 ? (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  No mood check-ins logged for this project yet. Use the dot in the header, or log feelings on tasks and notes within this project.
+                </p>
+              ) : (
+                <div>
+                  <EmotionWheel mode="density" emotions={projectEmotions} />
+                  <div className="mt-3 space-y-1">
+                    {[...projectEmotions].sort((a, b) => b.count - a.count).map(e => (
+                      <div key={e.emotion} className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: EMOTION_COLOURS[e.emotion] || '#888' }} />
+                        <span className="text-xs capitalize" style={{ color: 'var(--color-text)' }}>{e.emotion}</span>
+                        <span className="text-xs ml-auto" style={{ color: 'var(--color-muted)' }}>×{e.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Files */}
         <div data-tour="rag-files" className="mt-10">

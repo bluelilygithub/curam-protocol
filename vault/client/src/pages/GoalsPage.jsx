@@ -4,6 +4,7 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import { startGoalsTour, TOUR_KEY } from '../utils/tours/goalsTour';
 import GettingStartedWizard from '../components/GettingStartedWizard';
+import MoodDot from '../components/mood/MoodDot';
 
 const PRESET_COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#22c55e', '#3b82f6', '#ef4444'];
 
@@ -93,7 +94,7 @@ function KrProgressBar({ current, target, unit, color }) {
   );
 }
 
-function KeyResultRow({ kr, objectiveId, onUpdate, onDelete, accentColor }) {
+function KeyResultRow({ kr, objectiveId, onUpdate, onDelete, accentColor, krMoodDominant }) {
   const getIcon = useIcon();
   const [editing, setEditing] = useState(false);
   const [editVal, setEditVal] = useState(String(kr.currentValue));
@@ -139,8 +140,9 @@ function KeyResultRow({ kr, objectiveId, onUpdate, onDelete, accentColor }) {
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
           <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: progressColor(pct) + '22', color: progressColor(pct) }}>{pct}%</span>
+          {krMoodDominant !== undefined && <MoodDot entityType="key_result" entityId={kr.id} entityTitle={kr.title} dominantEmotion={krMoodDominant} />}
           {confirmDelete ? (
             <>
               <button onClick={() => onDelete(kr.id)} style={{ fontSize: 10, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px' }}>Delete?</button>
@@ -807,6 +809,31 @@ export default function GoalsPage() {
 
   useEffect(() => { loadObjectives(); }, [loadObjectives]);
 
+  const [moodMap, setMoodMap] = useState(null);
+  useEffect(() => {
+    if (objectives.length === 0) { setMoodMap({}); return; }
+    const entities = [];
+    for (const o of objectives) {
+      entities.push({ entityType: 'goal', entityId: String(o.id) });
+      for (const kr of (o.keyResults || [])) {
+        entities.push({ entityType: 'key_result', entityId: String(kr.id) });
+      }
+    }
+    api.post('/api/mood/dominant/batch', { entities })
+      .then(r => r.json())
+      .then(batch => {
+        const map = {};
+        for (const o of objectives) {
+          map[`goal:${o.id}`] = batch[`goal:${o.id}`] || null;
+          for (const kr of (o.keyResults || [])) {
+            map[`key_result:${kr.id}`] = batch[`key_result:${kr.id}`] || null;
+          }
+        }
+        setMoodMap(map);
+      })
+      .catch(() => setMoodMap({}));
+  }, [objectives]);
+
   useEffect(() => {
     api.get('/api/goals/wizard/status').then(r => r.json()).then(d => setWizardCompleted(d.completed)).catch(() => setWizardCompleted(true));
   }, []);
@@ -1225,6 +1252,9 @@ export default function GoalsPage() {
               <div style={{ flexShrink: 0, textAlign: 'center', minWidth: 60 }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color: progressColor(selectedObj.overallProgress) }}>{selectedObj.overallProgress}%</div>
                 <div style={{ fontSize: 10, color: 'var(--color-muted)' }}>overall</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }}>
+                  {moodMap !== null && <MoodDot entityType="goal" entityId={selectedObj.id} entityTitle={selectedObj.title} dominantEmotion={moodMap[`goal:${selectedObj.id}`]} />}
+                </div>
               </div>
             </div>
 
@@ -1268,6 +1298,7 @@ export default function GoalsPage() {
                       loadObjectives();
                     }}
                     onDelete={handleKrDelete}
+                    krMoodDominant={moodMap ? moodMap[`key_result:${kr.id}`] : undefined}
                   />
                 ))}
                 {showAddKr && (

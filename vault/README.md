@@ -131,6 +131,24 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Double-entry journal** | Auto-generated balanced journal entries for every invoice, payment, expense, and wage; viewable in the Journal tab |
 | **Cash-basis BAS** | Australian BAS calculator — GST collected from paid invoices only (by `paidAt` date); Australian quarterly periods; G1/G11/1A/1B/W1/W2 fields |
 
+#### Mood Tracking
+
+| Feature | Description |
+|---|---|
+| **Mood page** | Dedicated `/mood` page — emotional overview with a Plutchik density wheel, breakdown list (count + avg intensity per core emotion), daily timeline, and most active projects breakdown; period tabs: Today / Week / Month / Custom date range |
+| **Project filter** | Filter the Mood page by a specific project — shows only check-ins logged on tasks, notes, or the project itself within that project; hides the project breakdown section when a project is selected |
+| **Source filter** | Multi-select pill filter (All / Projects / Tasks / Goals / Notes / Sessions / General) to narrow the mood summary by entity type |
+| **MoodDot** | Small dot button attached to tasks, notes, and projects — click to log a feeling for that specific entity; shows the dominant emotion colour when check-ins exist; uses a dashed border when no check-ins exist yet |
+| **Log a feeling** | "Log a feeling" button in the Mood page header opens a general check-in not tied to any specific entity |
+| **Project card mood** | Each project card on the home page shows the dominant emotion colour and name in a bottom row; clicking it opens the check-in modal for that project |
+| **Project header mood** | MoodDot in the project detail header — log a feeling directly for the project entity |
+| **Project chat feeling** | "Feeling" button in the project chat toolbar (desktop) — shows the current dominant emotion colour and name if check-ins exist; opens check-in modal; hidden in general chats |
+| **Check-in modal** | Full-screen Plutchik emotion wheel in interactive mode — select core → secondary → tertiary emotion, set intensity (1–10 slider), mark body locations on a body map, add an optional note |
+| **Emotion wheel** | Reusable `EmotionWheel` component with two modes: **interactive** (click to select an emotion, with secondary/tertiary drill-down) and **density** (radial segments sized by check-in count for the summary view) |
+| **Daily timeline** | Mood page timeline groups check-ins by local date (browser timezone aware); each day shows coloured emotion pills and a dominant-emotion dot; dates parsed at local noon to avoid DST boundary issues |
+| **Timezone-correct dates** | Server uses `TO_CHAR(DATE_TRUNC('day', created_at AT TIME ZONE $tz), 'YYYY-MM-DD')` — dates always reflect the user's local day, not UTC |
+| **Custom emotion wheel** | `GET /PUT /api/mood/config` — store and retrieve a custom Plutchik wheel configuration per user; defaults to the 8-primary Plutchik model if no config is saved |
+
 #### Admin & Account
 
 | Feature | Description |
@@ -155,7 +173,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 - **Auth:** Token-based sessions — random hex token stored in `auth_sessions` table; `requireAuth` middleware on all `/api/*` routes; bcryptjs for password hashing
 - **Deploy:** Railway with managed PostgreSQL service and persistent volume for file uploads (`UPLOAD_DIR` env var)
 
-### Database Schema (36 tables)
+### Database Schema (38 tables)
 
 #### Core / Auth
 | Table | Key columns |
@@ -219,6 +237,12 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | `fin_wages` | userId, date, employee, gross, tax, superannuation, net |
 | `fin_journal_entries` | userId, date, description, reference, type CHECK (invoice/payment/expense/wage/manual), sourceId |
 | `fin_journal_lines` | entryId (CASCADE), accountId (RESTRICT), debit, credit |
+
+#### Mood
+| Table | Key columns |
+|---|---|
+| `mood_checkins` | id, user_id, entity_type (project/task/note/goal/key_result/session/general), entity_id, core_emotion, secondary_emotion, tertiary_emotion, intensity (1–10), body_locations (JSON), note, created_at |
+| `mood_wheel_config` | user_id (UNIQUE), config (JSON — custom Plutchik wheel), updated_at |
 
 #### Integrations & Search
 | Table | Key columns |

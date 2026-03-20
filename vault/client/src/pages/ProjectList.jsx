@@ -5,6 +5,12 @@ import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from '../components/NewProjectModal';
 import { getModelShortName } from '../utils/models';
 import api from '../utils/apiClient';
+import CheckinModal from '../components/mood/CheckinModal';
+
+const EMOTION_COLOURS = {
+  joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
+  sadness: '#5B6FAD', disgust: '#8A5C8A', anger: '#A85C5C', anticipation: '#C48B3C',
+};
 
 function GoalsWidget() {
   const getIcon = useIcon();
@@ -249,6 +255,8 @@ function ProjectList() {
   const [archivedLoading, setArchivedLoading] = useState(false);
   const [toast, setToast] = useState(null); // { message, action?: { label, fn } }
   const toastTimer = useRef(null);
+  const [moodMap, setMoodMap] = useState(null);
+  const [feelingModalProjectId, setFeelingModalProjectId] = useState(null);
 
   const showToast = (message, action) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -271,6 +279,29 @@ function ProjectList() {
     fetchProjects();
     fetchArchived();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (projects.length === 0) { setMoodMap({}); return; }
+    const entities = projects.map(p => ({ entityType: 'project', entityId: String(p.id) }));
+    api.post('/api/mood/dominant/batch', { entities })
+      .then(r => r.json())
+      .then(batch => {
+        const map = {};
+        for (const p of projects) map[`project:${p.id}`] = batch[`project:${p.id}`] || null;
+        setMoodMap(map);
+      })
+      .catch(() => setMoodMap({}));
+  }, [projects]);
+
+  const refreshProjectMood = (pid) => {
+    api.get(`/api/mood/dominant/project/${pid}`)
+      .then(r => r.json())
+      .then(d => setMoodMap(prev => ({
+        ...prev,
+        [`project:${pid}`]: d.coreEmotion ? d : null,
+      })))
+      .catch(() => {});
+  };
 
   const handleConfirmDelete = async () => {
     await remove(deleteTarget.id);
@@ -426,6 +457,19 @@ function ProjectList() {
     <div className="flex flex-col h-full">
       {showModal && <NewProjectModal onClose={() => setShowModal(false)} onCreate={handleCreate} />}
 
+      {feelingModalProjectId && (() => {
+        const proj = projects.find(p => p.id === feelingModalProjectId);
+        return (
+          <CheckinModal
+            entityType="project"
+            entityId={feelingModalProjectId}
+            entityTitle={proj?.name || 'Project'}
+            onClose={() => setFeelingModalProjectId(null)}
+            onSave={() => { setFeelingModalProjectId(null); refreshProjectMood(feelingModalProjectId); }}
+          />
+        );
+      })()}
+
       {/* Delete confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
@@ -522,22 +566,19 @@ function ProjectList() {
                   onDragOver={(e) => { e.preventDefault(); if (project.id !== draggedId) setDragOverId(project.id); }}
                   onDrop={(e) => { e.preventDefault(); handleDrop(project.id); }}
                   onDragEnd={() => { setDraggedId(null); setDragOverId(null); }}
-                  className="relative group"
+                  className="relative group rounded-xl border overflow-hidden transition-all hover:shadow-sm"
                   style={{
                     opacity: draggedId === project.id ? 0.4 : 1,
                     outline: dragOverId === project.id ? '2px solid var(--color-primary)' : 'none',
-                    borderRadius: '12px',
+                    background: 'var(--color-surface)',
+                    borderColor: 'var(--color-border)',
                     cursor: 'grab',
                   }}
                 >
                   <button
                     onClick={() => { setActive(project.id); navigate(`/projects/${project.id}`); }}
-                    className="w-full text-left p-4 rounded-xl border transition-all hover:shadow-sm"
-                    style={{
-                      background: 'var(--color-surface)',
-                      borderColor: 'var(--color-border)',
-                      cursor: 'pointer',
-                    }}
+                    className="w-full text-left p-4"
+                    style={{ cursor: 'pointer' }}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div
@@ -571,6 +612,31 @@ function ProjectList() {
                       )}
                     </div>
                   </button>
+
+                  {/* Mood row — full width, own row at bottom of card */}
+                  {moodMap !== null && (() => {
+                    const dominant = moodMap[`project:${project.id}`];
+                    const color = dominant ? (EMOTION_COLOURS[dominant.coreEmotion] || '#888') : null;
+                    return (
+                      <div className="px-4 py-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setFeelingModalProjectId(project.id); }}
+                          className="flex items-center gap-2 hover:opacity-70 transition-opacity"
+                        >
+                          <span
+                            className="w-6 h-6 rounded-full flex-shrink-0"
+                            style={{
+                              background: color || 'transparent',
+                              border: dominant ? 'none' : '1.5px dashed var(--color-muted)',
+                            }}
+                          />
+                          <span className="text-xs capitalize" style={{ color: 'var(--color-muted)' }}>
+                            {dominant ? dominant.coreEmotion : 'Log feeling'}
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   {/* Hover action buttons */}
                   <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
