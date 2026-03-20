@@ -38,6 +38,12 @@ function SettingsPage() {
       : ''
   );
 
+  // Mood & Reflection reminder settings
+  const [inquiryFrequency, setInquiryFrequency] = useState('off');  // 'off' | 'daily' | 'weekly'
+  const [inquiryTime,      setInquiryTime]      = useState('09:00');
+  const [inquiryDays,      setInquiryDays]      = useState([1, 3, 5]); // Mon/Wed/Fri default
+  const [inquirySaved,     setInquirySaved]     = useState(false);
+
   const BUDGET_PRESETS = [0.10, 0.25, 0.50, 1.00, 5.00];
   const { token } = useAuthStore();
   const getIcon = useIcon();
@@ -91,6 +97,9 @@ function SettingsPage() {
       if (data.user_city) setProfileCity(data.user_city);
       if (data.user_state) setProfileState(data.user_state);
       if (data.user_country) setProfileCountry(data.user_country);
+      if (data.inquiry_reminder_frequency) setInquiryFrequency(data.inquiry_reminder_frequency);
+      if (data.inquiry_reminder_time)      setInquiryTime(data.inquiry_reminder_time);
+      if (data.inquiry_reminder_days)      { try { setInquiryDays(JSON.parse(data.inquiry_reminder_days)); } catch {} }
     }).catch(() => {});
   }, []);
 
@@ -169,6 +178,16 @@ function SettingsPage() {
     await api.post('/api/settings', { key: 'allowedFileTypes', value: DEFAULT_FILE_TYPES }).catch(() => {});
     setFileTypesSaved(true);
     setTimeout(() => setFileTypesSaved(false), 2000);
+  }
+
+  async function saveInquiryReminder() {
+    await Promise.all([
+      api.post('/api/settings', { key: 'inquiry_reminder_frequency', value: inquiryFrequency }).catch(() => {}),
+      api.post('/api/settings', { key: 'inquiry_reminder_time',      value: inquiryTime      }).catch(() => {}),
+      api.post('/api/settings', { key: 'inquiry_reminder_days',      value: JSON.stringify(inquiryDays) }).catch(() => {}),
+    ]);
+    setInquirySaved(true);
+    setTimeout(() => setInquirySaved(false), 2000);
   }
 
   return (
@@ -921,6 +940,99 @@ function SettingsPage() {
           </div>
           <span className="text-sm" style={{ color: 'var(--color-text)' }}>Pause all reminders</span>
         </label>
+      </section>
+      )}
+
+      {/* Mood & Reflection — Tasks tab */}
+      {tab === 'Tasks' && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Mood &amp; Reflection
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Remind yourself to pause for a guided emotional inquiry.
+        </p>
+
+        {/* Frequency */}
+        <div className="mb-4">
+          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
+            Guided inquiry reminder
+          </label>
+          <div className="flex gap-2">
+            {['off', 'daily', 'weekly'].map(opt => (
+              <button
+                key={opt}
+                onClick={() => setInquiryFrequency(opt)}
+                className="px-3 py-1.5 rounded-lg border text-xs font-medium capitalize transition-all"
+                style={{
+                  background:  inquiryFrequency === opt ? 'var(--color-primary)' : 'var(--color-surface)',
+                  borderColor: inquiryFrequency === opt ? 'var(--color-primary)' : 'var(--color-border)',
+                  color:       inquiryFrequency === opt ? '#fff' : 'var(--color-text)',
+                }}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Reminder time — visible when daily or weekly */}
+        {(inquiryFrequency === 'daily' || inquiryFrequency === 'weekly') && (
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
+              Reminder time
+            </label>
+            <input
+              type="time"
+              value={inquiryTime}
+              onChange={e => setInquiryTime(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </div>
+        )}
+
+        {/* Reminder days — visible when weekly */}
+        {inquiryFrequency === 'weekly' && (
+          <div className="mb-4">
+            <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
+              Reminder days
+            </label>
+            <div className="flex gap-1.5 flex-wrap">
+              {[
+                { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' }, { day: 3, label: 'Wed' },
+                { day: 4, label: 'Thu' }, { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' },
+                { day: 0, label: 'Sun' },
+              ].map(({ day, label }) => {
+                const active = inquiryDays.includes(day);
+                return (
+                  <button
+                    key={day}
+                    onClick={() => setInquiryDays(prev =>
+                      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort()
+                    )}
+                    className="px-2.5 py-1 rounded-lg border text-xs font-medium transition-all"
+                    style={{
+                      background:  active ? 'var(--color-primary)' : 'var(--color-surface)',
+                      borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+                      color:       active ? '#fff' : 'var(--color-text)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={saveInquiryReminder}
+          className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+          style={{ background: inquirySaved ? '#22c55e' : 'var(--color-primary)' }}
+        >
+          {inquirySaved ? 'Saved ✓' : 'Save'}
+        </button>
       </section>
       )}
 

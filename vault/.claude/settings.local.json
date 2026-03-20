@@ -22,7 +22,10 @@
       "Bash(\"C:\\\\Program Files\\\\nodejs\\\\npm.cmd\" install:*)",
       "Bash(cd:*)",
       "Bash(python3:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(TOKEN=\"11ecf31e14ea9376b6458b8f5adbc0339166144bb9366f58678e958253ca7fec\")",
+      "Bash(node -e \":*)",
+      "Bash(TOKEN=\"test_token_1774038497782\")"
     ]
   }
 }

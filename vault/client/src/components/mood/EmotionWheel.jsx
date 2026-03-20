@@ -84,7 +84,7 @@ function segmentPath(cx, cy, innerR, outerR, startDeg, endDeg) {
 
 // ── Interactive mode ──────────────────────────────────────────────────────────
 
-function InteractiveWheel({ onSelect, onCancel, wheel = PLUTCHIK_WHEEL }) {
+function InteractiveWheel({ onSelect, onCancel, wheel = PLUTCHIK_WHEEL, hideIntensity = false, hideBodyLocations = false }) {
   const [step, setStep] = useState('core');
   const [selectedCore, setSelectedCore] = useState(null);
   const [selectedSecondary, setSelectedSecondary] = useState(null);
@@ -301,54 +301,58 @@ function InteractiveWheel({ onSelect, onCancel, wheel = PLUTCHIK_WHEEL }) {
             )}
           </div>
 
-          {/* Intensity slider */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Intensity</span>
-              <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
-                {intensity}/10 — {intensityLabel}
-              </span>
+          {/* Intensity slider — hidden when parent modal owns intensity (Step 3) */}
+          {!hideIntensity && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Intensity</span>
+                <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {intensity}/10 — {intensityLabel}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                <span className="flex-shrink-0">Barely there</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={intensity}
+                  onChange={e => setIntensity(Number(e.target.value))}
+                  className="flex-1"
+                  style={{ accentColor: 'var(--color-primary)' }}
+                />
+                <span className="flex-shrink-0">Overwhelming</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-              <span className="flex-shrink-0">Barely there</span>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={intensity}
-                onChange={e => setIntensity(Number(e.target.value))}
-                className="flex-1"
-                style={{ accentColor: 'var(--color-primary)' }}
-              />
-              <span className="flex-shrink-0">Overwhelming</span>
-            </div>
-          </div>
+          )}
 
-          {/* Body locations */}
-          <div>
-            <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
-              Where do you feel it? <span className="font-normal">(optional)</span>
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {BODY_LOCATIONS.map(loc => {
-                const active = bodyLocations.includes(loc);
-                return (
-                  <button
-                    key={loc}
-                    onClick={() => toggleBodyLocation(loc)}
-                    className="text-xs px-2.5 py-1 rounded-full border transition-colors"
-                    style={{
-                      background: active ? 'var(--color-surface)' : 'transparent',
-                      borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
-                      color: active ? 'var(--color-text)' : 'var(--color-muted)',
-                    }}
-                  >
-                    {loc}
-                  </button>
-                );
-              })}
+          {/* Body locations — hidden when parent modal owns body data (Step 1) */}
+          {!hideBodyLocations && (
+            <div>
+              <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
+                Where do you feel it? <span className="font-normal">(optional)</span>
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {BODY_LOCATIONS.map(loc => {
+                  const active = bodyLocations.includes(loc);
+                  return (
+                    <button
+                      key={loc}
+                      onClick={() => toggleBodyLocation(loc)}
+                      className="text-xs px-2.5 py-1 rounded-full border transition-colors"
+                      style={{
+                        background: active ? 'var(--color-surface)' : 'transparent',
+                        borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+                        color: active ? 'var(--color-text)' : 'var(--color-muted)',
+                      }}
+                    >
+                      {loc}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Note */}
           <textarea
@@ -500,7 +504,7 @@ function DensityWheel({ emotions = [], wheel = PLUTCHIK_WHEEL }) {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-export default function EmotionWheel({ mode = 'interactive', onSelect, onCancel, emotions = [] }) {
+export default function EmotionWheel({ mode = 'interactive', onSelect, onCancel, emotions = [], hideIntensity = false, hideBodyLocations = false }) {
   if (mode === 'density') return <DensityWheel emotions={emotions} />;
-  return <InteractiveWheel onSelect={onSelect} onCancel={onCancel} />;
+  return <InteractiveWheel onSelect={onSelect} onCancel={onCancel} hideIntensity={hideIntensity} hideBodyLocations={hideBodyLocations} />;
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import CheckinModal from './mood/CheckinModal';
+import InquirySession from './mood/InquirySession';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 
@@ -30,7 +31,8 @@ export default function MorningDigest() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState(null);
   const [morningCheckedIn, setMorningCheckedIn] = useState(false);
-  const [showMoodModal, setShowMoodModal] = useState(false);
+  const [showMoodModal,   setShowMoodModal]   = useState(false);
+  const [showInquiry,     setShowInquiry]     = useState(false);
   const [moodDismissed, setMoodDismissed] = useState(false);
 
   useEffect(() => {
@@ -156,6 +158,17 @@ export default function MorningDigest() {
                       </button>
                     ))}
                   </div>
+                  <p className="mt-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                    Or{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowInquiry(true)}
+                      className="underline hover:opacity-70 transition-opacity"
+                      style={{ color: 'var(--color-primary)' }}
+                    >
+                      take a few minutes for a guided inquiry →
+                    </button>
+                  </p>
                 </div>
               )}
             </div>
@@ -183,6 +196,16 @@ export default function MorningDigest() {
           onSave={() => {
             setMorningCheckedIn(true);
             setShowMoodModal(false);
+          }}
+        />
+      )}
+
+      {showInquiry && (
+        <InquirySession
+          onClose={() => setShowInquiry(false)}
+          onComplete={() => {
+            setMorningCheckedIn(true);
+            setShowInquiry(false);
           }}
         />
       )}

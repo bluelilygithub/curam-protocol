@@ -135,15 +135,22 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 
 | Feature | Description |
 |---|---|
-| **Mood page** | Dedicated `/mood` page — emotional overview with a Plutchik density wheel, breakdown list (count + avg intensity per core emotion), daily timeline, and most active projects breakdown; period tabs: Today / Week / Month / Custom date range |
+| **Mood page** | Dedicated `/mood` page — two tabs: **Overview** (Plutchik density wheel, breakdown list, daily timeline, most active projects, Pattern Insights) and **Sessions** (list of completed inquiry sessions with inline transcript reader); period tabs on Overview: Today / Week / Month / Custom date range |
 | **Project filter** | Filter the Mood page by a specific project — shows only check-ins logged on tasks, notes, or the project itself within that project; hides the project breakdown section when a project is selected |
 | **Source filter** | Multi-select pill filter (All / Projects / Tasks / Goals / Notes / Sessions / General) to narrow the mood summary by entity type |
 | **MoodDot** | Small dot button attached to tasks, notes, and projects — click to log a feeling for that specific entity; shows the dominant emotion colour when check-ins exist; uses a dashed border when no check-ins exist yet |
-| **Log a feeling** | "Log a feeling" button in the Mood page header opens a general check-in not tied to any specific entity |
+| **Quick check-in** | "Quick check-in" button in the Mood page header opens the 3-step check-in modal |
+| **Begin inquiry** | "Begin inquiry" button in the Mood page header (and "Or take a few minutes for a guided inquiry →" link in Morning Digest) launches the full InquirySession modal |
 | **Project card mood** | Each project card on the home page shows the dominant emotion colour and name in a bottom row; clicking it opens the check-in modal for that project |
 | **Project header mood** | MoodDot in the project detail header — log a feeling directly for the project entity |
 | **Project chat feeling** | "Feeling" button in the project chat toolbar (desktop) — shows the current dominant emotion colour and name if check-ins exist; opens check-in modal; hidden in general chats |
-| **Check-in modal** | Full-screen Plutchik emotion wheel in interactive mode — select core → secondary → tertiary emotion, set intensity (1–10 slider), mark body locations on a body map, add an optional note |
+| **Check-in modal** | 3-step full-screen flow — Step 1: body scan (tap body locations on a body map, describe quality of sensation in free text); Step 2: interactive Plutchik emotion wheel (core → secondary → tertiary, intensity 1–10 slider); Step 3: context (optional note, `is_surface` toggle); saves to `mood_checkins` |
+| **Guided inquiry (InquirySession)** | 5-stage full-screen modal for deep self-inquiry — **Stage 1** arrival prompt (optional free text, sets the session opening tone); **Stage 2** body scan (tap body locations on a body map, select sensation qualities from a pill grid, free-text description); **Stage 3** emotion wheel (interactive Plutchik selection + intensity slider); **Stage 4** live AI conversation (SSE-streamed Claude responses using the `INQUIRY_SYSTEM_PROMPT` — *"You are a clean mirror…"* — with full body scan + emotion context; voice input via Web Speech API mic button; speaker controls on each AI message for read-aloud via browser TTS); **Stage 5** integration (free-text user summary, session saved to `mood_sessions`); sessions accessible in the Sessions tab |
+| **Sessions tab** | Lists all completed inquiry sessions sorted by date — duration, dominant emotions, user summary preview; click any row to expand an inline transcript showing the full AI conversation |
+| **Pattern Insights** | Collapsible section on the Overview tab — generates 3–5 AI-written insight cards from recent check-in and session data via SSE streaming (`POST /api/mood/insights`); results cached to `mood_insights_cache` + `mood_insights_generated` in the settings table; each insight card has a left-colour-border; a closing reflective question is shown centred in italics |
+| **Inquiry reminder** | Configurable reminder banner — Settings → Mood & Reflection: set frequency (Off / Daily / Weekly), preferred time, and day-of-week pills; Layout checks on mount and route change and shows a slide-in banner when conditions are met (4-hour tolerance window, once-per-day via `inquiry_reminder_{YYYY-MM-DD}` localStorage key); banner has "Begin now" (opens InquirySession) and "Maybe later" (dismiss) actions |
+| **Voice input (inquiry)** | In Stage 4 of the inquiry — mic button starts Web Speech API recognition; red pulsing dot while active; Stop button commits transcript to the input; live interim text shown in the textarea while recording |
+| **Speaker controls (inquiry)** | Speaker icon on each AI message in Stage 4 reads it aloud via browser TTS; the most recent completed AI message shows active Pause/Resume + Stop controls; all earlier messages show a static speaker icon for on-demand playback |
 | **Emotion wheel** | Reusable `EmotionWheel` component with two modes: **interactive** (click to select an emotion, with secondary/tertiary drill-down) and **density** (radial segments sized by check-in count for the summary view) |
 | **Daily timeline** | Mood page timeline groups check-ins by local date (browser timezone aware); each day shows coloured emotion pills and a dominant-emotion dot; dates parsed at local noon to avoid DST boundary issues |
 | **Timezone-correct dates** | Server uses `TO_CHAR(DATE_TRUNC('day', created_at AT TIME ZONE $tz), 'YYYY-MM-DD')` — dates always reflect the user's local day, not UTC |
@@ -156,6 +163,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **User Profile** | Settings → Profile — set your first name, city, state, and country (dropdown); stored in the `settings` table; used to personalise every LLM conversation with your name, location, local time, and default currency/country context |
 | **Token Budget Settings** | Settings → Token Budget Alerts — configure initial alert threshold, critical threshold, and re-alert frequency after dismissal; settings persisted to DB and take effect immediately without page refresh |
 | **Task Reminder Settings** | Settings → Task Reminders — toggle any of 7 reminder times on/off; pause all reminders with a single toggle; yellow banner shown when paused; times saved as JSON to `task_reminder_times` in the settings table; pause state saved to `task_reminders_paused` |
+| **Mood & Reflection Settings** | Settings → Mood & Reflection — configure inquiry reminder frequency (Off / Daily / Weekly), preferred time (time picker), and active days (Mon–Sun pill toggles, visible in Weekly mode); saved to `inquiry_reminder_frequency`, `inquiry_reminder_time`, and `inquiry_reminder_days` in the settings table |
 | **Admin Dashboard** | Usage stats — sessions, messages, tokens, searches, debates, comparisons; filterable by date range |
 | **Search** | Global search palette across projects, chats, files, and tasks |
 | **Password reset** | Email-based password reset flow with 1-hour expiry tokens |
@@ -173,7 +181,7 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 - **Auth:** Token-based sessions — random hex token stored in `auth_sessions` table; `requireAuth` middleware on all `/api/*` routes; bcryptjs for password hashing
 - **Deploy:** Railway with managed PostgreSQL service and persistent volume for file uploads (`UPLOAD_DIR` env var)
 
-### Database Schema (38 tables)
+### Database Schema (39 tables)
 
 #### Core / Auth
 | Table | Key columns |
@@ -241,7 +249,8 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 #### Mood
 | Table | Key columns |
 |---|---|
-| `mood_checkins` | id, user_id, entity_type (project/task/note/goal/key_result/session/general), entity_id, core_emotion, secondary_emotion, tertiary_emotion, intensity (1–10), body_locations (JSON), note, created_at |
+| `mood_checkins` | id, user_id, entity_type (project/task/note/goal/key_result/session/general), entity_id, core_emotion, secondary_emotion, tertiary_emotion, intensity (1–10), body_locations (JSON), body_qualities (JSON), body_description (TEXT), note, is_surface (BOOLEAN), check_in_type (quick/inquiry), inquiry_session_id (FK → mood_sessions), created_at |
+| `mood_sessions` | id, user_id, started_at, completed_at, body_scan (JSON — locations + qualities + description), conversation (JSON — full message array), pattern_context (JSON), user_summary (TEXT), dominant_emotions (JSON), duration_seconds (INTEGER) |
 | `mood_wheel_config` | user_id (UNIQUE), config (JSON — custom Plutchik wheel), updated_at |
 
 #### Integrations & Search

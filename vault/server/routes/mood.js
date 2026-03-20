@@ -2,6 +2,97 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const Anthropic = require('@anthropic-ai/sdk');
+
+const anthropic = new Anthropic();
+
+const INQUIRY_SYSTEM_PROMPT = `You are a compassionate, skilled facilitator of emotional
+self-inquiry. Your role is to help the user discover and
+understand their own emotional experience more deeply.
+
+You are NOT a therapist. You do NOT give advice. You do NOT
+interpret what their feelings mean or suggest what they should
+do or feel. You are a mirror — you reflect back what you hear
+and ask questions that help the user go deeper into their own
+experience.
+
+Your approach:
+- Ask ONE question at a time. Never more than one.
+- Ask "what" questions, not "why" questions. "What do you
+  notice?" not "Why do you think that is?" Why questions
+  invite rationalisation. What questions invite observation.
+- Before asking a new question, briefly reflect back what
+  the user just said in your own words — 1-2 sentences
+  maximum. This confirms you heard them and creates a sense
+  of being witnessed.
+- Keep your responses short. 3-5 sentences total.
+  Reflection + one question. That is it.
+- Be curious, warm, and unhurried. Never clinical.
+- If the user describes a physical sensation, stay with it
+  before moving to labels or meaning. "You mentioned
+  tightness in your chest — what else do you notice
+  about that?"
+- Notice when the body description and the emotion label
+  do not quite match, and gently name that. "You said you
+  feel fine, but earlier you described a heaviness in your
+  shoulders. What is that about?"
+- If the user names a particular emotion, explore its
+  texture rather than accepting the label at face value.
+  Frustrated can mean many things. What kind of frustrated?
+- After 3-4 exchanges, if it feels natural, ask: "Is this
+  the feeling on the surface, or is there something
+  underneath it?" This is one of the most revealing
+  questions in emotional inquiry. Do not force it — only
+  ask when there is a natural opening.
+- Never summarise what the user should take away. Never
+  conclude. The user will write their own summary at the
+  end. Your job is to open, not to close.
+- If the user seems to be avoiding or deflecting, stay
+  gentle. Do not push. You can name what you notice:
+  "I notice you moved away from that — do you want to
+  stay with it a moment, or is it right to move on?"
+- Never use therapeutic jargon. No "sit with", no
+  "validate", no "process". Speak like a wise, warm,
+  perceptive friend.
+- The conversation will be 4-6 exchanges. Know when to
+  bring it to a natural close by saying something like:
+  "I think we have covered some real ground here. Before
+  we finish — is there anything else that wants to
+  be said?"
+
+What you are NOT doing:
+- Not diagnosing
+- Not advising
+- Not interpreting meaning
+- Not telling the user what their emotion means about them
+- Not suggesting actions
+- Not reassuring ("I am sure it will be fine")
+- Not minimising ("That sounds hard but...")
+- Not cheerleading
+
+Tone:
+You are not a support system. You are not a companion.
+You are not emotionally invested in how the user feels
+or what they discover. You are a skilled, neutral
+observer — present and curious, but detached.
+
+Do not express care about the user's wellbeing.
+Do not say things like "I'm here for you", "that sounds
+really hard", "you're doing great", or anything that
+positions you as emotionally supportive.
+Do not affirm or validate the user's feelings.
+Validation is not your role — observation is.
+
+If the user shares something painful or difficult,
+do not acknowledge the difficulty. Simply stay with
+the inquiry. "What do you notice about that?" is
+always more useful than "that sounds really hard."
+
+You are a clean mirror. A clean mirror does not
+comfort. It reflects accurately and without distortion.
+The user is here to see themselves more clearly —
+not to feel better, not to be understood, not to be
+supported. Just to see.`;
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C',
@@ -455,6 +546,346 @@ router.put('/config', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[mood] config PUT error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Inquiry endpoints ─────────────────────────────────────────────────────────
+
+// POST /api/mood/inquiry/start
+router.post('/inquiry/start', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+
+    // Fetch last 7 days grouped by emotion + entity_type
+    const patternsResult = await pool.query(
+      `SELECT core_emotion, entity_type, COUNT(*) as count, MAX(created_at) as last_seen
+       FROM mood_checkins
+       WHERE user_id = $1 AND created_at >= NOW() - INTERVAL '7 days'
+       GROUP BY core_emotion, entity_type
+       ORDER BY count DESC`,
+      [userId]
+    );
+
+    // Aggregate into per-emotion pattern objects
+    const emotionMap = {};
+    for (const row of patternsResult.rows) {
+      const em = row.core_emotion;
+      if (!emotionMap[em]) {
+        emotionMap[em] = {
+          emotion: em,
+          colour: EMOTION_COLOURS[em] || '#888',
+          count: 0,
+          entityBreakdown: [],
+          lastSeen: null,
+        };
+      }
+      const cnt = parseInt(row.count, 10);
+      emotionMap[em].count += cnt;
+      emotionMap[em].entityBreakdown.push({ entityType: row.entity_type, count: cnt });
+      const rowDate = new Date(row.last_seen);
+      if (!emotionMap[em].lastSeen || rowDate > new Date(emotionMap[em].lastSeen)) {
+        emotionMap[em].lastSeen = row.last_seen;
+      }
+    }
+    const recentPatterns = Object.values(emotionMap).sort((a, b) => b.count - a.count);
+
+    // Create a new session row
+    const sessionResult = await pool.query(
+      `INSERT INTO mood_sessions (user_id, pattern_context) VALUES ($1, $2) RETURNING id`,
+      [userId, JSON.stringify(recentPatterns)]
+    );
+
+    res.json({ sessionId: sessionResult.rows[0].id, recentPatterns });
+  } catch (err) {
+    console.error('[mood] inquiry/start error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/mood/inquiry/message — SSE
+router.post('/inquiry/message', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const { sessionId, userMessage, conversation, bodyScan, stage, recentPatterns } = req.body;
+
+    // Verify session belongs to this user
+    const sessionCheck = await pool.query(
+      'SELECT id FROM mood_sessions WHERE id = $1 AND user_id = $2',
+      [sessionId, userId]
+    );
+    if (sessionCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Build readable context block
+    const patternLines = (recentPatterns || []).map(p => {
+      const breakdown = (p.entityBreakdown || []).map(e => `${e.entityType} (${e.count})`).join(', ');
+      return `- ${p.emotion} ×${p.count}${breakdown ? ': ' + breakdown : ''}`;
+    }).join('\n');
+
+    const locationText  = bodyScan?.locations?.length     ? bodyScan.locations.join(', ')  : 'none recorded';
+    const qualitiesText = bodyScan?.qualities?.length     ? bodyScan.qualities.join(', ')  : 'none recorded';
+    const descriptionText = bodyScan?.body_description || 'none recorded';
+
+    const contextBlock = `Recent emotional check-ins (last 7 days):
+${patternLines || 'No recent check-ins'}
+
+Body scan from this session:
+Locations: ${locationText}
+Qualities: ${qualitiesText}
+Description: ${descriptionText}
+
+Current stage: ${stage || 'inquiry'}`;
+
+    const systemWithContext = INQUIRY_SYSTEM_PROMPT + '\n\n---\n\n' + contextBlock;
+
+    // Build messages array. If userMessage is empty this is the AI's opening turn —
+    // inject a silent prompt so Claude opens the conversation naturally.
+    const trimmedMsg = (userMessage || '').trim();
+    const priorMessages = (conversation || []).filter(m => m.content && m.content.trim());
+    const messages = priorMessages.length === 0 && !trimmedMsg
+      ? [{ role: 'user', content: 'Please begin.' }]
+      : [
+          ...priorMessages,
+          ...(trimmedMsg ? [{ role: 'user', content: trimmedMsg }] : []),
+        ];
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const stream = anthropic.messages.stream({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      system: systemWithContext,
+      messages,
+    });
+
+    stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
+    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
+    stream.on('error', (err) => {
+      console.error('[mood] inquiry/message stream error:', err);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+  } catch (err) {
+    console.error('[mood] inquiry/message error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/mood/inquiry/:sessionId/complete
+router.put('/inquiry/:sessionId/complete', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const sessionId = parseInt(req.params.sessionId, 10);
+    const { userSummary, dominantEmotions, durationSeconds, conversation } = req.body;
+
+    const result = await pool.query(
+      `UPDATE mood_sessions
+       SET completed_at = NOW(),
+           user_summary = $1,
+           dominant_emotions = $2,
+           duration_seconds = $3,
+           conversation = $4
+       WHERE id = $5 AND user_id = $6
+       RETURNING *`,
+      [
+        userSummary || null,
+        JSON.stringify(dominantEmotions || []),
+        durationSeconds || null,
+        JSON.stringify(conversation || []),
+        sessionId,
+        userId,
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[mood] inquiry/complete error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/mood/sessions
+router.get('/sessions', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+    const offset = parseInt(req.query.offset, 10) || 0;
+
+    const result = await pool.query(
+      `SELECT id, started_at, completed_at,
+              LEFT(user_summary, 150) as user_summary,
+              dominant_emotions, duration_seconds
+       FROM mood_sessions
+       WHERE user_id = $1 AND completed_at IS NOT NULL
+       ORDER BY completed_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM mood_sessions WHERE user_id = $1 AND completed_at IS NOT NULL',
+      [userId]
+    );
+
+    res.json({
+      sessions: result.rows,
+      total: parseInt(countResult.rows[0].count, 10),
+    });
+  } catch (err) {
+    console.error('[mood] sessions list error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/mood/sessions/:id
+router.get('/sessions/:id', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const sessionId = parseInt(req.params.id, 10);
+
+    const result = await pool.query(
+      'SELECT * FROM mood_sessions WHERE id = $1 AND user_id = $2',
+      [sessionId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[mood] session detail error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/mood/insights — SSE
+router.post('/insights', async (req, res) => {
+  try {
+    const userId = getUserId(req);
+    const now = new Date();
+    const defaultFrom = new Date(now.getTime() - 30 * 86400000).toISOString();
+    const from = req.query.from || req.body.from || defaultFrom;
+    const to = req.query.to || req.body.to || now.toISOString();
+
+    // Fetch check-ins for the period
+    const checkinsResult = await pool.query(
+      `SELECT core_emotion, entity_type, COUNT(*) as count, AVG(intensity) as avg_intensity
+       FROM mood_checkins
+       WHERE user_id = $1 AND created_at >= $2 AND created_at <= $3
+       GROUP BY core_emotion, entity_type
+       ORDER BY count DESC`,
+      [userId, from, to]
+    );
+
+    // Fetch completed inquiry sessions for the period
+    const sessionsResult = await pool.query(
+      `SELECT id, completed_at, user_summary, dominant_emotions, duration_seconds
+       FROM mood_sessions
+       WHERE user_id = $1 AND completed_at IS NOT NULL
+         AND completed_at >= $2 AND completed_at <= $3
+       ORDER BY completed_at DESC`,
+      [userId, from, to]
+    );
+
+    // Build readable data for the AI
+    const checkinLines = checkinsResult.rows.map(r =>
+      `- ${r.core_emotion} (${r.entity_type}): ${r.count}× avg intensity ${parseFloat(r.avg_intensity).toFixed(1)}/10`
+    ).join('\n');
+
+    const sessionLines = sessionsResult.rows.map((s, i) => {
+      const date = new Date(s.completed_at).toLocaleDateString();
+      const emotions = Array.isArray(s.dominant_emotions) ? s.dominant_emotions.join(', ') : s.dominant_emotions;
+      return `${i + 1}. [${date}] Emotions: ${emotions || 'none'}. Summary: "${(s.user_summary || '').substring(0, 200)}"`;
+    }).join('\n');
+
+    const userMessage = `Emotional check-in data (${from.substring(0, 10)} to ${to.substring(0, 10)}):
+
+Check-ins by emotion and context:
+${checkinLines || 'No check-ins in this period.'}
+
+Inquiry sessions completed (${sessionsResult.rows.length}):
+${sessionLines || 'No inquiry sessions in this period.'}`;
+
+    const insightsSystemPrompt = `You are analysing someone's emotional check-in data to
+help them understand their patterns. Your role is to
+surface observations, not to advise or interpret.
+
+Speak directly to the person in second person (you).
+Be specific — reference actual emotions and actual
+contexts (tasks, projects, sessions) where relevant.
+Be curious and tentative, not declarative. Use language
+like "it looks like", "you seem to", "there is a pattern
+of" rather than "you are" or "this means".
+Keep each insight to 2-3 sentences.
+Generate exactly 5 insights and 1 closing question.
+Do not give advice. Do not suggest what the person
+should do. Only observe.
+End with one open question — something the data raises
+but does not answer.
+
+Respond ONLY with a valid JSON array, no preamble,
+no markdown fences:
+[
+  { "insight": "...", "type": "pattern" },
+  { "insight": "...", "type": "pattern" },
+  { "insight": "...", "type": "pattern" },
+  { "insight": "...", "type": "pattern" },
+  { "insight": "...", "type": "pattern" },
+  { "question": "...", "type": "question" }
+]`;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    let accumulated = '';
+
+    const stream = anthropic.messages.stream({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1024,
+      system: insightsSystemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
+
+    stream.on('text', (text) => {
+      accumulated += text;
+      res.write(`data: ${JSON.stringify(text)}\n\n`);
+    });
+
+    stream.on('finalMessage', async () => {
+      res.write('data: [DONE]\n\n');
+      res.end();
+      // Cache result
+      try {
+        await pool.query(
+          `INSERT INTO settings ("userId", key, value) VALUES ($1, 'mood_insights_cache', $2)
+           ON CONFLICT ("userId", key) DO UPDATE SET value = $2`,
+          [userId, accumulated]
+        );
+        await pool.query(
+          `INSERT INTO settings ("userId", key, value) VALUES ($1, 'mood_insights_generated', $2)
+           ON CONFLICT ("userId", key) DO UPDATE SET value = $2`,
+          [userId, new Date().toISOString()]
+        );
+      } catch (cacheErr) {
+        console.error('[mood] insights cache error:', cacheErr.message);
+      }
+    });
+
+    stream.on('error', (err) => {
+      console.error('[mood] insights stream error:', err);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
+  } catch (err) {
+    console.error('[mood] insights error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

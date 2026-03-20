@@ -752,6 +752,39 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_mood_checkins_user ON mood_checkins(user_id, created_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_mood_checkins_entity ON mood_checkins(entity_type, entity_id)`);
 
+  // ── Mood sessions (inquiry journeys) ──────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mood_sessions (
+      id                SERIAL PRIMARY KEY,
+      user_id           INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      started_at        TIMESTAMP DEFAULT NOW(),
+      completed_at      TIMESTAMP,
+      body_scan         JSON,
+      conversation      JSON,
+      pattern_context   JSON,
+      user_summary      TEXT,
+      dominant_emotions JSON,
+      duration_seconds  INTEGER,
+      created_at        TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_mood_sessions_user ON mood_sessions(user_id, created_at DESC)`);
+
+  // ── mood_checkins phase-2 columns ─────────────────────────────────────────
+  await pool.query(`ALTER TABLE mood_checkins ADD COLUMN IF NOT EXISTS body_qualities JSON`);
+  await pool.query(`ALTER TABLE mood_checkins ADD COLUMN IF NOT EXISTS body_description TEXT`);
+  await pool.query(`ALTER TABLE mood_checkins ADD COLUMN IF NOT EXISTS is_surface BOOLEAN`);
+  await pool.query(`ALTER TABLE mood_checkins ADD COLUMN IF NOT EXISTS check_in_type VARCHAR(10) DEFAULT 'quick'`);
+  await pool.query(`ALTER TABLE mood_checkins ADD COLUMN IF NOT EXISTS inquiry_session_id INTEGER REFERENCES mood_sessions(id) ON DELETE SET NULL`);
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE mood_checkins
+        ADD CONSTRAINT mood_checkins_check_in_type_check
+        CHECK (check_in_type IN ('quick', 'inquiry'));
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+
   console.log('[db] Schema ready');
 }
 

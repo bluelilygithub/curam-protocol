@@ -7,6 +7,7 @@ import api from '../utils/apiClient';
 import QuickCapture from './QuickCapture';
 import MorningDigest from './MorningDigest';
 import TaskReminderModal from './TaskReminderModal';
+import InquirySession from './mood/InquirySession';
 import TourButton from './TourButton';
 import Toast from './Toast';
 import useSettingsStore from '../store/settingsStore';
@@ -24,10 +25,13 @@ function Layout() {
   const location = useLocation();
   const getIcon = useIcon();
 
-  const [reminderModal, setReminderModal] = useState(null); // { time, overdue, today }
-  const [dueTodayCount, setDueTodayCount] = useState(0);
-  const [showDueBanner, setShowDueBanner] = useState(false);
-  const [bookmarkCount, setBookmarkCount] = useState(0);
+  const [reminderModal,       setReminderModal]       = useState(null); // { time, overdue, today }
+  const [dueTodayCount,       setDueTodayCount]       = useState(0);
+  const [showDueBanner,       setShowDueBanner]       = useState(false);
+  const [bookmarkCount,       setBookmarkCount]       = useState(0);
+  const [showInquiryReminder, setShowInquiryReminder] = useState(false);
+  const [showInquirySession,  setShowInquirySession]  = useState(false);
+  const [inquiryReminderSettings, setInquiryReminderSettings] = useState(null);
 
   useEffect(() => {
     if (sessionStorage.getItem('tasksAlertDismissed')) return;
@@ -58,6 +62,48 @@ function Layout() {
     window.addEventListener('vault:bookmark-changed', fetchBookmarkCount);
     return () => window.removeEventListener('vault:bookmark-changed', fetchBookmarkCount);
   }, []);
+
+  // Inquiry reminder logic
+  const checkInquiryReminder = useCallback(async (settings) => {
+    const freq = settings?.inquiry_reminder_frequency || 'off';
+    if (freq === 'off') return;
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const storageKey = `inquiry_reminder_${todayKey}`;
+    if (localStorage.getItem(storageKey)) return;
+
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const reminderTime = settings?.inquiry_reminder_time || '09:00';
+    const [rh, rm] = reminderTime.split(':').map(Number);
+    const reminderMinutes = rh * 60 + rm;
+
+    // Only show if we're within a 4-hour window after the scheduled time
+    const diff = currentMinutes - reminderMinutes;
+    if (diff < 0 || diff > 240) return;
+
+    // For weekly: check if today's day-of-week is in the configured days
+    if (freq === 'weekly') {
+      const todayDow = now.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      let days = [];
+      try { days = JSON.parse(settings.inquiry_reminder_days || '[]'); } catch {}
+      if (!days.includes(todayDow)) return;
+    }
+
+    setShowInquiryReminder(true);
+  }, []);
+
+  useEffect(() => {
+    api.get('/api/settings').then(r => r.json()).then(data => {
+      setInquiryReminderSettings(data);
+      checkInquiryReminder(data);
+    }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-check on route change (in case it's a new day)
+  useEffect(() => {
+    if (inquiryReminderSettings) checkInquiryReminder(inquiryReminderSettings);
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Task reminder logic
   const showReminderForTime = useCallback(async (time) => {
@@ -433,6 +479,59 @@ function Layout() {
           overdue={reminderModal.overdue}
           today={reminderModal.today}
           onDismiss={() => setReminderModal(null)}
+        />
+      )}
+
+      {/* Inquiry reminder banner */}
+      {showInquiryReminder && !showInquirySession && (
+        <div
+          className="fixed bottom-5 left-1/2 z-[65] w-full max-w-sm"
+          style={{ transform: 'translateX(-50%)', animation: 'slideUp 0.25s ease' }}
+        >
+          <style>{`@keyframes slideUp { from { opacity: 0; transform: translateX(-50%) translateY(16px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }`}</style>
+          <div
+            className="rounded-2xl border shadow-2xl px-5 py-4"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+          >
+            <p className="text-sm font-semibold mb-0.5" style={{ color: 'var(--color-text)' }}>
+              Time for your reflection
+            </p>
+            <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+              A few minutes of guided inquiry can help you understand what is really going on.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const todayKey = new Date().toISOString().slice(0, 10);
+                  localStorage.setItem(`inquiry_reminder_${todayKey}`, '1');
+                  setShowInquiryReminder(false);
+                  setShowInquirySession(true);
+                }}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Begin now
+              </button>
+              <button
+                onClick={() => {
+                  const todayKey = new Date().toISOString().slice(0, 10);
+                  localStorage.setItem(`inquiry_reminder_${todayKey}`, '1');
+                  setShowInquiryReminder(false);
+                }}
+                className="flex-1 py-2 rounded-xl text-sm border hover:opacity-70 transition-opacity"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInquirySession && (
+        <InquirySession
+          onClose={() => setShowInquirySession(false)}
+          onComplete={() => {}}
         />
       )}
     </div>
