@@ -53,6 +53,36 @@ const NODE_LABELS = {
 
 const FILTER_ORDER = ['project', 'file', 'note', 'session', 'task', 'goal', 'url'];
 
+// Finance-related types (not yet in graph) default to hidden when added in future
+const DEFAULT_ACTIVE = new Set(['project', 'file', 'note', 'session', 'task', 'goal', 'url']);
+const FILTER_STORAGE_KEY = 'graph_filter_prefs';
+
+function getDefaultFilters() {
+  return Object.fromEntries(FILTER_ORDER.map(t => [t, DEFAULT_ACTIVE.has(t)]));
+}
+
+function loadSavedFilters() {
+  try {
+    const saved = localStorage.getItem(FILTER_STORAGE_KEY);
+    if (!saved) return getDefaultFilters();
+    const parsed = JSON.parse(saved);
+    const defaults = getDefaultFilters();
+    // Merge: saved values win, new types fall back to defaults
+    return { ...defaults, ...Object.fromEntries(
+      Object.entries(parsed).filter(([k]) => FILTER_ORDER.includes(k))
+    )};
+  } catch {
+    return getDefaultFilters();
+  }
+}
+
+const PRESET_DEFS = [
+  { id: 'all',   label: 'All',          types: Object.fromEntries(FILTER_ORDER.map(t => [t, true])) },
+  { id: 'work',  label: 'Work',         types: Object.fromEntries(FILTER_ORDER.map(t => [t, ['project','file','note','url'].includes(t)])) },
+  { id: 'tasks', label: 'Tasks & Goals',types: Object.fromEntries(FILTER_ORDER.map(t => [t, ['task','goal'].includes(t)])) },
+  { id: 'this',  label: 'This Project', types: null }, // dynamic — computed when a project node is selected
+];
+
 // ── SSE reader ────────────────────────────────────────────────────────────────
 
 async function readSSEStream(res, onEvent) {
@@ -282,9 +312,7 @@ function GraphPage() {
   const [search,       setSearch]       = useState('');
   const [showFilters,  setShowFilters]  = useState(false);
   const [showSemantic, setShowSemantic] = useState(true);
-  const [filters, setFilters] = useState(
-    Object.fromEntries(FILTER_ORDER.map(t => [t, true]))
-  );
+  const [filters, setFilters] = useState(loadSavedFilters);
   const [dimensions,  setDimensions]  = useState({ width: window.innerWidth, height: window.innerHeight });
   const [useMockData, setUseMockData] = useState(false);
 
@@ -303,6 +331,11 @@ function GraphPage() {
   const nodePositionsRef  = useRef(new Map()); // id → {x, y} — persists across filter changes
 
   useEffect(() => { searchRef.current = search; }, [search]);
+
+  // Persist filter choices to localStorage
+  useEffect(() => {
+    try { localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters)); } catch {}
+  }, [filters]);
 
   // ── Fetch graph data ──────────────────────────────────────────────────────
   const loadGraph = useCallback(() => {
@@ -898,37 +931,113 @@ function GraphPage() {
         )}
 
         {/* Filter panel */}
-        {showFilters && (
-          <div
-            className="absolute z-10 rounded-xl border p-3 space-y-2"
-            style={{
-              top: (computing && computeProgress) ? 88 : 44,
-              left: 12,
-              background: 'var(--color-surface)',
-              borderColor: 'var(--color-border)',
-              minWidth: 180,
-            }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
-              Show node types
-            </p>
-            {FILTER_ORDER.map(type => (
-              <label key={type} className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={filters[type]}
-                  onChange={() => setFilters(prev => ({ ...prev, [type]: !prev[type] }))}
-                  className="rounded"
-                  style={{ accentColor: NODE_COLORS[type] }}
-                />
-                <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}>
-                  <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: NODE_COLORS[type] }} />
-                  {NODE_LABELS[type]}
-                </span>
-              </label>
-            ))}
-          </div>
-        )}
+        {showFilters && (() => {
+          // Determine which preset (if any) matches current filter state
+          const activePresetId = PRESET_DEFS.slice(0, 3).find(p =>
+            FILTER_ORDER.every(t => filters[t] === p.types[t])
+          )?.id ?? null;
+
+          // "This Project" — available when a project node is selected
+          const projectNode = selectedNode?.type === 'project' ? selectedNode : null;
+          const handleThisProject = () => {
+            if (!projectNode || !sourceData) return;
+            const connected = new Set([projectNode.id]);
+            for (const e of sourceData.edges) {
+              if (e.source === projectNode.id) connected.add(e.target);
+              if (e.target === projectNode.id) connected.add(e.source);
+            }
+            const connectedTypes = new Set(
+              sourceData.nodes.filter(n => connected.has(n.id)).map(n => n.type)
+            );
+            setFilters(Object.fromEntries(FILTER_ORDER.map(t => [t, connectedTypes.has(t)])));
+            handleShowMe([...connected]);
+          };
+          const thisProjectActive = projectNode && (() => {
+            const connected = new Set([projectNode.id]);
+            for (const e of sourceData?.edges ?? []) {
+              if (e.source === projectNode.id) connected.add(e.target);
+              if (e.target === projectNode.id) connected.add(e.source);
+            }
+            const connectedTypes = new Set(
+              (sourceData?.nodes ?? []).filter(n => connected.has(n.id)).map(n => n.type)
+            );
+            return FILTER_ORDER.every(t => filters[t] === connectedTypes.has(t));
+          })();
+
+          return (
+            <div
+              className="absolute z-10 rounded-xl border p-3 space-y-3"
+              style={{
+                top: (computing && computeProgress) ? 88 : 44,
+                left: 12,
+                background: 'var(--color-surface)',
+                borderColor: 'var(--color-border)',
+                minWidth: 192,
+              }}
+            >
+              {/* Preset buttons */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>
+                  Presets
+                </p>
+                <div className="flex flex-col gap-1">
+                  {PRESET_DEFS.slice(0, 3).map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setFilters({ ...p.types })}
+                      className="text-left text-xs px-2.5 py-1.5 rounded-lg border transition-all"
+                      style={{
+                        background:  activePresetId === p.id ? 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))' : 'transparent',
+                        borderColor: activePresetId === p.id ? 'var(--color-primary)' : 'var(--color-border)',
+                        color:       activePresetId === p.id ? 'var(--color-primary)' : 'var(--color-text)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                  <button
+                    onClick={handleThisProject}
+                    disabled={!projectNode}
+                    className="text-left text-xs px-2.5 py-1.5 rounded-lg border transition-all disabled:opacity-40"
+                    title={projectNode ? `Filter to: ${projectNode.label}` : 'Select a project node first'}
+                    style={{
+                      background:  thisProjectActive ? 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))' : 'transparent',
+                      borderColor: thisProjectActive ? 'var(--color-primary)' : 'var(--color-border)',
+                      color:       thisProjectActive ? 'var(--color-primary)' : 'var(--color-text)',
+                      cursor: projectNode ? 'pointer' : 'default',
+                    }}
+                  >
+                    This Project
+                    {!projectNode && <span className="ml-1 opacity-50">(select a project)</span>}
+                  </button>
+                </div>
+              </div>
+
+              {/* Per-type checkboxes */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>
+                  Node types
+                </p>
+                {FILTER_ORDER.map(type => (
+                  <label key={type} className="flex items-center gap-2.5 cursor-pointer py-0.5">
+                    <input
+                      type="checkbox"
+                      checked={filters[type]}
+                      onChange={() => setFilters(prev => ({ ...prev, [type]: !prev[type] }))}
+                      className="rounded"
+                      style={{ accentColor: NODE_COLORS[type] }}
+                    />
+                    <span className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}>
+                      <span className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: NODE_COLORS[type] }} />
+                      {NODE_LABELS[type]}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Insights panel */}
         {showInsights && (
