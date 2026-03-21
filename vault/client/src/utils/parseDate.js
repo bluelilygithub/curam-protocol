@@ -187,6 +187,23 @@ export function parseNaturalDate(input) {
 }
 
 /**
+ * Parse an effort/duration string into minutes, or null if unrecognised.
+ * Supported: 15m, 2h, 1.5h, 3d, 1w, 2 weeks, 3 weeks, bare integers (treated as minutes).
+ * 1 day = 480 min (8-hour day). 1 week = 5 days = 2400 min.
+ */
+export function parseEffortInput(str) {
+  if (!str || !str.trim()) return null;
+  const s = str.trim().toLowerCase();
+  if (/^\d+w$/.test(s)) return parseInt(s) * 2400;
+  if (/^\d+\s+weeks?$/.test(s)) return parseInt(s) * 2400;
+  if (/^\d+d$/.test(s)) return parseInt(s) * 480;
+  if (/^\d*\.?\d+h$/.test(s)) return Math.round(parseFloat(s) * 60);
+  if (/^\d+m$/.test(s)) return parseInt(s);
+  if (/^\d+$/.test(s)) return parseInt(s);
+  return null;
+}
+
+/**
  * Format a Date for human display: "Mar 15 2026 14:30" or "Mar 15 2026"
  */
 export function formatDateForInput(date) {

@@ -366,7 +366,7 @@ function UntimedList({ tasks, days, onEdit, onToggleStatus }) {
 
 function CalendarSidebar({ viewDate, subView, tasks, days, onSelectDate, onEdit, onToggleStatus, getWeekStart }) {
   return (
-    <div style={{
+    <div data-tour="calendar-sidebar" style={{
       width:      `${SIDEBAR_WIDTH}px`,
       flexShrink: 0,
       borderLeft: '1px solid var(--color-border)',
@@ -887,7 +887,7 @@ export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus,
       {/* ── Toolbar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--color-border)', flexShrink: 0, flexWrap: 'wrap' }}>
         {/* View switcher */}
-        <div style={{ display: 'flex', gap: '2px', background: 'var(--color-surface)', borderRadius: '0.5rem', padding: '2px' }}>
+        <div data-tour="calendar-subview-btns" style={{ display: 'flex', gap: '2px', background: 'var(--color-surface)', borderRadius: '0.5rem', padding: '2px' }}>
           {['day','week','month','agenda'].map(v => (
             <button
               key={v}
@@ -922,7 +922,7 @@ export default function TasksCalendar({ tasks, projects, onEdit, onToggleStatus,
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
         {/* Primary view */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        <div data-tour="calendar-grid" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
           {subView === 'day' && (
             <DayView date={startOfDay(currentDate)} tasks={tasks} onNew={onNew} onReschedule={onReschedule} onEdit={onEdit} onToggleStatus={onToggleStatus} onUpdateEffort={onUpdateEffort} />
           )}

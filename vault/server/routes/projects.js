@@ -62,16 +62,17 @@ router.patch('/reorder', async (req, res) => {
 
 // POST /api/projects
 router.post('/', async (req, res) => {
-  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, clientId } = req.body;
+  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, clientId, startDate, targetEndDate } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO projects (name, goal, problem, audience, "techStack", constraints, "successCriteria", tone, notes, model, "projectType", "typeConfig", "clientId", "userId")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+      `INSERT INTO projects (name, goal, problem, audience, "techStack", constraints, "successCriteria", tone, notes, model, "projectType", "typeConfig", "clientId", "startDate", "targetEndDate", "userId")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
       [name, goal || '', problem || '', audience || '', techStack || '', constraints || '',
        successCriteria || '', tone || '', notes || '', model || 'claude-sonnet-4-6',
-       projectType || null, typeConfig ? JSON.stringify(typeConfig) : null, clientId || null, req.user.id]
+       projectType || null, typeConfig ? JSON.stringify(typeConfig) : null, clientId || null,
+       startDate || null, targetEndDate || null, req.user.id]
     );
     const { rows: project } = await pool.query('SELECT * FROM projects WHERE id=$1', [rows[0].id]);
     await syncSearchIndex(project[0]);
@@ -133,7 +134,7 @@ router.patch('/:id/unarchive', async (req, res) => {
 
 // PUT /api/projects/:id
 router.put('/:id', async (req, res) => {
-  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, folderId } = req.body;
+  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, folderId, startDate, targetEndDate } = req.body;
   try {
     const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
@@ -143,8 +144,8 @@ router.put('/:id', async (req, res) => {
       `UPDATE projects SET
         name=$1, goal=$2, problem=$3, audience=$4, "techStack"=$5, constraints=$6,
         "successCriteria"=$7, tone=$8, notes=$9, model=$10, "projectType"=$11, "typeConfig"=$12,
-        "folderId"=$13, "updatedAt"=NOW()
-       WHERE id=$14`,
+        "folderId"=$13, "startDate"=$14, "targetEndDate"=$15, "updatedAt"=NOW()
+       WHERE id=$16`,
       [
         name ?? p.name,
         goal ?? p.goal,
@@ -159,6 +160,8 @@ router.put('/:id', async (req, res) => {
         projectType ?? p.projectType ?? null,
         typeConfig !== undefined ? JSON.stringify(typeConfig) : (p.typeConfig ?? null),
         folderId !== undefined ? folderId : p.folderId,
+        startDate !== undefined ? (startDate || null) : p.startDate,
+        targetEndDate !== undefined ? (targetEndDate || null) : p.targetEndDate,
         req.params.id,
       ]
     );

@@ -25,6 +25,8 @@ const FIELDS = [
   { key: 'successCriteria', label: 'Success Criteria', placeholder: 'How will you know this succeeded?', multiline: true },
   { key: 'tone', label: 'Tone', placeholder: 'Professional, casual, technical…' },
   { key: 'notes', label: 'Notes', placeholder: 'Any other context…', multiline: true },
+  { key: 'startDate', label: 'Start date', type: 'date' },
+  { key: 'targetEndDate', label: 'Target end date', type: 'date' },
 ];
 
 function ProjectDetail() {
@@ -226,7 +228,7 @@ function ProjectDetail() {
                 />
               ) : (
                 <input
-                  type="text"
+                  type={field.type || 'text'}
                   value={form[field.key] || ''}
                   onChange={(e) => setForm({ ...form, [field.key]: e.target.value })}
                   placeholder={field.placeholder}

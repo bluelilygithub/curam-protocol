@@ -26,6 +26,7 @@ import ClientDetailPage from './pages/ClientDetailPage';
 import UsagePage from './pages/UsagePage';
 import MoodPage from './pages/MoodPage';
 import SharedTaskPage from './pages/SharedTaskPage';
+import NewsDigestPage from './pages/NewsDigestPage';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
@@ -90,7 +91,8 @@ function App() {
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/usage" element={<UsagePage />} />
               <Route path="/mood" element={<MoodPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="/news-digest" element={<NewsDigestPage />} />
+<Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
         </BrowserRouter>

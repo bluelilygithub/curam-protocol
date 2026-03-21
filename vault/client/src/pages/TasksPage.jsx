@@ -11,6 +11,7 @@ import TaskTemplatesPanel from '../components/tasks/TaskTemplatesPanel';
 import TaskStatsBar from '../components/tasks/TaskStatsBar';
 import TaskFilters from '../components/tasks/TaskFilters';
 import TasksTree from '../components/tasks/TasksTree';
+import TaskTimeline from '../components/tasks/TaskTimeline';
 import { parseNaturalDate, formatDateForInput, toISOForAPI } from '../utils/parseDate';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
 
@@ -65,6 +66,7 @@ function parseEffortInput(str) {
 const EFFORT_PRESETS = [
   { label: '15m', val: 15 }, { label: '30m', val: 30 }, { label: '1h', val: 60 },
   { label: '2h', val: 120 }, { label: '4h', val: 240 }, { label: '1d', val: 480 }, { label: '2d', val: 960 },
+  { label: '3d', val: 1440 }, { label: '1w', val: 2400 }, { label: '2w', val: 4800 },
 ];
 
 const EMPTY_FORM = {
@@ -691,7 +693,7 @@ export default function TasksPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const v = params.get('view');
-    if (v && ['list', 'board', 'calendar', 'matrix', 'tree'].includes(v)) {
+    if (v && ['list', 'board', 'calendar', 'matrix', 'tree', 'timeline'].includes(v)) {
       setViewMode(v);
       localStorage.setItem('tasksViewMode', v);
     }
@@ -1317,7 +1319,7 @@ export default function TasksPage() {
         case 'b': {
           e.preventDefault();
           setViewMode(prev => {
-            const modes = ['list', 'board', 'calendar', 'matrix', 'tree'];
+            const modes = ['list', 'board', 'calendar', 'matrix', 'tree', 'timeline'];
             const next = modes[(modes.indexOf(prev) + 1) % modes.length];
             localStorage.setItem('tasksViewMode', next);
             return next;
@@ -1409,6 +1411,19 @@ export default function TasksPage() {
     }
     return true;
   });
+
+  // Timeline props — map existing task shape to what TaskTimeline expects
+  const timelineProject = filterProject ? projects.find(p => String(p.id) === String(filterProject)) : null;
+  const timelineTasks = filtered.map(t => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    dueDate: t.dueDate ? t.dueDate.slice(0, 10) : null,
+    estimatedMinutes: t.estimatedMinutes || null,
+    isMilestone: t.isMilestone === 1,
+    parentTaskId: t.parentTaskId || null,
+    blockerIds: (dependenciesCache[t.id]?.blockers || []).map(b => b.id),
+  }));
 
   const totalEffort = filtered.filter(t => t.status !== 'done' && t.estimatedMinutes).reduce((sum, t) => sum + t.estimatedMinutes, 0);
   const timeLogged = filtered.filter(t => t.timeSpentMinutes > 0).reduce((sum, t) => sum + (t.timeSpentMinutes || 0), 0);
@@ -2098,6 +2113,7 @@ export default function TasksPage() {
               { mode: 'calendar', icon: 'calendar', title: 'Calendar view' },
               { mode: 'matrix', icon: 'target', title: 'Eisenhower Matrix (m)' },
               { mode: 'tree', icon: 'git-branch', title: 'Tree view (t)' },
+              { mode: 'timeline', icon: 'bar-chart', title: 'Timeline view' },
             ].map((v, i) => (
               <button
                 key={v.mode}
@@ -2105,6 +2121,7 @@ export default function TasksPage() {
                 className="px-2.5 py-1.5 text-xs transition-all border-l first:border-l-0"
                 style={{ background: viewMode === v.mode ? 'var(--color-primary)' : 'transparent', color: viewMode === v.mode ? '#fff' : 'var(--color-muted)', borderColor: 'var(--color-border)' }}
                 title={v.title}
+                {...(v.mode === 'calendar' ? { 'data-tour': 'tasks-view-calendar' } : {})}
               >
                 {getIcon(v.icon, { size: 13 })}
               </button>
@@ -2250,7 +2267,13 @@ export default function TasksPage() {
 
         {/* Task content area */}
         <div className="flex-1 overflow-hidden flex flex-col">
-          {viewMode === 'tree' ? (
+          {viewMode === 'timeline' ? (
+            <TaskTimeline
+              tasks={timelineTasks}
+              project={timelineProject}
+              onEdit={(taskId) => { const t = tasks.find(t => t.id === taskId); if (t) openEdit(t); }}
+            />
+          ) : viewMode === 'tree' ? (
             <div className="flex-1 overflow-auto">
               <TasksTree
                 tasks={sortTasks(filtered.filter(t => !t.parentTaskId && t.status !== 'done'))}

@@ -764,10 +764,11 @@ function GraphPage() {
     <div className="flex h-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
 
       {/* ── Graph canvas ─────────────────────────────────────────────────── */}
-      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+      <div data-tour="graph-canvas" ref={containerRef} className="flex-1 relative overflow-hidden">
 
         {/* Top toolbar */}
         <div
+          data-tour="graph-toolbar"
           className="absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-3 py-2 flex-wrap"
           style={{ background: 'linear-gradient(to bottom, var(--color-bg) 70%, transparent)' }}
         >
@@ -795,6 +796,7 @@ function GraphPage() {
 
           {/* Filter toggle */}
           <button
+            data-tour="graph-filter-btn"
             onClick={() => setShowFilters(v => !v)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs flex-shrink-0"
             style={{
@@ -811,6 +813,7 @@ function GraphPage() {
 
           {/* Insights button */}
           <button
+            data-tour="graph-insights-btn"
             onClick={() => setShowInsights(v => !v)}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs flex-shrink-0"
             style={{
@@ -837,6 +840,7 @@ function GraphPage() {
           {/* Semantic compute button */}
           {!computing && (
             <button
+              data-tour="graph-semantic-btn"
               onClick={handleCompute}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs flex-shrink-0"
               style={{

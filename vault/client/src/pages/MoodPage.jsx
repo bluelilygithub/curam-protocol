@@ -265,6 +265,7 @@ export default function MoodPage() {
           </div>
           <div className="flex gap-2">
             <button
+              data-tour="mood-checkin-btn"
               onClick={() => setShowCheckinModal(true)}
               className="px-4 py-2 rounded-xl text-sm font-medium border transition-opacity hover:opacity-80"
               style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }}
@@ -272,6 +273,7 @@ export default function MoodPage() {
               Quick check-in
             </button>
             <button
+              data-tour="mood-inquiry-btn"
               onClick={() => setShowInquiry(true)}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-90"
               style={{ background: 'var(--color-primary)' }}
@@ -303,7 +305,7 @@ export default function MoodPage() {
         )}
 
         {/* Main tab bar */}
-        <div className="flex gap-0 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        <div data-tour="mood-tabs" className="flex gap-0 border-b" style={{ borderColor: 'var(--color-border)' }}>
           {['overview', 'sessions'].map(t => (
             <button
               key={t}
@@ -469,7 +471,7 @@ export default function MoodPage() {
                 )}
 
                 {/* ── Patterns & Insights (collapsible) ── */}
-                <div className="rounded-2xl border overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <div data-tour="mood-insights" className="rounded-2xl border overflow-hidden" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
                   <button
                     className="w-full flex items-center justify-between px-5 py-4 text-left hover:opacity-80 transition-opacity"
                     onClick={() => setInsightsOpen(v => !v)}

@@ -156,6 +156,22 @@ Work is organised around **Projects**. Each project holds a structured brief (go
 | **Timezone-correct dates** | Server uses `TO_CHAR(DATE_TRUNC('day', created_at AT TIME ZONE $tz), 'YYYY-MM-DD')` — dates always reflect the user's local day, not UTC |
 | **Custom emotion wheel** | `GET /PUT /api/mood/config` — store and retrieve a custom Plutchik wheel configuration per user; defaults to the 8-primary Plutchik model if no config is saved |
 
+#### News Digest
+
+| Feature | Description |
+|---|---|
+| **Daily digest** | Automatically fetches and analyses news for user-defined topics every day at a configurable time; results stored per-topic per-date so any past digest can be retrieved |
+| **Topics** | Add topics by title + optional extra keywords (e.g. "Climate policy Australia" + "carbon, emissions, IPCC"); drag-to-reorder; enable/disable per topic without deleting |
+| **Perspectives** | Each topic is analysed across four collapsible blocks: Unbiased Summary, Left-leaning perspective, Right-leaning perspective, and Common Ground |
+| **Deep analysis fields** | Unbiased block includes: `timeline` (dated events from the articles), `keyFacts` (specific verifiable claims), `mechanisms` (how things work — funding flows, supply chains), `actorMotivations` (named actors and their strategic reasons), `uncertainties` (what is contested or unresolved), `sourceCredibility` (flags state media and contradictions between sources) |
+| **Commentary** | Per-topic free-text commentary saved per date; auto-saved after 1.5 s idle; injected as rolling context into the next day's analysis so the AI can note how your interpretation evolved |
+| **Per-topic chat** | Q&A chat window inside each topic card; system prompt built from the last 7 days of summaries + your commentary so questions are answered with rolling context |
+| **Copy** | ⎘ Copy button in the expanded card header copies the full analysis as structured plain text (Markdown headings) to the clipboard |
+| **Date navigation** | Browse any past digest with ← → arrows or a jump-to dropdown listing all dates that have a digest |
+| **Generate now** | Manual trigger button on the Digest tab; always force-regenerates (fetches fresh articles and re-runs analysis, replacing any existing result for that date) |
+| **Configurable schedule** | Settings → News Digest: set the time (HH:MM) and which days of the week the digest auto-runs; schedule is applied immediately without a server restart |
+| **Configurable sources** | Toggle built-in RSS feeds on/off (ABC News, Guardian Australia, Reuters, Sky News, Google News); add custom RSS feed URLs by name and URL; saved to the settings table |
+
 #### Admin & Account
 
 | Feature | Description |
@@ -338,6 +354,122 @@ The `calendarNLP` service pre-computes the same ranges plus named weekdays for t
 ### NLP test harness
 
 Run `node server/services/gmailNLP.test.js` to execute 45 test cases across 11 categories (direction, name resolution, time ranges, content keywords, attachments, status, count/extract/summary/thread intent, and combined queries). Output includes per-category breakdown and an overall score.
+
+---
+
+## News Digest — How Information is Extracted
+
+Understanding this pipeline matters for tuning quality. Every stage is a point where you can intervene.
+
+### Pipeline overview
+
+```
+Topics (title + keywords)
+        ↓
+  Article fetching          newsAggregationService.js
+  (RSS + Google News)
+        ↓
+  Recency filter            isRecent() — 72h window, widens to 96h if < 3 results
+        ↓
+  Relevance scoring         keyword term matching against title + snippet
+        ↓
+  Deduplication             title prefix match (first 60 chars)
+        ↓
+  Sort                      newest-first, then by relevance score within same recency band
+        ↓
+  Top 15 articles passed    truncated to 600 chars of snippet per article
+  to analysis model
+        ↓
+  AI analysis               newsAnalysisService.js — Gemini 2.5 Pro → Claude Sonnet fallback
+        ↓
+  JSON stored per topic     news_digest_topics table
+        ↓
+  Rolling context           last 7 days of unbiased summaries + user commentary
+  injected into next run
+```
+
+### Article fetching (`server/services/newsAggregationService.js`)
+
+**Built-in sources** (configurable from Settings → News Digest):
+
+| Source | Type | Notes |
+|---|---|---|
+| ABC News | RSS | General Australian news |
+| Guardian Australia | RSS | Centre-left Australian/world coverage |
+| Reuters | RSS | Wire service, internationally neutral |
+| Sky News | RSS | Centre-right world coverage |
+| Google News | Keyword search | `news.google.com/rss/search?q=<keywords>&hl=en-AU&gl=AU` — returns up to 15 articles matching the topic's keywords directly |
+
+Each built-in RSS feed returns all recent articles regardless of topic; keyword relevance is scored after fetching. Google News runs a targeted keyword search and is the primary source for specific topics.
+
+**Recency filter:** articles with a parseable `pubDate` older than 72 hours are excluded. If fewer than 3 articles survive, the window automatically widens to 96 hours. Articles with no parseable date are always kept.
+
+**Relevance scoring:** each keyword from the topic (title words + extra keywords, split on spaces and commas) is matched against the article title and snippet. Score = count of matching terms. Articles scoring 0 are dropped.
+
+**What this means in practice:** if a topic has only one or two keywords (e.g. "AI"), many articles will score 1 and the ranking will be almost purely chronological. More specific keywords ("LLM regulation EU Act") produce better discrimination.
+
+### Analysis model and prompt (`server/services/newsAnalysisService.js`)
+
+**Model priority:** Gemini 2.5 Pro is tried first (faster, lower cost for batch runs). If it fails or is unavailable, Claude Sonnet is the fallback. Token budget is 3,000 output tokens.
+
+**What the prompt asks for:** the analyst role is framed as writing a *daily intelligence briefing* — specifically what changed or happened in the last 48 hours, not a general background on the topic. The key instruction is: *"summaries must be specific enough that they could not apply to any other day's news on this topic."*
+
+**The JSON schema the model must return:**
+
+```json
+{
+  "unbiased": {
+    "summary":           "3-4 sentence narrative of today's specific development",
+    "timeline":          ["[date] event — only if dates appear in articles"],
+    "keyFacts":          ["specific verifiable claim with context"],
+    "mechanisms":        ["How X works — only if supply chains/funding discussed"],
+    "actorMotivations":  ["Named actor: what they did — strategic reason"],
+    "uncertainties":     ["What is contested or left unresolved"],
+    "sourceCredibility": "Flags PressTV=Iran, RT=Russia, Xinhua=China, Sputnik=Russia, or contradictions",
+    "sourceIndices":     [1, 2, 3]
+  },
+  "left": {
+    "summary":      "Progressive framing of TODAY's specific development",
+    "keyPoints":    ["argument tied to this story"],
+    "emphasis":     "The value or concern driving this framing",
+    "sourceIndices": [1, 3]
+  },
+  "right": {
+    "summary":      "Conservative framing of TODAY's specific development",
+    "keyPoints":    ["argument tied to this story"],
+    "emphasis":     "The value or concern driving this framing",
+    "sourceIndices": [2, 4]
+  },
+  "commonGround": {
+    "agreedFacts":       ["verifiable fact both sides accept"],
+    "coreDisagreement":  "The fundamental tension in today's story"
+  }
+}
+```
+
+Optional fields (`timeline`, `mechanisms`, `actorMotivations`, `uncertainties`, `sourceCredibility`) are only generated when the articles actually support them. The prompt instructs the model not to produce placeholder content.
+
+**Source indices** are 1-based references to the numbered article list. URLs are resolved server-side from the original article objects — the model never generates URLs, eliminating hallucinated links.
+
+### Rolling context
+
+Before each topic analysis, the cron fetches the last 6 days of unbiased summaries + any user commentary for that topic. This is prepended to the prompt so the model can note escalations, shifts in tone, or developments that contradict prior coverage. User commentary (written in the per-topic text field) is treated as editorial input — use it to flag angles the AI missed or to note your own interpretation.
+
+### Schedule and idempotency
+
+The digest runs via `node-cron` (`server/cron/newsDigestCron.js`). The schedule is stored in the `settings` table (`news_digest_time`, `news_digest_days`) and applied immediately when saved — the cron job is cancelled and recreated without a server restart.
+
+The scheduled cron is **idempotent** — it skips topics that already have a result for that date, so if it runs twice (e.g. after a restart) nothing is duplicated. **Manual generation** (the Generate now / Refresh button) always force-regenerates, deleting existing results for that topic+date before re-running.
+
+### Tuning the quality
+
+| Problem | Likely cause | Fix |
+|---|---|---|
+| Analysis is generic / could be any day | Topic keywords too broad | Add specific keywords to the topic (Settings → Topics → edit) |
+| Old articles appearing | RSS feed pubDate missing or malformed | Those articles have no date and pass the recency filter; add more specific keywords to outrank them |
+| No results for a topic | No articles in 96h window, or keywords too niche | Broaden keywords; add Google News as a source; check topic name matches what news outlets call the subject |
+| Left/right framing feels templated | Insufficient ideological signal in sources | Add sources with a clear editorial line (e.g. The Australian, The Guardian) |
+| State media not flagged | Model missed it | Note it in your commentary — it feeds back into tomorrow's context |
 
 ---
 
@@ -666,6 +798,10 @@ npm run dev
 ## Recent Changes
 
 ### March 2026
+
+- **News Digest** — new `/news-digest` page; topics with title + keywords, drag-to-reorder, enable/disable toggle; daily digest auto-run via `node-cron` at a user-configurable time and day selection (stored in `settings` table, applied immediately without restart); article fetching from RSS feeds + Google News keyword search (`newsAggregationService.js`); 72h recency filter with automatic 96h fallback when fewer than 3 articles match; relevance scoring by keyword term count; top 15 articles (600-char snippets) passed to Gemini 2.5 Pro → Claude Sonnet fallback for analysis; prompt framed as a daily intelligence briefing — asks for what specifically changed today, not background; JSON schema includes `timeline`, `keyFacts`, `mechanisms`, `actorMotivations`, `uncertainties`, `sourceCredibility` (all optional, generated only when supported by articles); rolling 7-day context (prior summaries + user commentary) injected into each run; per-topic Q&A chat with 7-day context window; user commentary auto-saved and used as editorial input for next day; date navigation with jump-to dropdown; copy button (⎘) in expanded card header copies full analysis as Markdown; manual Generate now / Refresh always force-regenerates (deletes and re-runs, bypassing idempotency); scheduled cron remains idempotent; Settings → News Digest tab: time picker, day-of-week toggles, source toggle list, add custom RSS URL; 5 new DB tables: `news_topics`, `news_digests`, `news_digest_topics`, `news_digest_context`, `news_chat`; `node-cron` and `rss-parser` added to dependencies; see [News Digest — How Information is Extracted](#news-digest--how-information-is-extracted) for full pipeline documentation
+
+- **Client Management** — new `/clients` page and `/clients/:id` detail page; client records with name, company, status (Prospect / Active / Paused / Archived), communication preference, tags, notes; client contacts sub-table; client touchpoints (calls, emails, meetings) with AI-generated summaries; link clients to projects and invoices; mood summary pulled from project check-ins; Gmail integration: `@gmail` search filtered to client email domain; `clients`, `client_contacts`, `client_touchpoints` tables; `clientId` FK added to `projects` and `fin_invoices`
 
 - **Curam Finance module** — full bookkeeping and invoicing module at `/finance`; 8-tab layout (Dashboard, Invoices, Clients, Expenses, Wages, Journal, BAS, Settings); double-entry journal auto-generated for every transaction; invoice numbers auto-sequenced `INV-YYYY###`; invoice email via MailChannels TX API with styled HTML template (or SMTP fallback); Draft + Sent invoices editable (journal deleted and recreated on save); Paid invoices read-only; Resend button for Sent invoices; expense GST auto-calculated as total ÷ 11 when "GST Included" ticked; category autocomplete from `GET /expenses/categories` (no hardcoded list); expense edit with journal reversal; BAS on **cash basis** — GST collected from `paidAt` date not issue date; all destructive actions use `ConfirmModal`; success/error feedback via `Toast` (new `toastStore.js` Zustand store + `Toast.jsx` component mounted in `Layout`); 8 `fin_*` tables added to `db.js` init schema; route registered at `app.use('/api/finance', ...)`; 💰 nav icon added to top bar
 - **Finance — PDF invoices, BAS workflow, receipt uploads, overdue flagging** — PDF invoice download generated server-side via `@react-pdf/renderer` (ESM, loaded with dynamic `await import()` from CJS server); gold-branded A4 layout with logo, line-item table, GST subtotals and bank payment footer; served from `GET /api/finance/invoices/:id/pdf`; BAS reconciliation status bar (Open → Reconciled → Lodged → Paid) with timestamps and locked notice on paid quarters; BAS paid auto-generates a `bas` journal entry; pre-reconcile warnings modal (amber) checks for G1/G11=0, negative net GST, 1A mismatch, and unpaid invoices raised in the quarter (`GET /bas/:quarterId/warnings`); lodge confirmation shows G1/1A/1B/net GST figures; Annual BAS Summary panel (right side of BAS tab) with financial-year navigation and a row-click that syncs the left panel's quarter; receipt upload on expenses — multer disk storage under `uploads/receipts/`, `receipt_path` column on `fin_expenses`, drag-and-drop upload modal, PDF iframe / image viewer modal, remove with ConfirmModal; paperclip icon on expense rows (amber = has receipt); overdue invoice badge — `displayStatus()` helper returns `'overdue'` for `sent` invoices past their due date; filter tabs on the invoice list (All / Draft / Sent / Overdue / Paid); Dashboard splits Outstanding into Outstanding and Overdue cards; Finance Settings adds Account Name field; `apiClient.js` extended with `postForm()` for multipart uploads; `ConfirmModal` message prop changed from `<p>` to `<div>` to support JSX content

@@ -18,6 +18,10 @@ import { startIntegrationsTour, TOUR_KEY as INTEGRATIONS_TOUR_KEY } from '../uti
 import { startGettingStartedTour, TOUR_KEY as GETTING_STARTED_TOUR_KEY } from '../utils/tours/gettingStartedTour';
 import { startMilestonesTour, TOUR_KEY as MILESTONES_TOUR_KEY } from '../utils/tours/milestonesTour';
 import { startFinanceTour, TOUR_KEY as FINANCE_TOUR_KEY } from '../utils/tours/financeTour';
+import { startMoodTour, TOUR_KEY as MOOD_TOUR_KEY } from '../utils/tours/moodTour';
+import { startNewsDigestTour, TOUR_KEY as NEWS_DIGEST_TOUR_KEY } from '../utils/tours/newsDigestTour';
+import { startCalendarTour, TOUR_KEY as CALENDAR_TOUR_KEY } from '../utils/tours/calendarTour';
+import { startGraphTour, TOUR_KEY as GRAPH_TOUR_KEY } from '../utils/tours/graphTour';
 import ConfirmModal from '../components/ConfirmModal';
 
 function SettingsPage() {
@@ -44,6 +48,21 @@ function SettingsPage() {
   const [inquiryDays,      setInquiryDays]      = useState([1, 3, 5]); // Mon/Wed/Fri default
   const [inquirySaved,     setInquirySaved]     = useState(false);
 
+  // News Digest settings
+  const DEFAULT_DIGEST_SOURCES = [
+    { name: 'ABC News',           url: 'https://www.abc.net.au/news/feed/51120/rss.xml',    enabled: true },
+    { name: 'Guardian Australia', url: 'https://www.theguardian.com/australia-news/rss',    enabled: true },
+    { name: 'Reuters',            url: 'https://feeds.reuters.com/reuters/topNews',          enabled: true },
+    { name: 'Sky News',           url: 'https://feeds.skynews.com/feeds/rss/world.xml',     enabled: true },
+    { name: 'Google News',        url: '__google_news__',                                    enabled: true },
+  ];
+  const [digestTime,    setDigestTime]    = useState('07:00');
+  const [digestDays,    setDigestDays]    = useState([0, 1, 2, 3, 4, 5, 6]);
+  const [digestSources, setDigestSources] = useState(DEFAULT_DIGEST_SOURCES);
+  const [digestSaved,   setDigestSaved]   = useState(false);
+  const [newFeedName,   setNewFeedName]   = useState('');
+  const [newFeedUrl,    setNewFeedUrl]    = useState('');
+
   const BUDGET_PRESETS = [0.10, 0.25, 0.50, 1.00, 5.00];
   const { token } = useAuthStore();
   const getIcon = useIcon();
@@ -65,7 +84,7 @@ function SettingsPage() {
   const [showResetGoalsConfirm, setShowResetGoalsConfirm] = useState(false);
   const [tab, setTab] = useState(() => localStorage.getItem('settingsTab') || 'Appearance');
 
-  const TABS = ['Appearance', 'Profile', 'AI & Chat', 'Tasks', 'Goals', 'Integrations', 'Tours'];
+  const TABS = ['Appearance', 'Profile', 'AI & Chat', 'Tasks', 'Goals', 'Integrations', 'News Digest', 'Tours'];
 
   function selectTab(t) {
     setTab(t);
@@ -100,6 +119,12 @@ function SettingsPage() {
       if (data.inquiry_reminder_frequency) setInquiryFrequency(data.inquiry_reminder_frequency);
       if (data.inquiry_reminder_time)      setInquiryTime(data.inquiry_reminder_time);
       if (data.inquiry_reminder_days)      { try { setInquiryDays(JSON.parse(data.inquiry_reminder_days)); } catch {} }
+    }).catch(() => {});
+
+    api.get('/api/news-digest/settings').then(r => r.json()).then(data => {
+      if (data.time)    setDigestTime(data.time);
+      if (data.days)    setDigestDays(data.days);
+      if (data.sources) setDigestSources(data.sources);
     }).catch(() => {});
   }, []);
 
@@ -188,6 +213,16 @@ function SettingsPage() {
     ]);
     setInquirySaved(true);
     setTimeout(() => setInquirySaved(false), 2000);
+  }
+
+  async function saveDigestSettings() {
+    try {
+      await api.post('/api/news-digest/settings', { time: digestTime, days: digestDays, sources: digestSources });
+      setDigestSaved(true);
+      setTimeout(() => setDigestSaved(false), 2000);
+    } catch {
+      // silent — toast not imported in scope here, server errors will show on next load
+    }
   }
 
   return (
@@ -1036,6 +1071,160 @@ function SettingsPage() {
       </section>
       )}
 
+      {/* News Digest tab */}
+      {tab === 'News Digest' && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Schedule
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          When the daily digest runs automatically. Uses Australia/Sydney time.
+        </p>
+
+        <div className="mb-5">
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
+            Time
+          </label>
+          <input
+            type="time"
+            value={digestTime}
+            onChange={e => setDigestTime(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border text-sm outline-none"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+        </div>
+
+        <div className="mb-6">
+          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
+            Days
+          </label>
+          <div className="flex gap-1.5 flex-wrap">
+            {[
+              { day: 1, label: 'Mon' }, { day: 2, label: 'Tue' }, { day: 3, label: 'Wed' },
+              { day: 4, label: 'Thu' }, { day: 5, label: 'Fri' }, { day: 6, label: 'Sat' },
+              { day: 0, label: 'Sun' },
+            ].map(({ day, label }) => {
+              const active = digestDays.includes(day);
+              return (
+                <button
+                  key={day}
+                  onClick={() => setDigestDays(prev =>
+                    prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort()
+                  )}
+                  className="px-2.5 py-1 rounded-lg border text-xs font-medium transition-all"
+                  style={{
+                    background:  active ? 'var(--color-primary)' : 'var(--color-surface)',
+                    borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+                    color:       active ? '#fff' : 'var(--color-text)',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Sources
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Toggle sources on or off, or add custom RSS feeds.
+        </p>
+
+        <div className="space-y-2 mb-4">
+          {digestSources.map((source, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl border"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium" style={{ color: source.enabled !== false ? 'var(--color-text)' : 'var(--color-muted)' }}>
+                  {source.name}
+                </p>
+                {source.url !== '__google_news__' && (
+                  <p className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>{source.url}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div
+                  onClick={() => setDigestSources(prev => prev.map((s, idx) =>
+                    idx === i ? { ...s, enabled: s.enabled === false } : s
+                  ))}
+                  className="relative w-9 h-5 rounded-full transition-colors flex-shrink-0"
+                  style={{ background: source.enabled !== false ? 'var(--color-primary)' : 'var(--color-border)', cursor: 'pointer' }}
+                >
+                  <span
+                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                    style={{ transform: source.enabled !== false ? 'translateX(17px)' : 'translateX(1px)' }}
+                  />
+                </div>
+                {/* Only allow deleting custom (non-default) sources */}
+                {!['ABC News', 'Guardian Australia', 'Reuters', 'Sky News', 'Google News'].includes(source.name) && (
+                  <button
+                    onClick={() => setDigestSources(prev => prev.filter((_, idx) => idx !== i))}
+                    className="w-6 h-6 flex items-center justify-center rounded text-xs hover:opacity-60"
+                    style={{ color: '#ef4444' }}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Add custom RSS feed */}
+        <div
+          className="p-3 rounded-xl border space-y-2 mb-5"
+          style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
+        >
+          <p className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Add custom RSS feed</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newFeedName}
+              onChange={e => setNewFeedName(e.target.value)}
+              placeholder="Name (e.g. BBC News)"
+              className="flex-1 px-3 py-1.5 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+            <input
+              type="url"
+              value={newFeedUrl}
+              onChange={e => setNewFeedUrl(e.target.value)}
+              placeholder="RSS URL"
+              className="flex-1 px-3 py-1.5 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+            <button
+              onClick={() => {
+                if (!newFeedName.trim() || !newFeedUrl.trim()) return;
+                setDigestSources(prev => [...prev, { name: newFeedName.trim(), url: newFeedUrl.trim(), enabled: true }]);
+                setNewFeedName('');
+                setNewFeedUrl('');
+              }}
+              disabled={!newFeedName.trim() || !newFeedUrl.trim()}
+              className="px-3 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
+        <button
+          onClick={saveDigestSettings}
+          className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+          style={{ background: digestSaved ? '#22c55e' : 'var(--color-primary)' }}
+        >
+          {digestSaved ? 'Saved ✓' : 'Save'}
+        </button>
+      </section>
+      )}
+
       {/* Integrations tab */}
       {tab === 'Integrations' && (
       <section data-tour="integrations-section">
@@ -1223,6 +1412,78 @@ function SettingsPage() {
               style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
             >
               Retake Tour
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Mood Tracking Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                7-step tour — check-ins, guided inquiry, overview, sessions, pattern insights
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(MOOD_TOUR_KEY);
+                setTimeout(() => startMoodTour(navigate), 200);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(MOOD_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>News Digest Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                7-step tour — topics, generating digests, AI analysis, commentary, follow-up chat
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(NEWS_DIGEST_TOUR_KEY);
+                setTimeout(() => startNewsDigestTour(navigate), 200);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(NEWS_DIGEST_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Task Calendar Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                6-step tour — day/week/month/agenda views, drag to reschedule, resize for effort
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(CALENDAR_TOUR_KEY);
+                setTimeout(() => startCalendarTour(navigate), 200);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(CALENDAR_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Knowledge Graph Tour</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                7-step tour — navigation, semantic connections, AI insights, node types, project focus
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                localStorage.removeItem(GRAPH_TOUR_KEY);
+                setTimeout(() => startGraphTour(navigate), 200);
+              }}
+              className="flex-shrink-0 ml-4 px-4 py-2 rounded-lg border text-sm font-medium transition-all hover:opacity-80"
+              style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'transparent' }}
+            >
+              {localStorage.getItem(GRAPH_TOUR_KEY) ? 'Retake Tour' : 'Take Tour'}
             </button>
           </div>
         </div>

@@ -162,6 +162,68 @@ async function initSchema() {
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "activityStatus" TEXT NOT NULL DEFAULT 'none' CHECK("activityStatus" IN ('none','started','paused','waiting'))`);
     await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "isMilestone" INTEGER DEFAULT 0`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON tasks("userId", "isMilestone") WHERE "isMilestone" = 1`);
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "startDate" DATE DEFAULT NULL`);
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "targetEndDate" DATE DEFAULT NULL`);
+
+    // ── News Digest ───────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS news_topics (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title       TEXT NOT NULL,
+        keywords    TEXT DEFAULT '',
+        "sortOrder" INTEGER DEFAULT 0,
+        active      BOOLEAN DEFAULT true,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS news_digests (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date          DATE NOT NULL,
+        "generatedAt" TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE("userId", date)
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS news_digest_topics (
+        id        SERIAL PRIMARY KEY,
+        "digestId" INTEGER NOT NULL REFERENCES news_digests(id) ON DELETE CASCADE,
+        "topicId"  INTEGER NOT NULL REFERENCES news_topics(id) ON DELETE CASCADE,
+        articles   JSONB DEFAULT '[]',
+        analysis   JSONB DEFAULT '{}',
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS news_digest_context (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "topicId"   INTEGER NOT NULL REFERENCES news_topics(id) ON DELETE CASCADE,
+        date        DATE NOT NULL,
+        commentary  TEXT DEFAULT '',
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE("userId", "topicId", date)
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS news_chat (
+        id          SERIAL PRIMARY KEY,
+        "topicId"   INTEGER NOT NULL REFERENCES news_topics(id) ON DELETE CASCADE,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role        TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+        content     TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_news_chat_topic ON news_chat("topicId", "createdAt")
+    `);
 
     // ── Chat ──────────────────────────────────────────────────────────────────
     await client.query(`

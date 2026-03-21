@@ -92,6 +92,7 @@ app.use('/api/finance', require('./routes/finance'));
 app.use('/api/usage', require('./routes/usage'));
 app.use('/api/mood', require('./routes/mood'));
 app.use('/api/clients', require('./routes/clients'));
+app.use('/api/news-digest', require('./routes/newsDigest'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');
@@ -108,6 +109,9 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Start cron jobs
+const { startNewsDigestCron } = require('./cron/newsDigestCron');
+
 // Poll until schema is ready, then seed and start listening
 async function start() {
   for (let i = 0; i < 10; i++) {
@@ -121,6 +125,7 @@ async function start() {
   }
 
   await seedInitialUser().catch(err => console.error('Seed error:', err));
+  startNewsDigestCron();
 
   app.listen(PORT, () => {
     console.log('Vault server running on port ' + PORT);
