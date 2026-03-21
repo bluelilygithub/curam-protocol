@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../utils/apiClient';
 import ConfirmModal from '../components/ConfirmModal';
 import useToastStore from '../store/toastStore';
@@ -287,9 +288,13 @@ function ClientsTab() {
 
   return (
     <div className="p-6">
+      <div className="mb-4 px-3 py-2.5 rounded-lg text-xs flex items-center justify-between" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
+        <span>Client relationships are now managed in the Clients module.</span>
+        <Link to="/clients" className="font-medium hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)' }}>Go to Clients →</Link>
+      </div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Clients</h2>
-        <Btn onClick={openNew}>+ New Client</Btn>
+        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Billing records</h2>
+        <Btn onClick={openNew}>+ New</Btn>
       </div>
 
       {clients.length === 0 ? (
@@ -298,7 +303,7 @@ function ClientsTab() {
         <div className="flex flex-col gap-2 max-w-2xl">
           {clients.map(c => (
             <div
-              key={c.id}
+              key={`${c.source || 'fin'}-${c.id}`}
               className="flex items-center justify-between p-3 rounded-lg border"
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             >
@@ -309,12 +314,18 @@ function ClientsTab() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Btn variant="secondary" onClick={() => openEdit(c)}>Edit</Btn>
-                <button
-                  onClick={() => del(c.id, c.name)}
-                  className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
-                  style={{ color: '#ef4444', borderColor: '#fca5a5' }}
-                >Delete</button>
+                {c.source === 'crm' ? (
+                  <Link to={`/clients/${c.id}`} className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>View →</Link>
+                ) : (
+                  <>
+                    <Btn variant="secondary" onClick={() => openEdit(c)}>Edit</Btn>
+                    <button
+                      onClick={() => del(c.id, c.name)}
+                      className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
+                      style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                    >Delete</button>
+                  </>
+                )}
               </div>
             </div>
           ))}
@@ -382,13 +393,13 @@ function InvoicesTab() {
   const [filterStatus, setFilterStatus] = useState('all');
   const addToast = useToastStore(s => s.addToast);
 
-  const blankForm = () => ({ clientId: '', issueDate: todayStr(), dueDate: '', notes: '', items: [{ ...BLANK_ITEM }] });
+  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', items: [{ ...BLANK_ITEM }] });
   const [form, setForm] = useState(blankForm);
 
   const load = useCallback(async () => {
     const [invs, cls] = await Promise.all([
       api.get('/api/finance/invoices').then(r => r.json()),
-      api.get('/api/finance/clients').then(r => r.json()),
+      api.get('/api/clients').then(r => r.json()),
     ]);
     setInvoices(Array.isArray(invs) ? invs : []);
     setClients(Array.isArray(cls) ? cls : []);
@@ -402,7 +413,7 @@ function InvoicesTab() {
     if (inv.status === 'paid') return; // paid invoices are read-only
     const data = await api.get(`/api/finance/invoices/${inv.id}`).then(r => r.json());
     setForm({
-      clientId:  data.clientId ? String(data.clientId) : '',
+      clientRef: data.clientRef ? String(data.clientRef) : '',
       issueDate: data.issueDate ? String(data.issueDate).slice(0,10) : todayStr(),
       dueDate:   data.dueDate  ? String(data.dueDate).slice(0,10)  : '',
       notes:     data.notes || '',
@@ -427,7 +438,7 @@ function InvoicesTab() {
     setSaving(true);
     setError('');
     try {
-      const payload = { ...form, clientId: form.clientId || null };
+      const payload = { ...form, clientRef: form.clientRef || null, clientId: null };
       if (modal === 'new') {
         await api.post('/api/finance/invoices', payload);
       } else {
@@ -611,7 +622,7 @@ function InvoicesTab() {
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-2 gap-3">
               <Field label="Client">
-                <Sel value={form.clientId} onChange={v => setForm(p => ({...p, clientId: v}))}>
+                <Sel value={form.clientRef} onChange={v => setForm(p => ({...p, clientRef: v}))}>
                   <option value="">— No client —</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </Sel>

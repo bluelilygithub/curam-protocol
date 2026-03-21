@@ -91,6 +91,7 @@ app.use('/api/graph',    require('./routes/graph'));
 app.use('/api/finance', require('./routes/finance'));
 app.use('/api/usage', require('./routes/usage'));
 app.use('/api/mood', require('./routes/mood'));
+app.use('/api/clients', require('./routes/clients'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

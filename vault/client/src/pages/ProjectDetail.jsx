@@ -150,9 +150,22 @@ function ProjectDetail() {
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-semibold truncate" style={{ color: 'var(--color-text)' }}>{project.name}</h1>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Updated {new Date(project.updatedAt).toLocaleDateString()}
-            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                Updated {new Date(project.updatedAt).toLocaleDateString()}
+              </p>
+              {project.clientId && project.clientName && (
+                <a
+                  href={`/clients/${project.clientId}`}
+                  onClick={e => { e.preventDefault(); navigate(`/clients/${project.clientId}`); }}
+                  className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-md hover:opacity-70 transition-opacity"
+                  style={{ background: 'var(--color-surface)', color: 'var(--color-primary)', border: '1px solid var(--color-border)' }}
+                >
+                  {getIcon('briefcase', { size: 10 })}
+                  {project.clientName}
+                </a>
+              )}
+            </div>
           </div>
           <MoodDot entityType="project" entityId={project.id} entityTitle={project.name} />
           <button

@@ -324,6 +324,15 @@ function Layout() {
           </Link>
 
           <Link
+            to="/clients"
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            style={{ color: location.pathname.startsWith('/clients') ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Clients"
+          >
+            {getIcon('briefcase', { size: 16 })}
+          </Link>
+
+          <Link
             to="/tasks"
             className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/tasks' ? 'var(--color-primary)' : 'var(--color-muted)' }}

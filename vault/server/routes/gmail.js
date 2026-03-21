@@ -412,3 +412,5 @@ Be concise and direct. When asked to count, count. When asked to summarise, summ
 });
 
 module.exports = router;
+module.exports.getGmailClient = getGmailClient;
+module.exports.getHeader      = getHeader;

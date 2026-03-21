@@ -32,6 +32,9 @@ function ProjectSidebar({ onClose }) {
   const [habitsOpen, setHabitsOpen] = useState(() => {
     try { return JSON.parse(localStorage.getItem('sidebarHabitsOpen') ?? 'false'); } catch { return false; }
   });
+  const [clientOpen, setClientOpen] = useState(false);
+  const [touchpointForm, setTouchpointForm] = useState(null); // null | { type, date, note }
+  const [tpSaving, setTpSaving] = useState(false);
 
   useEffect(() => { fetchProjects(); }, []);
   useEffect(() => {
@@ -476,6 +479,89 @@ function ProjectSidebar({ onClose }) {
           </div>
         )}
       </div>
+
+      {/* Client context section */}
+      {(() => {
+        const activeProject = projects.find(p => p.id === activeProjectId);
+        if (!activeProject?.clientId || !activeProject?.clientName) return null;
+        return (
+          <div className="px-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <button
+              onClick={() => setClientOpen(v => !v)}
+              className="w-full text-left px-2 py-2 flex items-center gap-1.5 transition-colors hover:opacity-70"
+            >
+              {getIcon(clientOpen ? 'chevron-down' : 'chevron-right', { size: 11, style: { color: 'var(--color-muted)' } })}
+              <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>Client</span>
+            </button>
+            {clientOpen && (
+              <div className="pb-2 px-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{activeProject.clientName}</span>
+                  <button
+                    onClick={() => { navigate(`/clients/${activeProject.clientId}`); if (onClose) onClose(); }}
+                    className="text-xs hover:opacity-70 flex-shrink-0"
+                    style={{ color: 'var(--color-primary)' }}
+                  >View →</button>
+                </div>
+                {touchpointForm ? (
+                  <div className="space-y-1.5">
+                    <select
+                      value={touchpointForm.type}
+                      onChange={e => setTouchpointForm(p => ({ ...p, type: e.target.value }))}
+                      className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      {['call','email','meeting','decision','milestone','other'].map(t => (
+                        <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="date"
+                      value={touchpointForm.date}
+                      onChange={e => setTouchpointForm(p => ({ ...p, date: e.target.value }))}
+                      className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    />
+                    <textarea
+                      rows={2}
+                      value={touchpointForm.note}
+                      onChange={e => setTouchpointForm(p => ({ ...p, note: e.target.value }))}
+                      placeholder="Note…"
+                      className="w-full text-xs px-2 py-1.5 rounded-lg border outline-none resize-none"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    />
+                    <div className="flex gap-1.5">
+                      <button
+                        disabled={tpSaving}
+                        onClick={async () => {
+                          setTpSaving(true);
+                          try {
+                            await api.post(`/api/clients/${activeProject.clientId}/touchpoints`, touchpointForm);
+                            setTouchpointForm(null);
+                          } finally { setTpSaving(false); }
+                        }}
+                        className="flex-1 text-xs py-1 rounded-lg font-medium text-white disabled:opacity-50"
+                        style={{ background: 'var(--color-primary)' }}
+                      >{tpSaving ? 'Saving…' : 'Log'}</button>
+                      <button
+                        onClick={() => setTouchpointForm(null)}
+                        className="text-xs px-2 py-1 rounded-lg border"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                      >Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setTouchpointForm({ type: 'call', date: new Date().toISOString().slice(0, 10), note: '' })}
+                    className="w-full text-left text-xs px-2 py-1.5 rounded-lg hover:opacity-70 transition-opacity"
+                    style={{ color: 'var(--color-muted)' }}
+                  >+ Log touchpoint</button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Bottom */}
       <div className="px-2 py-2 border-t" style={{ borderColor: 'var(--color-border)' }}>

@@ -574,6 +574,50 @@ async function initSchema() {
       )
     `);
 
+    // ── Clients ───────────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS clients (
+        id                  SERIAL PRIMARY KEY,
+        "userId"            INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name                VARCHAR(255) NOT NULL,
+        company             VARCHAR(255),
+        status              VARCHAR(20) DEFAULT 'active'
+                            CHECK (status IN ('prospect','active','paused','archived')),
+        "communicationPref" VARCHAR(50),
+        "howTheyWork"       TEXT,
+        "startDate"         DATE,
+        tags                JSON,
+        notes               TEXT,
+        "createdAt"         TIMESTAMP DEFAULT NOW(),
+        "updatedAt"         TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS client_contacts (
+        id          SERIAL PRIMARY KEY,
+        "clientId"  INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+        name        VARCHAR(255) NOT NULL,
+        role        VARCHAR(100),
+        email       VARCHAR(255),
+        phone       VARCHAR(50),
+        "isPrimary" BOOLEAN DEFAULT FALSE,
+        "createdAt" TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS client_touchpoints (
+        id          SERIAL PRIMARY KEY,
+        "clientId"  INTEGER REFERENCES clients(id) ON DELETE CASCADE,
+        "contactId" INTEGER REFERENCES client_contacts(id) ON DELETE SET NULL,
+        type        VARCHAR(20) CHECK (type IN ('call','email','meeting','decision','milestone','other')),
+        date        DATE NOT NULL,
+        note        TEXT,
+        "createdAt" TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -784,6 +828,15 @@ async function initSchema() {
     EXCEPTION WHEN duplicate_object THEN NULL;
     END $$
   `);
+
+  // ── Clients: schema additions ─────────────────────────────────────────────
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "clientType" VARCHAR(10) DEFAULT 'company'`);
+  await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE fin_invoices ADD COLUMN IF NOT EXISTS "clientRef" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_clients_user ON clients("userId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_client_contacts_client ON client_contacts("clientId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_client_touchpoints_client ON client_touchpoints("clientId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_projects_client ON projects("clientId")`);
 
   console.log('[db] Schema ready');
 }

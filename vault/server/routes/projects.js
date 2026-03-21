@@ -26,11 +26,12 @@ router.get('/', async (req, res) => {
   const archived = req.query.archived === 'true';
   try {
     const { rows } = await pool.query(`
-      SELECT p.*, COUNT(DISTINCT m."sessionId") as "chatCount"
+      SELECT p.*, COUNT(DISTINCT m."sessionId") as "chatCount", c.name AS "clientName"
       FROM projects p
       LEFT JOIN messages m ON m."projectId" = p.id
+      LEFT JOIN clients c ON c.id = p."clientId"
       WHERE p."userId"=$1 AND ${archived ? 'p."archived_at" IS NOT NULL' : 'p."archived_at" IS NULL'}
-      GROUP BY p.id
+      GROUP BY p.id, c.name
       ORDER BY p."sortOrder" ASC, p."updatedAt" DESC
     `, [req.user.id]);
     res.json(rows);
@@ -61,16 +62,16 @@ router.patch('/reorder', async (req, res) => {
 
 // POST /api/projects
 router.post('/', async (req, res) => {
-  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig } = req.body;
+  const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, clientId } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
 
   try {
     const { rows } = await pool.query(
-      `INSERT INTO projects (name, goal, problem, audience, "techStack", constraints, "successCriteria", tone, notes, model, "projectType", "typeConfig", "userId")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`,
+      `INSERT INTO projects (name, goal, problem, audience, "techStack", constraints, "successCriteria", tone, notes, model, "projectType", "typeConfig", "clientId", "userId")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
       [name, goal || '', problem || '', audience || '', techStack || '', constraints || '',
        successCriteria || '', tone || '', notes || '', model || 'claude-sonnet-4-6',
-       projectType || null, typeConfig ? JSON.stringify(typeConfig) : null, req.user.id]
+       projectType || null, typeConfig ? JSON.stringify(typeConfig) : null, clientId || null, req.user.id]
     );
     const { rows: project } = await pool.query('SELECT * FROM projects WHERE id=$1', [rows[0].id]);
     await syncSearchIndex(project[0]);
@@ -83,7 +84,10 @@ router.post('/', async (req, res) => {
 // GET /api/projects/:id  (works for both active and archived)
 router.get('/:id', async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
+    const { rows } = await pool.query(
+      `SELECT p.*, c.name AS "clientName" FROM projects p LEFT JOIN clients c ON c.id = p."clientId" WHERE p.id=$1 AND p."userId"=$2`,
+      [req.params.id, req.user.id]
+    );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
   } catch (err) {

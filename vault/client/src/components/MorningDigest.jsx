@@ -93,7 +93,10 @@ export default function MorningDigest() {
                 {data.overdue.map(t => (
                   <div key={t.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border"
                     style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', borderLeft: `3px solid ${PRIORITY_COLOR[t.priority]}` }}>
-                    <span className="flex-1 text-sm" style={{ color: 'var(--color-text)' }}>{t.title}</span>
+                    <span className="flex-1 text-sm" style={{ color: 'var(--color-text)' }}>
+                      {t.title}
+                      {t.clientName && <span className="ml-1.5 text-xs" style={{ color: 'var(--color-muted)' }}>{t.clientName}</span>}
+                    </span>
                     {t.dueDate && <span className="text-xs flex-shrink-0" style={{ color: '#ef4444' }}>{t.dueDate.slice(0, 10)}</span>}
                   </div>
                 ))}
@@ -111,7 +114,10 @@ export default function MorningDigest() {
                 {data.today.map(t => (
                   <div key={t.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl border"
                     style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', borderLeft: `3px solid ${PRIORITY_COLOR[t.priority]}` }}>
-                    <span className="flex-1 text-sm" style={{ color: 'var(--color-text)' }}>{t.title}</span>
+                    <span className="flex-1 text-sm" style={{ color: 'var(--color-text)' }}>
+                      {t.title}
+                      {t.clientName && <span className="ml-1.5 text-xs" style={{ color: 'var(--color-muted)' }}>{t.clientName}</span>}
+                    </span>
                     {t.dueDate?.includes('T') && <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{t.dueDate.slice(11, 16)}</span>}
                   </div>
                 ))}

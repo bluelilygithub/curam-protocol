@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MODELS, PROJECT_TYPES, TYPE_FIELDS, getModelById } from '../utils/models';
+import api from '../utils/apiClient';
 
 function buildDefaultTypeConfig(typeId) {
   const fields = TYPE_FIELDS[typeId];
@@ -13,7 +14,13 @@ function NewProjectModal({ onClose, onCreate }) {
   const [selectedModel, setSelectedModel] = useState('claude-haiku-4-5-20251001');
   const [typeConfig, setTypeConfig] = useState(() => buildDefaultTypeConfig('research'));
   const [creating, setCreating] = useState(false);
+  const [clientId, setClientId] = useState('');
+  const [clients, setClients] = useState([]);
   const nameRef = useRef(null);
+
+  useEffect(() => {
+    api.get('/api/clients?status=active').then(r => r.json()).then(d => setClients(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
 
   useEffect(() => { nameRef.current?.focus(); }, []);
 
@@ -33,6 +40,7 @@ function NewProjectModal({ onClose, onCreate }) {
         model: selectedModel,
         projectType: selectedType?.id || null,
         typeConfig: selectedType ? typeConfig : null,
+        clientId: clientId ? Number(clientId) : null,
       });
     } finally {
       setCreating(false);
@@ -78,6 +86,24 @@ function NewProjectModal({ onClose, onCreate }) {
                 style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               />
             </div>
+
+            {/* Client (optional) */}
+            {clients.length > 0 && (
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>
+                  Client <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+                </label>
+                <select
+                  value={clientId}
+                  onChange={e => setClientId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border text-sm outline-none"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  <option value="">No client</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.company ? ` — ${c.company}` : ''}</option>)}
+                </select>
+              </div>
+            )}
 
             {/* Project type tiles */}
             <div>

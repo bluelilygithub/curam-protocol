@@ -226,7 +226,7 @@ router.post('/dominant/batch', async (req, res) => {
        )
        SELECT mc.entity_type, mc.entity_id, mc.core_emotion, COUNT(*) AS cnt
        FROM mood_checkins mc
-       JOIN target t ON mc.entity_type = t.et AND mc.entity_id = t.eid
+       JOIN target t ON mc.entity_type = t.et AND mc.entity_id::text = t.eid
        WHERE mc.user_id = $1
        GROUP BY mc.entity_type, mc.entity_id, mc.core_emotion`,
       [userId, types, ids]

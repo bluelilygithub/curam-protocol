@@ -155,7 +155,10 @@ router.get('/accounts', async (req, res) => {
 router.get('/clients', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT * FROM fin_clients WHERE "userId"=$1 ORDER BY name`, [req.user.id]
+      `SELECT id, name, email, phone, address, abn, 'fin' AS source FROM fin_clients WHERE "userId"=$1
+       UNION ALL
+       SELECT id, name, NULL AS email, NULL AS phone, NULL AS address, NULL AS abn, 'crm' AS source FROM clients WHERE "userId"=$1
+       ORDER BY name`, [req.user.id]
     );
     res.json(rows);
   } catch (err) {
@@ -206,9 +209,10 @@ router.delete('/clients/:id', async (req, res) => {
 router.get('/invoices', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT i.*, c.name AS "clientName"
+      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName"
        FROM fin_invoices i
-       LEFT JOIN fin_clients c ON c.id = i."clientId"
+       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
+       LEFT JOIN clients cr ON cr.id = i."clientRef"
        WHERE i."userId"=$1
        ORDER BY i."issueDate" DESC, i.id DESC`,
       [req.user.id]
@@ -224,7 +228,7 @@ router.post('/invoices', async (req, res) => {
   try {
     await client.query('BEGIN');
     const userId = req.user.id;
-    const { clientId, issueDate, dueDate, notes, items = [] } = req.body;
+    const { clientId, clientRef, issueDate, dueDate, notes, items = [] } = req.body;
 
     let subtotal = 0, gst = 0;
     for (const item of items) {
@@ -243,9 +247,9 @@ router.post('/invoices', async (req, res) => {
 
     const number = await nextInvoiceNumber(userId);
     const { rows } = await client.query(
-      `INSERT INTO fin_invoices ("userId","clientId",number,status,"issueDate","dueDate",subtotal,gst,total,notes)
-       VALUES ($1,$2,$3,'draft',$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [userId, clientId||null, number, issueDate||new Date().toISOString().slice(0,10), dueDate||null, subtotal, gst, total, notes||null]
+      `INSERT INTO fin_invoices ("userId","clientId","clientRef",number,status,"issueDate","dueDate",subtotal,gst,total,notes)
+       VALUES ($1,$2,$3,$4,'draft',$5,$6,$7,$8,$9,$10) RETURNING *`,
+      [userId, clientId||null, clientRef||null, number, issueDate||new Date().toISOString().slice(0,10), dueDate||null, subtotal, gst, total, notes||null]
     );
     const invoice = rows[0];
 
@@ -291,10 +295,13 @@ router.post('/invoices', async (req, res) => {
 router.get('/invoices/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT i.*, c.name AS "clientName", c.email AS "clientEmail",
-              c.address AS "clientAddress", c.abn AS "clientAbn"
+      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
+              COALESCE(fc.email, NULL) AS "clientEmail",
+              COALESCE(fc.address, NULL) AS "clientAddress",
+              COALESCE(fc.abn, NULL) AS "clientAbn"
        FROM fin_invoices i
-       LEFT JOIN fin_clients c ON c.id = i."clientId"
+       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
+       LEFT JOIN clients cr ON cr.id = i."clientRef"
        WHERE i.id=$1 AND i."userId"=$2`,
       [req.params.id, req.user.id]
     );
@@ -316,10 +323,13 @@ router.get('/invoices/:id/pdf', async (req, res) => {
     const invoiceId = req.params.id;
 
     const { rows } = await pool.query(
-      `SELECT i.*, c.name AS "clientName", c.email AS "clientEmail",
-              c.address AS "clientAddress", c.abn AS "clientAbn"
+      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
+              COALESCE(fc.email, NULL) AS "clientEmail",
+              COALESCE(fc.address, NULL) AS "clientAddress",
+              COALESCE(fc.abn, NULL) AS "clientAbn"
        FROM fin_invoices i
-       LEFT JOIN fin_clients c ON c.id = i."clientId"
+       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
+       LEFT JOIN clients cr ON cr.id = i."clientRef"
        WHERE i.id=$1 AND i."userId"=$2`,
       [invoiceId, userId]
     );
@@ -363,7 +373,7 @@ router.put('/invoices/:id', async (req, res) => {
     await client.query('BEGIN');
     const userId    = req.user.id;
     const invoiceId = req.params.id;
-    const { clientId, issueDate, dueDate, notes, status, items = [] } = req.body;
+    const { clientId, clientRef, issueDate, dueDate, notes, status, items = [] } = req.body;
 
     const { rows: check } = await client.query(
       `SELECT id, number, status FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
@@ -388,9 +398,9 @@ router.put('/invoices/:id', async (req, res) => {
 
     await client.query(
       `UPDATE fin_invoices
-       SET "clientId"=$1,"issueDate"=$2,"dueDate"=$3,subtotal=$4,gst=$5,total=$6,notes=$7,status=$8,"updatedAt"=NOW()
-       WHERE id=$9 AND "userId"=$10`,
-      [clientId||null, issueDate, dueDate||null, subtotal, gst, total, notes||null, status||'draft', invoiceId, userId]
+       SET "clientId"=$1,"clientRef"=$2,"issueDate"=$3,"dueDate"=$4,subtotal=$5,gst=$6,total=$7,notes=$8,status=$9,"updatedAt"=NOW()
+       WHERE id=$10 AND "userId"=$11`,
+      [clientId||null, clientRef||null, issueDate, dueDate||null, subtotal, gst, total, notes||null, status||'draft', invoiceId, userId]
     );
     await client.query(`DELETE FROM fin_invoice_items WHERE "invoiceId"=$1`, [invoiceId]);
     for (const item of items) {
@@ -442,10 +452,13 @@ router.post('/invoices/:id/send', async (req, res) => {
 
     // Load invoice + items + client
     const { rows } = await pool.query(
-      `SELECT i.*, c.name AS "clientName", c.email AS "clientEmail",
-              c.address AS "clientAddress", c.abn AS "clientAbn"
+      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
+              COALESCE(fc.email, NULL) AS "clientEmail",
+              COALESCE(fc.address, NULL) AS "clientAddress",
+              COALESCE(fc.abn, NULL) AS "clientAbn"
        FROM fin_invoices i
-       LEFT JOIN fin_clients c ON c.id = i."clientId"
+       LEFT JOIN fin_clients fc ON fc.id = i."clientId"
+       LEFT JOIN clients cr ON cr.id = i."clientRef"
        WHERE i.id=$1 AND i."userId"=$2`,
       [invoiceId, userId]
     );

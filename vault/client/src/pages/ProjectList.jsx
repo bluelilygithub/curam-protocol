@@ -591,9 +591,12 @@ function ProjectList() {
                         {new Date(project.updatedAt).toLocaleDateString()}
                       </span>
                     </div>
-                    <h3 className="font-medium text-sm mb-1 truncate" style={{ color: 'var(--color-text)' }}>
+                    <h3 className="font-medium text-sm mb-0.5 truncate" style={{ color: 'var(--color-text)' }}>
                       {project.name}
                     </h3>
+                    {project.clientName && (
+                      <p className="text-xs mb-1 truncate" style={{ color: 'var(--color-primary)', opacity: 0.8 }}>{project.clientName}</p>
+                    )}
                     {project.goal ? (
                       <p className="text-xs line-clamp-2" style={{ color: 'var(--color-muted)' }}>{project.goal}</p>
                     ) : (

@@ -21,6 +21,8 @@ import NotesPage from './pages/NotesPage';
 import ChainsPage from './pages/ChainsPage';
 import GraphPage from './pages/GraphPage';
 import FinancePage from './pages/FinancePage';
+import ClientsPage from './pages/ClientsPage';
+import ClientDetailPage from './pages/ClientDetailPage';
 import UsagePage from './pages/UsagePage';
 import MoodPage from './pages/MoodPage';
 import SharedTaskPage from './pages/SharedTaskPage';
@@ -83,6 +85,8 @@ function App() {
               <Route path="/notes" element={<NotesPage />} />
               <Route path="/chains" element={<ChainsPage />} />
               <Route path="/graph"    element={<GraphPage />} />
+              <Route path="/clients" element={<ClientsPage />} />
+              <Route path="/clients/:id" element={<ClientDetailPage />} />
               <Route path="/finance" element={<FinancePage />} />
               <Route path="/usage" element={<UsagePage />} />
               <Route path="/mood" element={<MoodPage />} />
