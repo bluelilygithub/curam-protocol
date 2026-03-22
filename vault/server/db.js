@@ -680,6 +680,25 @@ async function initSchema() {
       )
     `);
 
+    // ── Mission Statements (versioned) ───────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS mission_statements (
+        id             SERIAL PRIMARY KEY,
+        user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        version_number INTEGER NOT NULL,
+        statement_text TEXT NOT NULL,
+        wizard_data    JSONB,
+        created_at     TIMESTAMPTZ DEFAULT NOW(),
+        is_current     BOOLEAN DEFAULT FALSE,
+        UNIQUE(user_id, version_number),
+        CHECK (version_number > 0)
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_mission_user_current
+        ON mission_statements(user_id, is_current) WHERE is_current = true
+    `);
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -903,6 +922,46 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_client_contacts_client ON client_contacts("clientId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_client_touchpoints_client ON client_touchpoints("clientId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_projects_client ON projects("clientId")`);
+
+  // ── Mission statements: trigger to enforce single current per user ─────────
+  await pool.query(`
+    CREATE OR REPLACE FUNCTION enforce_single_current_mission()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      IF NEW.is_current = true THEN
+        UPDATE mission_statements
+          SET is_current = false
+          WHERE user_id = NEW.user_id
+            AND id != NEW.id
+            AND is_current = true;
+      END IF;
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql
+  `);
+  await pool.query(`
+    DO $$ BEGIN
+      CREATE TRIGGER maintain_current_mission
+        BEFORE INSERT OR UPDATE ON mission_statements
+        FOR EACH ROW EXECUTE FUNCTION enforce_single_current_mission();
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END $$
+  `);
+
+  // ── Mission statements: migrate existing from settings ────────────────────
+  // For each user who has mission_statement in settings but no row in mission_statements,
+  // insert it as version 1 (is_current = true).
+  await pool.query(`
+    INSERT INTO mission_statements (user_id, version_number, statement_text, is_current)
+    SELECT s."userId", 1, s.value, true
+    FROM settings s
+    WHERE s.key = 'mission_statement'
+      AND s.value IS NOT NULL
+      AND s.value != ''
+      AND NOT EXISTS (
+        SELECT 1 FROM mission_statements m WHERE m.user_id = s."userId"
+      )
+  `);
 
   console.log('[db] Schema ready');
 }

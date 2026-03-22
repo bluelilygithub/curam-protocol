@@ -473,10 +473,91 @@ const WIZARD_QUESTIONS = [
   "What principles or values guide your decisions?",
 ];
 
+function timeSince(isoString) {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days < 7) return `${days} day${days !== 1 ? 's' : ''}`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks} week${weeks !== 1 ? 's' : ''}`;
+  const months = Math.floor(days / 30);
+  return `${months} month${months !== 1 ? 's' : ''}`;
+}
+
+function MissionHistoryModal({ onClose }) {
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/api/mission/history').then(r => r.json()).then(setHistory).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: 'var(--color-surface)', borderRadius: 16, border: '1px solid var(--color-border)', width: '100%', maxWidth: 560, maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-text)' }}>Mission History</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', fontSize: 18, lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {loading ? (
+            <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>Loading…</p>
+          ) : history.length === 0 ? (
+            <p style={{ color: 'var(--color-muted)', fontSize: 13 }}>No history yet.</p>
+          ) : history.map(v => (
+            <div key={v.id} style={{ padding: '12px 16px', borderRadius: 10, border: '1px solid var(--color-border)', background: v.isCurrent ? 'var(--color-primary)08' : 'var(--color-bg)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Version {v.versionNumber}</span>
+                {v.isCurrent && <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 10, background: 'var(--color-primary)', color: '#fff', fontWeight: 600 }}>Current</span>}
+                <span style={{ fontSize: 11, color: 'var(--color-muted)', marginLeft: 'auto' }}>
+                  {new Date(v.createdAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.65, fontStyle: 'italic', color: 'var(--color-text)' }}>{v.statementText}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MissionReminderModal({ status, onSnooze, onReviewed }) {
+  const since = status.lastReviewedAt ? timeSince(status.lastReviewedAt) : null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: 'var(--color-surface)', borderRadius: 16, border: '1px solid var(--color-border)', width: '100%', maxWidth: 440, padding: '24px 28px' }}>
+        <div style={{ fontSize: 22, marginBottom: 10 }}>🧭</div>
+        <h3 style={{ margin: '0 0 10px', fontSize: 16, fontWeight: 700, color: 'var(--color-text)' }}>Mission Review Reminder</h3>
+        <p style={{ margin: '0 0 14px', fontSize: 14, color: 'var(--color-text)', lineHeight: 1.6 }}>
+          {since ? `It's been ${since} since you last reviewed your mission.` : 'Time to revisit your mission statement.'}
+        </p>
+        <ul style={{ margin: '0 0 20px', paddingLeft: 18, fontSize: 13, color: 'var(--color-muted)', lineHeight: 1.8 }}>
+          <li>Reread your mission statement</li>
+          <li>Check if your current tasks reflect it</li>
+        </ul>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={onSnooze}
+            style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', fontSize: 13, cursor: 'pointer' }}
+          >
+            Snooze 7 days
+          </button>
+          <button
+            onClick={onReviewed}
+            style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', background: 'var(--color-primary)', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          >
+            Mark as Reviewed
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MissionStatementCard() {
   const getIcon = useIcon();
-  const [statement, setStatement] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [currentMission, setCurrentMission] = useState(undefined); // undefined=loading, null=none, object=exists
   const [editMode, setEditMode] = useState(false);
   const [editText, setEditText] = useState('');
   const [saving, setSaving] = useState(false);
@@ -487,18 +568,35 @@ function MissionStatementCard() {
   const [generating, setGenerating] = useState(false);
   const [generatedText, setGeneratedText] = useState('');
   const [generationDone, setGenerationDone] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [reminderStatus, setReminderStatus] = useState(null);
+  const [showReminderModal, setShowReminderModal] = useState(false);
 
   useEffect(() => {
-    api.get('/api/goals/mission').then(r => r.json()).then(data => {
-      setStatement(data.statement || null);
-    }).catch(() => {}).finally(() => setLoading(false));
+    api.get('/api/mission/current').then(r => r.json()).then(data => {
+      setCurrentMission(data || null);
+    }).catch(() => setCurrentMission(null));
+
+    api.get('/api/mission/reminder-status').then(r => r.json()).then(data => {
+      setReminderStatus(data);
+      if (data?.shouldShow) setShowReminderModal(true);
+    }).catch(() => {});
   }, []);
+
+  const statement = currentMission?.statementText ?? null;
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const data = await api.put('/api/goals/mission', { statement: editText }).then(r => r.json());
-      setStatement(data.statement || null);
+      let data;
+      if (currentMission?.id) {
+        // Direct edit of existing mission — no new version
+        data = await api.put(`/api/mission/${currentMission.id}`, { statementText: editText }).then(r => r.json());
+      } else {
+        // No mission yet — create version 1
+        data = await api.post('/api/mission', { statementText: editText }).then(r => r.json());
+      }
+      setCurrentMission(data);
       setEditMode(false);
     } catch (err) { console.error(err); }
     finally { setSaving(false); }
@@ -540,11 +638,7 @@ function MissionStatementCard() {
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6);
           if (payload === '[DONE]') { setGenerationDone(true); break; }
-          try {
-            const token = JSON.parse(payload);
-            accumulated += token;
-            setGeneratedText(accumulated);
-          } catch {}
+          try { accumulated += JSON.parse(payload); setGeneratedText(accumulated); } catch {}
         }
       }
       setGenerationDone(true);
@@ -555,8 +649,9 @@ function MissionStatementCard() {
   const handleUseStatement = async () => {
     setSaving(true);
     try {
-      const data = await api.put('/api/goals/mission', { statement: generatedText }).then(r => r.json());
-      setStatement(data.statement || null);
+      // Always creates a new version when coming from wizard
+      const data = await api.post('/api/mission', { statementText: generatedText }).then(r => r.json());
+      setCurrentMission(data);
       setShowWizard(false);
       setGeneratedText('');
       setGenerationDone(false);
@@ -564,12 +659,29 @@ function MissionStatementCard() {
     finally { setSaving(false); }
   };
 
-  if (loading) return null;
+  const handleSnooze = async () => {
+    await api.post('/api/mission/reminder/snooze', {}).catch(() => {});
+    setShowReminderModal(false);
+    window.dispatchEvent(new CustomEvent('vault:mission-reminder-cleared'));
+  };
+
+  const handleReviewed = async () => {
+    await api.post('/api/mission/reminder/reviewed', {}).catch(() => {});
+    setShowReminderModal(false);
+    window.dispatchEvent(new CustomEvent('vault:mission-reminder-cleared'));
+  };
+
+  if (currentMission === undefined) return null;
 
   const s = { background: 'var(--color-surface)', borderColor: 'var(--color-border)' };
 
   return (
     <div style={{ flexShrink: 0, borderBottom: '1px solid var(--color-border)' }}>
+      {showHistory && <MissionHistoryModal onClose={() => setShowHistory(false)} />}
+      {showReminderModal && reminderStatus?.shouldShow && (
+        <MissionReminderModal status={reminderStatus} onSnooze={handleSnooze} onReviewed={handleReviewed} />
+      )}
+
       {/* Main card row */}
       <div
         style={{ padding: '14px 20px', background: s.background, position: 'relative' }}
@@ -609,9 +721,19 @@ function MissionStatementCard() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: 'var(--color-primary)22', flexShrink: 0, marginTop: 2 }}>
               {getIcon('compass', { size: 14, style: { color: 'var(--color-primary)' } })}
             </div>
-            <blockquote style={{ flex: 1, margin: 0, paddingLeft: 14, borderLeft: '3px solid var(--color-primary)', fontStyle: 'italic', fontSize: 14, lineHeight: 1.65, color: 'var(--color-text)' }}>
-              {statement}
-            </blockquote>
+            <div style={{ flex: 1 }}>
+              <blockquote style={{ margin: 0, paddingLeft: 14, borderLeft: '3px solid var(--color-primary)', fontStyle: 'italic', fontSize: 14, lineHeight: 1.65, color: 'var(--color-text)' }}>
+                {statement}
+              </blockquote>
+              {currentMission?.versionNumber > 1 && (
+                <button
+                  onClick={() => setShowHistory(true)}
+                  style={{ marginTop: 8, marginLeft: 14, fontSize: 11, color: 'var(--color-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                >
+                  View history (v{currentMission.versionNumber})
+                </button>
+              )}
+            </div>
             {hovered && (
               <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                 <button
@@ -623,7 +745,7 @@ function MissionStatementCard() {
                 </button>
                 <button
                   onClick={() => handleOpenWizard(true)}
-                  title="Rewrite with Claude"
+                  title="Rewrite with Claude (new version)"
                   style={{ padding: '4px 7px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                 >
                   {getIcon('sparkles', { size: 13 })}
@@ -639,6 +761,9 @@ function MissionStatementCard() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
               {getIcon('compass', { size: 14, style: { color: 'var(--color-primary)' } })}
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text)' }}>Personal Mission Statement</span>
+              {currentMission?.id && (
+                <span style={{ fontSize: 11, color: 'var(--color-muted)' }}>(editing v{currentMission.versionNumber} — no new version created)</span>
+              )}
             </div>
             <textarea
               autoFocus

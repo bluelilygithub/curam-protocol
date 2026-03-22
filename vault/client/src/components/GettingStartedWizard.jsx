@@ -1150,7 +1150,15 @@ export default function GettingStartedWizard({ onClose, onComplete }) {
     setSaving(true);
     try {
       if (data.missionFinal?.trim()) {
-        await api.put('/api/goals/mission', { statement: data.missionFinal.trim() });
+        await api.post('/api/mission', {
+          statementText: data.missionFinal.trim(),
+          wizardData: {
+            mattersMost: data.mattersMost || '',
+            betterAt: data.betterAt || '',
+            lifeStage: data.lifeStage || '',
+            missionGenerated: data.missionGenerated || '',
+          },
+        });
       }
       let objectiveId = null;
       if (data.objective?.title?.trim()) {

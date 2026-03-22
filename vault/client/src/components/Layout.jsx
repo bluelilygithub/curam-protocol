@@ -32,6 +32,7 @@ function Layout() {
   const [showInquiryReminder, setShowInquiryReminder] = useState(false);
   const [showInquirySession,  setShowInquirySession]  = useState(false);
   const [inquiryReminderSettings, setInquiryReminderSettings] = useState(null);
+  const [missionReminderDue,  setMissionReminderDue]  = useState(false);
 
   useEffect(() => {
     if (sessionStorage.getItem('tasksAlertDismissed')) return;
@@ -61,6 +62,15 @@ function Layout() {
     fetchBookmarkCount();
     window.addEventListener('vault:bookmark-changed', fetchBookmarkCount);
     return () => window.removeEventListener('vault:bookmark-changed', fetchBookmarkCount);
+  }, []);
+
+  useEffect(() => {
+    api.get('/api/mission/reminder-status').then(r => r.json()).then(d => {
+      if (d?.shouldShow) setMissionReminderDue(true);
+    }).catch(() => {});
+    const clearBadge = () => setMissionReminderDue(false);
+    window.addEventListener('vault:mission-reminder-cleared', clearBadge);
+    return () => window.removeEventListener('vault:mission-reminder-cleared', clearBadge);
   }, []);
 
   // Inquiry reminder logic
@@ -343,11 +353,14 @@ function Layout() {
 
           <Link
             to="/goals"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
             style={{ color: location.pathname === '/goals' ? 'var(--color-primary)' : 'var(--color-muted)' }}
             title="Goals"
           >
             {getIcon('target', { size: 16 })}
+            {missionReminderDue && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full" style={{ background: '#f59e0b' }} />
+            )}
           </Link>
 
           <Link

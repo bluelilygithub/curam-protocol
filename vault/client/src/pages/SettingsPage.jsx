@@ -83,6 +83,9 @@ function SettingsPage() {
   const [showReopenWizardConfirm, setShowReopenWizardConfirm] = useState(false);
   const [showResetGoalsConfirm, setShowResetGoalsConfirm] = useState(false);
   const [tab, setTab] = useState(() => localStorage.getItem('settingsTab') || 'Appearance');
+  const [missionReviewFreq, setMissionReviewFreq] = useState('off');
+  const [missionLastReviewed, setMissionLastReviewed] = useState(null);
+  const [missionSnoozedUntil, setMissionSnoozedUntil] = useState(null);
 
   const TABS = ['Appearance', 'Profile', 'AI & Chat', 'Tasks', 'Goals', 'Integrations', 'News Digest', 'Tours'];
 
@@ -119,6 +122,9 @@ function SettingsPage() {
       if (data.inquiry_reminder_frequency) setInquiryFrequency(data.inquiry_reminder_frequency);
       if (data.inquiry_reminder_time)      setInquiryTime(data.inquiry_reminder_time);
       if (data.inquiry_reminder_days)      { try { setInquiryDays(JSON.parse(data.inquiry_reminder_days)); } catch {} }
+      if (data.mission_review_frequency)   setMissionReviewFreq(data.mission_review_frequency);
+      setMissionLastReviewed(data.mission_last_reviewed_at || null);
+      setMissionSnoozedUntil(data.mission_review_snoozed_until || null);
     }).catch(() => {});
 
     api.get('/api/news-digest/settings').then(r => r.json()).then(data => {
@@ -1493,6 +1499,48 @@ function SettingsPage() {
       {/* Goals Setup — Goals tab */}
       {tab === 'Goals' && (
       <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>Mission Review Reminders</h2>
+        <div className="space-y-3 mb-8">
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            Get a periodic nudge to revisit your mission statement. A badge appears on the Goals icon when a review is due.
+          </p>
+          <div className="p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <p className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>Review frequency</p>
+            <div className="flex flex-wrap gap-2">
+              {['off', 'weekly', 'monthly', 'quarterly'].map(freq => (
+                <button
+                  key={freq}
+                  onClick={async () => {
+                    setMissionReviewFreq(freq);
+                    await api.post('/api/settings', { key: 'mission_review_frequency', value: freq }).catch(() => {});
+                    window.dispatchEvent(new CustomEvent('vault:mission-reminder-cleared'));
+                  }}
+                  className="px-3 py-1.5 rounded-lg border text-sm transition-all"
+                  style={{
+                    borderColor: missionReviewFreq === freq ? 'var(--color-primary)' : 'var(--color-border)',
+                    background: missionReviewFreq === freq ? 'var(--color-primary)' : 'transparent',
+                    color: missionReviewFreq === freq ? '#fff' : 'var(--color-muted)',
+                    fontWeight: missionReviewFreq === freq ? 600 : 400,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                </button>
+              ))}
+            </div>
+            {missionLastReviewed && (
+              <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
+                Last reviewed: {new Date(missionLastReviewed).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            )}
+            {missionSnoozedUntil && new Date(missionSnoozedUntil) > new Date() && (
+              <p className="text-xs mt-1" style={{ color: '#f59e0b' }}>
+                Snoozed until: {new Date(missionSnoozedUntil).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            )}
+          </div>
+        </div>
+
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: 'var(--color-muted)' }}>Goals Setup</h2>
         <div className="space-y-3">
           <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>

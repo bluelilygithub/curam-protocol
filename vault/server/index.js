@@ -82,6 +82,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/goals', require('./routes/goals'));
+app.use('/api/mission', require('./routes/mission'));
 app.use('/api/notes', require('./routes/notes'));
 app.use('/api/session-files', require('./routes/sessionFiles'));
 app.use('/api/chains', require('./routes/chains'));
