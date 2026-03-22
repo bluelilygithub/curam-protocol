@@ -8,6 +8,7 @@ const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { pool } = require('../db');
 const { sanitiseCodeFile } = require('../utils/sanitiseCodeFile');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -140,7 +141,7 @@ async function extractPdfText(filePath) {
 async function generateAiSummary(text, filename) {
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 500,
       store: false,
       messages: [{

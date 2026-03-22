@@ -7,6 +7,23 @@ const { analyseTopicArticles } = require('../services/newsAnalysisService');
 
 let cronTask = null;
 
+// Approximate cost per million tokens by model tier
+function estimateCost(inputTokens, outputTokens, model) {
+  let inputRate, outputRate;
+  if (model && model.startsWith('gemini')) {
+    inputRate  = 0.10 / 1_000_000;
+    outputRate = 0.40 / 1_000_000;
+  } else if (model && model.includes('haiku')) {
+    inputRate  = 0.80 / 1_000_000;
+    outputRate = 4.00 / 1_000_000;
+  } else {
+    // sonnet or unknown — use sonnet rates
+    inputRate  = 3.00 / 1_000_000;
+    outputRate = 15.00 / 1_000_000;
+  }
+  return inputTokens * inputRate + outputTokens * outputRate;
+}
+
 async function getScheduleSettings() {
   try {
     const { rows } = await pool.query(
@@ -87,6 +104,10 @@ async function generateDigestForUser(userId, dateStr, force = false) {
   const digestId = digestRows[0].id;
 
   // Process each topic (sequentially to avoid API rate limits)
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let lastModel = null;
+
   for (const topic of topics) {
     // Skip if already done — unless force-regenerating
     const { rows: existing } = await pool.query(
@@ -106,7 +127,11 @@ async function generateDigestForUser(userId, dateStr, force = false) {
     try {
       const articles = await fetchArticlesForTopic(topic.title, topic.keywords);
       const context  = await fetchTopicContext(userId, topic.id, dateStr);
-      const analysis = await analyseTopicArticles(topic.title, articles, context);
+      const { analysis, usage } = await analyseTopicArticles(topic.title, articles, context, userId);
+
+      totalInputTokens  += usage.inputTokens  || 0;
+      totalOutputTokens += usage.outputTokens || 0;
+      if (usage.model) lastModel = usage.model;
 
       await pool.query(
         `INSERT INTO news_digest_topics ("digestId", "topicId", articles, analysis)
@@ -118,7 +143,14 @@ async function generateDigestForUser(userId, dateStr, force = false) {
     }
   }
 
-  console.log(`[news-cron] Digest complete for user ${userId} on ${dateStr}`);
+  // Store token usage and approximate cost
+  const approxCostUsd = estimateCost(totalInputTokens, totalOutputTokens, lastModel);
+  await pool.query(
+    `UPDATE news_digests SET "totalTokens"=$1, "approxCostUsd"=$2 WHERE id=$3`,
+    [totalInputTokens + totalOutputTokens, approxCostUsd, digestId]
+  );
+
+  console.log(`[news-cron] Digest complete for user ${userId} on ${dateStr} — ${totalInputTokens + totalOutputTokens} tokens, ~$${approxCostUsd.toFixed(4)}`);
 }
 
 /**

@@ -5,6 +5,7 @@ const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { pool } = require('../db');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -55,7 +56,8 @@ router.post(
   '/',
   upload.fields([{ name: 'fileA', maxCount: 1 }, { name: 'fileB', maxCount: 1 }]),
   async (req, res) => {
-    const { fileAId, fileBId, mode = 'diff', model = 'claude-sonnet-4-6' } = req.body;
+    const { standard: standardModel } = await getModelsForUser(req.user?.id);
+    const { fileAId, fileBId, mode = 'diff', model = standardModel } = req.body;
     const uploadA = req.files?.fileA?.[0];
     const uploadB = req.files?.fileB?.[0];
 

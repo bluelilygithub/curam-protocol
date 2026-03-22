@@ -7,6 +7,7 @@ const dns = require('dns');
 const { URL } = require('url');
 const { isYoutubeUrl, fetchYoutubeTranscript } = require('../services/youtubeTranscript');
 const Anthropic = require('@anthropic-ai/sdk');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -17,7 +18,7 @@ async function summariseTranscript(rawTranscript) {
   if (!process.env.ANTHROPIC_API_KEY) return rawTranscript;
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 4096,
       system: 'Summarise the following video transcript to approximately 20% of its original length. Preserve key points, specific details, names, numbers, and conclusions. Write in flowing prose, not bullet points.',
       messages: [{ role: 'user', content: rawTranscript }],

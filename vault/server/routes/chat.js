@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { buildTypeConfigPrompt } = require('../typePrompts');
 const { calculateCost } = require('../services/costCalculator');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const chatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -348,6 +349,7 @@ router.post('/', chatLimiter, async (req, res) => {
     : { rows: [] };
   const project = projRows[0] || null;
   const sid = sessionId || `session-${Date.now()}`;
+  const { light: lightModel, standard: standardModel } = await getModelsForUser(req.user?.id);
 
   // Extract plain text from the last user message for RAG query
   const lastMsg = messages[messages.length - 1];
@@ -436,7 +438,7 @@ router.post('/', chatLimiter, async (req, res) => {
   let fullContent = '';
 
   try {
-    const model = reqModel || project?.model || 'claude-sonnet-4-6';
+    const model = reqModel || project?.model || standardModel;
     const temperature = typeof reqTemp === 'number' ? Math.max(0, Math.min(1, reqTemp)) : 0.7;
 
     let inputTokens = 0, outputTokens = 0;
@@ -616,7 +618,7 @@ router.post('/', chatLimiter, async (req, res) => {
             const userSnippet = lastUser.content.substring(0, 300);
             const aiSnippet = fullContent.substring(0, 300);
             anthropic.messages.create({
-              model: 'claude-haiku-4-5-20251001',
+              model: lightModel,
               max_tokens: 20,
               messages: [{
                 role: 'user',
@@ -794,9 +796,11 @@ router.post('/sessions/:sessionId/summarize', async (req, res) => {
     .map(m => `${m.role === 'user' ? 'User' : 'Claude'}: ${m.content}`)
     .join('\n\n');
 
+  const { standard: standardModel } = await getModelsForUser(req.user?.id);
+
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: standardModel,
       max_tokens: 2000,
       messages: [{
         role: 'user',
@@ -931,9 +935,11 @@ router.post('/suggestions', async (req, res) => {
     .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.substring(0, 400)}`)
     .join('\n\n');
 
+  const { light: lightModel } = await getModelsForUser(req.user?.id);
+
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: lightModel,
       max_tokens: 180,
       messages: [{
         role: 'user',
@@ -995,11 +1001,13 @@ router.post('/analyse-prompt', async (req, res) => {
       }
     } catch { /* use fallback */ }
 
-    // Ask Haiku to classify the prompt
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+
+    // Classify the prompt complexity
     let classification;
     try {
       const msg = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: lightModel,
         max_tokens: 256,
         system: `You are a prompt complexity classifier. Analyse the user's message and return ONLY valid JSON with no preamble, explanation, or markdown.\n\nReturn this exact shape:\n{\n  "complexity": "simple" | "moderate" | "complex",\n  "needsImage": true | false,\n  "reason": "one sentence plain English explanation",\n  "suggestedTier": "light" | "standard" | "premium"\n}\n\nRules:\n- "simple": casual questions, short factual lookups, quick rewrites, greetings, single-sentence tasks\n- "moderate": multi-step explanations, summarisation, short code tasks, structured output\n- "complex": long-form code, architecture, deep analysis, multi-document reasoning, debugging, legal/financial content\n- "needsImage": true only if the user is explicitly asking to generate, create, draw, or produce an image or visual\n- "suggestedTier": "light" for simple, "standard" for moderate, "premium" for complex\n- If needsImage is true, set suggestedTier to "image" regardless of complexity`,
         messages: [{ role: 'user', content: String(prompt || '').slice(0, 2000) }],

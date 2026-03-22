@@ -219,7 +219,7 @@ Output: {"gmailQuery":"from:Sarah OR to:Sarah subject:contract","intent":"thread
  * @param {string} [today]      - ISO date YYYY-MM-DD (defaults to current date)
  * @returns {Promise<{ gmailQuery: string, intent: string, maxResults: number, responseMode: string }>}
  */
-async function translateToGmailQuery(userMessage, today) {
+async function translateToGmailQuery(userMessage, today, modelId = 'claude-haiku-4-5-20251001') {
   if (!process.env.ANTHROPIC_API_KEY) {
     return { gmailQuery: userMessage, intent: 'list', maxResults: GMAIL_LIMITS.list, responseMode: 'list' };
   }
@@ -231,7 +231,7 @@ async function translateToGmailQuery(userMessage, today) {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: modelId,
     max_tokens: 200,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }],

@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { getModelsForUser } = require('../services/modelResolver');
 
 async function syncSearchIndex(project) {
   await pool.query(
@@ -65,12 +66,14 @@ router.post('/', async (req, res) => {
   const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, clientId, startDate, targetEndDate } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
 
+  const { standard: standardModel } = await getModelsForUser(req.user?.id);
+
   try {
     const { rows } = await pool.query(
       `INSERT INTO projects (name, goal, problem, audience, "techStack", constraints, "successCriteria", tone, notes, model, "projectType", "typeConfig", "clientId", "startDate", "targetEndDate", "userId")
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
       [name, goal || '', problem || '', audience || '', techStack || '', constraints || '',
-       successCriteria || '', tone || '', notes || '', model || 'claude-sonnet-4-6',
+       successCriteria || '', tone || '', notes || '', model || standardModel,
        projectType || null, typeConfig ? JSON.stringify(typeConfig) : null, clientId || null,
        startDate || null, targetEndDate || null, req.user.id]
     );
@@ -135,6 +138,7 @@ router.patch('/:id/unarchive', async (req, res) => {
 // PUT /api/projects/:id
 router.put('/:id', async (req, res) => {
   const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, folderId, startDate, targetEndDate } = req.body;
+  const { standard: standardModel } = await getModelsForUser(req.user?.id);
   try {
     const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
@@ -156,7 +160,7 @@ router.put('/:id', async (req, res) => {
         successCriteria ?? p.successCriteria,
         tone ?? p.tone,
         notes ?? p.notes,
-        model ?? p.model ?? 'claude-sonnet-4-6',
+        model ?? p.model ?? standardModel,
         projectType ?? p.projectType ?? null,
         typeConfig !== undefined ? JSON.stringify(typeConfig) : (p.typeConfig ?? null),
         folderId !== undefined ? folderId : p.folderId,

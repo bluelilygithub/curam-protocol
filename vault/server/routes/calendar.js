@@ -8,6 +8,7 @@ const rateLimit   = require('express-rate-limit');
 const { pool }    = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { translateToCalendarQuery } = require('../services/calendarNLP');
+const { getModelsForUser } = require('../services/modelResolver');
 const { encrypt, decrypt } = require('../utils/encryption');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -148,8 +149,9 @@ router.get('/search', calendarSearchLimiter, async (req, res) => {
 
   try {
     const today = new Date().toISOString().slice(0, 10);
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
     const { timeMin, timeMax, searchQuery, maxResults, calendarId, intent } =
-      await translateToCalendarQuery(q.trim(), today);
+      await translateToCalendarQuery(q.trim(), today, lightModel);
 
     const calendar = await getCalendarClient(req.user.id);
 
@@ -229,7 +231,7 @@ router.post('/ask', calendarAskLimiter, async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
 
     const stream = anthropic.messages.stream({
-      model:      'claude-haiku-4-5-20251001',
+      model:      (await getModelsForUser(req.user?.id)).light,
       max_tokens: 1024,
       system: `You are a personal calendar assistant integrated into the user's own productivity workspace. The user has connected their personal Google Calendar via OAuth — every event you see belongs to their own calendar. Help them with any questions about their events. Be concise and direct.`,
       messages: [{

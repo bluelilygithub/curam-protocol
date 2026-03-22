@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const anthropic = new Anthropic();
 
@@ -656,7 +657,7 @@ Current stage: ${stage || 'inquiry'}`;
     res.setHeader('Connection', 'keep-alive');
 
     const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-6',
+      model: (await getModelsForUser(req.user?.id)).standard,
       max_tokens: 512,
       system: systemWithContext,
       messages,
@@ -848,7 +849,7 @@ no markdown fences:
     let accumulated = '';
 
     const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-6',
+      model: (await getModelsForUser(req.user?.id)).standard,
       max_tokens: 1024,
       system: insightsSystemPrompt,
       messages: [{ role: 'user', content: userMessage }],

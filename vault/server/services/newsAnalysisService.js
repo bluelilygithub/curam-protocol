@@ -2,6 +2,7 @@
 
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { getModelsForUser } = require('./modelResolver');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -115,42 +116,58 @@ function parseJSON(text) {
  * @param {Array}  [context]  - optional [{date, unbiasedSummary, commentary}]
  * @returns {Promise<Object>} analysis object with sources resolved
  */
-async function analyseTopicArticles(topicTitle, articles, context) {
+async function analyseTopicArticles(topicTitle, articles, context, userId) {
   if (!articles || articles.length === 0) {
     return {
-      left:         { summary: 'No articles found for this topic.', keyPoints: [], emphasis: '', sources: [] },
-      right:        { summary: 'No articles found for this topic.', keyPoints: [], emphasis: '', sources: [] },
-      commonGround: { agreedFacts: [], coreDisagreement: '' },
-      unbiased:     { summary: 'No articles found for this topic.', keyFacts: [], sources: [] },
+      analysis: {
+        left:         { summary: 'No articles found for this topic.', keyPoints: [], emphasis: '', sources: [] },
+        right:        { summary: 'No articles found for this topic.', keyPoints: [], emphasis: '', sources: [] },
+        commonGround: { agreedFacts: [], coreDisagreement: '' },
+        unbiased:     { summary: 'No articles found for this topic.', keyFacts: [], sources: [] },
+      },
+      usage: { inputTokens: 0, outputTokens: 0, model: null },
     };
   }
 
   const prompt = buildPrompt(topicTitle, articles, context);
+  const { gemini: geminiModelId, standard: anthropicModelId } = await getModelsForUser(userId);
   let raw;
+  let usage = { inputTokens: 0, outputTokens: 0, model: null };
 
   // Try Gemini first (cheaper for bulk digest runs)
   const gemini = getGemini();
   if (gemini) {
     try {
-      const model = gemini.getGenerativeModel({ model: 'gemini-2.5-pro-preview-05-06' });
+      const model = gemini.getGenerativeModel({ model: geminiModelId });
       const result = await model.generateContent(prompt);
       raw = parseJSON(result.response.text());
+      const meta = result.response.usageMetadata;
+      usage = {
+        inputTokens:  meta?.promptTokenCount     || 0,
+        outputTokens: meta?.candidatesTokenCount || 0,
+        model: geminiModelId,
+      };
     } catch (err) {
-      console.warn(`[news] Gemini analysis failed, falling back to Claude: ${err.message}`);
+      console.warn(`[news] Gemini analysis failed (${geminiModelId}), falling back to Claude: ${err.message}`);
     }
   }
 
   if (!raw) {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: anthropicModelId,
       max_tokens: 3000,
       messages: [{ role: 'user', content: prompt }],
     });
     raw = parseJSON(message.content[0]?.text || '{}');
+    usage = {
+      inputTokens:  message.usage?.input_tokens  || 0,
+      outputTokens: message.usage?.output_tokens || 0,
+      model: anthropicModelId,
+    };
   }
 
   // Resolve 1-based indices → real article objects (no hallucinated URLs)
-  return resolveSourceIndices(raw, articles);
+  return { analysis: resolveSourceIndices(raw, articles), usage };
 }
 
 module.exports = { analyseTopicArticles };

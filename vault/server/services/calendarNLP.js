@@ -212,7 +212,7 @@ Output: {"timeMin":"${dates.ago90}","timeMax":"${dates.future90}","searchQuery":
  * @param {string} [today]      - ISO date YYYY-MM-DD (defaults to current date)
  * @returns {Promise<{ timeMin, timeMax, searchQuery, maxResults, calendarId, intent }>}
  */
-async function translateToCalendarQuery(userMessage, today) {
+async function translateToCalendarQuery(userMessage, today, modelId = 'claude-haiku-4-5-20251001') {
   const todayStr = today || new Date().toISOString().slice(0, 10);
   const dates    = calculateDates(todayStr);
 
@@ -222,7 +222,7 @@ async function translateToCalendarQuery(userMessage, today) {
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: modelId,
     max_tokens: 200,
     system: buildSystemPrompt(dates),
     messages: [{ role: 'user', content: userMessage }],

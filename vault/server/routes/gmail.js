@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { translateToGmailQuery, GMAIL_LIMITS } = require('../services/gmailNLP');
+const { getModelsForUser } = require('../services/modelResolver');
 const { encrypt, decrypt } = require('../utils/encryption');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -267,7 +268,8 @@ router.get('/search', gmailSearchLimiter, async (req, res) => {
 
   try {
     const today = new Date().toISOString().slice(0, 10);
-    const { gmailQuery, intent, maxResults: nlpMax, responseMode } = await translateToGmailQuery(q.trim(), today);
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const { gmailQuery, intent, maxResults: nlpMax, responseMode } = await translateToGmailQuery(q.trim(), today, lightModel);
 
     const resolvedMax = Math.min(parseInt(max) || nlpMax, GMAIL_LIMITS.count);
 
@@ -363,7 +365,7 @@ router.post('/ask', gmailAskLimiter, async (req, res) => {
     const threadSubject = getHeader(firstHeaders, 'Subject') || '(no subject)';
 
     const stream = anthropic.messages.stream({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 1024,
       system: `You are a personal email assistant integrated into the user's own productivity workspace. The user has authenticated their personal Gmail account via Google OAuth — every email you receive is FROM THEIR OWN INBOX. They are the author or recipient of every email shown.
 

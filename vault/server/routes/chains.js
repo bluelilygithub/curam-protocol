@@ -5,6 +5,7 @@ const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { pool } = require('../db');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -107,6 +108,7 @@ router.post('/:id/run', async (req, res) => {
   if (steps.length === 0) return res.status(400).json({ error: 'Chain has no steps' });
 
   const { input = '' } = req.body;
+  const { standard: standardModel } = await getModelsForUser(req.user?.id);
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -121,7 +123,7 @@ router.post('/:id/run', async (req, res) => {
 
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
-    const model = step.model || 'claude-sonnet-4-6';
+    const model = step.model || standardModel;
     const resolvedPrompt = resolveTemplate(step.prompt || '', input, outputs);
 
     send('step_start', { stepIndex: i, label: step.label || `Step ${i + 1}`, total: steps.length });

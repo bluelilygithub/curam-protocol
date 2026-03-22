@@ -6,6 +6,7 @@ const { randomUUID } = require('crypto');
 const multer = require('multer');
 const Anthropic = require('@anthropic-ai/sdk');
 const { pool } = require('../db');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -204,7 +205,7 @@ router.post('/summary', async (req, res) => {
 
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 1024,
       messages: [{
         role: 'user',

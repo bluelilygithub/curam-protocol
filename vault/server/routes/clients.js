@@ -4,6 +4,7 @@ const express = require('express');
 const router  = express.Router();
 const { pool } = require('../db');
 const { translateToGmailQuery } = require('../services/gmailNLP');
+const { getModelsForUser } = require('../services/modelResolver');
 const { getGmailClient, getHeader } = require('./gmail');
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -520,7 +521,8 @@ router.get('/:id/gmail-search', async (req, res) => {
     let finalQuery = contactFilter;
     if (q && q.trim()) {
       const today = new Date().toISOString().slice(0, 10);
-      const { gmailQuery: translatedQ } = await translateToGmailQuery(q.trim(), today);
+      const { light: lightModel } = await getModelsForUser(req.user?.id);
+      const { gmailQuery: translatedQ } = await translateToGmailQuery(q.trim(), today, lightModel);
       finalQuery = `${contactFilter} ${translatedQ}`;
     }
 

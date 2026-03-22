@@ -8,23 +8,31 @@ import TopicChat from '../components/newsDigest/TopicChat';
 
 function formatDate(iso) {
   if (!iso) return '';
-  const d = new Date(iso + (iso.includes('T') ? '' : 'T00:00:00'));
-  return d.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function isoFromLocal(date) {
+  return new Intl.DateTimeFormat('en-CA').format(date);
+}
+
+function formatShortDate(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}-${m}-${y}`;
 }
 
 function prevDay(iso) {
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = iso.split('-').map(Number);
+  return isoFromLocal(new Date(y, m - 1, d - 1));
 }
 
 function nextDay(iso) {
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = iso.split('-').map(Number);
+  return isoFromLocal(new Date(y, m - 1, d + 1));
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => isoFromLocal(new Date());
 
 // ── Small components ──────────────────────────────────────────────────────────
 
@@ -742,7 +750,7 @@ export default function NewsDigestPage() {
                 >
                   <option value="">Jump to date…</option>
                   {availableDates.map(d => (
-                    <option key={d} value={d}>{d}</option>
+                    <option key={d} value={d}>{formatShortDate(d)}</option>
                   ))}
                 </select>
               </div>
@@ -798,6 +806,30 @@ export default function NewsDigestPage() {
               </div>
             )}
 
+            {/* Digest exists but no topic results (e.g. topics were deleted after generation) */}
+            {!loadingDigest && digestData?.digest && digestData.topicResults?.length === 0 && (
+              <div
+                className="rounded-2xl border p-8 text-center space-y-4"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              >
+                <p className="text-4xl">📭</p>
+                <p className="font-semibold" style={{ color: 'var(--color-text)' }}>
+                  No topic results for {formatDate(date)}
+                </p>
+                <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                  A digest was generated but contained no topic data. Try regenerating.
+                </p>
+                <button
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-60"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  {generating ? 'Generating…' : 'Regenerate'}
+                </button>
+              </div>
+            )}
+
             {/* Digest content */}
             {!loadingDigest && digestData?.topicResults?.length > 0 && (
               <>
@@ -806,6 +838,12 @@ export default function NewsDigestPage() {
                     {digestData.topicResults.length} topic{digestData.topicResults.length !== 1 ? 's' : ''}
                     {digestData.digest?.generatedAt && (
                       <span> · Generated {new Date(digestData.digest.generatedAt).toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })}</span>
+                    )}
+                    {digestData.digest?.totalTokens > 0 && (
+                      <span> · {Number(digestData.digest.totalTokens).toLocaleString()} tokens</span>
+                    )}
+                    {digestData.digest?.approxCostUsd > 0 && (
+                      <span> · ~${Number(digestData.digest.approxCostUsd).toFixed(4)}</span>
                     )}
                   </p>
                   <button

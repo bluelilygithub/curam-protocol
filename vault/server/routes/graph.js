@@ -5,6 +5,7 @@ const router    = express.Router();
 const { pool }  = require('../db');
 const { embedText } = require('../services/embeddings');
 const Anthropic = require('@anthropic-ai/sdk');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const SIMILARITY_THRESHOLD = 0.82;
 const MAX_NOTES    = 100;
@@ -528,7 +529,7 @@ router.post('/insights/refresh', async (req, res) => {
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const message   = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 1024,
       messages: [{
         role: 'user',

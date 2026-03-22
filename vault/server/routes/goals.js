@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const anthropic = new Anthropic();
 
@@ -100,7 +101,7 @@ Output ONLY JSON objects, one per line, no explanations, no markdown, no array b
 {"title":"Increase monthly revenue","targetValue":50000,"unit":"$"}
 {"title":"Complete onboarding modules","targetValue":100,"unit":"%"}`;
     const stream = anthropic.messages.stream({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 500,
       system: 'You are a goal-setting coach specialising in OKR frameworks. Output only JSON objects, one per line.',
       messages: [{ role: 'user', content: prompt }],
@@ -202,7 +203,7 @@ router.post('/mission/generate', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     const prompt = `Based on these answers about a person's roles, character traits, lifetime contributions, and guiding principles, write a personal mission statement that is 2–4 sentences, inspiring, personal, and written in the first person. Focus on being and contributing, not just achieving. Return only the mission statement text with no preamble or explanation.\n\nAnswers:\n1. Roles: ${answers[0]}\n2. Character traits: ${answers[1]}\n3. Lifetime contributions: ${answers[2]}\n4. Guiding principles: ${answers[3]}`;
     const stream = anthropic.messages.stream({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 300,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -231,7 +232,7 @@ router.post('/renewal-assessment', async (req, res) => {
       .join('; ');
     const prompt = `A person's current renewal dimension balance (Habit 7 — Sharpen the Saw):\n${summary}\n\nThe 4 renewal dimensions: Physical (body, health, exercise), Mental (learning, reading, creativity), Social/Emotional (relationships, empathy, giving), Spiritual (mission, values, reflection).\n\nIn 2-3 sentences, give a warm and practical assessment of their balance. If one dimension is significantly lower than others, suggest one specific action they could take this week to strengthen it. Be encouraging and brief.`;
     const stream = anthropic.messages.stream({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 250,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -334,7 +335,7 @@ What matters most to them: ${mattersMost || '(not provided)'}
 What they are getting better at: ${betterAt || '(not provided)'}
 Their current life stage / context: ${lifeStage || '(not provided)'}`;
     const stream = anthropic.messages.stream({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 300,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -356,7 +357,7 @@ What matters most: "${mattersMost || '(not provided)'}"
 
 Suggest ONE concrete, achievable objective for the next 90 days that aligns with this mission. Return a JSON object with fields: title (string, max 60 chars), description (string, 1 sentence), timeframe (string, e.g. "Q2 2026"), color (one of: #6366f1, #3b82f6, #22c55e, #f59e0b, #ef4444, #8b5cf6). Output only the JSON object, no explanation.`;
     const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 200,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -378,7 +379,7 @@ router.post('/wizard/suggest-krs', async (req, res) => {
 
 Suggest exactly 3 SMART Key Results. Output only 3 JSON objects, one per line, with fields: title (string), targetValue (number), unit (string like "%", "tasks", "sessions", "hours", "items"). No markdown, no explanation.`;
     const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 300,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -407,7 +408,7 @@ Physical: ${physical ?? 5}/10, Mental: ${mental ?? 5}/10, Social: ${social ?? 5}
 
 In 2–3 sentences, give a warm personalised observation about their balance. Name the dimension that scored lowest and suggest one small, specific thing they could add to their life this week to strengthen it. Be warm, brief, and encouraging.`;
     const stream = anthropic.messages.stream({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 200,
       messages: [{ role: 'user', content: prompt }],
     });

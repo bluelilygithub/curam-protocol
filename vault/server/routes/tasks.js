@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
+const { getModelsForUser } = require('../services/modelResolver');
 const crypto = require('crypto');
 
 const anthropic = new Anthropic();
@@ -218,7 +219,7 @@ router.get('/morning-digest', async (req, res) => {
       ];
       try {
         const response = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
+          model: (await getModelsForUser(req.user?.id)).light,
           max_tokens: 150,
           system: 'You are a productivity assistant. Given the user\'s task list, recommend what to focus on first today and explain briefly why in 2-3 sentences. Be direct and specific.',
           messages: [{ role: 'user', content: `My tasks:\n${lines.join('\n')}\n\nWhat should I focus on first?` }],
@@ -252,7 +253,7 @@ router.post('/weekly-review-suggestions', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     const stream = anthropic.messages.stream({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 400,
       system: 'You are a productivity coach. Based on the user\'s open tasks, give 3-5 concrete, actionable suggestions for the coming week. Be specific, encouraging, and prioritise by impact. Use bullet points.',
       messages: [{ role: 'user', content: `Here are my open tasks:\n${lines}\n\nWhat should I focus on this week?` }],
@@ -283,7 +284,7 @@ router.post('/suggest', async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const contextBlock = context ? `\n\nSurrounding context:\n${context.substring(0, 400)}` : '';
     const result = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 60,
       messages: [{
         role: 'user',
@@ -401,7 +402,7 @@ router.post('/extract', async (req, res) => {
     const messages = msgRows.reverse();
     const conversation = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 2048,
       system: 'You are a task extraction assistant. Read this conversation and extract all action items, next steps, and tasks mentioned. Return ONLY a valid JSON array of task objects with fields: title, priority (high/medium/low), category, dueDate (ISO string or null), notes. No other text.',
       messages: [{ role: 'user', content: conversation }],
@@ -442,7 +443,7 @@ router.post('/ai-generate', async (req, res) => {
       ? 'You are a task planning assistant. Generate subtasks for the given task. Return ONLY a valid JSON array of objects with fields: title, notes (optional), estimatedMinutes (number of minutes or null). No other text.'
       : 'You are a task planning assistant. Extract or generate a structured task list from the user input. Return ONLY a valid JSON array of task objects with fields: title, notes (optional), priority (high/medium/low), category (optional), dueDate (ISO date string or null), estimatedMinutes (number of minutes or null). No other text.';
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: (await getModelsForUser(req.user?.id)).light,
       max_tokens: 2048,
       system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],

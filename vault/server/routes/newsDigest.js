@@ -6,6 +6,7 @@ const { pool }  = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { generateDigestForUser } = require('../cron/newsDigestCron');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const { DEFAULT_SOURCES } = require('../services/newsAggregationService');
 
@@ -127,7 +128,7 @@ router.get('/', async (req, res) => {
 
   try {
     const { rows: digestRows } = await pool.query(
-      `SELECT id, date, "generatedAt" FROM news_digests WHERE "userId"=$1 AND date=$2`,
+      `SELECT id, date, "generatedAt", "totalTokens", "approxCostUsd" FROM news_digests WHERE "userId"=$1 AND date=$2`,
       [req.user.id, date]
     );
 
@@ -303,10 +304,11 @@ router.post('/topics/:topicId/chat', async (req, res) => {
 
     // Call AI
     let aiText;
+    const { gemini: geminiModelId, light: lightModel } = await getModelsForUser(req.user?.id);
     const gemini = getGemini();
     if (gemini) {
       try {
-        const model = gemini.getGenerativeModel({ model: 'gemini-2.0-flash' });
+        const model = gemini.getGenerativeModel({ model: geminiModelId });
         const result = await model.generateContent(`${systemPrompt}\n\nUser: ${message.trim()}`);
         aiText = result.response.text();
       } catch (err) {
@@ -316,7 +318,7 @@ router.post('/topics/:topicId/chat', async (req, res) => {
 
     if (!aiText) {
       const response = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: lightModel,
         max_tokens: 1024,
         system: systemPrompt,
         messages: [{ role: 'user', content: message.trim() }],

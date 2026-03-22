@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const { pool } = require('../db');
+const { getModelsForUser } = require('../services/modelResolver');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -22,9 +23,11 @@ router.post('/chat', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
+  const { standard: standardModel } = await getModelsForUser(req.user?.id);
+
   try {
     const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-20250514',
+      model: standardModel,
       max_tokens: 4096,
       system: systemPrompt,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),

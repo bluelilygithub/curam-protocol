@@ -891,6 +891,10 @@ async function initSchema() {
     END $$
   `);
 
+  // ── News digest: token tracking ───────────────────────────────────────────
+  await pool.query(`ALTER TABLE news_digests ADD COLUMN IF NOT EXISTS "totalTokens" INTEGER DEFAULT 0`);
+  await pool.query(`ALTER TABLE news_digests ADD COLUMN IF NOT EXISTS "approxCostUsd" NUMERIC(10,6) DEFAULT 0`);
+
   // ── Clients: schema additions ─────────────────────────────────────────────
   await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "clientType" VARCHAR(10) DEFAULT 'company'`);
   await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "clientId" INTEGER REFERENCES clients(id) ON DELETE SET NULL`);
