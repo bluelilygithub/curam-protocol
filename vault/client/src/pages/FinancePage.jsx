@@ -274,6 +274,13 @@ function ClientsTab() {
     }
   };
 
+  const toggleActive = async (c) => {
+    const next = !c.isActive;
+    await api.patch(`/api/finance/clients/${c.id}`, { isActive: next });
+    setClients(prev => prev.map(x => x.id === c.id ? { ...x, isActive: next } : x));
+    addToast(next ? 'Client set to active' : 'Client deactivated');
+  };
+
   const del = (id, name) => {
     setConfirmModal({
       message: `Delete "${name}"? This cannot be undone.`,
@@ -318,6 +325,13 @@ function ClientsTab() {
                   <Link to={`/clients/${c.id}`} className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>View →</Link>
                 ) : (
                   <>
+                    <button
+                      onClick={() => toggleActive(c)}
+                      className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
+                      style={c.isActive
+                        ? { color: '#92400e', borderColor: '#fde68a', background: '#fef3c7' }
+                        : { color: '#065f46', borderColor: '#6ee7b7', background: '#d1fae5' }}
+                    >{c.isActive ? 'Deactivate' : 'Set active'}</button>
                     <Btn variant="secondary" onClick={() => openEdit(c)}>Edit</Btn>
                     <button
                       onClick={() => del(c.id, c.name)}
@@ -399,7 +413,7 @@ function InvoicesTab() {
   const load = useCallback(async () => {
     const [invs, cls] = await Promise.all([
       api.get('/api/finance/invoices').then(r => r.json()),
-      api.get('/api/clients?status=active').then(r => r.json()),
+      api.get('/api/finance/clients?activeOnly=true').then(r => r.json()),
     ]);
     setInvoices(Array.isArray(invs) ? invs : []);
     setClients(Array.isArray(cls) ? cls : []);
@@ -413,7 +427,7 @@ function InvoicesTab() {
     if (inv.status === 'paid') return; // paid invoices are read-only
     const data = await api.get(`/api/finance/invoices/${inv.id}`).then(r => r.json());
     setForm({
-      clientRef: data.clientRef ? String(data.clientRef) : '',
+      clientRef: data.clientRef ? `crm:${data.clientRef}` : data.clientId ? `fin:${data.clientId}` : '',
       issueDate: data.issueDate ? String(data.issueDate).slice(0,10) : todayStr(),
       dueDate:   data.dueDate  ? String(data.dueDate).slice(0,10)  : '',
       notes:     data.notes || '',
@@ -438,7 +452,10 @@ function InvoicesTab() {
     setSaving(true);
     setError('');
     try {
-      const payload = { ...form, clientRef: form.clientRef || null, clientId: null };
+      const [src, rawId] = form.clientRef ? form.clientRef.split(':') : [null, null];
+      const clientId  = src === 'fin' ? parseInt(rawId, 10) : null;
+      const clientRef = src === 'crm' ? parseInt(rawId, 10) : null;
+      const payload = { ...form, clientRef, clientId };
       if (modal === 'new') {
         await api.post('/api/finance/invoices', payload);
       } else {
@@ -624,7 +641,7 @@ function InvoicesTab() {
               <Field label="Client">
                 <Sel value={form.clientRef} onChange={v => setForm(p => ({...p, clientRef: v}))}>
                   <option value="">— No client —</option>
-                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {clients.map(c => <option key={`${c.source}:${c.id}`} value={`${c.source}:${c.id}`}>{c.name}</option>)}
                 </Sel>
               </Field>
               <Field label="Issue Date">

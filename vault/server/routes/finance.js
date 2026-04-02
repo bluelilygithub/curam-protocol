@@ -153,13 +153,16 @@ router.get('/accounts', async (req, res) => {
 // ── Clients ───────────────────────────────────────────────────────────────────
 
 router.get('/clients', async (req, res) => {
+  const activeOnly = req.query.activeOnly === 'true';
   try {
-    const { rows } = await pool.query(
-      `SELECT id, name, email, phone, address, abn, 'fin' AS source FROM fin_clients WHERE "userId"=$1
-       UNION ALL
-       SELECT id, name, NULL AS email, NULL AS phone, NULL AS address, NULL AS abn, 'crm' AS source FROM clients WHERE "userId"=$1
-       ORDER BY name`, [req.user.id]
-    );
+    let query = `
+      SELECT id, name, email, phone, address, abn, "isActive", 'fin' AS source FROM fin_clients WHERE "userId"=$1
+        ${activeOnly ? 'AND "isActive" = TRUE' : ''}
+      UNION ALL
+      SELECT id, name, NULL AS email, NULL AS phone, NULL AS address, NULL AS abn, TRUE AS "isActive", 'crm' AS source
+        FROM clients WHERE "userId"=$1 ${activeOnly ? "AND status = 'active'" : ''}
+      ORDER BY name`;
+    const { rows } = await pool.query(query, [req.user.id]);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -187,6 +190,21 @@ router.put('/clients/:id', async (req, res) => {
       `UPDATE fin_clients SET name=$1, email=$2, phone=$3, address=$4, abn=$5, "updatedAt"=NOW()
        WHERE id=$6 AND "userId"=$7 RETURNING *`,
       [name, email||null, phone||null, address||null, abn||null, req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/clients/:id', async (req, res) => {
+  try {
+    const { isActive } = req.body;
+    if (typeof isActive !== 'boolean') return res.status(400).json({ error: 'isActive must be boolean' });
+    const { rows } = await pool.query(
+      `UPDATE fin_clients SET "isActive"=$1, "updatedAt"=NOW() WHERE id=$2 AND "userId"=$3 RETURNING *`,
+      [isActive, req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
