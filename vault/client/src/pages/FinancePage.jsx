@@ -399,7 +399,7 @@ function InvoicesTab() {
   const load = useCallback(async () => {
     const [invs, cls] = await Promise.all([
       api.get('/api/finance/invoices').then(r => r.json()),
-      api.get('/api/clients').then(r => r.json()),
+      api.get('/api/clients?status=active').then(r => r.json()),
     ]);
     setInvoices(Array.isArray(invs) ? invs : []);
     setClients(Array.isArray(cls) ? cls : []);

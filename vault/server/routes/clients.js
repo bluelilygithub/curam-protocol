@@ -279,6 +279,27 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/clients/:id — partial update (e.g. status toggle)
+router.patch('/:id', async (req, res) => {
+  const clientId = parseInt(req.params.id, 10);
+  const { status } = req.body;
+  const allowed = ['prospect', 'active', 'paused', 'archived'];
+  if (!status || !allowed.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `UPDATE clients SET status=$1 WHERE id=$2 AND "userId"=$3 RETURNING *`,
+      [status, clientId, req.user.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[clients] patch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE /api/clients/:id
 router.delete('/:id', async (req, res) => {
   const clientId = parseInt(req.params.id, 10);

@@ -340,6 +340,17 @@ export default function ClientsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const handleToggleActive = async (client) => {
+    const newStatus = client.status === 'active' ? 'paused' : 'active';
+    try {
+      await api.patch(`/api/clients/${client.id}`, { status: newStatus });
+      setClients(prev => prev.map(c => c.id === client.id ? { ...c, status: newStatus } : c));
+      addToast(newStatus === 'active' ? 'Client set to active' : 'Client deactivated');
+    } catch {
+      addToast('Failed to update status', 'error');
+    }
+  };
+
   const handleDelete = (client) => {
     setConfirmDel({
       client,
@@ -423,6 +434,7 @@ export default function ClientsPage() {
               client={client}
               onEdit={() => setModal(client)}
               onDelete={() => handleDelete(client)}
+              onToggleActive={() => handleToggleActive(client)}
               onClick={() => navigate(`/clients/${client.id}`)}
             />
           ))}
@@ -455,7 +467,7 @@ export default function ClientsPage() {
 
 // ── Client card ────────────────────────────────────────────────────────────────
 
-function ClientCard({ client, onClick, onEdit, onDelete }) {
+function ClientCard({ client, onClick, onEdit, onDelete, onToggleActive }) {
   const dominantEmotion = client.dominantMood ? { coreEmotion: client.dominantMood } : null;
   const getIcon = useIcon();
   const isIndividual = client.clientType === 'individual';
@@ -530,6 +542,17 @@ function ClientCard({ client, onClick, onEdit, onDelete }) {
           style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
         >
           Edit
+        </button>
+        <button
+          onClick={onToggleActive}
+          className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
+          style={
+            client.status === 'active'
+              ? { color: '#92400e', borderColor: '#fde68a', background: '#fef3c7' }
+              : { color: '#065f46', borderColor: '#6ee7b7', background: '#d1fae5' }
+          }
+        >
+          {client.status === 'active' ? 'Deactivate' : 'Set active'}
         </button>
         <button
           onClick={onDelete}
