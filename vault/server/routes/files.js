@@ -170,6 +170,7 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
   let extractedText = '';
   let aiSummary = '';
   let storedMimetype = req.file.mimetype;
+  let diskPath = req.file.path;  // will be set to null for PDFs after extraction
 
   const ext = path.extname(req.file.originalname).toLowerCase();
   const isPdf = req.file.mimetype === 'application/pdf' || ext === '.pdf';
@@ -210,6 +211,10 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
     }
   } else if (isPdf) {
     extractedText = await extractPdfText(req.file.path);
+    // Discard the PDF binary — only the extracted text is kept
+    try { fs.unlinkSync(req.file.path); } catch {}
+    diskPath = null;
+    storedMimetype = 'text/plain';
     if (extractedText) {
       aiSummary = await generateAiSummary(extractedText, req.file.originalname);
     }
@@ -235,10 +240,11 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
   }
 
   try {
+    const storedSize = diskPath ? req.file.size : Buffer.byteLength(extractedText || '', 'utf8');
     const { rows } = await pool.query(
       `INSERT INTO files ("projectId", name, size, mimetype, path, "extractedText", "aiSummary")
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [projectId, req.file.originalname, req.file.size, storedMimetype, req.file.path, extractedText, aiSummary]
+      [projectId, req.file.originalname, storedSize, storedMimetype, diskPath, extractedText, aiSummary]
     );
     const fileId = rows[0].id;
 
@@ -270,24 +276,7 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
       }
     }
 
-    // Anthropic Files API — upload PDFs for persistent cross-session file references
-    const isPdf = storedMimetype === 'application/pdf' ||
-                  path.extname(req.file.originalname).toLowerCase() === '.pdf';
-    if (isPdf && process.env.ANTHROPIC_API_KEY) {
-      try {
-        console.log('[files] Uploading to Anthropic Files API:', req.file.originalname);
-        const fileStream = fs.createReadStream(req.file.path);
-        const anthropicFile = await anthropic.beta.files.upload({
-          file: await Anthropic.toFile(fileStream, req.file.originalname, { type: 'application/pdf' }),
-        });
-        console.log('[files] Anthropic Files API upload success, file_id:', anthropicFile.id);
-        await pool.query('UPDATE files SET "anthropicFileId"=$1 WHERE id=$2', [anthropicFile.id, fileId]);
-      } catch (anthropicErr) {
-        console.error('[files] Anthropic Files API upload failed:', anthropicErr.message, anthropicErr.status);
-      }
-    } else {
-      console.log('[files] Skipping Anthropic Files API upload — isPdf:', isPdf, 'hasKey:', !!process.env.ANTHROPIC_API_KEY);
-    }
+    // Anthropic Files API upload skipped — PDF binary is discarded after text extraction
 
     const { rows: file } = await pool.query('SELECT * FROM files WHERE id=$1', [fileId]);
 
@@ -310,7 +299,7 @@ router.get('/:id/raw', async (req, res) => {
     const { rows } = await pool.query('SELECT path, mimetype, name FROM files WHERE id=$1', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     const { path: filePath, mimetype, name } = rows[0];
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not on disk' });
+    if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ error: 'File not on disk' });
     res.setHeader('Content-Type', mimetype || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(name)}"`);
     fs.createReadStream(filePath).pipe(res);

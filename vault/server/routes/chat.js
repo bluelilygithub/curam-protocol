@@ -21,8 +21,6 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 
-const RAG_FALLBACK_CAP = 32_000; // max chars injected when RAG is unavailable
-
 // Returns { blocks, ragFallbackActive }.
 // blocks — array of Anthropic system content blocks with cache_control layering.
 // Stable blocks (persona, brief, memory, files, URLs) each carry cache_control so
@@ -31,6 +29,10 @@ const RAG_FALLBACK_CAP = 32_000; // max chars injected when RAG is unavailable
 // Anthropic supports up to 4 cache breakpoints per call; we use exactly 4:
 //   [1] persona + base, [2] project brief, [3] memory, [4] file/URL context (combined).
 // The date block is the 5th block and intentionally has no cache_control.
+//
+// Pinned files are always sent in full (no RAG selection) so the block content is
+// identical across turns — required for the Anthropic cache to hit. File tokens cost
+// ~10% on cache reads after the first message.
 //
 // Callers on the Gemini path should join blocks: blocks.map(b => b.text).join('\n')
 async function buildSystemPrompt(project, personaId, sid = null, webSearch = false, userMessage = '', userId = null, userTimezone = null) {
@@ -87,54 +89,28 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
   }
 
   // ── Block 4: File context + pinned URLs (cache_control) ─────────────────────
-  // Combined into one breakpoint to stay within the 4-breakpoint limit.
-  // RAG chunks are message-dependent so they reduce cache hit rate for this block,
-  // but the block is still marked cacheable for turns where the query matches.
+  // Pinned files are sent in full on every prompt so the block content stays
+  // identical across turns — this is required for Anthropic's prompt cache to
+  // hit. Stable content + cache_control means file tokens are billed at ~10%
+  // after the first message in a session.
   if (project) {
     const parts = [];
 
-    // Pinned files — RAG when available, full-text fallback
+    // Pinned files — always full text, no RAG selection, so content is stable
     const { rows: pinnedFiles } = await pool.query(
       'SELECT * FROM files WHERE "projectId"=$1 AND pinned=1', [project.id]
     );
     if (pinnedFiles.length > 0) {
       const fileList = pinnedFiles.map(f => `• ${f.name}`).join('\n');
-      let usedRag = false;
-
-      if (userMessage && process.env.GEMINI_API_KEY) {
-        try {
-          const { retrieveRelevantChunks } = require('../services/embeddings');
-          const chunks = await retrieveRelevantChunks(userMessage, project.id, 5);
-          if (chunks.length > 0) {
-            parts.push(`The following project files are pinned:\n${fileList}`);
-            parts.push(`## Relevant context from project files\n\n${chunks.join('\n\n---\n\n')}`);
-            usedRag = true;
-          }
-        } catch (ragErr) {
-          console.warn('[chat] RAG retrieval failed, falling back to full text:', ragErr.message);
-        }
-      }
-
-      if (!usedRag) {
-        ragFallbackActive = true;
-        const fileBlocks = pinnedFiles.map(f =>
-          f.extractedText
-            ? `[Pinned file: ${f.name}]\n${f.extractedText.substring(0, 4000)}`
-            : `[Pinned file: ${f.name} (${f.mimetype})]`
-        );
-        let combined = fileBlocks.join('\n\n');
-        const rawChars = combined.length;
-        if (rawChars > RAG_FALLBACK_CAP) {
-          combined = combined.substring(0, RAG_FALLBACK_CAP) +
-            '\n\n[Content truncated — embeddings unavailable. Re-upload files to restore full RAG context.]';
-        }
-        console.warn(
-          `[RAG FALLBACK] session=${sid || 'unknown'} project=${project.id} ` +
-          `raw_chars=${rawChars} capped_chars=${Math.min(rawChars, RAG_FALLBACK_CAP)}`
-        );
-        parts.push(`The following project files are pinned and their content is included below. These are the ONLY files in your context unless the user explicitly attaches others in the conversation:\n${fileList}`);
-        parts.push(combined);
-      }
+      const fileBlocks = pinnedFiles.map(f =>
+        f.extractedText
+          ? `[Pinned file: ${f.name}]\n${f.extractedText}`
+          : `[Pinned file: ${f.name} (${f.mimetype}) — no text content extracted]`
+      );
+      const totalChars = fileBlocks.reduce((s, b) => s + b.length, 0);
+      console.log(`[pinned files] project=${project.id} files=${pinnedFiles.length} total_chars=${totalChars}`);
+      parts.push(`The following project files are pinned and included in full below:\n${fileList}`);
+      parts.push(fileBlocks.join('\n\n'));
     }
 
     // Session files — selected by the user for this session

@@ -797,7 +797,7 @@ function InvoicesTab() {
               <tbody>
                 {(viewInvoice.items || []).map((item, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td className="py-1.5">{item.description}</td>
+                    <td className="py-1.5" style={{ whiteSpace: 'pre-wrap' }}>{item.description}</td>
                     <td className="py-1.5 text-right">{item.qty}</td>
                     <td className="py-1.5 text-right">{fmt(item.unitPrice)}</td>
                     <td className="py-1.5 text-right">{fmt(item.gst)}</td>
@@ -975,7 +975,9 @@ function ExpensesTab() {
           <div className="grid grid-cols-2 gap-3 mb-3">
             <Field label="Date"><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Field>
             <Field label="Supplier"><Input value={form.supplier} onChange={v => setForm(p => ({...p, supplier: v}))} placeholder="Supplier name" /></Field>
-            <Field label="Description"><Input value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="What was purchased" /></Field>
+            <div className="col-span-2">
+              <Field label="Description"><Textarea value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="What was purchased" rows={2} /></Field>
+            </div>
             <Field label="Category"><CategoryInput value={form.category} onChange={v => setForm(p => ({...p, category: v}))} /></Field>
             <Field label="Total Amount Paid ($)">
               <Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" />
