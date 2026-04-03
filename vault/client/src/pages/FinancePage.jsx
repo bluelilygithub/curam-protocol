@@ -250,6 +250,29 @@ function SupplierInput({ value, onChange }) {
   );
 }
 
+function TxCodeSelect({ value, onChange, type, placeholder = 'No code' }) {
+  const [codes, setCodes] = useState([]);
+  useEffect(() => {
+    api.get(`/api/finance/tx-codes?type=${type}`)
+      .then(r => r.json())
+      .then(d => setCodes(Array.isArray(d) ? d.filter(c => c.isActive) : []))
+      .catch(() => {});
+  }, [type]);
+  return (
+    <select
+      value={value || ''}
+      onChange={e => onChange(e.target.value ? parseInt(e.target.value) : null)}
+      className="text-xs px-2 py-1 rounded-lg border w-full"
+      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: value ? 'var(--color-text)' : 'var(--color-muted)' }}
+    >
+      <option value="">{placeholder}</option>
+      {codes.map(c => (
+        <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
+      ))}
+    </select>
+  );
+}
+
 // ── Date range ────────────────────────────────────────────────────────────────
 
 function getPresetRange(preset) {
@@ -531,7 +554,7 @@ function ClientsTab() {
 
 // ── Invoices ──────────────────────────────────────────────────────────────────
 
-const BLANK_ITEM = { description: '', qty: '1', unitPrice: '', gstApplies: true };
+const BLANK_ITEM = { description: '', qty: '1', unitPrice: '', gstApplies: true, txCodeId: null };
 
 function calcTotals(items) {
   let subtotal = 0, gst = 0;
@@ -546,6 +569,7 @@ function calcTotals(items) {
 function InvoicesTab({ from, to }) {
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
+  const [incomeCodes, setIncomeCodes] = useState([]);
   const [modal, setModal] = useState(null);
   const [viewInvoice, setViewInvoice] = useState(null);
   const [sendModal, setSendModal] = useState(null); // invoice to send
@@ -573,6 +597,11 @@ function InvoicesTab({ from, to }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.get('/api/finance/tx-codes?type=income').then(r => r.json()).then(d => setIncomeCodes(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+
+  const incomeCodeMap = Object.fromEntries(incomeCodes.map(c => [c.id, c]));
 
   const openNew = () => { setForm(blankForm()); setError(''); setModal('new'); };
 
@@ -586,7 +615,7 @@ function InvoicesTab({ from, to }) {
       notes:     data.notes || '',
       paidAt:    data.paidAt  ? String(data.paidAt).slice(0,10)   : '',
       items:     data.items.length
-        ? data.items.map(i => ({ description: i.description, qty: String(i.qty), unitPrice: String(i.unitPrice), gstApplies: parseFloat(i.gst) > 0 }))
+        ? data.items.map(i => ({ description: i.description, qty: String(i.qty), unitPrice: String(i.unitPrice), gstApplies: parseFloat(i.gst) > 0, txCodeId: i.txCodeId || null }))
         : [{ ...BLANK_ITEM }],
     });
     setError('');
@@ -833,7 +862,10 @@ function InvoicesTab({ from, to }) {
               <div className="flex flex-col gap-2">
                 {form.items.map((item, idx) => (
                   <div key={idx} className="grid gap-1 items-start" style={{ gridTemplateColumns: '1fr 60px 90px 60px 24px' }}>
-                    <Textarea value={item.description} onChange={v => setItem(idx, 'description', v)} placeholder="Description" rows={2} />
+                    <div className="flex flex-col gap-1">
+                      <Textarea value={item.description} onChange={v => setItem(idx, 'description', v)} placeholder="Description" rows={2} />
+                      <TxCodeSelect value={item.txCodeId} onChange={v => setItem(idx, 'txCodeId', v)} type="income" placeholder="— income code —" />
+                    </div>
                     <input
                       type="number" min="1" step="1"
                       value={item.qty}
@@ -959,7 +991,14 @@ function InvoicesTab({ from, to }) {
               <tbody>
                 {(viewInvoice.items || []).map((item, i) => (
                   <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <td className="py-1.5" style={{ whiteSpace: 'pre-wrap' }}>{item.description}</td>
+                    <td className="py-1.5">
+                      <span style={{ whiteSpace: 'pre-wrap' }}>{item.description}</span>
+                      {item.txCodeId && incomeCodeMap[item.txCodeId] && (
+                        <span className="block text-xs font-mono mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                          {incomeCodeMap[item.txCodeId].code}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-1.5 text-right">{item.qty}</td>
                     <td className="py-1.5 text-right">{fmt(item.unitPrice)}</td>
                     <td className="py-1.5 text-right">{fmt(item.gst)}</td>
@@ -992,10 +1031,11 @@ function InvoicesTab({ from, to }) {
 
 // ── Expenses ──────────────────────────────────────────────────────────────────
 
-const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '' };
+const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null };
 
 function ExpensesTab({ from, to }) {
   const [expenses, setExpenses]     = useState([]);
+  const [expenseCodes, setExpenseCodes] = useState([]);
   const [showForm, setShowForm]     = useState(false);
   const [editingExpense, setEditing] = useState(null);
   const [form, setForm]             = useState({ ...BLANK_EXPENSE, date: todayStr() });
@@ -1012,10 +1052,15 @@ function ExpensesTab({ from, to }) {
     ? (parseFloat(form.amount) / 11).toFixed(2)
     : '0.00';
 
+  const codeMap = Object.fromEntries(expenseCodes.map(c => [c.id, c]));
+
   const load = useCallback(() => {
     api.get('/api/finance/expenses').then(r => r.json()).then(d => setExpenses(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.get('/api/finance/tx-codes?type=expense').then(r => r.json()).then(d => setExpenseCodes(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
 
   const openNew = () => {
     setEditing(null);
@@ -1035,6 +1080,7 @@ function ExpensesTab({ from, to }) {
       gstIncluded: parseFloat(exp.gst) > 0,
       category:    exp.category || '',
       supplier:    exp.supplier || '',
+      txCodeId:    exp.txCodeId || null,
     });
     setError('');
     setShowForm(true);
@@ -1141,6 +1187,9 @@ function ExpensesTab({ from, to }) {
               <Field label="Description"><Textarea value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="What was purchased" rows={2} /></Field>
             </div>
             <Field label="Category"><CategoryInput value={form.category} onChange={v => setForm(p => ({...p, category: v}))} /></Field>
+            <Field label="Expense Code">
+              <TxCodeSelect value={form.txCodeId} onChange={v => setForm(p => ({...p, txCodeId: v}))} type="expense" placeholder="— select code —" />
+            </Field>
             <Field label="Total Amount Paid ($)">
               <Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" />
             </Field>
@@ -1173,7 +1222,7 @@ function ExpensesTab({ from, to }) {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                {['Date', 'Description', 'Supplier', 'Ex-GST', 'GST', 'Total', 'Category', '', ''].map(h => (
+                {['Date', 'Description', 'Supplier', 'Ex-GST', 'GST', 'Total', 'Category', 'Code', '', ''].map(h => (
                   <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -1193,6 +1242,9 @@ function ExpensesTab({ from, to }) {
                   <td className="py-2 px-2" style={{ color: 'var(--color-muted)' }}>{fmt(e.gst)}</td>
                   <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>{fmt(parseFloat(e.amount) + parseFloat(e.gst || 0))}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{e.category || '—'}</td>
+                  <td className="py-2 px-2 text-xs font-mono" style={{ color: 'var(--color-muted)' }}>
+                    {e.txCodeId && codeMap[e.txCodeId] ? codeMap[e.txCodeId].code : '—'}
+                  </td>
                   <td className="py-2 px-1">
                     <button
                       onClick={() => e.receipt_path ? openViewReceipt(e) : openUploadModal(e)}

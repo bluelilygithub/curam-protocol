@@ -455,9 +455,9 @@ router.post('/invoices', async (req, res) => {
 
     for (const item of items) {
       await client.query(
-        `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [invoice.id, item.description, item.qty, item.unitPrice, item._gst, item._amount]
+        `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [invoice.id, item.description, item.qty, item.unitPrice, item._gst, item._amount, item.txCodeId||null]
       );
     }
 
@@ -575,7 +575,7 @@ router.put('/invoices/:id', async (req, res) => {
     await client.query('BEGIN');
     const userId    = req.user.id;
     const invoiceId = req.params.id;
-    const { clientId, clientRef, issueDate, dueDate, notes, status, paidAt, items = [] } = req.body;
+    const { clientId, clientRef, issueDate, dueDate, notes, status, paidAt, items = [], txCodeId } = req.body;
 
     const { rows: check } = await client.query(
       `SELECT id, number, status, "paidAt" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
@@ -626,9 +626,9 @@ router.put('/invoices/:id', async (req, res) => {
     await client.query(`DELETE FROM fin_invoice_items WHERE "invoiceId"=$1`, [invoiceId]);
     for (const item of items) {
       await client.query(
-        `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [invoiceId, item.description, item.qty, item.unitPrice, item._gst, item._amount]
+        `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId")
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [invoiceId, item.description, item.qty, item.unitPrice, item._gst, item._amount, item.txCodeId||null]
       );
     }
 
@@ -939,16 +939,16 @@ router.post('/expenses', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { date, description, amount, gstIncluded, category, supplier } = req.body;
+    const { date, description, amount, gstIncluded, category, supplier, txCodeId } = req.body;
     // amount = total paid (GST-inclusive when gstIncluded=true)
     const totalPaid = parseFloat(amount) || 0;
     const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
     const amt       = parseFloat((totalPaid - gstAmt).toFixed(2)); // ex-GST amount stored in amount col
 
     const { rows } = await dbClient.query(
-      `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [userId, date||new Date().toISOString().slice(0,10), description, amt, gstAmt, category||null, supplier||null]
+      `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier, "txCodeId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [userId, date||new Date().toISOString().slice(0,10), description, amt, gstAmt, category||null, supplier||null, txCodeId||null]
     );
     const expense = rows[0];
 
@@ -988,15 +988,15 @@ router.put('/expenses/:id', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId    = req.user.id;
     const expenseId = req.params.id;
-    const { date, description, amount, gstIncluded, category, supplier } = req.body;
+    const { date, description, amount, gstIncluded, category, supplier, txCodeId } = req.body;
     const totalPaid = parseFloat(amount) || 0;
     const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
     const amt       = parseFloat((totalPaid - gstAmt).toFixed(2));
 
     const { rows } = await dbClient.query(
-      `UPDATE fin_expenses SET date=$1,description=$2,amount=$3,gst=$4,category=$5,supplier=$6,"updatedAt"=NOW()
-       WHERE id=$7 AND "userId"=$8 RETURNING *`,
-      [date, description, amt, gstAmt, category||null, supplier||null, expenseId, userId]
+      `UPDATE fin_expenses SET date=$1,description=$2,amount=$3,gst=$4,category=$5,supplier=$6,"txCodeId"=$7,"updatedAt"=NOW()
+       WHERE id=$8 AND "userId"=$9 RETURNING *`,
+      [date, description, amt, gstAmt, category||null, supplier||null, txCodeId||null, expenseId, userId]
     );
     if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const expense = rows[0];

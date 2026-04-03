@@ -847,6 +847,10 @@ async function initSchema() {
   await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW()`);
   await pool.query(`ALTER TABLE fin_accounts ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW()`);
 
+  // Link tx codes to invoice items and expenses
+  await pool.query(`ALTER TABLE fin_invoice_items ADD COLUMN IF NOT EXISTS "txCodeId" INTEGER REFERENCES fin_tx_codes(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "txCodeId" INTEGER REFERENCES fin_tx_codes(id) ON DELETE SET NULL`);
+
   // Suppliers
   await pool.query(`
     CREATE TABLE IF NOT EXISTS fin_suppliers (
