@@ -314,6 +314,14 @@ function ProjectSidebar({ onClose }) {
                         </span>
                       )}
                       <span
+                        onClick={(e) => { e.stopPropagation(); navigate(`/projects/${project.id}`); if (onClose) onClose(); }}
+                        className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
+                        style={{ color: 'var(--color-muted)' }}
+                        title="Open project"
+                      >
+                        {getIcon('external-link', { size: 11 })}
+                      </span>
+                      <span
                         onClick={(e) => { e.stopPropagation(); setActive(project.id); navigate(`/projects/${project.id}/chat`); if (onClose) onClose(); }}
                         className="flex-shrink-0 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity cursor-pointer"
                         style={{ color: 'var(--color-primary)' }}
