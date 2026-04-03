@@ -1460,13 +1460,168 @@ function WagesTab({ from, to }) {
   );
 }
 
+// ── Accounts ─────────────────────────────────────────────────────────────────
+
+const ACCOUNT_TYPES = ['asset','liability','equity','income','expense'];
+const BLANK_ACCOUNT = { code: '', name: '', type: 'liability' };
+
+function AccountsTab() {
+  const [accounts, setAccounts]   = useState([]);
+  const [showForm, setShowForm]   = useState(false);
+  const [editing, setEditing]     = useState(null);
+  const [form, setForm]           = useState({ ...BLANK_ACCOUNT });
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [confirmModal, setConfirmModal] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  const load = useCallback(() => {
+    api.get('/api/finance/accounts').then(r => r.json()).then(d => setAccounts(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const openNew   = () => { setEditing(null); setForm({ ...BLANK_ACCOUNT }); setError(''); setShowForm(true); };
+  const openEdit  = (a) => { if (a.isSystem) return; setEditing(a); setForm({ code: a.code, name: a.name, type: a.type }); setError(''); setShowForm(true); };
+  const cancelForm = () => { setShowForm(false); setEditing(null); setError(''); };
+
+  const save = async () => {
+    if (!form.code.trim() || !form.name.trim()) { setError('Code and name required'); return; }
+    setSaving(true); setError('');
+    try {
+      if (editing) {
+        await api.put(`/api/finance/accounts/${editing.id}`, form);
+        addToast('Account updated');
+      } else {
+        await api.post('/api/finance/accounts', form);
+        addToast('Account added');
+      }
+      load(); cancelForm();
+    } catch (e) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const del = (a) => {
+    if (a.isSystem) return;
+    setConfirmModal({
+      message: `Delete account "${a.code} — ${a.name}"? This will fail if the account has journal entries.`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          await api.delete(`/api/finance/accounts/${a.id}`);
+          setAccounts(prev => prev.filter(x => x.id !== a.id));
+          addToast('Account deleted');
+        } catch (e) { addToast(e.message, 'error'); }
+      },
+    });
+  };
+
+  const af = k => v => setForm(p => ({ ...p, [k]: v }));
+  const visible = accounts.filter(a => typeFilter === 'all' || a.type === typeFilter);
+  const typeGroups = ACCOUNT_TYPES.reduce((g, t) => { g[t] = visible.filter(a => a.type === t); return g; }, {});
+
+  const typeBadgeColor = { asset: '#dbeafe', liability: '#fee2e2', equity: '#f3e8ff', income: '#d1fae5', expense: '#fef3c7' };
+  const typeBadgeText  = { asset: '#1e40af', liability: '#991b1b', equity: '#6d28d9', income: '#065f46', expense: '#92400e' };
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Chart of Accounts</h2>
+        <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Account'}</Btn>
+      </div>
+
+      <div className="flex gap-1 mb-4 flex-wrap">
+        {[['all','All'], ...ACCOUNT_TYPES.map(t => [t, t.charAt(0).toUpperCase() + t.slice(1)])].map(([k,l]) => (
+          <button key={k} onClick={() => setTypeFilter(k)}
+            className="text-xs px-3 py-1 rounded-full font-medium transition-colors"
+            style={{ background: typeFilter === k ? 'var(--color-primary)' : 'transparent', color: typeFilter === k ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+          >{l}</button>
+        ))}
+      </div>
+
+      {showForm && (
+        <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <Field label="Code *"><Input value={form.code} onChange={af('code')} placeholder="2100" /></Field>
+            <Field label="Type">
+              <Sel value={form.type} onChange={af('type')}>
+                {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+              </Sel>
+            </Field>
+            <div className="col-span-1" style={{ gridColumn: 'span 1' }}>
+              {/* spacer */}
+            </div>
+            <div className="col-span-3">
+              <Field label="Account Name *"><Input value={form.name} onChange={af('name')} placeholder="e.g. Owner Loan" /></Field>
+            </div>
+          </div>
+          <ErrMsg msg={error} />
+          <div className="flex gap-2 mt-2">
+            <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Add Account'}</Btn>
+          </div>
+        </div>
+      )}
+
+      {ACCOUNT_TYPES.filter(t => typeFilter === 'all' || t === typeFilter).map(t => {
+        const group = typeGroups[t];
+        if (!group.length) return null;
+        return (
+          <div key={t} className="mb-5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                style={{ background: typeBadgeColor[t], color: typeBadgeText[t] }}>
+                {t}
+              </span>
+            </div>
+            <table className="w-full text-sm border-collapse">
+              <tbody>
+                {group.map(a => (
+                  <tr key={a.id} className="border-b hover:opacity-80" style={{ borderColor: 'var(--color-border)' }}>
+                    <td className="py-2 px-2 font-mono text-xs w-20" style={{ color: 'var(--color-muted)' }}>{a.code}</td>
+                    <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>
+                      {a.name}
+                      {a.isSystem && <span className="ml-2 text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>system</span>}
+                    </td>
+                    <td className="py-2 px-2 text-right">
+                      {!a.isSystem && (
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => openEdit(a)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
+                          <button onClick={() => del(a)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+
+      {confirmModal && (
+        <ConfirmModal title="Confirm" message={confirmModal.message} confirmLabel="Delete" danger
+          onConfirm={confirmModal.onConfirm} onCancel={() => setConfirmModal(null)} />
+      )}
+    </div>
+  );
+}
+
 // ── Journal ───────────────────────────────────────────────────────────────────
 
-function JournalTab({ from, to }) {
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
+const BLANK_JOURNAL_LINE = { accountId: '', debit: '', credit: '' };
 
-  useEffect(() => {
+function JournalTab({ from, to }) {
+  const [entries, setEntries]   = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm]         = useState({ date: todayStr(), description: '', lines: [{ ...BLANK_JOURNAL_LINE }, { ...BLANK_JOURNAL_LINE }] });
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [confirmModal, setConfirmModal] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  const loadEntries = useCallback(() => {
     api.get('/api/finance/journal')
       .then(r => r.json())
       .then(d => setEntries(Array.isArray(d) ? d : []))
@@ -1474,11 +1629,129 @@ function JournalTab({ from, to }) {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => { loadEntries(); }, [loadEntries]);
+  useEffect(() => {
+    api.get('/api/finance/accounts').then(r => r.json()).then(d => setAccounts(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+
+  const setLine = (idx, key, val) => setForm(p => ({
+    ...p,
+    lines: p.lines.map((l, i) => i === idx ? { ...l, [key]: val } : l),
+  }));
+  const addLine    = () => setForm(p => ({ ...p, lines: [...p.lines, { ...BLANK_JOURNAL_LINE }] }));
+  const removeLine = (idx) => setForm(p => ({ ...p, lines: p.lines.filter((_, i) => i !== idx) }));
+
+  const totalDebits  = form.lines.reduce((s, l) => s + (parseFloat(l.debit)  || 0), 0);
+  const totalCredits = form.lines.reduce((s, l) => s + (parseFloat(l.credit) || 0), 0);
+  const balanced     = Math.abs(totalDebits - totalCredits) < 0.01;
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setForm({ date: todayStr(), description: '', lines: [{ ...BLANK_JOURNAL_LINE }, { ...BLANK_JOURNAL_LINE }] });
+    setError('');
+  };
+
+  const save = async () => {
+    if (!form.description.trim()) { setError('Description required'); return; }
+    const lines = form.lines.filter(l => l.accountId && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
+    if (lines.length < 2) { setError('At least two lines with an account and amount required'); return; }
+    if (!balanced) { setError(`Entry is not balanced — debits ${fmt(totalDebits)}, credits ${fmt(totalCredits)}`); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post('/api/finance/journal', {
+        date: form.date,
+        description: form.description,
+        lines: lines.map(l => ({ accountId: parseInt(l.accountId), debit: parseFloat(l.debit) || 0, credit: parseFloat(l.credit) || 0 })),
+      });
+      addToast('Journal entry recorded');
+      loadEntries();
+      cancelForm();
+    } catch (e) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const delEntry = (entry) => {
+    if (entry.type !== 'manual') return;
+    setConfirmModal({
+      message: `Delete journal entry "${entry.description}"?`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          await api.delete(`/api/finance/journal/${entry.id}`);
+          setEntries(prev => prev.filter(e => e.id !== entry.id));
+          addToast('Entry deleted');
+        } catch (e) { addToast(e.message, 'error'); }
+      },
+    });
+  };
+
   if (loading) return <div className="p-6 text-sm" style={{ color: 'var(--color-muted)' }}>Loading...</div>;
 
   return (
     <div data-tour="finance-journal" className="p-6">
-      <h2 className="font-semibold mb-4" style={{ color: 'var(--color-text)' }}>Journal</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Journal</h2>
+        <Btn onClick={showForm ? cancelForm : () => setShowForm(true)}>{showForm ? 'Cancel' : '+ Manual Entry'}</Btn>
+      </div>
+
+      {showForm && (
+        <div className="mb-6 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <Field label="Date"><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Field>
+            <div className="col-span-2">
+              <Field label="Description"><Input value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="e.g. Loan repayment — owner loan settlement" /></Field>
+            </div>
+          </div>
+
+          <div className="mb-2">
+            <div className="grid text-xs font-semibold mb-1 gap-2" style={{ gridTemplateColumns: '1fr 100px 100px 24px', color: 'var(--color-muted)' }}>
+              <span>Account</span><span className="text-right">Debit</span><span className="text-right">Credit</span><span />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {form.lines.map((line, idx) => (
+                <div key={idx} className="grid gap-2 items-center" style={{ gridTemplateColumns: '1fr 100px 100px 24px' }}>
+                  <select
+                    value={line.accountId}
+                    onChange={e => setLine(idx, 'accountId', e.target.value)}
+                    className="text-sm px-2 py-1.5 rounded-lg border w-full"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="">— select account —</option>
+                    {accounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+                  </select>
+                  <input
+                    type="number" min="0" step="0.01" placeholder="0.00"
+                    value={line.debit}
+                    onChange={e => setLine(idx, 'debit', e.target.value)}
+                    className="text-sm px-2 py-1.5 rounded-lg border text-right w-full"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                  />
+                  <input
+                    type="number" min="0" step="0.01" placeholder="0.00"
+                    value={line.credit}
+                    onChange={e => setLine(idx, 'credit', e.target.value)}
+                    className="text-sm px-2 py-1.5 rounded-lg border text-right w-full"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                  />
+                  <button onClick={() => removeLine(idx)} className="text-xs hover:opacity-60 text-center" style={{ color: '#ef4444' }}>✕</button>
+                </div>
+              ))}
+            </div>
+            <button onClick={addLine} className="mt-2 text-xs hover:opacity-70" style={{ color: 'var(--color-primary)' }}>+ Add line</button>
+          </div>
+
+          <div className="flex justify-end gap-6 text-xs mb-3 font-mono" style={{ color: balanced ? '#065f46' : '#ef4444' }}>
+            <span>Debits: {fmt(totalDebits)}</span>
+            <span>Credits: {fmt(totalCredits)}</span>
+            <span>{balanced ? '✓ Balanced' : '✗ Not balanced'}</span>
+          </div>
+
+          <ErrMsg msg={error} />
+          <div className="flex gap-2 mt-2">
+            <Btn onClick={save} disabled={saving || !balanced}>{saving ? 'Saving…' : 'Post Entry'}</Btn>
+          </div>
+        </div>
+      )}
 
       {entries.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
@@ -1503,6 +1776,9 @@ function JournalTab({ from, to }) {
                 <div className="flex gap-2 items-center flex-shrink-0">
                   <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>{entry.type}</span>
                   <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(entry.date)}</span>
+                  {entry.type === 'manual' && (
+                    <button onClick={() => delEntry(entry)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                  )}
                 </div>
               </div>
               <table className="w-full text-xs">
@@ -1530,6 +1806,11 @@ function JournalTab({ from, to }) {
             </div>
           ))}
         </div>
+      )}
+
+      {confirmModal && (
+        <ConfirmModal title="Confirm" message={confirmModal.message} confirmLabel="Delete" danger
+          onConfirm={confirmModal.onConfirm} onCancel={() => setConfirmModal(null)} />
       )}
     </div>
   );
@@ -2349,8 +2630,8 @@ function CodesTab() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Journal', 'Codes', 'BAS', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Codes', 'BAS', 'Settings']);
+const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Journal', 'Accounts', 'Codes', 'BAS', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Settings']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
@@ -2403,6 +2684,7 @@ export default function FinancePage() {
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
         {tab === 'Wages'     && <WagesTab     from={from} to={to} />}
         {tab === 'Journal'   && <JournalTab   from={from} to={to} />}
+        {tab === 'Accounts'  && <AccountsTab />}
         {tab === 'Codes'     && <CodesTab />}
         {tab === 'BAS'       && <BASTab />}
         {tab === 'Settings'  && <SettingsTab />}

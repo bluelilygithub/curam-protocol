@@ -180,6 +180,55 @@ router.get('/accounts', async (req, res) => {
   }
 });
 
+router.post('/accounts', async (req, res) => {
+  try {
+    await ensureAccounts(req.user.id);
+    const { code, name, type } = req.body;
+    if (!code?.trim() || !name?.trim() || !type) return res.status(400).json({ error: 'Code, name and type required' });
+    const validTypes = ['asset','liability','equity','income','expense'];
+    if (!validTypes.includes(type)) return res.status(400).json({ error: `Type must be one of: ${validTypes.join(', ')}` });
+    const { rows } = await pool.query(
+      `INSERT INTO fin_accounts ("userId", code, name, type) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [req.user.id, code.trim(), name.trim(), type]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Account code already exists' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/accounts/:id', async (req, res) => {
+  try {
+    const { code, name, type } = req.body;
+    if (!code?.trim() || !name?.trim() || !type) return res.status(400).json({ error: 'Code, name and type required' });
+    const { rows } = await pool.query(
+      `UPDATE fin_accounts SET code=$1,name=$2,type=$3,"updatedAt"=NOW()
+       WHERE id=$4 AND "userId"=$5 AND "isSystem"=false RETURNING *`,
+      [code.trim(), name.trim(), type, req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found or system account (cannot edit)' });
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Account code already exists' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/accounts/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM fin_accounts WHERE id=$1 AND "userId"=$2 AND "isSystem"=false RETURNING id`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found or system account (cannot delete)' });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === '23503') return res.status(409).json({ error: 'Account has journal entries and cannot be deleted' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Clients ───────────────────────────────────────────────────────────────────
 
 router.get('/clients', async (req, res) => {
@@ -1217,6 +1266,27 @@ router.post('/journal', async (req, res) => {
     });
     await dbClient.query('COMMIT');
     res.json({ id: entryId });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+router.delete('/journal/:id', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const { rows } = await dbClient.query(
+      `SELECT id FROM fin_journal_entries WHERE id=$1 AND "userId"=$2 AND type='manual'`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found or not a manual entry' });
+    await dbClient.query(`DELETE FROM fin_journal_lines WHERE "entryId"=$1`, [req.params.id]);
+    await dbClient.query(`DELETE FROM fin_journal_entries WHERE id=$1`, [req.params.id]);
+    await dbClient.query('COMMIT');
+    res.json({ ok: true });
   } catch (err) {
     await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });
