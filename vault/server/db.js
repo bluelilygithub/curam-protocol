@@ -851,6 +851,9 @@ async function initSchema() {
   await pool.query(`ALTER TABLE fin_invoice_items ADD COLUMN IF NOT EXISTS "txCodeId" INTEGER REFERENCES fin_tx_codes(id) ON DELETE SET NULL`);
   await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "txCodeId" INTEGER REFERENCES fin_tx_codes(id) ON DELETE SET NULL`);
 
+  // Payment account on expenses (which account was credited — defaults to Bank if null)
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "paidViaId" INTEGER REFERENCES fin_accounts(id) ON DELETE SET NULL`);
+
   // Suppliers
   await pool.query(`
     CREATE TABLE IF NOT EXISTS fin_suppliers (

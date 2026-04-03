@@ -1031,17 +1031,21 @@ function InvoicesTab({ from, to }) {
 
 // ── Expenses ──────────────────────────────────────────────────────────────────
 
-const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null };
+const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '', txCodeId: null, paidViaId: null };
 
 function ExpensesTab({ from, to }) {
   const [expenses, setExpenses]     = useState([]);
   const [expenseCodes, setExpenseCodes] = useState([]);
+  const [paymentAccounts, setPaymentAccounts] = useState([]);
   const [showForm, setShowForm]     = useState(false);
   const [editingExpense, setEditing] = useState(null);
   const [form, setForm]             = useState({ ...BLANK_EXPENSE, date: todayStr() });
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState('');
   const [confirmModal, setConfirmModal] = useState(null);
+  const [ccPayModal, setCcPayModal]     = useState(null);   // { expense, account } — pay CC modal
+  const [ccPayDate, setCcPayDate]       = useState(todayStr());
+  const [ccPaySaving, setCcPaySaving]   = useState(false);
   const [receiptModal, setReceiptModal] = useState(null);   // { expense } — upload modal
   const [viewReceiptModal, setViewReceiptModal] = useState(null); // { expense, url, isPdf }
   const [receiptUploading, setReceiptUploading] = useState(false);
@@ -1052,7 +1056,8 @@ function ExpensesTab({ from, to }) {
     ? (parseFloat(form.amount) / 11).toFixed(2)
     : '0.00';
 
-  const codeMap = Object.fromEntries(expenseCodes.map(c => [c.id, c]));
+  const codeMap    = Object.fromEntries(expenseCodes.map(c => [c.id, c]));
+  const accountMap = Object.fromEntries(paymentAccounts.map(a => [a.id, a]));
 
   const load = useCallback(() => {
     api.get('/api/finance/expenses').then(r => r.json()).then(d => setExpenses(Array.isArray(d) ? d : [])).catch(() => {});
@@ -1060,6 +1065,11 @@ function ExpensesTab({ from, to }) {
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     api.get('/api/finance/tx-codes?type=expense').then(r => r.json()).then(d => setExpenseCodes(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+  useEffect(() => {
+    api.get('/api/finance/accounts').then(r => r.json())
+      .then(d => setPaymentAccounts(Array.isArray(d) ? d.filter(a => a.type === 'asset' || a.type === 'liability') : []))
+      .catch(() => {});
   }, []);
 
   const openNew = () => {
@@ -1081,6 +1091,7 @@ function ExpensesTab({ from, to }) {
       category:    exp.category || '',
       supplier:    exp.supplier || '',
       txCodeId:    exp.txCodeId || null,
+      paidViaId:   exp.paidViaId || null,
     });
     setError('');
     setShowForm(true);
@@ -1155,6 +1166,38 @@ function ExpensesTab({ from, to }) {
     }
   };
 
+  const openCcPay = (exp) => {
+    const account = accountMap[exp.paidViaId];
+    setCcPayDate(todayStr());
+    setCcPayModal({ expense: exp, account });
+  };
+
+  const confirmCcPay = async () => {
+    if (!ccPayModal) return;
+    const { expense, account } = ccPayModal;
+    const total = parseFloat(expense.amount) + parseFloat(expense.gst || 0);
+    setCcPaySaving(true);
+    try {
+      // Find Bank/Cash account id
+      const bankAcc = paymentAccounts.find(a => a.code === '1000');
+      if (!bankAcc) throw new Error('Bank / Cash account (1000) not found');
+      await api.post('/api/finance/journal', {
+        date: ccPayDate,
+        description: `CC payment — ${expense.description}`,
+        lines: [
+          { accountId: account.id, debit: total, credit: 0 },
+          { accountId: bankAcc.id, debit: 0, credit: total },
+        ],
+      });
+      addToast('CC payment journal entry recorded');
+      setCcPayModal(null);
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setCcPaySaving(false);
+    }
+  };
+
   const removeReceipt = (exp) => {
     setConfirmModal({
       message: `Remove receipt for "${exp.description}"?`,
@@ -1190,6 +1233,17 @@ function ExpensesTab({ from, to }) {
             <Field label="Expense Code">
               <TxCodeSelect value={form.txCodeId} onChange={v => setForm(p => ({...p, txCodeId: v}))} type="expense" placeholder="— select code —" />
             </Field>
+            <Field label="Paid via">
+              <select
+                value={form.paidViaId || ''}
+                onChange={e => setForm(p => ({...p, paidViaId: e.target.value ? parseInt(e.target.value) : null}))}
+                className="text-sm px-3 py-2 rounded-lg border w-full"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                <option value="">Bank / Cash (default)</option>
+                {paymentAccounts.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+              </select>
+            </Field>
             <Field label="Total Amount Paid ($)">
               <Input type="number" value={form.amount} onChange={v => setForm(p => ({...p, amount: v}))} placeholder="0.00" />
             </Field>
@@ -1222,7 +1276,7 @@ function ExpensesTab({ from, to }) {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                {['Date', 'Description', 'Supplier', 'Ex-GST', 'GST', 'Total', 'Category', 'Code', '', ''].map(h => (
+                {['Date', 'Description', 'Supplier', 'Ex-GST', 'GST', 'Total', 'Category', 'Code', 'Paid via', '', ''].map(h => (
                   <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -1245,6 +1299,9 @@ function ExpensesTab({ from, to }) {
                   <td className="py-2 px-2 text-xs font-mono" style={{ color: 'var(--color-muted)' }}>
                     {e.txCodeId && codeMap[e.txCodeId] ? codeMap[e.txCodeId].code : '—'}
                   </td>
+                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                    {e.paidViaId && accountMap[e.paidViaId] ? accountMap[e.paidViaId].name : 'Bank / Cash'}
+                  </td>
                   <td className="py-2 px-1">
                     <button
                       onClick={() => e.receipt_path ? openViewReceipt(e) : openUploadModal(e)}
@@ -1255,6 +1312,9 @@ function ExpensesTab({ from, to }) {
                   </td>
                   <td className="py-2 px-2">
                     <div className="flex gap-2">
+                      {e.paidViaId && accountMap[e.paidViaId]?.type === 'liability' && (
+                        <button onClick={() => openCcPay(e)} className="text-xs hover:opacity-60" style={{ color: '#f59e0b' }} title="Record payment of this card charge from bank">Pay CC</button>
+                      )}
                       <button onClick={() => openEdit(e)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
                       <button onClick={() => del(e)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
                     </div>
@@ -1275,6 +1335,29 @@ function ExpensesTab({ from, to }) {
           onConfirm={confirmModal.onConfirm}
           onCancel={() => setConfirmModal(null)}
         />
+      )}
+
+      {/* Pay CC modal */}
+      {ccPayModal && (
+        <Modal title="Record Credit Card Payment" onClose={() => setCcPayModal(null)}>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+              This will post a journal entry to clear <strong>{ccPayModal.account?.name}</strong> and debit <strong>Bank / Cash</strong> for{' '}
+              <strong>{fmt(parseFloat(ccPayModal.expense.amount) + parseFloat(ccPayModal.expense.gst || 0))}</strong>.
+            </p>
+            <Field label="Payment Date">
+              <Input type="date" value={ccPayDate} onChange={setCcPayDate} />
+            </Field>
+            <div className="rounded-lg p-3 text-xs font-mono flex flex-col gap-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+              <div className="flex justify-between"><span>DR {ccPayModal.account?.code} — {ccPayModal.account?.name}</span><span>{fmt(parseFloat(ccPayModal.expense.amount) + parseFloat(ccPayModal.expense.gst || 0))}</span></div>
+              <div className="flex justify-between"><span>CR 1000 — Bank / Cash</span><span>{fmt(parseFloat(ccPayModal.expense.amount) + parseFloat(ccPayModal.expense.gst || 0))}</span></div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Btn variant="secondary" onClick={() => setCcPayModal(null)}>Cancel</Btn>
+              <Btn onClick={confirmCcPay} disabled={ccPaySaving}>{ccPaySaving ? 'Posting…' : 'Post Entry'}</Btn>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* Upload receipt modal */}

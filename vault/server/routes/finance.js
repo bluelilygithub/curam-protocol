@@ -988,28 +988,29 @@ router.post('/expenses', async (req, res) => {
   try {
     await dbClient.query('BEGIN');
     const userId = req.user.id;
-    const { date, description, amount, gstIncluded, category, supplier, txCodeId } = req.body;
+    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId } = req.body;
     // amount = total paid (GST-inclusive when gstIncluded=true)
     const totalPaid = parseFloat(amount) || 0;
     const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
     const amt       = parseFloat((totalPaid - gstAmt).toFixed(2)); // ex-GST amount stored in amount col
 
     const { rows } = await dbClient.query(
-      `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier, "txCodeId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [userId, date||new Date().toISOString().slice(0,10), description, amt, gstAmt, category||null, supplier||null, txCodeId||null]
+      `INSERT INTO fin_expenses ("userId", date, description, amount, gst, category, supplier, "txCodeId", "paidViaId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [userId, date||new Date().toISOString().slice(0,10), description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null]
     );
     const expense = rows[0];
 
-    // Journal: DR Expenses (ex-GST), DR GST Paid, CR Bank (total paid)
+    // Journal: DR Expenses (ex-GST), DR GST Paid, CR <paidVia account, defaults to Bank>
     await ensureAccounts(userId);
     const expId    = await accountByCode(userId, '5000');
     const gstPaid  = await accountByCode(userId, '1200');
     const bankId   = await accountByCode(userId, '1000');
-    if (expId && bankId) {
+    const creditId = paidViaId || bankId;
+    if (expId && creditId) {
       const lines = [
-        { accountId: expId,  debit: amt,      credit: 0 },
-        { accountId: bankId, debit: 0,        credit: totalPaid },
+        { accountId: expId,    debit: amt,      credit: 0 },
+        { accountId: creditId, debit: 0,        credit: totalPaid },
       ];
       if (gstAmt > 0 && gstPaid) lines.splice(1, 0, { accountId: gstPaid, debit: gstAmt, credit: 0 });
       await createJournalEntry(dbClient, userId, {
@@ -1037,29 +1038,30 @@ router.put('/expenses/:id', async (req, res) => {
     await dbClient.query('BEGIN');
     const userId    = req.user.id;
     const expenseId = req.params.id;
-    const { date, description, amount, gstIncluded, category, supplier, txCodeId } = req.body;
+    const { date, description, amount, gstIncluded, category, supplier, txCodeId, paidViaId } = req.body;
     const totalPaid = parseFloat(amount) || 0;
     const gstAmt    = gstIncluded ? parseFloat((totalPaid / 11).toFixed(2)) : 0;
     const amt       = parseFloat((totalPaid - gstAmt).toFixed(2));
 
     const { rows } = await dbClient.query(
-      `UPDATE fin_expenses SET date=$1,description=$2,amount=$3,gst=$4,category=$5,supplier=$6,"txCodeId"=$7,"updatedAt"=NOW()
-       WHERE id=$8 AND "userId"=$9 RETURNING *`,
-      [date, description, amt, gstAmt, category||null, supplier||null, txCodeId||null, expenseId, userId]
+      `UPDATE fin_expenses SET date=$1,description=$2,amount=$3,gst=$4,category=$5,supplier=$6,"txCodeId"=$7,"paidViaId"=$8,"updatedAt"=NOW()
+       WHERE id=$9 AND "userId"=$10 RETURNING *`,
+      [date, description, amt, gstAmt, category||null, supplier||null, txCodeId||null, paidViaId||null, expenseId, userId]
     );
     if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
     const expense = rows[0];
 
-    // Reverse old journal, recreate with correct amounts
+    // Reverse old journal, recreate with correct amounts and payment account
     await deleteJournalForSource(dbClient, userId, parseInt(expenseId), 'expense');
     await ensureAccounts(userId);
     const expAccId = await accountByCode(userId, '5000');
     const gstPaid  = await accountByCode(userId, '1200');
     const bankId   = await accountByCode(userId, '1000');
-    if (expAccId && bankId) {
+    const creditId = paidViaId || bankId;
+    if (expAccId && creditId) {
       const lines = [
         { accountId: expAccId, debit: amt,      credit: 0 },
-        { accountId: bankId,   debit: 0,        credit: totalPaid },
+        { accountId: creditId, debit: 0,        credit: totalPaid },
       ];
       if (gstAmt > 0 && gstPaid) lines.splice(1, 0, { accountId: gstPaid, debit: gstAmt, credit: 0 });
       await createJournalEntry(dbClient, userId, {
