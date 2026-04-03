@@ -87,6 +87,19 @@ function Input({ value, onChange, type = 'text', placeholder, className = '' }) 
   );
 }
 
+function Textarea({ value, onChange, placeholder, rows = 3 }) {
+  return (
+    <textarea
+      rows={rows}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="text-sm px-3 py-2 rounded-lg border w-full"
+      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none', resize: 'vertical' }}
+    />
+  );
+}
+
 function Sel({ value, onChange, children }) {
   return (
     <select
@@ -241,7 +254,7 @@ function ClientsTab() {
   const [clients, setClients] = useState([]);
   const [modal, setModal] = useState(null);
   const [confirmModal, setConfirmModal] = useState(null);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', abn: '' });
+  const [form, setForm] = useState({ name: '', contactName: '', email: '', phone: '', address: '', abn: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const addToast = useToastStore(s => s.addToast);
@@ -252,8 +265,8 @@ function ClientsTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  const openNew  = () => { setForm({ name: '', email: '', phone: '', address: '', abn: '' }); setError(''); setModal('new'); };
-  const openEdit = (c) => { setForm({ name: c.name, email: c.email||'', phone: c.phone||'', address: c.address||'', abn: c.abn||'' }); setError(''); setModal(c); };
+  const openNew  = () => { setForm({ name: '', contactName: '', email: '', phone: '', address: '', abn: '' }); setError(''); setModal('new'); };
+  const openEdit = (c) => { setForm({ name: c.name, contactName: c.contactName||'', email: c.email||'', phone: c.phone||'', address: c.address||'', abn: c.abn||'' }); setError(''); setModal(c); };
 
   const save = async () => {
     if (!form.name.trim()) { setError('Name required'); return; }
@@ -317,7 +330,7 @@ function ClientsTab() {
               <div>
                 <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{c.name}</div>
                 <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                  {[c.email, c.abn && `ABN ${c.abn}`].filter(Boolean).join(' · ') || 'No contact info'}
+                  {[c.contactName, c.email, c.abn && `ABN ${c.abn}`].filter(Boolean).join(' · ') || 'No contact info'}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -350,6 +363,7 @@ function ClientsTab() {
         <Modal title={modal === 'new' ? 'New Client' : 'Edit Client'} onClose={() => setModal(null)}>
           <div className="flex flex-col gap-3">
             <Field label="Name *"><Input value={form.name} onChange={v => setForm(p => ({...p, name: v}))} placeholder="Client name" /></Field>
+            <Field label="Contact Name"><Input value={form.contactName} onChange={v => setForm(p => ({...p, contactName: v}))} placeholder="Primary contact person" /></Field>
             <Field label="Email"><Input type="email" value={form.email} onChange={v => setForm(p => ({...p, email: v}))} placeholder="email@example.com" /></Field>
             <Field label="Phone"><Input value={form.phone} onChange={v => setForm(p => ({...p, phone: v}))} placeholder="+61 4xx xxx xxx" /></Field>
             <Field label="ABN"><Input value={form.abn} onChange={v => setForm(p => ({...p, abn: v}))} placeholder="12 345 678 901" /></Field>
@@ -650,10 +664,10 @@ function InvoicesTab() {
               <Field label="Due Date">
                 <Input type="date" value={form.dueDate} onChange={v => setForm(p => ({...p, dueDate: v}))} />
               </Field>
-              <Field label="Notes">
-                <Input value={form.notes} onChange={v => setForm(p => ({...p, notes: v}))} placeholder="Payment terms, reference…" />
-              </Field>
             </div>
+            <Field label="Notes">
+              <Textarea value={form.notes} onChange={v => setForm(p => ({...p, notes: v}))} placeholder="Payment terms, reference…" rows={3} />
+            </Field>
 
             {/* Line items */}
             <div>
@@ -670,11 +684,17 @@ function InvoicesTab() {
               </div>
               <div className="flex flex-col gap-2">
                 {form.items.map((item, idx) => (
-                  <div key={idx} className="grid gap-1 items-center" style={{ gridTemplateColumns: '1fr 60px 90px 60px 24px' }}>
-                    <Input value={item.description} onChange={v => setItem(idx, 'description', v)} placeholder="Description" />
-                    <Input value={item.qty}         onChange={v => setItem(idx, 'qty', v)}         type="number" />
+                  <div key={idx} className="grid gap-1 items-start" style={{ gridTemplateColumns: '1fr 60px 90px 60px 24px' }}>
+                    <Textarea value={item.description} onChange={v => setItem(idx, 'description', v)} placeholder="Description" rows={2} />
+                    <input
+                      type="number" min="1" step="1"
+                      value={item.qty}
+                      onChange={e => setItem(idx, 'qty', e.target.value.replace(/\./g, ''))}
+                      className="text-sm px-3 py-2 rounded-lg border w-full"
+                      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+                    />
                     <Input value={item.unitPrice}   onChange={v => setItem(idx, 'unitPrice', v)}   type="number" placeholder="0.00" />
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1 pt-2">
                       <input
                         type="checkbox"
                         id={`gst-${idx}`}
@@ -683,7 +703,7 @@ function InvoicesTab() {
                       />
                       <label htmlFor={`gst-${idx}`} className="text-xs" style={{ color: 'var(--color-muted)' }}>10%</label>
                     </div>
-                    <button onClick={() => removeItem(idx)} className="text-xs rounded hover:opacity-60 text-center" style={{ color: '#ef4444' }}>✕</button>
+                    <button onClick={() => removeItem(idx)} className="text-xs rounded hover:opacity-60 text-center pt-2" style={{ color: '#ef4444' }}>✕</button>
                   </div>
                 ))}
               </div>

@@ -110,6 +110,7 @@ function buildDocument(deps, invoice, items, client, cfg) {
   const billTo = React.createElement(View, { style: styles.billToSection },
     React.createElement(Text, { style: styles.billToLabel }, 'BILL TO'),
     client && React.createElement(Text, { style: styles.billToName }, client.name),
+    client?.contactName && React.createElement(Text, { style: styles.billToDetail }, `Attn: ${client.contactName}`),
     client?.email   && React.createElement(Text, { style: styles.billToDetail }, `Email: ${client.email}`),
     client?.address && React.createElement(Text, { style: styles.billToDetail }, client.address),
     client?.abn     && React.createElement(Text, { style: styles.billToDetail }, `ABN: ${client.abn}`),

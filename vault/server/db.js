@@ -498,19 +498,21 @@ async function initSchema() {
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_clients (
-        id           SERIAL PRIMARY KEY,
-        "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name         TEXT NOT NULL,
-        email        TEXT,
-        phone        TEXT,
-        address      TEXT,
-        abn          TEXT,
-        "isActive"   BOOLEAN NOT NULL DEFAULT TRUE,
-        "createdAt"  TIMESTAMPTZ DEFAULT NOW(),
-        "updatedAt"  TIMESTAMPTZ DEFAULT NOW()
+        id              SERIAL PRIMARY KEY,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name            TEXT NOT NULL,
+        "contactName"   TEXT,
+        email           TEXT,
+        phone           TEXT,
+        address         TEXT,
+        abn             TEXT,
+        "isActive"      BOOLEAN NOT NULL DEFAULT TRUE,
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     await client.query(`ALTER TABLE fin_clients ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT TRUE`);
+    await client.query(`ALTER TABLE fin_clients ADD COLUMN IF NOT EXISTS "contactName" TEXT`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_invoices (

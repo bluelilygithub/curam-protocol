@@ -156,10 +156,10 @@ router.get('/clients', async (req, res) => {
   const activeOnly = req.query.activeOnly === 'true';
   try {
     let query = `
-      SELECT id, name, email, phone, address, abn, "isActive", 'fin' AS source FROM fin_clients WHERE "userId"=$1
+      SELECT id, name, "contactName", email, phone, address, abn, "isActive", 'fin' AS source FROM fin_clients WHERE "userId"=$1
         ${activeOnly ? 'AND "isActive" = TRUE' : ''}
       UNION ALL
-      SELECT id, name, NULL AS email, NULL AS phone, NULL AS address, NULL AS abn, TRUE AS "isActive", 'crm' AS source
+      SELECT id, name, NULL AS "contactName", NULL AS email, NULL AS phone, NULL AS address, NULL AS abn, TRUE AS "isActive", 'crm' AS source
         FROM clients WHERE "userId"=$1 ${activeOnly ? "AND status = 'active'" : ''}
       ORDER BY name`;
     const { rows } = await pool.query(query, [req.user.id]);
@@ -171,11 +171,11 @@ router.get('/clients', async (req, res) => {
 
 router.post('/clients', async (req, res) => {
   try {
-    const { name, email, phone, address, abn } = req.body;
+    const { name, contactName, email, phone, address, abn } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
     const { rows } = await pool.query(
-      `INSERT INTO fin_clients ("userId", name, email, phone, address, abn) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [req.user.id, name.trim(), email||null, phone||null, address||null, abn||null]
+      `INSERT INTO fin_clients ("userId", name, "contactName", email, phone, address, abn) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.id, name.trim(), contactName||null, email||null, phone||null, address||null, abn||null]
     );
     res.json(rows[0]);
   } catch (err) {
@@ -185,11 +185,11 @@ router.post('/clients', async (req, res) => {
 
 router.put('/clients/:id', async (req, res) => {
   try {
-    const { name, email, phone, address, abn } = req.body;
+    const { name, contactName, email, phone, address, abn } = req.body;
     const { rows } = await pool.query(
-      `UPDATE fin_clients SET name=$1, email=$2, phone=$3, address=$4, abn=$5, "updatedAt"=NOW()
-       WHERE id=$6 AND "userId"=$7 RETURNING *`,
-      [name, email||null, phone||null, address||null, abn||null, req.params.id, req.user.id]
+      `UPDATE fin_clients SET name=$1, "contactName"=$2, email=$3, phone=$4, address=$5, abn=$6, "updatedAt"=NOW()
+       WHERE id=$7 AND "userId"=$8 RETURNING *`,
+      [name, contactName||null, email||null, phone||null, address||null, abn||null, req.params.id, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
@@ -342,9 +342,10 @@ router.get('/invoices/:id/pdf', async (req, res) => {
 
     const { rows } = await pool.query(
       `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
-              COALESCE(fc.email, NULL) AS "clientEmail",
-              COALESCE(fc.address, NULL) AS "clientAddress",
-              COALESCE(fc.abn, NULL) AS "clientAbn"
+              fc."contactName"                  AS "clientContactName",
+              COALESCE(fc.email, NULL)           AS "clientEmail",
+              COALESCE(fc.address, NULL)         AS "clientAddress",
+              COALESCE(fc.abn, NULL)             AS "clientAbn"
        FROM fin_invoices i
        LEFT JOIN fin_clients fc ON fc.id = i."clientId"
        LEFT JOIN clients cr ON cr.id = i."clientRef"
@@ -359,10 +360,11 @@ router.get('/invoices/:id/pdf', async (req, res) => {
     );
 
     const client = {
-      name:    invoice.clientName,
-      email:   invoice.clientEmail,
-      address: invoice.clientAddress,
-      abn:     invoice.clientAbn,
+      name:        invoice.clientName,
+      contactName: invoice.clientContactName,
+      email:       invoice.clientEmail,
+      address:     invoice.clientAddress,
+      abn:         invoice.clientAbn,
     };
 
     const settingKeys = ['fin_biz_name','fin_abn','fin_address','fin_bank_name','fin_account_name','fin_bsb','fin_account_number'];
