@@ -853,6 +853,7 @@ async function initSchema() {
 
   // Payment account on expenses (which account was credited — defaults to Bank if null)
   await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "paidViaId" INTEGER REFERENCES fin_accounts(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "ccSettled" BOOLEAN NOT NULL DEFAULT FALSE`);
 
   // Suppliers
   await pool.query(`

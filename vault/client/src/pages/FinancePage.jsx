@@ -1174,23 +1174,12 @@ function ExpensesTab({ from, to }) {
 
   const confirmCcPay = async () => {
     if (!ccPayModal) return;
-    const { expense, account } = ccPayModal;
-    const total = parseFloat(expense.amount) + parseFloat(expense.gst || 0);
     setCcPaySaving(true);
     try {
-      // Find Bank/Cash account id
-      const bankAcc = paymentAccounts.find(a => a.code === '1000');
-      if (!bankAcc) throw new Error('Bank / Cash account (1000) not found');
-      await api.post('/api/finance/journal', {
-        date: ccPayDate,
-        description: `CC payment — ${expense.description}`,
-        lines: [
-          { accountId: account.id, debit: total, credit: 0 },
-          { accountId: bankAcc.id, debit: 0, credit: total },
-        ],
-      });
-      addToast('CC payment journal entry recorded');
+      await api.post(`/api/finance/expenses/${ccPayModal.expense.id}/cc-pay`, { date: ccPayDate });
+      addToast('CC payment recorded');
       setCcPayModal(null);
+      load();
     } catch (e) {
       addToast(e.message, 'error');
     } finally {
@@ -1312,8 +1301,11 @@ function ExpensesTab({ from, to }) {
                   </td>
                   <td className="py-2 px-2">
                     <div className="flex gap-2">
-                      {e.paidViaId && accountMap[e.paidViaId]?.type === 'liability' && (
+                      {e.paidViaId && accountMap[e.paidViaId]?.type === 'liability' && !e.ccSettled && (
                         <button onClick={() => openCcPay(e)} className="text-xs hover:opacity-60" style={{ color: '#f59e0b' }} title="Record payment of this card charge from bank">Pay CC</button>
+                      )}
+                      {e.ccSettled && (
+                        <span className="text-xs" style={{ color: '#065f46' }}>Settled</span>
                       )}
                       <button onClick={() => openEdit(e)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
                       <button onClick={() => del(e)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>

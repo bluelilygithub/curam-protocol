@@ -1092,6 +1092,50 @@ router.delete('/expenses/:id', async (req, res) => {
   }
 });
 
+// POST /finance/expenses/:id/cc-pay — settle the CC charge and mark expense as settled
+router.post('/expenses/:id/cc-pay', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { date } = req.body;
+
+    const { rows } = await dbClient.query(
+      `SELECT e.*, a.id AS "creditAccountId", a.code AS "creditCode", a.name AS "creditName"
+       FROM fin_expenses e
+       JOIN fin_accounts a ON a.id = e."paidViaId"
+       WHERE e.id=$1 AND e."userId"=$2`,
+      [req.params.id, userId]
+    );
+    if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Expense not found' }); }
+    const exp = rows[0];
+    if (exp.ccSettled) { await dbClient.query('ROLLBACK'); return res.status(409).json({ error: 'CC already settled for this expense' }); }
+
+    const bankId = await accountByCode(userId, '1000');
+    if (!bankId) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Bank / Cash account (1000) not found' }); }
+
+    const total = parseFloat(exp.amount) + parseFloat(exp.gst || 0);
+    await createJournalEntry(dbClient, userId, {
+      date:        date || new Date().toISOString().slice(0, 10),
+      description: `CC payment — ${exp.description}`,
+      type:        'manual',
+      lines: [
+        { accountId: exp.creditAccountId, debit: total, credit: 0 },
+        { accountId: bankId,              debit: 0,     credit: total },
+      ],
+    });
+
+    await dbClient.query(`UPDATE fin_expenses SET "ccSettled"=true WHERE id=$1`, [req.params.id]);
+    await dbClient.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
 // ── Expense receipts ──────────────────────────────────────────────────────────
 
 router.post('/expenses/:id/receipt', receiptUpload.single('receipt'), async (req, res) => {
