@@ -422,7 +422,7 @@ function InvoicesTab() {
   const [filterStatus, setFilterStatus] = useState('all');
   const addToast = useToastStore(s => s.addToast);
 
-  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', items: [{ ...BLANK_ITEM }] });
+  const blankForm = () => ({ clientRef: '', issueDate: todayStr(), dueDate: '', notes: '', paidAt: '', items: [{ ...BLANK_ITEM }] });
   const [form, setForm] = useState(blankForm);
 
   const load = useCallback(async () => {
@@ -439,13 +439,14 @@ function InvoicesTab() {
   const openNew = () => { setForm(blankForm()); setError(''); setModal('new'); };
 
   const openEdit = async (inv) => {
-    if (inv.status === 'paid') return; // paid invoices are read-only
+    if (inv.isLocked) return;
     const data = await api.get(`/api/finance/invoices/${inv.id}`).then(r => r.json());
     setForm({
       clientRef: data.clientRef ? `crm:${data.clientRef}` : data.clientId ? `fin:${data.clientId}` : '',
       issueDate: data.issueDate ? String(data.issueDate).slice(0,10) : todayStr(),
       dueDate:   data.dueDate  ? String(data.dueDate).slice(0,10)  : '',
       notes:     data.notes || '',
+      paidAt:    data.paidAt  ? String(data.paidAt).slice(0,10)   : '',
       items:     data.items.length
         ? data.items.map(i => ({ description: i.description, qty: String(i.qty), unitPrice: String(i.unitPrice), gstApplies: parseFloat(i.gst) > 0 }))
         : [{ ...BLANK_ITEM }],
@@ -470,7 +471,7 @@ function InvoicesTab() {
       const [src, rawId] = form.clientRef ? form.clientRef.split(':') : [null, null];
       const clientId  = src === 'fin' ? parseInt(rawId, 10) : null;
       const clientRef = src === 'crm' ? parseInt(rawId, 10) : null;
-      const payload = { ...form, clientRef, clientId };
+      const payload = { ...form, clientRef, clientId, paidAt: form.paidAt || null };
       if (modal === 'new') {
         await api.post('/api/finance/invoices', payload);
       } else {
@@ -621,7 +622,7 @@ function InvoicesTab() {
                       {inv.status === 'sent' && (
                         <button onClick={() => openSend(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ color: '#1e40af', borderColor: '#bfdbfe' }}>Resend</button>
                       )}
-                      {(inv.status === 'draft' || inv.status === 'sent') && (
+                      {!inv.isLocked && (
                         <button onClick={() => openEdit(inv)} className="text-xs px-2 py-0.5 rounded border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Edit</button>
                       )}
                       {inv.status !== 'paid' && inv.status !== 'void' && (
@@ -663,6 +664,11 @@ function InvoicesTab() {
               <Field label="Due Date">
                 <Input type="date" value={form.dueDate} onChange={v => setForm(p => ({...p, dueDate: v}))} />
               </Field>
+              {modal !== 'new' && modal?.status === 'paid' && (
+                <Field label="Payment Date">
+                  <Input type="date" value={form.paidAt} onChange={v => setForm(p => ({...p, paidAt: v}))} />
+                </Field>
+              )}
             </div>
             <Field label="Notes">
               <Textarea value={form.notes} onChange={v => setForm(p => ({...p, notes: v}))} placeholder="Payment terms, reference…" rows={3} />

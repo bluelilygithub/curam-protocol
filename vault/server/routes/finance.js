@@ -227,7 +227,13 @@ router.delete('/clients/:id', async (req, res) => {
 router.get('/invoices', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName"
+      `SELECT i.*, COALESCE(fc.name, cr.name) AS "clientName",
+              EXISTS (
+                SELECT 1 FROM fin_bas_quarters q
+                WHERE q."userId" = i."userId"
+                  AND i."paidAt"::date BETWEEN q.from_date AND q.to_date
+                  AND q.status != 'open'
+              ) AS "isLocked"
        FROM fin_invoices i
        LEFT JOIN fin_clients fc ON fc.id = i."clientId"
        LEFT JOIN clients cr ON cr.id = i."clientRef"
@@ -393,13 +399,26 @@ router.put('/invoices/:id', async (req, res) => {
     await client.query('BEGIN');
     const userId    = req.user.id;
     const invoiceId = req.params.id;
-    const { clientId, clientRef, issueDate, dueDate, notes, status, items = [] } = req.body;
+    const { clientId, clientRef, issueDate, dueDate, notes, status, paidAt, items = [] } = req.body;
 
     const { rows: check } = await client.query(
-      `SELECT id, number, status FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
+      `SELECT id, number, status, "paidAt" FROM fin_invoices WHERE id=$1 AND "userId"=$2`, [invoiceId, userId]
     );
     if (!check[0]) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
-    if (check[0].status === 'paid') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Cannot edit a paid invoice' }); }
+
+    // Paid invoices can be edited until their payment date falls within a reconciled BAS quarter
+    if (check[0].status === 'paid') {
+      const effectivePaidAt = paidAt || check[0].paidAt;
+      const { rows: lockCheck } = await client.query(
+        `SELECT 1 FROM fin_bas_quarters
+         WHERE "userId"=$1 AND $2::date BETWEEN from_date AND to_date AND status != 'open'`,
+        [userId, effectivePaidAt]
+      );
+      if (lockCheck.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invoice is locked — its payment date falls within a reconciled BAS quarter' });
+      }
+    }
 
     let subtotal = 0, gst = 0;
     for (const item of items) {
@@ -416,11 +435,17 @@ router.put('/invoices/:id', async (req, res) => {
     gst      = parseFloat(gst.toFixed(2));
     const total = parseFloat((subtotal + gst).toFixed(2));
 
+    const isPaid      = check[0].status === 'paid';
+    const newStatus   = isPaid ? 'paid' : (status || 'draft');
+    const newPaidAt   = isPaid ? (paidAt || check[0].paidAt) : null;
+
     await client.query(
       `UPDATE fin_invoices
-       SET "clientId"=$1,"clientRef"=$2,"issueDate"=$3,"dueDate"=$4,subtotal=$5,gst=$6,total=$7,notes=$8,status=$9,"updatedAt"=NOW()
-       WHERE id=$10 AND "userId"=$11`,
-      [clientId||null, clientRef||null, issueDate, dueDate||null, subtotal, gst, total, notes||null, status||'draft', invoiceId, userId]
+       SET "clientId"=$1,"clientRef"=$2,"issueDate"=$3,"dueDate"=$4,subtotal=$5,gst=$6,total=$7,
+           notes=$8,status=$9,"paidAt"=$10,"updatedAt"=NOW()
+       WHERE id=$11 AND "userId"=$12`,
+      [clientId||null, clientRef||null, issueDate, dueDate||null, subtotal, gst, total,
+       notes||null, newStatus, newPaidAt, invoiceId, userId]
     );
     await client.query(`DELETE FROM fin_invoice_items WHERE "invoiceId"=$1`, [invoiceId]);
     for (const item of items) {
@@ -431,13 +456,15 @@ router.put('/invoices/:id', async (req, res) => {
       );
     }
 
-    // Delete old invoice journal entry and recreate with updated amounts
-    await deleteJournalForSource(client, userId, parseInt(invoiceId), 'invoice');
     await ensureAccounts(userId);
     const arId     = await accountByCode(userId, '1100');
     const incId    = await accountByCode(userId, '4000');
     const gstColId = await accountByCode(userId, '2200');
+    const bankId   = await accountByCode(userId, '1000');
     const invNum   = check[0].number;
+
+    // Recreate invoice journal entry (AR / Income / GST collected)
+    await deleteJournalForSource(client, userId, parseInt(invoiceId), 'invoice');
     if (arId && incId && gstColId) {
       await createJournalEntry(client, userId, {
         date:        issueDate || new Date().toISOString().slice(0, 10),
@@ -449,6 +476,22 @@ router.put('/invoices/:id', async (req, res) => {
           { accountId: arId,     debit: total,    credit: 0 },
           { accountId: incId,    debit: 0,        credit: subtotal },
           { accountId: gstColId, debit: 0,        credit: gst },
+        ],
+      });
+    }
+
+    // For paid invoices, also recreate the payment journal entry (Bank / AR)
+    if (isPaid && bankId && arId) {
+      await deleteJournalForSource(client, userId, parseInt(invoiceId), 'payment');
+      await createJournalEntry(client, userId, {
+        date:        newPaidAt,
+        description: `Payment received — ${invNum}`,
+        reference:   invNum,
+        type:        'payment',
+        sourceId:    parseInt(invoiceId),
+        lines: [
+          { accountId: bankId, debit: total,  credit: 0 },
+          { accountId: arId,   debit: 0,      credit: total },
         ],
       });
     }
