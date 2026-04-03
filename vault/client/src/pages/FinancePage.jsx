@@ -417,6 +417,7 @@ function InvoicesTab() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [confirmModal, setConfirmModal] = useState(null);
+  const [paidModal, setPaidModal] = useState(null); // { inv, date }
   const [pdfLoading, setPdfLoading] = useState(null);
   const [filterStatus, setFilterStatus] = useState('all');
   const addToast = useToastStore(s => s.addToast);
@@ -486,22 +487,20 @@ function InvoicesTab() {
   };
 
   const markPaid = (inv) => {
-    setConfirmModal({
-      title: 'Mark as Paid',
-      message: `Mark ${inv.number} as paid today?`,
-      confirmLabel: 'Mark Paid',
-      onConfirm: async () => {
-        setConfirmModal(null);
-        try {
-          await api.post(`/api/finance/invoices/${inv.id}/mark-paid`, { paidAt: todayStr() });
-          await load();
-          if (viewInvoice?.id === inv.id) setViewInvoice(null);
-          addToast(`${inv.number} marked paid`);
-        } catch (e) {
-          addToast(e.message, 'error');
-        }
-      },
-    });
+    setPaidModal({ inv, date: todayStr() });
+  };
+
+  const confirmMarkPaid = async () => {
+    const { inv, date } = paidModal;
+    setPaidModal(null);
+    try {
+      await api.post(`/api/finance/invoices/${inv.id}/mark-paid`, { paidAt: date });
+      await load();
+      if (viewInvoice?.id === inv.id) setViewInvoice(null);
+      addToast(`${inv.number} marked paid`);
+    } catch (e) {
+      addToast(e.message, 'error');
+    }
   };
 
   const openSend = (inv) => {
@@ -767,6 +766,20 @@ function InvoicesTab() {
           onConfirm={confirmModal.onConfirm}
           onCancel={() => setConfirmModal(null)}
         />
+      )}
+
+      {paidModal && (
+        <Modal title={`Mark ${paidModal.inv.number} as Paid`} onClose={() => setPaidModal(null)}>
+          <div className="flex flex-col gap-4">
+            <Field label="Date payment was received">
+              <Input type="date" value={paidModal.date} onChange={v => setPaidModal(p => ({ ...p, date: v }))} />
+            </Field>
+            <div className="flex gap-2 justify-end">
+              <Btn variant="secondary" onClick={() => setPaidModal(null)}>Cancel</Btn>
+              <Btn onClick={confirmMarkPaid}>Mark Paid</Btn>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* Invoice detail */}
