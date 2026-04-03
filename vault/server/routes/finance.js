@@ -1304,12 +1304,14 @@ router.get('/dashboard', async (req, res) => {
     const userId    = req.user.id;
     const yearStart = `${new Date().getFullYear()}-01-01`;
     const today     = new Date().toISOString().slice(0, 10);
+    const from      = req.query.from || yearStart;
+    const to        = req.query.to   || today;
 
     const [paid, outstanding, overdue, expenses, wages] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
-         FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt">=$2`,
-        [userId, yearStart]
+         FROM fin_invoices WHERE "userId"=$1 AND status='paid' AND "paidAt"::date BETWEEN $2 AND $3`,
+        [userId, from, to]
       ),
       pool.query(
         `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
@@ -1323,12 +1325,12 @@ router.get('/dashboard', async (req, res) => {
         [userId, today]
       ),
       pool.query(
-        `SELECT COALESCE(SUM(amount),0) AS total FROM fin_expenses WHERE "userId"=$1 AND date>=$2`,
-        [userId, yearStart]
+        `SELECT COALESCE(SUM(amount),0) AS total FROM fin_expenses WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+        [userId, from, to]
       ),
       pool.query(
-        `SELECT COALESCE(SUM(gross),0) AS total FROM fin_wages WHERE "userId"=$1 AND date>=$2`,
-        [userId, yearStart]
+        `SELECT COALESCE(SUM(gross),0) AS total FROM fin_wages WHERE "userId"=$1 AND date BETWEEN $2 AND $3`,
+        [userId, from, to]
       ),
     ]);
 

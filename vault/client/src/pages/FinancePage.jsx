@@ -198,19 +198,105 @@ function CategoryInput({ value, onChange }) {
   );
 }
 
+// ── Date range ────────────────────────────────────────────────────────────────
+
+function getPresetRange(preset) {
+  const now = new Date();
+  const y   = now.getFullYear();
+  const m   = now.getMonth(); // 0-indexed
+  const pad = n => String(n).padStart(2, '0');
+  const str = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+  if (preset === 'week') {
+    const mon = new Date(now); mon.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    return { from: str(mon), to: str(sun) };
+  }
+  if (preset === 'month') {
+    return { from: `${y}-${pad(m+1)}-01`, to: str(new Date(y, m+1, 0)) };
+  }
+  if (preset === 'quarter') {
+    const q = Math.floor(m / 3);
+    return { from: `${y}-${pad(q*3+1)}-01`, to: str(new Date(y, q*3+3, 0)) };
+  }
+  if (preset === 'year') {
+    return { from: `${y}-01-01`, to: `${y}-12-31` };
+  }
+  return { from: '', to: '' }; // 'all' / 'custom' — no auto range
+}
+
+const DATE_PRESETS = [
+  { key: 'week',    label: 'Week'    },
+  { key: 'month',   label: 'Month'   },
+  { key: 'quarter', label: 'Quarter' },
+  { key: 'year',    label: 'Year'    },
+  { key: 'custom',  label: 'Custom'  },
+  { key: 'all',     label: 'All'     },
+];
+
+function DateRangePicker({ value, onChange }) {
+  const { preset, from, to } = value;
+  const select = (key) => {
+    if (key === 'custom') { onChange({ preset: 'custom', from, to }); return; }
+    onChange({ preset: key, ...getPresetRange(key) });
+  };
+  return (
+    <div className="flex items-center gap-2 flex-wrap px-6 py-2 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <div className="flex gap-1 flex-wrap">
+        {DATE_PRESETS.map(p => (
+          <button
+            key={p.key}
+            onClick={() => select(p.key)}
+            className="text-xs px-2.5 py-1 rounded-full font-medium transition-colors"
+            style={{
+              background:   preset === p.key ? 'var(--color-primary)' : 'transparent',
+              color:        preset === p.key ? '#fff' : 'var(--color-muted)',
+              border:       '1px solid var(--color-border)',
+            }}
+          >{p.label}</button>
+        ))}
+      </div>
+      {preset === 'custom' && (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="date" value={from}
+            onChange={e => onChange({ preset: 'custom', from: e.target.value, to })}
+            className="text-xs px-2 py-1 rounded-lg border outline-none"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>–</span>
+          <input
+            type="date" value={to}
+            onChange={e => onChange({ preset: 'custom', from, to: e.target.value })}
+            className="text-xs px-2 py-1 rounded-lg border outline-none"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+        </div>
+      )}
+      {preset !== 'all' && preset !== 'custom' && from && to && (
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(from)} – {fmtDate(to)}</span>
+      )}
+    </div>
+  );
+}
+
 // ── Dashboard ──────────────────────────────────────────────────────────────────
 
-function DashboardTab() {
+function DashboardTab({ from, to }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/api/finance/dashboard')
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to)   params.set('to', to);
+    api.get(`/api/finance/dashboard?${params}`)
       .then(r => r.json())
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [from, to]);
 
   if (loading) return <div className="p-6 text-sm" style={{ color: 'var(--color-muted)' }}>Loading...</div>;
   if (!data) return null;
@@ -218,11 +304,11 @@ function DashboardTab() {
   const net = parseFloat((data.yearRevenue - data.yearExpenses - data.yearWages).toFixed(2));
 
   const cards = [
-    { label: 'Revenue YTD',      value: fmt(data.yearRevenue),       sub: `${data.paidInvoices} paid invoices`                           },
+    { label: 'Revenue',          value: fmt(data.yearRevenue),       sub: `${data.paidInvoices} paid invoices`                           },
     { label: 'Outstanding',      value: fmt(data.outstandingAmount), sub: `${data.outstandingCount} sent, not yet due`, warn: data.outstandingCount > 0 },
     { label: 'Overdue',          value: fmt(data.overdueAmount),     sub: `${data.overdueCount} past due date`,         neg: data.overdueCount > 0    },
-    { label: 'Expenses YTD',     value: fmt(data.yearExpenses),      sub: 'ex GST'                                                        },
-    { label: 'Wages YTD',        value: fmt(data.yearWages),         sub: 'gross wages'                                                   },
+    { label: 'Expenses',         value: fmt(data.yearExpenses),      sub: 'ex GST'                                                        },
+    { label: 'Wages',            value: fmt(data.yearWages),         sub: 'gross wages'                                                   },
     { label: 'Net Profit (est)', value: fmt(net),                    sub: 'revenue − expenses − wages',                 neg: net < 0                  },
   ];
 
@@ -405,7 +491,7 @@ function calcTotals(items) {
   return { subtotal: subtotal.toFixed(2), gst: gst.toFixed(2), total: (subtotal + gst).toFixed(2) };
 }
 
-function InvoicesTab() {
+function InvoicesTab({ from, to }) {
   const [invoices, setInvoices] = useState([]);
   const [clients, setClients] = useState([]);
   const [modal, setModal] = useState(null);
@@ -586,9 +672,13 @@ function InvoicesTab() {
       </div>
 
       {(() => {
-        const filtered = invoices.filter(inv =>
-          filterStatus === 'all' ? true : displayStatus(inv) === filterStatus
-        );
+        const filtered = invoices.filter(inv => {
+          if (filterStatus !== 'all' && displayStatus(inv) !== filterStatus) return false;
+          const d = String(inv.issueDate).slice(0, 10);
+          if (from && d < from) return false;
+          if (to   && d > to)   return false;
+          return true;
+        });
         return filtered.length === 0 ? (
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No invoices match this filter.</p>
         ) : (
@@ -852,7 +942,7 @@ function InvoicesTab() {
 
 const BLANK_EXPENSE = { date: '', description: '', amount: '', gstIncluded: true, category: '', supplier: '' };
 
-function ExpensesTab() {
+function ExpensesTab({ from, to }) {
   const [expenses, setExpenses]     = useState([]);
   const [showForm, setShowForm]     = useState(false);
   const [editingExpense, setEditing] = useState(null);
@@ -1037,7 +1127,12 @@ function ExpensesTab() {
               </tr>
             </thead>
             <tbody>
-              {expenses.map(e => (
+              {expenses.filter(e => {
+                const d = String(e.date).slice(0, 10);
+                if (from && d < from) return false;
+                if (to   && d > to)   return false;
+                return true;
+              }).map(e => (
                 <tr key={e.id} className="border-b hover:opacity-80" style={{ borderColor: 'var(--color-border)' }}>
                   <td className="py-2 px-2 text-xs whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{fmtDate(e.date)}</td>
                   <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{e.description}</td>
@@ -1137,7 +1232,7 @@ function ExpensesTab() {
 
 // ── Wages ─────────────────────────────────────────────────────────────────────
 
-function WagesTab() {
+function WagesTab({ from, to }) {
   const [wages, setWages]       = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({ date: todayStr(), employee: '', gross: '', tax: '', superannuation: '', net: '' });
@@ -1224,7 +1319,12 @@ function WagesTab() {
               </tr>
             </thead>
             <tbody>
-              {wages.map(w => (
+              {wages.filter(w => {
+                const d = String(w.date).slice(0, 10);
+                if (from && d < from) return false;
+                if (to   && d > to)   return false;
+                return true;
+              }).map(w => (
                 <tr key={w.id} className="border-b hover:opacity-80" style={{ borderColor: 'var(--color-border)' }}>
                   <td className="py-2 px-2 text-xs whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{fmtDate(w.date)}</td>
                   <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{w.employee}</td>
@@ -1258,7 +1358,7 @@ function WagesTab() {
 
 // ── Journal ───────────────────────────────────────────────────────────────────
 
-function JournalTab() {
+function JournalTab({ from, to }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -1282,7 +1382,12 @@ function JournalTab() {
         </p>
       ) : (
         <div className="flex flex-col gap-3">
-          {entries.map(entry => (
+          {entries.filter(entry => {
+            const d = String(entry.date).slice(0, 10);
+            if (from && d < from) return false;
+            if (to   && d > to)   return false;
+            return true;
+          }).map(entry => (
             <div key={entry.id} className="p-3 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <div className="flex items-start justify-between mb-2 gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
@@ -1840,9 +1945,14 @@ function SettingsTab() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 const TABS = ['Dashboard', 'Invoices', 'Clients', 'Expenses', 'Wages', 'Journal', 'BAS', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Clients', 'BAS', 'Settings']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
+  const [dateRange, setDateRange] = useState(() => ({ preset: 'month', ...getPresetRange('month') }));
+
+  const showDatePicker = !NO_DATE_FILTER_TABS.has(tab);
+  const { from, to } = dateRange;
 
   return (
     <div className="flex flex-col h-full">
@@ -1874,14 +1984,19 @@ export default function FinancePage() {
         </div>
       </div>
 
+      {/* Date range picker — hidden for Clients, BAS, Settings */}
+      {showDatePicker && (
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
+      )}
+
       {/* Tab content */}
       <div className="flex-1 overflow-auto">
-        {tab === 'Dashboard' && <DashboardTab />}
-        {tab === 'Invoices'  && <InvoicesTab />}
+        {tab === 'Dashboard' && <DashboardTab from={from} to={to} />}
+        {tab === 'Invoices'  && <InvoicesTab  from={from} to={to} />}
         {tab === 'Clients'   && <ClientsTab />}
-        {tab === 'Expenses'  && <ExpensesTab />}
-        {tab === 'Wages'     && <WagesTab />}
-        {tab === 'Journal'   && <JournalTab />}
+        {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
+        {tab === 'Wages'     && <WagesTab     from={from} to={to} />}
+        {tab === 'Journal'   && <JournalTab   from={from} to={to} />}
         {tab === 'BAS'       && <BASTab />}
         {tab === 'Settings'  && <SettingsTab />}
       </div>
