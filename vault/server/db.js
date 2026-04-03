@@ -847,6 +847,40 @@ async function initSchema() {
   await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW()`);
   await pool.query(`ALTER TABLE fin_accounts ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW()`);
 
+  // Suppliers
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_suppliers (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      email       TEXT,
+      phone       TEXT,
+      abn         TEXT,
+      website     TEXT,
+      notes       TEXT,
+      "isActive"  BOOLEAN NOT NULL DEFAULT TRUE,
+      "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // Income / Expense transaction codes
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS fin_tx_codes (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      code        TEXT NOT NULL,
+      name        TEXT NOT NULL,
+      type        TEXT NOT NULL CHECK(type IN ('income','expense')),
+      description TEXT,
+      "isSystem"  BOOLEAN NOT NULL DEFAULT FALSE,
+      "isActive"  BOOLEAN NOT NULL DEFAULT TRUE,
+      "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE("userId", code)
+    )
+  `);
+
   // Fix journal entries type CHECK to include 'bas'
   await pool.query(`
     DO $$

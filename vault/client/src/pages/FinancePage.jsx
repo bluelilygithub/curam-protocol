@@ -198,6 +198,58 @@ function CategoryInput({ value, onChange }) {
   );
 }
 
+function SupplierInput({ value, onChange }) {
+  const [suppliers, setSuppliers] = useState([]);
+  const [open, setOpen]           = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    api.get('/api/finance/suppliers?activeOnly=true')
+      .then(r => r.json())
+      .then(d => setSuppliers(Array.isArray(d) ? d.map(s => s.name) : []))
+      .catch(() => {});
+  }, []);
+
+  const filtered = suppliers.filter(s => s.toLowerCase().includes((value || '').toLowerCase()) && s !== value);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <input
+        type="text"
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="Supplier name…"
+        className="text-sm px-3 py-2 rounded-lg border w-full"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', outline: 'none' }}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+          borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.12)', marginTop: 2,
+        }}>
+          {filtered.map(s => (
+            <button
+              key={s}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); onChange(s); setOpen(false); }}
+              className="w-full text-left text-sm px-3 py-1.5 hover:opacity-70 transition-opacity"
+              style={{ color: 'var(--color-text)' }}
+            >{s}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Date range ────────────────────────────────────────────────────────────────
 
 function getPresetRange(preset) {
@@ -1084,7 +1136,7 @@ function ExpensesTab({ from, to }) {
         <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <Field label="Date"><Input type="date" value={form.date} onChange={v => setForm(p => ({...p, date: v}))} /></Field>
-            <Field label="Supplier"><Input value={form.supplier} onChange={v => setForm(p => ({...p, supplier: v}))} placeholder="Supplier name" /></Field>
+            <Field label="Supplier"><SupplierInput value={form.supplier} onChange={v => setForm(p => ({...p, supplier: v}))} /></Field>
             <div className="col-span-2">
               <Field label="Description"><Textarea value={form.description} onChange={v => setForm(p => ({...p, description: v}))} placeholder="What was purchased" rows={2} /></Field>
             </div>
@@ -1942,10 +1994,311 @@ function SettingsTab() {
   );
 }
 
+// ── Suppliers ─────────────────────────────────────────────────────────────────
+
+const BLANK_SUPPLIER = { name: '', email: '', phone: '', abn: '', website: '', notes: '' };
+
+function SuppliersTab() {
+  const [suppliers, setSuppliers] = useState([]);
+  const [showForm, setShowForm]   = useState(false);
+  const [editing, setEditing]     = useState(null);
+  const [form, setForm]           = useState({ ...BLANK_SUPPLIER });
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
+  const [confirmModal, setConfirmModal] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  const load = useCallback(() => {
+    api.get('/api/finance/suppliers').then(r => r.json()).then(d => setSuppliers(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const openNew = () => { setEditing(null); setForm({ ...BLANK_SUPPLIER }); setError(''); setShowForm(true); };
+  const openEdit = (s) => { setEditing(s); setForm({ name: s.name, email: s.email||'', phone: s.phone||'', abn: s.abn||'', website: s.website||'', notes: s.notes||'' }); setError(''); setShowForm(true); };
+  const cancelForm = () => { setShowForm(false); setEditing(null); setError(''); };
+
+  const save = async () => {
+    if (!form.name.trim()) { setError('Name required'); return; }
+    setSaving(true); setError('');
+    try {
+      if (editing) {
+        await api.put(`/api/finance/suppliers/${editing.id}`, form);
+        addToast('Supplier updated');
+      } else {
+        await api.post('/api/finance/suppliers', form);
+        addToast('Supplier added');
+      }
+      load(); cancelForm();
+    } catch (e) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const toggleActive = async (s) => {
+    await api.patch(`/api/finance/suppliers/${s.id}`);
+    load();
+  };
+
+  const del = (s) => {
+    setConfirmModal({
+      message: `Delete supplier "${s.name}"?`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        await api.delete(`/api/finance/suppliers/${s.id}`);
+        setSuppliers(prev => prev.filter(x => x.id !== s.id));
+        addToast('Supplier deleted');
+      },
+    });
+  };
+
+  const sf = k => v => setForm(p => ({ ...p, [k]: v }));
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Suppliers</h2>
+        <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Supplier'}</Btn>
+      </div>
+
+      {showForm && (
+        <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="col-span-2">
+              <Field label="Supplier Name *"><Input value={form.name} onChange={sf('name')} placeholder="Acme Corp" /></Field>
+            </div>
+            <Field label="Email"><Input type="email" value={form.email} onChange={sf('email')} placeholder="accounts@supplier.com" /></Field>
+            <Field label="Phone"><Input value={form.phone} onChange={sf('phone')} placeholder="+61 2 1234 5678" /></Field>
+            <Field label="ABN"><Input value={form.abn} onChange={sf('abn')} placeholder="12 345 678 901" /></Field>
+            <Field label="Website"><Input value={form.website} onChange={sf('website')} placeholder="https://supplier.com" /></Field>
+            <div className="col-span-2">
+              <Field label="Notes"><Textarea value={form.notes} onChange={sf('notes')} rows={2} placeholder="Internal notes…" /></Field>
+            </div>
+          </div>
+          <ErrMsg msg={error} />
+          <div className="flex gap-2 mt-2">
+            <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Add Supplier'}</Btn>
+          </div>
+        </div>
+      )}
+
+      {suppliers.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No suppliers yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                {['Name', 'Email', 'Phone', 'ABN', 'Status', ''].map(h => (
+                  <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {suppliers.map(s => (
+                <tr key={s.id} className="border-b hover:opacity-80" style={{ borderColor: 'var(--color-border)', opacity: s.isActive ? 1 : 0.5 }}>
+                  <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>{s.name}</td>
+                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{s.email || '—'}</td>
+                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{s.phone || '—'}</td>
+                  <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{s.abn || '—'}</td>
+                  <td className="py-2 px-2">
+                    <button
+                      onClick={() => toggleActive(s)}
+                      className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{ background: s.isActive ? '#d1fae5' : 'var(--color-surface)', color: s.isActive ? '#065f46' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+                    >{s.isActive ? 'Active' : 'Inactive'}</button>
+                  </td>
+                  <td className="py-2 px-2">
+                    <div className="flex gap-2">
+                      <button onClick={() => openEdit(s)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
+                      <button onClick={() => del(s)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {confirmModal && (
+        <ConfirmModal
+          title="Confirm" message={confirmModal.message} confirmLabel="Delete" danger
+          onConfirm={confirmModal.onConfirm} onCancel={() => setConfirmModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Transaction Codes ──────────────────────────────────────────────────────────
+
+const BLANK_TX_CODE = { code: '', name: '', type: 'expense', description: '' };
+
+function CodesTab() {
+  const [codes, setCodes]       = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing]   = useState(null);
+  const [form, setForm]         = useState({ ...BLANK_TX_CODE });
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [filter, setFilter]     = useState('all');
+  const [confirmModal, setConfirmModal] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  const load = useCallback(() => {
+    api.get('/api/finance/tx-codes').then(r => r.json()).then(d => setCodes(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const openNew = () => { setEditing(null); setForm({ ...BLANK_TX_CODE }); setError(''); setShowForm(true); };
+  const openEdit = (c) => {
+    if (c.isSystem) return;
+    setEditing(c);
+    setForm({ code: c.code, name: c.name, type: c.type, description: c.description || '' });
+    setError(''); setShowForm(true);
+  };
+  const cancelForm = () => { setShowForm(false); setEditing(null); setError(''); };
+
+  const save = async () => {
+    if (!form.code.trim() || !form.name.trim()) { setError('Code and name required'); return; }
+    setSaving(true); setError('');
+    try {
+      if (editing) {
+        await api.put(`/api/finance/tx-codes/${editing.id}`, form);
+        addToast('Code updated');
+      } else {
+        await api.post('/api/finance/tx-codes', form);
+        addToast('Code added');
+      }
+      load(); cancelForm();
+    } catch (e) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const toggleActive = async (c) => {
+    await api.patch(`/api/finance/tx-codes/${c.id}`);
+    load();
+  };
+
+  const del = (c) => {
+    if (c.isSystem) return;
+    setConfirmModal({
+      message: `Delete code "${c.code} — ${c.name}"?`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        await api.delete(`/api/finance/tx-codes/${c.id}`);
+        setCodes(prev => prev.filter(x => x.id !== c.id));
+        addToast('Code deleted');
+      },
+    });
+  };
+
+  const cf = k => v => setForm(p => ({ ...p, [k]: v }));
+
+  const visible = codes.filter(c => filter === 'all' || c.type === filter);
+
+  return (
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Income & Expense Codes</h2>
+        <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Code'}</Btn>
+      </div>
+
+      <div className="flex gap-1 mb-4">
+        {[['all','All'],['income','Income'],['expense','Expense']].map(([k,l]) => (
+          <button key={k} onClick={() => setFilter(k)}
+            className="text-xs px-3 py-1 rounded-full font-medium transition-colors"
+            style={{ background: filter === k ? 'var(--color-primary)' : 'transparent', color: filter === k ? '#fff' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+          >{l}</button>
+        ))}
+      </div>
+
+      {showForm && (
+        <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <Field label="Code *"><Input value={form.code} onChange={cf('code')} placeholder="EXP-200" /></Field>
+            <Field label="Type">
+              <Sel value={form.type} onChange={cf('type')}>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+              </Sel>
+            </Field>
+            <div className="col-span-2">
+              <Field label="Name *"><Input value={form.name} onChange={cf('name')} placeholder="e.g. Software & Subscriptions" /></Field>
+            </div>
+            <div className="col-span-2">
+              <Field label="Description"><Textarea value={form.description} onChange={cf('description')} rows={2} placeholder="Optional description…" /></Field>
+            </div>
+          </div>
+          <ErrMsg msg={error} />
+          <div className="flex gap-2 mt-2">
+            <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : editing ? 'Update' : 'Add Code'}</Btn>
+          </div>
+        </div>
+      )}
+
+      {visible.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No codes found.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                {['Code', 'Name', 'Type', 'Status', ''].map(h => (
+                  <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map(c => (
+                <tr key={c.id} className="border-b hover:opacity-80" style={{ borderColor: 'var(--color-border)', opacity: c.isActive ? 1 : 0.5 }}>
+                  <td className="py-2 px-2 font-mono text-xs font-medium" style={{ color: 'var(--color-text)' }}>{c.code}</td>
+                  <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>
+                    {c.name}
+                    {c.isSystem && <span className="ml-1.5 text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>system</span>}
+                    {c.description && <span className="block text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{c.description}</span>}
+                  </td>
+                  <td className="py-2 px-2">
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                      style={{ background: c.type === 'income' ? '#dbeafe' : '#fef3c7', color: c.type === 'income' ? '#1e40af' : '#92400e' }}>
+                      {c.type}
+                    </span>
+                  </td>
+                  <td className="py-2 px-2">
+                    <button
+                      onClick={() => toggleActive(c)}
+                      className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{ background: c.isActive ? '#d1fae5' : 'var(--color-surface)', color: c.isActive ? '#065f46' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+                    >{c.isActive ? 'Active' : 'Inactive'}</button>
+                  </td>
+                  <td className="py-2 px-2">
+                    {!c.isSystem && (
+                      <div className="flex gap-2">
+                        <button onClick={() => openEdit(c)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
+                        <button onClick={() => del(c)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {confirmModal && (
+        <ConfirmModal
+          title="Confirm" message={confirmModal.message} confirmLabel="Delete" danger
+          onConfirm={confirmModal.onConfirm} onCancel={() => setConfirmModal(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['Dashboard', 'Invoices', 'Clients', 'Expenses', 'Wages', 'Journal', 'BAS', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Clients', 'BAS', 'Settings']);
+const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Journal', 'Codes', 'BAS', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Codes', 'BAS', 'Settings']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
@@ -1994,9 +2347,11 @@ export default function FinancePage() {
         {tab === 'Dashboard' && <DashboardTab from={from} to={to} />}
         {tab === 'Invoices'  && <InvoicesTab  from={from} to={to} />}
         {tab === 'Clients'   && <ClientsTab />}
+        {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
         {tab === 'Wages'     && <WagesTab     from={from} to={to} />}
         {tab === 'Journal'   && <JournalTab   from={from} to={to} />}
+        {tab === 'Codes'     && <CodesTab />}
         {tab === 'BAS'       && <BASTab />}
         {tab === 'Settings'  && <SettingsTab />}
       </div>

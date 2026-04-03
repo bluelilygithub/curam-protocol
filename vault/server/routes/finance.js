@@ -68,6 +68,36 @@ async function ensureAccounts(userId) {
   }
 }
 
+const DEFAULT_TX_CODES = [
+  { code: 'INC-100', name: 'Consulting / Professional Services', type: 'income'  },
+  { code: 'INC-200', name: 'Product Sales',                      type: 'income'  },
+  { code: 'INC-900', name: 'Other Income',                       type: 'income'  },
+  { code: 'EXP-100', name: 'Advertising & Marketing',            type: 'expense' },
+  { code: 'EXP-110', name: 'Bank Charges',                       type: 'expense' },
+  { code: 'EXP-120', name: 'Equipment & Hardware',               type: 'expense' },
+  { code: 'EXP-130', name: 'Insurance',                          type: 'expense' },
+  { code: 'EXP-140', name: 'Office Supplies',                    type: 'expense' },
+  { code: 'EXP-150', name: 'Professional Services',              type: 'expense' },
+  { code: 'EXP-160', name: 'Software & Subscriptions',           type: 'expense' },
+  { code: 'EXP-170', name: 'Travel & Accommodation',             type: 'expense' },
+  { code: 'EXP-180', name: 'Utilities',                          type: 'expense' },
+  { code: 'EXP-900', name: 'Other Expenses',                     type: 'expense' },
+];
+
+async function ensureTxCodes(userId) {
+  const { rows } = await pool.query(
+    'SELECT id FROM fin_tx_codes WHERE "userId"=$1 LIMIT 1', [userId]
+  );
+  if (rows.length) return;
+  for (const c of DEFAULT_TX_CODES) {
+    await pool.query(
+      `INSERT INTO fin_tx_codes ("userId", code, name, type, "isSystem") VALUES ($1,$2,$3,$4,true)
+       ON CONFLICT ("userId", code) DO NOTHING`,
+      [userId, c.code, c.name, c.type]
+    );
+  }
+}
+
 async function accountByCode(userId, code) {
   const { rows } = await pool.query(
     'SELECT id FROM fin_accounts WHERE "userId"=$1 AND code=$2', [userId, code]
@@ -216,6 +246,152 @@ router.patch('/clients/:id', async (req, res) => {
 router.delete('/clients/:id', async (req, res) => {
   try {
     await pool.query(`DELETE FROM fin_clients WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Suppliers ─────────────────────────────────────────────────────────────────
+
+router.get('/suppliers', async (req, res) => {
+  try {
+    const activeOnly = req.query.activeOnly === 'true';
+    const { rows } = await pool.query(
+      `SELECT * FROM fin_suppliers WHERE "userId"=$1 ${activeOnly ? 'AND "isActive"=true' : ''} ORDER BY name`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/suppliers', async (req, res) => {
+  try {
+    const { name, email, phone, abn, website, notes } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+    const { rows } = await pool.query(
+      `INSERT INTO fin_suppliers ("userId", name, email, phone, abn, website, notes)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.id, name.trim(), email||null, phone||null, abn||null, website||null, notes||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/suppliers/:id', async (req, res) => {
+  try {
+    const { name, email, phone, abn, website, notes } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+    const { rows } = await pool.query(
+      `UPDATE fin_suppliers SET name=$1,email=$2,phone=$3,abn=$4,website=$5,notes=$6,"updatedAt"=NOW()
+       WHERE id=$7 AND "userId"=$8 RETURNING *`,
+      [name.trim(), email||null, phone||null, abn||null, website||null, notes||null, req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/suppliers/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE fin_suppliers SET "isActive"=NOT "isActive","updatedAt"=NOW()
+       WHERE id=$1 AND "userId"=$2 RETURNING "isActive"`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json({ isActive: rows[0].isActive });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/suppliers/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM fin_suppliers WHERE id=$1 AND "userId"=$2`, [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Transaction Codes ──────────────────────────────────────────────────────────
+
+router.get('/tx-codes', async (req, res) => {
+  try {
+    await ensureTxCodes(req.user.id);
+    const { type } = req.query;
+    const { rows } = await pool.query(
+      `SELECT * FROM fin_tx_codes WHERE "userId"=$1 ${type ? 'AND type=$2' : ''} ORDER BY code`,
+      type ? [req.user.id, type] : [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/tx-codes', async (req, res) => {
+  try {
+    const { code, name, type, description } = req.body;
+    if (!code?.trim() || !name?.trim() || !type) return res.status(400).json({ error: 'Code, name and type required' });
+    if (!['income','expense'].includes(type)) return res.status(400).json({ error: 'Type must be income or expense' });
+    const { rows } = await pool.query(
+      `INSERT INTO fin_tx_codes ("userId", code, name, type, description)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.id, code.trim().toUpperCase(), name.trim(), type, description||null]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Code already exists' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/tx-codes/:id', async (req, res) => {
+  try {
+    const { code, name, type, description } = req.body;
+    if (!code?.trim() || !name?.trim() || !type) return res.status(400).json({ error: 'Code, name and type required' });
+    const { rows } = await pool.query(
+      `UPDATE fin_tx_codes SET code=$1,name=$2,type=$3,description=$4,"updatedAt"=NOW()
+       WHERE id=$5 AND "userId"=$6 AND "isSystem"=false RETURNING *`,
+      [code.trim().toUpperCase(), name.trim(), type, description||null, req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found or system code (cannot edit)' });
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Code already exists' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/tx-codes/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE fin_tx_codes SET "isActive"=NOT "isActive","updatedAt"=NOW()
+       WHERE id=$1 AND "userId"=$2 RETURNING "isActive"`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+    res.json({ isActive: rows[0].isActive });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/tx-codes/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM fin_tx_codes WHERE id=$1 AND "userId"=$2 AND "isSystem"=false RETURNING id`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found or system code (cannot delete)' });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
