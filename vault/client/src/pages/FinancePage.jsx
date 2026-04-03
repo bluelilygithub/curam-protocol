@@ -596,7 +596,7 @@ function InvoicesTab() {
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
-                {['Number', 'Client', 'Issued', 'Due', 'Total', 'Status', ''].map(h => (
+                {['Number', 'Client', 'Issued', 'Due', 'Paid', 'Total', 'Status', ''].map(h => (
                   <th key={h} className="text-left py-2 px-2 text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -612,6 +612,7 @@ function InvoicesTab() {
                   <td className="py-2 px-2" style={{ color: 'var(--color-text)' }}>{inv.clientName || '—'}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(inv.issueDate)}</td>
                   <td className="py-2 px-2 text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(inv.dueDate)}</td>
+                  <td className="py-2 px-2 text-xs" style={{ color: inv.paidAt ? '#065f46' : 'var(--color-muted)' }}>{inv.paidAt ? fmtDate(inv.paidAt) : '—'}</td>
                   <td className="py-2 px-2 font-medium" style={{ color: 'var(--color-text)' }}>{fmt(inv.total)}</td>
                   <td className="py-2 px-2"><StatusBadge status={displayStatus(inv)} /></td>
                   <td className="py-2 px-2">
