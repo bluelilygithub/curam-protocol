@@ -1856,7 +1856,12 @@ function JournalTab({ from, to }) {
                   )}
                 </div>
               </div>
-              <table className="w-full text-xs">
+              <table className="w-full text-xs" style={{ tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col />
+                  <col style={{ width: 90 }} />
+                  <col style={{ width: 90 }} />
+                </colgroup>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <th className="text-left py-1 font-medium" style={{ color: 'var(--color-muted)' }}>Account</th>
@@ -1868,11 +1873,11 @@ function JournalTab({ from, to }) {
                   {(entry.lines || []).map((line, i) => (
                     <tr key={i}>
                       <td className="py-0.5" style={{ color: 'var(--color-text)' }}>{line.code} — {line.accountName}</td>
-                      <td className="text-right py-0.5 font-mono" style={{ color: 'var(--color-text)' }}>
-                        {parseFloat(line.debit) > 0 ? fmt(line.debit) : ''}
+                      <td className="text-right py-0.5" style={{ color: 'var(--color-text)' }}>
+                        {parseFloat(line.debit) > 0 ? <span style={{ fontFamily: 'ui-monospace, monospace' }}>{fmt(line.debit)}</span> : ''}
                       </td>
-                      <td className="text-right py-0.5 font-mono" style={{ color: 'var(--color-text)' }}>
-                        {parseFloat(line.credit) > 0 ? fmt(line.credit) : ''}
+                      <td className="text-right py-0.5" style={{ color: 'var(--color-text)' }}>
+                        {parseFloat(line.credit) > 0 ? <span style={{ fontFamily: 'ui-monospace, monospace' }}>{fmt(line.credit)}</span> : ''}
                       </td>
                     </tr>
                   ))}

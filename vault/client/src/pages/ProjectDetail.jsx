@@ -240,18 +240,6 @@ function ProjectDetail() {
             </div>
           ))}
 
-          <div className="pt-1">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
-              style={{ background: 'var(--color-primary)' }}
-            >
-              {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Changes'}
-            </button>
-          </div>
-        </form>
-
         {/* AI Model */}
         <div data-tour="rag-model-picker" className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>AI Model</h2>
@@ -321,6 +309,7 @@ function ProjectDetail() {
         )}
 
         {/* Pinned URLs */}
+
         <div data-tour="rag-pinned-urls" className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
           <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>Pinned Web Pages</h2>
           <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
@@ -438,6 +427,18 @@ function ProjectDetail() {
             </div>
           </div>
         )}
+
+        <div className="pt-6">
+          <button
+            type="submit"
+            disabled={saving}
+            className="px-5 py-2.5 rounded-xl text-sm font-medium text-white transition-opacity hover:opacity-80"
+            style={{ background: 'var(--color-primary)' }}
+          >
+            {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save Changes'}
+          </button>
+        </div>
+        </form>
 
         {/* Emotional Overview */}
         <div className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
