@@ -44,6 +44,9 @@ function ProjectDetail() {
   const [personas, setPersonas] = useState([]);
   const [emotionalOpen, setEmotionalOpen] = useState(false);
   const [projectEmotions, setProjectEmotions] = useState([]);
+  const [showSessions, setShowSessions] = useState(false);
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const [pinnedUrls, setPinnedUrls] = useState([]);
   const [urlInput, setUrlInput] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
@@ -74,6 +77,27 @@ function ProjectDetail() {
       setForm(p);
     }
   }, [project?.id]);
+
+  const handleToggleSessions = async () => {
+    if (!showSessions) {
+      setSessionsLoading(true);
+      try {
+        const res = await api.get(`/api/chat/sessions/${id}`);
+        const data = await res.json();
+        setSessions(Array.isArray(data) ? data : []);
+      } catch (_) {
+        setSessions([]);
+      } finally {
+        setSessionsLoading(false);
+      }
+    }
+    setShowSessions(v => !v);
+  };
+
+  const goToSession = (sessionId) => {
+    navigate(`/projects/${id}/chat`);
+    setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: sessionId })), 80);
+  };
 
   const handleAddPinnedUrl = async () => {
     if (!urlInput.trim() || addingUrl) return;
@@ -179,6 +203,17 @@ function ProjectDetail() {
             Chat
           </button>
           <button
+            onClick={handleToggleSessions}
+            className="w-8 h-8 flex items-center justify-center rounded-lg border hover:opacity-60 transition-opacity"
+            style={{
+              borderColor: showSessions ? 'var(--color-primary)' : 'var(--color-border)',
+              color: showSessions ? 'var(--color-primary)' : 'var(--color-muted)',
+            }}
+            title="View all chats"
+          >
+            {getIcon('history', { size: 14 })}
+          </button>
+          <button
             onClick={() => downloadProjectMd(project)}
             className="w-8 h-8 flex items-center justify-center rounded-lg border hover:opacity-60 transition-opacity"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
@@ -207,6 +242,49 @@ function ProjectDetail() {
               </button>
               <button onClick={() => setConfirmDelete(false)} className="px-3 py-1.5 rounded-lg text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
             </div>
+          </div>
+        )}
+
+        {/* Sessions panel */}
+        {showSessions && (
+          <div className="mb-6 rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+            <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Chat Sessions</span>
+              <button
+                onClick={() => navigate(`/projects/${id}/chat`)}
+                className="text-xs px-2.5 py-1 rounded-lg transition-opacity hover:opacity-70 font-medium"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}
+              >
+                + New chat
+              </button>
+            </div>
+            {sessionsLoading ? (
+              <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</div>
+            ) : sessions.length === 0 ? (
+              <div className="px-4 py-6 text-center text-xs" style={{ color: 'var(--color-muted)' }}>No chat sessions yet.</div>
+            ) : (
+              <div className="divide-y" style={{ '--tw-divide-opacity': 1, borderColor: 'var(--color-border)' }}>
+                {sessions.map(s => (
+                  <button
+                    key={s.sessionId}
+                    onClick={() => goToSession(s.sessionId)}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:opacity-70 transition-opacity"
+                    style={{ background: 'var(--color-bg)' }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate" style={{ color: 'var(--color-text)' }}>
+                        {s.starred ? '★ ' : ''}{s.title || 'Untitled chat'}
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                        {new Date(s.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {s.isSummarized ? ' · summarised' : ''}
+                      </p>
+                    </div>
+                    {getIcon('chevron-right', { size: 13, color: 'var(--color-muted)' })}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
