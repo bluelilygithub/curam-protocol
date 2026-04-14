@@ -1754,7 +1754,7 @@ router.get('/export/excel', async (req, res) => {
         expParams
       ),
       pool.query(
-        `SELECT i.number, i."issueDate", i."dueDate", i.status, i.total, i."gstTotal",
+        `SELECT i.number, i."issueDate", i."dueDate", i.status, i.subtotal, i.gst, i.total,
                 COALESCE(fc.name, cr.name) AS "clientName"
          FROM fin_invoices i
          LEFT JOIN fin_clients fc ON fc.id = i."clientId"
@@ -1796,15 +1796,14 @@ router.get('/export/excel', async (req, res) => {
     }
 
     for (const i of invoices.rows) {
-      const exGst = (parseFloat(i.total) || 0) - (parseFloat(i.gstTotal) || 0);
       rows.push(csvRow(
         fmtDateAU(i.issueDate),
         'Invoice',
         i.number,
         '',
         i.clientName || '',
-        fmtNum(exGst),
-        fmtNum(i.gstTotal),
+        fmtNum(i.subtotal),
+        fmtNum(i.gst),
         fmtNum(i.total),
         '',
         '',
