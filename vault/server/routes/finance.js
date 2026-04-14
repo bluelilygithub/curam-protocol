@@ -1713,9 +1713,9 @@ router.get('/export/myob', async (req, res) => {
 
     const from2 = from ? from.replace(/-/g, '') : 'all';
     const to2   = to   ? to.replace(/-/g, '')   : 'all';
-    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="myob-journal-${from2}-${to2}.csv"`);
-    res.send(lines.join('\r\n'));
+    res.send('\uFEFF' + lines.join('\r\n'));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1833,9 +1833,9 @@ router.get('/export/excel', async (req, res) => {
 
     const from2 = from ? from.replace(/-/g, '') : 'all';
     const to2   = to   ? to.replace(/-/g, '')   : 'all';
-    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="finance-export-${from2}-${to2}.csv"`);
-    res.send(rows.join('\r\n'));
+    res.send('\uFEFF' + rows.join('\r\n'));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
