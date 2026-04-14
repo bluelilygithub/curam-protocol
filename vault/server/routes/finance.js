@@ -1656,9 +1656,11 @@ function csvRow(...cells) {
 
 function fmtDateAU(d) {
   if (!d) return '';
-  const s = String(d).slice(0, 10);
-  const [y, m, day] = s.split('-');
-  return `${day}/${m}/${y}`;
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  const day = String(dt.getUTCDate()).padStart(2, '0');
+  const mon = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  return `${day}/${mon}/${dt.getUTCFullYear()}`;
 }
 
 function fmtNum(n) {
