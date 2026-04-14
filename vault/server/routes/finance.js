@@ -1700,10 +1700,11 @@ router.get('/export/myob', async (req, res) => {
     const lines = ['Date,Memo,Tax Code,Account Number,Debit Amount,Credit Amount'];
     for (const entry of rows) {
       for (const line of entry.lines) {
+        const taxCode = line.name && line.name.toUpperCase().includes('GST') ? 'GST' : 'N-T';
         lines.push(csvRow(
           fmtDateAU(entry.date),
           entry.description,
-          'N-T',
+          taxCode,
           line.code,
           fmtNum(line.debit),
           fmtNum(line.credit)
