@@ -1725,12 +1725,21 @@ router.get('/export/excel', async (req, res) => {
     const userId = req.user.id;
     const { from, to } = req.query;
 
-    const dateWhere = (col) => {
-      let w = `"userId"=$1`;
-      if (from) w += ` AND ${col} >= '${from}'`;
-      if (to)   w += ` AND ${col} <= '${to}'`;
-      return w;
-    };
+    // Build parameterised WHERE for each query independently
+    const expParams = [userId];
+    let expWhere = `e."userId"=$1`;
+    if (from) { expParams.push(from); expWhere += ` AND e.date >= $${expParams.length}`; }
+    if (to)   { expParams.push(to);   expWhere += ` AND e.date <= $${expParams.length}`; }
+
+    const invParams = [userId];
+    let invWhere = `i."userId"=$1`;
+    if (from) { invParams.push(from); invWhere += ` AND i."issueDate" >= $${invParams.length}`; }
+    if (to)   { invParams.push(to);   invWhere += ` AND i."issueDate" <= $${invParams.length}`; }
+
+    const wageParams = [userId];
+    let wageWhere = `"userId"=$1`;
+    if (from) { wageParams.push(from); wageWhere += ` AND date >= $${wageParams.length}`; }
+    if (to)   { wageParams.push(to);   wageWhere += ` AND date <= $${wageParams.length}`; }
 
     const [expenses, invoices, wages] = await Promise.all([
       pool.query(
@@ -1740,9 +1749,9 @@ router.get('/export/excel', async (req, res) => {
          FROM fin_expenses e
          LEFT JOIN fin_accounts a ON a.id = e."paidViaId"
          LEFT JOIN fin_tx_codes t ON t.id = e."txCodeId"
-         WHERE ${dateWhere('e.date')}
+         WHERE ${expWhere}
          ORDER BY e.date ASC, e.id ASC`,
-        [userId]
+        expParams
       ),
       pool.query(
         `SELECT i.number, i."issueDate", i."dueDate", i.status, i.total, i."gstTotal",
@@ -1750,16 +1759,16 @@ router.get('/export/excel', async (req, res) => {
          FROM fin_invoices i
          LEFT JOIN fin_clients fc ON fc.id = i."clientId"
          LEFT JOIN clients cr ON cr.id = i."clientRef"
-         WHERE ${dateWhere('i."issueDate"')}
+         WHERE ${invWhere}
          ORDER BY i."issueDate" ASC, i.id ASC`,
-        [userId]
+        invParams
       ),
       pool.query(
         `SELECT date, employee, gross, tax, superannuation, net
          FROM fin_wages
-         WHERE ${dateWhere('date')}
+         WHERE ${wageWhere}
          ORDER BY date ASC, id ASC`,
-        [userId]
+        wageParams
       ),
     ]);
 

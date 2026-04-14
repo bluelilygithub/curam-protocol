@@ -2728,7 +2728,10 @@ export default function FinancePage() {
       const params = new URLSearchParams({ from, to });
       const endpoint = type === 'myob' ? 'myob' : 'excel';
       const res = await api.get(`/api/finance/export/${endpoint}?${params}`);
-      if (!res.ok) throw new Error('Export failed');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Export failed');
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
