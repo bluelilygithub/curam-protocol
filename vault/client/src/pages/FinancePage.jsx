@@ -2716,18 +2716,55 @@ const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes'
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
   const [dateRange, setDateRange] = useState(() => ({ preset: 'month', ...getPresetRange('month') }));
+  const [exporting, setExporting] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
 
   const showDatePicker = !NO_DATE_FILTER_TABS.has(tab);
   const { from, to } = dateRange;
+
+  const doExport = async (type) => {
+    setExporting(type);
+    try {
+      const params = new URLSearchParams({ from, to });
+      const endpoint = type === 'myob' ? 'myob' : 'excel';
+      const res = await api.get(`/api/finance/export/${endpoint}?${params}`);
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const fromStr = from.replace(/-/g, '');
+      const toStr   = to.replace(/-/g, '');
+      a.href = url;
+      a.download = type === 'myob'
+        ? `myob-journal-${fromStr}-${toStr}.csv`
+        : `finance-export-${fromStr}-${toStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      addToast(e.message || 'Export failed', 'error');
+    } finally {
+      setExporting(null);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
       {/* Header + tabs */}
       <div className="flex-shrink-0 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <div className="px-6 pt-4 pb-0">
-          <div className="flex items-center gap-2 mb-3">
-            <span style={{ fontSize: 20 }}>💰</span>
-            <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Curam Finance</h1>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <span style={{ fontSize: 20 }}>💰</span>
+              <h1 className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>Curam Finance</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <Btn variant="secondary" onClick={() => doExport('myob')} disabled={exporting === 'myob'}>
+                {exporting === 'myob' ? 'Exporting…' : 'Export MYOB'}
+              </Btn>
+              <Btn variant="secondary" onClick={() => doExport('excel')} disabled={exporting === 'excel'}>
+                {exporting === 'excel' ? 'Exporting…' : 'Export Excel'}
+              </Btn>
+            </div>
           </div>
           <div data-tour="finance-tabs" className="flex gap-0 overflow-x-auto">
             {TABS.map(t => (

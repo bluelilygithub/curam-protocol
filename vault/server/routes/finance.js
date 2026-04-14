@@ -1641,4 +1641,194 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
+// ── Exports ───────────────────────────────────────────────────────────────────
+
+function csvEscape(val) {
+  if (val === null || val === undefined) return '';
+  const s = String(val);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function csvRow(...cells) {
+  return cells.map(csvEscape).join(',');
+}
+
+function fmtDateAU(d) {
+  if (!d) return '';
+  const s = String(d).slice(0, 10);
+  const [y, m, day] = s.split('-');
+  return `${day}/${m}/${y}`;
+}
+
+function fmtNum(n) {
+  return (parseFloat(n) || 0).toFixed(2);
+}
+
+// MYOB General Journal format
+router.get('/export/myob', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { from, to } = req.query;
+
+    let where = `e."userId"=$1`;
+    const params = [userId];
+    if (from) { params.push(from); where += ` AND e.date >= $${params.length}`; }
+    if (to)   { params.push(to);   where += ` AND e.date <= $${params.length}`; }
+
+    const { rows } = await pool.query(
+      `SELECT e.date, e.description, e.type,
+        json_agg(
+          json_build_object(
+            'code',   a.code,
+            'name',   a.name,
+            'debit',  l.debit,
+            'credit', l.credit
+          ) ORDER BY l.id
+        ) AS lines
+       FROM fin_journal_entries e
+       JOIN fin_journal_lines l ON l."entryId" = e.id
+       JOIN fin_accounts a ON a.id = l."accountId"
+       WHERE ${where}
+       GROUP BY e.id
+       ORDER BY e.date ASC, e.id ASC`,
+      params
+    );
+
+    const lines = ['Date,Memo,Tax Code,Account Number,Debit Amount,Credit Amount'];
+    for (const entry of rows) {
+      for (const line of entry.lines) {
+        lines.push(csvRow(
+          fmtDateAU(entry.date),
+          entry.description,
+          'N-T',
+          line.code,
+          fmtNum(line.debit),
+          fmtNum(line.credit)
+        ));
+      }
+    }
+
+    const from2 = from ? from.replace(/-/g, '') : 'all';
+    const to2   = to   ? to.replace(/-/g, '')   : 'all';
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="myob-journal-${from2}-${to2}.csv"`);
+    res.send(lines.join('\r\n'));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Excel (comprehensive transaction) export
+router.get('/export/excel', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { from, to } = req.query;
+
+    const dateWhere = (col) => {
+      let w = `"userId"=$1`;
+      if (from) w += ` AND ${col} >= '${from}'`;
+      if (to)   w += ` AND ${col} <= '${to}'`;
+      return w;
+    };
+
+    const [expenses, invoices, wages] = await Promise.all([
+      pool.query(
+        `SELECT e.date, e.description, e.supplier, e.amount, e.gst, e.category, e."ccSettled",
+                a.code AS "accountCode", a.name AS "accountName",
+                t.code AS "txCode"
+         FROM fin_expenses e
+         LEFT JOIN fin_accounts a ON a.id = e."paidViaId"
+         LEFT JOIN fin_tx_codes t ON t.id = e."txCodeId"
+         WHERE ${dateWhere('e.date')}
+         ORDER BY e.date ASC, e.id ASC`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT i.number, i."issueDate", i."dueDate", i.status, i.total, i."gstTotal",
+                COALESCE(fc.name, cr.name) AS "clientName"
+         FROM fin_invoices i
+         LEFT JOIN fin_clients fc ON fc.id = i."clientId"
+         LEFT JOIN clients cr ON cr.id = i."clientRef"
+         WHERE ${dateWhere('i."issueDate"')}
+         ORDER BY i."issueDate" ASC, i.id ASC`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT date, employee, gross, tax, superannuation, net
+         FROM fin_wages
+         WHERE ${dateWhere('date')}
+         ORDER BY date ASC, id ASC`,
+        [userId]
+      ),
+    ]);
+
+    const rows = [
+      csvRow('Date', 'Type', 'Reference', 'Description / Employee', 'Supplier / Client',
+             'Ex-GST Amount', 'GST', 'Total (inc GST)', 'Category', 'Payment Account', 'Tx Code', 'Notes'),
+    ];
+
+    for (const e of expenses.rows) {
+      const total = (parseFloat(e.amount) || 0) + (parseFloat(e.gst) || 0);
+      rows.push(csvRow(
+        fmtDateAU(e.date),
+        'Expense',
+        '',
+        e.description,
+        e.supplier || '',
+        fmtNum(e.amount),
+        fmtNum(e.gst),
+        fmtNum(total),
+        e.category || '',
+        e.accountCode ? `${e.accountCode} — ${e.accountName}` : 'Bank / Cash',
+        e.txCode || '',
+        e.ccSettled ? 'CC Settled' : ''
+      ));
+    }
+
+    for (const i of invoices.rows) {
+      const exGst = (parseFloat(i.total) || 0) - (parseFloat(i.gstTotal) || 0);
+      rows.push(csvRow(
+        fmtDateAU(i.issueDate),
+        'Invoice',
+        i.number,
+        '',
+        i.clientName || '',
+        fmtNum(exGst),
+        fmtNum(i.gstTotal),
+        fmtNum(i.total),
+        '',
+        '',
+        '',
+        i.status
+      ));
+    }
+
+    for (const w of wages.rows) {
+      rows.push(csvRow(
+        fmtDateAU(w.date),
+        'Wage',
+        '',
+        w.employee,
+        '',
+        fmtNum(w.gross),
+        '0.00',
+        fmtNum(w.gross),
+        '',
+        '',
+        '',
+        `Tax: ${fmtNum(w.tax)} | Super: ${fmtNum(w.superannuation)} | Net: ${fmtNum(w.net)}`
+      ));
+    }
+
+    const from2 = from ? from.replace(/-/g, '') : 'all';
+    const to2   = to   ? to.replace(/-/g, '')   : 'all';
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="finance-export-${from2}-${to2}.csv"`);
+    res.send(rows.join('\r\n'));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
