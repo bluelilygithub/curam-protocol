@@ -1684,6 +1684,7 @@ router.get('/export/myob', async (req, res) => {
           json_build_object(
             'code',   a.code,
             'name',   a.name,
+            'atype',  a.type,
             'debit',  l.debit,
             'credit', l.credit
           ) ORDER BY l.id
@@ -1699,8 +1700,14 @@ router.get('/export/myob', async (req, res) => {
 
     const lines = ['Date,Memo,Tax Code,Account Number,Debit Amount,Credit Amount'];
     for (const entry of rows) {
+      // Entry has GST if any line posts to a GST-named account
+      const hasGst = entry.lines.some(l => l.name && l.name.toUpperCase().includes('GST'));
       for (const line of entry.lines) {
-        const taxCode = line.name && line.name.toUpperCase().includes('GST') ? 'GST' : 'N-T';
+        const isGstAccount = line.name && line.name.toUpperCase().includes('GST');
+        // GST account lines always get GST; expense/income lines get GST when the entry had GST applied
+        const taxCode = (isGstAccount || (hasGst && (line.atype === 'expense' || line.atype === 'income')))
+          ? 'GST'
+          : 'N-T';
         lines.push(csvRow(
           fmtDateAU(entry.date),
           entry.description,
