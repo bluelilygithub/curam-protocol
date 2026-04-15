@@ -644,9 +644,17 @@ function InvoicesTab({ from, to }) {
       const clientRef = src === 'crm' ? parseInt(rawId, 10) : null;
       const payload = { ...form, clientRef, clientId, paidAt: form.paidAt || null };
       if (modal === 'new') {
-        await api.post('/api/finance/invoices', payload);
+        const res = await api.post('/api/finance/invoices', payload);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Failed to create invoice');
+        }
       } else {
-        await api.put(`/api/finance/invoices/${modal.id}`, { ...payload, status: modal.status });
+        const res = await api.put(`/api/finance/invoices/${modal.id}`, { ...payload, status: modal.status });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Failed to update invoice');
+        }
       }
       await load();
       setModal(null);
