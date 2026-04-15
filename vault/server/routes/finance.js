@@ -485,6 +485,8 @@ router.post('/invoices', async (req, res) => {
       const up  = parseFloat(item.unitPrice) || 0;
       const amt = parseFloat((qty * up).toFixed(2));
       const itemGst = item.gstApplies ? parseFloat((amt * 0.1).toFixed(2)) : 0;
+      item._qty    = qty;
+      item._up     = up;
       item._amount = amt;
       item._gst    = itemGst;
       subtotal += amt;
@@ -506,7 +508,7 @@ router.post('/invoices', async (req, res) => {
       await client.query(
         `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId")
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [invoice.id, item.description, item.qty, item.unitPrice, item._gst, item._amount, item.txCodeId||null]
+        [invoice.id, item.description || '', item._qty, item._up, item._gst, item._amount, item.txCodeId||null]
       );
     }
 
@@ -651,6 +653,8 @@ router.put('/invoices/:id', async (req, res) => {
       const up  = parseFloat(item.unitPrice) || 0;
       const amt = parseFloat((qty * up).toFixed(2));
       const itemGst = item.gstApplies ? parseFloat((amt * 0.1).toFixed(2)) : 0;
+      item._qty    = qty;
+      item._up     = up;
       item._amount = amt;
       item._gst    = itemGst;
       subtotal += amt;
@@ -677,7 +681,7 @@ router.put('/invoices/:id', async (req, res) => {
       await client.query(
         `INSERT INTO fin_invoice_items ("invoiceId", description, qty, "unitPrice", gst, amount, "txCodeId")
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [invoiceId, item.description, item.qty, item.unitPrice, item._gst, item._amount, item.txCodeId||null]
+        [invoiceId, item.description || '', item._qty, item._up, item._gst, item._amount, item.txCodeId||null]
       );
     }
 
