@@ -15,6 +15,7 @@ const upload = multer({
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
+function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
 
 const MODE_PROMPTS = {
   diff: 'You will be given two documents. Provide a detailed comparison. Use clear headings to organise additions, removals, modifications, and unchanged sections. Be thorough and precise.',
@@ -122,6 +123,42 @@ router.post(
         for await (const chunk of streamResult.stream) {
           const text = chunk.text();
           if (text) res.write(`data: ${JSON.stringify({ delta: text })}\n\n`);
+        }
+      } else if (isDeepSeek(model)) {
+        const dsKey = process.env.DEEPSEEK_API_KEY;
+        if (!dsKey) throw new Error('DEEPSEEK_API_KEY is not configured');
+        const dsMessages = [];
+        if (systemPrompt?.trim()) dsMessages.push({ role: 'system', content: systemPrompt });
+        const userText = contentBlocks.filter(b => b.type === 'text').map(b => b.text).join('\n');
+        dsMessages.push({ role: 'user', content: userText });
+        const dsResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${dsKey}` },
+          body: JSON.stringify({ model, messages: dsMessages, stream: true, max_tokens: 8096 }),
+        });
+        if (!dsResponse.ok) {
+          const errText = await dsResponse.text();
+          throw new Error(`DeepSeek API error ${dsResponse.status}: ${errText}`);
+        }
+        const reader = dsResponse.body.getReader();
+        const decoder = new TextDecoder();
+        let dsBuf = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          dsBuf += decoder.decode(value, { stream: true });
+          const lines = dsBuf.split('\n');
+          dsBuf = lines.pop();
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const raw = line.slice(6).trim();
+            if (raw === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(raw);
+              const text = parsed.choices?.[0]?.delta?.content;
+              if (text) res.write(`data: ${JSON.stringify({ delta: text })}\n\n`);
+            } catch {}
+          }
         }
       } else {
         const stream = anthropic.messages.stream({

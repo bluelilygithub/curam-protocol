@@ -74,6 +74,24 @@ async function callModel(modelId, userText, sharedContextFiles = []) {
     return result.response.text();
   }
 
+  if (modelId.startsWith('deepseek-')) {
+    const dsKey = process.env.DEEPSEEK_API_KEY;
+    if (!dsKey) throw new Error('DeepSeek API key not configured. Add DEEPSEEK_API_KEY to your environment.');
+    const systemPrompt = buildSystemWithContext(DEBATE_SYSTEM, sharedContextFiles);
+    const messages = [];
+    if (systemPrompt?.trim()) messages.push({ role: 'system', content: systemPrompt });
+    const contextText = sharedContextFiles.filter(f => !f.isImage && f.extractedText).map(f => `[${f.name}]\n${f.extractedText}`).join('\n\n');
+    messages.push({ role: 'user', content: contextText ? `${contextText}\n\n${userText}` : userText });
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${dsKey}` },
+      body: JSON.stringify({ model: modelId, messages, max_tokens: 1024 }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `DeepSeek error ${res.status}`);
+    return data.choices?.[0]?.message?.content || '';
+  }
+
   // Anthropic
   const systemPrompt = buildSystemWithContext(DEBATE_SYSTEM, sharedContextFiles);
   const content = buildAnthropicContent(userText, sharedContextFiles);

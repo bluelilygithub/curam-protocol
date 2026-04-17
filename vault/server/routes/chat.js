@@ -20,6 +20,22 @@ const chatLimiter = rateLimit({
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
+function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
+
+function toDeepSeekMessages(systemBlocks, messages) {
+  const result = [];
+  const sysText = systemBlocks.map(b => b.text).join('\n\n').trim();
+  if (sysText) result.push({ role: 'system', content: sysText });
+  for (const m of messages) {
+    const content = typeof m.content === 'string'
+      ? m.content
+      : Array.isArray(m.content)
+        ? m.content.filter(b => b.type === 'text').map(b => b.text).join('\n')
+        : String(m.content);
+    result.push({ role: m.role, content });
+  }
+  return result;
+}
 
 // Returns { blocks, ragFallbackActive }.
 // blocks — array of Anthropic system content blocks with cache_control layering.
@@ -279,6 +295,7 @@ router.get('/model-status', (req, res) => {
   res.json({
     anthropic: !!process.env.ANTHROPIC_API_KEY,
     gemini: !!process.env.GEMINI_API_KEY,
+    deepseek: !!process.env.DEEPSEEK_API_KEY,
   });
 });
 
@@ -295,6 +312,18 @@ router.post('/test-model', async (req, res) => {
       const gModel = genai.getGenerativeModel({ model: modelId });
       const result = await gModel.generateContent('Reply with only the word "ok".');
       const text = result.response.text().trim();
+      res.json({ ok: true, response: text });
+    } else if (isDeepSeek(modelId)) {
+      const dsKey = process.env.DEEPSEEK_API_KEY;
+      if (!dsKey) return res.json({ ok: false, code: 'auth', error: 'DEEPSEEK_API_KEY is not configured.' });
+      const dsRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${dsKey}` },
+        body: JSON.stringify({ model: modelId, messages: [{ role: 'user', content: 'Reply with only the word "ok".' }], max_tokens: 10 }),
+      });
+      const dsData = await dsRes.json();
+      if (!dsRes.ok) return res.json({ ok: false, code: 'auth', error: dsData.error?.message || `DeepSeek error ${dsRes.status}` });
+      const text = dsData.choices?.[0]?.message?.content?.trim() || '';
       res.json({ ok: true, response: text });
     } else {
       if (!process.env.ANTHROPIC_API_KEY) return res.json({ ok: false, code: 'auth', error: 'ANTHROPIC_API_KEY is not configured.' });
@@ -468,6 +497,51 @@ router.post('/', chatLimiter, async (req, res) => {
       const finalResponse = await streamResult.response;
       inputTokens = finalResponse.usageMetadata?.promptTokenCount || 0;
       outputTokens = finalResponse.usageMetadata?.candidatesTokenCount || 0;
+
+    } else if (isDeepSeek(model)) {
+      // ── DeepSeek path ────────────────────────────────────────────────────────
+      const dsKey = process.env.DEEPSEEK_API_KEY;
+      if (!dsKey) throw new Error('DEEPSEEK_API_KEY is not configured');
+
+      const dsMessages = toDeepSeekMessages(systemBlocks, apiMessages);
+      const dsResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${dsKey}` },
+        body: JSON.stringify({ model, messages: dsMessages, stream: true, max_tokens: 8096, temperature }),
+      });
+
+      if (!dsResponse.ok) {
+        const errText = await dsResponse.text();
+        throw new Error(`DeepSeek API error ${dsResponse.status}: ${errText}`);
+      }
+
+      const reader = dsResponse.body.getReader();
+      const decoder = new TextDecoder();
+      let dsBuf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        dsBuf += decoder.decode(value, { stream: true });
+        const lines = dsBuf.split('\n');
+        dsBuf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const raw = line.slice(6).trim();
+          if (raw === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(raw);
+            const text = parsed.choices?.[0]?.delta?.content;
+            if (text) {
+              fullContent += text;
+              res.write(`data: ${JSON.stringify({ delta: text, sessionId: sid })}\n\n`);
+            }
+            if (parsed.usage) {
+              inputTokens = parsed.usage.prompt_tokens || 0;
+              outputTokens = parsed.usage.completion_tokens || 0;
+            }
+          } catch {}
+        }
+      }
 
     } else {
       // ── Anthropic path ───────────────────────────────────────────────────────

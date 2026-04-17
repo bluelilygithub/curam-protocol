@@ -49,6 +49,26 @@ export const MODELS = [
     color: '#9334e6',
     provider: 'gemini',
   },
+  {
+    id: 'deepseek-chat',
+    name: 'DeepSeek V3',
+    label: 'DeepSeek',
+    emoji: '🐋',
+    tagline: 'DeepSeek · Fast',
+    desc: 'Fast and capable general-purpose model from DeepSeek',
+    color: '#0ea5e9',
+    provider: 'deepseek',
+  },
+  {
+    id: 'deepseek-reasoner',
+    name: 'DeepSeek R1',
+    label: 'DeepSeek Reasoning',
+    emoji: '🧩',
+    tagline: 'DeepSeek · Reasoning',
+    desc: 'Deep reasoning model — best for complex logic and analysis',
+    color: '#7c3aed',
+    provider: 'deepseek',
+  },
 ];
 
 export const PROJECT_TYPES = [
@@ -311,4 +331,8 @@ export function getModelShortName(id) {
 
 export function isGeminiModel(id) {
   return typeof id === 'string' && id.startsWith('gemini-');
+}
+
+export function isDeepSeekModel(id) {
+  return typeof id === 'string' && id.startsWith('deepseek-');
 }

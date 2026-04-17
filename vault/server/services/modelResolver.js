@@ -6,6 +6,7 @@ const DEFAULTS = {
   light:    'claude-haiku-4-5-20251001',
   standard: 'claude-sonnet-4-6',
   gemini:   'gemini-2.0-flash',
+  deepseek: 'deepseek-chat',
 };
 
 /**
@@ -30,12 +31,14 @@ async function getModelsForUser(userId) {
     if (rows[0]?.value) {
       const models = JSON.parse(rows[0].value);
       if (Array.isArray(models) && models.length > 0) {
-        const anthropicModels = models.filter(m => m.id && !m.id.startsWith('gemini-'));
+        const anthropicModels = models.filter(m => m.id && !m.id.startsWith('gemini-') && !m.id.startsWith('deepseek-'));
         const geminiModels    = models.filter(m => m.id &&  m.id.startsWith('gemini-'));
+        const deepseekModels  = models.filter(m => m.id &&  m.id.startsWith('deepseek-'));
         return {
           light:    anthropicModels[0]?.id || DEFAULTS.light,
           standard: anthropicModels[1]?.id || anthropicModels[0]?.id || DEFAULTS.standard,
           gemini:   geminiModels[0]?.id    || DEFAULTS.gemini,
+          deepseek: deepseekModels[0]?.id  || DEFAULTS.deepseek,
         };
       }
     }
