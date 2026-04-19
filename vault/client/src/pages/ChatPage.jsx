@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
@@ -45,10 +45,12 @@ const MemoMessageList = React.memo(function MemoMessageList({
   suggestions, onDelete, onBranch, onOpenArtifact, onSuggestionSelect,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
   isTTSAvailable, isSpeaking, isPaused, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
+  wideChat,
 }) {
   const getIcon = useIcon();
+  const widthClass = wideChat ? 'max-w-[80%] mx-auto' : 'max-w-3xl mx-auto';
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
+    <div className={`${widthClass} px-4 py-6`}>
       {messages.map((msg, i) => {
         const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
         return (
@@ -149,6 +151,16 @@ function ChatPage({ general = false }) {
   const [sessionFiles, setSessionFiles] = useState([]); // files attached from library this session
   const [pinnedFiles, setPinnedFiles] = useState([]);   // project files pinned (always in context)
   const [showContextBar, setShowContextBar] = useState(true);
+
+  // Chat column width: narrow (max-w-3xl) vs wide (80%)
+  const [wideChat, setWideChat] = useState(() => {
+    try { return localStorage.getItem('chatWide') === 'true'; } catch { return false; }
+  });
+  const toggleWideChat = () => setWideChat(v => {
+    try { localStorage.setItem('chatWide', String(!v)); } catch { /* ignore */ }
+    return !v;
+  });
+  const msgWidthClass = wideChat ? 'max-w-[80%] mx-auto' : 'max-w-3xl mx-auto';
 
   // Summarize
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -1379,6 +1391,20 @@ function ChatPage({ general = false }) {
 
           {/* Messages */}
           <SelectionToolbar projectId={projectId} sessionId={sessionId} contextRef={messageListRef} />
+
+          {/* Width toggle — top-left of conversation region, desktop only */}
+          <div className="hidden sm:flex flex-shrink-0 items-center px-3 pt-1.5 pb-0">
+            <button
+              type="button"
+              onClick={toggleWideChat}
+              title={wideChat ? 'Narrow layout' : 'Wide layout'}
+              className="w-6 h-6 flex items-center justify-center rounded transition-opacity hover:opacity-100"
+              style={{ color: wideChat ? 'var(--color-primary)' : 'var(--color-muted)', opacity: wideChat ? 1 : 0.4 }}
+            >
+              {getIcon('columns', { size: 13 })}
+            </button>
+          </div>
+
           <div ref={messageListRef} className="flex-1 overflow-y-auto">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full pb-16 px-6 text-center">
@@ -1406,6 +1432,7 @@ function ChatPage({ general = false }) {
                 messagesEndRef={messagesEndRef}
                 bookmarkedMap={bookmarkedMap}
                 onToggleBookmark={handleToggleBookmark}
+                wideChat={wideChat}
                 isTTSAvailable={isTTSAvailable}
                 isSpeaking={isSpeaking}
                 isPaused={isPaused}
@@ -1461,7 +1488,7 @@ function ChatPage({ general = false }) {
 
           {/* Input area */}
           <div className="flex-shrink-0 px-4 pb-safe pt-1">
-            <div className="max-w-3xl mx-auto">
+            <div className={msgWidthClass}>
               <div className="relative">
 
                 {/* File picker */}
