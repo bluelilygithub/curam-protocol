@@ -3,7 +3,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { X, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
-function ArtifactPanel({ artifacts, initialIndex = 0, onClose }) {
+function ArtifactPanel({ artifacts, initialIndex = 0, onClose, narrowSide = false }) {
   const [idx, setIdx] = useState(Math.min(initialIndex, artifacts.length - 1));
   const [copied, setCopied] = useState(false);
 
@@ -20,8 +20,12 @@ function ArtifactPanel({ artifacts, initialIndex = 0, onClose }) {
 
   return (
     <div
-      className="flex flex-col border-l h-full overflow-hidden w-full sm:w-[45%]"
-      style={{ minWidth: '320px', borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+      className={`flex flex-col border-l h-full overflow-hidden w-full shrink-0 ${narrowSide ? 'sm:w-[20%]' : 'sm:w-[40%]'}`}
+      style={{
+        minWidth: narrowSide ? '200px' : '320px',
+        borderColor: 'var(--color-border)',
+        background: 'var(--color-surface)',
+      }}
     >
       {/* Header */}
       <div

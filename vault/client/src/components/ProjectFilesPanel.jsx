@@ -18,7 +18,7 @@ function getDomain(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 
-function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionFileIds = [] }) {
+function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionFileIds = [], narrowSide = false }) {
   const getIcon = useIcon();
   const fileInputRef = useRef(null);
   const { allowedFileTypes } = useSettingsStore();
@@ -66,8 +66,11 @@ function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionF
   return (
     <>
     <div
-      className="flex-shrink-0 flex flex-col border-l overflow-hidden w-full sm:w-72 h-full"
-      style={{ borderColor: 'var(--color-border)' }}
+      className={`flex-shrink-0 flex flex-col border-l overflow-hidden w-full shrink-0 h-full ${narrowSide ? 'sm:w-[20%]' : 'sm:w-[40%]'}`}
+      style={{
+        borderColor: 'var(--color-border)',
+        minWidth: narrowSide ? '200px' : '280px',
+      }}
     >
       {/* Header */}
       <div
