@@ -1393,16 +1393,16 @@ function ChatPage({ general = false }) {
           <SelectionToolbar projectId={projectId} sessionId={sessionId} contextRef={messageListRef} />
 
           {/* Width toggle — aligned to the right edge of the conversation block, desktop only */}
-          <div className="hidden sm:block flex-shrink-0 px-4 pt-1.5 pb-0">
+          <div className="hidden sm:block flex-shrink-0 px-4 pt-2 pb-0">
             <div className={`${msgWidthClass} flex justify-end`}>
               <button
                 type="button"
                 onClick={toggleWideChat}
-                title={wideChat ? 'Narrow layout' : 'Wide layout'}
-                className="w-6 h-6 flex items-center justify-center rounded transition-opacity hover:opacity-100"
-                style={{ color: '#22c55e', opacity: wideChat ? 1 : 0.4 }}
+                title={wideChat ? 'Collapse to narrow layout' : 'Expand to wide layout'}
+                className="w-8 h-8 flex items-center justify-center rounded-lg transition-all hover:opacity-90"
+                style={{ color: '#15803d' }}
               >
-                {getIcon('columns', { size: 13 })}
+                {getIcon(wideChat ? 'collapse-horizontal' : 'expand-horizontal', { size: 18 })}
               </button>
             </div>
           </div>
