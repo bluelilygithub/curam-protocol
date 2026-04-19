@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { X, Copy, Check, ChevronLeft, ChevronRight, Columns2 } from 'lucide-react';
+import { X, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 
-function ArtifactPanel({ artifacts, initialIndex = 0, onClose, narrowSide = false, onToggleSplit }) {
+function ArtifactPanel({ artifacts, initialIndex = 0, onClose, narrowSide = false }) {
   const [idx, setIdx] = useState(Math.min(initialIndex, artifacts.length - 1));
   const [copied, setCopied] = useState(false);
 
@@ -62,22 +62,6 @@ function ArtifactPanel({ artifacts, initialIndex = 0, onClose, narrowSide = fals
         )}
 
         <div className="flex-1 min-w-0" />
-
-        {onToggleSplit && (
-          <button
-            type="button"
-            onClick={onToggleSplit}
-            className="hidden sm:flex w-7 h-7 flex-shrink-0 items-center justify-center rounded-md border transition-colors hover:opacity-70"
-            style={{
-              borderColor: 'var(--color-border)',
-              color: narrowSide ? 'var(--color-primary)' : 'var(--color-muted)',
-              background: narrowSide ? 'var(--color-primary)15' : 'transparent',
-            }}
-            title={narrowSide ? 'Balanced split (60/40)' : 'Widen chat (80/20)'}
-          >
-            <Columns2 size={14} />
-          </button>
-        )}
 
         <button
           onClick={handleCopy}

@@ -38,17 +38,21 @@ const TEMPERATURES = [
   { label: 'Creative', value: 1.0, desc: 'Varied, imaginative' },
 ];
 
-// Memoised message list â€” only re-renders when messages, streaming state, or actions change,
+// Memoised message list - only re-renders when messages, streaming state, or actions change,
 // not when the user types in the input field.
 const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
   suggestions, onDelete, onBranch, onOpenArtifact, onSuggestionSelect,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
   isTTSAvailable, isSpeaking, isPaused, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
+  wideMessageColumn,
 }) {
   const getIcon = useIcon();
+  const widthClass = wideMessageColumn
+    ? 'w-full sm:max-w-[80%] mx-auto'
+    : 'max-w-3xl mx-auto';
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
+    <div className={`${widthClass} px-4 py-6`}>
       {messages.map((msg, i) => {
         const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
         return (
@@ -150,7 +154,7 @@ function ChatPage({ general = false }) {
   const [pinnedFiles, setPinnedFiles] = useState([]);   // project files pinned (always in context)
   const [showContextBar, setShowContextBar] = useState(true);
 
-  // Chat width expansion
+  // Side panel (artifact / project files) width: narrower strip vs wider strip when a panel is open
   const [chatExpanded, setChatExpanded] = useState(() => {
     try {
       return localStorage.getItem("chatExpanded") === "true";
@@ -168,6 +172,29 @@ function ChatPage({ general = false }) {
       return next;
     });
   };
+
+  // Main chat column width (message list + composer): ~max-w-3xl vs 80% of chat area (desktop)
+  const [wideMessageColumn, setWideMessageColumn] = useState(() => {
+    try {
+      return localStorage.getItem("wideMessageColumn") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleWideMessageColumn = () => {
+    setWideMessageColumn((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("wideMessageColumn", String(next));
+      } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const chatComposerWidthClass = wideMessageColumn
+    ? "w-full sm:max-w-[80%] mx-auto"
+    : "max-w-3xl mx-auto";
 
   // Summarize
   const [isSummarizing, setIsSummarizing] = useState(false);
@@ -980,6 +1007,36 @@ function ChatPage({ general = false }) {
 
         <div className="flex-1" />
 
+        {/* Message column width: standard (~768px) vs wide (80%) - desktop; unrelated to code artifacts */}
+        <button
+          type="button"
+          onClick={handleToggleWideMessageColumn}
+          className="hidden sm:flex w-7 h-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors hover:opacity-70"
+          style={{
+            color: wideMessageColumn ? 'var(--color-primary)' : 'var(--color-muted)',
+            background: wideMessageColumn ? 'var(--color-primary)15' : 'transparent',
+          }}
+          title={wideMessageColumn ? 'Standard message width' : 'Wide message column (80%)'}
+        >
+          {getIcon('columns', { size: 14 })}
+        </button>
+
+        {/* When artifact or project-files panel is open: adjust that panel vs chat split (40% vs 20% side) */}
+        {(activeArtifacts || (showFilesPanel && projectId)) && (
+          <button
+            type="button"
+            onClick={handleToggleChatSplit}
+            className="hidden sm:flex w-7 h-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            style={{
+              color: chatExpanded ? 'var(--color-primary)' : 'var(--color-muted)',
+              background: chatExpanded ? 'var(--color-primary)15' : 'transparent',
+            }}
+            title={chatExpanded ? 'Side panel: balanced (40%)' : 'Side panel: narrow strip (20%)'}
+          >
+            {getIcon('layout', { size: 14 })}
+          </button>
+        )}
+
         {/* Usage display */}
         {costDisplay && (
           <span className="text-xs hidden md:block" style={{ color: 'var(--color-muted)', opacity: 0.6 }}>
@@ -1425,6 +1482,7 @@ function ChatPage({ general = false }) {
                 messagesEndRef={messagesEndRef}
                 bookmarkedMap={bookmarkedMap}
                 onToggleBookmark={handleToggleBookmark}
+                wideMessageColumn={wideMessageColumn}
                 isTTSAvailable={isTTSAvailable}
                 isSpeaking={isSpeaking}
                 isPaused={isPaused}
@@ -1442,7 +1500,7 @@ function ChatPage({ general = false }) {
               {getIcon('alert-triangle', { size: 13 })}
               <span className="flex-1">This conversation is getting long ({messages.length} messages). Summarizing keeps Claude focused.</span>
               <button onClick={handleSummarize} disabled={isSummarizing} className="px-2.5 py-1 rounded-lg text-xs font-medium text-white flex-shrink-0" style={{ background: '#d97706' }}>
-                {isSummarizing ? 'Summarizingâ€¦' : 'Summarize'}
+                {isSummarizing ? 'Summarizing...' : 'Summarize'}
               </button>
             </div>
           )}
@@ -1480,7 +1538,7 @@ function ChatPage({ general = false }) {
 
           {/* Input area */}
           <div className="flex-shrink-0 px-4 pb-safe pt-1">
-            <div className="max-w-3xl mx-auto">
+            <div className={chatComposerWidthClass}>
               <div className="relative">
 
                 {/* File picker */}
@@ -1510,7 +1568,7 @@ function ChatPage({ general = false }) {
                         if (e.key === 'Enter') { e.preventDefault(); if (urlInputValue.trim()) { addUrl(urlInputValue.trim()); setUrlInputValue(''); setShowUrlInput(false); } }
                         if (e.key === 'Escape') { setShowUrlInput(false); setUrlInputValue(''); }
                       }}
-                      placeholder="Paste a URL and press Enterâ€¦"
+                      placeholder="Paste a URL and press Enter..."
                       className="flex-1 bg-transparent outline-none text-sm"
                       style={{ color: 'var(--color-text)' }}
                     />
@@ -1772,7 +1830,7 @@ function ChatPage({ general = false }) {
                         autoFocus
                         value={promptSearch}
                         onChange={e => setPromptSearch(e.target.value)}
-                        placeholder="Search promptsâ€¦"
+                        placeholder="Search prompts..."
                         className="w-full bg-transparent outline-none text-xs"
                         style={{ color: 'var(--color-text)' }}
                       />
@@ -1841,7 +1899,7 @@ function ChatPage({ general = false }) {
                         ? 'What would you like to know about this page?'
                         : attachments.length > 0
                         ? `What would you like to do with ${attachments.length === 1 ? 'this file' : 'these files'}?`
-                        : project ? `Message ${project.name}â€¦` : 'Messageâ€¦'
+                        : project ? `Message ${project.name}...` : 'Message...'
                     }
                     rows={1}
                     className="w-full px-4 pt-3.5 pb-12 bg-transparent outline-none resize-none text-sm leading-relaxed"
@@ -1979,7 +2037,6 @@ function ChatPage({ general = false }) {
               initialIndex={activeArtifacts.initialIndex}
               onClose={() => setActiveArtifacts(null)}
               narrowSide={chatExpanded}
-              onToggleSplit={handleToggleChatSplit}
             />
           </div>
         )}
@@ -1990,7 +2047,6 @@ function ChatPage({ general = false }) {
             <ProjectFilesPanel
               projectId={projectId}
               narrowSide={chatExpanded}
-              onToggleSplit={handleToggleChatSplit}
               onClose={() => setShowFilesPanel(false)}
               onAttach={(file) => {
                 attachExisting(file);

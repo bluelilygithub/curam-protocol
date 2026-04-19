@@ -18,7 +18,7 @@ function getDomain(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 
-function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionFileIds = [], narrowSide = false, onToggleSplit }) {
+function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionFileIds = [], narrowSide = false }) {
   const getIcon = useIcon();
   const fileInputRef = useRef(null);
   const { allowedFileTypes } = useSettingsStore();
@@ -88,20 +88,6 @@ function ProjectFilesPanel({ projectId, onClose, onAttach, onAttachUrl, sessionF
             className="hidden"
             onChange={handleFileChange}
           />
-          {onToggleSplit && (
-            <button
-              type="button"
-              onClick={onToggleSplit}
-              className="hidden sm:flex w-7 h-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors hover:opacity-70"
-              style={{
-                color: narrowSide ? 'var(--color-primary)' : 'var(--color-muted)',
-                background: narrowSide ? 'var(--color-primary)15' : 'transparent',
-              }}
-              title={narrowSide ? 'Balanced split (60/40)' : 'Widen chat (80/20)'}
-            >
-              {getIcon('columns', { size: 14 })}
-            </button>
-          )}
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
