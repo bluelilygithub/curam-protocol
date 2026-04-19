@@ -184,8 +184,6 @@ function ChatPage({ general = false }) {
   // Artifacts
   const [activeArtifacts, setActiveArtifacts] = useState(null); // { artifacts, initialIndex }
 
-  const sidePanelOpen = Boolean(activeArtifacts || (showFilesPanel && projectId));
-
   // Follow-up suggestions
   const [suggestions, setSuggestions] = useState([]);
 
@@ -1229,21 +1227,6 @@ function ChatPage({ general = false }) {
 
         <div className="hidden sm:block"><ExportMenu sessionId={sessionId} projectId={projectId} /></div>
 
-        {sidePanelOpen && (
-          <button
-            type="button"
-            onClick={handleToggleChatSplit}
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-lg transition-colors hover:opacity-70"
-            style={{
-              color: chatExpanded ? 'var(--color-primary)' : 'var(--color-muted)',
-              background: chatExpanded ? 'var(--color-primary)15' : 'transparent',
-            }}
-            title={chatExpanded ? 'Balanced split (60/40)' : 'Widen chat (80/20)'}
-          >
-            {getIcon('columns', { size: 14 })}
-          </button>
-        )}
-
         {projectId && (
           <button
             onClick={() => setShowFilesPanel(v => !v)}
@@ -1996,6 +1979,7 @@ function ChatPage({ general = false }) {
               initialIndex={activeArtifacts.initialIndex}
               onClose={() => setActiveArtifacts(null)}
               narrowSide={chatExpanded}
+              onToggleSplit={handleToggleChatSplit}
             />
           </div>
         )}
@@ -2006,6 +1990,7 @@ function ChatPage({ general = false }) {
             <ProjectFilesPanel
               projectId={projectId}
               narrowSide={chatExpanded}
+              onToggleSplit={handleToggleChatSplit}
               onClose={() => setShowFilesPanel(false)}
               onAttach={(file) => {
                 attachExisting(file);
