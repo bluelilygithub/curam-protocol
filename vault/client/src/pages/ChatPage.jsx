@@ -1392,8 +1392,8 @@ function ChatPage({ general = false }) {
           {/* Messages */}
           <SelectionToolbar projectId={projectId} sessionId={sessionId} contextRef={messageListRef} />
 
-          {/* Width toggle — top-left of conversation region, desktop only */}
-          <div className="hidden sm:flex flex-shrink-0 items-center px-3 pt-1.5 pb-0">
+          {/* Width toggle — top-right of conversation region, desktop only */}
+          <div className="hidden sm:flex flex-shrink-0 items-center justify-end px-3 pt-1.5 pb-0">
             <button
               type="button"
               onClick={toggleWideChat}

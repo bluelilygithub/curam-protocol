@@ -57,6 +57,7 @@ const semanticMap = {
   'eye-off': { lucide: 'EyeOff' },
   'bar-chart': { lucide: 'BarChart2' },
   'clock': { lucide: 'Clock' },
+  'history': { lucide: 'History' },
   'message-circle': { lucide: 'MessageCircle' },
   'list-checks': { lucide: 'ListChecks' },
   'check-circle': { lucide: 'CheckCircle2' },
