@@ -66,7 +66,6 @@ const semanticMap = {
   'wand': { lucide: 'Wand2' },
   'grip-vertical': { lucide: 'GripVertical' },
   'layout': { lucide: 'LayoutDashboard' },
-  columns: { lucide: 'Columns2' },
   'share-2': { lucide: 'Share2' },
   'calendar-check': { lucide: 'CalendarCheck' },
   'arrow-right': { lucide: 'ArrowRight' },

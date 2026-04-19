@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
@@ -38,21 +38,17 @@ const TEMPERATURES = [
   { label: 'Creative', value: 1.0, desc: 'Varied, imaginative' },
 ];
 
-// Memoised message list - only re-renders when messages, streaming state, or actions change,
+// Memoised message list — only re-renders when messages, streaming state, or actions change,
 // not when the user types in the input field.
 const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
   suggestions, onDelete, onBranch, onOpenArtifact, onSuggestionSelect,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
   isTTSAvailable, isSpeaking, isPaused, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
-  wideMessageColumn,
 }) {
   const getIcon = useIcon();
-  const widthClass = wideMessageColumn
-    ? 'w-full sm:max-w-[80%] mx-auto'
-    : 'max-w-3xl mx-auto';
   return (
-    <div className={`${widthClass} px-4 py-6`}>
+    <div className="max-w-3xl mx-auto px-4 py-6">
       {messages.map((msg, i) => {
         const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
         return (
@@ -154,48 +150,6 @@ function ChatPage({ general = false }) {
   const [pinnedFiles, setPinnedFiles] = useState([]);   // project files pinned (always in context)
   const [showContextBar, setShowContextBar] = useState(true);
 
-  // Side panel (artifact / project files) width: narrower strip vs wider strip when a panel is open
-  const [chatExpanded, setChatExpanded] = useState(() => {
-    try {
-      return localStorage.getItem("chatExpanded") === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  const handleToggleChatSplit = () => {
-    setChatExpanded((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem("chatExpanded", String(next));
-      } catch { /* ignore */ }
-      return next;
-    });
-  };
-
-  // Main chat column width (message list + composer): ~max-w-3xl vs 80% of chat area (desktop)
-  const [wideMessageColumn, setWideMessageColumn] = useState(() => {
-    try {
-      return localStorage.getItem("wideMessageColumn") === "true";
-    } catch {
-      return false;
-    }
-  });
-
-  const handleToggleWideMessageColumn = () => {
-    setWideMessageColumn((v) => {
-      const next = !v;
-      try {
-        localStorage.setItem("wideMessageColumn", String(next));
-      } catch { /* ignore */ }
-      return next;
-    });
-  };
-
-  const chatComposerWidthClass = wideMessageColumn
-    ? "w-full sm:max-w-[80%] mx-auto"
-    : "max-w-3xl mx-auto";
-
   // Summarize
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [showSummaryPanel, setShowSummaryPanel] = useState(false);
@@ -219,10 +173,10 @@ function ChatPage({ general = false }) {
   const [prompts, setPrompts] = useState([]);
   const [promptSearch, setPromptSearch] = useState('');
 
-  // Prompt variable modal â€” { content, onInsert } or null
+  // Prompt variable modal — { content, onInsert } or null
   const [promptVarModal, setPromptVarModal] = useState(null);
 
-  // Bookmarks â€” { [messageId]: true } map for current session
+  // Bookmarks — { [messageId]: true } map for current session
   const [bookmarkedMap, setBookmarkedMap] = useState({});
 
   // Reasoning mode
@@ -689,7 +643,7 @@ function ChatPage({ general = false }) {
       ).join('\n\n---\n\n');
       addManualAttachment({
         url: `gmail://thread/${result.threadId}`,
-        title: `ðŸ“§ ${result.subject}`,
+        title: `📧 ${result.subject}`,
         content: threadText,
       });
       setGmailAttached(prev => [...prev, result.threadId]);
@@ -745,7 +699,7 @@ function ChatPage({ general = false }) {
       if (data.error) { setCalendarError(data.error); return; }
       addManualAttachment({
         url: `calendar://event/${event.id}`,
-        title: `ðŸ“… ${event.title || 'Event'}`,
+        title: `📅 ${event.title || 'Event'}`,
         content: data.text || '',
       });
       setCalendarAttached(prev => [...prev, event.id]);
@@ -809,7 +763,7 @@ function ChatPage({ general = false }) {
         if (saveSummaryToNote && projectId) {
           try {
             const today = new Date().toISOString().slice(0, 10);
-            const noteTitle = `${sessionTitle || 'Chat'} â€” Summary ${today}`;
+            const noteTitle = `${sessionTitle || 'Chat'} — Summary ${today}`;
             await api.post('/api/notes', { title: noteTitle, body: data.summary, project_id: projectId });
             setSummaryNoteSaved(true);
             setTimeout(() => setSummaryNoteSaved(false), 3500);
@@ -883,7 +837,7 @@ function ChatPage({ general = false }) {
 
   const currentTempLabel = TEMPERATURES.find(t => t.value === temperature)?.label || 'Balanced';
   const costDisplay = sessionUsage.inputTokens > 0
-    ? `${formatTokens(sessionUsage.inputTokens + sessionUsage.outputTokens)} tokens Â· ${formatCost(calcCost(sessionUsage.model || effectiveModel, sessionUsage.inputTokens, sessionUsage.outputTokens))}`
+    ? `${formatTokens(sessionUsage.inputTokens + sessionUsage.outputTokens)} tokens · ${formatCost(calcCost(sessionUsage.model || effectiveModel, sessionUsage.inputTokens, sessionUsage.outputTokens))}`
     : null;
 
   const filteredPrompts = promptSearch
@@ -947,7 +901,7 @@ function ChatPage({ general = false }) {
             >
               <span className="truncate">
                 {currentSession
-                  ? (currentSession.starred ? 'â­ ' : '') + (currentSession.title || `${new Date(currentSession.startedAt).toLocaleDateString()} Â· ${currentSession.sessionId.slice(-6)}`) + (currentSession.isSummarized ? ' âœ¦' : '')
+                  ? (currentSession.starred ? '⭐ ' : '') + (currentSession.title || `${new Date(currentSession.startedAt).toLocaleDateString()} · ${currentSession.sessionId.slice(-6)}`) + (currentSession.isSummarized ? ' ✦' : '')
                   : '+ New chat'}
               </span>
               {getIcon('chevron-down', { size: 10 })}
@@ -985,7 +939,7 @@ function ChatPage({ general = false }) {
                             className="flex-1 text-left text-xs truncate"
                             style={{ color: 'var(--color-text)' }}
                           >
-                            {s.starred ? 'â­ ' : ''}{s.title || `${new Date(s.startedAt).toLocaleDateString()} Â· ${s.sessionId.slice(-6)}`}{s.isSummarized ? ' âœ¦' : ''}
+                            {s.starred ? '⭐ ' : ''}{s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}{s.isSummarized ? ' ✦' : ''}
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setConfirmDeleteSid(s.sessionId); }}
@@ -1006,36 +960,6 @@ function ChatPage({ general = false }) {
         )}
 
         <div className="flex-1" />
-
-        {/* Message column width: standard (~768px) vs wide (80%) - desktop; unrelated to code artifacts */}
-        <button
-          type="button"
-          onClick={handleToggleWideMessageColumn}
-          className="hidden sm:flex w-7 h-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors hover:opacity-70"
-          style={{
-            color: wideMessageColumn ? 'var(--color-primary)' : 'var(--color-muted)',
-            background: wideMessageColumn ? 'var(--color-primary)15' : 'transparent',
-          }}
-          title={wideMessageColumn ? 'Standard message width' : 'Wide message column (80%)'}
-        >
-          {getIcon('columns', { size: 14 })}
-        </button>
-
-        {/* When artifact or project-files panel is open: adjust that panel vs chat split (40% vs 20% side) */}
-        {(activeArtifacts || (showFilesPanel && projectId)) && (
-          <button
-            type="button"
-            onClick={handleToggleChatSplit}
-            className="hidden sm:flex w-7 h-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors hover:opacity-70"
-            style={{
-              color: chatExpanded ? 'var(--color-primary)' : 'var(--color-muted)',
-              background: chatExpanded ? 'var(--color-primary)15' : 'transparent',
-            }}
-            title={chatExpanded ? 'Side panel: balanced (40%)' : 'Side panel: narrow strip (20%)'}
-          >
-            {getIcon('layout', { size: 14 })}
-          </button>
-        )}
 
         {/* Usage display */}
         {costDisplay && (
@@ -1070,7 +994,7 @@ function ChatPage({ general = false }) {
                     <div className="text-xs font-medium" style={{ color: temperature === t.value ? 'var(--color-primary)' : 'var(--color-text)' }}>{t.label}</div>
                     <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{t.desc}</div>
                   </div>
-                  {temperature === t.value && <span className="text-xs" style={{ color: 'var(--color-primary)' }}>âœ“</span>}
+                  {temperature === t.value && <span className="text-xs" style={{ color: 'var(--color-primary)' }}>✓</span>}
                 </button>
               ))}
             </div>
@@ -1087,10 +1011,10 @@ function ChatPage({ general = false }) {
               color: 'var(--color-muted)',
               background: 'var(--color-surface)',
             }}
-            title={modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? 'API key not configured â€” click to switch model' : 'Switch AI model'}
+            title={modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? 'API key not configured — click to switch model' : 'Switch AI model'}
           >
             {(() => { const m = MODELS.find(x => x.id === effectiveModel); return m ? `${m.emoji} ${m.name}` : effectiveModel; })()}
-            {modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false && <span style={{ color: '#f59e0b' }}>âš ï¸</span>}
+            {modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false && <span style={{ color: '#f59e0b' }}>⚠️</span>}
           </button>
           {showModelPicker && (
             <div
@@ -1109,12 +1033,12 @@ function ChatPage({ general = false }) {
                     <span className="text-base flex-shrink-0 mt-0.5">{m.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-semibold flex items-center gap-1.5" style={{ color: effectiveModel === m.id ? 'var(--color-primary)' : unavailable ? 'var(--color-muted)' : 'var(--color-text)' }}>
-                        {m.label} Â· {m.name}
-                        {unavailable && <span title="API key not configured" style={{ color: '#f59e0b' }}>âš ï¸</span>}
+                        {m.label} · {m.name}
+                        {unavailable && <span title="API key not configured" style={{ color: '#f59e0b' }}>⚠️</span>}
                       </div>
                       <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{unavailable ? 'API key not configured' : m.tagline}</div>
                     </div>
-                    {effectiveModel === m.id && <span className="ml-auto text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>âœ“</span>}
+                    {effectiveModel === m.id && <span className="ml-auto text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>✓</span>}
                   </button>
                 );
               })}
@@ -1122,7 +1046,7 @@ function ChatPage({ general = false }) {
           )}
         </div>
 
-        {/* Reasoning mode toggle â€” only for sonnet/opus, hidden on mobile */}
+        {/* Reasoning mode toggle — only for sonnet/opus, hidden on mobile */}
         {(effectiveModel.includes('sonnet') || effectiveModel.includes('opus')) && (
           <button
             onClick={() => setReasoning(v => !v)}
@@ -1154,7 +1078,7 @@ function ChatPage({ general = false }) {
           Search
         </button>
 
-        {/* Persona picker â€” hidden on mobile */}
+        {/* Persona picker — hidden on mobile */}
         <div className="relative hidden sm:block">
           <button
             onClick={() => { setShowPersonaPicker(v => !v); if (!showPersonaPicker) loadPersonas(); setShowModelPicker(false); setShowTempPicker(false); }}
@@ -1179,7 +1103,7 @@ function ChatPage({ general = false }) {
                 className="w-full text-left px-3 py-2 text-xs hover:opacity-70 transition-opacity"
                 style={{ color: selectedPersonaId === null ? 'var(--color-primary)' : 'var(--color-muted)' }}
               >
-                {selectedPersonaId === null ? 'âœ“ ' : ''}No persona
+                {selectedPersonaId === null ? '✓ ' : ''}No persona
               </button>
               {personas.map(p => (
                 <button
@@ -1189,7 +1113,7 @@ function ChatPage({ general = false }) {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium" style={{ color: selectedPersonaId === p.id ? 'var(--color-primary)' : 'var(--color-text)' }}>
-                      {selectedPersonaId === p.id ? 'âœ“ ' : ''}{p.name}
+                      {selectedPersonaId === p.id ? '✓ ' : ''}{p.name}
                     </div>
                     {p.description && (
                       <div className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{p.description}</div>
@@ -1204,7 +1128,7 @@ function ChatPage({ general = false }) {
           )}
         </div>
 
-        {/* Feeling button â€” project chats only, hidden on mobile */}
+        {/* Feeling button — project chats only, hidden on mobile */}
         {projectId && (
           <>
             <button
@@ -1247,7 +1171,7 @@ function ChatPage({ general = false }) {
           </>
         )}
 
-        {/* Star â€” hidden on mobile */}
+        {/* Star — hidden on mobile */}
         {sessionId && (
           <button
             onClick={handleToggleStar}
@@ -1321,8 +1245,8 @@ function ChatPage({ general = false }) {
 
       {isSummarized && (
         <div className="flex-shrink-0 mx-4 mt-3 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 text-xs" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <span style={{ color: 'var(--color-primary)' }}>âœ¦</span>
-          <span className="flex-1" style={{ color: 'var(--color-text)' }}>Conversation summarized â€” Claude is working from the summary.</span>
+          <span style={{ color: 'var(--color-primary)' }}>✦</span>
+          <span className="flex-1" style={{ color: 'var(--color-text)' }}>Conversation summarized — Claude is working from the summary.</span>
           <button onClick={handleViewSummary} className="font-medium hover:opacity-70" style={{ color: 'var(--color-primary)' }}>{showSummaryPanel ? 'Hide' : 'View'}</button>
           <button onClick={() => totalContentSize > 150000 ? setConfirmRevert(true) : handleRevertSummary()} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Revert to full thread</button>
           {confirmRevert && (
@@ -1346,8 +1270,8 @@ function ChatPage({ general = false }) {
       {/* Session budget banners */}
       {sessionBudget && shouldShowBudgetAlert && budgetPct >= budgetCriticalThreshold && (
         <div className="flex-shrink-0 mx-4 mt-3 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 text-xs" style={{ background: '#fff1f2', borderColor: '#fca5a5', color: '#991b1b' }}>
-          <span>ðŸ’¸</span>
-          <span className="flex-1">Session budget reached ({formatCost(sessionCost)} of {formatCost(sessionBudget)}) â€” consider summarising this chat.</span>
+          <span>💸</span>
+          <span className="flex-1">Session budget reached ({formatCost(sessionCost)} of {formatCost(sessionBudget)}) — consider summarising this chat.</span>
           {messages.length >= 4 && !isSummarized && (
             <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0" style={{ color: '#991b1b' }}>
               <input
@@ -1366,35 +1290,35 @@ function ChatPage({ general = false }) {
               className="flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium text-white"
               style={{ background: '#ef4444' }}
             >
-              {isSummarizing ? 'Summarisingâ€¦' : 'Summarise now'}
+              {isSummarizing ? 'Summarising…' : 'Summarise now'}
             </button>
           )}
-          <button onClick={dismissBudgetAlert} className="flex-shrink-0 hover:opacity-60 transition-opacity font-bold" style={{ color: '#991b1b' }} title="Dismiss">âœ•</button>
+          <button onClick={dismissBudgetAlert} className="flex-shrink-0 hover:opacity-60 transition-opacity font-bold" style={{ color: '#991b1b' }} title="Dismiss">✕</button>
         </div>
       )}
 
       {sessionBudget && shouldShowBudgetAlert && budgetPct >= budgetAlertThreshold && budgetPct < budgetCriticalThreshold && (
         <div className="flex-shrink-0 mx-4 mt-3 px-4 py-2.5 rounded-xl border flex items-center gap-2.5 text-xs" style={{ background: '#fffbeb', borderColor: '#fde68a', color: '#78350f' }}>
-          <span>âš ï¸</span>
+          <span>⚠️</span>
           <span className="flex-1">You've used {Math.round(budgetPct)}% of your session budget ({formatCost(sessionCost)} of {formatCost(sessionBudget)}).</span>
-          <button onClick={dismissBudgetAlert} className="flex-shrink-0 hover:opacity-60 transition-opacity font-bold" style={{ color: '#78350f' }} title="Dismiss">âœ•</button>
+          <button onClick={dismissBudgetAlert} className="flex-shrink-0 hover:opacity-60 transition-opacity font-bold" style={{ color: '#78350f' }} title="Dismiss">✕</button>
         </div>
       )}
 
       {/* Summary saved to Notes toast */}
       {summaryNoteSaved && (
         <div className="fixed bottom-20 right-6 z-50 px-4 py-2 rounded-xl shadow-lg text-sm font-medium text-white pointer-events-none" style={{ background: 'var(--color-primary)' }}>
-          Summary saved to Notes âœ“
+          Summary saved to Notes ✓
         </div>
       )}
 
-      {/* Main content area â€” flex row when artifact panel open */}
+      {/* Main content area — flex row when artifact panel open */}
       <div className="flex flex-1 overflow-hidden">
 
         {/* Chat column */}
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 
-          {/* Context bar â€” shows files available to this chat */}
+          {/* Context bar — shows files available to this chat */}
           {(pinnedFiles.length > 0 || sessionFiles.length > 0 || ragFallbackActive) && (
             <div
               className="flex-shrink-0 border-b px-4 py-1.5"
@@ -1415,9 +1339,9 @@ function ChatPage({ general = false }) {
                       <span
                         className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border"
                         style={{ borderColor: '#f59e0b', color: '#f59e0b', background: '#f59e0b11' }}
-                        title="Embeddings unavailable â€” full file text is being injected instead of semantic chunks. Re-upload files to restore RAG context."
+                        title="Embeddings unavailable — full file text is being injected instead of semantic chunks. Re-upload files to restore RAG context."
                       >
-                        âš  RAG unavailable â€” full-text fallback active
+                        ⚠ RAG unavailable — full-text fallback active
                       </span>
                     )}
                     {pinnedFiles.map(f => (
@@ -1425,9 +1349,9 @@ function ChatPage({ general = false }) {
                         key={`pin-${f.id}`}
                         className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border"
                         style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                        title="Pinned â€” available in all chats in this project"
+                        title="Pinned — available in all chats in this project"
                       >
-                        ðŸ“Œ {f.name}
+                        📌 {f.name}
                       </span>
                     ))}
                     {sessionFiles.map(f => (
@@ -1437,14 +1361,14 @@ function ChatPage({ general = false }) {
                         style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
                         title="Attached this session"
                       >
-                        ðŸ“Ž {f.name}
+                        📎 {f.name}
                         <button
                           onClick={() => {
                             if (sessionId) api.delete(`/api/session-files/${sessionId}/${f.id}`).catch(() => {});
                             setSessionFiles(prev => prev.filter(x => x.id !== f.id));
                           }}
                           className="hover:opacity-60 ml-0.5"
-                        >Ã—</button>
+                        >×</button>
                       </span>
                     ))}
                   </>
@@ -1482,7 +1406,6 @@ function ChatPage({ general = false }) {
                 messagesEndRef={messagesEndRef}
                 bookmarkedMap={bookmarkedMap}
                 onToggleBookmark={handleToggleBookmark}
-                wideMessageColumn={wideMessageColumn}
                 isTTSAvailable={isTTSAvailable}
                 isSpeaking={isSpeaking}
                 isPaused={isPaused}
@@ -1500,12 +1423,12 @@ function ChatPage({ general = false }) {
               {getIcon('alert-triangle', { size: 13 })}
               <span className="flex-1">This conversation is getting long ({messages.length} messages). Summarizing keeps Claude focused.</span>
               <button onClick={handleSummarize} disabled={isSummarizing} className="px-2.5 py-1 rounded-lg text-xs font-medium text-white flex-shrink-0" style={{ background: '#d97706' }}>
-                {isSummarizing ? 'Summarizing...' : 'Summarize'}
+                {isSummarizing ? 'Summarizing…' : 'Summarize'}
               </button>
             </div>
           )}
 
-          {/* Error banner â€” stream errors and pre-send preflight errors */}
+          {/* Error banner — stream errors and pre-send preflight errors */}
           {(streamError || preflightError) && (() => {
             const err = streamError || preflightError;
             const isRed = err.code === 'auth' || err.code === 'model' || err.code === 'billing';
@@ -1513,7 +1436,7 @@ function ChatPage({ general = false }) {
             const bg = isOrange ? '#fff7ed' : isRed ? '#fff1f2' : '#fffbeb';
             const border = isOrange ? '#fed7aa' : isRed ? '#fca5a5' : '#fde68a';
             const color = isOrange ? '#9a3412' : isRed ? '#991b1b' : '#78350f';
-            const icon = err.code === 'auth' ? 'ðŸ”‘' : err.code === 'billing' ? 'ðŸ’³' : err.code === 'model' ? 'ðŸ¤–' : err.code === 'rate_limit' ? 'â³' : 'âš ï¸';
+            const icon = err.code === 'auth' ? '🔑' : err.code === 'billing' ? '💳' : err.code === 'model' ? '🤖' : err.code === 'rate_limit' ? '⏳' : '⚠️';
             return (
               <div
                 className="flex-shrink-0 mx-4 mb-2 px-4 py-3 rounded-xl border flex items-start gap-3 text-xs"
@@ -1538,7 +1461,7 @@ function ChatPage({ general = false }) {
 
           {/* Input area */}
           <div className="flex-shrink-0 px-4 pb-safe pt-1">
-            <div className={chatComposerWidthClass}>
+            <div className="max-w-3xl mx-auto">
               <div className="relative">
 
                 {/* File picker */}
@@ -1568,7 +1491,7 @@ function ChatPage({ general = false }) {
                         if (e.key === 'Enter') { e.preventDefault(); if (urlInputValue.trim()) { addUrl(urlInputValue.trim()); setUrlInputValue(''); setShowUrlInput(false); } }
                         if (e.key === 'Escape') { setShowUrlInput(false); setUrlInputValue(''); }
                       }}
-                      placeholder="Paste a URL and press Enter..."
+                      placeholder="Paste a URL and press Enter…"
                       className="flex-1 bg-transparent outline-none text-sm"
                       style={{ color: 'var(--color-text)' }}
                     />
@@ -1635,12 +1558,12 @@ function ChatPage({ general = false }) {
                           </div>
                         ))}
                         <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {searchResults.length} page{searchResults.length !== 1 ? 's' : ''} added to context Â· press Done or Enter
+                          {searchResults.length} page{searchResults.length !== 1 ? 's' : ''} added to context · press Done or Enter
                         </p>
                       </div>
                     ) : (
                       <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Top 3 results will be fetched and attached as context Â· Esc to cancel
+                        Top 3 results will be fetched and attached as context · Esc to cancel
                       </p>
                     )}
                   </div>
@@ -1656,7 +1579,7 @@ function ChatPage({ general = false }) {
                     style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '340px', maxWidth: '520px' }}
                   >
                     <div className="flex items-center gap-2 px-3 py-2.5">
-                      <span style={{ fontSize: 13, flexShrink: 0 }}>âœ‰ï¸</span>
+                      <span style={{ fontSize: 13, flexShrink: 0 }}>✉️</span>
                       <input
                         autoFocus
                         type="text"
@@ -1710,24 +1633,24 @@ function ChatPage({ general = false }) {
                               <div className="flex items-center justify-between gap-2">
                                 <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.subject}</p>
                                 {attached
-                                  ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>âœ“ Added</span>
+                                  ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>✓ Added</span>
                                   : <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>Attach</span>
                                 }
                               </div>
-                              <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-muted)' }}>{r.from} Â· {r.date ? new Date(r.date).toLocaleDateString() : ''}</p>
+                              <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-muted)' }}>{r.from} · {r.date ? new Date(r.date).toLocaleDateString() : ''}</p>
                               {r.snippet && <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--color-muted)' }}>{r.snippet}</p>}
                             </button>
                           );
                         })}
                         {gmailAttached.length > 0 && (
                           <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                            {gmailAttached.length} thread{gmailAttached.length !== 1 ? 's' : ''} added to context Â· press Done or Enter
+                            {gmailAttached.length} thread{gmailAttached.length !== 1 ? 's' : ''} added to context · press Done or Enter
                           </p>
                         )}
                       </div>
                     ) : !gmailError && (
                       <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Search your inbox and attach emails as context Â· Esc to cancel
+                        Search your inbox and attach emails as context · Esc to cancel
                       </p>
                     )}
                   </div>
@@ -1743,7 +1666,7 @@ function ChatPage({ general = false }) {
                     style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', minWidth: '340px', maxWidth: '520px' }}
                   >
                     <div className="flex items-center gap-2 px-3 py-2.5">
-                      <span style={{ fontSize: 13, flexShrink: 0 }}>ðŸ“…</span>
+                      <span style={{ fontSize: 13, flexShrink: 0 }}>📅</span>
                       <input
                         autoFocus
                         type="text"
@@ -1794,23 +1717,23 @@ function ChatPage({ general = false }) {
                               <div className="flex items-center justify-between gap-2">
                                 <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{event.title || '(No title)'}</p>
                                 {attached
-                                  ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>âœ“ Added</span>
+                                  ? <span className="text-xs flex-shrink-0" style={{ color: '#22c55e' }}>✓ Added</span>
                                   : <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>Attach</span>
                                 }
                               </div>
-                              {startLabel && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{startLabel}{event.location ? ` Â· ${event.location}` : ''}</p>}
+                              {startLabel && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{startLabel}{event.location ? ` · ${event.location}` : ''}</p>}
                             </button>
                           );
                         })}
                         {calendarAttached.length > 0 && (
                           <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                            {calendarAttached.length} event{calendarAttached.length !== 1 ? 's' : ''} added to context Â· press Done or Enter
+                            {calendarAttached.length} event{calendarAttached.length !== 1 ? 's' : ''} added to context · press Done or Enter
                           </p>
                         )}
                       </div>
                     ) : !calendarError && (
                       <p className="px-3 pb-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Search your calendar and attach events as context Â· Esc to cancel
+                        Search your calendar and attach events as context · Esc to cancel
                       </p>
                     )}
                   </div>
@@ -1830,7 +1753,7 @@ function ChatPage({ general = false }) {
                         autoFocus
                         value={promptSearch}
                         onChange={e => setPromptSearch(e.target.value)}
-                        placeholder="Search prompts..."
+                        placeholder="Search prompts…"
                         className="w-full bg-transparent outline-none text-xs"
                         style={{ color: 'var(--color-text)' }}
                       />
@@ -1882,7 +1805,7 @@ function ChatPage({ general = false }) {
                             className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-white text-xs font-bold"
                             style={{ background: 'var(--color-muted)', lineHeight: 1 }}
                             title="Remove image"
-                          >Ã—</button>
+                          >×</button>
                         </div>
                       ))}
                     </div>
@@ -1899,7 +1822,7 @@ function ChatPage({ general = false }) {
                         ? 'What would you like to know about this page?'
                         : attachments.length > 0
                         ? `What would you like to do with ${attachments.length === 1 ? 'this file' : 'these files'}?`
-                        : project ? `Message ${project.name}...` : 'Message...'
+                        : project ? `Message ${project.name}…` : 'Message…'
                     }
                     rows={1}
                     className="w-full px-4 pt-3.5 pb-12 bg-transparent outline-none resize-none text-sm leading-relaxed"
@@ -1952,7 +1875,7 @@ function ChatPage({ general = false }) {
 
                       {isSTTAvailable && (
                         <>
-                          {/* Mic â€” starts recording; pulsing red dot while active */}
+                          {/* Mic — starts recording; pulsing red dot while active */}
                           <button
                             onClick={startListening}
                             disabled={isListening}
@@ -1980,7 +1903,7 @@ function ChatPage({ general = false }) {
                                 className="text-xs max-w-[120px] truncate"
                                 style={{ color: '#ef4444' }}
                               >
-                                {interimText || 'Listeningâ€¦'}
+                                {interimText || 'Listening…'}
                               </span>
                               <button
                                 onClick={stopListening}
@@ -2023,30 +1946,28 @@ function ChatPage({ general = false }) {
               </div>
 
               <p className="hidden sm:block text-center text-xs mt-2" style={{ color: 'var(--color-muted)', opacity: 0.5 }}>
-                Shift+Enter or Ctrl+Enter to send Â· Enter for new line Â· @ mention Â· âŒ˜/ shortcuts
+                Shift+Enter or Ctrl+Enter to send · Enter for new line · @ mention · ⌘/ shortcuts
               </p>
             </div>
           </div>
         </div>
 
-        {/* Artifact panel â€” fullscreen overlay on mobile, side panel on desktop */}
+        {/* Artifact panel — fullscreen overlay on mobile, side panel on desktop */}
         {activeArtifacts && (
           <div className="fixed inset-0 z-30 sm:static sm:inset-auto sm:z-auto sm:flex sm:h-full">
             <ArtifactPanel
               artifacts={activeArtifacts.artifacts}
               initialIndex={activeArtifacts.initialIndex}
               onClose={() => setActiveArtifacts(null)}
-              narrowSide={chatExpanded}
             />
           </div>
         )}
 
-        {/* Project files panel â€” fullscreen overlay on mobile, side panel on desktop */}
+        {/* Project files panel — fullscreen overlay on mobile, side panel on desktop */}
         {showFilesPanel && projectId && (
           <div className="fixed inset-0 z-30 sm:static sm:inset-auto sm:z-auto">
             <ProjectFilesPanel
               projectId={projectId}
-              narrowSide={chatExpanded}
               onClose={() => setShowFilesPanel(false)}
               onAttach={(file) => {
                 attachExisting(file);
