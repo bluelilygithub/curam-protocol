@@ -98,6 +98,257 @@ async function readSSEStream(res, onEvent) {
   }
 }
 
+// ── Claude window monitor helpers ─────────────────────────────────────────────
+
+const SESSION_MINS = 5 * 60;
+const WEEK_DAYS    = 7;
+
+function parseHHMM(str) {
+  const [h, m] = (str ?? '06:00').split(':').map(Number);
+  return { h: h || 0, m: m || 0 };
+}
+
+function fmt12(date) {
+  const h    = date.getHours();
+  const m    = date.getMinutes();
+  const ampm = h >= 12 ? 'pm' : 'am';
+  const h12  = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')}${ampm}`;
+}
+
+function fmtDuration(mins) {
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  return `${mins}m`;
+}
+
+function computeWindows(cfg) {
+  const timeStr  = cfg?.daily_start ?? '06:00';
+  const startDay = Number(cfg?.weekly_start_day ?? 1);
+  const now      = new Date();
+  const { h, m } = parseHHMM(timeStr);
+  const windowMs = SESSION_MINS * 60_000;
+
+  const firstStart = new Date(now);
+  firstStart.setHours(h, m, 0, 0);
+
+  let pct5h, sessionLabel, sessionSub;
+  if (now < firstStart) {
+    const minsUntil = Math.ceil((firstStart - now) / 60_000);
+    pct5h        = 0;
+    sessionLabel = `Starts in ${fmtDuration(minsUntil)}`;
+    sessionSub   = `First session begins at ${fmt12(firstStart)}`;
+  } else {
+    const elapsed      = now - firstStart;
+    const winIdx       = Math.floor(elapsed / windowMs);
+    const winStart     = new Date(firstStart.getTime() + winIdx * windowMs);
+    const winEnd       = new Date(winStart.getTime() + windowMs);
+    const elapsedInWin = now - winStart;
+    pct5h              = elapsedInWin / windowMs;
+    const minsLeft     = Math.ceil((winEnd - now) / 60_000);
+    sessionLabel       = `${fmtDuration(minsLeft)} remaining`;
+    sessionSub         = `Window ${winIdx + 1} · Resets at ${fmt12(winEnd)}`;
+  }
+
+  const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dow       = (now.getDay() - startDay + 7) % 7;
+  const dayFrac   = (now.getHours() * 60 + now.getMinutes()) / (24 * 60);
+  const pctWeek   = (dow + dayFrac) / WEEK_DAYS;
+  const daysLeft  = WEEK_DAYS - dow - 1;
+  const weekLabel = daysLeft > 0 ? `${daysLeft}d remaining` : 'Last day of week';
+  const weekSub   = `${DAY_NAMES[now.getDay()]} · day ${dow + 1} of 7 · resets ${DAY_NAMES[startDay]}`;
+
+  return { pct5h, sessionLabel, sessionSub, pctWeek, weekLabel, weekSub };
+}
+
+function gaugeColor(pct) {
+  if (pct >= 0.85) return '#ef4444';
+  if (pct >= 0.65) return '#f59e0b';
+  return '#22c55e';
+}
+
+function DonutGauge({ title, pct, label, sublabel, size = 160 }) {
+  const r     = 46;
+  const circ  = 2 * Math.PI * r;
+  const fill  = Math.min(Math.max(pct || 0, 0), 1);
+  const color = gaugeColor(fill);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+      <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>{title}</div>
+      <svg width={size} height={size} viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r={r} fill="none" strokeWidth="10" stroke="var(--color-border)" />
+        <circle
+          cx="50" cy="50" r={r}
+          fill="none" strokeWidth="10"
+          stroke={color}
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={circ * (1 - fill)}
+          transform="rotate(-90 50 50)"
+          style={{ transition: 'stroke-dashoffset 0.6s ease, stroke 0.4s ease' }}
+        />
+        <text x="50" y="47" textAnchor="middle" fontSize="16" fontWeight="700" fill={color}>
+          {Math.round(fill * 100)}%
+        </text>
+        <text x="50" y="60" textAnchor="middle" fontSize="7" fill="var(--color-muted)">used</text>
+      </svg>
+      <div style={{ textAlign: 'center' }}>
+        <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{label}</div>
+        <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{sublabel}</div>
+      </div>
+    </div>
+  );
+}
+
+const DAY_OPTIONS = [
+  { label: 'Sun', value: 0 }, { label: 'Mon', value: 1 }, { label: 'Tue', value: 2 },
+  { label: 'Wed', value: 3 }, { label: 'Thu', value: 4 }, { label: 'Fri', value: 5 },
+  { label: 'Sat', value: 6 },
+];
+
+function ClaudeWindowMonitor() {
+  const getIcon = useIcon();
+  const [cfg, setCfg]           = useState({ daily_start: '06:00', weekly_start_day: 1 });
+  const [windows, setWindows]   = useState(null);
+  const [showConfig, setShowConfig] = useState(false);
+  const [draft, setDraft]       = useState({ daily_start: '06:00', weekly_start_day: 1 });
+  const [saving, setSaving]     = useState(false);
+
+  useEffect(() => {
+    api.get('/api/settings').then(r => r.json()).then(data => {
+      const loaded = {
+        daily_start:      data.claude_daily_start      ?? '06:00',
+        weekly_start_day: Number(data.claude_weekly_start_day ?? 1),
+      };
+      setCfg(loaded);
+      setDraft(loaded);
+      setWindows(computeWindows(loaded));
+    }).catch(() => {
+      setWindows(computeWindows({ daily_start: '06:00', weekly_start_day: 1 }));
+    });
+  }, []); // eslint-disable-line
+
+  useEffect(() => {
+    const id = setInterval(() => setWindows(w => w ? computeWindows(cfg) : w), 30_000);
+    return () => clearInterval(id);
+  }, [cfg]);
+
+  const saveConfig = async () => {
+    setSaving(true);
+    try {
+      await Promise.all([
+        api.post('/api/settings', { key: 'claude_daily_start',      value: draft.daily_start }),
+        api.post('/api/settings', { key: 'claude_weekly_start_day', value: String(draft.weekly_start_day) }),
+      ]);
+      setCfg(draft);
+      setWindows(computeWindows(draft));
+      setShowConfig(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Claude Windows</h2>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
+            5-hour session window · 7-day weekly cap · time-based estimates.
+          </p>
+        </div>
+        <button
+          onClick={() => { setDraft(cfg); setShowConfig(v => !v); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all hover:opacity-70"
+          style={{
+            borderColor: showConfig ? 'var(--color-primary)' : 'var(--color-border)',
+            background:  showConfig ? 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))' : 'var(--color-surface)',
+            color:       showConfig ? 'var(--color-primary)' : 'var(--color-muted)',
+          }}
+        >
+          {getIcon('settings', { size: 12 })}
+          Configure
+        </button>
+      </div>
+
+      {showConfig && (
+        <div className="rounded-2xl border p-4 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div className="flex flex-wrap gap-6">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
+                Daily start time
+              </label>
+              <input
+                type="time"
+                value={draft.daily_start}
+                onChange={e => setDraft(d => ({ ...d, daily_start: e.target.value }))}
+                className="px-3 py-1.5 rounded-lg border text-sm outline-none"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+              />
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>When you typically start your first Claude Code session</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
+                Week starts on
+              </label>
+              <div className="flex gap-1 flex-wrap">
+                {DAY_OPTIONS.map(d => (
+                  <button
+                    key={d.value}
+                    onClick={() => setDraft(v => ({ ...v, weekly_start_day: d.value }))}
+                    className="px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all hover:opacity-70"
+                    style={{
+                      borderColor: draft.weekly_start_day === d.value ? 'var(--color-primary)' : 'var(--color-border)',
+                      background:  draft.weekly_start_day === d.value ? 'color-mix(in srgb, var(--color-primary) 15%, var(--color-surface))' : 'var(--color-bg)',
+                      color:       draft.weekly_start_day === d.value ? 'var(--color-primary)' : 'var(--color-muted)',
+                    }}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={saveConfig}
+              disabled={saving}
+              className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50 hover:opacity-80 transition-opacity"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              onClick={() => setShowConfig(false)}
+              className="px-4 py-1.5 rounded-lg text-xs border hover:opacity-70 transition-opacity"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {windows ? (
+        <div className="rounded-2xl border p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div className="flex justify-around gap-8 flex-wrap">
+            <DonutGauge title="5-Hour Window"  pct={windows.pct5h}   label={windows.sessionLabel} sublabel={windows.sessionSub} />
+            <DonutGauge title="Weekly Cap"     pct={windows.pctWeek} label={windows.weekLabel}    sublabel={windows.weekSub} />
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border p-8 text-center text-sm animate-pulse"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+          Loading…
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 function StatCard({ iconName, label, value, sub, color }) {
@@ -540,6 +791,9 @@ function AdminPage() {
           </div>
         ) : null}
       </div>
+
+      {/* ── Claude Window Monitor ─────────────────────────────────────────── */}
+      <ClaudeWindowMonitor />
 
       {/* ── Session Monitor ───────────────────────────────────────────────── */}
       <SessionMonitor />
