@@ -4,6 +4,24 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-04-23
+
+**Change:** Token optimisation pass on `buildSystemPrompt()` in `chat.js`.
+
+Removed filler instructions and shortened verbose field labels throughout the system prompt. No behaviour change — purely cosmetic text reduction.
+
+**Specific changes:**
+- Block 1: removed `'You are a helpful AI assistant.'` fallback (no-op instruction); `'You are an AI assistant for the project X'` → `Project: "X"`
+- Block 2: removed `'Provide focused, actionable assistance based on this project context.'` (pure filler); shortened labels — `Problem being solved:` → `Problem:`, `Target audience:` → `Audience:`, `Success criteria:` → `Success:`, `Communication tone:` → `Tone:`, `Additional notes:` → `Notes:`
+- Block 3: `Persistent user memory:` → `Memory:`
+- Block 4: `The following project files are pinned and included in full below:` → `Pinned files:`; `Files selected for this session:` → `Session files:`; `Pinned web pages:` → `Web pages:`
+- Block 5 (web search): trimmed ~25 tokens from the web search instruction; security warning preserved but tightened
+- Summarised session injection: assistant filler response (~19 tokens) → `'OK.'` (1 token)
+- Summarise prompt: tightened
+- Suggestions prompt: tightened
+
+---
+
 ## 2026-04-15
 
 **Issue:** Invoices (and other finance records) saved with wrong date — off by one day for Australian users.
