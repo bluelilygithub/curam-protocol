@@ -443,7 +443,7 @@ router.post('/', chatLimiter, async (req, res) => {
     const model = reqModel || project?.model || standardModel;
     const temperature = typeof reqTemp === 'number' ? Math.max(0, Math.min(1, reqTemp)) : 0.7;
 
-    let inputTokens = 0, outputTokens = 0;
+    let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, cacheCreationTokens = 0;
 
     if (isGemini(model)) {
       // ── Gemini path ──────────────────────────────────────────────────────────
@@ -576,7 +576,9 @@ router.post('/', chatLimiter, async (req, res) => {
 
       for await (const chunk of stream) {
         if (chunk.type === 'message_start') {
-          inputTokens = chunk.message?.usage?.input_tokens || 0;
+          inputTokens        = chunk.message?.usage?.input_tokens || 0;
+          cacheReadTokens    = chunk.message?.usage?.cache_read_input_tokens || 0;
+          cacheCreationTokens = chunk.message?.usage?.cache_creation_input_tokens || 0;
         }
         if (chunk.type === 'message_delta' && chunk.usage) {
           outputTokens = chunk.usage.output_tokens || 0;
@@ -652,9 +654,9 @@ router.post('/', chatLimiter, async (req, res) => {
           if ((inputTokens || outputTokens) && req.user?.id) {
             const cost = calculateCost(model, inputTokens, outputTokens);
             pool.query(
-              `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-              [req.user.id, sid, model, inputTokens, outputTokens, cost, 'chat']
+              `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature, cache_read_tokens, cache_creation_tokens)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [req.user.id, sid, model, inputTokens, outputTokens, cost, 'chat', cacheReadTokens, cacheCreationTokens]
             ).catch(err => console.error('[usage] log error:', err.message));
           }
 

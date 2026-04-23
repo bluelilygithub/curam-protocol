@@ -51,4 +51,68 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// GET /api/admin/monitor — session monitor: recent sessions + today's cache summary
+router.get('/monitor', async (req, res) => {
+  const userId = req.user.id;
+  try {
+    const [summaryRes, sessionsRes] = await Promise.all([
+      pool.query(`
+        SELECT
+          COUNT(DISTINCT session_id)::INT               AS sessions_today,
+          COALESCE(SUM(input_tokens)::INT, 0)           AS input_tokens,
+          COALESCE(SUM(output_tokens)::INT, 0)          AS output_tokens,
+          COALESCE(SUM(cache_read_tokens)::INT, 0)      AS cache_read_tokens,
+          COALESCE(SUM(cache_creation_tokens)::INT, 0)  AS cache_creation_tokens,
+          COALESCE(SUM(estimated_cost_usd)::FLOAT, 0)   AS cost_today
+        FROM usage_logs
+        WHERE user_id = $1
+          AND created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'Australia/Sydney') AT TIME ZONE 'Australia/Sydney'
+      `, [userId]),
+      pool.query(`
+        SELECT
+          s."sessionId",
+          s.title,
+          s."updatedAt",
+          s."inputTokens",
+          s."outputTokens",
+          p.name AS "projectName",
+          COUNT(DISTINCT m.id)::INT                         AS "messageCount",
+          COALESCE(SUM(ul.estimated_cost_usd)::FLOAT, 0)   AS cost,
+          COALESCE(SUM(ul.cache_read_tokens)::INT, 0)       AS "cacheReadTokens",
+          COALESCE(SUM(ul.cache_creation_tokens)::INT, 0)   AS "cacheCreationTokens",
+          array_agg(DISTINCT ul.model_id) FILTER (WHERE ul.model_id IS NOT NULL) AS models
+        FROM sessions s
+        LEFT JOIN projects p ON p.id = s."projectId"
+        LEFT JOIN messages m ON m."sessionId" = s."sessionId"
+        LEFT JOIN usage_logs ul ON ul.session_id = s."sessionId" AND ul.user_id = $1
+        WHERE s."userId" = $1
+        GROUP BY s."sessionId", s.title, s."updatedAt", s."inputTokens", s."outputTokens", p.name
+        ORDER BY s."updatedAt" DESC
+        LIMIT 25
+      `, [userId]),
+    ]);
+
+    const raw = summaryRes.rows[0];
+    const totalInput = (raw.input_tokens || 0) + (raw.cache_read_tokens || 0) + (raw.cache_creation_tokens || 0);
+    const cacheHitPct = totalInput > 0
+      ? Math.round((raw.cache_read_tokens / totalInput) * 100)
+      : 0;
+
+    res.json({
+      summary: {
+        sessionsToday:       raw.sessions_today || 0,
+        inputTokensToday:    raw.input_tokens || 0,
+        outputTokensToday:   raw.output_tokens || 0,
+        cacheReadTokens:     raw.cache_read_tokens || 0,
+        cacheCreationTokens: raw.cache_creation_tokens || 0,
+        cacheHitPct,
+        costToday:           raw.cost_today || 0,
+      },
+      sessions: sessionsRes.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -134,6 +134,186 @@ function ProgressBar({ percent, complete, stage }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+function shortModel(id) {
+  if (!id) return '—';
+  return id
+    .replace('claude-', '')
+    .replace('gemini-', 'gemini/')
+    .replace(/-20251001$/, '')
+    .replace(/-20241022$/, '');
+}
+
+function fmtCost(n) {
+  if (!n || n === 0) return '$0.00';
+  if (n < 0.0001) return `$${Number(n).toFixed(6)}`;
+  if (n < 0.01)   return `$${Number(n).toFixed(4)}`;
+  return `$${Number(n).toFixed(2)}`;
+}
+
+function relativeTime(iso) {
+  if (!iso) return '—';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ── Session Monitor sub-component ─────────────────────────────────────────
+
+function SessionMonitor() {
+  const getIcon = useIcon();
+  const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const res  = await api.get('/api/admin/monitor');
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed');
+      setData(json);
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = setInterval(load, 30000);
+    return () => clearInterval(id);
+  }, [autoRefresh, load]);
+
+  const { summary, sessions } = data || {};
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Session Monitor</h2>
+          <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>Recent Claude sessions with cache and cost data.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setAutoRefresh(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+            style={{
+              borderColor: autoRefresh ? 'var(--color-primary)' : 'var(--color-border)',
+              background:  autoRefresh ? 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))' : 'var(--color-surface)',
+              color:       autoRefresh ? 'var(--color-primary)' : 'var(--color-muted)',
+            }}
+          >
+            {getIcon('loader', { size: 12, style: autoRefresh ? { animation: 'spin 2s linear infinite' } : undefined })}
+            Auto-refresh
+          </button>
+          <button
+            onClick={() => { setLoading(true); load(); }}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-50 transition-opacity hover:opacity-70"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}
+          >
+            {getIcon('refresh-cw', { size: 12 })}
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
+
+      {/* Summary chips */}
+      {summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Sessions today',  value: summary.sessionsToday,            sub: null },
+            { label: 'Cache hit rate',  value: `${summary.cacheHitPct}%`,        sub: `${(summary.cacheReadTokens || 0).toLocaleString()} tokens read from cache` },
+            { label: 'Cache created',   value: (summary.cacheCreationTokens || 0).toLocaleString(), sub: 'new cache entries today' },
+            { label: 'Cost today',      value: fmtCost(summary.costToday),       sub: null },
+          ].map(c => (
+            <div key={c.label} className="rounded-2xl border p-4 space-y-1"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>{c.label}</div>
+              <div className="text-2xl font-bold tabular-nums" style={{ color: 'var(--color-text)' }}>{c.value}</div>
+              {c.sub && <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{c.sub}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Sessions table */}
+      {loading && !data ? (
+        <div className="rounded-2xl border p-8 text-center text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+          Loading…
+        </div>
+      ) : sessions?.length > 0 ? (
+        <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+          <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+                {['When', 'Session', 'Model', 'Msgs', 'Tokens', 'Cache', 'Cost'].map(h => (
+                  <th key={h} className="px-3 py-2.5 text-left font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--color-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((s, i) => {
+                const totalIn = (s.inputTokens || 0) + (s.cacheReadTokens || 0) + (s.cacheCreationTokens || 0);
+                const cachePct = totalIn > 0 ? Math.round((s.cacheReadTokens / totalIn) * 100) : 0;
+                const model = s.models?.filter(Boolean)?.[0];
+                return (
+                  <tr key={s.sessionId}
+                      style={{ borderBottom: i < sessions.length - 1 ? '1px solid var(--color-border)' : undefined, background: 'var(--color-surface)' }}>
+                    <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>
+                      {relativeTime(s.updatedAt)}
+                    </td>
+                    <td className="px-3 py-2.5 max-w-[180px]">
+                      <div className="truncate font-medium" style={{ color: 'var(--color-text)' }}>
+                        {s.title || 'Untitled'}
+                      </div>
+                      {s.projectName && (
+                        <div className="truncate text-xs" style={{ color: 'var(--color-muted)' }}>{s.projectName}</div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
+                      {model ? shortModel(model) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-muted)' }}>
+                      {(s.messageCount || 0).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>
+                      {((s.inputTokens || 0) + (s.outputTokens || 0)).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">
+                      <span style={{ color: cachePct >= 50 ? '#22c55e' : cachePct >= 20 ? '#f59e0b' : 'var(--color-muted)' }}>
+                        {cachePct > 0 ? `${cachePct}%` : '—'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium" style={{ color: 'var(--color-text)' }}>
+                      {fmtCost(s.cost)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-2xl border p-8 text-center text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+          No sessions yet.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminPage() {
   const navigate = useNavigate();
   const { token } = useAuthStore();
@@ -360,6 +540,9 @@ function AdminPage() {
           </div>
         ) : null}
       </div>
+
+      {/* ── Session Monitor ───────────────────────────────────────────────── */}
+      <SessionMonitor />
 
       {/* ── Backups ────────────────────────────────────────────────────────── */}
       <div className="space-y-6">

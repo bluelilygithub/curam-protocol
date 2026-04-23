@@ -919,6 +919,8 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS usage_logs_user_created
     ON usage_logs(user_id, created_at DESC)
   `);
+  await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS cache_read_tokens INTEGER NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS cache_creation_tokens INTEGER NOT NULL DEFAULT 0`);
 
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_mood_checkins_user ON mood_checkins(user_id, created_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_mood_checkins_entity ON mood_checkins(entity_type, entity_id)`);
