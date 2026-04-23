@@ -100,8 +100,8 @@ async function readSSEStream(res, onEvent) {
 
 // ── Claude window monitor helpers ─────────────────────────────────────────────
 
-const SESSION_MINS = 5 * 60;
-const WEEK_DAYS    = 7;
+const SESSION_MINS  = 5 * 60;
+const WINDOW_DAYS   = 7;
 
 function parseHHMM(str) {
   const [h, m] = (str ?? '06:00').split(':').map(Number);
@@ -156,8 +156,8 @@ function computeWindows(cfg) {
   const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const dow       = (now.getDay() - startDay + 7) % 7;
   const dayFrac   = (now.getHours() * 60 + now.getMinutes()) / (24 * 60);
-  const pctWeek   = (dow + dayFrac) / WEEK_DAYS;
-  const daysLeft  = WEEK_DAYS - dow - 1;
+  const pctWeek   = (dow + dayFrac) / WINDOW_DAYS;
+  const daysLeft  = WINDOW_DAYS - dow - 1;
   const weekLabel = daysLeft > 0 ? `${daysLeft}d remaining` : 'Last day of week';
   const weekSub   = `${DAY_NAMES[now.getDay()]} · day ${dow + 1} of 7 · resets ${DAY_NAMES[startDay]}`;
 
