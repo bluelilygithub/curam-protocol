@@ -199,3 +199,27 @@
   - The 5-hour window starts from the first message, not from when the limit is hit
   - The weekly cap is independent — exhausting it means waiting for the 7-day reset even if the 5-hour window resets
   - Pinging Claude Code does NOT reset either window — both are consum
+
+
+
+
+
+
+
+Claude Code uses a dual-layer usage system with two distinct windows that serve different purposes:
+
+The 5-Hour Rolling Window (burst control)
+The five-hour rolling window governs burst usage — effectively capping how many requests a user can submit within a given time frame. TrueFoundry Importantly, the timer doesn't reset based on clock time — it resets based on when you first accessed Claude Code. If you start a session at 2 PM, your new five-hour window opens at 7 PM, not at midnight. Usagebar
+In terms of message allowances: Pro plans allow approximately 45 messages per 5-hour window, while Max 5x subscribers get 225 messages and Max 20x users get 900. Usagebar
+
+The Weekly Cap (abuse prevention)
+In addition to the 5-hour rolling windows, Anthropic enforces weekly rate limits that reset every seven days. These include an overall usage cap plus a separate weekly cap for Opus models. Portkey
+The weekly limit is shared across all Claude usage — claude.ai conversations count toward it, Claude in your IDE counts toward it, and Claude Code counts toward it. Usagebar
+
+Why both limits exist
+The weekly cap and rolling window serve as guardrails, ensuring no developer or team can monopolize resources or circumvent fair-use policies by switching access points or stacking parallel sessions. Enforcing rate limits also deters scenarios such as account sharing, reselling Claude access, or deploying continuous scripts — in each case, unchecked usage would otherwise degrade service reliability for all users. TrueFoundry
+Anthropic says the limits affect fewer than 5% of subscribers based on usage patterns. Portkey
+
+What happens when you hit a limit
+Extra usage allows individuals on paid plans to continue using Claude seamlessly after reaching their included usage limits — instead of being blocked, you can switch to consumption-based pricing at standard API rates and continue without interruption. Session limits reset every five hours as usual. Claude
+You can monitor both windows at Settings > Usage in claude.ai, which shows progress bars for both your current session and weekly limits.
