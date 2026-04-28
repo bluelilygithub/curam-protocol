@@ -208,13 +208,13 @@ function NewProjectModal({ onClose, onCreate }) {
                     onClick={() => setSelectedModel(model.id)}
                     className="flex flex-col gap-1 px-3 py-2.5 rounded-xl border text-left transition-all"
                     style={{
-                      background: selectedModel === model.id ? model.color + '15' : 'var(--color-surface)',
-                      borderColor: selectedModel === model.id ? model.color : 'var(--color-border)',
+                      background: selectedModel === model.id ? (model.color || 'var(--color-primary)') + '15' : 'var(--color-surface)',
+                      borderColor: selectedModel === model.id ? (model.color || 'var(--color-primary)') : 'var(--color-border)',
                     }}
                   >
                     <div className="flex items-center gap-1.5">
                       <span className="text-base">{model.emoji}</span>
-                      <span className="text-xs font-semibold" style={{ color: selectedModel === model.id ? model.color : 'var(--color-text)' }}>
+                      <span className="text-xs font-semibold" style={{ color: selectedModel === model.id ? (model.color || 'var(--color-primary)') : 'var(--color-text)' }}>
                         {model.label}
                       </span>
                     </div>
