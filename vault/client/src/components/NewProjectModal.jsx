@@ -11,7 +11,7 @@ function buildDefaultTypeConfig(typeId) {
 function NewProjectModal({ onClose, onCreate }) {
   const [name, setName] = useState('');
   const [selectedType, setSelectedType] = useState(() => PROJECT_TYPES.find(t => t.id === 'research') || null);
-  const [selectedModel, setSelectedModel] = useState('claude-haiku-4-5-20251001');
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
   const [typeConfig, setTypeConfig] = useState(() => buildDefaultTypeConfig('research'));
   const [creating, setCreating] = useState(false);
   const [clientId, setClientId] = useState('');
@@ -20,6 +20,9 @@ function NewProjectModal({ onClose, onCreate }) {
 
   useEffect(() => {
     api.get('/api/clients?status=active').then(r => r.json()).then(d => setClients(Array.isArray(d) ? d : [])).catch(() => {});
+    api.get('/api/settings').then(r => r.json()).then(data => {
+      if (data.default_model) setSelectedModel(data.default_model);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => { nameRef.current?.focus(); }, []);

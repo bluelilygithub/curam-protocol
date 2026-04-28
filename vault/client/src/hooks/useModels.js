@@ -4,6 +4,7 @@ import { MODELS as DEFAULT_MODELS } from '../utils/models';
 
 export function useModels() {
   const [models, setModels] = useState(DEFAULT_MODELS);
+  const [defaultModel, setDefaultModel] = useState('');
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -14,6 +15,7 @@ export function useModels() {
         const parsed = JSON.parse(data.vault_models);
         if (Array.isArray(parsed) && parsed.length > 0) setModels(parsed);
       }
+      if (data.default_model) setDefaultModel(data.default_model);
     } catch {}
     setLoading(false);
   }, []);
@@ -25,5 +27,10 @@ export function useModels() {
     await api.post('/api/settings', { key: 'vault_models', value: JSON.stringify(newModels) });
   }, []);
 
-  return { models, saveModels, loading, reload: load };
+  const saveDefaultModel = useCallback(async (modelId) => {
+    setDefaultModel(modelId);
+    await api.post('/api/settings', { key: 'default_model', value: modelId });
+  }, []);
+
+  return { models, saveModels, defaultModel, saveDefaultModel, loading, reload: load };
 }
