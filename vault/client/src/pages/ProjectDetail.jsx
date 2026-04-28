@@ -6,7 +6,7 @@ import { useIcon } from '../providers/IconProvider';
 import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
 import { downloadProjectMd } from '../utils/exportMd';
-import { MODELS, TYPE_FIELDS, getModelById } from '../utils/models';
+import { MODELS, TYPE_FIELDS } from '../utils/models';
 import EmotionWheel from '../components/mood/EmotionWheel';
 import MoodDot from '../components/mood/MoodDot';
 
@@ -47,6 +47,7 @@ function ProjectDetail() {
   const [showSessions, setShowSessions] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [availableModels, setAvailableModels] = useState(MODELS);
   const [pinnedUrls, setPinnedUrls] = useState([]);
   const [urlInput, setUrlInput] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
@@ -62,6 +63,14 @@ function ProjectDetail() {
     api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
     api.get('/api/personas').then(r => r.json()).then(setPersonas).catch(() => {});
     api.get(`/api/pinned-urls/${id}`).then(r => r.json()).then(setPinnedUrls).catch(() => {});
+    api.get('/api/settings').then(r => r.json()).then(data => {
+      if (data.vault_models) {
+        try {
+          const parsed = JSON.parse(data.vault_models);
+          if (Array.isArray(parsed) && parsed.length > 0) setAvailableModels(parsed);
+        } catch {}
+      }
+    }).catch(() => {});
     api.get(`/api/mood/summary/project/${id}`)
       .then(r => r.json())
       .then(d => setProjectEmotions(d.emotions || []))
@@ -325,20 +334,20 @@ function ProjectDetail() {
             Default model used when chatting in this project. You can override it per chat in the chat header.
           </p>
           <div className="grid grid-cols-3 gap-2">
-            {MODELS.map(model => (
+            {availableModels.map(model => (
               <button
                 key={model.id}
                 type="button"
                 onClick={() => setForm({ ...form, model: model.id })}
                 className="flex flex-col gap-1 px-3 py-2.5 rounded-xl border text-left transition-all"
                 style={{
-                  background: (form.model || 'claude-sonnet-4-6') === model.id ? model.color + '12' : 'var(--color-surface)',
-                  borderColor: (form.model || 'claude-sonnet-4-6') === model.id ? model.color : 'var(--color-border)',
+                  background: (form.model || availableModels[0]?.id) === model.id ? model.color + '12' : 'var(--color-surface)',
+                  borderColor: (form.model || availableModels[0]?.id) === model.id ? model.color : 'var(--color-border)',
                 }}
               >
                 <div className="flex items-center gap-1.5">
                   <span className="text-base">{model.emoji}</span>
-                  <span className="text-xs font-semibold" style={{ color: (form.model || 'claude-sonnet-4-6') === model.id ? model.color : 'var(--color-text)' }}>
+                  <span className="text-xs font-semibold" style={{ color: (form.model || availableModels[0]?.id) === model.id ? model.color : 'var(--color-text)' }}>
                     {model.label}
                   </span>
                 </div>
