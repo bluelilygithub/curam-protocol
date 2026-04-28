@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MODELS, PROJECT_TYPES, TYPE_FIELDS, getModelById } from '../utils/models';
+import { MODELS, PROJECT_TYPES, TYPE_FIELDS } from '../utils/models';
 import api from '../utils/apiClient';
 
 function buildDefaultTypeConfig(typeId) {
@@ -13,6 +13,7 @@ function NewProjectModal({ onClose, onCreate }) {
   const [selectedType, setSelectedType] = useState(() => PROJECT_TYPES.find(t => t.id === 'research') || null);
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
   const [typeConfig, setTypeConfig] = useState(() => buildDefaultTypeConfig('research'));
+  const [availableModels, setAvailableModels] = useState(MODELS);
   const [creating, setCreating] = useState(false);
   const [clientId, setClientId] = useState('');
   const [clients, setClients] = useState([]);
@@ -21,15 +22,23 @@ function NewProjectModal({ onClose, onCreate }) {
   useEffect(() => {
     api.get('/api/clients?status=active').then(r => r.json()).then(d => setClients(Array.isArray(d) ? d : [])).catch(() => {});
     api.get('/api/settings').then(r => r.json()).then(data => {
+      if (data.vault_models) {
+        try {
+          const parsed = JSON.parse(data.vault_models);
+          if (Array.isArray(parsed) && parsed.length > 0) setAvailableModels(parsed);
+        } catch {}
+      }
       if (data.default_model) setSelectedModel(data.default_model);
     }).catch(() => {});
   }, []);
 
   useEffect(() => { nameRef.current?.focus(); }, []);
 
+  const findModel = (id) => availableModels.find(m => m.id === id) || MODELS.find(m => m.id === id);
+
   const handleTypeSelect = (type) => {
     setSelectedType(type);
-    setSelectedModel(type.model);
+    if (availableModels.find(m => m.id === type.model)) setSelectedModel(type.model);
     setTypeConfig(buildDefaultTypeConfig(type.id));
   };
 
@@ -50,8 +59,8 @@ function NewProjectModal({ onClose, onCreate }) {
     }
   };
 
-  const recommendedModel = selectedType ? getModelById(selectedType.model) : null;
-  const activeModel = getModelById(selectedModel);
+  const recommendedModel = selectedType ? findModel(selectedType.model) : null;
+  const activeModel = findModel(selectedModel);
 
   return (
     <div
@@ -192,7 +201,7 @@ function NewProjectModal({ onClose, onCreate }) {
               </div>
 
               <div className="grid grid-cols-3 gap-2">
-                {MODELS.map(model => (
+                {availableModels.map(model => (
                   <button
                     key={model.id}
                     type="button"
