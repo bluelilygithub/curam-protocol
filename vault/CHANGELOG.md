@@ -4,6 +4,56 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-03 (2)
+
+**Fix:** Server crash on startup when pgvector unavailable after session RAG feature.
+
+**Root cause:** `ALTER TABLE sessions ADD COLUMN "summaryEmbedding" vector(768)` was added outside any try/catch. Environments without pgvector threw `type "vector" does not exist`, which propagated to `initSchema()` and triggered `process.exit(1)`.
+
+**Solution:** Wrapped the column addition in a try/catch matching the same best-effort pattern already used for `file_chunks`. Server now starts cleanly without pgvector — `summaryEmbedding` column is skipped with a warning and session RAG degrades to the recency fallback.
+
+**Modified file:** `server/db.js`.
+
+---
+
+## 2026-05-03
+
+**Feature:** Project chat history RAG — semantic context across sessions.
+
+After each AI reply in a project chat, a ~150-word summary of the session is generated (Claude Haiku) and embedded (Google `text-embedding-004`) then stored in `sessions.summary` and `sessions.summaryEmbedding`. On every new message, the user's message is embedded and cosine-searched against all other summarised sessions in the same project. The top-5 most semantically relevant summaries are injected as a non-cached "Related project conversations" block in the system prompt — giving the model awareness of decisions, discoveries, and context from prior chats in the project. Falls back to most-recent sessions if Gemini is unavailable.
+
+**Schema:** `summary TEXT` and `"summaryEmbedding" vector(768)` added to `sessions` table.
+
+**Modified files:** `server/db.js`, `server/routes/chat.js`.
+
+---
+
+## 2026-05-02 (6)
+
+**Feature:** Apple Touch Icon — Curam AI logo used when site saved to iOS home screen.
+
+Added `<link rel="apple-touch-icon" href="/favicon.png" />` to `client/index.html`.
+
+---
+
+## 2026-05-02 (5)
+
+**Feature:** Favicon — Curam AI logo (`curam-ai-logo.png`) set as browser tab icon.
+
+Copied logo to `client/public/favicon.png` (Vite serves `public/` as static root). Added `<link rel="icon" type="image/png" href="/favicon.png" />` to `client/index.html`.
+
+---
+
+## 2026-05-02 (4)
+
+**Fix:** Notes mic dictation appends transcript on same line as existing content.
+
+Changed append logic from space-separator (`current + ' ' + transcript`) to newline-separator (`current + '\n' + transcript`). Empty body still gets no leading newline.
+
+**Modified file:** `client/src/pages/NotesPage.jsx`.
+
+---
+
 ## 2026-05-02 (3)
 
 **Fix:** iOS Safari mic dictation — transcription never captured on iPhone.

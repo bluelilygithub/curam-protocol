@@ -43,6 +43,7 @@ Two separate applications in one repo (`version-7` branch, main branch for PRs):
 
 ## DB Tables (PostgreSQL — 27 tables)
 Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions`, `folders`, `personas`, `prompts`, `memory`, `pinned_urls`, `debates`, `settings`, `password_resets`
+- `sessions` table: `sessionId TEXT PK`, `projectId`, `userId`, `title`, `summary TEXT`, `"summaryEmbedding" vector(768)`, `isSummarized`, `summaryContent`, `inputTokens`, `outputTokens`, `starred`, `personaId`, `branchedFrom`
 - `settings` table: `key TEXT PRIMARY KEY, value TEXT` — stores GEMINI_API_KEY, SEARCH_API_KEY, MAIL_CHANNEL_API_KEY
 - `password_resets` table: token, email, expiresAt (1 hour TTL)
 
@@ -83,7 +84,9 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 - **Tasks** (`/tasks`) — full task management; see Tasks section below
 - **Goals** (`/goals`) — OKR-lite Goal Setting; Objectives → Key Results → Tasks; see Goals section below
 - **Mobile Dashboard** (`/mobile-dashboard`) — auto-redirect from `/` on mobile (`window.innerWidth < 640`); 5 configurable tiles: Tasks (today's due + inline quick-add), Projects (2-col grid), Finance (YTD summary), Chat History (last 12 sessions), Notes (list + inline quick-create); mobile top bar replaces icon row with Home + Menu (≡) + Logout; `MobileNavDropdown` full-screen overlay lists all 21 features; Settings → Mobile tab: toggle/reorder tiles + toggle nav items; persisted as `mobile_dashboard_tiles` / `mobile_nav_items` settings keys
-- **Notes mobile UX** — on mobile (`viewportMobile` state + resize listener) the notes list panel becomes a fixed slide-in drawer (285px, `transform translateX`, z-50, backdrop overlay); auto-opens on page load; closes on note select or ✕ tap; `≡ Notes` button in editor toolbar re-opens it; mic button (Web Speech API — `SpeechRecognition || webkitSpeechRecognition`) appends dictated transcript to note body on stop; stale-closure-safe via `bodyValueRef`/`titleValueRef`/`selectedRef`; red "Listening…" banner while active; Convert to Task + Take to Chat hidden on mobile toolbar
+- **Notes mobile UX** — on mobile (`viewportMobile` state + resize listener) the notes list panel becomes a fixed slide-in drawer (285px, `transform translateX`, z-50, backdrop overlay); auto-opens on page load; closes on note select or ✕ tap; `≡ Notes` button in editor toolbar re-opens it; mic button (Web Speech API — `SpeechRecognition || webkitSpeechRecognition`) appends dictated transcript on new line to note body on stop; `interimResults: true` required for iOS Safari (never sets `isFinal`); stale-closure-safe via `bodyValueRef`/`titleValueRef`/`selectedRef`; red "Listening…" banner with italic live preview while active; `micError` state for permission/error visibility; Convert to Task + Take to Chat visible on all screen sizes
+- **Project session RAG** — after each AI reply in a project chat, Haiku generates a ~150-word session summary, Gemini `text-embedding-004` embeds it, both stored in `sessions.summary` + `sessions."summaryEmbedding" vector(768)`; at query time user message embedded → cosine-search same-project sessions (excluding current) → top-5 injected as non-cached "Related project conversations" system prompt block; falls back to most-recent if Gemini unavailable
+- **Favicon + Apple Touch Icon** — `curam-ai-logo.png` copied to `client/public/favicon.png`; `<link rel="icon">` + `<link rel="apple-touch-icon">` in `client/index.html`
 
 ## DB Tables (additional)
 - `comparisons` — saved comparison results linked to projects
