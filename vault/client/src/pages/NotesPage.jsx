@@ -174,7 +174,7 @@ export default function NotesPage() {
           finalTranscriptRef.current = '';
           if (!transcript) return;
           const current = bodyValueRef.current;
-          const newBody = current + (current && !current.endsWith('\n') ? ' ' : '') + transcript;
+          const newBody = current + (current ? '\n' : '') + transcript;
           setBody(newBody);
           setDirty(true);
           const sel = selectedRef.current;
