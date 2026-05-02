@@ -37,6 +37,7 @@ export default function NotesPage() {
   const titleValueRef = useRef(title);
   const selectedRef = useRef(selected);
   const finalTranscriptRef = useRef('');
+  const isListeningRef = useRef(false); // ref version avoids stale closure in recognition callbacks
 
   const [viewportMobile, setViewportMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
   const [mobileListOpen, setMobileListOpen] = useState(false);
@@ -117,56 +118,76 @@ export default function NotesPage() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
 
-    if (isListening) {
-      recognitionRef.current?.stop();
+    if (isListeningRef.current) {
+      // Stop: abort current session, finalize in onend
+      isListeningRef.current = false;
+      recognitionRef.current?.abort();
       return;
     }
 
     finalTranscriptRef.current = '';
-    const recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = 'en-AU';
-
-    recognition.onresult = (event) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscriptRef.current += event.results[i][0].transcript + ' ';
-        }
-      }
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      const transcript = finalTranscriptRef.current.trim();
-      finalTranscriptRef.current = '';
-      if (!transcript) return;
-      const current = bodyValueRef.current;
-      const newBody = current + (current && !current.endsWith('\n') ? ' ' : '') + transcript;
-      setBody(newBody);
-      setDirty(true);
-      const sel = selectedRef.current;
-      if (sel) {
-        clearTimeout(autosaveTimer.current);
-        autosaveTimer.current = setTimeout(async () => {
-          setSaving(true);
-          try {
-            await api.put(`/api/notes/${sel.id}`, { title: titleValueRef.current, body: newBody });
-            setDirty(false);
-          } catch {}
-          setSaving(false);
-        }, AUTOSAVE_DELAY);
-      }
-    };
-
-    recognition.onerror = () => {
-      setIsListening(false);
-      finalTranscriptRef.current = '';
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
+    isListeningRef.current = true;
     setIsListening(true);
+
+    function startSession() {
+      if (!isListeningRef.current) return;
+      const recognition = new SR();
+      // continuous:false is far more reliable on mobile browsers.
+      // We auto-restart in onend to achieve effectively-continuous behavior.
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = navigator.language || 'en';
+
+      recognition.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            finalTranscriptRef.current += event.results[i][0].transcript + ' ';
+          }
+        }
+      };
+
+      recognition.onend = () => {
+        if (isListeningRef.current) {
+          // Still active — restart immediately for next phrase
+          setTimeout(startSession, 80);
+        } else {
+          // User stopped — append everything accumulated
+          setIsListening(false);
+          const transcript = finalTranscriptRef.current.trim();
+          finalTranscriptRef.current = '';
+          if (!transcript) return;
+          const current = bodyValueRef.current;
+          const newBody = current + (current && !current.endsWith('\n') ? ' ' : '') + transcript;
+          setBody(newBody);
+          setDirty(true);
+          const sel = selectedRef.current;
+          if (sel) {
+            clearTimeout(autosaveTimer.current);
+            autosaveTimer.current = setTimeout(async () => {
+              setSaving(true);
+              try {
+                await api.put(`/api/notes/${sel.id}`, { title: titleValueRef.current, body: newBody });
+                setDirty(false);
+              } catch {}
+              setSaving(false);
+            }, AUTOSAVE_DELAY);
+          }
+        }
+      };
+
+      recognition.onerror = (event) => {
+        // no-speech is normal (silence between phrases) — just restart
+        if (event.error === 'no-speech' || event.error === 'aborted') return;
+        isListeningRef.current = false;
+        setIsListening(false);
+        finalTranscriptRef.current = '';
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    }
+
+    startSession();
   }
 
   const [moodMap, setMoodMap] = useState(null);
