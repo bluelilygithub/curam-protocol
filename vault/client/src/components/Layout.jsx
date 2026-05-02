@@ -5,6 +5,7 @@ import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
 import QuickCapture from './QuickCapture';
+import MobileNavDropdown from './mobile/MobileNavDropdown';
 import MorningDigest from './MorningDigest';
 import TaskReminderModal from './TaskReminderModal';
 import InquirySession from './mood/InquirySession';
@@ -25,6 +26,7 @@ function Layout() {
   const location = useLocation();
   const getIcon = useIcon();
 
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [reminderModal,       setReminderModal]       = useState(null); // { time, overdue, today }
   const [dueTodayCount,       setDueTodayCount]       = useState(0);
   const [showDueBanner,       setShowDueBanner]       = useState(false);
@@ -266,7 +268,7 @@ function Layout() {
           </button>
 
           <Link
-            to="/"
+            to={isMobile ? '/mobile-dashboard' : '/'}
             className="text-sm font-semibold tracking-tight flex-shrink-0"
             style={{ color: 'var(--color-text)' }}
           >
@@ -299,7 +301,7 @@ function Layout() {
 
           <Link
             to="/personas"
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/personas' ? 'var(--color-primary)' : 'var(--color-muted)' }}
             title="Personas"
           >
@@ -335,7 +337,7 @@ function Layout() {
 
           <Link
             to="/clients"
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname.startsWith('/clients') ? 'var(--color-primary)' : 'var(--color-muted)' }}
             title="Clients"
           >
@@ -344,7 +346,7 @@ function Layout() {
 
           <Link
             to="/tasks"
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/tasks' ? 'var(--color-primary)' : 'var(--color-muted)' }}
             title="Tasks"
           >
@@ -461,7 +463,7 @@ function Layout() {
 
           <Link
             to="/settings"
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: location.pathname === '/settings' ? 'var(--color-primary)' : 'var(--color-muted)' }}
             title="Settings"
           >
@@ -470,13 +472,50 @@ function Layout() {
 
           <button
             onClick={handleLogout}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+            className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
             style={{ color: 'var(--color-muted)' }}
             title="Sign out"
           >
             {getIcon('log-out', { size: 16 })}
           </button>
+
+          {/* Mobile-only controls */}
+          {isMobile && (
+            <div className="flex items-center gap-0.5">
+              {location.pathname !== '/mobile-dashboard' && (
+                <Link
+                  to="/mobile-dashboard"
+                  className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+                  style={{ color: 'var(--color-muted)' }}
+                  title="Dashboard"
+                >
+                  {getIcon('home', { size: 16 })}
+                </Link>
+              )}
+              <button
+                onClick={() => setMobileNavOpen(true)}
+                className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+                style={{ color: 'var(--color-muted)' }}
+                title="Menu"
+              >
+                {getIcon('menu', { size: 16 })}
+              </button>
+              <button
+                onClick={handleLogout}
+                className="w-8 h-8 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+                style={{ color: 'var(--color-muted)' }}
+                title="Sign out"
+              >
+                {getIcon('log-out', { size: 16 })}
+              </button>
+            </div>
+          )}
         </header>
+
+        {/* Mobile nav dropdown */}
+        {isMobile && mobileNavOpen && (
+          <MobileNavDropdown onClose={() => setMobileNavOpen(false)} />
+        )}
 
         {/* Due today banner */}
         {showDueBanner && (

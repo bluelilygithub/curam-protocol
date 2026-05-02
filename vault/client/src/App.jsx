@@ -14,6 +14,7 @@ import PersonasPage from './pages/PersonasPage';
 import ComparisonPage from './pages/ComparisonPage';
 import DebatePage from './pages/DebatePage';
 import AdminPage from './pages/AdminPage';
+import MobileDashboard from './pages/MobileDashboard';
 import ChatHistoryPage from './pages/ChatHistoryPage';
 import TasksPage from './pages/TasksPage';
 import GoalsPage from './pages/GoalsPage';
@@ -32,6 +33,11 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
 import SearchPalette from './components/SearchPalette';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+
+function HomeRoute() {
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  return isMobile ? <Navigate to="/mobile-dashboard" replace /> : <ProjectList />;
+}
 
 function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -68,7 +74,8 @@ function App() {
             <Route path="/register" element={<Navigate to="/login" replace />} />
             <Route path="/shared/task/:token" element={<SharedTaskPage />} />
             <Route element={<AuthGuard><Layout /></AuthGuard>}>
-              <Route index element={<ProjectList />} />
+              <Route index element={<HomeRoute />} />
+              <Route path="/mobile-dashboard" element={<MobileDashboard />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/projects/:id/chat" element={<ChatPage />} />
               <Route path="/chat" element={<ChatPage general />} />

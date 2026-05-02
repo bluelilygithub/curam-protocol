@@ -82,6 +82,8 @@ const semanticMap = {
   'lightbulb':    { lucide: 'Lightbulb' },
   'crosshair':    { lucide: 'Crosshair' },
   'briefcase':    { lucide: 'Briefcase' },
+  'menu':         { lucide: 'Menu' },
+  'smartphone':   { lucide: 'Smartphone' },
 };
 
 const IconContext = createContext(null);

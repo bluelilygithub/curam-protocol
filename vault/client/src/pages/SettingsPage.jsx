@@ -23,6 +23,7 @@ import { startNewsDigestTour, TOUR_KEY as NEWS_DIGEST_TOUR_KEY } from '../utils/
 import { startCalendarTour, TOUR_KEY as CALENDAR_TOUR_KEY } from '../utils/tours/calendarTour';
 import { startGraphTour, TOUR_KEY as GRAPH_TOUR_KEY } from '../utils/tours/graphTour';
 import ConfirmModal from '../components/ConfirmModal';
+import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -87,7 +88,11 @@ function SettingsPage() {
   const [missionLastReviewed, setMissionLastReviewed] = useState(null);
   const [missionSnoozedUntil, setMissionSnoozedUntil] = useState(null);
 
-  const TABS = ['Appearance', 'Profile', 'AI & Chat', 'Tasks', 'Goals', 'Integrations', 'News Digest', 'Tours'];
+  const [mobileTiles, setMobileTiles] = useState(() => DEFAULT_TILES.map(t => ({ ...t })));
+  const [mobileNavItems, setMobileNavItems] = useState(() => DEFAULT_NAV_ITEMS.map(i => ({ ...i })));
+  const [mobileSaved, setMobileSaved] = useState(false);
+
+  const TABS = ['Appearance', 'Profile', 'AI & Chat', 'Tasks', 'Goals', 'Integrations', 'News Digest', 'Mobile', 'Tours'];
 
   function selectTab(t) {
     setTab(t);
@@ -125,6 +130,12 @@ function SettingsPage() {
       if (data.mission_review_frequency)   setMissionReviewFreq(data.mission_review_frequency);
       setMissionLastReviewed(data.mission_last_reviewed_at || null);
       setMissionSnoozedUntil(data.mission_review_snoozed_until || null);
+      if (data.mobile_dashboard_tiles) {
+        try { setMobileTiles(mergeWithDefaults(JSON.parse(data.mobile_dashboard_tiles), DEFAULT_TILES)); } catch {}
+      }
+      if (data.mobile_nav_items) {
+        try { setMobileNavItems(mergeWithDefaults(JSON.parse(data.mobile_nav_items), DEFAULT_NAV_ITEMS)); } catch {}
+      }
     }).catch(() => {});
 
     api.get('/api/news-digest/settings').then(r => r.json()).then(data => {
@@ -1597,6 +1608,120 @@ function SettingsPage() {
           </div>
         </div>
       </section>
+      )}
+
+      {/* Mobile tab */}
+      {tab === 'Mobile' && (
+      <>
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+            Dashboard Tiles
+          </h2>
+          <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+            Choose which tiles appear on the mobile dashboard and their order.
+          </p>
+          <div className="space-y-2">
+            {mobileTiles.map((tile, idx) => (
+              <div
+                key={tile.id}
+                className="flex items-center gap-3 p-3 rounded-xl border"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', opacity: tile.enabled === false ? 0.5 : 1 }}
+              >
+                <div className="flex flex-col gap-0.5">
+                  <button
+                    onClick={() => {
+                      if (idx === 0) return;
+                      const next = [...mobileTiles];
+                      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                      setMobileTiles(next);
+                    }}
+                    disabled={idx === 0}
+                    className="w-5 h-5 flex items-center justify-center rounded text-xs hover:opacity-60 disabled:opacity-20 transition-opacity"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (idx === mobileTiles.length - 1) return;
+                      const next = [...mobileTiles];
+                      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                      setMobileTiles(next);
+                    }}
+                    disabled={idx === mobileTiles.length - 1}
+                    className="w-5 h-5 flex items-center justify-center rounded text-xs hover:opacity-60 disabled:opacity-20 transition-opacity"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    ▼
+                  </button>
+                </div>
+                <span className="flex-1 text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                  {tile.label}
+                </span>
+                <button
+                  onClick={() => {
+                    setMobileTiles(prev => prev.map((t, i) => i === idx ? { ...t, enabled: t.enabled === false ? true : false } : t));
+                  }}
+                  className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
+                  style={{
+                    borderColor: tile.enabled === false ? 'var(--color-border)' : 'var(--color-primary)',
+                    color: tile.enabled === false ? 'var(--color-muted)' : 'var(--color-primary)',
+                    background: 'transparent',
+                  }}
+                >
+                  {tile.enabled === false ? 'Off' : 'On'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+            Navigation Menu
+          </h2>
+          <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+            Choose which features appear in the mobile navigation dropdown.
+          </p>
+          <div className="space-y-1.5">
+            {mobileNavItems.map((item, idx) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl border"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', opacity: item.enabled === false ? 0.5 : 1 }}
+              >
+                <span className="flex-1 text-sm" style={{ color: 'var(--color-text)' }}>{item.label}</span>
+                <button
+                  onClick={() => {
+                    setMobileNavItems(prev => prev.map((n, i) => i === idx ? { ...n, enabled: n.enabled === false ? true : false } : n));
+                  }}
+                  className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
+                  style={{
+                    borderColor: item.enabled === false ? 'var(--color-border)' : 'var(--color-primary)',
+                    color: item.enabled === false ? 'var(--color-muted)' : 'var(--color-primary)',
+                    background: 'transparent',
+                  }}
+                >
+                  {item.enabled === false ? 'Off' : 'On'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <button
+          onClick={async () => {
+            await api.post('/api/settings', { key: 'mobile_dashboard_tiles', value: JSON.stringify(mobileTiles) }).catch(() => {});
+            await api.post('/api/settings', { key: 'mobile_nav_items', value: JSON.stringify(mobileNavItems) }).catch(() => {});
+            setMobileSaved(true);
+            setTimeout(() => setMobileSaved(false), 2000);
+          }}
+          className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+          style={{ background: mobileSaved ? '#22c55e' : 'var(--color-primary)' }}
+        >
+          {mobileSaved ? 'Saved ✓' : 'Save Mobile Settings'}
+        </button>
+      </>
       )}
 
       </div>{/* end space-y-10 content area */}
