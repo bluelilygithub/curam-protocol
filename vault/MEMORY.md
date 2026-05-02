@@ -82,6 +82,7 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 - **Session delete from dropdown** — native `<select>` replaced with custom dropdown in ChatPage header; each session row has a hover trash icon with inline "Delete? Yes / No" confirm; supports deleting non-active sessions
 - **Tasks** (`/tasks`) — full task management; see Tasks section below
 - **Goals** (`/goals`) — OKR-lite Goal Setting; Objectives → Key Results → Tasks; see Goals section below
+- **Mobile Dashboard** (`/mobile-dashboard`) — auto-redirect from `/` on mobile (`window.innerWidth < 640`); 5 configurable tiles: Tasks (today's due + inline quick-add), Projects (2-col grid), Finance (YTD summary), Chat History (last 12 sessions), Notes (list + inline quick-create); mobile top bar replaces icon row with Home + Menu (≡) + Logout; `MobileNavDropdown` full-screen overlay lists all 21 features; Settings → Mobile tab: toggle/reorder tiles + toggle nav items; persisted as `mobile_dashboard_tiles` / `mobile_nav_items` settings keys
 
 ## DB Tables (additional)
 - `comparisons` — saved comparison results linked to projects

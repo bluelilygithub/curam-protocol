@@ -4,6 +4,32 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-02
+
+**Feature:** Mobile dashboard — dedicated landing page for mobile users.
+
+Logging in on a mobile device (`window.innerWidth < 640`) now redirects from `/` to `/mobile-dashboard` instead of the desktop project list. The mobile top bar is simplified: all individual icon links are hidden, replaced with a Home button (returns to dashboard when inside a feature), a Menu button (≡), and Logout.
+
+**Dashboard tiles** — five cards stacked vertically, each with live data and quick actions:
+- **Tasks** — today's due tasks with a count badge and inline quick-add form (title only, status `todo`). "View all" footer → `/tasks`.
+- **Projects** — 2-column grid of all projects with colour-coded left border. Footer → `/`.
+- **Finance** — YTD revenue, outstanding invoices (amber if > 0), overdue invoices (red if > 0), YTD expenses. Footer: "Add Expense" and "View all" → `/finance`.
+- **Chat History** — last 12 sessions with relative timestamps and project name. Footer: "New Chat" → `/chat`, "All history" → `/history`.
+- **Notes** — list of notes with body preview and inline quick-create (creates note then navigates to `/notes`). Footer → `/notes`.
+
+**Navigation dropdown** — tapping ≡ opens a full-screen overlay listing all 21 features, with "Dashboard" pinned at the top. Active route highlighted. Closes on backdrop tap or item selection.
+
+**Settings → Mobile tab** (new tab between "News Digest" and "Tours") — two sections:
+- *Dashboard Tiles*: toggle each tile on/off and reorder with ▲▼ arrows.
+- *Navigation Menu*: toggle each of the 21 nav items on/off.
+- Save button persists to `mobile_dashboard_tiles` and `mobile_nav_items` settings keys.
+
+**New files:** `client/src/utils/mobileConfig.js` (shared defaults + `mergeWithDefaults`), `client/src/pages/MobileDashboard.jsx`, `client/src/components/mobile/{TasksTile,FinanceTile,ChatHistoryTile,ProjectsTile,NotesTile,MobileNavDropdown}.jsx`.
+
+**Modified files:** `App.jsx` (HomeRoute + `/mobile-dashboard` route), `Layout.jsx` (mobile header + dropdown), `SettingsPage.jsx` (Mobile tab), `IconProvider.jsx` (`menu`, `smartphone` icons added).
+
+---
+
 ## 2026-04-28
 
 **Feature:** Configurable default model for chat and new projects.
