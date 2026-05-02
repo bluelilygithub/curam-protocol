@@ -709,7 +709,7 @@ export default function NotesPage() {
               )}
               <button
                 onClick={(e) => convertToTask(selected, e)}
-                className="hidden sm:flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
                 style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
                 title="Convert to task"
               >
@@ -717,7 +717,7 @@ export default function NotesPage() {
                 Convert to Task
               </button>
 
-            <div className="relative hidden sm:block">
+            <div className="relative">
               <button
                 onClick={() => { setShowChatPicker(v => !v); setNewProjectName(''); setCreatingProject(false); }}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
