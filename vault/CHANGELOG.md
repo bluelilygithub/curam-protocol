@@ -4,6 +4,18 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-02 (3)
+
+**Fix:** iOS Safari mic dictation — transcription never captured on iPhone.
+
+**Root cause:** `interimResults: false` (the default) means the browser only fires `onresult` when it marks a segment `isFinal: true`. iOS Safari's Web Speech API implementation never sets `isFinal`, so no results were ever delivered despite the mic appearing active.
+
+**Solution:** Set `interimResults: true` so iOS fires `onresult` with interim segments. The `onresult` handler captures `sessionFinal || sessionInterim` — on iOS the interim value is the only one present; on desktop the final value is preferred. Live transcript now shown as italic preview text inside the red listening banner. Added `micError` state so permission-denied and other errors surface visibly below the banner rather than failing silently.
+
+**Modified file:** `client/src/pages/NotesPage.jsx`.
+
+---
+
 ## 2026-05-02 (2)
 
 **Feature:** Mobile notes — slide-in list drawer and mic dictation.
