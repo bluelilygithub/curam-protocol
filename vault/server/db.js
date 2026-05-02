@@ -1011,6 +1011,10 @@ async function initSchema() {
       )
   `);
 
+  // ── Session summaries for project RAG ────────────────────────────────────
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS summary TEXT`);
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "summaryEmbedding" vector(768)`);
+
   console.log('[db] Schema ready');
 }
 

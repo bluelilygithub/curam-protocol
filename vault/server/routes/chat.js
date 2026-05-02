@@ -10,6 +10,7 @@ const { pool } = require('../db');
 const { buildTypeConfigPrompt } = require('../typePrompts');
 const { calculateCost } = require('../services/costCalculator');
 const { getModelsForUser } = require('../services/modelResolver');
+const { embedText } = require('../services/embeddings');
 
 const chatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -35,6 +36,47 @@ function toDeepSeekMessages(systemBlocks, messages) {
     result.push({ role: m.role, content });
   }
   return result;
+}
+
+// Generates a ~150-word summary of a session and stores it + its embedding.
+// Fired background after each reply — cheap (Haiku) and fire-and-forget.
+async function generateAndStoreSessionSummary(sid, userId) {
+  if (!process.env.ANTHROPIC_API_KEY) return;
+  try {
+    const { rows: msgs } = await pool.query(
+      `SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC`,
+      [sid]
+    );
+    if (msgs.length < 2) return;
+
+    const transcript = msgs
+      .slice(-20)
+      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.substring(0, 400)}`)
+      .join('\n\n');
+
+    const { light: lightModel } = await getModelsForUser(userId);
+    const response = await anthropic.messages.create({
+      model: lightModel,
+      max_tokens: 300,
+      messages: [{
+        role: 'user',
+        content: `Summarise this conversation in 150 words for use as context in future related chats in the same project. Cover: main topics, key decisions or conclusions, important discoveries or constraints. Plain text, no bullet points.\n\n${transcript}`,
+      }],
+    });
+
+    const summary = response.content[0]?.text?.trim();
+    if (!summary) return;
+
+    const embedding = await embedText(summary);
+    const vectorLiteral = embedding ? `[${embedding.join(',')}]` : null;
+
+    await pool.query(
+      `UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3`,
+      [summary, vectorLiteral, sid]
+    );
+  } catch (err) {
+    console.error('[session-summary] error:', err.message);
+  }
 }
 
 // Returns { blocks, ragFallbackActive }.
@@ -160,6 +202,51 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
     }
 
     if (parts.length > 0) pushBlock(parts.join('\n\n'), true);
+  }
+
+  // ── Block 4.5: Related project conversations (RAG, no cache_control) ────────
+  // Embeds the user message → cosine similarity against summarised sessions in
+  // the same project → injects top-5 most semantically relevant summaries.
+  // Falls back to most-recent if GEMINI_API_KEY absent or embedding fails.
+  if (project && sid) {
+    try {
+      let relatedSessions = [];
+
+      if (userMessage && process.env.GEMINI_API_KEY) {
+        const queryEmb = await embedText(userMessage.substring(0, 500));
+        if (queryEmb) {
+          const vec = `[${queryEmb.join(',')}]`;
+          const { rows } = await pool.query(
+            `SELECT title, summary FROM sessions
+             WHERE "projectId"=$1 AND "sessionId"!=$2
+               AND summary IS NOT NULL AND "summaryEmbedding" IS NOT NULL
+             ORDER BY "summaryEmbedding" <=> $3::vector
+             LIMIT 5`,
+            [project.id, sid, vec]
+          );
+          relatedSessions = rows;
+        }
+      }
+
+      if (relatedSessions.length === 0) {
+        const { rows } = await pool.query(
+          `SELECT title, summary FROM sessions
+           WHERE "projectId"=$1 AND "sessionId"!=$2 AND summary IS NOT NULL
+           ORDER BY "updatedAt" DESC LIMIT 5`,
+          [project.id, sid]
+        );
+        relatedSessions = rows;
+      }
+
+      if (relatedSessions.length > 0) {
+        const parts = relatedSessions.map((s, i) =>
+          `[Chat ${i + 1}: ${s.title || 'Untitled'}]\n${s.summary}`
+        );
+        pushBlock(`Related project conversations:\n\n${parts.join('\n\n')}`, false);
+      }
+    } catch (err) {
+      console.error('[related-sessions] error:', err.message);
+    }
   }
 
   // ── Block 5: Today's date + web search notice (no cache_control — dynamic) ──
@@ -682,6 +769,11 @@ router.post('/', chatLimiter, async (req, res) => {
                 ).catch(() => {});
               }
             }).catch(() => {});
+          }
+
+          // Background: regenerate session summary for project-level RAG
+          if (projectId) {
+            generateAndStoreSessionSummary(sid, req.user?.id ?? null).catch(() => {});
           }
         }
       }
