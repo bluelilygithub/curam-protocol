@@ -1013,7 +1013,11 @@ async function initSchema() {
 
   // ── Session summaries for project RAG ────────────────────────────────────
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS summary TEXT`);
-  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "summaryEmbedding" vector(768)`);
+  try {
+    await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "summaryEmbedding" vector(768)`);
+  } catch (err) {
+    console.warn('[db] Could not add summaryEmbedding column (pgvector may be missing):', err.message);
+  }
 
   console.log('[db] Schema ready');
 }
