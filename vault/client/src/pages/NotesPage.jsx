@@ -32,6 +32,16 @@ export default function NotesPage() {
   const bodyRef = useRef(null);
   const mentionTimerRef = useRef(null);
   const mentionAtIndexRef = useRef(-1);
+  const recognitionRef = useRef(null);
+  const bodyValueRef = useRef(body);
+  const titleValueRef = useRef(title);
+  const selectedRef = useRef(selected);
+  const finalTranscriptRef = useRef('');
+
+  const [viewportMobile, setViewportMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
+  const [mobileListOpen, setMobileListOpen] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [micSupported, setMicSupported] = useState(false);
 
   // @mention state
   const [showMention, setShowMention] = useState(false);
@@ -82,6 +92,83 @@ export default function NotesPage() {
 
   useEffect(() => { loadNotes(); }, [loadNotes]);
 
+  // Keep value refs current for mic callbacks (avoids stale closures)
+  useEffect(() => { bodyValueRef.current = body; }, [body]);
+  useEffect(() => { titleValueRef.current = title; }, [title]);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+
+  useEffect(() => {
+    const check = () => setViewportMobile(window.innerWidth < 640);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  // Auto-open notes drawer on mobile when page first loads
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 640) setMobileListOpen(true);
+  }, []); // eslint-disable-line
+
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    setMicSupported(!!SR);
+  }, []);
+
+  function toggleMic() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    finalTranscriptRef.current = '';
+    const recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-AU';
+
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscriptRef.current += event.results[i][0].transcript + ' ';
+        }
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      const transcript = finalTranscriptRef.current.trim();
+      finalTranscriptRef.current = '';
+      if (!transcript) return;
+      const current = bodyValueRef.current;
+      const newBody = current + (current && !current.endsWith('\n') ? ' ' : '') + transcript;
+      setBody(newBody);
+      setDirty(true);
+      const sel = selectedRef.current;
+      if (sel) {
+        clearTimeout(autosaveTimer.current);
+        autosaveTimer.current = setTimeout(async () => {
+          setSaving(true);
+          try {
+            await api.put(`/api/notes/${sel.id}`, { title: titleValueRef.current, body: newBody });
+            setDirty(false);
+          } catch {}
+          setSaving(false);
+        }, AUTOSAVE_DELAY);
+      }
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+      finalTranscriptRef.current = '';
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }
+
   const [moodMap, setMoodMap] = useState(null);
   useEffect(() => {
     if (notes.length === 0) { setMoodMap({}); return; }
@@ -124,6 +211,7 @@ export default function NotesPage() {
     const note = await res.json();
     await loadNotes(search);
     selectNote(note);
+    if (viewportMobile) setMobileListOpen(false);
   }
 
   async function deleteNote(noteId, e) {
@@ -409,19 +497,55 @@ export default function NotesPage() {
 
   return (
     <div className="flex overflow-hidden" style={{ height: '100%' }}>
-      {/* ── List panel ── */}
-      <div className="w-64 flex-shrink-0 border-r flex flex-col" style={{ borderColor: 'var(--color-border)' }}>
+      {/* ── List panel — desktop: static, mobile: slide-in drawer ── */}
+      {viewportMobile && mobileListOpen && (
+        <div
+          className="fixed inset-0 z-40"
+          style={{ background: 'rgba(0,0,0,0.35)' }}
+          onClick={() => setMobileListOpen(false)}
+        />
+      )}
+      <div
+        className="flex-shrink-0 border-r flex flex-col"
+        style={viewportMobile ? {
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          bottom: 0,
+          zIndex: 50,
+          width: '285px',
+          background: 'var(--color-surface)',
+          borderColor: 'var(--color-border)',
+          transform: mobileListOpen ? 'translateX(0)' : 'translateX(-285px)',
+          transition: 'transform 0.2s ease',
+        } : {
+          width: '256px',
+          borderColor: 'var(--color-border)',
+        }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Notes</span>
-          <button
-            onClick={createNote}
-            className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
-            style={{ color: 'var(--color-primary)' }}
-            title="New note"
-          >
-            {getIcon('plus', { size: 16 })}
-          </button>
+          <div className="flex items-center gap-1">
+            {viewportMobile && (
+              <button
+                onClick={() => setMobileListOpen(false)}
+                className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
+                style={{ color: 'var(--color-muted)' }}
+                title="Close"
+              >
+                {getIcon('x', { size: 14 })}
+              </button>
+            )}
+            <button
+              onClick={createNote}
+              className="w-6 h-6 flex items-center justify-center rounded hover:opacity-60 transition-opacity"
+              style={{ color: 'var(--color-primary)' }}
+              title="New note"
+            >
+              {getIcon('plus', { size: 16 })}
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -453,7 +577,7 @@ export default function NotesPage() {
                 borderColor: 'var(--color-border)',
                 background: selected?.id === note.id ? 'var(--color-surface-2)' : 'transparent',
               }}
-              onClick={() => selectNote(note)}
+              onClick={() => { selectNote(note); if (viewportMobile) setMobileListOpen(false); }}
             >
               <div className="flex items-start justify-between px-3 py-2">
                 <div className="min-w-0">
@@ -499,7 +623,17 @@ export default function NotesPage() {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Toolbar */}
           <div className="flex items-center justify-between px-4 py-2 border-b flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              {viewportMobile && (
+                <button
+                  onClick={() => setMobileListOpen(true)}
+                  className="flex items-center gap-1 text-xs px-2 py-1 rounded-md hover:opacity-70 transition-opacity flex-shrink-0 border"
+                  style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)' }}
+                  title="Show notes list"
+                >
+                  {getIcon('menu', { size: 12 })} Notes
+                </button>
+              )}
               <select
                 value={selected.project_id || ''}
                 onChange={handleProjectChange}
@@ -517,9 +651,23 @@ export default function NotesPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {micSupported && (
+                <button
+                  onClick={toggleMic}
+                  className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0"
+                  style={{
+                    color: isListening ? '#ef4444' : 'var(--color-muted)',
+                    background: isListening ? '#fee2e2' : undefined,
+                    animation: isListening ? 'pulse 1.2s ease-in-out infinite' : undefined,
+                  }}
+                  title={isListening ? 'Stop dictation' : 'Dictate (voice input)'}
+                >
+                  {getIcon('mic', { size: 16 })}
+                </button>
+              )}
               <button
                 onClick={(e) => convertToTask(selected, e)}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
+                className="hidden sm:flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
                 style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
                 title="Convert to task"
               >
@@ -527,7 +675,7 @@ export default function NotesPage() {
                 Convert to Task
               </button>
 
-            <div className="relative">
+            <div className="relative hidden sm:block">
               <button
                 onClick={() => { setShowChatPicker(v => !v); setNewProjectName(''); setCreatingProject(false); }}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-opacity hover:opacity-80"
@@ -644,6 +792,16 @@ export default function NotesPage() {
 
           {/* Body */}
           <div className="flex-1 relative overflow-hidden flex flex-col">
+            {isListening && (
+              <div
+                className="flex-shrink-0 flex items-center gap-2 px-4 py-2 text-xs font-medium border-b"
+                style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}
+              >
+                <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'pulse 1.2s ease-in-out infinite' }} />
+                Listening… tap the mic button to stop
+              </div>
+            )}
             <textarea
               ref={bodyRef}
               value={body}
@@ -913,13 +1071,24 @@ export default function NotesPage() {
           <div className="text-center">
             <div className="mb-3 flex justify-center">{getIcon('pen-line', { size: 32, style: { opacity: 0.3 } })}</div>
             <p className="text-sm">Select a note or create a new one</p>
-            <button
-              onClick={createNote}
-              className="mt-3 text-sm px-4 py-2 rounded-md hover:opacity-80 transition-opacity"
-              style={{ background: 'var(--color-primary)', color: '#fff' }}
-            >
-              New Note
-            </button>
+            <div className="flex gap-2 justify-center mt-3">
+              {viewportMobile && (
+                <button
+                  onClick={() => setMobileListOpen(true)}
+                  className="text-sm px-4 py-2 rounded-md hover:opacity-80 transition-opacity"
+                  style={{ background: 'var(--color-surface)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}
+                >
+                  Show Notes
+                </button>
+              )}
+              <button
+                onClick={createNote}
+                className="text-sm px-4 py-2 rounded-md hover:opacity-80 transition-opacity"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}
+              >
+                New Note
+              </button>
+            </div>
           </div>
         </div>
       )}
