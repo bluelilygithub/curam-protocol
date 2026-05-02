@@ -4,6 +4,20 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-02 (2)
+
+**Feature:** Mobile notes — slide-in list drawer and mic dictation.
+
+**List drawer:** On mobile (`window.innerWidth < 640`), the 256px notes list side panel is replaced with a fixed slide-in overlay drawer (285px wide). It auto-opens when `/notes` loads. Selecting a note or tapping the backdrop closes it. A `≡ Notes` button in the editor toolbar re-opens it. The desktop layout is completely unchanged.
+
+**Mic dictation:** A mic button appears in the editor toolbar whenever `SpeechRecognition` (or `webkitSpeechRecognition`) is available — Chrome on Android, Safari iOS 14.5+. Tap to start continuous dictation; tap again to stop. A red "Listening…" banner with a pulsing dot shows while active. On stop, the full transcript is appended to the note body (space-separated) and autosaved. Implemented using value refs (`bodyValueRef`, `titleValueRef`, `selectedRef`) to prevent stale closure issues in the Speech API callbacks.
+
+**Toolbar cleanup on mobile:** Convert to Task and Take to Chat buttons are hidden on mobile to prevent toolbar overflow. Both remain visible on desktop.
+
+**Modified file:** `client/src/pages/NotesPage.jsx`.
+
+---
+
 ## 2026-05-02
 
 **Feature:** Mobile dashboard — dedicated landing page for mobile users.

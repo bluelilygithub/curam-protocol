@@ -83,6 +83,7 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 - **Tasks** (`/tasks`) — full task management; see Tasks section below
 - **Goals** (`/goals`) — OKR-lite Goal Setting; Objectives → Key Results → Tasks; see Goals section below
 - **Mobile Dashboard** (`/mobile-dashboard`) — auto-redirect from `/` on mobile (`window.innerWidth < 640`); 5 configurable tiles: Tasks (today's due + inline quick-add), Projects (2-col grid), Finance (YTD summary), Chat History (last 12 sessions), Notes (list + inline quick-create); mobile top bar replaces icon row with Home + Menu (≡) + Logout; `MobileNavDropdown` full-screen overlay lists all 21 features; Settings → Mobile tab: toggle/reorder tiles + toggle nav items; persisted as `mobile_dashboard_tiles` / `mobile_nav_items` settings keys
+- **Notes mobile UX** — on mobile (`viewportMobile` state + resize listener) the notes list panel becomes a fixed slide-in drawer (285px, `transform translateX`, z-50, backdrop overlay); auto-opens on page load; closes on note select or ✕ tap; `≡ Notes` button in editor toolbar re-opens it; mic button (Web Speech API — `SpeechRecognition || webkitSpeechRecognition`) appends dictated transcript to note body on stop; stale-closure-safe via `bodyValueRef`/`titleValueRef`/`selectedRef`; red "Listening…" banner while active; Convert to Task + Take to Chat hidden on mobile toolbar
 
 ## DB Tables (additional)
 - `comparisons` — saved comparison results linked to projects
