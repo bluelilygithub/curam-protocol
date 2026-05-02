@@ -43,6 +43,8 @@ export default function NotesPage() {
   const [mobileListOpen, setMobileListOpen] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [micSupported, setMicSupported] = useState(false);
+  const [interimText, setInterimText] = useState('');
+  const [micError, setMicError] = useState('');
 
   // @mention state
   const [showMention, setShowMention] = useState(false);
@@ -118,8 +120,9 @@ export default function NotesPage() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
 
+    setMicError('');
+
     if (isListeningRef.current) {
-      // Stop: abort current session, finalize in onend
       isListeningRef.current = false;
       recognitionRef.current?.abort();
       return;
@@ -128,30 +131,44 @@ export default function NotesPage() {
     finalTranscriptRef.current = '';
     isListeningRef.current = true;
     setIsListening(true);
+    setInterimText('');
 
     function startSession() {
       if (!isListeningRef.current) return;
       const recognition = new SR();
-      // continuous:false is far more reliable on mobile browsers.
-      // We auto-restart in onend to achieve effectively-continuous behavior.
       recognition.continuous = false;
-      recognition.interimResults = false;
+      // interimResults:true is required on iOS Safari — it never marks results
+      // as isFinal, so with false we receive nothing at all.
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
       recognition.lang = navigator.language || 'en';
 
+      let sessionFinal = '';
+      let sessionInterim = '';
+
       recognition.onresult = (event) => {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
+        sessionFinal = '';
+        sessionInterim = '';
+        for (let i = 0; i < event.results.length; i++) {
           if (event.results[i].isFinal) {
-            finalTranscriptRef.current += event.results[i][0].transcript + ' ';
+            sessionFinal += event.results[i][0].transcript;
+          } else {
+            sessionInterim += event.results[i][0].transcript;
           }
         }
+        // Show live partial text in the listening banner
+        setInterimText(sessionFinal || sessionInterim);
       };
 
       recognition.onend = () => {
+        setInterimText('');
+        // iOS often never sets isFinal — fall back to interim text
+        const text = (sessionFinal || sessionInterim).trim();
+        if (text) finalTranscriptRef.current += text + ' ';
+
         if (isListeningRef.current) {
-          // Still active — restart immediately for next phrase
           setTimeout(startSession, 80);
         } else {
-          // User stopped — append everything accumulated
           setIsListening(false);
           const transcript = finalTranscriptRef.current.trim();
           finalTranscriptRef.current = '';
@@ -176,15 +193,19 @@ export default function NotesPage() {
       };
 
       recognition.onerror = (event) => {
-        // no-speech is normal (silence between phrases) — just restart
-        if (event.error === 'no-speech' || event.error === 'aborted') return;
+        setInterimText('');
+        if (event.error === 'no-speech' || event.error === 'aborted') {
+          if (isListeningRef.current) setTimeout(startSession, 80);
+          return;
+        }
         isListeningRef.current = false;
         setIsListening(false);
         finalTranscriptRef.current = '';
+        setMicError(event.error === 'not-allowed' ? 'Microphone permission denied' : `Mic error: ${event.error}`);
       };
 
       recognitionRef.current = recognition;
-      recognition.start();
+      try { recognition.start(); } catch {}
     }
 
     startSession();
@@ -815,12 +836,24 @@ export default function NotesPage() {
           <div className="flex-1 relative overflow-hidden flex flex-col">
             {isListening && (
               <div
-                className="flex-shrink-0 flex items-center gap-2 px-4 py-2 text-xs font-medium border-b"
+                className="flex-shrink-0 flex flex-col gap-1 px-4 py-2 text-xs font-medium border-b"
                 style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}
               >
                 <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'pulse 1.2s ease-in-out infinite' }} />
-                Listening… tap the mic button to stop
+                <div className="flex items-center gap-2">
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block', flexShrink: 0, animation: 'pulse 1.2s ease-in-out infinite' }} />
+                  Listening… tap mic to stop
+                </div>
+                {interimText && (
+                  <div style={{ color: '#dc2626', opacity: 0.8, fontStyle: 'italic', paddingLeft: 16 }}>
+                    {interimText}
+                  </div>
+                )}
+              </div>
+            )}
+            {micError && (
+              <div className="flex-shrink-0 px-4 py-2 text-xs border-b" style={{ background: '#fee2e2', borderColor: '#fca5a5', color: '#b91c1c' }}>
+                {micError}
               </div>
             )}
             <textarea
