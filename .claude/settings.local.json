@@ -22,7 +22,9 @@
       "Bash(powershell.exe:*)",
       "Bash(npm show:*)",
       "Bash(netstat -ano | findstr :3001 | findstr LISTENING)",
-      "Bash(taskkill /PID 8876 /F)"
+      "Bash(taskkill /PID 8876 /F)",
+      "Read(//c/Users/micha/Local Sites/**)",
+      "Bash(grep -v \"^\\\\s*\\\\`\\\\`\\\\`\")"
     ]
   }
 }

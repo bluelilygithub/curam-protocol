@@ -4,6 +4,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-03 (5)
+
+**Deploy test:** Toolbar progressive-disclosure refactor — PageToolbar + OverflowMenu components, TasksPage and ChatPage updated.
+
+---
+
 ## 2026-05-03 (4)
 
 **Feature:** `OverflowMenu` component + ChatPage declutter (toolbar stage 2).

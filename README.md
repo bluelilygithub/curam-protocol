@@ -105,7 +105,7 @@ python main.py
 
 ## App 2 — Vault (`vault/`)
 
-Internal AI workspace: projects, chat, files, tasks, goals, personas, prompts, memory, debates, document comparison, Gmail integration, prompt chains, and an interactive knowledge graph.
+Internal AI workspace: projects, chat, files, tasks, goals, clients, personas, prompts, memory, debates, document comparison, Gmail integration, prompt chains, and an interactive knowledge graph.
 
 **Stack:** Node.js 22 LTS, Express, PostgreSQL (`pg`), React 18, Vite, Tailwind CSS, `react-force-graph-2d` (D3 force simulation)
 
@@ -144,7 +144,7 @@ npm run dev
 |---|---|
 | **Chat** | Multi-model chat (Claude + Gemini); project sessions + general chat; chat history; `@search`, `@gmail`, `@mention` tasks/files/prompts |
 | **Tasks** | Full task manager — list, Kanban, calendar, Eisenhower Matrix views; subtasks, templates, effort tracking, time logging, dependencies, Focus Mode (Pomodoro), weekly review, CSV import, public sharing |
-| **Goals** | OKR-lite — Objectives → Key Results → Tasks; AI-suggested KRs; Personal Mission Statement wizard; Renewal Balance Dashboard |
+| **Goals** | OKR-lite — Objectives → Key Results → Tasks; AI-suggested KRs; Personal Mission Statement wizard; Renewal Balance Dashboard; Getting Started Wizard (7-step guided setup) |
 | **Document Compare** | Side-by-side SSE streaming comparison; 4 modes; save to project |
 | **Debate** | Multi-model debate (Anthropic + Gemini); round history; synthesis summary |
 | **Files** | Per-project uploads — PDFs, images, text, spreadsheets (xlsx, xls, ods), Word documents (docx, doc), and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example); text extracted and AI-summarised for all formats; spreadsheets converted to per-sheet CSV; Word docs extracted via mammoth; code files stored as plain text, 500 KB limit, prompt-injection sanitised; pin files for permanent context in every project chat; add files to the current session only via the session files feature |
@@ -153,6 +153,7 @@ npm run dev
 | **Web Search** | `@search` in chat; Brave Search / Serper / SerpAPI auto-detected from key format |
 | **Gmail** | `@gmail` in chat; connect personal Gmail via OAuth 2.0; natural language search with Claude Haiku query translation; attach email threads as context; ask questions about threads via SSE streaming |
 | **Notes** | Quick-capture thought pad — title, date, free text; link to projects; one-click "Take to Chat" to open note as chat context |
+| **Clients** | CRM module at `/clients` — company and individual client records; contacts (name, role, email, phone); touchpoint log (call, email, meeting, note); linked to projects, invoices, tasks, and the morning digest; company/individual toggle in new/edit modal (individual auto-creates a primary contact from the client name); client chip in project detail header + client name on project cards; sidebar quick-log for touchpoints; Finance invoices linkable to CRM clients via `clientRef` |
 | **Prompt Chains** | Build reusable multi-step prompt sequences; run sequentially with output passed as context between steps |
 | **Knowledge Graph** | Full-screen D3 force-simulation canvas at `/graph` (🕸 share icon in top nav, desktop; navigate directly on mobile). Maps all vault content as interactive nodes: Projects (indigo circle, large), Files (blue rect), Notes (amber rounded rect), Chat Sessions (green circle), Tasks (orange diamond), Goals (purple hexagon), Pinned URLs (teal circle). Explicit structural edges: `contains`, `subtask`, `branch`, `created`, `tracks`, `key_result`, `blocks`. AI-computed semantic edges (dashed pink lines) via pgvector + Gemini embeddings — `contains` links orbit wide (180 px), collision radius prevents overlap. Interactions: zoom/pan, drag nodes, click a node to open a detail panel with type badge and "Go to" button for direct navigation, hover to highlight adjacency. Toolbar: search bar (amber glow on match), type-filter panel (per-colour checkboxes), "Find connections" / "Re-compute" semantic button, live node and edge count. Labels hidden when zoomed out, shown on zoom-in or hover. Proactive Insights panel (Claude Haiku) surfaces cross-project patterns, orphaned content, and semantic clusters — each insight has a "Show me" button that highlights and zooms to the relevant nodes. |
 
@@ -198,6 +199,9 @@ PostgreSQL. Schema and connection pool in `vault/server/db.js`. On Railway, conn
 | `gmail_tokens` | Gmail OAuth tokens per user — auto-refreshed via `googleapis` token event |
 | `notes` | User-scoped quick-capture notes with optional project link |
 | `graph_edges` | Cached semantic connection pairs (`source_id`, `target_id`, similarity score, `computed_at`) with unique constraint enabling upsert |
+| `clients` | CRM client records — name, company, status, communicationPref, howTheyWork, startDate, tags, notes, clientType (company/individual) |
+| `client_contacts` | Contacts at a client — name, role, email, phone, isPrimary |
+| `client_touchpoints` | Communication log entries per client — type, date, note |
 | `chains` | Prompt chain definitions (name, steps JSON) |
 | `search_index` | Full-text search index (tsvector + GIN index) across projects, files, and messages |
 
@@ -516,7 +520,7 @@ Vault uses PostgreSQL. Add a **PostgreSQL** service to your Railway project and 
 
 1. Railway dashboard → **New** → **Database** → **PostgreSQL**.
 2. In the Vault service → **Variables** tab → **Add Reference** → select the PostgreSQL service's `DATABASE_URL`.
-3. On first boot, `db.js` connects and creates all 27 tables if they don't exist. Subsequent deploys are idempotent.
+3. On first boot, `db.js` connects and creates all 30 tables if they don't exist. Subsequent deploys are idempotent.
 
 **Volume mount for file uploads:**
 
@@ -599,6 +603,9 @@ Requires either `MAIL_CHANNEL_API_KEY` or all four SMTP vars. Check the server l
 
 ### March 2026
 
+- **Clients module** — full CRM at `/clients`; company and individual client types (toggle in new/edit modal; individual hides company field and auto-creates a primary contact from the client name; person icon vs briefcase icon on cards and detail header); contacts tab (add/edit/delete contacts with role, email, phone, primary flag); touchpoints tab (call, email, meeting, note log with date and free text); three summary stats per client card (projects, outstanding invoiced, dominant project mood); client chip in the Project Detail header links back to the client; client name shown under project name in Project List cards; client selector in New Project Modal; sidebar "Client" section on open projects shows a quick touchpoint log form; Finance invoices linkable to CRM clients via a `clientRef` foreign key (Finance Clients tab shows a banner directing to the Clients module); morning digest shows client name beside overdue/due-today tasks; new DB tables: `clients`, `client_contacts`, `client_touchpoints`; new columns: `projects.clientId`, `fin_invoices.clientRef`, `clients.clientType`
+- **Bug fix — mood type mismatch** — `mood_checkins.entity_id` is stored as INTEGER in the live DB; two queries were comparing it against TEXT expressions, causing 500 errors on `GET /api/clients` and `POST /api/mood/dominant/batch`; fixed by removing the `::text` cast in `clients.js` (`p.id = mc.entity_id`) and adding a cast in `mood.js` (`mc.entity_id::text = t.eid`)
+- **Getting Started Wizard** — 7-step full-screen guided setup for the Goals page; steps: Personal Context (what matters most, what you're improving, life stage) → Mission Statement (Claude drafts from context, editable) → First Objective (AI-suggested with colour picker) → Key Results (3 AI-suggested, toggle/edit) → Connect Tasks (link open tasks to the objective) → Renewal Balance (four 0–10 sliders with streaming AI observation) → Review & Save (one-click sequential save of mission, objective, KRs, task links, and wizard completion flag); draft auto-saved to `localStorage`; wizard triggered automatically on first visit when no objectives exist; ✨ button in Goals header to reopen; Settings page "Redo Setup" button resets completion flag; `POST /api/goals/wizard/(complete|reset|generate-mission|suggest-objective|suggest-krs|renewal-observation)` and `GET /api/goals/wizard/status` — all stored in the existing `settings` table
 - **Knowledge Graph — Phase 3: Proactive Insights** — Insights panel on the graph page powered by Claude Haiku; analyses graph structure (node counts, orphaned content, cross-project semantic clusters, top connected nodes) and generates 4–6 specific observations; each insight has a "Show me" button that highlights and zooms to the relevant nodes; insights cached in the `settings` table and refreshed on demand
 - **Knowledge Graph — Phase 2: Semantic Connections** — `POST /api/graph/compute-semantic` SSE endpoint; file↔file similarity via pgvector SQL (`avg(embedding) <=> avg(embedding)`); note and session embeddings via Gemini; note↔note, file↔note, and session↔note comparisons in Node.js; connections cached in the new `graph_edges` table; dashed pink lines on the canvas; "Find connections" / "Re-compute" button with live progress bar
 - **Knowledge Graph — Phase 1** — New `/graph` route with a full-screen `react-force-graph-2d` canvas; all vault content (projects, files, notes, sessions, tasks, goals, pinned URLs) rendered as typed, shaped nodes; explicit structural edges (contains, subtask, branch, created, tracks, key_result, blocks); hover highlights adjacency; click opens node detail panel with "Go to" navigation; search, type filters, legend
