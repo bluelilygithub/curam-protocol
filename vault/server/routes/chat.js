@@ -42,6 +42,16 @@ function invalidateUserProfile(userId) { profileCache.delete(userId); }
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
 
+const BRANCH_INSTRUCTION = `When your response covers a complex topic with distinct sub-areas that would benefit from dedicated exploration, you may suggest up to 3 branch conversations at the very end of your response. Branches open new chats within this project focused on a specific aspect.
+
+Only suggest branches when genuinely warranted — not after every response, and never after simple or direct questions.
+
+To suggest branches, append this block at the absolute end of your response, after all other content:
+
+[BRANCHES]
+[{"title":"Short descriptive title","content":"The opening 2–3 paragraphs you would write to begin that branch chat — substantive content, not a teaser or summary"}]
+[/BRANCHES]`;
+
 function toDeepSeekMessages(systemBlocks, messages) {
   const result = [];
   const sysText = systemBlocks.map(b => b.text).join('\n\n').trim();
@@ -133,6 +143,7 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
       const persona = rows[0];
       if (persona?.systemPrompt) parts.push(`\nPersona — ${persona.name}:\n${persona.systemPrompt}`);
     }
+    if (project && project.projectType !== 'quick') parts.push(`\n${BRANCH_INSTRUCTION}`);
     pushBlock(parts.join('\n'), true);
   }
 
@@ -700,7 +711,21 @@ router.post('/', chatLimiter, async (req, res) => {
       }
     }
 
+    // Parse and strip [BRANCHES] block — emit to client, store clean content
+    let parsedBranches = [];
+    const branchMatch = fullContent.match(/\[BRANCHES\]([\s\S]*?)\[\/BRANCHES\]/);
+    if (branchMatch) {
+      try {
+        const b = JSON.parse(branchMatch[1].trim());
+        if (Array.isArray(b)) parsedBranches = b.slice(0, 3).filter(x => x.title && x.content);
+      } catch { /* ignore malformed */ }
+      fullContent = fullContent.replace(/\s*\[BRANCHES\][\s\S]*?\[\/BRANCHES\]\s*$/, '').trimEnd();
+    }
+
     res.write(`data: ${JSON.stringify({ usage: { inputTokens, outputTokens, model, ragFallbackActive } })}\n\n`);
+    if (parsedBranches.length > 0) {
+      res.write(`data: ${JSON.stringify({ branches: parsedBranches })}\n\n`);
+    }
     res.write(`data: [DONE]\n\n`);
     res.end();
 
@@ -801,6 +826,27 @@ router.post('/', chatLimiter, async (req, res) => {
       res.write(`data: ${JSON.stringify({ streamError: classified })}\n\n`);
       res.end();
     }
+  }
+});
+
+// POST /api/chat/sessions/seed — create a new session pre-seeded with an assistant message (branch feature)
+router.post('/sessions/seed', async (req, res) => {
+  const { projectId, title, content } = req.body;
+  if (!projectId || !title || !content) return res.status(400).json({ error: 'projectId, title, and content required' });
+  const sid = `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    await pool.query(
+      'INSERT INTO sessions ("sessionId","projectId","userId",title) VALUES ($1,$2,$3,$4)',
+      [sid, projectId, req.user.id, title]
+    );
+    await pool.query(
+      'INSERT INTO messages ("sessionId","projectId",role,content) VALUES ($1,$2,$3,$4)',
+      [sid, projectId, 'assistant', content]
+    );
+    res.json({ sessionId: sid });
+  } catch (err) {
+    console.error('[seed]', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

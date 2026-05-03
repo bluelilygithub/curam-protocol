@@ -17,6 +17,7 @@ import UrlBar from '../components/UrlBar';
 import ArtifactPanel from '../components/ArtifactPanel';
 import ProjectFilesPanel from '../components/ProjectFilesPanel';
 import FollowUpChips from '../components/FollowUpChips';
+import BranchSuggestions from '../components/BranchSuggestions';
 import { downloadChatMd } from '../utils/exportMd';
 import { calcCost, formatCost, formatTokens } from '../utils/pricing';
 import { useModels } from '../hooks/useModels';
@@ -43,7 +44,7 @@ const TEMPERATURES = [
 // not when the user types in the input field.
 const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
-  suggestions, onDelete, onBranch, onOpenArtifact, onSuggestionSelect,
+  suggestions, branches, onDelete, onBranch, onOpenArtifact, onSuggestionSelect, onBranchSelect,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
   isTTSAvailable, isSpeaking, isPaused, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
   wideChat,
@@ -74,7 +75,10 @@ const MemoMessageList = React.memo(function MemoMessageList({
               onStop={isLastAssistant && isTTSAvailable ? stopSpeaking : undefined}
             />
             {isLastAssistant && !isStreaming && (
-              <FollowUpChips suggestions={suggestions} onSelect={onSuggestionSelect} />
+              <>
+                <FollowUpChips suggestions={suggestions} onSelect={onSuggestionSelect} />
+                <BranchSuggestions branches={branches} onSelect={onBranchSelect} />
+              </>
             )}
           </div>
         );
@@ -90,7 +94,7 @@ function ChatPage({ general = false }) {
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
-  const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
+  const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive, branches, clearBranches } = useChat({ projectId });
   const { models: MODELS } = useModels();
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, isSpeaking, isPaused, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
@@ -321,7 +325,7 @@ function ChatPage({ general = false }) {
     const handler = () => { clearMessages(); setSuggestions([]); setActiveArtifacts(null); };
     document.addEventListener('vault:new-chat', handler);
     return () => document.removeEventListener('vault:new-chat', handler);
-  }, [clearMessages]);
+  }, [clearMessages]);  // clearMessages already clears branches internally
 
   // Load a specific session (from sidebar or history page)
   useEffect(() => {
@@ -330,6 +334,7 @@ function ChatPage({ general = false }) {
       setShowSummaryPanel(false);
       setSummaryText('');
       setSuggestions([]);
+      clearBranches();
       setActiveArtifacts(null);
       loadHistory(e.detail);
     };
@@ -344,6 +349,7 @@ function ChatPage({ general = false }) {
       setShowSummaryPanel(false);
       setSummaryText('');
       setSuggestions([]);
+      clearBranches();
       setActiveArtifacts(null);
       loadHistory(sessionParam);
     }
@@ -478,6 +484,21 @@ function ChatPage({ general = false }) {
 
   handleSendRef.current = handleSend;
   const stableSuggestionSelect = useCallback((s) => handleSendRef.current?.(s), []);
+
+  const handleBranchSelect = useCallback(async (branch) => {
+    if (!projectId) return;
+    try {
+      const res = await api.post('/api/chat/sessions/seed', { projectId, title: branch.title, content: branch.content });
+      const { sessionId: newSid } = await res.json();
+      clearBranches();
+      setSuggestions([]);
+      setActiveArtifacts(null);
+      await loadHistory(newSid);
+      fetchSessions();
+    } catch (err) {
+      console.error('[branch-select]', err);
+    }
+  }, [projectId, clearBranches, loadHistory, fetchSessions]);
 
   // After a model switch from the advisor, fire the send once the new chatModel value has committed
   useEffect(() => {
@@ -1403,10 +1424,12 @@ function ChatPage({ general = false }) {
                 isAiSearching={isAiSearching}
                 sessionId={sessionId}
                 suggestions={suggestions}
+                branches={branches}
                 onDelete={deleteMessagePair}
                 onBranch={handleBranch}
                 onOpenArtifact={handleOpenArtifact}
                 onSuggestionSelect={stableSuggestionSelect}
+                onBranchSelect={handleBranchSelect}
                 messagesEndRef={messagesEndRef}
                 bookmarkedMap={bookmarkedMap}
                 onToggleBookmark={handleToggleBookmark}

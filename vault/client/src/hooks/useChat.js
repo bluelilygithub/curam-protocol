@@ -9,6 +9,7 @@ export function useChat({ projectId }) {
   const [streamError, setStreamError] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
   const [ragFallbackActive, setRagFallbackActive] = useState(false);
+  const [branches, setBranches] = useState([]);
   const abortRef = useRef(null);
   const timeoutRef = useRef(null);
 
@@ -28,6 +29,7 @@ export function useChat({ projectId }) {
   ) => {
     setStreamError(null);
     setIsSearching(false);
+    setBranches([]);
     const newMessages = [...messages, { role: 'user', content: userContent, attachments: attachmentMeta, urlAttachments }];
     setMessages(newMessages);
     setIsStreaming(true);
@@ -137,6 +139,21 @@ export function useChat({ projectId }) {
                 return updated;
               });
             }
+            if (parsed.branches) {
+              setBranches(parsed.branches);
+              // Strip [BRANCHES] block from displayed message — server already stripped it from DB
+              setMessages((prev) => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.role === 'assistant') {
+                  updated[updated.length - 1] = {
+                    ...last,
+                    content: last.content.replace(/\s*\[BRANCHES\][\s\S]*?\[\/BRANCHES\]\s*$/, '').trimEnd(),
+                  };
+                }
+                return updated;
+              });
+            }
           } catch (e) {
             // ignore JSON parse errors
           }
@@ -174,7 +191,10 @@ export function useChat({ projectId }) {
   const clearMessages = useCallback(() => {
     setMessages([]);
     setSessionId(null);
+    setBranches([]);
   }, []);
+
+  const clearBranches = useCallback(() => setBranches([]), []);
 
   const deleteMessagePair = useCallback(async (startIndex) => {
     if (!sessionId) return;
@@ -217,5 +237,5 @@ export function useChat({ projectId }) {
     }
   }, [isStreaming, sessionId, sendMessage]);
 
-  return { messages, isStreaming, isSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError, ragFallbackActive };
+  return { messages, isStreaming, isSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError, ragFallbackActive, branches, clearBranches };
 }

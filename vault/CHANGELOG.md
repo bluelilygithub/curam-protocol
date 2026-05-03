@@ -4,6 +4,28 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-04 (2)
+
+**Feature:** Smart branch suggestions — LLM-initiated chat branching within projects.
+
+When an AI response covers a complex topic with clear sub-areas, the model may append up to 3 branch suggestions at the end of its reply. These appear below the message as "Explore deeper" chips (with a git-branch icon), distinct from follow-up question chips. Clicking a branch creates a new session in the same project, pre-seeded with the LLM's opening content for that topic, and navigates to it. The parent session is preserved.
+
+**Implementation:** `BRANCH_INSTRUCTION` injected into system prompt Block 1 for all non-`quick` project chats (all models). Server parses and strips `[BRANCHES]...[/BRANCHES]` from `fullContent` after streaming, emits a `{"branches":[...]}` SSE event before `[DONE]`, and stores clean content in DB. Client strips the block from the displayed message on receipt. `POST /api/chat/sessions/seed` endpoint creates the pre-seeded session. `BranchSuggestions.jsx` renders below `FollowUpChips`.
+
+**New file:** `client/src/components/BranchSuggestions.jsx`. **Modified files:** `server/routes/chat.js`, `client/src/hooks/useChat.js`, `client/src/pages/ChatPage.jsx`.
+
+---
+
+## 2026-05-04
+
+**Perf:** In-process cache for user profile settings — eliminates DB round-trip per chat message.
+
+`buildSystemPrompt` previously queried `settings` for `user_name`, `user_city`, `user_state`, `user_country` on every message. These values rarely change. A `Map`-based TTL cache (5-minute expiry, per `userId`) now serves the data from memory after the first request, skipping the DB hit on subsequent messages.
+
+**Modified file:** `server/routes/chat.js`.
+
+---
+
 ## 2026-05-03 (5)
 
 **Deploy test:** Toolbar progressive-disclosure refactor — PageToolbar + OverflowMenu components, TasksPage and ChatPage updated.
