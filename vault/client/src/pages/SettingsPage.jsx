@@ -78,7 +78,7 @@ function SettingsPage() {
   const [fileTypesSaved, setFileTypesSaved] = useState(false);
   const [showPwFields, setShowPwFields] = useState({ current: false, next: false, confirm: false });
   const [modelStatus, setModelStatus] = useState(null);
-  const { models, saveModels, defaultModel, saveDefaultModel } = useModels();
+  const { models, saveModels, defaultModel, saveDefaultModel, branchEvalModel, saveBranchEvalModel } = useModels();
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
   const [modelForm, setModelForm] = useState({});
   const [showReopenWizardConfirm, setShowReopenWizardConfirm] = useState(false);
@@ -669,6 +669,27 @@ function SettingsPage() {
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
             <option value="">System default (claude-sonnet-4-6)</option>
+            {models.map(m => (
+              <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Branch evaluation model selector */}
+        <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+            Branch evaluation model
+          </label>
+          <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+            Used to evaluate whether a response warrants branch suggestions. Set to a capable model — flash/economy models will not trigger branches.
+          </p>
+          <select
+            value={branchEvalModel}
+            onChange={e => saveBranchEvalModel(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            <option value="">Use current chat model</option>
             {models.map(m => (
               <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
             ))}

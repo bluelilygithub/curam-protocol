@@ -1159,7 +1159,11 @@ router.post('/branches', async (req, res) => {
     if (assistantMsg.content.length < 400) return res.json({ branches: [] });
 
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const model = chatModel || lightModel;
+    // branch_eval_model setting overrides the chat model for evaluation
+    const { rows: evalRows } = req.user?.id
+      ? await pool.query("SELECT value FROM settings WHERE \"userId\"=$1 AND key='branch_eval_model'", [req.user.id])
+      : { rows: [] };
+    const model = evalRows[0]?.value || chatModel || lightModel;
 
     const branchPrompt = [
       'Read the exchange below and decide if the response contains 2 or more distinct sub-topics that each deserve a dedicated deeper conversation.',

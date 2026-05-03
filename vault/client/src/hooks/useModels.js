@@ -5,6 +5,7 @@ import { MODELS as DEFAULT_MODELS } from '../utils/models';
 export function useModels() {
   const [models, setModels] = useState(DEFAULT_MODELS);
   const [defaultModel, setDefaultModel] = useState('');
+  const [branchEvalModel, setBranchEvalModel] = useState('');
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -16,6 +17,7 @@ export function useModels() {
         if (Array.isArray(parsed) && parsed.length > 0) setModels(parsed);
       }
       if (data.default_model) setDefaultModel(data.default_model);
+      if (data.branch_eval_model) setBranchEvalModel(data.branch_eval_model);
     } catch {}
     setLoading(false);
   }, []);
@@ -32,5 +34,10 @@ export function useModels() {
     await api.post('/api/settings', { key: 'default_model', value: modelId });
   }, []);
 
-  return { models, saveModels, defaultModel, saveDefaultModel, loading, reload: load };
+  const saveBranchEvalModel = useCallback(async (modelId) => {
+    setBranchEvalModel(modelId);
+    await api.post('/api/settings', { key: 'branch_eval_model', value: modelId });
+  }, []);
+
+  return { models, saveModels, defaultModel, saveDefaultModel, branchEvalModel, saveBranchEvalModel, loading, reload: load };
 }
