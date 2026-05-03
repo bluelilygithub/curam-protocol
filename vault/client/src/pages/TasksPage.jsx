@@ -14,6 +14,7 @@ import TasksTree from '../components/tasks/TasksTree';
 import TaskTimeline from '../components/tasks/TaskTimeline';
 import { parseNaturalDate, formatDateForInput, toISOForAPI } from '../utils/parseDate';
 import { startTasksTour, TOUR_KEY as TASKS_TOUR_KEY } from '../utils/tours/tasksTour';
+import PageToolbar from '../components/PageToolbar';
 
 const PRIORITY_COLOR = { high: '#ef4444', medium: '#f59e0b', low: '#22c55e' };
 const PRIORITY_LABEL = { high: 'High', medium: 'Medium', low: 'Low' };
@@ -2056,27 +2057,29 @@ export default function TasksPage() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <div
-          className="flex-shrink-0 flex items-center gap-3 px-6 py-4 border-b"
-          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+        <PageToolbar
+          title="Tasks"
+          views={[
+            { mode: 'list',     icon: 'list-checks', label: 'List' },
+            { mode: 'board',    icon: 'layout',      label: 'Board' },
+            { mode: 'calendar', icon: 'calendar',    label: 'Calendar', dataTour: 'tasks-view-calendar' },
+            { mode: 'matrix',   icon: 'target',      label: 'Matrix',   shortcut: 'M' },
+            { mode: 'tree',     icon: 'git-branch',  label: 'Tree',     shortcut: 'T' },
+            { mode: 'timeline', icon: 'bar-chart',   label: 'Timeline' },
+          ]}
+          viewsGroupTour="view-selector"
+          activeView={viewMode}
+          onViewChange={(mode) => { setViewMode(mode); localStorage.setItem('tasksViewMode', mode); }}
+          overflowActions={[
+            { label: 'Ask Claude',    icon: 'wand',         shortcut: 'A', active: showAI,        onClick: () => { setShowAI(v => !v); setAiMessage(''); } },
+            { label: 'Weekly Review', icon: 'calendar',     shortcut: 'W',                        onClick: () => setShowWeeklyReview(true), dataTour: 'weekly-review-btn' },
+            { label: 'Import',        icon: 'upload',                      active: showImport,    onClick: () => setShowImport(v => !v),    dataTour: 'import-btn' },
+            { label: 'Templates',     icon: 'book',                        active: showTemplates, onClick: () => setShowTemplates(v => !v), dataTour: 'templates-btn' },
+            { label: 'Tasks guide',   icon: 'help-circle',                 active: showHelp,      onClick: () => setShowHelp(v => !v) },
+          ]}
+          onShortcuts={() => setShowShortcuts(true)}
+          primaryAction={{ label: 'New Task', icon: 'plus', onClick: () => openNew() }}
         >
-          <h1 className="text-xl font-semibold flex-1" style={{ color: 'var(--color-text)' }}>Tasks</h1>
-          <button
-            onClick={() => { setShowAI(v => !v); setAiMessage(''); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
-            style={{ borderColor: showAI ? 'var(--color-primary)' : 'var(--color-border)', color: showAI ? 'var(--color-primary)' : 'var(--color-muted)', background: showAI ? 'var(--color-bg)' : 'transparent' }}
-          >
-            {getIcon('wand', { size: 13 })} Ask Claude
-          </button>
-          <button
-            onClick={() => setShowWeeklyReview(true)}
-            data-tour="weekly-review-btn"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-            title="Weekly Review (W)"
-          >
-            {getIcon('calendar', { size: 13 })} Weekly Review
-          </button>
           {activeTimer && (
             <button
               onClick={handleStopTimer}
@@ -2087,70 +2090,7 @@ export default function TasksPage() {
               ⏱ {activeTimer.task.title.slice(0, 20)}{activeTimer.task.title.length > 20 ? '…' : ''} — {String(Math.floor(elapsed / 3600)).padStart(2,'0')}:{String(Math.floor((elapsed % 3600) / 60)).padStart(2,'0')}:{String(elapsed % 60).padStart(2,'0')}
             </button>
           )}
-          <button
-            data-tour="import-btn"
-            onClick={() => setShowImport(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
-            style={{ borderColor: showImport ? 'var(--color-primary)' : 'var(--color-border)', color: showImport ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Import from CSV"
-          >
-            {getIcon('upload', { size: 13 })} Import
-          </button>
-          <button
-            data-tour="templates-btn"
-            onClick={() => { setShowTemplates(v => !v); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all"
-            style={{ borderColor: showTemplates ? 'var(--color-primary)' : 'var(--color-border)', color: showTemplates ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Task Templates"
-          >
-            {getIcon('book', { size: 13 })} Templates
-          </button>
-          {/* View toggle */}
-          <div data-tour="view-selector" className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-            {[
-              { mode: 'list', icon: 'list-checks', title: 'List view' },
-              { mode: 'board', icon: 'layout', title: 'Board view' },
-              { mode: 'calendar', icon: 'calendar', title: 'Calendar view' },
-              { mode: 'matrix', icon: 'target', title: 'Eisenhower Matrix (m)' },
-              { mode: 'tree', icon: 'git-branch', title: 'Tree view (t)' },
-              { mode: 'timeline', icon: 'bar-chart', title: 'Timeline view' },
-            ].map((v, i) => (
-              <button
-                key={v.mode}
-                onClick={() => { setViewMode(v.mode); localStorage.setItem('tasksViewMode', v.mode); }}
-                className="px-2.5 py-1.5 text-xs transition-all border-l first:border-l-0"
-                style={{ background: viewMode === v.mode ? 'var(--color-primary)' : 'transparent', color: viewMode === v.mode ? '#fff' : 'var(--color-muted)', borderColor: 'var(--color-border)' }}
-                title={v.title}
-                {...(v.mode === 'calendar' ? { 'data-tour': 'tasks-view-calendar' } : {})}
-              >
-                {getIcon(v.icon, { size: 13 })}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => setShowHelp(v => !v)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border hover:opacity-70 transition-opacity"
-            style={{ borderColor: showHelp ? 'var(--color-primary)' : 'var(--color-border)', color: showHelp ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Tasks guide"
-          >
-            {getIcon('book', { size: 14 })}
-          </button>
-          <button
-            onClick={() => setShowShortcuts(true)}
-            className="w-8 h-8 flex items-center justify-center rounded-lg border text-xs font-bold hover:opacity-70 transition-opacity"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-            title="Keyboard shortcuts"
-          >
-            ?
-          </button>
-          <button
-            onClick={() => openNew()}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-sm font-medium text-white"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            {getIcon('plus', { size: 13, color: 'white' })} New Task
-          </button>
-        </div>
+        </PageToolbar>
 
         {/* Stats bar */}
         {tasks.length > 0 && (
