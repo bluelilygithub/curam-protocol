@@ -4,13 +4,33 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-04 (4)
+
+**Fix:** Branch generation uses the session's own model, not Haiku.
+
+`POST /api/chat/branches` now routes to Gemini, DeepSeek, or Anthropic based on the active chat model sent by the client (`effectiveModel`). Branch content quality matches the conversation. Falls back to light model only when no model is provided.
+
+**Modified files:** `server/routes/chat.js`, `client/src/pages/ChatPage.jsx`.
+
+---
+
+## 2026-05-04 (3)
+
+**Refactor:** Branch generation moved to a post-stream Haiku call, removing reliance on model compliance.
+
+The original approach injected a `BRANCH_INSTRUCTION` into the system prompt and asked the main LLM to append a `[BRANCHES]` block. This was unreliable — models (especially DeepSeek) frequently ignored it. Branch generation is now a separate `POST /api/chat/branches` call that fires after each stream alongside follow-up suggestions. It reads the last exchange and independently decides whether branching is warranted. Returns `[]` for short responses and `quick`-type projects. Fully model-agnostic.
+
+**Modified files:** `server/routes/chat.js`, `client/src/hooks/useChat.js`, `client/src/pages/ChatPage.jsx`.
+
+---
+
 ## 2026-05-04 (2)
 
 **Feature:** Smart branch suggestions — LLM-initiated chat branching within projects.
 
-When an AI response covers a complex topic with clear sub-areas, the model may append up to 3 branch suggestions at the end of its reply. These appear below the message as "Explore deeper" chips (with a git-branch icon), distinct from follow-up question chips. Clicking a branch creates a new session in the same project, pre-seeded with the LLM's opening content for that topic, and navigates to it. The parent session is preserved.
+When an AI response covers a complex topic with clear sub-areas, up to 3 branch suggestions appear below the message as "Explore deeper" chips (with a git-branch icon), distinct from follow-up question chips. Clicking a branch creates a new session in the same project, pre-seeded with the opening content for that topic, and navigates to it. The parent session is preserved.
 
-**Implementation:** `BRANCH_INSTRUCTION` injected into system prompt Block 1 for all non-`quick` project chats (all models). Server parses and strips `[BRANCHES]...[/BRANCHES]` from `fullContent` after streaming, emits a `{"branches":[...]}` SSE event before `[DONE]`, and stores clean content in DB. Client strips the block from the displayed message on receipt. `POST /api/chat/sessions/seed` endpoint creates the pre-seeded session. `BranchSuggestions.jsx` renders below `FollowUpChips`.
+`POST /api/chat/sessions/seed` creates the pre-seeded session. `BranchSuggestions.jsx` renders below `FollowUpChips`.
 
 **New file:** `client/src/components/BranchSuggestions.jsx`. **Modified files:** `server/routes/chat.js`, `client/src/hooks/useChat.js`, `client/src/pages/ChatPage.jsx`.
 
