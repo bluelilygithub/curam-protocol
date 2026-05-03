@@ -20,6 +20,25 @@ const chatLimiter = rateLimit({
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// In-process cache for user profile settings — data changes rarely, skip DB hit per message.
+const profileCache = new Map(); // userId → { data, expiresAt }
+const PROFILE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function getUserProfile(userId) {
+  const cached = profileCache.get(userId);
+  if (cached && Date.now() < cached.expiresAt) return cached.data;
+  const { rows } = await pool.query(
+    `SELECT key, value FROM settings WHERE "userId"=$1 AND key IN ('user_name','user_city','user_state','user_country')`,
+    [userId]
+  );
+  const data = {};
+  rows.forEach(r => { data[r.key] = r.value; });
+  profileCache.set(userId, { data, expiresAt: Date.now() + PROFILE_TTL_MS });
+  return data;
+}
+
+function invalidateUserProfile(userId) { profileCache.delete(userId); }
+
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
 
@@ -258,12 +277,7 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
     const parts = [`Today's date is ${todayStr}.`];
 
     if (userId) {
-      const { rows: profileRows } = await pool.query(
-        `SELECT key, value FROM settings WHERE "userId"=$1 AND key IN ('user_name','user_city','user_state','user_country')`,
-        [userId]
-      );
-      const profile = {};
-      profileRows.forEach(r => { profile[r.key] = r.value; });
+      const profile = await getUserProfile(userId);
       const location = [profile.user_city, profile.user_state, profile.user_country].filter(Boolean).join(', ');
       if (profile.user_name || location) {
         let sentence = 'You are speaking with';
