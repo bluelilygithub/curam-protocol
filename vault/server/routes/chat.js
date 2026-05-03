@@ -1132,12 +1132,11 @@ router.post('/suggestions', async (req, res) => {
   }
 });
 
-// POST /api/chat/branches — post-stream branch suggestion via Haiku (model-agnostic)
+// POST /api/chat/branches — post-stream branch suggestion using the session's own model.
 // Reads the last exchange, decides if branching is warranted, returns up to 3 branch objects.
 router.post('/branches', async (req, res) => {
-  const { sessionId, projectId } = req.body;
+  const { sessionId, projectId, model: chatModel } = req.body;
   if (!sessionId || !projectId) return res.json({ branches: [] });
-  if (!process.env.ANTHROPIC_API_KEY) return res.json({ branches: [] });
 
   try {
     // Skip quick-type projects
@@ -1160,6 +1159,7 @@ router.post('/branches', async (req, res) => {
     if (assistantMsg.content.length < 400) return res.json({ branches: [] });
 
     const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const model = chatModel || lightModel;
 
     const branchPrompt = [
       'You decide whether a chat response warrants branching into separate focused conversations.',
@@ -1175,13 +1175,35 @@ router.post('/branches', async (req, res) => {
       'Assistant: ' + assistantMsg.content.substring(0, 1200),
     ].join('\n');
 
-    const response = await anthropic.messages.create({
-      model: lightModel,
-      max_tokens: 1200,
-      messages: [{ role: 'user', content: branchPrompt }],
-    });
+    let text = '[]';
 
-    const text = response.content[0]?.text?.trim() || '[]';
+    if (isGemini(model)) {
+      const geminiKey = process.env.GEMINI_API_KEY;
+      if (!geminiKey) return res.json({ branches: [] });
+      const genai = new GoogleGenerativeAI(geminiKey);
+      const gModel = genai.getGenerativeModel({ model });
+      const result = await gModel.generateContent(branchPrompt);
+      text = result.response.text() || '[]';
+    } else if (isDeepSeek(model)) {
+      const dsKey = process.env.DEEPSEEK_API_KEY;
+      if (!dsKey) return res.json({ branches: [] });
+      const dsRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${dsKey}` },
+        body: JSON.stringify({ model, messages: [{ role: 'user', content: branchPrompt }], max_tokens: 1200 }),
+      });
+      const data = await dsRes.json();
+      text = data.choices?.[0]?.message?.content || '[]';
+    } else {
+      if (!process.env.ANTHROPIC_API_KEY) return res.json({ branches: [] });
+      const response = await anthropic.messages.create({
+        model,
+        max_tokens: 1200,
+        messages: [{ role: 'user', content: branchPrompt }],
+      });
+      text = response.content[0]?.text?.trim() || '[]';
+    }
+
     const match = text.match(/\[[\s\S]*\]/);
     const raw = match ? JSON.parse(match[0]) : [];
     const branches = Array.isArray(raw)

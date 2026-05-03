@@ -315,7 +315,7 @@ function ChatPage({ general = false }) {
       api.post('/api/chat/suggestions', { sessionId })
         .then(r => r.json()).then(d => setSuggestions(d.suggestions || [])).catch(() => {});
       if (projectId) {
-        api.post('/api/chat/branches', { sessionId, projectId })
+        api.post('/api/chat/branches', { sessionId, projectId, model: effectiveModel })
           .then(r => r.json()).then(d => setBranches(d.branches || [])).catch(() => {});
       }
       fetchSessions();
