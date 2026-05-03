@@ -32,7 +32,10 @@
       "Bash(node -e \"console.log\\(process.env.DATABASE_URL\\)\")",
       "Bash(PGPASSWORD=vault psql -U vault -h localhost -d vault_dev -c \"\nSELECT\n  c.*,\n  COUNT\\(DISTINCT cc.id\\)::int AS \\\\\"contactCount\\\\\",\n  COUNT\\(DISTINCT p.id\\) FILTER \\(WHERE p.\\\\\"archived_at\\\\\" IS NULL\\)::int AS \\\\\"projectCount\\\\\",\n  COALESCE\\(SUM\\(fi.total\\) FILTER \\(WHERE fi.status != 'void'\\), 0\\) AS \\\\\"totalInvoiced\\\\\",\n  COALESCE\\(SUM\\(fi.total\\) FILTER \\(WHERE fi.status = 'sent'\\), 0\\) AS \\\\\"outstanding\\\\\",\n  \\(\n    SELECT mc.core_emotion\n    FROM mood_checkins mc\n    JOIN projects mp ON mp.id::text = mc.entity_id\n      AND mc.entity_type = 'project'\n    WHERE mp.\\\\\"clientId\\\\\" = c.id\n      AND mc.user_id = c.\\\\\"userId\\\\\"\n    GROUP BY mc.core_emotion\n    ORDER BY COUNT\\(*\\) DESC\n    LIMIT 1\n  \\) AS \\\\\"dominantMood\\\\\"\nFROM clients c\nLEFT JOIN client_contacts cc ON cc.\\\\\"clientId\\\\\" = c.id\nLEFT JOIN projects p ON p.\\\\\"clientId\\\\\" = c.id AND p.\\\\\"userId\\\\\" = c.\\\\\"userId\\\\\"\nLEFT JOIN fin_invoices fi ON fi.\\\\\"clientRef\\\\\" = c.id AND fi.\\\\\"userId\\\\\" = c.\\\\\"userId\\\\\"\nWHERE c.\\\\\"userId\\\\\" = 1\nGROUP BY c.id\nORDER BY c.name ASC\nLIMIT 1;\n\" 2>&1)",
       "Bash(rm replit.md linkedin-assessment.md \"attached_assets/DIAMONDPLATE_AI_CHATBOT_SPECIFICATION.md\" \"attached_assets/content-1768113119607.md\")",
-      "Bash(rm -rf \"attached_assets/zapier_plugin_review/\")"
+      "Bash(rm -rf \"attached_assets/zapier_plugin_review/\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }
