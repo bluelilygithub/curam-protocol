@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-04 (5)
+
+**Feature:** Branch evaluation model setting.
+
+New selector in Settings → Models: "Branch evaluation model". When set, the `/branches` endpoint uses this model for evaluation regardless of which model the chat used. Solves the problem of flash/economy models (e.g. DeepSeek Flash) consistently returning `[]` — set a capable model (Sonnet, Opus, Gemini Pro) here to ensure branches trigger reliably. Falls back to the active chat model when not set.
+
+**Modified files:** `server/routes/chat.js`, `client/src/hooks/useModels.js`, `client/src/pages/SettingsPage.jsx`.
+
+---
+
 ## 2026-05-04 (4)
 
 **Fix:** Branch generation uses the session's own model, not Haiku.
