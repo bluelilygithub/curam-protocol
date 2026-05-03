@@ -42,15 +42,6 @@ function invalidateUserProfile(userId) { profileCache.delete(userId); }
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
 
-const BRANCH_INSTRUCTION = `When your response covers a complex topic with distinct sub-areas that would benefit from dedicated exploration, you may suggest up to 3 branch conversations at the very end of your response. Branches open new chats within this project focused on a specific aspect.
-
-Only suggest branches when genuinely warranted — not after every response, and never after simple or direct questions.
-
-To suggest branches, append this block at the absolute end of your response, after all other content:
-
-[BRANCHES]
-[{"title":"Short descriptive title","content":"The opening 2–3 paragraphs you would write to begin that branch chat — substantive content, not a teaser or summary"}]
-[/BRANCHES]`;
 
 function toDeepSeekMessages(systemBlocks, messages) {
   const result = [];
@@ -143,7 +134,6 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
       const persona = rows[0];
       if (persona?.systemPrompt) parts.push(`\nPersona — ${persona.name}:\n${persona.systemPrompt}`);
     }
-    if (project && project.projectType !== 'quick') parts.push(`\n${BRANCH_INSTRUCTION}`);
     pushBlock(parts.join('\n'), true);
   }
 
@@ -711,21 +701,7 @@ router.post('/', chatLimiter, async (req, res) => {
       }
     }
 
-    // Parse and strip [BRANCHES] block — emit to client, store clean content
-    let parsedBranches = [];
-    const branchMatch = fullContent.match(/\[BRANCHES\]([\s\S]*?)\[\/BRANCHES\]/);
-    if (branchMatch) {
-      try {
-        const b = JSON.parse(branchMatch[1].trim());
-        if (Array.isArray(b)) parsedBranches = b.slice(0, 3).filter(x => x.title && x.content);
-      } catch { /* ignore malformed */ }
-      fullContent = fullContent.replace(/\s*\[BRANCHES\][\s\S]*?\[\/BRANCHES\]\s*$/, '').trimEnd();
-    }
-
     res.write(`data: ${JSON.stringify({ usage: { inputTokens, outputTokens, model, ragFallbackActive } })}\n\n`);
-    if (parsedBranches.length > 0) {
-      res.write(`data: ${JSON.stringify({ branches: parsedBranches })}\n\n`);
-    }
     res.write(`data: [DONE]\n\n`);
     res.end();
 
@@ -1153,6 +1129,68 @@ router.post('/suggestions', async (req, res) => {
     res.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 3) : [] });
   } catch {
     res.json({ suggestions: [] });
+  }
+});
+
+// POST /api/chat/branches — post-stream branch suggestion via Haiku (model-agnostic)
+// Reads the last exchange, decides if branching is warranted, returns up to 3 branch objects.
+router.post('/branches', async (req, res) => {
+  const { sessionId, projectId } = req.body;
+  if (!sessionId || !projectId) return res.json({ branches: [] });
+  if (!process.env.ANTHROPIC_API_KEY) return res.json({ branches: [] });
+
+  try {
+    // Skip quick-type projects
+    const { rows: projRows } = await pool.query('SELECT "projectType" FROM projects WHERE id=$1', [projectId]);
+    if (projRows[0]?.projectType === 'quick') return res.json({ branches: [] });
+
+    // Fetch last user + assistant message pair
+    const { rows: msgRows } = await pool.query(
+      'SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" DESC LIMIT 2',
+      [sessionId]
+    );
+    const msgs = msgRows.reverse();
+    if (msgs.length < 2) return res.json({ branches: [] });
+
+    const userMsg = msgs.find(m => m.role === 'user');
+    const assistantMsg = msgs.find(m => m.role === 'assistant');
+    if (!userMsg || !assistantMsg) return res.json({ branches: [] });
+
+    // Skip short responses — not complex enough to warrant branches
+    if (assistantMsg.content.length < 400) return res.json({ branches: [] });
+
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+
+    const branchPrompt = [
+      'You decide whether a chat response warrants branching into separate focused conversations.',
+      '',
+      'Read the exchange below. If the response covers a complex topic with 2 or more distinct sub-areas that would genuinely benefit from dedicated deeper exploration, return up to 3 branch suggestions. If the response is simple, direct, or already complete on its own, return an empty array.',
+      '',
+      'Return ONLY a valid JSON array — no explanation, no markdown fences. Each item: {"title":"Max 8-word descriptive title","content":"The opening 2-3 paragraphs you would write to begin a chat focused entirely on this sub-topic — substantive content, not a teaser"}.',
+      '',
+      'Return [] if branching is not warranted.',
+      '',
+      'User: ' + userMsg.content.substring(0, 600),
+      '',
+      'Assistant: ' + assistantMsg.content.substring(0, 1200),
+    ].join('\n');
+
+    const response = await anthropic.messages.create({
+      model: lightModel,
+      max_tokens: 1200,
+      messages: [{ role: 'user', content: branchPrompt }],
+    });
+
+    const text = response.content[0]?.text?.trim() || '[]';
+    const match = text.match(/\[[\s\S]*\]/);
+    const raw = match ? JSON.parse(match[0]) : [];
+    const branches = Array.isArray(raw)
+      ? raw.slice(0, 3).filter(b => b.title && b.content)
+      : [];
+    return res.json({ branches });
+  } catch (err) {
+    console.error('[branches]', err.message);
+    return res.json({ branches: [] });
   }
 });
 
