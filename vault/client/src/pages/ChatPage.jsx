@@ -21,6 +21,7 @@ import { downloadChatMd } from '../utils/exportMd';
 import { calcCost, formatCost, formatTokens } from '../utils/pricing';
 import { useModels } from '../hooks/useModels';
 import SelectionToolbar from '../components/SelectionToolbar';
+import OverflowMenu from '../components/OverflowMenu';
 import PromptVariableModal from '../components/PromptVariableModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { extractVariables } from '../utils/promptVariables';
@@ -1183,66 +1184,41 @@ function ChatPage({ general = false }) {
           </>
         )}
 
-        {/* Star — hidden on mobile */}
-        {sessionId && (
-          <button
-            onClick={handleToggleStar}
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-lg transition-colors hover:opacity-70"
-            style={{ color: isStarred ? '#f59e0b' : 'var(--color-muted)' }}
-            title={isStarred ? 'Unstar chat' : 'Star chat'}
-          >
-            {getIcon('star', { size: 14 })}
-          </button>
-        )}
-
-        {sessionId && messages.length >= 4 && !isSummarized && (
-          <button
-            onClick={handleSummarize}
-            disabled={isSummarizing}
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-lg transition-colors hover:opacity-70"
-            style={{ color: 'var(--color-primary)' }}
-            title="Summarize this conversation"
-          >
-            {isSummarizing ? getIcon('loader', { size: 14 }) : getIcon('sparkles', { size: 14 })}
-          </button>
-        )}
-
-        {sessionId && (
-          <button
-            onClick={() => downloadChatMd(messages, sessionTitle || sessionId, project?.name)}
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-lg transition-colors hover:opacity-70"
-            style={{ color: 'var(--color-muted)' }}
-            title="Save chat as Markdown"
-          >
-            {getIcon('file-down', { size: 14 })}
-          </button>
-        )}
-
         <div className="hidden sm:block"><ExportMenu sessionId={sessionId} projectId={projectId} /></div>
 
         {projectId && (
           <button
             onClick={() => setShowFilesPanel(v => !v)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
+            className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
             style={{
+              borderColor: showFilesPanel ? 'var(--color-primary)' : 'var(--color-border)',
               color: showFilesPanel ? 'var(--color-primary)' : 'var(--color-muted)',
-              background: showFilesPanel ? 'var(--color-primary)15' : 'transparent',
+              background: showFilesPanel ? 'var(--color-primary)15' : 'var(--color-surface)',
             }}
             title="Project files"
           >
-            {getIcon('files', { size: 14 })}
+            {getIcon('files', { size: 13 })}
+            <span className="hidden sm:inline">Files</span>
           </button>
         )}
 
+        {/* Session actions — star, summarize, download, delete */}
         {sessionId && (
-          <button
-            onClick={() => setConfirmDeleteSession(true)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg transition-colors hover:opacity-70"
-            style={{ color: 'var(--color-muted)' }}
-            title="Delete this chat"
-          >
-            {getIcon('trash', { size: 14 })}
-          </button>
+          <OverflowMenu
+            title="Session actions"
+            actions={[
+              { label: isStarred ? 'Unstar' : 'Star', icon: 'star', active: isStarred, onClick: handleToggleStar },
+              ...(messages.length >= 4 && !isSummarized ? [{
+                label: isSummarizing ? 'Summarizing…' : 'Summarize',
+                icon: 'sparkles',
+                onClick: handleSummarize,
+                disabled: isSummarizing,
+              }] : []),
+              { label: 'Download', icon: 'file-down', onClick: () => downloadChatMd(messages, sessionTitle || sessionId, project?.name) },
+              { divider: true, key: 'sep' },
+              { label: 'Delete chat', icon: 'trash', danger: true, onClick: () => setConfirmDeleteSession(true) },
+            ]}
+          />
         )}
       </div>
 

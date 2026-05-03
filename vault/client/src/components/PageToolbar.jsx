@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useIcon } from '../providers/IconProvider';
+import OverflowMenu from './OverflowMenu';
 
 /**
  * Shared page-level toolbar. Four zones:
  *   [title] [view-controls] [children*] → [overflow-actions] [shortcuts?] [primary-CTA?]
  *
  * Props
- *   title            — page heading
+ *   title            — page heading string
  *   views            — [{ mode, icon, label, shortcut?, dataTour? }]
  *   viewsGroupTour   — data-tour on the views container div
  *   activeView       — active mode string
  *   onViewChange     — (mode) => void
- *   overflowActions  — [{ label, icon, shortcut?, active?, onClick, dataTour? }]
+ *   overflowActions  — passed straight to OverflowMenu
  *   primaryAction    — { label, icon?, onClick, dataTour? }
  *   onShortcuts      — () => void — omit to hide the ? button
  *   children         — contextual slot rendered after views (e.g. active timer)
@@ -28,8 +29,6 @@ export default function PageToolbar({
   children,
 }) {
   const getIcon = useIcon();
-  const [overflowOpen, setOverflowOpen] = useState(false);
-  const hasOverflow = overflowActions && overflowActions.length > 0;
 
   return (
     <div
@@ -78,65 +77,7 @@ export default function PageToolbar({
       <div className="flex-1" />
 
       {/* Zone 4a — overflow menu */}
-      {hasOverflow && (
-        <div className="relative">
-          <button
-            onClick={() => setOverflowOpen((v) => !v)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-xs hover:opacity-70 transition-opacity"
-            style={{
-              borderColor: overflowOpen ? 'var(--color-primary)' : 'var(--color-border)',
-              color: overflowOpen ? 'var(--color-primary)' : 'var(--color-muted)',
-            }}
-            title="More actions"
-          >
-            {getIcon('more-horizontal', { size: 14 })}
-          </button>
-
-          {overflowOpen && (
-            <>
-              <div className="fixed inset-0 z-20" onClick={() => setOverflowOpen(false)} />
-              <div
-                className="absolute right-0 top-full mt-1 z-30 rounded-xl border shadow-xl overflow-hidden"
-                style={{
-                  background: 'var(--color-surface)',
-                  borderColor: 'var(--color-border)',
-                  minWidth: 200,
-                }}
-              >
-                {overflowActions.map((action) => (
-                  <button
-                    key={action.label}
-                    onClick={() => { action.onClick(); setOverflowOpen(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left hover:opacity-70 transition-opacity"
-                    style={{
-                      color: action.active ? 'var(--color-primary)' : 'var(--color-text)',
-                      background: action.active ? 'var(--color-primary)18' : 'transparent',
-                    }}
-                    {...(action.dataTour ? { 'data-tour': action.dataTour } : {})}
-                  >
-                    <span style={{ color: action.active ? 'var(--color-primary)' : 'var(--color-muted)', flexShrink: 0 }}>
-                      {action.icon && getIcon(action.icon, { size: 15 })}
-                    </span>
-                    <span className="flex-1">{action.label}</span>
-                    {action.shortcut && (
-                      <kbd
-                        className="text-xs px-1.5 py-0.5 rounded font-mono"
-                        style={{
-                          background: 'var(--color-bg)',
-                          color: 'var(--color-muted)',
-                          border: '1px solid var(--color-border)',
-                        }}
-                      >
-                        {action.shortcut}
-                      </kbd>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      )}
+      <OverflowMenu actions={overflowActions} />
 
       {/* Zone 4b — keyboard shortcuts button */}
       {onShortcuts && (
