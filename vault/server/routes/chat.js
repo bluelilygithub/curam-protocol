@@ -1209,6 +1209,7 @@ router.post('/branches', async (req, res) => {
     const branches = Array.isArray(raw)
       ? raw.slice(0, 3).filter(b => b.title && b.content)
       : [];
+    console.log('[branches]', { model, assistantLen: assistantMsg.content.length, textLen: text.length, matched: !!match, rawCount: Array.isArray(raw) ? raw.length : 'non-array', finalCount: branches.length, preview: text.substring(0, 200) });
     return res.json({ branches });
   } catch (err) {
     console.error('[branches]', err.message);
