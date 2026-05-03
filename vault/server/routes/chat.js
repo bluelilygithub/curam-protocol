@@ -1162,11 +1162,15 @@ router.post('/branches', async (req, res) => {
     const model = chatModel || lightModel;
 
     const branchPrompt = [
-      'Identify 2–3 distinct sub-topics from the assistant response below that are worth exploring in their own dedicated conversation.',
+      'Read the exchange below and decide if the response contains 2 or more distinct sub-topics that each deserve a dedicated deeper conversation.',
       '',
-      'Return ONLY a valid JSON array — no explanation, no markdown fences, no preamble. Each item: {"title":"Max 8-word descriptive title","content":"The opening 2-3 substantive paragraphs you would write to begin a conversation focused entirely on this sub-topic — not a summary or teaser, actual content"}.',
+      'Branch-worthy: response covers multiple independent concepts, each substantial enough to explore on its own (e.g. a technical overview touching architecture, security, AND performance — each could be its own deep-dive).',
+      'Not branch-worthy: response is long but stays on one theme, or covers sub-points that are naturally part of the same answer.',
       '',
-      'Return [] only if the response is a single narrow topic with no meaningful sub-areas.',
+      'If branch-worthy, return a JSON array of 2–3 items. Each item: {"title":"Max 8-word descriptive title","content":"The opening 2-3 substantive paragraphs to begin a focused conversation on this sub-topic — real content, not a teaser"}.',
+      'If not branch-worthy, return [].',
+      '',
+      'Return ONLY the JSON array — no explanation, no markdown fences.',
       '',
       'User: ' + userMsg.content.substring(0, 600),
       '',
