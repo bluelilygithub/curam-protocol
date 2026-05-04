@@ -1,6 +1,5 @@
 'use strict';
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { pool } = require('../db');
 
 // text-embedding-004 produces 768-dimensional embeddings
@@ -18,10 +17,24 @@ async function embedText(text) {
   if (!apiKey) return null;
 
   try {
-    const genai = new GoogleGenerativeAI(apiKey);
-    const model = genai.getGenerativeModel({ model: 'text-embedding-004' });
-    const result = await model.embedContent(text);
-    return result.embedding.values;
+    // text-embedding-004 is only available on v1, not v1beta (SDK default)
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'models/text-embedding-004',
+          content: { parts: [{ text }] },
+        }),
+      }
+    );
+    if (!res.ok) {
+      const msg = await res.text();
+      throw new Error(`${res.status} ${msg}`);
+    }
+    const data = await res.json();
+    return data.embedding.values;
   } catch (err) {
     console.error('[embeddings] embedText error:', err.message);
     return null;

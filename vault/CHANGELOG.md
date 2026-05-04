@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-04 (6)
+
+**Fix:** `text-embedding-004` returning 404 — switched embeddings to direct REST call on `v1` endpoint.
+
+`@google/generative-ai` SDK defaults to the `v1beta` API. `text-embedding-004` is only registered under `v1`. `embedText()` now bypasses the SDK and calls `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent` directly via `fetch`. Embedding-based RAG and session summary storage are now functional on Railway.
+
+**Modified file:** `server/services/embeddings.js`.
+
+---
+
 ## 2026-05-04 (5)
 
 **Feature:** Branch evaluation model setting.
