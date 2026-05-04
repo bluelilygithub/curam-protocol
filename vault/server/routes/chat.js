@@ -62,7 +62,6 @@ function toDeepSeekMessages(systemBlocks, messages) {
 // Generates a ~150-word summary of a session and stores it + its embedding.
 // Fired background after each reply — cheap (Haiku) and fire-and-forget.
 async function generateAndStoreSessionSummary(sid, userId) {
-  if (!process.env.ANTHROPIC_API_KEY) return;
   try {
     const { rows: msgs } = await pool.query(
       `SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC`,
@@ -86,10 +85,18 @@ async function generateAndStoreSessionSummary(sid, userId) {
     const embedding = await embedText(summary);
     const vectorLiteral = embedding ? `[${embedding.join(',')}]` : null;
 
-    await pool.query(
-      `UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3`,
-      [summary, vectorLiteral, sid]
-    );
+    try {
+      await pool.query(
+        `UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3`,
+        [summary, vectorLiteral, sid]
+      );
+    } catch {
+      // summaryEmbedding column may not exist when pgvector is unavailable — store text only
+      await pool.query(
+        `UPDATE sessions SET summary=$1, "updatedAt"=NOW() WHERE "sessionId"=$2`,
+        [summary, sid]
+      );
+    }
   } catch (err) {
     console.error('[session-summary] error:', err.message);
   }
