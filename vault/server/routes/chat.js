@@ -777,8 +777,9 @@ router.post('/', chatLimiter, async (req, res) => {
           if (msgCount <= 2 && !sessionMeta?.title) {
             const userSnippet = lastUser.content.substring(0, 300);
             const aiSnippet = fullContent.substring(0, 300);
+            const titleModel = (lightModel.startsWith('claude-') && !model.startsWith('claude-')) ? model : lightModel;
             callModel(
-              lightModel,
+              titleModel,
               `Generate a concise 4-6 word title for this conversation. Return only the title, no punctuation, no quotes.\n\nUser: ${userSnippet}\n\nAssistant: ${aiSnippet}`,
               { maxTokens: 20 }
             ).then(title => {
@@ -1212,7 +1213,7 @@ router.post('/sessions/:sessionId/branch', async (req, res) => {
 
 // POST /api/chat/suggestions — generate follow-up suggestions via Haiku
 router.post('/suggestions', async (req, res) => {
-  const { sessionId, messages: clientMessages } = req.body;
+  const { sessionId, messages: clientMessages, model: activeModel } = req.body;
   if (!sessionId) return res.status(400).json({ suggestions: [] });
 
   let msgs = [];
@@ -1235,10 +1236,14 @@ router.post('/suggestions', async (req, res) => {
     .join('\n\n');
 
   const { light: lightModel } = await getModelsForUser(req.user?.id);
+  // Use active chat model's provider when light defaults to Anthropic but user is on another provider
+  const effectiveSuggestModel = (lightModel.startsWith('claude-') && activeModel && !activeModel.startsWith('claude-'))
+    ? activeModel
+    : lightModel;
 
   try {
     const text = await callModel(
-      lightModel,
+      effectiveSuggestModel,
       `Suggest 3 follow-up questions (max 8 words each). JSON array only.\n\n${conversationSnippet}`,
       { maxTokens: 180 }
     );
@@ -1299,12 +1304,16 @@ router.post('/analyse-prompt', async (req, res) => {
     } catch { /* use fallback */ }
 
     const { light: lightModel } = await getModelsForUser(req.user?.id);
+    // Use active chat model's provider when light defaults to Anthropic but user is on another provider
+    const classifyModel = (lightModel.startsWith('claude-') && currentModelId && !currentModelId.startsWith('claude-'))
+      ? currentModelId
+      : lightModel;
 
     // Classify the prompt complexity
     let classification;
     try {
       const rawText = await callModel(
-        lightModel,
+        classifyModel,
         String(prompt || '').slice(0, 2000),
         {
           maxTokens: 256,

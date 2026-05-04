@@ -318,7 +318,7 @@ function ChatPage({ general = false }) {
         role: m.role,
         content: typeof m.content === 'string' ? m.content.substring(0, 400) : '',
       }));
-      api.post('/api/chat/suggestions', { sessionId, messages: recentMsgs })
+      api.post('/api/chat/suggestions', { sessionId, messages: recentMsgs, model: effectiveModel })
         .then(r => r.json()).then(d => setSuggestions(d.suggestions || [])).catch(() => {});
       fetchSessions();
       fetchProjects();
