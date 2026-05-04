@@ -4,61 +4,30 @@ const { pool } = require('../db');
 
 const EMBEDDING_DIM = 768;
 
-// Track consecutive failures to avoid hammering a broken endpoint
-let _consecutiveFailures = 0;
-const FAILURE_THRESHOLD = 5;
-
 async function embedText(text) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
-  // Circuit breaker — skip after repeated failures to avoid log spam
-  if (_consecutiveFailures >= FAILURE_THRESHOLD) return null;
-
-  // Try models in order until one works
-  const candidates = [
-    'text-embedding-004',
-    'embedding-001',
-  ];
-
-  for (const model of candidates) {
-    for (const version of ['v1', 'v1beta']) {
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/${version}/models/${model}:embedContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              content: { parts: [{ text }] },
-            }),
-          }
-        );
-        if (!res.ok) {
-          const errBody = await res.text().catch(() => '');
-          console.error(`[embeddings] ${model}/${version} failed ${res.status}: ${errBody.slice(0, 200)}`);
-          continue;
-        }
-        const data = await res.json();
-        const values = data.embedding?.values;
-        if (values?.length) {
-          _consecutiveFailures = 0;
-          return values;
-        }
-      } catch (e) {
-        console.error(`[embeddings] ${model}/${version} exception:`, e.message);
-        continue;
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/embedding-001:embedContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: { parts: [{ text }] } }),
       }
+    );
+    if (!res.ok) {
+      const msg = await res.text().catch(() => '');
+      console.error(`[embeddings] embedText failed ${res.status}: ${msg.slice(0, 200)}`);
+      return null;
     }
+    const data = await res.json();
+    return data.embedding?.values || null;
+  } catch (err) {
+    console.error('[embeddings] embedText error:', err.message);
+    return null;
   }
-
-  _consecutiveFailures++;
-  if (_consecutiveFailures === FAILURE_THRESHOLD) {
-    console.warn('[embeddings] repeated failures — suppressing further attempts until restart');
-  } else {
-    console.error('[embeddings] embedText: no working embedding model found for this API key');
-  }
-  return null;
 }
 
 async function retrieveRelevantChunks(queryText, projectId, topK = 5) {
