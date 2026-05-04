@@ -1,6 +1,6 @@
 'use strict';
 
-const Anthropic = require('@anthropic-ai/sdk');
+const { callModel } = require('./callModel');
 
 const CALENDAR_LIMITS = {
   list:    20,
@@ -216,19 +216,12 @@ async function translateToCalendarQuery(userMessage, today, modelId = 'claude-ha
   const todayStr = today || new Date().toISOString().slice(0, 10);
   const dates    = calculateDates(todayStr);
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  let raw = '';
+  try {
+    raw = await callModel(modelId, userMessage, { maxTokens: 200, system: buildSystemPrompt(dates) });
+  } catch {
     return { timeMin: dates.todayStart, timeMax: dates.future30, searchQuery: userMessage, maxResults: CALENDAR_LIMITS.default, calendarId: 'primary', intent: 'list' };
   }
-
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const response = await client.messages.create({
-    model: modelId,
-    max_tokens: 200,
-    system: buildSystemPrompt(dates),
-    messages: [{ role: 'user', content: userMessage }],
-  });
-
-  const raw = response.content[0]?.text?.trim() || '';
 
   try {
     const match = raw.match(/\{[\s\S]*\}/);

@@ -1,6 +1,6 @@
 'use strict';
 
-const Anthropic = require('@anthropic-ai/sdk');
+const { callModel } = require('./callModel');
 
 const GMAIL_LIMITS = {
   count:   500,
@@ -220,24 +220,16 @@ Output: {"gmailQuery":"from:Sarah OR to:Sarah subject:contract","intent":"thread
  * @returns {Promise<{ gmailQuery: string, intent: string, maxResults: number, responseMode: string }>}
  */
 async function translateToGmailQuery(userMessage, today, modelId = 'claude-haiku-4-5-20251001') {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { gmailQuery: userMessage, intent: 'list', maxResults: GMAIL_LIMITS.list, responseMode: 'list' };
-  }
-
   const todayStr = today || new Date().toISOString().slice(0, 10);
   const dates = calculateDates(todayStr);
   const systemPrompt = buildSystemPrompt(dates);
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-  const response = await client.messages.create({
-    model: modelId,
-    max_tokens: 200,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
-  });
-
-  const raw = response.content[0]?.text?.trim() || '';
+  let raw = '';
+  try {
+    raw = await callModel(modelId, userMessage, { maxTokens: 200, system: systemPrompt });
+  } catch {
+    return { gmailQuery: userMessage, intent: 'list', maxResults: GMAIL_LIMITS.list, responseMode: 'list' };
+  }
 
   try {
     const match = raw.match(/\{[\s\S]*\}/);
