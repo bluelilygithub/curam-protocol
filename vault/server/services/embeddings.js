@@ -17,15 +17,14 @@ async function embedText(text) {
   if (!apiKey) return null;
 
   try {
-    // text-embedding-004 is only available on v1, not v1beta (SDK default)
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'models/text-embedding-004',
           content: { parts: [{ text }] },
+          taskType: 'RETRIEVAL_DOCUMENT',
         }),
       }
     );
