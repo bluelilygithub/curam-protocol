@@ -920,6 +920,19 @@ router.post('/sessions/branch-from-followup', async (req, res) => {
     }
 
     res.json({ sessionId: sid });
+
+    // Background: embed the generated content so this session appears in project RAG
+    // Use title + opening content as the summary — no extra LLM call needed.
+    const summaryText = `${title}\n\n${content.substring(0, 600)}`;
+    embedText(summaryText).then(embedding => {
+      if (!embedding) return;
+      const vec = `[${embedding.join(',')}]`;
+      pool.query(
+        `UPDATE sessions SET summary=$1, "summaryEmbedding"=$2 WHERE "sessionId"=$3`,
+        [summaryText, vec, sid]
+      ).catch(err => console.error('[branch-from-followup] summary embed error:', err.message));
+    }).catch(() => {});
+
   } catch (err) {
     console.error('[branch-from-followup]', err.message);
     res.status(500).json({ error: err.message });
@@ -939,7 +952,7 @@ router.get('/sessions/general', async (req, res) => {
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
       WHERE m."projectId" IS NULL AND s."userId"=$1
       GROUP BY m."sessionId", s."sessionId"
-      ORDER BY COALESCE(s.starred,0) DESC, MIN(m."createdAt") DESC
+      ORDER BY MIN(m."createdAt") ASC
       LIMIT 30
     `, [req.user.id]);
     res.json(rows);
@@ -992,7 +1005,7 @@ router.get('/sessions/:projectId', async (req, res) => {
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
       WHERE m."projectId"=$1
       GROUP BY m."sessionId", s."sessionId"
-      ORDER BY COALESCE(s.starred,0) DESC, MIN(m."createdAt") DESC
+      ORDER BY MIN(m."createdAt") ASC
     `, [req.params.projectId]);
     res.json(rows);
   } catch (err) {
