@@ -61,7 +61,7 @@ function toDeepSeekMessages(systemBlocks, messages) {
 
 // Generates a ~150-word summary of a session and stores it + its embedding.
 // Fired background after each reply — cheap (Haiku) and fire-and-forget.
-async function generateAndStoreSessionSummary(sid, userId) {
+async function generateAndStoreSessionSummary(sid, userId, modelHint = null) {
   try {
     const { rows: msgs } = await pool.query(
       `SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC`,
@@ -75,8 +75,12 @@ async function generateAndStoreSessionSummary(sid, userId) {
       .join('\n\n');
 
     const { light: lightModel } = await getModelsForUser(userId);
+    // If lightModel defaults to Anthropic but the active chat used a non-Anthropic model, use that instead
+    const effectiveModel = (lightModel.startsWith('claude-') && modelHint && !modelHint.startsWith('claude-'))
+      ? modelHint
+      : lightModel;
     const summary = await callModel(
-      lightModel,
+      effectiveModel,
       `Summarise this conversation in 150 words for use as context in future related chats in the same project. Cover: main topics, key decisions or conclusions, important discoveries or constraints. Plain text, no bullet points.\n\n${transcript}`,
       { maxTokens: 300 }
     );
@@ -789,7 +793,7 @@ router.post('/', chatLimiter, async (req, res) => {
 
           // Background: regenerate session summary for project-level RAG
           if (projectId) {
-            generateAndStoreSessionSummary(sid, req.user?.id ?? null).catch(() => {});
+            generateAndStoreSessionSummary(sid, req.user?.id ?? null, model).catch(() => {});
           }
         }
       }

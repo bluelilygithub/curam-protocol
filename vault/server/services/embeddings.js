@@ -2,53 +2,58 @@
 
 const { pool } = require('../db');
 
-// text-embedding-004 produces 768-dimensional embeddings
 const EMBEDDING_DIM = 768;
 
-/**
- * Embed a single string using Google's text-embedding-004 model.
- * Returns a float array, or null if GEMINI_API_KEY is absent or the call fails.
- *
- * @param {string} text
- * @returns {Promise<number[]|null>}
- */
+// Track consecutive failures to avoid hammering a broken endpoint
+let _consecutiveFailures = 0;
+const FAILURE_THRESHOLD = 5;
+
 async function embedText(text) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/embedding-001:embedContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: { parts: [{ text }] },
-        }),
-      }
-    );
-    if (!res.ok) {
-      const msg = await res.text();
-      throw new Error(`${res.status} ${msg}`);
+  // Circuit breaker — skip after repeated failures to avoid log spam
+  if (_consecutiveFailures >= FAILURE_THRESHOLD) return null;
+
+  // Try models in order until one works
+  const candidates = [
+    'text-embedding-004',
+    'embedding-001',
+  ];
+
+  for (const model of candidates) {
+    for (const version of ['v1', 'v1beta']) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/${version}/models/${model}:embedContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              content: { parts: [{ text }] },
+            }),
+          }
+        );
+        if (!res.ok) continue;
+        const data = await res.json();
+        const values = data.embedding?.values;
+        if (values?.length) {
+          _consecutiveFailures = 0;
+          return values;
+        }
+      } catch { continue; }
     }
-    const data = await res.json();
-    return data.embedding.values;
-  } catch (err) {
-    console.error('[embeddings] embedText error:', err.message);
-    return null;
   }
+
+  _consecutiveFailures++;
+  if (_consecutiveFailures === FAILURE_THRESHOLD) {
+    console.warn('[embeddings] repeated failures — suppressing further attempts until restart');
+  } else {
+    console.error('[embeddings] embedText: no working embedding model found for this API key');
+  }
+  return null;
 }
 
-/**
- * Embed the user's query and return the top-K most relevant chunks for a project.
- * Falls back to an empty array if GEMINI_API_KEY is absent, pgvector is unavailable,
- * or any error occurs — the caller falls back to full-text injection.
- *
- * @param {string} queryText
- * @param {number|string} projectId
- * @param {number} topK
- * @returns {Promise<string[]>}
- */
 async function retrieveRelevantChunks(queryText, projectId, topK = 5) {
   if (!process.env.GEMINI_API_KEY || !queryText || !projectId) return [];
 
