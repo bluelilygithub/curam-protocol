@@ -236,19 +236,21 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
       let relatedSessions = [];
 
       if (userMessage && process.env.GEMINI_API_KEY) {
-        const queryEmb = await embedText(userMessage.substring(0, 500));
-        if (queryEmb) {
-          const vec = `[${queryEmb.join(',')}]`;
-          const { rows } = await pool.query(
-            `SELECT title, summary FROM sessions
-             WHERE "projectId"=$1 AND "sessionId"!=$2
-               AND summary IS NOT NULL AND "summaryEmbedding" IS NOT NULL
-             ORDER BY "summaryEmbedding" <=> $3::vector
-             LIMIT 5`,
-            [project.id, sid, vec]
-          );
-          relatedSessions = rows;
-        }
+        try {
+          const queryEmb = await embedText(userMessage.substring(0, 500));
+          if (queryEmb) {
+            const vec = `[${queryEmb.join(',')}]`;
+            const { rows } = await pool.query(
+              `SELECT title, summary FROM sessions
+               WHERE "projectId"=$1 AND "sessionId"!=$2
+                 AND summary IS NOT NULL AND "summaryEmbedding" IS NOT NULL
+               ORDER BY "summaryEmbedding" <=> $3::vector
+               LIMIT 5`,
+              [project.id, sid, vec]
+            );
+            relatedSessions = rows;
+          }
+        } catch { /* pgvector unavailable — fall through to recency fallback */ }
       }
 
       if (relatedSessions.length === 0) {
