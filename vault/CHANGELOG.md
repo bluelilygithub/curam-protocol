@@ -6,9 +6,9 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ## 2026-05-04 (6)
 
-**Fix:** `text-embedding-004` 404 — use `v1beta` + `taskType`, drop `model` from body.
+**Fix:** Embeddings — switch to `embedding-001`; `text-embedding-004` unavailable for this API key.
 
-Google's embedding API requires `v1beta` (not `v1`), no `model` field in the request body (model is encoded in the URL path), and `taskType: "RETRIEVAL_DOCUMENT"` for `text-embedding-004`. All three were wrong: SDK was sending `model` in body, our manual fetch used `v1` and included `model`. Fixed to match Google's documented curl format exactly.
+`text-embedding-004` returns 404 on both `v1` and `v1beta` for this API key — the model is not accessible with the current Gemini key. Switched to `embedding-001`, which is universally available on all Gemini API keys and produces the same 768-dimension vectors, keeping the schema unchanged.
 
 **Modified file:** `server/services/embeddings.js`.
 
