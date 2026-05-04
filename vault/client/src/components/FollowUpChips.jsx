@@ -12,33 +12,34 @@ function FollowUpChips({ suggestions, onSelect, onBranch, canBranch, isBranching
           {pendingIdx === i ? (
             <div
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-primary)' }}
             >
-              <span className="truncate max-w-[200px]" style={{ color: 'var(--color-muted)' }}>{s}</span>
-              <span style={{ color: 'var(--color-border)' }}>·</span>
+              <span className="truncate max-w-[180px]" style={{ color: 'var(--color-muted)' }}>{s}</span>
               <button
                 onClick={() => { setPendingIdx(null); onSelect(s); }}
-                className="font-medium hover:opacity-70 transition-opacity flex-shrink-0"
-                style={{ color: 'var(--color-primary)' }}
+                className="flex-shrink-0 px-2 py-0.5 rounded-lg font-medium transition-opacity hover:opacity-80"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}
               >
                 Ask here
               </button>
               {canBranch && (
-                <>
-                  <span style={{ color: 'var(--color-border)' }}>·</span>
-                  <button
-                    onClick={() => { setPendingIdx(null); onBranch(s); }}
-                    disabled={isBranching}
-                    className="font-medium hover:opacity-70 transition-opacity flex-shrink-0"
-                    style={{ color: 'var(--color-text)', opacity: isBranching ? 0.5 : undefined }}
-                  >
-                    {isBranching ? 'Creating…' : 'New chat'}
-                  </button>
-                </>
+                <button
+                  onClick={() => { setPendingIdx(null); onBranch(s); }}
+                  disabled={isBranching}
+                  className="flex-shrink-0 px-2 py-0.5 rounded-lg font-medium border transition-opacity hover:opacity-80"
+                  style={{
+                    borderColor: 'var(--color-primary)',
+                    color: 'var(--color-primary)',
+                    background: 'transparent',
+                    opacity: isBranching ? 0.5 : undefined,
+                  }}
+                >
+                  New chat
+                </button>
               )}
               <button
                 onClick={() => setPendingIdx(null)}
-                className="hover:opacity-60 transition-opacity flex-shrink-0 ml-0.5"
+                className="flex-shrink-0 hover:opacity-60 transition-opacity"
                 style={{ color: 'var(--color-muted)' }}
               >
                 ✕

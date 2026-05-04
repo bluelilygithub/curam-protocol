@@ -2031,6 +2031,25 @@ function ChatPage({ general = false }) {
         />
       )}
 
+      {/* Branching loading modal */}
+      {isBranching && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.35)' }}>
+          <div
+            className="px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3 text-center"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', minWidth: '260px' }}
+          >
+            <div
+              className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+              style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
+            />
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Creating new chat…</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Generating a focused opening based on your project context and this conversation.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Smart Model Advisor modal */}
       <ModelAdvisorModal
         isOpen={advisorOpen}
