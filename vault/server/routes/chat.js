@@ -1245,14 +1245,18 @@ router.post('/suggestions', async (req, res) => {
     ? activeModel
     : lightModel;
 
+  console.log(`[suggestions] model=${effectiveSuggestModel} msgs=${msgs.length} sid=${sessionId}`);
+
   try {
     const text = await callModel(
       effectiveSuggestModel,
       `Suggest 3 follow-up questions (max 8 words each). JSON array only.\n\n${conversationSnippet}`,
       { maxTokens: 180 }
     );
+    console.log(`[suggestions] raw=${text.slice(0, 120)}`);
     const match = text.match(/\[[\s\S]*\]/);
     const suggestions = match ? JSON.parse(match[0]) : [];
+    console.log(`[suggestions] parsed=${suggestions.length}`);
     res.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 3) : [] });
   } catch (err) {
     console.error('[suggestions] callModel error:', err.message);
