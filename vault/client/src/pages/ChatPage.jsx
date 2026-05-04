@@ -17,7 +17,6 @@ import UrlBar from '../components/UrlBar';
 import ArtifactPanel from '../components/ArtifactPanel';
 import ProjectFilesPanel from '../components/ProjectFilesPanel';
 import FollowUpChips from '../components/FollowUpChips';
-import BranchSuggestions from '../components/BranchSuggestions';
 import { downloadChatMd } from '../utils/exportMd';
 import { calcCost, formatCost, formatTokens } from '../utils/pricing';
 import { useModels } from '../hooks/useModels';
@@ -44,7 +43,7 @@ const TEMPERATURES = [
 // not when the user types in the input field.
 const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
-  suggestions, branches, onDelete, onBranch, onOpenArtifact, onSuggestionSelect, onBranchSelect,
+  suggestions, onDelete, onBranch, onOpenArtifact, onSuggestionSelect, onBranchFollowup, canBranch, isBranching,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
   isTTSAvailable, isSpeaking, isPaused, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
   wideChat,
@@ -75,10 +74,13 @@ const MemoMessageList = React.memo(function MemoMessageList({
               onStop={isLastAssistant && isTTSAvailable ? stopSpeaking : undefined}
             />
             {isLastAssistant && !isStreaming && (
-              <>
-                <FollowUpChips suggestions={suggestions} onSelect={onSuggestionSelect} />
-                <BranchSuggestions branches={branches} onSelect={onBranchSelect} />
-              </>
+              <FollowUpChips
+                suggestions={suggestions}
+                onSelect={onSuggestionSelect}
+                onBranch={onBranchFollowup}
+                canBranch={canBranch}
+                isBranching={isBranching}
+              />
             )}
           </div>
         );
@@ -184,7 +186,7 @@ function ChatPage({ general = false }) {
 
   // Follow-up suggestions
   const [suggestions, setSuggestions] = useState([]);
-  const [branches, setBranches] = useState([]);
+  const [isBranching, setIsBranching] = useState(false);
 
   // Prompt picker
   const [showPromptPicker, setShowPromptPicker] = useState(false);
@@ -309,26 +311,21 @@ function ChatPage({ general = false }) {
     if (sessionId) { setSummaryText(''); setShowSummaryPanel(false); setSuggestions([]); }
   }, [sessionId]);
 
-  // Fetch follow-up suggestions + branch suggestions after stream ends
+  // Fetch follow-up suggestions after stream ends
   useEffect(() => {
     if (!isStreaming && sessionId && messages.length >= 2) {
       api.post('/api/chat/suggestions', { sessionId })
         .then(r => r.json()).then(d => setSuggestions(d.suggestions || [])).catch(() => {});
-      if (projectId) {
-        api.post('/api/chat/branches', { sessionId, projectId, model: effectiveModel })
-          .then(r => r.json()).then(d => setBranches(d.branches || [])).catch(() => {});
-      }
       fetchSessions();
       fetchProjects();
     } else if (isStreaming) {
       setSuggestions([]);
-      setBranches([]);
     }
   }, [isStreaming]);
 
   // Cmd+N new chat listener
   useEffect(() => {
-    const handler = () => { clearMessages(); setSuggestions([]); setBranches([]); setActiveArtifacts(null); };
+    const handler = () => { clearMessages(); setSuggestions([]); setActiveArtifacts(null); };
     document.addEventListener('vault:new-chat', handler);
     return () => document.removeEventListener('vault:new-chat', handler);
   }, [clearMessages]);
@@ -340,7 +337,6 @@ function ChatPage({ general = false }) {
       setShowSummaryPanel(false);
       setSummaryText('');
       setSuggestions([]);
-      setBranches([]);
       setActiveArtifacts(null);
       loadHistory(e.detail);
     };
@@ -355,7 +351,6 @@ function ChatPage({ general = false }) {
       setShowSummaryPanel(false);
       setSummaryText('');
       setSuggestions([]);
-      setBranches([]);
       setActiveArtifacts(null);
       loadHistory(sessionParam);
     }
@@ -483,7 +478,6 @@ function ChatPage({ general = false }) {
     clearUrls();
     setInlineImages([]);
     setSuggestions([]);
-    setBranches([]);
     setActiveArtifacts(null);
     await sendMessage(text, ids, meta, effectiveModel, readyUrls, temperature, selectedPersonaId, reasoning, imgPayload, webSearch);
     setTimeout(fetchSessions, 2000);
@@ -492,20 +486,26 @@ function ChatPage({ general = false }) {
   handleSendRef.current = handleSend;
   const stableSuggestionSelect = useCallback((s) => handleSendRef.current?.(s), []);
 
-  const handleBranchSelect = useCallback(async (branch) => {
+  const handleBranchFromFollowup = useCallback(async (title) => {
     if (!projectId) return;
+    setIsBranching(true);
     try {
-      const res = await api.post('/api/chat/sessions/seed', { projectId, title: branch.title, content: branch.content });
+      const res = await api.post('/api/chat/sessions/branch-from-followup', {
+        projectId,
+        title,
+        parentSessionId: sessionId,
+      });
       const { sessionId: newSid } = await res.json();
-      setBranches([]);
       setSuggestions([]);
       setActiveArtifacts(null);
       await loadHistory(newSid);
       fetchSessions();
     } catch (err) {
-      console.error('[branch-select]', err);
+      console.error('[branch-from-followup]', err);
+    } finally {
+      setIsBranching(false);
     }
-  }, [projectId, loadHistory, fetchSessions]);
+  }, [projectId, sessionId, loadHistory, fetchSessions]);
 
   // After a model switch from the advisor, fire the send once the new chatModel value has committed
   useEffect(() => {
@@ -1431,12 +1431,13 @@ function ChatPage({ general = false }) {
                 isAiSearching={isAiSearching}
                 sessionId={sessionId}
                 suggestions={suggestions}
-                branches={branches}
                 onDelete={deleteMessagePair}
                 onBranch={handleBranch}
                 onOpenArtifact={handleOpenArtifact}
                 onSuggestionSelect={stableSuggestionSelect}
-                onBranchSelect={handleBranchSelect}
+                onBranchFollowup={handleBranchFromFollowup}
+                canBranch={!!projectId}
+                isBranching={isBranching}
                 messagesEndRef={messagesEndRef}
                 bookmarkedMap={bookmarkedMap}
                 onToggleBookmark={handleToggleBookmark}

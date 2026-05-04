@@ -826,6 +826,106 @@ router.post('/sessions/seed', async (req, res) => {
   }
 });
 
+// POST /api/chat/sessions/branch-from-followup — create a new session seeded with AI content
+// based on a follow-up question, the parent session's conversation, and the project brief.
+router.post('/sessions/branch-from-followup', async (req, res) => {
+  const { projectId, title, parentSessionId } = req.body;
+  if (!projectId || !title) return res.status(400).json({ error: 'projectId and title required' });
+
+  try {
+    const { rows: projRows } = await pool.query('SELECT * FROM projects WHERE id=$1', [projectId]);
+    const project = projRows[0];
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    // Parent session context — last 10 messages
+    let parentContext = '';
+    if (parentSessionId) {
+      const { rows: msgs } = await pool.query(
+        'SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" DESC LIMIT 10',
+        [parentSessionId]
+      );
+      parentContext = msgs.reverse()
+        .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.substring(0, 600)}`)
+        .join('\n\n');
+    }
+
+    // Project brief
+    const briefParts = [];
+    if (project.goal) briefParts.push(`Goal: ${project.goal}`);
+    if (project.problem) briefParts.push(`Problem: ${project.problem}`);
+    if (project.audience) briefParts.push(`Audience: ${project.audience}`);
+    if (project.techStack) briefParts.push(`Tech stack: ${project.techStack}`);
+    if (project.constraints) briefParts.push(`Constraints: ${project.constraints}`);
+    if (project.notes) briefParts.push(`Notes: ${project.notes}`);
+    const brief = briefParts.join('\n');
+
+    const promptParts = [
+      `You are starting a new focused conversation in the project "${project.name}".`,
+      brief ? `\nProject context:\n${brief}` : '',
+      parentContext ? `\nRecent conversation this is branching from:\n${parentContext}` : '',
+      `\nThe user wants to explore this specific topic: "${title}"`,
+      '\nWrite a substantive, focused opening response (3–5 paragraphs) that dives directly into this topic. Draw on the project context and conversation above to make it specific and grounded. Do not introduce yourself or explain what you are doing — just begin the conversation.',
+    ].filter(Boolean).join('\n');
+
+    const { standard: standardModel } = await getModelsForUser(req.user?.id);
+    let content = '';
+
+    if (isGemini(standardModel)) {
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      if (!geminiApiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+      const genai = new GoogleGenerativeAI(geminiApiKey);
+      const gModel = genai.getGenerativeModel({ model: standardModel, generationConfig: { maxOutputTokens: 2000 } });
+      const result = await gModel.generateContent(promptParts);
+      content = result.response.text().trim();
+    } else if (isDeepSeek(standardModel)) {
+      const dsKey = process.env.DEEPSEEK_API_KEY;
+      if (!dsKey) return res.status(500).json({ error: 'DEEPSEEK_API_KEY not configured' });
+      const dsRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${dsKey}` },
+        body: JSON.stringify({ model: standardModel, messages: [{ role: 'user', content: promptParts }], max_tokens: 2000 }),
+      });
+      const dsData = await dsRes.json();
+      content = dsData.choices?.[0]?.message?.content?.trim() || '';
+    } else {
+      if (!process.env.ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not configured' });
+      const response = await anthropic.messages.create({
+        model: standardModel,
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: promptParts }],
+      });
+      content = response.content[0]?.text?.trim() || '';
+    }
+
+    if (!content) return res.status(500).json({ error: 'Failed to generate branch content' });
+
+    const sid = `branch-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'INSERT INTO sessions ("sessionId","projectId","userId",title,"branchedFrom") VALUES ($1,$2,$3,$4,$5)',
+        [sid, projectId, req.user?.id ?? null, title, parentSessionId || null]
+      );
+      await client.query(
+        'INSERT INTO messages ("sessionId","projectId",role,content) VALUES ($1,$2,$3,$4)',
+        [sid, projectId, 'assistant', content]
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    res.json({ sessionId: sid });
+  } catch (err) {
+    console.error('[branch-from-followup]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/chat/sessions/general — sessions with no project (must be before :projectId)
 router.get('/sessions/general', async (req, res) => {
   try {
@@ -1132,96 +1232,6 @@ router.post('/suggestions', async (req, res) => {
   }
 });
 
-// POST /api/chat/branches — post-stream branch suggestion using the session's own model.
-// Reads the last exchange, decides if branching is warranted, returns up to 3 branch objects.
-router.post('/branches', async (req, res) => {
-  const { sessionId, projectId, model: chatModel } = req.body;
-  if (!sessionId || !projectId) return res.json({ branches: [] });
-
-  try {
-    // Skip quick-type projects
-    const { rows: projRows } = await pool.query('SELECT "projectType" FROM projects WHERE id=$1', [projectId]);
-    if (projRows[0]?.projectType === 'quick') return res.json({ branches: [] });
-
-    // Fetch last user + assistant message pair
-    const { rows: msgRows } = await pool.query(
-      'SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" DESC LIMIT 2',
-      [sessionId]
-    );
-    const msgs = msgRows.reverse();
-    if (msgs.length < 2) return res.json({ branches: [] });
-
-    const userMsg = msgs.find(m => m.role === 'user');
-    const assistantMsg = msgs.find(m => m.role === 'assistant');
-    if (!userMsg || !assistantMsg) return res.json({ branches: [] });
-
-    // Skip short responses — not complex enough to warrant branches
-    if (assistantMsg.content.length < 400) return res.json({ branches: [] });
-
-    const { light: lightModel } = await getModelsForUser(req.user?.id);
-    // branch_eval_model setting overrides the chat model for evaluation
-    const { rows: evalRows } = req.user?.id
-      ? await pool.query("SELECT value FROM settings WHERE \"userId\"=$1 AND key='branch_eval_model'", [req.user.id])
-      : { rows: [] };
-    const model = evalRows[0]?.value || chatModel || lightModel;
-
-    const branchPrompt = [
-      'Read the exchange below and decide if the response contains 2 or more distinct sub-topics that each deserve a dedicated deeper conversation.',
-      '',
-      'Branch-worthy: response covers multiple independent concepts, each substantial enough to explore on its own (e.g. a technical overview touching architecture, security, AND performance — each could be its own deep-dive).',
-      'Not branch-worthy: response is long but stays on one theme, or covers sub-points that are naturally part of the same answer.',
-      '',
-      'If branch-worthy, return a JSON array of 2–3 items. Each item: {"title":"Max 8-word descriptive title","content":"The opening 2-3 substantive paragraphs to begin a focused conversation on this sub-topic — real content, not a teaser"}.',
-      'If not branch-worthy, return [].',
-      '',
-      'Return ONLY the JSON array — no explanation, no markdown fences.',
-      '',
-      'User: ' + userMsg.content.substring(0, 600),
-      '',
-      'Assistant: ' + assistantMsg.content.substring(0, 1200),
-    ].join('\n');
-
-    let text = '[]';
-
-    if (isGemini(model)) {
-      const geminiKey = process.env.GEMINI_API_KEY;
-      if (!geminiKey) return res.json({ branches: [] });
-      const genai = new GoogleGenerativeAI(geminiKey);
-      const gModel = genai.getGenerativeModel({ model });
-      const result = await gModel.generateContent(branchPrompt);
-      text = result.response.text() || '[]';
-    } else if (isDeepSeek(model)) {
-      const dsKey = process.env.DEEPSEEK_API_KEY;
-      if (!dsKey) return res.json({ branches: [] });
-      const dsRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${dsKey}` },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: branchPrompt }], max_tokens: 1200 }),
-      });
-      const data = await dsRes.json();
-      text = data.choices?.[0]?.message?.content || '[]';
-    } else {
-      if (!process.env.ANTHROPIC_API_KEY) return res.json({ branches: [] });
-      const response = await anthropic.messages.create({
-        model,
-        max_tokens: 1200,
-        messages: [{ role: 'user', content: branchPrompt }],
-      });
-      text = response.content[0]?.text?.trim() || '[]';
-    }
-
-    const match = text.match(/\[[\s\S]*\]/);
-    const raw = match ? JSON.parse(match[0]) : [];
-    const branches = Array.isArray(raw)
-      ? raw.slice(0, 3).filter(b => b.title && b.content)
-      : [];
-    console.log('[branches]', { model, assistantLen: assistantMsg.content.length, textLen: text.length, matched: !!match, rawCount: Array.isArray(raw) ? raw.length : 'non-array', finalCount: branches.length, preview: text.substring(0, 200) });
-    return res.json({ branches });
-  } catch (err) {
-    console.error('[branches]', err.message);
-    return res.json({ branches: [] });
-  }
-});
 
 // ── POST /api/chat/analyse-prompt — Smart Model Advisor pre-send classifier ────
 router.post('/analyse-prompt', async (req, res) => {
