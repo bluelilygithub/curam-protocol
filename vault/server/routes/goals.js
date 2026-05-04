@@ -4,9 +4,30 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
+const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 
 const anthropic = new Anthropic();
+
+async function streamModelSSE(res, { modelId, system, userContent, maxTokens, onError }) {
+  if (!modelId.startsWith('claude-')) {
+    try {
+      const text = await callModel(modelId, userContent, { maxTokens, ...(system ? { system } : {}) });
+      res.write(`data: ${JSON.stringify(text || '')}\n\n`);
+    } catch (err) {
+      if (onError) onError(err);
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
+    return;
+  }
+  const params = { model: modelId, max_tokens: maxTokens, messages: [{ role: 'user', content: userContent }] };
+  if (system) params.system = system;
+  const stream = anthropic.messages.stream(params);
+  stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
+  stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
+  stream.on('error', (err) => { if (onError) onError(err); res.write('data: [DONE]\n\n'); res.end(); });
+}
 
 async function buildKeyResult(kr) {
   const { rows: tasks } = await pool.query(
@@ -100,23 +121,13 @@ Suggest 3-5 SMART Key Results for this objective. For each, provide a JSON objec
 Output ONLY JSON objects, one per line, no explanations, no markdown, no array brackets. Example:
 {"title":"Increase monthly revenue","targetValue":50000,"unit":"$"}
 {"title":"Complete onboarding modules","targetValue":100,"unit":"%"}`;
-    const stream = anthropic.messages.stream({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 500,
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    await streamModelSSE(res, {
+      modelId: lightModel,
       system: 'You are a goal-setting coach specialising in OKR frameworks. Output only JSON objects, one per line.',
-      messages: [{ role: 'user', content: prompt }],
-    });
-    stream.on('text', (text) => {
-      res.write(`data: ${JSON.stringify(text)}\n\n`);
-    });
-    stream.on('finalMessage', () => {
-      res.write('data: [DONE]\n\n');
-      res.end();
-    });
-    stream.on('error', (err) => {
-      console.error('[goals ai-suggest]', err);
-      res.write('data: [DONE]\n\n');
-      res.end();
+      userContent: prompt,
+      maxTokens: 500,
+      onError: (err) => console.error('[goals ai-suggest]', err),
     });
   } catch (err) {
     console.error('[goals ai-suggest]', err);
@@ -202,17 +213,12 @@ router.post('/mission/generate', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     const prompt = `Based on these answers about a person's roles, character traits, lifetime contributions, and guiding principles, write a personal mission statement that is 2–4 sentences, inspiring, personal, and written in the first person. Focus on being and contributing, not just achieving. Return only the mission statement text with no preamble or explanation.\n\nAnswers:\n1. Roles: ${answers[0]}\n2. Character traits: ${answers[1]}\n3. Lifetime contributions: ${answers[2]}\n4. Guiding principles: ${answers[3]}`;
-    const stream = anthropic.messages.stream({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
-    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
-    stream.on('error', (err) => {
-      console.error('[goals mission generate]', err);
-      res.write('data: [DONE]\n\n');
-      res.end();
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    await streamModelSSE(res, {
+      modelId: lightModel,
+      userContent: prompt,
+      maxTokens: 300,
+      onError: (err) => console.error('[goals mission generate]', err),
     });
   } catch (err) {
     console.error('[goals mission generate]', err);
@@ -231,14 +237,13 @@ router.post('/renewal-assessment', async (req, res) => {
       .map(([k, v]) => `${k}: ${v.taskCount || 0} task(s), ${v.objectiveCount || 0} objective(s)`)
       .join('; ');
     const prompt = `A person's current renewal dimension balance (Habit 7 — Sharpen the Saw):\n${summary}\n\nThe 4 renewal dimensions: Physical (body, health, exercise), Mental (learning, reading, creativity), Social/Emotional (relationships, empathy, giving), Spiritual (mission, values, reflection).\n\nIn 2-3 sentences, give a warm and practical assessment of their balance. If one dimension is significantly lower than others, suggest one specific action they could take this week to strengthen it. Be encouraging and brief.`;
-    const stream = anthropic.messages.stream({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 250,
-      messages: [{ role: 'user', content: prompt }],
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    await streamModelSSE(res, {
+      modelId: lightModel,
+      userContent: prompt,
+      maxTokens: 250,
+      onError: (err) => console.error('[goals renewal-assessment]', err),
     });
-    stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
-    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
-    stream.on('error', (err) => { console.error('[goals renewal-assessment]', err); res.write('data: [DONE]\n\n'); res.end(); });
   } catch (err) {
     console.error('[goals renewal-assessment]', err);
     res.status(500).json({ error: err.message });
@@ -334,14 +339,13 @@ router.post('/wizard/generate-mission', async (req, res) => {
 What matters most to them: ${mattersMost || '(not provided)'}
 What they are getting better at: ${betterAt || '(not provided)'}
 Their current life stage / context: ${lifeStage || '(not provided)'}`;
-    const stream = anthropic.messages.stream({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }],
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    await streamModelSSE(res, {
+      modelId: lightModel,
+      userContent: prompt,
+      maxTokens: 300,
+      onError: (err) => console.error('[wizard generate-mission]', err),
     });
-    stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
-    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
-    stream.on('error', (err) => { console.error('[wizard generate-mission]', err); res.write('data: [DONE]\n\n'); res.end(); });
   } catch (err) {
     console.error('[wizard generate-mission]', err);
     res.status(500).json({ error: err.message });
@@ -356,12 +360,8 @@ router.post('/wizard/suggest-objective', async (req, res) => {
 What matters most: "${mattersMost || '(not provided)'}"
 
 Suggest ONE concrete, achievable objective for the next 90 days that aligns with this mission. Return a JSON object with fields: title (string, max 60 chars), description (string, 1 sentence), timeframe (string, e.g. "Q2 2026"), color (one of: #6366f1, #3b82f6, #22c55e, #f59e0b, #ef4444, #8b5cf6). Output only the JSON object, no explanation.`;
-    const message = await anthropic.messages.create({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 200,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    const text = message.content[0]?.text || '{}';
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const text = await callModel(lightModel, prompt, { maxTokens: 200 }) || '{}';
     const match = text.match(/\{[\s\S]*\}/);
     const suggestion = match ? JSON.parse(match[0]) : {};
     res.json(suggestion);
@@ -378,12 +378,8 @@ router.post('/wizard/suggest-krs', async (req, res) => {
     const prompt = `Objective: "${objectiveTitle}"${objectiveDescription ? `\n${objectiveDescription}` : ''}
 
 Suggest exactly 3 SMART Key Results. Output only 3 JSON objects, one per line, with fields: title (string), targetValue (number), unit (string like "%", "tasks", "sessions", "hours", "items"). No markdown, no explanation.`;
-    const message = await anthropic.messages.create({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    const text = message.content[0]?.text || '';
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const text = await callModel(lightModel, prompt, { maxTokens: 300 }) || '';
     const lines = text.split('\n').filter(l => l.trim().startsWith('{'));
     const krs = [];
     for (const line of lines) {
@@ -407,14 +403,13 @@ router.post('/wizard/renewal-observation', async (req, res) => {
 Physical: ${physical ?? 5}/10, Mental: ${mental ?? 5}/10, Social: ${social ?? 5}/10, Spiritual: ${spiritual ?? 5}/10
 
 In 2–3 sentences, give a warm personalised observation about their balance. Name the dimension that scored lowest and suggest one small, specific thing they could add to their life this week to strengthen it. Be warm, brief, and encouraging.`;
-    const stream = anthropic.messages.stream({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 200,
-      messages: [{ role: 'user', content: prompt }],
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    await streamModelSSE(res, {
+      modelId: lightModel,
+      userContent: prompt,
+      maxTokens: 200,
+      onError: (err) => console.error('[wizard renewal-observation]', err),
     });
-    stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
-    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
-    stream.on('error', (err) => { console.error('[wizard renewal-observation]', err); res.write('data: [DONE]\n\n'); res.end(); });
   } catch (err) {
     console.error('[wizard renewal-observation]', err);
     res.status(500).json({ error: err.message });

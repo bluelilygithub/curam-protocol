@@ -41,8 +41,9 @@ async function getModelsForUser(userId) {
         const anthropicModels = models.filter(m => m.id && !m.id.startsWith('gemini-') && !m.id.startsWith('deepseek-'));
         const geminiModels    = models.filter(m => m.id &&  m.id.startsWith('gemini-'));
         const deepseekModels  = models.filter(m => m.id &&  m.id.startsWith('deepseek-'));
-        light    = anthropicModels[0]?.id || DEFAULTS.light;
-        standard = anthropicModels[1]?.id || anthropicModels[0]?.id || DEFAULTS.standard;
+        // Prefer Anthropic for light/standard, fall back to DeepSeek then Gemini
+        light    = anthropicModels[0]?.id || deepseekModels[0]?.id || geminiModels[0]?.id || DEFAULTS.light;
+        standard = anthropicModels[1]?.id || anthropicModels[0]?.id || deepseekModels[0]?.id || geminiModels[0]?.id || DEFAULTS.standard;
         gemini   = geminiModels[0]?.id    || DEFAULTS.gemini;
         deepseek = deepseekModels[0]?.id  || DEFAULTS.deepseek;
       }

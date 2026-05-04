@@ -3,14 +3,12 @@
 const express   = require('express');
 const router    = express.Router();
 const { pool }  = require('../db');
-const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { generateDigestForUser } = require('../cron/newsDigestCron');
+const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 
 const { DEFAULT_SOURCES } = require('../services/newsAggregationService');
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 function getGemini() {
   const key = process.env.GEMINI_API_KEY;
@@ -317,13 +315,8 @@ router.post('/topics/:topicId/chat', async (req, res) => {
     }
 
     if (!aiText) {
-      const response = await anthropic.messages.create({
-        model: lightModel,
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: message.trim() }],
-      });
-      aiText = response.content[0]?.text || 'Sorry, I could not generate a response.';
+      aiText = await callModel(lightModel, message.trim(), { maxTokens: 1024, system: systemPrompt })
+        || 'Sorry, I could not generate a response.';
     }
 
     // Save assistant message and return both

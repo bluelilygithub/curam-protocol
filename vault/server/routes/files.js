@@ -6,6 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
+const { callModel } = require('../services/callModel');
 const { pool } = require('../db');
 const { sanitiseCodeFile } = require('../utils/sanitiseCodeFile');
 const { getModelsForUser } = require('../services/modelResolver');
@@ -138,18 +139,14 @@ async function extractPdfText(filePath) {
   }
 }
 
-async function generateAiSummary(text, filename) {
+async function generateAiSummary(text, filename, userId) {
   try {
-    const response = await anthropic.messages.create({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 500,
-      store: false,
-      messages: [{
-        role: 'user',
-        content: `Summarize the following document "${filename}" in 2-3 sentences:\n\n${text.substring(0, 4000)}`,
-      }],
-    });
-    return response.content[0]?.text || '';
+    const { light: lightModel } = await getModelsForUser(userId);
+    return await callModel(
+      lightModel,
+      `Summarize the following document "${filename}" in 2-3 sentences:\n\n${text.substring(0, 4000)}`,
+      { maxTokens: 500 }
+    ) || '';
   } catch (err) {
     console.error('AI summary error:', err);
     return '';
@@ -207,7 +204,7 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
     extractedText = sanitised;
     storedMimetype = 'text/plain'; // Never store code files under an executable MIME type
     if (extractedText) {
-      aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+      aiSummary = await generateAiSummary(extractedText, req.file.originalname, req.user?.id);
     }
   } else if (isPdf) {
     extractedText = await extractPdfText(req.file.path);
@@ -216,23 +213,23 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
     diskPath = null;
     storedMimetype = 'text/plain';
     if (extractedText) {
-      aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+      aiSummary = await generateAiSummary(extractedText, req.file.originalname, req.user?.id);
     }
   } else if (isSpreadsheet) {
     extractedText = extractXlsxText(req.file.path);
     if (extractedText) {
-      aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+      aiSummary = await generateAiSummary(extractedText, req.file.originalname, req.user?.id);
     }
   } else if (isWord) {
     extractedText = await extractWordText(req.file.path);
     if (extractedText) {
-      aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+      aiSummary = await generateAiSummary(extractedText, req.file.originalname, req.user?.id);
     }
   } else if (isText) {
     try {
       extractedText = fs.readFileSync(req.file.path, 'utf8');
       if (extractedText) {
-        aiSummary = await generateAiSummary(extractedText, req.file.originalname);
+        aiSummary = await generateAiSummary(extractedText, req.file.originalname, req.user?.id);
       }
     } catch (err) {
       console.error('Text file read error:', err.message);

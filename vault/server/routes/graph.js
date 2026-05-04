@@ -4,7 +4,7 @@ const express   = require('express');
 const router    = express.Router();
 const { pool }  = require('../db');
 const { embedText } = require('../services/embeddings');
-const Anthropic = require('@anthropic-ai/sdk');
+const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 
 const SIMILARITY_THRESHOLD = 0.82;
@@ -520,24 +520,15 @@ router.get('/insights', async (req, res) => {
 
 router.post('/insights/refresh', async (req, res) => {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      return res.status(400).json({ error: 'ANTHROPIC_API_KEY is not configured.' });
-    }
-
     const graphData = await fetchGraphData();
     const summary   = buildGraphSummary(graphData.nodes, graphData.edges);
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const message   = await anthropic.messages.create({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: `You are analyzing someone's personal knowledge management vault. Based on the graph structure below, generate 4–6 short, specific, actionable insights about connections the user might not have noticed.\n\nRules:\n- Be specific — reference actual names from the data\n- Each insight must reference the relevant node IDs from the data\n- Focus on: cross-project themes, orphaned content that could be linked, clusters of related items, tasks disconnected from goals, recurring topics across sessions\n- Keep each insight under 25 words\n\n${summary}\n\nRespond with JSON only (no markdown):\n{"insights": [{"text": "...", "nodeIds": ["id1", "id2", ...]}]}`,
-      }],
-    });
-
-    const raw       = message.content[0]?.text ?? '{}';
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const raw = await callModel(
+      lightModel,
+      `You are analyzing someone's personal knowledge management vault. Based on the graph structure below, generate 4–6 short, specific, actionable insights about connections the user might not have noticed.\n\nRules:\n- Be specific — reference actual names from the data\n- Each insight must reference the relevant node IDs from the data\n- Focus on: cross-project themes, orphaned content that could be linked, clusters of related items, tasks disconnected from goals, recurring topics across sessions\n- Keep each insight under 25 words\n\n${summary}\n\nRespond with JSON only (no markdown):\n{"insights": [{"text": "...", "nodeIds": ["id1", "id2", ...]}]}`,
+      { maxTokens: 1024 }
+    ) ?? '{}';
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     let parsed;
     try {

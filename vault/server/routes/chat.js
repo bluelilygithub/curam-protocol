@@ -11,6 +11,7 @@ const { buildTypeConfigPrompt } = require('../typePrompts');
 const { calculateCost } = require('../services/costCalculator');
 const { getModelsForUser } = require('../services/modelResolver');
 const { embedText } = require('../services/embeddings');
+const { callModel } = require('../services/callModel');
 
 const chatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -75,16 +76,11 @@ async function generateAndStoreSessionSummary(sid, userId) {
       .join('\n\n');
 
     const { light: lightModel } = await getModelsForUser(userId);
-    const response = await anthropic.messages.create({
-      model: lightModel,
-      max_tokens: 300,
-      messages: [{
-        role: 'user',
-        content: `Summarise this conversation in 150 words for use as context in future related chats in the same project. Cover: main topics, key decisions or conclusions, important discoveries or constraints. Plain text, no bullet points.\n\n${transcript}`,
-      }],
-    });
-
-    const summary = response.content[0]?.text?.trim();
+    const summary = await callModel(
+      lightModel,
+      `Summarise this conversation in 150 words for use as context in future related chats in the same project. Cover: main topics, key decisions or conclusions, important discoveries or constraints. Plain text, no bullet points.\n\n${transcript}`,
+      { maxTokens: 300 }
+    );
     if (!summary) return;
 
     const embedding = await embedText(summary);
@@ -768,15 +764,11 @@ router.post('/', chatLimiter, async (req, res) => {
           if (msgCount <= 2 && !sessionMeta?.title) {
             const userSnippet = lastUser.content.substring(0, 300);
             const aiSnippet = fullContent.substring(0, 300);
-            anthropic.messages.create({
-              model: lightModel,
-              max_tokens: 20,
-              messages: [{
-                role: 'user',
-                content: `Generate a concise 4-6 word title for this conversation. Return only the title, no punctuation, no quotes.\n\nUser: ${userSnippet}\n\nAssistant: ${aiSnippet}`,
-              }],
-            }).then(r => {
-              const title = r.content[0]?.text?.trim() || '';
+            callModel(
+              lightModel,
+              `Generate a concise 4-6 word title for this conversation. Return only the title, no punctuation, no quotes.\n\nUser: ${userSnippet}\n\nAssistant: ${aiSnippet}`,
+              { maxTokens: 20 }
+            ).then(title => {
               if (title) {
                 pool.query(
                   'INSERT INTO sessions ("sessionId","projectId",title) VALUES ($1,$2,$3) ON CONFLICT ("sessionId") DO UPDATE SET title=EXCLUDED.title',
@@ -1089,15 +1081,11 @@ router.post('/sessions/:sessionId/summarize', async (req, res) => {
   const { standard: standardModel } = await getModelsForUser(req.user?.id);
 
   try {
-    const response = await anthropic.messages.create({
-      model: standardModel,
-      max_tokens: 2000,
-      messages: [{
-        role: 'user',
-        content: `Summarise this conversation. Capture all decisions, context, facts, next steps. This replaces the full thread as context — be complete:\n\n${conversationText}`,
-      }],
-    });
-    const summary = response.content[0]?.text || '';
+    const summary = await callModel(
+      standardModel,
+      `Summarise this conversation. Capture all decisions, context, facts, next steps. This replaces the full thread as context — be complete:\n\n${conversationText}`,
+      { maxTokens: 2000 }
+    );
     const { rows: existing } = await pool.query('SELECT "sessionId" FROM sessions WHERE "sessionId"=$1', [sessionId]);
     if (existing[0]) {
       await pool.query(
@@ -1228,15 +1216,11 @@ router.post('/suggestions', async (req, res) => {
   const { light: lightModel } = await getModelsForUser(req.user?.id);
 
   try {
-    const response = await anthropic.messages.create({
-      model: lightModel,
-      max_tokens: 180,
-      messages: [{
-        role: 'user',
-        content: `Suggest 3 follow-up questions (max 8 words each). JSON array only.\n\n${conversationSnippet}`,
-      }],
-    });
-    const text = response.content[0]?.text?.trim() || '[]';
+    const text = await callModel(
+      lightModel,
+      `Suggest 3 follow-up questions (max 8 words each). JSON array only.\n\n${conversationSnippet}`,
+      { maxTokens: 180 }
+    );
     const match = text.match(/\[[\s\S]*\]/);
     const suggestions = match ? JSON.parse(match[0]) : [];
     res.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 3) : [] });
@@ -1297,13 +1281,14 @@ router.post('/analyse-prompt', async (req, res) => {
     // Classify the prompt complexity
     let classification;
     try {
-      const msg = await anthropic.messages.create({
-        model: lightModel,
-        max_tokens: 256,
-        system: `You are a prompt complexity classifier. Analyse the user's message and return ONLY valid JSON with no preamble, explanation, or markdown.\n\nReturn this exact shape:\n{\n  "complexity": "simple" | "moderate" | "complex",\n  "needsImage": true | false,\n  "reason": "one sentence plain English explanation",\n  "suggestedTier": "light" | "standard" | "premium"\n}\n\nRules:\n- "simple": casual questions, short factual lookups, quick rewrites, greetings, single-sentence tasks\n- "moderate": multi-step explanations, summarisation, short code tasks, structured output\n- "complex": long-form code, architecture, deep analysis, multi-document reasoning, debugging, legal/financial content\n- "needsImage": true only if the user is explicitly asking to generate, create, draw, or produce an image or visual\n- "suggestedTier": "light" for simple, "standard" for moderate, "premium" for complex\n- If needsImage is true, set suggestedTier to "image" regardless of complexity`,
-        messages: [{ role: 'user', content: String(prompt || '').slice(0, 2000) }],
-      });
-      const rawText = msg.content[0].text.trim();
+      const rawText = await callModel(
+        lightModel,
+        String(prompt || '').slice(0, 2000),
+        {
+          maxTokens: 256,
+          system: `You are a prompt complexity classifier. Analyse the user's message and return ONLY valid JSON with no preamble, explanation, or markdown.\n\nReturn this exact shape:\n{\n  "complexity": "simple" | "moderate" | "complex",\n  "needsImage": true | false,\n  "reason": "one sentence plain English explanation",\n  "suggestedTier": "light" | "standard" | "premium"\n}\n\nRules:\n- "simple": casual questions, short factual lookups, quick rewrites, greetings, single-sentence tasks\n- "moderate": multi-step explanations, summarisation, short code tasks, structured output\n- "complex": long-form code, architecture, deep analysis, multi-document reasoning, debugging, legal/financial content\n- "needsImage": true only if the user is explicitly asking to generate, create, draw, or produce an image or visual\n- "suggestedTier": "light" for simple, "standard" for moderate, "premium" for complex\n- If needsImage is true, set suggestedTier to "image" regardless of complexity`,
+        }
+      );
       const jsonMatch = rawText.match(/\{[\s\S]*\}/);
       classification = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
     } catch (classifyErr) {

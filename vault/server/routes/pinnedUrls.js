@@ -6,24 +6,20 @@ const https = require('https');
 const dns = require('dns');
 const { URL } = require('url');
 const { isYoutubeUrl, fetchYoutubeTranscript } = require('../services/youtubeTranscript');
-const Anthropic = require('@anthropic-ai/sdk');
+const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
 // Returns the transcript as-is if under 5,000 chars; otherwise summarises to ~20%
-// using Claude Haiku. Gracefully returns the raw text on any error.
-async function summariseTranscript(rawTranscript) {
+// using the user's configured light model. Gracefully returns the raw text on any error.
+async function summariseTranscript(rawTranscript, userId) {
   if (!rawTranscript || rawTranscript.length < 5000) return rawTranscript;
-  if (!process.env.ANTHROPIC_API_KEY) return rawTranscript;
   try {
-    const response = await anthropic.messages.create({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 4096,
-      system: 'Summarise the following video transcript to approximately 20% of its original length. Preserve key points, specific details, names, numbers, and conclusions. Write in flowing prose, not bullet points.',
-      messages: [{ role: 'user', content: rawTranscript }],
-    });
-    return response.content[0]?.text || rawTranscript;
+    const { light: lightModel } = await getModelsForUser(userId);
+    return await callModel(
+      lightModel,
+      rawTranscript,
+      { maxTokens: 4096, system: 'Summarise the following video transcript to approximately 20% of its original length. Preserve key points, specific details, names, numbers, and conclusions. Write in flowing prose, not bullet points.' }
+    ) || rawTranscript;
   } catch (err) {
     console.warn('[pinnedUrls] summariseTranscript failed:', err.message);
     return rawTranscript;
@@ -141,7 +137,7 @@ router.post('/', async (req, res) => {
         const raw = await fetchUrl(fullUrl);
         ({ title, content } = parseHtml(raw, url));
       }
-      if (content) transcriptSummary = await summariseTranscript(content);
+      if (content) transcriptSummary = await summariseTranscript(content, req.user?.id);
     } else {
       const raw = await fetchUrl(fullUrl);
       ({ title, content } = parseHtml(raw, url));
@@ -176,7 +172,7 @@ router.patch('/:id/refresh', async (req, res) => {
         const raw = await fetchUrl(fullUrl);
         ({ title, content } = parseHtml(raw, url));
       }
-      if (content) transcriptSummary = await summariseTranscript(content);
+      if (content) transcriptSummary = await summariseTranscript(content, req.user?.id);
     } else {
       const raw = await fetchUrl(fullUrl);
       ({ title, content } = parseHtml(raw, url));

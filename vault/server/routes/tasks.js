@@ -4,10 +4,31 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
+const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 const crypto = require('crypto');
 
 const anthropic = new Anthropic();
+
+async function streamModelSSE(res, { modelId, system, userContent, maxTokens, onError }) {
+  if (!modelId.startsWith('claude-')) {
+    try {
+      const text = await callModel(modelId, userContent, { maxTokens, ...(system ? { system } : {}) });
+      res.write(`data: ${JSON.stringify(text || '')}\n\n`);
+    } catch (err) {
+      if (onError) onError(err);
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
+    return;
+  }
+  const params = { model: modelId, max_tokens: maxTokens, messages: [{ role: 'user', content: userContent }] };
+  if (system) params.system = system;
+  const stream = anthropic.messages.stream(params);
+  stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
+  stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
+  stream.on('error', (err) => { if (onError) onError(err); res.write('data: [DONE]\n\n'); res.end(); });
+}
 
 async function getTags(taskId) {
   const { rows } = await pool.query('SELECT tag FROM task_tags WHERE "taskId"=$1', [taskId]);
@@ -218,13 +239,12 @@ router.get('/morning-digest', async (req, res) => {
         ...today.map(t => `[TODAY] ${t.title} (${t.priority} priority${t.dueDate?.includes('T') ? ', at ' + t.dueDate.slice(11, 16) : ''})`),
       ];
       try {
-        const response = await anthropic.messages.create({
-          model: (await getModelsForUser(req.user?.id)).light,
-          max_tokens: 150,
-          system: 'You are a productivity assistant. Given the user\'s task list, recommend what to focus on first today and explain briefly why in 2-3 sentences. Be direct and specific.',
-          messages: [{ role: 'user', content: `My tasks:\n${lines.join('\n')}\n\nWhat should I focus on first?` }],
-        });
-        suggestion = response.content[0]?.text?.trim() || '';
+        const { light: lightModel } = await getModelsForUser(req.user?.id);
+        suggestion = await callModel(
+          lightModel,
+          `My tasks:\n${lines.join('\n')}\n\nWhat should I focus on first?`,
+          { maxTokens: 150, system: 'You are a productivity assistant. Given the user\'s task list, recommend what to focus on first today and explain briefly why in 2-3 sentences. Be direct and specific.' }
+        );
       } catch { suggestion = ''; }
     }
     res.json({ overdue, today, suggestion });
@@ -252,23 +272,13 @@ router.post('/weekly-review-suggestions', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    const stream = anthropic.messages.stream({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 400,
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    await streamModelSSE(res, {
+      modelId: lightModel,
       system: 'You are a productivity coach. Based on the user\'s open tasks, give 3-5 concrete, actionable suggestions for the coming week. Be specific, encouraging, and prioritise by impact. Use bullet points.',
-      messages: [{ role: 'user', content: `Here are my open tasks:\n${lines}\n\nWhat should I focus on this week?` }],
-    });
-    stream.on('text', (text) => {
-      res.write(`data: ${JSON.stringify(text)}\n\n`);
-    });
-    stream.on('finalMessage', () => {
-      res.write('data: [DONE]\n\n');
-      res.end();
-    });
-    stream.on('error', (err) => {
-      console.error('[weekly-review-suggestions]', err);
-      res.write('data: [DONE]\n\n');
-      res.end();
+      userContent: `Here are my open tasks:\n${lines}\n\nWhat should I focus on this week?`,
+      maxTokens: 400,
+      onError: (err) => console.error('[weekly-review-suggestions]', err),
     });
   } catch (err) {
     console.error('[weekly-review-suggestions]', err);
@@ -283,15 +293,12 @@ router.post('/suggest', async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const contextBlock = context ? `\n\nSurrounding context:\n${context.substring(0, 400)}` : '';
-    const result = await anthropic.messages.create({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 60,
-      messages: [{
-        role: 'user',
-        content: `Today is ${today}. Based on this task: "${text.substring(0, 200)}"${contextBlock}\n\nSuggest a priority and due date. Reply with only valid JSON, no markdown: {"priority":"high"|"medium"|"low","dueDate":"YYYY-MM-DD"|null}`,
-      }],
-    });
-    const raw = result.content[0]?.text?.trim() || '{}';
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const raw = await callModel(
+      lightModel,
+      `Today is ${today}. Based on this task: "${text.substring(0, 200)}"${contextBlock}\n\nSuggest a priority and due date. Reply with only valid JSON, no markdown: {"priority":"high"|"medium"|"low","dueDate":"YYYY-MM-DD"|null}`,
+      { maxTokens: 60 }
+    ) || '{}';
     const parsed = JSON.parse(raw);
     res.json({
       priority: ['high', 'medium', 'low'].includes(parsed.priority) ? parsed.priority : 'medium',
@@ -401,13 +408,12 @@ router.post('/extract', async (req, res) => {
     if (msgRows.length === 0) return res.status(400).json({ error: 'no messages found' });
     const messages = msgRows.reverse();
     const conversation = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
-    const response = await anthropic.messages.create({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 2048,
-      system: 'You are a task extraction assistant. Read this conversation and extract all action items, next steps, and tasks mentioned. Return ONLY a valid JSON array of task objects with fields: title, priority (high/medium/low), category, dueDate (ISO string or null), notes. No other text.',
-      messages: [{ role: 'user', content: conversation }],
-    });
-    const raw = response.content[0]?.text || '[]';
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const raw = await callModel(
+      lightModel,
+      conversation,
+      { maxTokens: 2048, system: 'You are a task extraction assistant. Read this conversation and extract all action items, next steps, and tasks mentioned. Return ONLY a valid JSON array of task objects with fields: title, priority (high/medium/low), category, dueDate (ISO string or null), notes. No other text.' }
+    ) || '[]';
     let extracted;
     try {
       const clean = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
@@ -442,13 +448,12 @@ router.post('/ai-generate', async (req, res) => {
     const systemPrompt = aiParentId
       ? 'You are a task planning assistant. Generate subtasks for the given task. Return ONLY a valid JSON array of objects with fields: title, notes (optional), estimatedMinutes (number of minutes or null). No other text.'
       : 'You are a task planning assistant. Extract or generate a structured task list from the user input. Return ONLY a valid JSON array of task objects with fields: title, notes (optional), priority (high/medium/low), category (optional), dueDate (ISO date string or null), estimatedMinutes (number of minutes or null). No other text.';
-    const response = await anthropic.messages.create({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    const raw = response.content[0]?.text || '[]';
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const raw = await callModel(
+      lightModel,
+      prompt,
+      { maxTokens: 2048, system: systemPrompt }
+    ) || '[]';
     let aiTasks;
     try {
       const clean = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();

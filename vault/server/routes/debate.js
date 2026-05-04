@@ -5,6 +5,7 @@ const router = express.Router();
 const { randomUUID } = require('crypto');
 const multer = require('multer');
 const Anthropic = require('@anthropic-ai/sdk');
+const { callModel: callModelService } = require('../services/callModel');
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
 
@@ -222,15 +223,13 @@ router.post('/summary', async (req, res) => {
   }
 
   try {
-    const response = await anthropic.messages.create({
-      model: (await getModelsForUser(req.user?.id)).light,
-      max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: `Two AI models debated the topic: "${topic}"\n\n${modelA}'s final position:\n${finalResponseA}\n\n${modelB}'s final position:\n${finalResponseB}\n\nSynthesise these into a structured summary covering:\n1. What both models agreed on\n2. Where they still differ\n3. A recommended conclusion or synthesis\n\nBe concise and clear.`,
-      }],
-    });
-    res.json({ summary: response.content[0]?.text || '' });
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const summary = await callModelService(
+      lightModel,
+      `Two AI models debated the topic: "${topic}"\n\n${modelA}'s final position:\n${finalResponseA}\n\n${modelB}'s final position:\n${finalResponseB}\n\nSynthesise these into a structured summary covering:\n1. What both models agreed on\n2. Where they still differ\n3. A recommended conclusion or synthesis\n\nBe concise and clear.`,
+      { maxTokens: 1024 }
+    );
+    res.json({ summary: summary || '' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
