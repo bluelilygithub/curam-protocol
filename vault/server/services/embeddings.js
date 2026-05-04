@@ -34,14 +34,21 @@ async function embedText(text) {
             }),
           }
         );
-        if (!res.ok) continue;
+        if (!res.ok) {
+          const errBody = await res.text().catch(() => '');
+          console.error(`[embeddings] ${model}/${version} failed ${res.status}: ${errBody.slice(0, 200)}`);
+          continue;
+        }
         const data = await res.json();
         const values = data.embedding?.values;
         if (values?.length) {
           _consecutiveFailures = 0;
           return values;
         }
-      } catch { continue; }
+      } catch (e) {
+        console.error(`[embeddings] ${model}/${version} exception:`, e.message);
+        continue;
+      }
     }
   }
 
