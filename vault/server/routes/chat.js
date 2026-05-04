@@ -81,8 +81,8 @@ async function generateAndStoreSessionSummary(sid, userId, modelHint = null) {
       : lightModel;
     const summary = await callModel(
       effectiveModel,
-      `Summarise this conversation in 150 words for use as context in future related chats in the same project. Cover: main topics, key decisions or conclusions, important discoveries or constraints. Plain text, no bullet points.\n\n${transcript}`,
-      { maxTokens: 300 }
+      `Summarise this conversation in up to 400 words for use as context in future related chats in the same project. Cover: main topics, key decisions or conclusions, important lists or rankings, important discoveries or constraints. Plain text, no bullet points.\n\n${transcript}`,
+      { maxTokens: 600 }
     );
     if (!summary) return;
 
