@@ -314,7 +314,11 @@ function ChatPage({ general = false }) {
   // Fetch follow-up suggestions after stream ends
   useEffect(() => {
     if (!isStreaming && sessionId && messages.length >= 2) {
-      api.post('/api/chat/suggestions', { sessionId })
+      const recentMsgs = messages.slice(-6).map(m => ({
+        role: m.role,
+        content: typeof m.content === 'string' ? m.content.substring(0, 400) : '',
+      }));
+      api.post('/api/chat/suggestions', { sessionId, messages: recentMsgs })
         .then(r => r.json()).then(d => setSuggestions(d.suggestions || [])).catch(() => {});
       fetchSessions();
       fetchProjects();

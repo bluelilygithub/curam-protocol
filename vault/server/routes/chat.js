@@ -1212,18 +1212,26 @@ router.post('/sessions/:sessionId/branch', async (req, res) => {
 
 // POST /api/chat/suggestions — generate follow-up suggestions via Haiku
 router.post('/suggestions', async (req, res) => {
-  const { sessionId } = req.body;
+  const { sessionId, messages: clientMessages } = req.body;
   if (!sessionId) return res.status(400).json({ suggestions: [] });
 
-  const { rows: msgRows } = await pool.query(
-    'SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" DESC LIMIT 6',
-    [sessionId]
-  );
-  const msgs = msgRows.reverse();
+  let msgs = [];
+
+  // Prefer client-provided messages (avoids race condition where DB hasn't persisted yet)
+  if (Array.isArray(clientMessages) && clientMessages.length > 0) {
+    msgs = clientMessages;
+  } else {
+    const { rows: msgRows } = await pool.query(
+      'SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" DESC LIMIT 6',
+      [sessionId]
+    );
+    msgs = msgRows.reverse();
+  }
+
   if (msgs.length === 0) return res.json({ suggestions: [] });
 
   const conversationSnippet = msgs
-    .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.substring(0, 400)}`)
+    .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${String(m.content || '').substring(0, 400)}`)
     .join('\n\n');
 
   const { light: lightModel } = await getModelsForUser(req.user?.id);
@@ -1237,7 +1245,8 @@ router.post('/suggestions', async (req, res) => {
     const match = text.match(/\[[\s\S]*\]/);
     const suggestions = match ? JSON.parse(match[0]) : [];
     res.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 3) : [] });
-  } catch {
+  } catch (err) {
+    console.error('[suggestions] callModel error:', err.message);
     res.json({ suggestions: [] });
   }
 });
