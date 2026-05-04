@@ -49,7 +49,15 @@ async function getModelsForUser(userId) {
       }
     }
 
-    if (byKey.default_model) standard = byKey.default_model;
+    if (byKey.default_model) {
+      standard = byKey.default_model;
+      // If user chose a non-Anthropic default, align light to the same provider —
+      // prevents background tasks (suggestions, advisor, auto-title) hitting Anthropic
+      // when the user has no Anthropic credits.
+      if (!standard.startsWith('claude-')) {
+        light = standard;
+      }
+    }
 
     return { light, standard, gemini, deepseek };
   } catch { /* fall through to defaults */ }
