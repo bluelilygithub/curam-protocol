@@ -1,10 +1,8 @@
 'use strict';
 
-const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { getModelsForUser } = require('./modelResolver');
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const { callModel } = require('./callModel');
 
 function getGemini() {
   const key = process.env.GEMINI_API_KEY;
@@ -130,7 +128,7 @@ async function analyseTopicArticles(topicTitle, articles, context, userId) {
   }
 
   const prompt = buildPrompt(topicTitle, articles, context);
-  const { gemini: geminiModelId, standard: anthropicModelId } = await getModelsForUser(userId);
+  const { gemini: geminiModelId, standard: standardModelId } = await getModelsForUser(userId);
   let raw;
   let usage = { inputTokens: 0, outputTokens: 0, model: null };
 
@@ -148,22 +146,14 @@ async function analyseTopicArticles(topicTitle, articles, context, userId) {
         model: geminiModelId,
       };
     } catch (err) {
-      console.warn(`[news] Gemini analysis failed (${geminiModelId}), falling back to Claude: ${err.message}`);
+      console.warn(`[news] Gemini analysis failed (${geminiModelId}), falling back to ${standardModelId}: ${err.message}`);
     }
   }
 
   if (!raw) {
-    const message = await anthropic.messages.create({
-      model: anthropicModelId,
-      max_tokens: 3000,
-      messages: [{ role: 'user', content: prompt }],
-    });
-    raw = parseJSON(message.content[0]?.text || '{}');
-    usage = {
-      inputTokens:  message.usage?.input_tokens  || 0,
-      outputTokens: message.usage?.output_tokens || 0,
-      model: anthropicModelId,
-    };
+    const text = await callModel(standardModelId, prompt, { maxTokens: 3000 });
+    raw = parseJSON(text || '{}');
+    usage = { inputTokens: 0, outputTokens: 0, model: standardModelId };
   }
 
   // Resolve 1-based indices → real article objects (no hallucinated URLs)
