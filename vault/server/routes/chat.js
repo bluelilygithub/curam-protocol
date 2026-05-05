@@ -94,14 +94,12 @@ async function generateAndStoreSessionSummary(sid, userId, modelHint = null) {
         `UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3`,
         [summary, vectorLiteral, sid]
       );
-      console.log(`[session-summary] stored sid=${sid} model=${effectiveModel} words=${summary.split(' ').length} embedding=${!!embedding}`);
     } catch {
       // summaryEmbedding column may not exist when pgvector is unavailable — store text only
       await pool.query(
         `UPDATE sessions SET summary=$1, "updatedAt"=NOW() WHERE "sessionId"=$2`,
         [summary, sid]
       );
-      console.log(`[session-summary] stored (text-only) sid=${sid} model=${effectiveModel} words=${summary.split(' ').length}`);
     }
   } catch (err) {
     console.error('[session-summary] error:', err.message);
@@ -159,7 +157,6 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
     if (project.notes) parts.push(`Notes: ${project.notes}`);
     const typeExtra = buildTypeConfigPrompt(project.projectType, project.typeConfig);
     if (typeExtra) parts.push(typeExtra);
-    console.log(`[ctx] project="${project.name}" brief_fields=${parts.length}`);
     pushBlock(parts.join('\n'), true);
   }
 
@@ -270,7 +267,6 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
         relatedSessions = rows;
       }
 
-      console.log(`[ctx] related_sessions found=${relatedSessions.length} project=${project.id}`);
       if (relatedSessions.length > 0) {
         const parts = relatedSessions.map((s, i) =>
           `[Chat ${i + 1}: ${s.title || 'Untitled'}]\n${s.summary}`
@@ -1245,21 +1241,18 @@ router.post('/suggestions', async (req, res) => {
     ? activeModel
     : lightModel;
 
-  console.log(`[suggestions] model=${effectiveSuggestModel} msgs=${msgs.length} sid=${sessionId}`);
-
   try {
     const text = await callModel(
       effectiveSuggestModel,
-      `Suggest 3 follow-up questions (max 8 words each). JSON array only.\n\n${conversationSnippet}`,
+      `You must respond with ONLY a JSON array of exactly 3 follow-up questions (max 8 words each). No explanation, no markdown, no code blocks — just the raw JSON array.\n\nExample: ["Question one?", "Question two?", "Question three?"]\n\n${conversationSnippet}`,
       { maxTokens: 180 }
     );
-    console.log(`[suggestions] raw=${text.slice(0, 120)}`);
-    const match = text.match(/\[[\s\S]*\]/);
-    const suggestions = match ? JSON.parse(match[0]) : [];
-    console.log(`[suggestions] parsed=${suggestions.length}`);
+    const match = text.match(/\[[\s\S]*?\]/);
+    let suggestions = [];
+    try { suggestions = match ? JSON.parse(match[0]) : []; } catch { suggestions = []; }
     res.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 3) : [] });
   } catch (err) {
-    console.error('[suggestions] callModel error:', err.message);
+    console.error('[suggestions] error:', err.message);
     res.json({ suggestions: [] });
   }
 });
