@@ -1247,7 +1247,7 @@ router.post('/suggestions', async (req, res) => {
       `You must respond with ONLY a JSON array of exactly 3 follow-up questions (max 8 words each). No explanation, no markdown, no code blocks — just the raw JSON array.\n\nExample: ["Question one?", "Question two?", "Question three?"]\n\n${conversationSnippet}`,
       { maxTokens: 180 }
     );
-    const match = text.match(/\[[\s\S]*?\]/);
+    const match = text.match(/\[[\s\S]*\]/);
     let suggestions = [];
     try { suggestions = match ? JSON.parse(match[0]) : []; } catch { suggestions = []; }
     res.json({ suggestions: Array.isArray(suggestions) ? suggestions.slice(0, 3) : [] });
