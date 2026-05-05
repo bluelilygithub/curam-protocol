@@ -1236,16 +1236,12 @@ router.post('/suggestions', async (req, res) => {
     .join('\n\n');
 
   const { light: lightModel } = await getModelsForUser(req.user?.id);
-  // Use active chat model's provider when light defaults to Anthropic but user is on another provider
-  const effectiveSuggestModel = (lightModel.startsWith('claude-') && activeModel && !activeModel.startsWith('claude-'))
-    ? activeModel
-    : lightModel;
 
   try {
     const text = await callModel(
-      effectiveSuggestModel,
+      lightModel,
       `You must respond with ONLY a JSON array of exactly 3 follow-up questions (max 8 words each). No explanation, no markdown, no code blocks — just the raw JSON array.\n\nExample: ["Question one?", "Question two?", "Question three?"]\n\n${conversationSnippet}`,
-      { maxTokens: 180 }
+      { maxTokens: 300 }
     );
     const match = text.match(/\[[\s\S]*\]/);
     let suggestions = [];
