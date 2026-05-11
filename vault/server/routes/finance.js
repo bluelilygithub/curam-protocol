@@ -1853,4 +1853,28 @@ router.get('/export/excel', async (req, res) => {
   }
 });
 
+// ── Trial Balance ─────────────────────────────────────────────────────────────
+
+router.get('/trial-balance', async (req, res) => {
+  try {
+    await ensureAccounts(req.user.id);
+    const { rows } = await pool.query(
+      `SELECT
+         a.id, a.code, a.name, a.type,
+         COALESCE(SUM(l.debit),  0) AS "totalDebit",
+         COALESCE(SUM(l.credit), 0) AS "totalCredit"
+       FROM fin_accounts a
+       LEFT JOIN fin_journal_lines l ON l."accountId" = a.id
+       LEFT JOIN fin_journal_entries e ON e.id = l."entryId" AND e."userId" = $1
+       WHERE a."userId" = $1
+       GROUP BY a.id, a.code, a.name, a.type
+       ORDER BY a.code`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

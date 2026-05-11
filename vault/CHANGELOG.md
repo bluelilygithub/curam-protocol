@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-12 (1)
+
+**Feature:** Finance — Trial Balance (Balances tab).
+
+New **Balances** tab in Finance shows a full trial balance drawn from the double-entry journal. Accounts grouped by type (Assets, Liabilities, Equity, Income, Expenses). Each row shows total debits, total credits, and normal balance (debit-normal for assets/expenses; credit-normal for liabilities/equity/income). Bank/Cash (1000) row highlighted. Group subtotals and grand totals with a balanced/out-of-balance indicator. No date filter — balances are all-time cumulative. Solves the problem of having no way to verify that recording an expense actually reduced the bank balance.
+
+**Modified files:** `server/routes/finance.js`, `client/src/pages/FinancePage.jsx`.
+
+---
+
 ## 2026-05-04 (6)
 
 **Fix:** Embeddings — switch to `embedding-001`; `text-embedding-004` unavailable for this API key.

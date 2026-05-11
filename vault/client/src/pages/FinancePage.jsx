@@ -2720,10 +2720,139 @@ function CodesTab() {
   );
 }
 
+// ── Trial Balance ─────────────────────────────────────────────────────────────
+
+const TYPE_ORDER = ['asset', 'liability', 'equity', 'income', 'expense'];
+const TYPE_LABELS = { asset: 'Assets', liability: 'Liabilities', equity: 'Equity', income: 'Income', expense: 'Expenses' };
+
+function normalBalance(row) {
+  const dr = parseFloat(row.totalDebit)  || 0;
+  const cr = parseFloat(row.totalCredit) || 0;
+  if (row.type === 'asset' || row.type === 'expense') return dr - cr;
+  return cr - dr;
+}
+
+function BalancesTab() {
+  const [rows, setRows]     = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get('/api/finance/trial-balance')
+      .then(r => r.json())
+      .then(d => setRows(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="p-6 text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</div>;
+
+  const grouped = TYPE_ORDER.reduce((acc, t) => {
+    acc[t] = rows.filter(r => r.type === t);
+    return acc;
+  }, {});
+
+  const totalDr = rows.reduce((s, r) => s + (parseFloat(r.totalDebit)  || 0), 0);
+  const totalCr = rows.reduce((s, r) => s + (parseFloat(r.totalCredit) || 0), 0);
+  const balanced = Math.abs(totalDr - totalCr) < 0.01;
+
+  return (
+    <div className="p-6 max-w-3xl">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Trial Balance</h2>
+        <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{
+          background: balanced ? '#d1fae5' : '#fee2e2',
+          color:      balanced ? '#065f46' : '#991b1b',
+        }}>
+          {balanced ? '✓ Balanced' : '✗ Out of balance'}
+        </span>
+      </div>
+
+      <div className="rounded-xl overflow-hidden border" style={{ borderColor: 'var(--color-border)' }}>
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr style={{ background: 'var(--color-surface)' }}>
+              <th className="text-left px-4 py-2 font-medium text-xs" style={{ color: 'var(--color-muted)' }}>Code</th>
+              <th className="text-left px-4 py-2 font-medium text-xs" style={{ color: 'var(--color-muted)' }}>Account</th>
+              <th className="text-right px-4 py-2 font-medium text-xs" style={{ color: 'var(--color-muted)' }}>Debit</th>
+              <th className="text-right px-4 py-2 font-medium text-xs" style={{ color: 'var(--color-muted)' }}>Credit</th>
+              <th className="text-right px-4 py-2 font-medium text-xs" style={{ color: 'var(--color-muted)' }}>Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {TYPE_ORDER.map(type => {
+              const group = grouped[type];
+              if (!group.length) return null;
+              const groupBalance = group.reduce((s, r) => s + normalBalance(r), 0);
+              return (
+                <React.Fragment key={type}>
+                  <tr style={{ background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)' }}>
+                    <td colSpan={5} className="px-4 py-1.5 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                      {TYPE_LABELS[type]}
+                    </td>
+                  </tr>
+                  {group.map(row => {
+                    const bal  = normalBalance(row);
+                    const isBank = row.code === '1000';
+                    return (
+                      <tr
+                        key={row.id}
+                        style={{
+                          borderTop:  '1px solid var(--color-border)',
+                          background: isBank ? 'rgba(var(--color-primary-rgb, 204,120,92), 0.06)' : 'var(--color-bg)',
+                        }}
+                      >
+                        <td className="px-4 py-2 font-mono text-xs" style={{ color: 'var(--color-muted)' }}>{row.code}</td>
+                        <td className="px-4 py-2" style={{ color: 'var(--color-text)', fontWeight: isBank ? 600 : 400 }}>
+                          {row.name}
+                          {isBank && <span className="ml-2 text-xs px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface)', color: 'var(--color-muted)' }}>Bank</span>}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono text-xs" style={{ color: 'var(--color-text)' }}>
+                          {parseFloat(row.totalDebit) > 0 ? fmt(row.totalDebit) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono text-xs" style={{ color: 'var(--color-text)' }}>
+                          {parseFloat(row.totalCredit) > 0 ? fmt(row.totalCredit) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono text-xs font-semibold" style={{
+                          color: bal >= 0 ? 'var(--color-text)' : '#ef4444',
+                        }}>
+                          {fmt(Math.abs(bal))}{bal < 0 ? ' CR' : ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  <tr style={{ background: 'var(--color-surface)', borderTop: '1px solid var(--color-border)' }}>
+                    <td colSpan={4} className="px-4 py-1.5 text-xs text-right font-semibold" style={{ color: 'var(--color-muted)' }}>
+                      {TYPE_LABELS[type]} total
+                    </td>
+                    <td className="px-4 py-1.5 text-right font-mono text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                      {fmt(Math.abs(groupBalance))}
+                    </td>
+                  </tr>
+                </React.Fragment>
+              );
+            })}
+            <tr style={{ borderTop: '2px solid var(--color-border)', background: 'var(--color-surface)' }}>
+              <td colSpan={2} className="px-4 py-2 text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Totals</td>
+              <td className="px-4 py-2 text-right font-mono text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{fmt(totalDr)}</td>
+              <td className="px-4 py-2 text-right font-mono text-xs font-semibold" style={{ color: 'var(--color-text)' }}>{fmt(totalCr)}</td>
+              <td className="px-4 py-2 text-right font-mono text-xs font-semibold" style={{ color: balanced ? '#065f46' : '#ef4444' }}>
+                {balanced ? '✓' : fmt(Math.abs(totalDr - totalCr))}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
+        Balances are all-time cumulative from all journal entries. Assets and expenses show debit (normal) balance; liabilities, equity, and income show credit (normal) balance.
+      </p>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Journal', 'Accounts', 'Codes', 'BAS', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Settings']);
+const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Journal', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
@@ -2819,6 +2948,7 @@ export default function FinancePage() {
         {tab === 'Accounts'  && <AccountsTab />}
         {tab === 'Codes'     && <CodesTab />}
         {tab === 'BAS'       && <BASTab />}
+        {tab === 'Balances'  && <BalancesTab />}
         {tab === 'Settings'  && <SettingsTab />}
       </div>
     </div>
