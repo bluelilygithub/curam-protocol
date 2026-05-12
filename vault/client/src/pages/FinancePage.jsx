@@ -1362,7 +1362,24 @@ function ExpensesTab({ from, to }) {
                         <button onClick={() => openCcPay(e)} className="text-xs hover:opacity-60" style={{ color: '#f59e0b' }} title="Record payment of this card charge from bank">Pay CC</button>
                       )}
                       {e.ccSettled && (
-                        <span className="text-xs" style={{ color: '#065f46' }}>Settled</span>
+                        <button
+                          className="text-xs hover:opacity-60"
+                          style={{ color: '#065f46' }}
+                          title="Unsettle — removes the settled flag only. Reverse the journal entry manually in the Journal tab if the amount was wrong."
+                          onClick={() => setConfirmModal({
+                            message: 'Unsettle this expense? The settlement journal entry is NOT reversed — delete it manually in the Journal tab if the amount was wrong.',
+                            onConfirm: async () => {
+                              setConfirmModal(null);
+                              try {
+                                await api.post(`/api/finance/expenses/${e.id}/cc-unsettle`);
+                                addToast('Expense unsettled');
+                                load();
+                              } catch (err) {
+                                addToast(err.message, 'error');
+                              }
+                            },
+                          })}
+                        >Settled ↩</button>
                       )}
                       <button onClick={() => openEdit(e)} className="text-xs hover:opacity-60" style={{ color: 'var(--color-primary)' }}>Edit</button>
                       <button onClick={() => del(e)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>

@@ -1196,6 +1196,19 @@ router.post('/expenses/:id/cc-pay', async (req, res) => {
 
 // ── Expense receipts ──────────────────────────────────────────────────────────
 
+router.post('/expenses/:id/cc-unsettle', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE fin_expenses SET "ccSettled"=false WHERE id=$1 AND "userId"=$2 AND "ccSettled"=true RETURNING id`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Expense not found or not settled' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/expenses/:id/receipt', receiptUpload.single('receipt'), async (req, res) => {
   try {
     const userId    = req.user.id;
