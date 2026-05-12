@@ -1058,6 +1058,11 @@ function ExpensesTab({ from, to }) {
   const [ccPayModal, setCcPayModal]     = useState(null);   // { expense, account } — pay CC modal
   const [ccPayDate, setCcPayDate]       = useState(todayStr());
   const [ccPaySaving, setCcPaySaving]   = useState(false);
+  const [ccStatement, setCcStatement]   = useState(null);   // { accounts, expenses } — statement modal
+  const [ccStmtDate, setCcStmtDate]     = useState(todayStr());
+  const [ccStmtAccountId, setCcStmtAccountId] = useState('');
+  const [ccStmtSelected, setCcStmtSelected]   = useState(new Set());
+  const [ccStmtSaving, setCcStmtSaving] = useState(false);
   const [receiptModal, setReceiptModal] = useState(null);   // { expense } — upload modal
   const [viewReceiptModal, setViewReceiptModal] = useState(null); // { expense, url, isPdf }
   const [receiptUploading, setReceiptUploading] = useState(false);
@@ -1199,6 +1204,41 @@ function ExpensesTab({ from, to }) {
     }
   };
 
+  const openCcStatement = () => {
+    const unsettled = expenses.filter(e => e.paidViaId && accountMap[e.paidViaId]?.type === 'liability' && !e.ccSettled);
+    if (!unsettled.length) return;
+    const ccAccounts = [...new Map(unsettled.map(e => [e.paidViaId, accountMap[e.paidViaId]])).entries()]
+      .map(([, a]) => a).filter(Boolean);
+    const firstId = String(ccAccounts[0]?.id || '');
+    setCcStmtDate(todayStr());
+    setCcStmtAccountId(firstId);
+    setCcStmtSelected(new Set(unsettled.filter(e => String(e.paidViaId) === firstId).map(e => e.id)));
+    setCcStatement({ accounts: ccAccounts, expenses: unsettled });
+  };
+
+  const confirmCcStatement = async () => {
+    if (!ccStatement) return;
+    const ids = [...ccStmtSelected];
+    if (!ids.length) return;
+    setCcStmtSaving(true);
+    try {
+      const res = await api.post('/api/finance/expenses/cc-statement-pay', {
+        accountId: parseInt(ccStmtAccountId),
+        date: ccStmtDate,
+        expenseIds: ids,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      addToast(`CC statement paid — ${data.count} item${data.count > 1 ? 's' : ''}, ${fmt(data.total)}`);
+      setCcStatement(null);
+      load();
+    } catch (e) {
+      addToast(e.message, 'error');
+    } finally {
+      setCcStmtSaving(false);
+    }
+  };
+
   const removeReceipt = (exp) => {
     setConfirmModal({
       message: `Remove receipt for "${exp.description}"?`,
@@ -1219,7 +1259,12 @@ function ExpensesTab({ from, to }) {
     <div data-tour="finance-expenses" className="p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Expenses</h2>
-        <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Expense'}</Btn>
+        <div className="flex gap-2">
+          {expenses.some(e => e.paidViaId && accountMap[e.paidViaId]?.type === 'liability' && !e.ccSettled) && (
+            <Btn variant="secondary" onClick={openCcStatement}>Pay CC Statement</Btn>
+          )}
+          <Btn onClick={showForm ? cancelForm : openNew}>{showForm ? 'Cancel' : '+ Add Expense'}</Btn>
+        </div>
       </div>
 
       {showForm && (
@@ -1363,6 +1408,111 @@ function ExpensesTab({ from, to }) {
           </div>
         </Modal>
       )}
+
+      {/* Pay CC Statement modal */}
+      {ccStatement && (() => {
+        const filteredExpenses = ccStatement.expenses.filter(e => String(e.paidViaId) === ccStmtAccountId);
+        const selectedTotal = filteredExpenses
+          .filter(e => ccStmtSelected.has(e.id))
+          .reduce((s, e) => s + parseFloat(e.amount) + parseFloat(e.gst || 0), 0);
+        const toggleAll = (checked) => {
+          setCcStmtSelected(checked ? new Set(filteredExpenses.map(e => e.id)) : new Set());
+        };
+        const toggleOne = (id, checked) => {
+          setCcStmtSelected(prev => {
+            const next = new Set(prev);
+            checked ? next.add(id) : next.delete(id);
+            return next;
+          });
+        };
+        return (
+          <Modal title="Pay CC Statement" wide onClose={() => setCcStatement(null)}>
+            <div className="flex flex-col gap-4">
+              {ccStatement.accounts.length > 1 && (
+                <Field label="Credit Card Account">
+                  <Sel value={ccStmtAccountId} onChange={v => {
+                    setCcStmtAccountId(v);
+                    const next = ccStatement.expenses.filter(e => String(e.paidViaId) === v);
+                    setCcStmtSelected(new Set(next.map(e => e.id)));
+                  }}>
+                    {ccStatement.accounts.map(a => (
+                      <option key={a.id} value={String(a.id)}>{a.code} — {a.name}</option>
+                    ))}
+                  </Sel>
+                </Field>
+              )}
+              <Field label="Payment Date">
+                <Input type="date" value={ccStmtDate} onChange={setCcStmtDate} />
+              </Field>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>
+                    Unsettled items ({filteredExpenses.length})
+                  </span>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer" style={{ color: 'var(--color-muted)' }}>
+                    <input type="checkbox"
+                      checked={filteredExpenses.length > 0 && filteredExpenses.every(e => ccStmtSelected.has(e.id))}
+                      onChange={e => toggleAll(e.target.checked)}
+                    />
+                    Select all
+                  </label>
+                </div>
+                <div className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ background: 'var(--color-surface)' }}>
+                        <th className="w-8 px-3 py-2"></th>
+                        <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--color-muted)' }}>Date</th>
+                        <th className="text-left px-3 py-2 font-medium" style={{ color: 'var(--color-muted)' }}>Description</th>
+                        <th className="text-right px-3 py-2 font-medium" style={{ color: 'var(--color-muted)' }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredExpenses.map(e => {
+                        const total = parseFloat(e.amount) + parseFloat(e.gst || 0);
+                        return (
+                          <tr key={e.id} style={{ borderTop: '1px solid var(--color-border)' }}>
+                            <td className="px-3 py-2 text-center">
+                              <input type="checkbox"
+                                checked={ccStmtSelected.has(e.id)}
+                                onChange={ev => toggleOne(e.id, ev.target.checked)}
+                              />
+                            </td>
+                            <td className="px-3 py-2" style={{ color: 'var(--color-muted)' }}>{fmtDate(e.date)}</td>
+                            <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>{e.description}</td>
+                            <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-text)' }}>{fmt(total)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="rounded-lg p-3 text-xs font-mono flex flex-col gap-1" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+                <div className="flex justify-between">
+                  <span>DR {ccStatement.accounts.find(a => String(a.id) === ccStmtAccountId)?.code} — {ccStatement.accounts.find(a => String(a.id) === ccStmtAccountId)?.name}</span>
+                  <span>{fmt(selectedTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>CR 1000 — Bank / Cash</span>
+                  <span>{fmt(selectedTotal)}</span>
+                </div>
+              </div>
+              <div className="flex gap-2 justify-between items-center">
+                <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  Total: {fmt(selectedTotal)} ({[...ccStmtSelected].filter(id => filteredExpenses.find(e => e.id === id)).length} items)
+                </span>
+                <div className="flex gap-2">
+                  <Btn variant="secondary" onClick={() => setCcStatement(null)}>Cancel</Btn>
+                  <Btn onClick={confirmCcStatement} disabled={ccStmtSaving || ccStmtSelected.size === 0}>
+                    {ccStmtSaving ? 'Posting…' : 'Post Payment'}
+                  </Btn>
+                </div>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* Upload receipt modal */}
       {receiptModal && (

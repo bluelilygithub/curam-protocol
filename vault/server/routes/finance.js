@@ -48,6 +48,7 @@ const DEFAULT_ACCOUNTS = [
   { code: '1100', name: 'Accounts Receivable',  type: 'asset'     },
   { code: '1200', name: 'GST Paid',             type: 'asset'     },
   { code: '2000', name: 'Accounts Payable',     type: 'liability' },
+  { code: '2100', name: 'Credit Card',          type: 'liability' },
   { code: '2200', name: 'GST Collected',        type: 'liability' },
   { code: '3000', name: "Owner's Equity",       type: 'equity'    },
   { code: '4000', name: 'Income',               type: 'income'    },
@@ -56,13 +57,10 @@ const DEFAULT_ACCOUNTS = [
 ];
 
 async function ensureAccounts(userId) {
-  const { rows } = await pool.query(
-    'SELECT id FROM fin_accounts WHERE "userId"=$1 LIMIT 1', [userId]
-  );
-  if (rows.length) return;
   for (const a of DEFAULT_ACCOUNTS) {
     await pool.query(
-      `INSERT INTO fin_accounts ("userId", code, name, type, "isSystem") VALUES ($1,$2,$3,$4,true)`,
+      `INSERT INTO fin_accounts ("userId", code, name, type, "isSystem") VALUES ($1,$2,$3,$4,true)
+       ON CONFLICT ("userId", code) DO NOTHING`,
       [userId, a.code, a.name, a.type]
     );
   }
@@ -1028,6 +1026,62 @@ router.post('/expenses', async (req, res) => {
 
     await dbClient.query('COMMIT');
     res.json(expense);
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+router.post('/expenses/cc-statement-pay', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { accountId, date, expenseIds } = req.body;
+
+    if (!accountId || !Array.isArray(expenseIds) || !expenseIds.length) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: 'accountId and expenseIds required' });
+    }
+
+    const { rows: expenses } = await dbClient.query(
+      `SELECT id, amount, gst FROM fin_expenses
+       WHERE id = ANY($1) AND "userId"=$2 AND "paidViaId"=$3 AND "ccSettled"=false`,
+      [expenseIds, userId, parseInt(accountId)]
+    );
+
+    if (!expenses.length) {
+      await dbClient.query('ROLLBACK');
+      return res.status(400).json({ error: 'No eligible unsettled expenses found' });
+    }
+
+    const total = parseFloat(
+      expenses.reduce((s, e) => s + parseFloat(e.amount) + parseFloat(e.gst || 0), 0).toFixed(2)
+    );
+
+    await ensureAccounts(userId);
+    const bankId = await accountByCode(userId, '1000');
+    if (!bankId) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Bank / Cash account not found' }); }
+
+    await createJournalEntry(dbClient, userId, {
+      date:        date || new Date().toISOString().slice(0, 10),
+      description: `CC statement payment — ${expenses.length} item${expenses.length > 1 ? 's' : ''}`,
+      type:        'manual',
+      lines: [
+        { accountId: parseInt(accountId), debit: total, credit: 0 },
+        { accountId: bankId,              debit: 0,     credit: total },
+      ],
+    });
+
+    await dbClient.query(
+      `UPDATE fin_expenses SET "ccSettled"=true WHERE id = ANY($1) AND "userId"=$2`,
+      [expenses.map(e => e.id), userId]
+    );
+
+    await dbClient.query('COMMIT');
+    res.json({ ok: true, count: expenses.length, total });
   } catch (err) {
     await dbClient.query('ROLLBACK');
     res.status(500).json({ error: err.message });

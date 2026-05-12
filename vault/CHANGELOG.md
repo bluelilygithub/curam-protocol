@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-12 (2)
+
+**Feature:** Finance — Pay CC Statement (bulk CC settlement).
+
+New **Pay CC Statement** button appears in the Expenses header whenever there are unsettled CC expenses. Opens a modal listing all unsettled items for the selected card account with checkboxes, total, and a date picker. Posting creates a single journal entry (`DR Credit Card / CR Bank`) and marks all selected expenses as settled — replacing the per-expense "Pay CC" workflow for month-end statement reconciliation. Also adds `POST /api/finance/expenses/cc-statement-pay` backend endpoint (named route placed before `/:id` routes).
+
+**Modified files:** `server/routes/finance.js`, `client/src/pages/FinancePage.jsx`.
+
+---
+
 ## 2026-05-12 (1)
 
 **Feature:** Finance — Trial Balance (Balances tab).
