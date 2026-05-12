@@ -1927,11 +1927,11 @@ router.get('/interest', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT e.id, e.date, e.description,
-              l.debit AS amount
+              SUM(l.debit) AS amount
        FROM fin_journal_entries e
        JOIN fin_journal_lines l ON l."entryId" = e.id
-       JOIN fin_accounts a ON a.id = l."accountId" AND a.code = '1000'
        WHERE e."userId"=$1 AND e.type='interest'
+       GROUP BY e.id, e.date, e.description
        ORDER BY e.date DESC, e.id DESC`,
       [req.user.id]
     );
