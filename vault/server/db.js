@@ -896,7 +896,7 @@ async function initSchema() {
       ALTER TABLE fin_journal_entries DROP CONSTRAINT IF EXISTS fin_journal_entries_type_check;
       ALTER TABLE fin_journal_entries
         ADD CONSTRAINT fin_journal_entries_type_check
-        CHECK(type IN ('manual','invoice','payment','expense','wage','bas'));
+        CHECK(type IN ('manual','invoice','payment','expense','wage','bas','interest'));
     EXCEPTION WHEN OTHERS THEN NULL;
     END $$
   `);

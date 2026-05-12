@@ -1716,7 +1716,7 @@ function WagesTab({ from, to }) {
 
 // ── Interest Income ───────────────────────────────────────────────────────────
 
-function InterestTab() {
+function InterestTab({ from, to }) {
   const [entries, setEntries]   = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm]         = useState({ date: todayStr(), amount: '', description: 'Bank interest' });
@@ -1726,15 +1726,23 @@ function InterestTab() {
   const addToast = useToastStore(s => s.addToast);
 
   const load = useCallback(() => {
-    api.get('/api/finance/interest').then(r => r.json()).then(d => setEntries(Array.isArray(d) ? d : [])).catch(() => {});
-  }, []);
+    const params = new URLSearchParams();
+    if (from) params.set('from', from);
+    if (to)   params.set('to', to);
+    api.get(`/api/finance/interest?${params}`)
+      .then(r => r.json())
+      .then(d => setEntries(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [from, to]);
   useEffect(() => { load(); }, [load]);
 
   const save = async () => {
     if (!form.amount || parseFloat(form.amount) <= 0) { setError('Valid amount required'); return; }
     setSaving(true); setError('');
     try {
-      await api.post('/api/finance/interest', form);
+      const res  = await api.post('/api/finance/interest', form);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save');
       addToast('Interest recorded');
       setForm({ date: todayStr(), amount: '', description: 'Bank interest' });
       setShowForm(false);
@@ -3141,7 +3149,7 @@ function BalancesTab() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Interest', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings']);
+const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
@@ -3233,7 +3241,7 @@ export default function FinancePage() {
         {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
         {tab === 'Wages'     && <WagesTab     from={from} to={to} />}
-        {tab === 'Interest'  && <InterestTab />}
+        {tab === 'Interest'  && <InterestTab from={from} to={to} />}
         {tab === 'Journal'   && <JournalTab   from={from} to={to} />}
         {tab === 'Accounts'  && <AccountsTab />}
         {tab === 'Codes'     && <CodesTab />}

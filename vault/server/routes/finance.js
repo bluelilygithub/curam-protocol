@@ -1925,15 +1925,20 @@ router.get('/export/excel', async (req, res) => {
 
 router.get('/interest', async (req, res) => {
   try {
+    const { from, to } = req.query;
+    const params = [req.user.id];
+    let dateWhere = '';
+    if (from) { params.push(from); dateWhere += ` AND e.date >= $${params.length}`; }
+    if (to)   { params.push(to);   dateWhere += ` AND e.date <= $${params.length}`; }
     const { rows } = await pool.query(
       `SELECT e.id, e.date, e.description,
               SUM(l.debit) AS amount
        FROM fin_journal_entries e
        JOIN fin_journal_lines l ON l."entryId" = e.id
-       WHERE e."userId"=$1 AND e.type='interest'
+       WHERE e."userId"=$1 AND e.type='interest'${dateWhere}
        GROUP BY e.id, e.date, e.description
        ORDER BY e.date DESC, e.id DESC`,
-      [req.user.id]
+      params
     );
     res.json(rows);
   } catch (err) {
