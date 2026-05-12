@@ -1714,6 +1714,128 @@ function WagesTab({ from, to }) {
   );
 }
 
+// ── Interest Income ───────────────────────────────────────────────────────────
+
+function InterestTab() {
+  const [entries, setEntries]   = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm]         = useState({ date: todayStr(), amount: '', description: 'Bank interest' });
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [confirmModal, setConfirmModal] = useState(null);
+  const addToast = useToastStore(s => s.addToast);
+
+  const load = useCallback(() => {
+    api.get('/api/finance/interest').then(r => r.json()).then(d => setEntries(Array.isArray(d) ? d : [])).catch(() => {});
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const save = async () => {
+    if (!form.amount || parseFloat(form.amount) <= 0) { setError('Valid amount required'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post('/api/finance/interest', form);
+      addToast('Interest recorded');
+      setForm({ date: todayStr(), amount: '', description: 'Bank interest' });
+      setShowForm(false);
+      load();
+    } catch (e) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const del = (entry) => {
+    setConfirmModal({
+      message: `Delete interest entry "${entry.description}" (${fmt(entry.amount)})?`,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          await api.delete(`/api/finance/interest/${entry.id}`);
+          addToast('Entry deleted');
+          load();
+        } catch (e) { addToast(e.message, 'error'); }
+      },
+    });
+  };
+
+  const total = entries.reduce((s, e) => s + parseFloat(e.amount), 0);
+
+  return (
+    <div className="p-6 max-w-2xl">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="font-semibold" style={{ color: 'var(--color-text)' }}>Interest Income</h2>
+          {entries.length > 0 && (
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+              {entries.length} entr{entries.length === 1 ? 'y' : 'ies'} · total {fmt(total)}
+            </p>
+          )}
+        </div>
+        <Btn onClick={() => { setShowForm(p => !p); setError(''); }}>
+          {showForm ? 'Cancel' : '+ Record Interest'}
+        </Btn>
+      </div>
+
+      {showForm && (
+        <div className="mb-5 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <Field label="Date"><Input type="date" value={form.date} onChange={v => setForm(p => ({ ...p, date: v }))} /></Field>
+            <Field label="Amount (AUD)"><Input type="number" value={form.amount} onChange={v => setForm(p => ({ ...p, amount: v }))} placeholder="0.00" /></Field>
+            <div className="col-span-2">
+              <Field label="Description"><Input value={form.description} onChange={v => setForm(p => ({ ...p, description: v }))} placeholder="Bank interest" /></Field>
+            </div>
+          </div>
+          <div className="rounded-lg p-3 text-xs font-mono flex flex-col gap-1 mb-3" style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}>
+            <div className="flex justify-between"><span>DR 1000 — Bank / Cash</span><span>{form.amount ? fmt(parseFloat(form.amount)) : '—'}</span></div>
+            <div className="flex justify-between"><span>CR 4100 — Interest Income</span><span>{form.amount ? fmt(parseFloat(form.amount)) : '—'}</span></div>
+          </div>
+          <ErrMsg msg={error} />
+          <div className="flex justify-end mt-2">
+            <Btn onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Post Entry'}</Btn>
+          </div>
+        </div>
+      )}
+
+      {entries.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No interest entries yet.</p>
+      ) : (
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr style={{ background: 'var(--color-surface)' }}>
+                <th className="text-left px-4 py-2 text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Date</th>
+                <th className="text-left px-4 py-2 text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Description</th>
+                <th className="text-right px-4 py-2 text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Amount</th>
+                <th className="px-4 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map(e => (
+                <tr key={e.id} style={{ borderTop: '1px solid var(--color-border)' }}>
+                  <td className="px-4 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>{fmtDate(e.date)}</td>
+                  <td className="px-4 py-2" style={{ color: 'var(--color-text)' }}>{e.description}</td>
+                  <td className="px-4 py-2 text-right font-mono text-sm" style={{ color: '#065f46' }}>{fmt(e.amount)}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button onClick={() => del(e)} className="text-xs hover:opacity-60" style={{ color: '#ef4444' }}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+              <tr style={{ borderTop: '2px solid var(--color-border)', background: 'var(--color-surface)' }}>
+                <td colSpan={2} className="px-4 py-2 text-xs font-semibold text-right" style={{ color: 'var(--color-muted)' }}>Total</td>
+                <td className="px-4 py-2 text-right font-mono font-semibold" style={{ color: '#065f46' }}>{fmt(total)}</td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {confirmModal && (
+        <ConfirmModal message={confirmModal.message} onConfirm={confirmModal.onConfirm} onCancel={() => setConfirmModal(null)} />
+      )}
+    </div>
+  );
+}
+
 // ── Accounts ─────────────────────────────────────────────────────────────────
 
 const ACCOUNT_TYPES = ['asset','liability','equity','income','expense'];
@@ -3018,8 +3140,8 @@ function BalancesTab() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Journal', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings']);
+const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Interest', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
@@ -3111,6 +3233,7 @@ export default function FinancePage() {
         {tab === 'Suppliers' && <SuppliersTab />}
         {tab === 'Expenses'  && <ExpensesTab  from={from} to={to} />}
         {tab === 'Wages'     && <WagesTab     from={from} to={to} />}
+        {tab === 'Interest'  && <InterestTab />}
         {tab === 'Journal'   && <JournalTab   from={from} to={to} />}
         {tab === 'Accounts'  && <AccountsTab />}
         {tab === 'Codes'     && <CodesTab />}

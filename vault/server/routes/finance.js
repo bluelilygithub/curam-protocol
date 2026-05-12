@@ -52,6 +52,7 @@ const DEFAULT_ACCOUNTS = [
   { code: '2200', name: 'GST Collected',        type: 'liability' },
   { code: '3000', name: "Owner's Equity",       type: 'equity'    },
   { code: '4000', name: 'Income',               type: 'income'    },
+  { code: '4100', name: 'Interest Income',      type: 'income'    },
   { code: '5000', name: 'Expenses',             type: 'expense'   },
   { code: '6000', name: 'Wages',                type: 'expense'   },
 ];
@@ -1917,6 +1918,81 @@ router.get('/export/excel', async (req, res) => {
     res.send('\uFEFF' + rows.join('\r\n'));
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Interest Income ───────────────────────────────────────────────────────────
+
+router.get('/interest', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT e.id, e.date, e.description,
+              l.debit AS amount
+       FROM fin_journal_entries e
+       JOIN fin_journal_lines l ON l."entryId" = e.id
+       JOIN fin_accounts a ON a.id = l."accountId" AND a.code = '1000'
+       WHERE e."userId"=$1 AND e.type='interest'
+       ORDER BY e.date DESC, e.id DESC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/interest', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const userId = req.user.id;
+    const { date, amount, description } = req.body;
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Valid amount required' }); }
+
+    await ensureAccounts(userId);
+    const bankId     = await accountByCode(userId, '1000');
+    const interestId = await accountByCode(userId, '4100');
+    if (!bankId || !interestId) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'Required accounts not found' }); }
+
+    const entryId = await createJournalEntry(dbClient, userId, {
+      date:        date || new Date().toISOString().slice(0, 10),
+      description: description?.trim() || 'Bank interest',
+      type:        'interest',
+      lines: [
+        { accountId: bankId,     debit: amt, credit: 0 },
+        { accountId: interestId, debit: 0,   credit: amt },
+      ],
+    });
+
+    await dbClient.query('COMMIT');
+    res.json({ id: entryId });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
+  }
+});
+
+router.delete('/interest/:id', async (req, res) => {
+  const dbClient = await pool.connect();
+  try {
+    await dbClient.query('BEGIN');
+    const { rows } = await dbClient.query(
+      `SELECT id FROM fin_journal_entries WHERE id=$1 AND "userId"=$2 AND type='interest'`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) { await dbClient.query('ROLLBACK'); return res.status(404).json({ error: 'Not found' }); }
+    await dbClient.query(`DELETE FROM fin_journal_lines WHERE "entryId"=$1`, [req.params.id]);
+    await dbClient.query(`DELETE FROM fin_journal_entries WHERE id=$1`, [req.params.id]);
+    await dbClient.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await dbClient.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    dbClient.release();
   }
 });
 
