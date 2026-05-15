@@ -1053,8 +1053,8 @@ function ChatPage({ general = false }) {
           )}
         </div>
 
-        {/* Model picker (admin) / current model badge (member) */}
-        {isAdmin ? (
+        {/* Model picker (admin only) */}
+        {isAdmin && (
           <div className="relative">
             <button
               onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); }}
@@ -1097,14 +1097,6 @@ function ChatPage({ general = false }) {
                 })}
               </div>
             )}
-          </div>
-        ) : (
-          <div
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
-            title="Model managed by admin"
-          >
-            {(() => { const m = MODELS.find(x => x.id === effectiveModel); return m ? `${m.emoji} ${m.name}` : effectiveModel; })()}
           </div>
         )}
 
