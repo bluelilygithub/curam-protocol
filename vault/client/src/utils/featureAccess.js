@@ -1,6 +1,7 @@
 export const DEFAULT_FEATURE_ACCESS = {
   clients: true,
   goals: true,
+  habitsSidebar: true,
   chains: true,
   graph: true,
   debate: true,
@@ -14,6 +15,7 @@ export const DEFAULT_FEATURE_ACCESS = {
 export const FEATURE_ACCESS_OPTIONS = [
   { key: 'clients', label: 'Clients' },
   { key: 'goals', label: 'Goals' },
+  { key: 'habitsSidebar', label: '7 Habits Sidebar' },
   { key: 'chains', label: 'Prompt Chains' },
   { key: 'graph', label: 'Knowledge Graph' },
   { key: 'debate', label: 'Debate' },

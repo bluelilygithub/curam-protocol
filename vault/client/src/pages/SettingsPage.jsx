@@ -95,18 +95,20 @@ function SettingsPage() {
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const [featureAccessSaved, setFeatureAccessSaved] = useState(false);
 
-  const TABS = [
-    'Appearance',
-    'Profile',
-    'AI & Chat',
-    'Tasks',
-    'Goals',
-    'Integrations',
-    'News Digest',
-    'Mobile',
-    ...(user?.isAdmin ? ['Feature Access'] : []),
-    'Tours',
-  ];
+  const TABS = user?.isAdmin
+    ? [
+        'Appearance',
+        'Profile',
+        'AI & Chat',
+        'Tasks',
+        'Goals',
+        'Integrations',
+        'News Digest',
+        'Mobile',
+        'Feature Access',
+        'Tours',
+      ]
+    : ['Appearance', 'Profile', 'Tasks'];
 
   function selectTab(t) {
     setTab(t);
@@ -114,18 +116,20 @@ function SettingsPage() {
   }
 
   useEffect(() => {
-    const allowedTabs = [
-      'Appearance',
-      'Profile',
-      'AI & Chat',
-      'Tasks',
-      'Goals',
-      'Integrations',
-      'News Digest',
-      'Mobile',
-      ...(user?.isAdmin ? ['Feature Access'] : []),
-      'Tours',
-    ];
+    const allowedTabs = user?.isAdmin
+      ? [
+          'Appearance',
+          'Profile',
+          'AI & Chat',
+          'Tasks',
+          'Goals',
+          'Integrations',
+          'News Digest',
+          'Mobile',
+          'Feature Access',
+          'Tours',
+        ]
+      : ['Appearance', 'Profile', 'Tasks'];
     if (!allowedTabs.includes(tab)) {
       setTab('Appearance');
       localStorage.setItem('settingsTab', 'Appearance');

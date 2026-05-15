@@ -263,7 +263,10 @@ function Layout() {
 
       {/* Sidebar */}
       <aside style={sidebarStyle}>
-        <ProjectSidebar onClose={() => setSidebarOpen(false)} />
+        <ProjectSidebar
+          onClose={() => setSidebarOpen(false)}
+          showHabits={canUseFeature('goals') && canUseFeature('habitsSidebar')}
+        />
       </aside>
 
       {/* Main */}

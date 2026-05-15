@@ -3,6 +3,7 @@
 const FEATURE_ACCESS_DEFAULTS = {
   clients: true,
   goals: true,
+  habitsSidebar: true,
   chains: true,
   graph: true,
   debate: true,
