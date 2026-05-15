@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const { pool } = require('../db');
+const { buildStudyDeckPdfBuffer } = require('../services/studyDeckPdf');
 
 // GET /api/export/chat/:sessionId — JSON download
 router.get('/chat/:sessionId', async (req, res) => {
@@ -123,6 +124,21 @@ router.get('/projects', async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="all-projects.json"');
     res.json(rows);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/export/study-deck/pdf — PDF from JSON payload (no DB row; same layout as saved decks)
+router.post('/study-deck/pdf', async (req, res) => {
+  const { title, payload } = req.body;
+  if (!payload || typeof payload !== 'object') return res.status(400).json({ error: 'payload object required' });
+  try {
+    const buf = await buildStudyDeckPdfBuffer({ title: title || 'Study deck', payload });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="study-deck.pdf"');
+    res.send(buf);
+  } catch (err) {
+    console.error('Study deck PDF export error:', err);
     res.status(500).json({ error: err.message });
   }
 });

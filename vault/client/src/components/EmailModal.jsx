@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 
-function EmailModal({ sessionId, onClose, defaultSubject = 'Chat Export' }) {
+function EmailModal({ sessionId, studyDeckId, onClose, defaultSubject = 'Chat Export' }) {
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState(defaultSubject);
   useEffect(() => {
     setSubject(defaultSubject);
-  }, [defaultSubject, sessionId]);
+  }, [defaultSubject, sessionId, studyDeckId]);
   const [status, setStatus] = useState('idle'); // idle | sending | success | error
   const [errorMsg, setErrorMsg] = useState('');
   const getIcon = useIcon();
@@ -16,7 +16,9 @@ function EmailModal({ sessionId, onClose, defaultSubject = 'Chat Export' }) {
     if (!to.trim()) return;
     setStatus('sending');
     try {
-      const res = await api.post('/api/email', { sessionId, to, subject });
+      const res = studyDeckId
+        ? await api.post(`/api/study-decks/${studyDeckId}/email`, { to, subject })
+        : await api.post('/api/email', { sessionId, to, subject });
       const data = await res.json();
       if (data.ok) {
         setStatus('success');
@@ -43,7 +45,7 @@ function EmailModal({ sessionId, onClose, defaultSubject = 'Chat Export' }) {
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-sm" style={{ color: 'var(--color-text)' }}>
-            Email Thread
+            {studyDeckId ? 'Email study deck' : 'Email Thread'}
           </h2>
           <button onClick={onClose} style={{ color: 'var(--color-muted)' }}>
             {getIcon('x', { size: 16 })}

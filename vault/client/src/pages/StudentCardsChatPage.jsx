@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import MessageBubble from '../components/MessageBubble';
+import StudentDeckPanel from '../components/StudentDeckPanel';
+import EmailModal from '../components/EmailModal';
 import { useChat } from '../hooks/useChat';
 import { useModels } from '../hooks/useModels';
 import { useVoice } from '../hooks/useVoice';
@@ -8,6 +11,7 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import ExportMenu from '../components/ExportMenu';
+import { extractLatestVaultDeck, extractLatestVaultChoices, stripVaultMachineBlocks } from '../utils/studyDeckParse';
 
 const TEMPERATURES = [
   { label: 'Precise', value: 0.2 },
@@ -163,7 +167,7 @@ export default function StudentCardsChatPage() {
   const canUseStudent = isAdmin || featureAccess.student !== false;
 
   const {
-    messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, clearMessages, streamError, clearStreamError,
+    messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, clearMessages, loadHistory, streamError, clearStreamError,
   } = useChat({
     projectId: null,
     studentCards: true,
@@ -176,6 +180,16 @@ export default function StudentCardsChatPage() {
   const [setup, setSetup] = useState(() => ({ ...INITIAL_SETUP }));
   const [savedSetup, setSavedSetup] = useState(null);
   const [deckTitle, setDeckTitle] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [pageTab, setPageTab] = useState('session');
+  const [libraryRows, setLibraryRows] = useState([]);
+  const [libraryLoad, setLibraryLoad] = useState(false);
+  const [libraryDetail, setLibraryDetail] = useState(null);
+  const [savedDeckId, setSavedDeckId] = useState(null);
+  const [showDeckEmail, setShowDeckEmail] = useState(false);
+  const [deckEmailTargetId, setDeckEmailTargetId] = useState(null);
+  const [deckEmailSubjectHint, setDeckEmailSubjectHint] = useState('');
+  const sessionBootRef = useRef(false);
 
   const [input, setInput] = useState('');
   const [chatModel, setChatModel] = useState(null);
@@ -211,6 +225,45 @@ export default function StudentCardsChatPage() {
   }, []);
 
   useEffect(() => {
+    const sid = searchParams.get('session');
+    if (!sid || sessionBootRef.current) return;
+    sessionBootRef.current = true;
+    loadHistory(sid)
+      .then(() => { setPhase('chat'); })
+      .catch(() => {});
+  }, [searchParams, loadHistory]);
+
+  const parsedDeck = useMemo(() => extractLatestVaultDeck(messages), [messages]);
+  const choicePrompt = useMemo(() => {
+    if (isStreaming) return null;
+    return extractLatestVaultChoices(messages);
+  }, [messages, isStreaming]);
+
+  const displayMessages = useMemo(() => messages.map((m) => {
+    if (m.role !== 'assistant' || !m.content) return m;
+    const stripped = stripVaultMachineBlocks(m.content);
+    if (stripped === m.content) return m;
+    return { ...m, content: stripped };
+  }), [messages]);
+
+  const refreshLibrary = useCallback(async () => {
+    setLibraryLoad(true);
+    try {
+      const res = await api.get('/api/study-decks');
+      const data = await res.json();
+      setLibraryRows(Array.isArray(data) ? data : []);
+    } catch {
+      setLibraryRows([]);
+    } finally {
+      setLibraryLoad(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (pageTab === 'library') refreshLibrary();
+  }, [pageTab, refreshLibrary]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isStreaming]);
 
@@ -239,6 +292,7 @@ export default function StudentCardsChatPage() {
     setSetup({ ...INITIAL_SETUP });
     setSavedSetup(null);
     setDeckTitle('');
+    setSavedDeckId(null);
   }, []);
 
   const handleEditSetup = useCallback(() => {
@@ -250,10 +304,12 @@ export default function StudentCardsChatPage() {
   }, [savedSetup, isListening, stopListening, stopSpeaking]);
 
   const handleNewSession = useCallback(() => {
+    sessionBootRef.current = false;
+    setSearchParams({});
     clearMessages();
     clearStreamError();
     resetWizard();
-  }, [clearMessages, clearStreamError, resetWizard]);
+  }, [clearMessages, clearStreamError, resetWizard, setSearchParams]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -261,6 +317,17 @@ export default function StudentCardsChatPage() {
     setInput('');
     await sendMessage(text, [], [], effectiveModel, [], temperature, null, false, [], false);
   }, [input, isStreaming, phase, sendMessage, effectiveModel, temperature]);
+
+  const handleChoice = useCallback(async (opt) => {
+    const label = opt.label || opt.id;
+    if (!label || isStreaming || phase !== 'chat') return;
+    await sendMessage(`My selection: ${label}`, [], [], effectiveModel, [], temperature, null, false, [], false);
+  }, [isStreaming, phase, sendMessage, effectiveModel, temperature]);
+
+  const handleDeckSaved = useCallback((row) => {
+    if (row?.id) setSavedDeckId(row.id);
+    refreshLibrary();
+  }, [refreshLibrary]);
 
   const canAdvanceFromStep = useCallback(() => {
     if (setupStep === 0) return !!setup.source;
@@ -273,6 +340,7 @@ export default function StudentCardsChatPage() {
   const handleBeginStudySession = useCallback(async () => {
     if (!setup.source || !setup.detail.trim() || !setup.familiarity || !setup.goal || isStreaming) return;
     setSavedSetup({ ...setup });
+    setSavedDeckId(null);
     const text = buildStudyBootstrap(setup, deckTitle);
     setPhase('chat');
     await sendMessage(text, [], [], effectiveModel, [], temperature, null, false, [], false);
@@ -508,6 +576,33 @@ export default function StudentCardsChatPage() {
     <div className="flex flex-col h-full min-h-0 overflow-hidden" style={{ background: 'var(--color-bg)' }}>
       <div className="flex-shrink-0 px-4 h-12 flex items-center gap-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
         <span className="text-sm font-medium flex-shrink-0" style={{ color: 'var(--color-text)' }}>Cards</span>
+        <div className="flex items-center gap-1 ml-2">
+          <button
+            type="button"
+            onClick={() => { setPageTab('session'); setLibraryDetail(null); }}
+            className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
+            style={{
+              borderColor: 'var(--color-border)',
+              color: pageTab === 'session' ? 'var(--color-primary)' : 'var(--color-muted)',
+              background: pageTab === 'session' ? 'var(--color-surface)' : 'transparent',
+            }}
+          >
+            Session
+          </button>
+          <button
+            type="button"
+            onClick={() => { setPageTab('library'); setLibraryDetail(null); }}
+            className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70 flex items-center gap-1"
+            style={{
+              borderColor: 'var(--color-border)',
+              color: pageTab === 'library' ? 'var(--color-primary)' : 'var(--color-muted)',
+              background: pageTab === 'library' ? 'var(--color-surface)' : 'transparent',
+            }}
+          >
+            {getIcon('library', { size: 12 })}
+            Saved
+          </button>
+        </div>
         <span className="flex-1" />
         {canSelectModel && (
           <div className="relative">
@@ -585,7 +680,7 @@ export default function StudentCardsChatPage() {
         >
           New session
         </button>
-        {phase === 'chat' && (
+        {phase === 'chat' && pageTab === 'session' && (
           <ExportMenu
             sessionId={sessionId}
             pdfTitle={deckTitle.trim() || 'Study cards'}
@@ -604,12 +699,49 @@ export default function StudentCardsChatPage() {
       )}
 
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {phase === 'setup' && (
+        {pageTab === 'library' && (
+          <div className="flex-1 overflow-y-auto min-h-0 px-4 py-6">
+            <div className={`${msgWidthClass} mx-auto w-full`}>
+              <h2 className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Saved decks & quizzes</h2>
+              {libraryLoad ? (
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>
+              ) : libraryRows.length === 0 ? (
+                <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No saved decks yet. During a session, use Save deck on the current deck.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {libraryRows.map((row) => (
+                    <li key={row.id}>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await api.get(`/api/study-decks/${row.id}`);
+                            const d = await res.json();
+                            setLibraryDetail(d);
+                          } catch { /* ignore */ }
+                        }}
+                        className="w-full text-left rounded-xl border px-4 py-3 transition-opacity hover:opacity-70"
+                        style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                      >
+                        <div className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{row.title || 'Untitled deck'}</div>
+                        <div className="text-[10px] mt-1 uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+                          {row.kind || 'mixed'}
+                          {row.updatedAt ? ` · ${new Date(row.updatedAt).toLocaleDateString()}` : ''}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+        {pageTab === 'session' && phase === 'setup' && (
           <div className="flex-1 overflow-y-auto min-h-0 py-8">
             {setupCard}
           </div>
         )}
-        {phase === 'chat' && (
+        {pageTab === 'session' && phase === 'chat' && (
           <>
             {savedSetup && (
               <div
@@ -660,9 +792,11 @@ export default function StudentCardsChatPage() {
                   </button>
                 </div>
               </div>
-              <div className={`${msgWidthClass} px-4 py-4 w-full`}>
-                {messages.map((msg, i) => {
-                  const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
+              <div className={`${msgWidthClass} px-4 py-4 w-full space-y-4`}>
+                {displayMessages.map((msg, i) => {
+                  const isLastAssistant = msg.role === 'assistant' && i === displayMessages.length - 1;
+                  const orig = messages[i];
+                  const speakContent = orig?.role === 'assistant' ? stripVaultMachineBlocks(orig.content || '') : '';
                   return (
                     <MessageBubble
                       key={i}
@@ -672,13 +806,65 @@ export default function StudentCardsChatPage() {
                       searching={false}
                       isSpeaking={isLastAssistant && isTTSAvailable ? isSpeaking : false}
                       isPaused={isLastAssistant && isTTSAvailable ? isPaused : false}
-                      onSpeak={isLastAssistant && isTTSAvailable && msg.role === 'assistant' ? () => speak(msg.content) : undefined}
+                      onSpeak={isLastAssistant && isTTSAvailable && msg.role === 'assistant' ? () => speak(speakContent) : undefined}
                       onPause={isLastAssistant && isTTSAvailable ? pauseSpeaking : undefined}
                       onResume={isLastAssistant && isTTSAvailable ? resumeSpeaking : undefined}
                       onStop={isLastAssistant && isTTSAvailable ? stopSpeaking : undefined}
                     />
                   );
                 })}
+                {choicePrompt && choicePrompt.options?.length > 0 && (
+                  <div
+                    className="rounded-xl border p-4 shadow-sm"
+                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                  >
+                    {choicePrompt.prompt && (
+                      <p className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>{choicePrompt.prompt}</p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {choicePrompt.options.map((opt) => (
+                        <button
+                          key={opt.id || opt.label}
+                          type="button"
+                          disabled={isStreaming}
+                          onClick={() => handleChoice(opt)}
+                          className="text-sm px-4 py-2 rounded-xl border transition-opacity hover:opacity-70 disabled:opacity-40"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+                        >
+                          {opt.label || opt.id}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {parsedDeck && (
+                  <div
+                    className="rounded-xl border p-4 shadow-sm space-y-3"
+                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Current deck</h3>
+                      {savedDeckId && (
+                        <button
+                          type="button"
+                          onClick={() => { setDeckEmailSubjectHint(deckTitle.trim() || 'Study deck'); setDeckEmailTargetId(savedDeckId); setShowDeckEmail(true); }}
+                          className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70 flex items-center gap-1"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                        >
+                          {getIcon('mail', { size: 12 })}
+                          Email deck
+                        </button>
+                      )}
+                    </div>
+                    <StudentDeckPanel
+                      title={deckTitle}
+                      payload={parsedDeck}
+                      sessionId={sessionId}
+                      savedDeckId={savedDeckId}
+                      onSaved={handleDeckSaved}
+                    />
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </div>
             </div>
@@ -686,7 +872,7 @@ export default function StudentCardsChatPage() {
         )}
       </div>
 
-      {phase === 'chat' && (
+      {phase === 'chat' && pageTab === 'session' && (
         <div className="flex-shrink-0 border-t px-4 py-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div className={`${msgWidthClass} flex gap-2 items-end mx-auto w-full px-0`}>
             <div className="flex-1 rounded-2xl border relative" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -769,6 +955,76 @@ export default function StudentCardsChatPage() {
               {sessionId ? ` · ${sessionId.slice(-8)}` : ''}
             </p>
           )}
+        </div>
+      )}
+
+      {showDeckEmail && deckEmailTargetId && (
+        <EmailModal
+          studyDeckId={deckEmailTargetId}
+          onClose={() => { setShowDeckEmail(false); setDeckEmailTargetId(null); setDeckEmailSubjectHint(''); }}
+          defaultSubject={`${deckEmailSubjectHint || 'Study deck'} — Deck export`}
+        />
+      )}
+
+      {libraryDetail && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={() => setLibraryDetail(null)}
+        >
+          <div
+            role="dialog"
+            className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl border shadow-2xl p-5"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{libraryDetail.title || 'Saved deck'}</h3>
+              <button type="button" className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }} onClick={() => setLibraryDetail(null)}>Close</button>
+            </div>
+            <StudentDeckPanel
+              title={libraryDetail.title}
+              payload={libraryDetail.payload}
+              sessionId={libraryDetail.sessionId}
+              savedDeckId={libraryDetail.id}
+              hideSave
+            />
+            <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+              {libraryDetail.sessionId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sid = libraryDetail.sessionId;
+                    setLibraryDetail(null);
+                    setSearchParams({ session: sid });
+                    sessionBootRef.current = false;
+                    loadHistory(sid).then(() => {
+                      setPhase('chat');
+                      setPageTab('session');
+                    }).catch(() => {});
+                  }}
+                  className="text-xs px-3 py-2 rounded-lg text-white transition-opacity hover:opacity-90"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  Resume chat session
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setDeckEmailSubjectHint(libraryDetail.title || 'Study deck');
+                  setDeckEmailTargetId(libraryDetail.id);
+                  setShowDeckEmail(true);
+                  setLibraryDetail(null);
+                }}
+                className="text-xs px-3 py-2 rounded-lg border transition-opacity hover:opacity-70 flex items-center gap-1"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                {getIcon('mail', { size: 12 })}
+                Email this deck
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

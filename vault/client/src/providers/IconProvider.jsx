@@ -90,6 +90,7 @@ const semanticMap = {
   'clipboard-list': { lucide: 'ClipboardList' },
   'layers': { lucide: 'Layers' },
   square: { lucide: 'Square' },
+  library: { lucide: 'Library' },
 };
 
 const IconContext = createContext(null);

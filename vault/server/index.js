@@ -68,6 +68,7 @@ app.use('/api/pdf', require('./routes/pdf'));
 app.use('/api/search', require('./routes/search'));
 app.use('/api/email', require('./routes/email'));
 app.use('/api/export', require('./routes/export'));
+app.use('/api/study-decks', require('./routes/studyDecks'));
 app.use('/api/fetch-url', require('./routes/fetchUrl'));
 app.use('/api/web-search', require('./routes/webSearch'));
 app.use('/api/memory', require('./routes/memory'));

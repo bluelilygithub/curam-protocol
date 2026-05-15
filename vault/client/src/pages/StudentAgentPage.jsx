@@ -21,7 +21,7 @@ export default function StudentAgentPage() {
           Quiz
         </p>
         <p className="text-sm text-center max-w-xs" style={{ color: 'var(--color-muted)' }}>
-          Coming soon
+          Coming soon. Quiz items you create with the Cards assistant can be saved and revisited from Student → Cards → Saved (same as flashcards and slide decks).
         </p>
       </div>
     </div>

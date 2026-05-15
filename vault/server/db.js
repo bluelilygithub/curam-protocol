@@ -492,6 +492,19 @@ async function initSchema() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS study_decks (
+        id              SERIAL PRIMARY KEY,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title           TEXT NOT NULL DEFAULT '',
+        kind            TEXT NOT NULL DEFAULT 'mixed',
+        payload         JSONB NOT NULL DEFAULT '{}',
+        "sessionId"     TEXT REFERENCES sessions("sessionId") ON DELETE SET NULL,
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ── Finance ───────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_accounts (
@@ -743,6 +756,7 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_user_id    ON notes(user_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_project_id  ON notes(project_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_session  ON messages("sessionId")`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_study_decks_user  ON study_decks("userId", "updatedAt" DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_project     ON tasks("projectId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_project  ON sessions("projectId")`);
 
