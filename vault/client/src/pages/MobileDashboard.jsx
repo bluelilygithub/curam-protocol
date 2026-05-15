@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/apiClient';
-import { DEFAULT_TILES, mergeWithDefaults } from '../utils/mobileConfig';
+import useAuthStore from '../store/authStore';
+import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import { DEFAULT_TILES, FEATURE_BY_TILE_ID, mergeWithDefaults } from '../utils/mobileConfig';
 import TasksTile from '../components/mobile/TasksTile';
 import FinanceTile from '../components/mobile/FinanceTile';
 import ChatHistoryTile from '../components/mobile/ChatHistoryTile';
@@ -16,7 +18,10 @@ const TILE_MAP = {
 };
 
 export default function MobileDashboard() {
+  const { user } = useAuthStore();
+  const isAdmin = !!user?.isAdmin;
   const [tiles, setTiles] = useState(null);
+  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
 
   useEffect(() => {
     api.get('/api/settings').then(r => r.json()).then(data => {
@@ -29,7 +34,22 @@ export default function MobileDashboard() {
     }).catch(() => setTiles(DEFAULT_TILES.map(t => ({ ...t }))));
   }, []);
 
-  const visible = (tiles || DEFAULT_TILES).filter(t => t.enabled !== false);
+  useEffect(() => {
+    api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
+      if (data?.flags && typeof data.flags === 'object') {
+        setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
+      }
+    }).catch(() => {});
+  }, []);
+
+  const visible = (tiles || DEFAULT_TILES)
+    .filter(t => t.enabled !== false)
+    .filter(t => {
+      if (isAdmin) return true;
+      const featureKey = FEATURE_BY_TILE_ID[t.id];
+      if (!featureKey) return true;
+      return featureAccess[featureKey] !== false;
+    });
 
   return (
     <div className="px-4 pt-4 pb-24 space-y-4">

@@ -8,6 +8,10 @@ export const DEFAULT_TILES = [
   { id: 'notes',    label: 'Notes',        enabled: true },
 ];
 
+export const FEATURE_BY_TILE_ID = {
+  finance: 'finance',
+};
+
 export const DEFAULT_NAV_ITEMS = [
   { id: 'projects',  label: 'Projects',        path: '/',            enabled: true },
   { id: 'tasks',     label: 'Tasks',           path: '/tasks',       enabled: true },
