@@ -1,26 +1,40 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import useProjectStore from '../store/projectStore';
+import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from '../components/NewProjectModal';
 import { getModelShortName } from '../utils/models';
 import api from '../utils/apiClient';
 import CheckinModal from '../components/mood/CheckinModal';
+import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
   sadness: '#5B6FAD', disgust: '#8A5C8A', anger: '#A85C5C', anticipation: '#C48B3C',
 };
 
-function GoalsWidget() {
+function GoalsWidget({ enabled = true }) {
   const getIcon = useIcon();
   const [dashboard, setDashboard] = useState(null);
 
   useEffect(() => {
-    api.get('/api/goals/dashboard').then(r => r.json()).then(setDashboard).catch(() => {});
-  }, []);
+    if (!enabled) {
+      setDashboard(null);
+      return;
+    }
+    api.get('/api/goals/dashboard')
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const data = await r.json().catch(() => null);
+        return data && typeof data === 'object' ? data : null;
+      })
+      .then((data) => setDashboard(data))
+      .catch(() => setDashboard(null));
+  }, [enabled]);
 
-  if (!dashboard || dashboard.activeCount === 0) return null;
+  if (!dashboard || Number(dashboard.activeCount || 0) === 0) return null;
+  const topObjectives = Array.isArray(dashboard.topObjectives) ? dashboard.topObjectives : [];
 
   const pctColor = (p) => p >= 70 ? '#22c55e' : p >= 30 ? '#f59e0b' : '#ef4444';
 
@@ -40,7 +54,7 @@ function GoalsWidget() {
         </Link>
       </div>
       <div className="flex flex-col gap-2">
-        {dashboard.topObjectives.map(obj => (
+        {topObjectives.map(obj => (
           <div key={obj.id}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs truncate" style={{ color: 'var(--color-text)', maxWidth: '70%' }}>{obj.title}</span>
@@ -245,6 +259,7 @@ function TasksWidget() {
 
 function ProjectList() {
   const { projects, fetchProjects, create, setActive, reorder, remove, archive, unarchive } = useProjectStore();
+  const { user } = useAuthStore();
   const [showModal, setShowModal] = useState(false);
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
@@ -257,6 +272,12 @@ function ProjectList() {
   const toastTimer = useRef(null);
   const [moodMap, setMoodMap] = useState(null);
   const [feelingModalProjectId, setFeelingModalProjectId] = useState(null);
+  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+
+  const canUseFeature = useCallback((key) => {
+    if (user?.isAdmin) return true;
+    return featureAccess[key] !== false;
+  }, [featureAccess, user?.isAdmin]);
 
   const showToast = (message, action) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -281,19 +302,39 @@ function ProjectList() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    api.get('/api/settings/feature-access')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.flags && typeof data.flags === 'object') {
+          setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!canUseFeature('mood')) {
+      setMoodMap({});
+      return;
+    }
     if (projects.length === 0) { setMoodMap({}); return; }
     const entities = projects.map(p => ({ entityType: 'project', entityId: String(p.id) }));
     api.post('/api/mood/dominant/batch', { entities })
-      .then(r => r.json())
+      .then(async (r) => {
+        if (!r.ok) return {};
+        const data = await r.json().catch(() => ({}));
+        return data && typeof data === 'object' ? data : {};
+      })
       .then(batch => {
         const map = {};
         for (const p of projects) map[`project:${p.id}`] = batch[`project:${p.id}`] || null;
         setMoodMap(map);
       })
       .catch(() => setMoodMap({}));
-  }, [projects]);
+  }, [canUseFeature, projects]);
 
   const refreshProjectMood = (pid) => {
+    if (!canUseFeature('mood')) return;
     api.get(`/api/mood/dominant/project/${pid}`)
       .then(r => r.json())
       .then(d => setMoodMap(prev => ({
@@ -543,7 +584,7 @@ function ProjectList() {
       ) : (
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto">
-            <GoalsWidget />
+            <GoalsWidget enabled={canUseFeature('goals')} />
             <TasksWidget />
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Projects</h1>
