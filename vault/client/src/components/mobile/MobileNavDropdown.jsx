@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../../utils/mobileConfig';
 
-export default function MobileNavDropdown({ onClose }) {
+export default function MobileNavDropdown({ onClose, isAdmin = false }) {
   const location = useLocation();
   const [items, setItems] = useState(null);
   const ref = useRef(null);
@@ -21,7 +21,9 @@ export default function MobileNavDropdown({ onClose }) {
     });
   }, []);
 
-  const visible = items ? items.filter(i => i.enabled !== false) : DEFAULT_NAV_ITEMS;
+  const visible = (items ? items : DEFAULT_NAV_ITEMS)
+    .filter(i => i.enabled !== false)
+    .filter(i => (i.id === 'admin' ? isAdmin : true));
 
   return (
     <div

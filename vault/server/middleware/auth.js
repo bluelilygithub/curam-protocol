@@ -22,7 +22,7 @@ async function requireAuth(req, res, next) {
     }
 
     const { rows: users } = await pool.query(
-      'SELECT id, email FROM users WHERE id=$1', [session.userId]
+      'SELECT id, email, "isAdmin" FROM users WHERE id=$1', [session.userId]
     );
     const user = users[0];
     if (!user) return res.status(401).json({ error: 'User not found' });
@@ -34,4 +34,10 @@ async function requireAuth(req, res, next) {
   }
 }
 
-module.exports = { requireAuth };
+function requireAdmin(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  return next();
+}
+
+module.exports = { requireAuth, requireAdmin };

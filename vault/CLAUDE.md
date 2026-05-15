@@ -1,6 +1,6 @@
 # Curam Vault — CLAUDE.md
 
-Single-user AI workspace. Node.js/Express backend + React/Vite frontend. Deployed on Railway at `https://curam-vault.up.railway.app`. PostgreSQL 15 + pgvector. Primary AI: Anthropic Claude. Secondary: Google Gemini.
+Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite frontend. Deployed on Railway at `https://curam-vault.up.railway.app`. PostgreSQL 15 + pgvector. Primary AI: Anthropic Claude. Secondary: Google Gemini.
 
 ---
 
@@ -17,7 +17,8 @@ Single-user AI workspace. Node.js/Express backend + React/Vite frontend. Deploye
 
 - `server/index.js` — Express entry, route registration order matters (shared routes before requireAuth)
 - `server/db.js` — all 39 tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
-- `server/middleware/auth.js` — 32-byte hex token lookup in `auth_sessions`
+- `server/middleware/auth.js` — 32-byte hex token lookup in `auth_sessions` + `requireAdmin` guard
+- `server/routes/admin.js` — admin dashboard stats/monitor + user management endpoints
 - `server/routes/chat.js` — `buildSystemPrompt()`, prompt caching, SSE streaming, model routing
 - `client/src/utils/apiClient.js` — authenticated fetch wrapper; **use this for all `/api/` calls**
 - `client/src/store/authStore.js` — Zustand auth (token, user); persisted
@@ -31,6 +32,8 @@ Single-user AI workspace. Node.js/Express backend + React/Vite frontend. Deploye
 Token-based, not JWT. 32-byte random hex stored in `auth_sessions` table. Every request hits DB once for lookup. Intentional: instant invalidation without a blocklist.
 
 `requireAuth` protects all `/api/*` except `/api/auth/*`, `/api/health`, and `/api/shared/*` (public task sharing). The shared routes **must** be registered before `requireAuth` in `server/index.js`.
+
+`/api/admin/*` is protected by `requireAdmin` (checks `users."isAdmin"`). The seeded first user is admin by default.
 
 **Never use raw `fetch('/api/...')` in frontend.** Always use `apiClient`.
 
@@ -142,6 +145,7 @@ Three tiers, each injected into the system prompt in order:
 
 - 39 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
 - `sessions.sessionId` is `TEXT PRIMARY KEY` (UUID), not SERIAL.
+- `users."isAdmin"` is `BOOLEAN NOT NULL DEFAULT FALSE`; first user is promoted to admin during bootstrap/backfill.
 - `tasks."order"` double-quoted everywhere (SQL reserved word).
 - `tasks."keyResultId"` FK added via `ALTER TABLE` after `key_results` is created (avoids forward reference).
 - `gmail_tokens.expiryDate` is `BIGINT` (Unix ms). Cast to `Number()` in routes.
@@ -151,7 +155,7 @@ Three tiers, each injected into the system prompt in order:
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard · Password reset · Shared task public links
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links
 
 ---
 

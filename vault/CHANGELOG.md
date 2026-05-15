@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-15
+
+**Feature:** Admin user management + admin-only access control.
+
+Introduced role-based admin authorization with `users."isAdmin"` and `requireAdmin` middleware protecting all `/api/admin/*` routes. Admin dashboard now includes a **Users** panel to create accounts, grant/revoke admin access, reset passwords (with active-session revocation), and delete users with safety guards (cannot delete self, cannot remove last admin). Frontend admin navigation is hidden for non-admin users and `/admin` route now hard-guards by role.
+
+**Modified files:** `server/db.js`, `server/middleware/auth.js`, `server/index.js`, `server/routes/auth.js`, `server/routes/admin.js`, `client/src/components/AuthGuard.jsx`, `client/src/components/Layout.jsx`, `client/src/components/mobile/MobileNavDropdown.jsx`, `client/src/App.jsx`, `client/src/pages/AdminPage.jsx`.
+
+---
+
 ## 2026-05-12 (2)
 
 **Feature:** Finance — Pay CC Statement (bulk CC settlement).

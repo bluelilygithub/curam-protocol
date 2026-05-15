@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 
 function AuthGuard({ children }) {
-  const { token, clearAuth } = useAuthStore();
+  const { token, setAuth, clearAuth } = useAuthStore();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
 
@@ -15,8 +15,10 @@ function AuthGuard({ children }) {
     }
     fetch('/api/auth/me', {
       headers: { Authorization: `Bearer ${token}` },
-    }).then(res => {
+    }).then(async (res) => {
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.user) setAuth(token, data.user);
         setChecking(false);
       } else {
         clearAuth();

@@ -30,6 +30,7 @@ function makeExpiry() {
 router.post('/register', async (req, res) => {
   const { email, password, inviteCode } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   if (!inviteCode || inviteCode !== process.env.INVITE_CODE) {
     return res.status(403).json({ error: 'Invalid invite code' });
   }
@@ -42,16 +43,17 @@ router.post('/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     const { rows: newUser } = await pool.query(
-      'INSERT INTO users (email, "passwordHash") VALUES ($1, $2) RETURNING id',
+      'INSERT INTO users (email, "passwordHash") VALUES ($1, $2) RETURNING id, email, "isAdmin"',
       [email.toLowerCase(), passwordHash]
     );
-    const userId = newUser[0].id;
+    const userRow = newUser[0];
+    const userId = userRow.id;
     const token = makeToken();
     await pool.query(
       'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
       [token, userId, makeExpiry()]
     );
-    res.status(201).json({ token, user: { id: userId, email: email.toLowerCase() } });
+    res.status(201).json({ token, user: { id: userId, email: userRow.email, isAdmin: !!userRow.isAdmin } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -77,7 +79,7 @@ router.post('/login', loginLimiter, async (req, res) => {
       'INSERT INTO auth_sessions (token, "userId", "expiresAt") VALUES ($1, $2, $3)',
       [token, user.id, makeExpiry()]
     );
-    res.json({ token, user: { id: user.id, email: user.email } });
+    res.json({ token, user: { id: user.id, email: user.email, isAdmin: !!user.isAdmin } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -180,7 +182,7 @@ router.get('/me', async (req, res) => {
     }
 
     const { rows: users } = await pool.query(
-      'SELECT id, email, "createdAt" FROM users WHERE id=$1', [session.userId]
+      'SELECT id, email, "createdAt", "isAdmin" FROM users WHERE id=$1', [session.userId]
     );
     const user = users[0];
     if (!user) return res.status(401).json({ error: 'User not found' });

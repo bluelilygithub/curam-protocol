@@ -2,7 +2,14 @@
 
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
+const SALT_ROUNDS = 12;
+
+async function getAdminCount(client = pool) {
+  const { rows } = await client.query('SELECT COUNT(*)::INT AS n FROM users WHERE "isAdmin" = TRUE');
+  return Number(rows[0]?.n || 0);
+}
 
 // GET /api/admin/stats?from=ISO&to=ISO
 router.get('/stats', async (req, res) => {
@@ -112,6 +119,128 @@ router.get('/monitor', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/admin/users
+router.get('/users', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        u.id,
+        u.email,
+        u."isAdmin",
+        u."createdAt",
+        MAX(s."createdAt") AS "lastLoginAt",
+        COUNT(*) FILTER (WHERE s."expiresAt" > NOW())::INT AS "activeSessions"
+      FROM users u
+      LEFT JOIN auth_sessions s ON s."userId" = u.id
+      GROUP BY u.id
+      ORDER BY u."createdAt" ASC
+    `);
+    res.json({ users: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/users
+router.post('/users', async (req, res) => {
+  const { email, password, isAdmin } = req.body || {};
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail || !password) return res.status(400).json({ error: 'email and password required' });
+  if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+  try {
+    const passwordHash = await bcrypt.hash(String(password), SALT_ROUNDS);
+    const { rows } = await pool.query(
+      'INSERT INTO users (email, "passwordHash", "isAdmin") VALUES ($1, $2, $3) RETURNING id, email, "isAdmin", "createdAt"',
+      [normalizedEmail, passwordHash, !!isAdmin]
+    );
+    res.status(201).json({ user: rows[0] });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Email already registered' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/users/:id/password
+router.put('/users/:id/password', async (req, res) => {
+  const userId = Number(req.params.id);
+  const { password } = req.body || {};
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' });
+  if (!password || String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+  try {
+    const hash = await bcrypt.hash(String(password), SALT_ROUNDS);
+    const update = await pool.query('UPDATE users SET "passwordHash"=$1 WHERE id=$2 RETURNING id', [hash, userId]);
+    if (!update.rows[0]) return res.status(404).json({ error: 'User not found' });
+    await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1', [userId]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /api/admin/users/:id/admin
+router.put('/users/:id/admin', async (req, res) => {
+  const userId = Number(req.params.id);
+  const makeAdmin = !!req.body?.isAdmin;
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' });
+
+  try {
+    const { rows: targetRows } = await pool.query('SELECT id, "isAdmin" FROM users WHERE id=$1', [userId]);
+    const target = targetRows[0];
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    if (target.id === req.user.id && !makeAdmin) return res.status(400).json({ error: 'You cannot remove your own admin access' });
+
+    if (target.isAdmin && !makeAdmin) {
+      const adminCount = await getAdminCount();
+      if (adminCount <= 1) return res.status(400).json({ error: 'At least one admin is required' });
+    }
+
+    const { rows } = await pool.query(
+      'UPDATE users SET "isAdmin"=$1 WHERE id=$2 RETURNING id, email, "isAdmin", "createdAt"',
+      [makeAdmin, userId]
+    );
+    res.json({ user: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/users/:id
+router.delete('/users/:id', async (req, res) => {
+  const userId = Number(req.params.id);
+  if (!userId) return res.status(400).json({ error: 'Invalid user id' });
+  if (userId === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: targetRows } = await client.query('SELECT id, email, "isAdmin" FROM users WHERE id=$1', [userId]);
+    const target = targetRows[0];
+    if (!target) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (target.isAdmin) {
+      const adminCount = await getAdminCount(client);
+      if (adminCount <= 1) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'At least one admin is required' });
+      }
+    }
+
+    await client.query('DELETE FROM password_resets WHERE email=$1', [target.email]);
+    await client.query('DELETE FROM users WHERE id=$1', [userId]);
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

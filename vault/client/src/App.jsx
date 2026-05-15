@@ -33,10 +33,16 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
 import SearchPalette from './components/SearchPalette';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+import useAuthStore from './store/authStore';
 
 function HomeRoute() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   return isMobile ? <Navigate to="/mobile-dashboard" replace /> : <ProjectList />;
+}
+
+function AdminRoute() {
+  const { user } = useAuthStore();
+  return user?.isAdmin ? <AdminPage /> : <Navigate to="/" replace />;
 }
 
 function App() {
@@ -86,7 +92,7 @@ function App() {
               <Route path="/personas" element={<PersonasPage />} />
               <Route path="/compare" element={<ComparisonPage />} />
               <Route path="/debate" element={<DebatePage />} />
-              <Route path="/admin" element={<AdminPage />} />
+              <Route path="/admin" element={<AdminRoute />} />
               <Route path="/history" element={<ChatHistoryPage />} />
               <Route path="/tasks" element={<TasksPage />} />
               <Route path="/goals" element={<GoalsPage />} />

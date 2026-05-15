@@ -34,6 +34,7 @@ async function initSchema() {
         id            SERIAL PRIMARY KEY,
         email         TEXT NOT NULL UNIQUE,
         "passwordHash" TEXT NOT NULL,
+        "isAdmin"     BOOLEAN NOT NULL DEFAULT FALSE,
         "createdAt"   TIMESTAMPTZ DEFAULT NOW()
       )
     `);
@@ -803,6 +804,7 @@ async function initSchema() {
   }
 
   // ── Multi-user: idempotent userId column additions ─────────────────────────
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS "isAdmin" BOOLEAN NOT NULL DEFAULT FALSE`);
   await pool.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE personas ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
@@ -825,6 +827,7 @@ async function initSchema() {
   await pool.query(`UPDATE objectives SET "userId" = 1 WHERE "userId" IS NULL`);
   await pool.query(`UPDATE sessions SET "userId" = 1 WHERE "userId" IS NULL`);
   await pool.query(`UPDATE prompt_chains SET "userId" = 1 WHERE "userId" IS NULL`);
+  await pool.query(`UPDATE users SET "isAdmin" = TRUE WHERE id = 1`);
 
   // Settings: change PK to composite (userId, key) for per-user settings
   await pool.query(`

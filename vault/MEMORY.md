@@ -36,13 +36,16 @@ Two separate applications in one repo (`version-7` branch, main branch for PRs):
 ## Auth System
 - Token-based (random hex, stored in `auth_sessions` table)
 - `requireAuth` middleware protects all `/api/*` except `/api/auth/*` and `/api/health`
+- `requireAdmin` middleware protects `/api/admin/*` (checks `users."isAdmin"`)
 - Frontend uses `apiClient` for all authenticated requests — **never use raw `fetch()` for `/api/` calls**
 - Auto-seed: server creates user from `SEED_EMAIL`+`SEED_PASSWORD` env vars on first startup if no users exist
+- Seeded first user is admin by default; user management happens in Admin → Users
 - Change password: Settings page → Change Password section
 - Password reset: `POST /api/auth/reset-password-request` + `/reset-password-confirm`; `APP_URL` env var for link domain
 
 ## DB Tables (PostgreSQL — 27 tables)
 Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions`, `folders`, `personas`, `prompts`, `memory`, `pinned_urls`, `debates`, `settings`, `password_resets`
+- `users` table includes `"isAdmin" BOOLEAN NOT NULL DEFAULT FALSE` (admin authorization source of truth)
 - `sessions` table: `sessionId TEXT PK`, `projectId`, `userId`, `title`, `summary TEXT`, `"summaryEmbedding" vector(768)`, `isSummarized`, `summaryContent`, `inputTokens`, `outputTokens`, `starred`, `personaId`, `branchedFrom`
 - `settings` table: `key TEXT PRIMARY KEY, value TEXT` — stores GEMINI_API_KEY, SEARCH_API_KEY, MAIL_CHANNEL_API_KEY
 - `password_resets` table: token, email, expiresAt (1 hour TTL)
@@ -71,7 +74,7 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 - Multi-Model Debate (`/debate`) — Anthropic + Gemini models, multi-file context upload, round history navigation, NO_CHANGE detection, synthesis summary, save to project with project selector
 - Password reset flow (`/reset-password`) — email token, 1-hour expiry
 - Eye/password visibility toggles on login + settings password fields
-- Admin Dashboard (`/admin`) — stat cards for projects, sessions, messages, searches, debates, comparisons, tokens; period selector (Today/Week/Month/Last month/6m/12m/Custom)
+- Admin Dashboard (`/admin`) — stat cards for projects, sessions, messages, searches, debates, comparisons, tokens; period selector (Today/Week/Month/Last month/6m/12m/Custom); plus **Users** panel for create/list/reset-password/promote/demote/delete
 - Configurable upload file types in Settings (persisted in Zustand, used as `accept` on all file inputs)
 - API keys stored in env + Railway variables only — no UI panel
 - Web search (`@search` in chat): results shown in modal with title/snippet/link before attaching as URL context; "No results found" shown when empty
@@ -199,3 +202,10 @@ Format responses in plain prose by default. Code blocks for actual code/commands
 
 ## Known Bugs / To Revisit
 - **Drag project into folder doesn't persist** — server `PUT /api/projects/:id` includes `folderId`, sidebar calls `fetchProjects()` after update. Still not working locally — suspect nodemon not picking up changes or local/Railway env difference. Needs network tab debugging.
+
+## User Management API (Admin only)
+- `GET /api/admin/users` — list users with last login and active session count
+- `POST /api/admin/users` — create user `{ email, password, isAdmin }`
+- `PUT /api/admin/users/:id/password` — reset user password and revoke sessions
+- `PUT /api/admin/users/:id/admin` — grant/revoke admin role
+- `DELETE /api/admin/users/:id` — delete user (cannot delete self or last admin)

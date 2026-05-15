@@ -44,7 +44,7 @@ async function seedInitialUser() {
   const bcrypt = require('bcryptjs');
   const hash = await bcrypt.hash(SEED_PASSWORD, 12);
   await pool.query(
-    'INSERT INTO users (email, "passwordHash") VALUES ($1, $2)',
+    'INSERT INTO users (email, "passwordHash", "isAdmin") VALUES ($1, $2, TRUE)',
     [SEED_EMAIL.toLowerCase(), hash]
   );
   console.log('Initial user created:', SEED_EMAIL);
@@ -56,7 +56,7 @@ app.use('/api/shared', require('./routes/sharedTasks'));
 app.use('/api/gmail', require('./routes/gmail'));
 app.use('/api/calendar', require('./routes/calendar'));
 
-const { requireAuth } = require('./middleware/auth');
+const { requireAuth, requireAdmin } = require('./middleware/auth');
 app.use('/api', requireAuth);
 
 app.use('/api/user', requireAuth, require('./routes/user'));
@@ -78,7 +78,7 @@ app.use('/api/pinned-urls', require('./routes/pinnedUrls'));
 app.use('/api/compare', require('./routes/compare'));
 app.use('/api/debate', require('./routes/debate'));
 app.use('/api/settings', require('./routes/settings'));
-app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin', requireAdmin, require('./routes/admin'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/goals', require('./routes/goals'));

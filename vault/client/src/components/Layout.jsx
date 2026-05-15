@@ -20,7 +20,7 @@ function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(!isMobileNow());
   const [isMobile, setIsMobile] = useState(isMobileNow());
 
-  const { token, clearAuth } = useAuthStore();
+  const { token, user, clearAuth } = useAuthStore();
   const { taskReminderTimes, taskRemindersPaused } = useSettingsStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -452,14 +452,16 @@ function Layout() {
             📰
           </Link>
 
-          <Link
-            to="/admin"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
-            style={{ color: location.pathname === '/admin' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Dashboard"
-          >
-            {getIcon('bar-chart', { size: 16 })}
-          </Link>
+          {user?.isAdmin && (
+            <Link
+              to="/admin"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname === '/admin' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Dashboard"
+            >
+              {getIcon('bar-chart', { size: 16 })}
+            </Link>
+          )}
 
           <Link
             to="/settings"
@@ -514,7 +516,7 @@ function Layout() {
 
         {/* Mobile nav dropdown */}
         {isMobile && mobileNavOpen && (
-          <MobileNavDropdown onClose={() => setMobileNavOpen(false)} />
+          <MobileNavDropdown onClose={() => setMobileNavOpen(false)} isAdmin={!!user?.isAdmin} />
         )}
 
         {/* Due today banner */}
