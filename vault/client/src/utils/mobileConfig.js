@@ -22,6 +22,7 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'finance',   label: 'Finance',         path: '/finance',     enabled: true },
   { id: 'chat',      label: 'General Chat',    path: '/chat',        enabled: true },
   { id: 'history',   label: 'Chat History',    path: '/history',     enabled: true },
+  { id: 'studentSection', label: 'Student',    path: '/student/quiz', enabled: true },
   { id: 'clients',   label: 'Clients',         path: '/clients',     enabled: true },
   { id: 'memory',    label: 'Memory',          path: '/memory',      enabled: true },
   { id: 'prompts',   label: 'Prompts',         path: '/prompts',     enabled: true },

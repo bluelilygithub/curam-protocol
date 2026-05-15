@@ -46,14 +46,13 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
         usage: 'usage',
         mood: 'mood',
         news: 'newsDigest',
+        studentSection: 'student',
       };
       const featureKey = featureByNavId[i.id];
       if (!featureKey) return true;
       return featureAccess[featureKey] !== false;
     })
     .filter(i => (i.id === 'admin' ? isAdmin : true));
-
-  const showStudent = isAdmin || featureAccess.student !== false;
 
   return (
     <div
@@ -83,58 +82,62 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
         >
           Dashboard
         </Link>
-        {showStudent && (
-          <>
-            <div
-              className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider border-b"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-            >
-              Student
-            </div>
+        {visible.map((item) => {
+          if (item.id === 'studentSection') {
+            return (
+              <React.Fragment key={item.id}>
+                <div
+                  className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider border-b"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                >
+                  Student
+                </div>
+                <Link
+                  to="/student/quiz"
+                  onClick={onClose}
+                  className="flex items-center px-4 py-3 text-sm border-b hover:opacity-70 transition-opacity"
+                  style={{
+                    color: location.pathname === '/student/quiz' ? 'var(--color-primary)' : 'var(--color-text)',
+                    borderColor: 'var(--color-border)',
+                    fontWeight: location.pathname === '/student/quiz' ? 600 : 400,
+                    background: location.pathname === '/student/quiz' ? 'var(--color-bg)' : undefined,
+                  }}
+                >
+                  Quiz
+                </Link>
+                <Link
+                  to="/student/cards"
+                  onClick={onClose}
+                  className="flex items-center px-4 py-3 text-sm border-b hover:opacity-70 transition-opacity"
+                  style={{
+                    color: location.pathname === '/student/cards' ? 'var(--color-primary)' : 'var(--color-text)',
+                    borderColor: 'var(--color-border)',
+                    fontWeight: location.pathname === '/student/cards' ? 600 : 400,
+                    background: location.pathname === '/student/cards' ? 'var(--color-bg)' : undefined,
+                  }}
+                >
+                  Cards
+                </Link>
+              </React.Fragment>
+            );
+          }
+          return (
             <Link
-              to="/student/quiz"
+              key={item.id}
+              to={item.path}
               onClick={onClose}
               className="flex items-center px-4 py-3 text-sm border-b hover:opacity-70 transition-opacity"
               style={{
-                color: location.pathname === '/student/quiz' ? 'var(--color-primary)' : 'var(--color-text)',
+                color: location.pathname === item.path ? 'var(--color-primary)' : 'var(--color-text)',
                 borderColor: 'var(--color-border)',
-                fontWeight: location.pathname === '/student/quiz' ? 600 : 400,
-                background: location.pathname === '/student/quiz' ? 'var(--color-bg)' : undefined,
+                fontWeight: location.pathname === item.path ? 600 : 400,
+                background: location.pathname === item.path ? 'var(--color-bg)' : undefined,
               }}
             >
-              Quiz
+              {item.label}
             </Link>
-            <Link
-              to="/student/cards"
-              onClick={onClose}
-              className="flex items-center px-4 py-3 text-sm border-b hover:opacity-70 transition-opacity"
-              style={{
-                color: location.pathname === '/student/cards' ? 'var(--color-primary)' : 'var(--color-text)',
-                borderColor: 'var(--color-border)',
-                fontWeight: location.pathname === '/student/cards' ? 600 : 400,
-                background: location.pathname === '/student/cards' ? 'var(--color-bg)' : undefined,
-              }}
-            >
-              Cards
-            </Link>
-          </>
-        )}
-        {visible.map(item => (
-          <Link
-            key={item.id}
-            to={item.path}
-            onClick={onClose}
-            className="flex items-center px-4 py-3 text-sm border-b hover:opacity-70 transition-opacity"
-            style={{
-              color: location.pathname === item.path ? 'var(--color-primary)' : 'var(--color-text)',
-              borderColor: 'var(--color-border)',
-              fontWeight: location.pathname === item.path ? 600 : 400,
-              background: location.pathname === item.path ? 'var(--color-bg)' : undefined,
-            }}
-          >
-            {item.label}
-          </Link>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
