@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MessageBubble from '../components/MessageBubble';
 import { useChat } from '../hooks/useChat';
 import { useModels } from '../hooks/useModels';
+import { useVoice } from '../hooks/useVoice';
 import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
@@ -13,6 +14,61 @@ const TEMPERATURES = [
   { label: 'Creative', value: 1.0 },
 ];
 
+const FAMILIARITY = [
+  { id: 'beginner', label: 'Beginner' },
+  { id: 'some', label: 'Some background' },
+  { id: 'confident', label: 'Fairly confident' },
+  { id: 'review', label: 'Quick review' },
+];
+
+const GOALS = [
+  { id: 'flashcards', label: 'Flashcards' },
+  { id: 'slides', label: 'Slide deck' },
+  { id: 'both', label: 'Both' },
+  { id: 'unsure', label: 'Not sure yet' },
+];
+
+const INITIAL_SETUP = {
+  source: null,
+  detail: '',
+  familiarity: null,
+  goal: null,
+  count: '',
+};
+
+function famLabel(id) {
+  return FAMILIARITY.find((f) => f.id === id)?.label || id;
+}
+
+function goalLabel(id) {
+  return GOALS.find((g) => g.id === id)?.label || id;
+}
+
+function buildStudyBootstrap(setup) {
+  const src = setup.source === 'topic' ? 'TOPIC' : setup.source === 'document' ? 'DOCUMENT' : '';
+  const heading = setup.source === 'topic' ? 'Topic / focus' : 'Document (pasted below)';
+  const countLine = (setup.count && setup.count.trim()) ? setup.count.trim() : 'you decide';
+  return `I've completed the setup cards. Use my answers below — do not repeat onboarding questions I already answered; continue from the appropriate point in your flow.
+
+1. Source: ${src}
+2. ${heading}:
+${setup.detail.trim()}
+
+3. Familiarity: ${famLabel(setup.familiarity)}
+4. Today I want: ${goalLabel(setup.goal)}
+5. Target size: ${countLine}
+
+Please acknowledge briefly and proceed.`;
+}
+
+function choiceCardStyle(active) {
+  return {
+    borderColor: active ? 'var(--color-primary)' : 'var(--color-border)',
+    color: active ? 'var(--color-primary)' : 'var(--color-text)',
+    background: active ? 'var(--color-bg)' : 'var(--color-surface)',
+  };
+}
+
 export default function StudentCardsChatPage() {
   const { user } = useAuthStore();
   const isAdmin = !!user?.isAdmin;
@@ -22,20 +78,40 @@ export default function StudentCardsChatPage() {
   const canSelectModel = isAdmin || featureAccess.memberModelSelection !== false;
   const canUseStudent = isAdmin || featureAccess.student !== false;
 
-  const { messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, clearMessages, streamError, clearStreamError } = useChat({
+  const {
+    messages, isStreaming, sessionId, sessionUsage, sendMessage, stopStreaming, clearMessages, streamError, clearStreamError,
+  } = useChat({
     projectId: null,
     studentCards: true,
   });
+
+  const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking, isSpeaking, isPaused } = useVoice();
+
+  const [phase, setPhase] = useState('setup');
+  const [setupStep, setSetupStep] = useState(0);
+  const [setup, setSetup] = useState(() => ({ ...INITIAL_SETUP }));
 
   const [input, setInput] = useState('');
   const [chatModel, setChatModel] = useState(null);
   const [temperature, setTemperature] = useState(0.7);
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [showTempPicker, setShowTempPicker] = useState(false);
+  const [wideCards, setWideCards] = useState(() => {
+    try { return localStorage.getItem('studentCardsWide') === 'true'; } catch { return false; }
+  });
+
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const detailTextareaRef = useRef(null);
+  const countTextareaRef = useRef(null);
 
   const effectiveModel = chatModel || defaultModel || MODELS[0]?.id;
+  const msgWidthClass = wideCards ? 'max-w-[80%] mx-auto' : 'max-w-3xl mx-auto';
+
+  const toggleWideCards = () => setWideCards((v) => {
+    try { localStorage.setItem('studentCardsWide', String(!v)); } catch { /* ignore */ }
+    return !v;
+  });
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -52,12 +128,58 @@ export default function StudentCardsChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isStreaming]);
 
+  useEffect(() => {
+    if (!transcript) return;
+    if (phase === 'chat') {
+      setInput((prev) => (prev.trimEnd() ? `${prev.trimEnd()} ${transcript.trim()}` : transcript.trim()));
+      return;
+    }
+    if (setupStep === 1) {
+      setSetup((s) => ({
+        ...s,
+        detail: s.detail.trimEnd() ? `${s.detail.trimEnd()} ${transcript.trim()}` : transcript.trim(),
+      }));
+    } else if (setupStep === 4) {
+      setSetup((s) => ({
+        ...s,
+        count: s.count.trimEnd() ? `${s.count.trimEnd()} ${transcript.trim()}` : transcript.trim(),
+      }));
+    }
+  }, [transcript, phase, setupStep]);
+
+  const resetWizard = useCallback(() => {
+    setPhase('setup');
+    setSetupStep(0);
+    setSetup({ ...INITIAL_SETUP });
+  }, []);
+
+  const handleNewSession = useCallback(() => {
+    clearMessages();
+    clearStreamError();
+    resetWizard();
+  }, [clearMessages, clearStreamError, resetWizard]);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || isStreaming) return;
+    if (!text || isStreaming || phase !== 'chat') return;
     setInput('');
     await sendMessage(text, [], [], effectiveModel, [], temperature, null, false, [], false);
-  }, [input, isStreaming, sendMessage, effectiveModel, temperature]);
+  }, [input, isStreaming, phase, sendMessage, effectiveModel, temperature]);
+
+  const canAdvanceFromStep = useCallback(() => {
+    if (setupStep === 0) return !!setup.source;
+    if (setupStep === 1) return setup.detail.trim().length > 0;
+    if (setupStep === 2) return !!setup.familiarity;
+    if (setupStep === 3) return !!setup.goal;
+    return true;
+  }, [setupStep, setup]);
+
+  const handleBeginStudySession = useCallback(async () => {
+    if (!setup.source || !setup.detail.trim() || !setup.familiarity || !setup.goal || isStreaming) return;
+    const text = buildStudyBootstrap(setup);
+    setPhase('chat');
+    await sendMessage(text, [], [], effectiveModel, [], temperature, null, false, [], false);
+  }, [setup, isStreaming, sendMessage, effectiveModel, temperature]);
 
   if (!canUseStudent) {
     return (
@@ -68,6 +190,198 @@ export default function StudentCardsChatPage() {
       </div>
     );
   }
+
+  const renderSetupMic = () => {
+    if (!isSTTAvailable || (setupStep !== 1 && setupStep !== 4)) return null;
+    return (
+      <div className="flex items-center gap-2 mt-2 flex-wrap">
+        <button
+          type="button"
+          onClick={startListening}
+          disabled={isListening}
+          className="w-8 h-8 flex items-center justify-center rounded-lg transition-all relative"
+          style={{ color: isListening ? '#ef4444' : 'var(--color-muted)', background: 'var(--color-bg)' }}
+          title="Voice input"
+        >
+          {getIcon('mic', { size: 16 })}
+          {isListening && (
+            <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse" style={{ background: '#ef4444' }} />
+          )}
+        </button>
+        {isListening && (
+          <>
+            <span className="text-xs max-w-[200px] truncate" style={{ color: '#ef4444' }}>{interimText || 'Listening…'}</span>
+            <button
+              type="button"
+              onClick={stopListening}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-white"
+              style={{ background: '#ef4444' }}
+            >
+              {getIcon('square', { size: 10, color: '#fff' })}
+              Stop
+            </button>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const setupCard = (
+    <div className="max-w-lg w-full mx-auto px-4 py-6">
+      <div
+        className="rounded-2xl border p-6 shadow-sm"
+        style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+      >
+        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>
+          Setup · Step {setupStep + 1} of 5
+        </p>
+
+        {setupStep === 0 && (
+          <>
+            <h2 className="text-base font-semibold mb-3" style={{ color: 'var(--color-text)' }}>What are we working from?</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setSetup((s) => ({ ...s, source: 'topic' }))}
+                className="p-4 rounded-xl border text-left text-sm font-medium transition-opacity hover:opacity-80"
+                style={choiceCardStyle(setup.source === 'topic')}
+              >
+                A topic to explore
+              </button>
+              <button
+                type="button"
+                onClick={() => setSetup((s) => ({ ...s, source: 'document' }))}
+                className="p-4 rounded-xl border text-left text-sm font-medium transition-opacity hover:opacity-80"
+                style={choiceCardStyle(setup.source === 'document')}
+              >
+                A document (paste)
+              </button>
+            </div>
+          </>
+        )}
+
+        {setupStep === 1 && (
+          <>
+            <h2 className="text-base font-semibold mb-2" style={{ color: 'var(--color-text)' }}>
+              {setup.source === 'topic' ? 'What is the topic?' : 'Paste your document'}
+            </h2>
+            <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+              {setup.source === 'topic'
+                ? 'Give as much or as little detail as you like.'
+                : 'Paste the full text here, or the longest excerpt you have.'}
+            </p>
+            <textarea
+              ref={detailTextareaRef}
+              value={setup.detail}
+              onChange={(e) => setSetup((s) => ({ ...s, detail: e.target.value }))}
+              rows={8}
+              className="w-full text-sm px-3 py-2 rounded-xl border outline-none resize-y min-h-[120px]"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+            {renderSetupMic()}
+          </>
+        )}
+
+        {setupStep === 2 && (
+          <>
+            <h2 className="text-base font-semibold mb-3" style={{ color: 'var(--color-text)' }}>How familiar are you with this subject?</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {FAMILIARITY.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setSetup((s) => ({ ...s, familiarity: f.id }))}
+                  className="p-3 rounded-xl border text-sm text-left transition-opacity hover:opacity-80"
+                  style={choiceCardStyle(setup.familiarity === f.id)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {setupStep === 3 && (
+          <>
+            <h2 className="text-base font-semibold mb-3" style={{ color: 'var(--color-text)' }}>What would you like to create today?</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {GOALS.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setSetup((s) => ({ ...s, goal: g.id }))}
+                  className="p-3 rounded-xl border text-sm text-left transition-opacity hover:opacity-80"
+                  style={choiceCardStyle(setup.goal === g.id)}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {setupStep === 4 && (
+          <>
+            <h2 className="text-base font-semibold mb-2" style={{ color: 'var(--color-text)' }}>How many cards or slides?</h2>
+            <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Leave blank or type &quot;you decide&quot; if you want the assistant to choose.</p>
+            <textarea
+              ref={countTextareaRef}
+              value={setup.count}
+              onChange={(e) => setSetup((s) => ({ ...s, count: e.target.value }))}
+              rows={3}
+              placeholder="e.g. 20 cards, or you decide"
+              className="w-full text-sm px-3 py-2 rounded-xl border outline-none resize-y"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+            <div className="flex gap-2 mt-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setSetup((s) => ({ ...s, count: 'you decide' }))}
+                className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                You decide
+              </button>
+            </div>
+            {renderSetupMic()}
+          </>
+        )}
+
+        <div className="flex items-center justify-between gap-3 mt-6 pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <button
+            type="button"
+            onClick={() => { if (setupStep > 0) setSetupStep((s) => s - 1); }}
+            disabled={setupStep === 0}
+            className="text-xs px-3 py-2 rounded-lg border hover:opacity-70 disabled:opacity-30"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+          >
+            Back
+          </button>
+          {setupStep < 4 ? (
+            <button
+              type="button"
+              onClick={() => canAdvanceFromStep() && setSetupStep((s) => s + 1)}
+              disabled={!canAdvanceFromStep()}
+              className="text-sm px-4 py-2 rounded-lg font-medium text-white hover:opacity-90 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleBeginStudySession}
+              disabled={!canAdvanceFromStep() || isStreaming}
+              className="text-sm px-4 py-2 rounded-lg font-medium text-white hover:opacity-90 disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Begin study session
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden" style={{ background: 'var(--color-bg)' }}>
@@ -144,26 +458,13 @@ export default function StudentCardsChatPage() {
         </div>
         <button
           type="button"
-          onClick={() => { clearMessages(); clearStreamError(); }}
+          onClick={handleNewSession}
           className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
         >
           New session
         </button>
       </div>
-
-      {messages.length === 0 && (
-        <div
-          className="flex-shrink-0 mx-4 mt-3 mb-2 px-4 py-3 rounded-xl border text-sm"
-          style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
-        >
-          <p className="font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Step 1 — onboarding</p>
-          <p>
-            Your assistant will guide you one question at a time. When you are ready, type <strong>Start</strong> below (or reply with your own opening).
-            Paste longer readings directly into the chat.
-          </p>
-        </div>
-      )}
 
       {streamError && (
         <div className="flex-shrink-0 px-4 py-2 text-xs border-b flex items-center justify-between gap-2" style={{ background: '#fff1f2', borderColor: '#fca5a5', color: '#991b1b' }}>
@@ -172,67 +473,137 @@ export default function StudentCardsChatPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 max-w-3xl mx-auto w-full">
-        {messages.map((msg, i) => (
-          <MessageBubble
-            key={i}
-            message={msg}
-            messageIndex={i}
-            isLatest={i === messages.length - 1 && msg.role === 'assistant'}
-            searching={false}
-          />
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      <div className="flex-shrink-0 border-t px-4 py-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-        <div className="max-w-3xl mx-auto flex gap-2 items-end">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder="Message your study assistant…"
-            rows={1}
-            className="flex-1 text-sm px-3 py-2 rounded-xl border outline-none resize-none min-h-[44px] max-h-[160px]"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-            disabled={isStreaming}
-          />
-          {isStreaming ? (
-            <button
-              type="button"
-              onClick={stopStreaming}
-              className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white hover:opacity-90 transition-opacity"
-              style={{ background: 'var(--color-primary)' }}
-              title="Stop"
-            >
-              {getIcon('stop-circle', { size: 18, color: '#fff' })}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!input.trim()}
-              className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white hover:opacity-90 transition-opacity disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}
-              title="Send"
-            >
-              {getIcon('send', { size: 18, color: '#fff' })}
-            </button>
-          )}
-        </div>
-        {sessionUsage.inputTokens > 0 && (
-          <p className="text-center text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
-            Session: {(sessionUsage.inputTokens + sessionUsage.outputTokens).toLocaleString()} tokens
-            {sessionId ? ` · ${sessionId.slice(-8)}` : ''}
-          </p>
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {phase === 'setup' && (
+          <div className="py-8">
+            {setupCard}
+          </div>
+        )}
+        {phase === 'chat' && (
+          <>
+            <div className="hidden sm:block flex-shrink-0 px-4 pt-2 pb-0">
+              <div className={`${msgWidthClass} flex justify-end`}>
+                <button
+                  type="button"
+                  onClick={toggleWideCards}
+                  title={wideCards ? 'Collapse to narrow layout' : 'Expand to wide layout'}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg transition-opacity hover:opacity-90"
+                  style={{ color: '#15803d' }}
+                >
+                  {getIcon(wideCards ? 'collapse-horizontal' : 'expand-horizontal', { size: 18 })}
+                </button>
+              </div>
+            </div>
+            <div className={`${msgWidthClass} px-4 py-4 w-full`}>
+              {messages.map((msg, i) => {
+                const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
+                return (
+                  <MessageBubble
+                    key={i}
+                    message={msg}
+                    messageIndex={i}
+                    isLatest={isLastAssistant}
+                    searching={false}
+                    isSpeaking={isLastAssistant && isTTSAvailable ? isSpeaking : false}
+                    isPaused={isLastAssistant && isTTSAvailable ? isPaused : false}
+                    onSpeak={isLastAssistant && isTTSAvailable && msg.role === 'assistant' ? () => speak(msg.content) : undefined}
+                    onPause={isLastAssistant && isTTSAvailable ? pauseSpeaking : undefined}
+                    onResume={isLastAssistant && isTTSAvailable ? resumeSpeaking : undefined}
+                    onStop={isLastAssistant && isTTSAvailable ? stopSpeaking : undefined}
+                  />
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+          </>
         )}
       </div>
+
+      {phase === 'chat' && (
+        <div className="flex-shrink-0 border-t px-4 py-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <div className={`${msgWidthClass} flex gap-2 items-end mx-auto w-full px-0`}>
+            <div className="flex-1 rounded-2xl border relative" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder="Message your study assistant…"
+                rows={1}
+                className="w-full text-sm px-3 py-2.5 pb-11 bg-transparent outline-none resize-none min-h-[52px] max-h-[160px]"
+                style={{ color: 'var(--color-text)' }}
+                disabled={isStreaming}
+              />
+              <div className="absolute bottom-2 left-2 flex items-center gap-1">
+                {isSTTAvailable && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={startListening}
+                      disabled={isListening || isStreaming}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg relative transition-opacity hover:opacity-80 disabled:opacity-40"
+                      style={{ color: isListening ? '#ef4444' : 'var(--color-muted)' }}
+                      title="Voice input"
+                    >
+                      {getIcon('mic', { size: 16 })}
+                      {isListening && (
+                        <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse" style={{ background: '#ef4444' }} />
+                      )}
+                    </button>
+                    {isListening && (
+                      <>
+                        <span className="text-xs max-w-[100px] sm:max-w-[160px] truncate" style={{ color: '#ef4444' }}>{interimText || 'Listening…'}</span>
+                        <button
+                          type="button"
+                          onClick={stopListening}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-white"
+                          style={{ background: '#ef4444' }}
+                        >
+                          {getIcon('square', { size: 10, color: '#fff' })}
+                          Stop
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+            {isStreaming ? (
+              <button
+                type="button"
+                onClick={stopStreaming}
+                className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white hover:opacity-90 transition-opacity"
+                style={{ background: 'var(--color-primary)' }}
+                title="Stop"
+              >
+                {getIcon('stop-circle', { size: 18, color: '#fff' })}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!input.trim()}
+                className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-white hover:opacity-90 transition-opacity disabled:opacity-40"
+                style={{ background: 'var(--color-primary)' }}
+                title="Send"
+              >
+                {getIcon('send', { size: 18, color: '#fff' })}
+              </button>
+            )}
+          </div>
+          {sessionUsage.inputTokens > 0 && (
+            <p className={`text-center text-xs mt-2 ${msgWidthClass} mx-auto`} style={{ color: 'var(--color-muted)' }}>
+              Session: {(sessionUsage.inputTokens + sessionUsage.outputTokens).toLocaleString()} tokens
+              {sessionId ? ` · ${sessionId.slice(-8)}` : ''}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
