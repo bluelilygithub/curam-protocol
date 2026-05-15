@@ -28,6 +28,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import { extractVariables } from '../utils/promptVariables';
 import ModelAdvisorModal from '../components/ModelAdvisorModal';
 import CheckinModal from '../components/mood/CheckinModal';
+import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
 const EMOTION_COLOURS = {
   joy: '#C9A84C', trust: '#6B9E70', fear: '#507A60', surprise: '#6B97B5',
@@ -96,6 +97,8 @@ function ChatPage({ general = false }) {
   const location = useLocation();
   const { user } = useAuthStore();
   const isAdmin = !!user?.isAdmin;
+  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const canSelectModel = isAdmin || featureAccess.memberModelSelection !== false;
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
@@ -235,6 +238,14 @@ function ChatPage({ general = false }) {
   const handleSendRef = useRef(null);
 
   const project = projects.find((p) => p.id === projectId);
+  useEffect(() => {
+    api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
+      if (data?.flags && typeof data.flags === 'object') {
+        setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
+      }
+    }).catch(() => {});
+  }, []);
+
   const currentSession = sessions.find(s => s.sessionId === sessionId);
   const sessionTitle = currentSession?.title || '';
   const isSummarized = !!(currentSession?.isSummarized);
@@ -417,7 +428,7 @@ function ChatPage({ general = false }) {
       .catch(() => {});
   }, [projectId]);
 
-  const effectiveModel = (isAdmin ? chatModel : null) || project?.model || defaultModel || 'claude-sonnet-4-6';
+  const effectiveModel = (canSelectModel ? chatModel : null) || project?.model || defaultModel || 'claude-sonnet-4-6';
   // Clear preflight error when model changes
   const prevEffectiveModelRef = useRef(effectiveModel);
   if (prevEffectiveModelRef.current !== effectiveModel) { prevEffectiveModelRef.current = effectiveModel; setPreflightError(null); }
@@ -523,7 +534,7 @@ function ChatPage({ general = false }) {
   }, [chatModel, advisorPendingSwitch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const checkModelBeforeSend = async () => {
-    if (!isAdmin) {
+    if (!canSelectModel) {
       handleSend();
       return;
     }
@@ -1053,8 +1064,8 @@ function ChatPage({ general = false }) {
           )}
         </div>
 
-        {/* Model picker (admin only) */}
-        {isAdmin && (
+        {/* Model picker (admin or member-enabled) */}
+        {canSelectModel && (
           <div className="relative">
             <button
               onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); }}
@@ -2071,7 +2082,7 @@ function ChatPage({ general = false }) {
         needsImage={advisorData?.needsImage || false}
         suggestedModels={advisorData?.suggestedModels || []}
         onSwitch={(id) => {
-          if (!isAdmin) { setAdvisorOpen(false); setPendingSendPayload(null); handleSend(); return; }
+          if (!canSelectModel) { setAdvisorOpen(false); setPendingSendPayload(null); handleSend(); return; }
           setAdvisorOpen(false);
           setChatModel(id);
           setAdvisorPendingSwitch(id);

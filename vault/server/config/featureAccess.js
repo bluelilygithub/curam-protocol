@@ -4,6 +4,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   clients: true,
   goals: true,
   habitsSidebar: true,
+  memberModelSelection: false,
   chains: true,
   graph: true,
   debate: true,

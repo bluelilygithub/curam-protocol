@@ -8,6 +8,7 @@ import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
 import { downloadProjectMd } from '../utils/exportMd';
 import { MODELS, TYPE_FIELDS } from '../utils/models';
+import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import EmotionWheel from '../components/mood/EmotionWheel';
 import MoodDot from '../components/mood/MoodDot';
 
@@ -35,6 +36,8 @@ function ProjectDetail() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const isAdmin = !!user?.isAdmin;
+  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const canSelectModel = isAdmin || featureAccess.memberModelSelection !== false;
   const { projects, fetchProjects, update, remove, setActive } = useProjectStore();
   const getIcon = useIcon();
 
@@ -65,6 +68,11 @@ function ProjectDetail() {
     setActive(Number(id));
     api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
     api.get('/api/personas').then(r => r.json()).then(setPersonas).catch(() => {});
+    api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
+      if (data?.flags && typeof data.flags === 'object') {
+        setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
+      }
+    }).catch(() => {});
     api.get(`/api/pinned-urls/${id}`).then(r => r.json()).then(setPinnedUrls).catch(() => {});
     api.get('/api/settings').then(r => r.json()).then(data => {
       if (data.vault_models) {
@@ -331,7 +339,7 @@ function ProjectDetail() {
           ))}
 
         {/* AI Model (admin only) */}
-        {isAdmin && (
+        {canSelectModel && (
           <div data-tour="rag-model-picker" className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
             <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>AI Model</h2>
             <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>

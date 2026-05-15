@@ -4,6 +4,15 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
+const { FEATURE_ACCESS_DEFAULTS } = require('../config/featureAccess');
+
+async function canMembersSelectModel() {
+  const { rows } = await pool.query(
+    "SELECT value FROM workspace_settings WHERE key = 'feature_memberModelSelection' LIMIT 1"
+  );
+  const rawValue = String(rows[0]?.value ?? FEATURE_ACCESS_DEFAULTS.memberModelSelection).trim().toLowerCase();
+  return rawValue !== 'false' && rawValue !== '0' && rawValue !== 'off';
+}
 
 async function syncSearchIndex(project) {
   await pool.query(
@@ -67,7 +76,8 @@ router.post('/', async (req, res) => {
   if (!name) return res.status(400).json({ error: 'name is required' });
 
   const { standard: standardModel } = await getModelsForUser(req.user?.id);
-  const projectModel = req.user?.isAdmin ? (model || standardModel) : standardModel;
+  const canSelectProjectModel = req.user?.isAdmin || await canMembersSelectModel();
+  const projectModel = canSelectProjectModel ? (model || standardModel) : standardModel;
 
   try {
     const { rows } = await pool.query(
@@ -140,12 +150,13 @@ router.patch('/:id/unarchive', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { name, goal, problem, audience, techStack, constraints, successCriteria, tone, notes, model, projectType, typeConfig, folderId, startDate, targetEndDate } = req.body;
   const { standard: standardModel } = await getModelsForUser(req.user?.id);
+  const canSelectProjectModel = req.user?.isAdmin || await canMembersSelectModel();
   try {
     const { rows: existing } = await pool.query('SELECT * FROM projects WHERE id=$1 AND "userId"=$2', [req.params.id, req.user.id]);
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
     const p = existing[0];
 
-    const resolvedModel = req.user?.isAdmin
+    const resolvedModel = canSelectProjectModel
       ? (model ?? p.model ?? standardModel)
       : standardModel;
 

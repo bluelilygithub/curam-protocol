@@ -12,6 +12,7 @@ const { calculateCost } = require('../services/costCalculator');
 const { getModelsForUser } = require('../services/modelResolver');
 const { embedText } = require('../services/embeddings');
 const { callModel } = require('../services/callModel');
+const { FEATURE_ACCESS_DEFAULTS } = require('../config/featureAccess');
 
 const chatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -42,6 +43,14 @@ function invalidateUserProfile(userId) { profileCache.delete(userId); }
 
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
+
+async function canMembersSelectModel() {
+  const { rows } = await pool.query(
+    "SELECT value FROM workspace_settings WHERE key = 'feature_memberModelSelection' LIMIT 1"
+  );
+  const rawValue = String(rows[0]?.value ?? FEATURE_ACCESS_DEFAULTS.memberModelSelection).trim().toLowerCase();
+  return rawValue !== 'false' && rawValue !== '0' && rawValue !== 'off';
+}
 
 
 function toDeepSeekMessages(systemBlocks, messages) {
@@ -551,7 +560,8 @@ router.post('/', chatLimiter, async (req, res) => {
   let fullContent = '';
 
   try {
-    const model = req.user?.isAdmin
+    const canSelectChatModel = req.user?.isAdmin || await canMembersSelectModel();
+    const model = canSelectChatModel
       ? (reqModel || project?.model || standardModel)
       : (project?.model || standardModel);
     const temperature = typeof reqTemp === 'number' ? Math.max(0, Math.min(1, reqTemp)) : 0.7;
