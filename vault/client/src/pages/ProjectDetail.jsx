@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useProjectStore from '../store/projectStore';
+import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import FileUploader from '../components/FileUploader';
@@ -32,6 +33,8 @@ const FIELDS = [
 function ProjectDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const isAdmin = !!user?.isAdmin;
   const { projects, fetchProjects, update, remove, setActive } = useProjectStore();
   const getIcon = useIcon();
 
@@ -327,36 +330,38 @@ function ProjectDetail() {
             </div>
           ))}
 
-        {/* AI Model */}
-        <div data-tour="rag-model-picker" className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
-          <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>AI Model</h2>
-          <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
-            Default model used when chatting in this project. You can override it per chat in the chat header.
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {availableModels.map(model => (
-              <button
-                key={model.id}
-                type="button"
-                onClick={() => setForm({ ...form, model: model.id })}
-                className="flex flex-col gap-1 px-3 py-2.5 rounded-xl border text-left transition-all"
-                style={{
-                  background: (form.model || availableModels[0]?.id) === model.id ? (model.color || 'var(--color-primary)') + '12' : 'var(--color-surface)',
-                  borderColor: (form.model || availableModels[0]?.id) === model.id ? (model.color || 'var(--color-primary)') : 'var(--color-border)',
-                }}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base">{model.emoji}</span>
-                  <span className="text-xs font-semibold" style={{ color: (form.model || availableModels[0]?.id) === model.id ? (model.color || 'var(--color-primary)') : 'var(--color-text)' }}>
-                    {model.label}
-                  </span>
-                </div>
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{model.tagline}</p>
-                <p className="text-xs leading-tight" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>{model.name}</p>
-              </button>
-            ))}
+        {/* AI Model (admin only) */}
+        {isAdmin && (
+          <div data-tour="rag-model-picker" className="mt-8 pt-8 border-t" style={{ borderColor: 'var(--color-border)' }}>
+            <h2 className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>AI Model</h2>
+            <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+              Default model used when chatting in this project. You can override it per chat in the chat header.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {availableModels.map(model => (
+                <button
+                  key={model.id}
+                  type="button"
+                  onClick={() => setForm({ ...form, model: model.id })}
+                  className="flex flex-col gap-1 px-3 py-2.5 rounded-xl border text-left transition-all"
+                  style={{
+                    background: (form.model || availableModels[0]?.id) === model.id ? (model.color || 'var(--color-primary)') + '12' : 'var(--color-surface)',
+                    borderColor: (form.model || availableModels[0]?.id) === model.id ? (model.color || 'var(--color-primary)') : 'var(--color-border)',
+                  }}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-base">{model.emoji}</span>
+                    <span className="text-xs font-semibold" style={{ color: (form.model || availableModels[0]?.id) === model.id ? (model.color || 'var(--color-primary)') : 'var(--color-text)' }}>
+                      {model.label}
+                    </span>
+                  </div>
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{model.tagline}</p>
+                  <p className="text-xs leading-tight" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>{model.name}</p>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Organisation */}
         {(folders.length > 0 || personas.length > 0) && (
