@@ -551,7 +551,9 @@ router.post('/', chatLimiter, async (req, res) => {
   let fullContent = '';
 
   try {
-    const model = reqModel || project?.model || standardModel;
+    const model = req.user?.isAdmin
+      ? (reqModel || project?.model || standardModel)
+      : (project?.model || standardModel);
     const temperature = typeof reqTemp === 'number' ? Math.max(0, Math.min(1, reqTemp)) : 0.7;
 
     let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, cacheCreationTokens = 0;

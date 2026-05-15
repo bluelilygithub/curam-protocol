@@ -6,6 +6,7 @@ import { useFileAttachment } from '../hooks/useFileAttachment';
 import { useUrlAttachment } from '../hooks/useUrlAttachment';
 import useProjectStore from '../store/projectStore';
 import useSettingsStore from '../store/settingsStore';
+import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import MessageBubble from '../components/MessageBubble';
@@ -93,11 +94,13 @@ const MemoMessageList = React.memo(function MemoMessageList({
 function ChatPage({ general = false }) {
   const { id: projectIdParam } = useParams();
   const location = useLocation();
+  const { user } = useAuthStore();
+  const isAdmin = !!user?.isAdmin;
   const { activeProjectId, projects, setActive, fetchProjects } = useProjectStore();
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
   const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
-  const { models: MODELS } = useModels();
+  const { models: MODELS, defaultModel } = useModels();
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, isSpeaking, isPaused, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
   const { urlAttachments, addUrl, addManual: addManualAttachment, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
@@ -414,7 +417,7 @@ function ChatPage({ general = false }) {
       .catch(() => {});
   }, [projectId]);
 
-  const effectiveModel = chatModel || project?.model || 'claude-sonnet-4-6';
+  const effectiveModel = (isAdmin ? chatModel : null) || project?.model || defaultModel || 'claude-sonnet-4-6';
   // Clear preflight error when model changes
   const prevEffectiveModelRef = useRef(effectiveModel);
   if (prevEffectiveModelRef.current !== effectiveModel) { prevEffectiveModelRef.current = effectiveModel; setPreflightError(null); }
@@ -520,6 +523,10 @@ function ChatPage({ general = false }) {
   }, [chatModel, advisorPendingSwitch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const checkModelBeforeSend = async () => {
+    if (!isAdmin) {
+      handleSend();
+      return;
+    }
     const text = input.trim();
     if (!text && inlineImages.length === 0) { handleSend(); return; }
     if (isStreaming) { handleSend(); return; }
@@ -1046,50 +1053,60 @@ function ChatPage({ general = false }) {
           )}
         </div>
 
-        {/* Model picker */}
-        <div className="relative">
-          <button
-            onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); }}
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
-            style={{
-              borderColor: modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? '#f59e0b' : 'var(--color-border)',
-              color: 'var(--color-muted)',
-              background: 'var(--color-surface)',
-            }}
-            title={modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? 'API key not configured — click to switch model' : 'Switch AI model'}
+        {/* Model picker (admin) / current model badge (member) */}
+        {isAdmin ? (
+          <div className="relative">
+            <button
+              onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); }}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
+              style={{
+                borderColor: modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? '#f59e0b' : 'var(--color-border)',
+                color: 'var(--color-muted)',
+                background: 'var(--color-surface)',
+              }}
+              title={modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? 'API key not configured — click to switch model' : 'Switch AI model'}
+            >
+              {(() => { const m = MODELS.find(x => x.id === effectiveModel); return m ? `${m.emoji} ${m.name}` : effectiveModel; })()}
+              {modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false && <span style={{ color: '#f59e0b' }}>⚠️</span>}
+            </button>
+            {showModelPicker && (
+              <div
+                className="absolute right-0 top-full mt-1 w-52 rounded-xl border shadow-lg py-1.5 z-40"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              >
+                {MODELS.map(m => {
+                  const unavailable = modelStatus[m.provider] === false;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => { setChatModel(m.id); setShowModelPicker(false); }}
+                      className="w-full text-left px-3 py-2 flex items-start gap-2.5 hover:opacity-70 transition-opacity"
+                      title={unavailable ? `${m.provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'} not configured` : undefined}
+                    >
+                      <span className="text-base flex-shrink-0 mt-0.5">{m.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold flex items-center gap-1.5" style={{ color: effectiveModel === m.id ? 'var(--color-primary)' : unavailable ? 'var(--color-muted)' : 'var(--color-text)' }}>
+                          {m.label} · {m.name}
+                          {unavailable && <span title="API key not configured" style={{ color: '#f59e0b' }}>⚠️</span>}
+                        </div>
+                        <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{unavailable ? 'API key not configured' : m.tagline}</div>
+                      </div>
+                      {effectiveModel === m.id && <span className="ml-auto text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
+            title="Model managed by admin"
           >
             {(() => { const m = MODELS.find(x => x.id === effectiveModel); return m ? `${m.emoji} ${m.name}` : effectiveModel; })()}
-            {modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false && <span style={{ color: '#f59e0b' }}>⚠️</span>}
-          </button>
-          {showModelPicker && (
-            <div
-              className="absolute right-0 top-full mt-1 w-52 rounded-xl border shadow-lg py-1.5 z-40"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              {MODELS.map(m => {
-                const unavailable = modelStatus[m.provider] === false;
-                return (
-                  <button
-                    key={m.id}
-                    onClick={() => { setChatModel(m.id); setShowModelPicker(false); }}
-                    className="w-full text-left px-3 py-2 flex items-start gap-2.5 hover:opacity-70 transition-opacity"
-                    title={unavailable ? `${m.provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'} not configured` : undefined}
-                  >
-                    <span className="text-base flex-shrink-0 mt-0.5">{m.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold flex items-center gap-1.5" style={{ color: effectiveModel === m.id ? 'var(--color-primary)' : unavailable ? 'var(--color-muted)' : 'var(--color-text)' }}>
-                        {m.label} · {m.name}
-                        {unavailable && <span title="API key not configured" style={{ color: '#f59e0b' }}>⚠️</span>}
-                      </div>
-                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>{unavailable ? 'API key not configured' : m.tagline}</div>
-                    </div>
-                    {effectiveModel === m.id && <span className="ml-auto text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>✓</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Reasoning mode toggle — only for sonnet/opus, hidden on mobile */}
         {(effectiveModel.includes('sonnet') || effectiveModel.includes('opus')) && (
@@ -2061,7 +2078,12 @@ function ChatPage({ general = false }) {
         reason={advisorData?.reason || ''}
         needsImage={advisorData?.needsImage || false}
         suggestedModels={advisorData?.suggestedModels || []}
-        onSwitch={(id) => { setAdvisorOpen(false); setChatModel(id); setAdvisorPendingSwitch(id); }}
+        onSwitch={(id) => {
+          if (!isAdmin) { setAdvisorOpen(false); setPendingSendPayload(null); handleSend(); return; }
+          setAdvisorOpen(false);
+          setChatModel(id);
+          setAdvisorPendingSwitch(id);
+        }}
         onConfirm={() => { setAdvisorOpen(false); setPendingSendPayload(null); handleSend(); }}
         onDismiss={() => { setAdvisorOpen(false); setPendingSendPayload(null); }}
       />
