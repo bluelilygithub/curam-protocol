@@ -28,6 +28,7 @@ import UsagePage from './pages/UsagePage';
 import MoodPage from './pages/MoodPage';
 import SharedTaskPage from './pages/SharedTaskPage';
 import NewsDigestPage from './pages/NewsDigestPage';
+import StudentAgentPage from './pages/StudentAgentPage';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
@@ -85,6 +86,8 @@ function App() {
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/projects/:id/chat" element={<ChatPage />} />
               <Route path="/chat" element={<ChatPage general />} />
+              <Route path="/student/quiz" element={<StudentAgentPage />} />
+              <Route path="/student/cards" element={<StudentAgentPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/memory" element={<MemoryPage />} />
               <Route path="/prompts" element={<PromptsPage />} />
@@ -105,7 +108,7 @@ function App() {
               <Route path="/usage" element={<UsagePage />} />
               <Route path="/mood" element={<MoodPage />} />
               <Route path="/news-digest" element={<NewsDigestPage />} />
-<Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
         </BrowserRouter>

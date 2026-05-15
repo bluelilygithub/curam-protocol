@@ -86,6 +86,7 @@ const semanticMap = {
   'smartphone':     { lucide: 'Smartphone' },
   'more-horizontal': { lucide: 'MoreHorizontal' },
   'help-circle':    { lucide: 'HelpCircle' },
+  'graduation-cap': { lucide: 'GraduationCap' },
 };
 
 const IconContext = createContext(null);

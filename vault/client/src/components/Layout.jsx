@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import ProjectSidebar from './ProjectSidebar';
 import { useIcon } from '../providers/IconProvider';
@@ -37,6 +37,8 @@ function Layout() {
   const [inquiryReminderSettings, setInquiryReminderSettings] = useState(null);
   const [missionReminderDue,  setMissionReminderDue]  = useState(false);
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const [studentMenuOpen, setStudentMenuOpen] = useState(false);
+  const studentMenuWrapRef = useRef(null);
 
   useEffect(() => {
     if (sessionStorage.getItem('tasksAlertDismissed')) return;
@@ -78,6 +80,20 @@ function Layout() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setStudentMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!studentMenuOpen) return;
+    const onDocMouseDown = (e) => {
+      const el = studentMenuWrapRef.current;
+      if (el && !el.contains(e.target)) setStudentMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [studentMenuOpen]);
 
   useEffect(() => {
     api.get('/api/mission/reminder-status').then(r => r.json()).then(d => {
@@ -404,6 +420,52 @@ function Layout() {
               />
             )}
           </Link>
+
+          {canUseFeature('student') && (
+            <div ref={studentMenuWrapRef} className="hidden sm:block relative flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setStudentMenuOpen(v => !v)}
+                className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border outline-none hover:opacity-70 transition-opacity max-w-[104px]"
+                style={{
+                  borderColor: location.pathname.startsWith('/student') ? 'var(--color-primary)' : 'var(--color-border)',
+                  color: location.pathname.startsWith('/student') ? 'var(--color-primary)' : 'var(--color-muted)',
+                  background: 'var(--color-surface)',
+                  fontWeight: location.pathname.startsWith('/student') ? 600 : 400,
+                }}
+                title="Student"
+              >
+                <span className="truncate">Student</span>
+                {getIcon('chevron-down', { size: 10 })}
+              </button>
+              {studentMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" aria-hidden onClick={() => setStudentMenuOpen(false)} />
+                  <div
+                    className="absolute right-0 top-full mt-1 z-20 rounded-xl border shadow-lg py-1 min-w-[148px]"
+                    style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+                  >
+                    <Link
+                      to="/student/quiz"
+                      onClick={() => setStudentMenuOpen(false)}
+                      className="block px-3 py-2 text-xs hover:opacity-70 transition-opacity"
+                      style={{ color: 'var(--color-text)' }}
+                    >
+                      Quiz
+                    </Link>
+                    <Link
+                      to="/student/cards"
+                      onClick={() => setStudentMenuOpen(false)}
+                      className="block px-3 py-2 text-xs hover:opacity-70 transition-opacity border-t"
+                      style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}
+                    >
+                      Cards
+                    </Link>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {canUseFeature('chains') && (
             <Link

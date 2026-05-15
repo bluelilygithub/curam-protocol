@@ -6,10 +6,12 @@ export const DEFAULT_TILES = [
   { id: 'finance',  label: 'Finance',      enabled: true },
   { id: 'history',  label: 'Chat History', enabled: true },
   { id: 'notes',    label: 'Notes',        enabled: true },
+  { id: 'student',  label: 'Student',      enabled: true },
 ];
 
 export const FEATURE_BY_TILE_ID = {
   finance: 'finance',
+  student: 'student',
 };
 
 export const DEFAULT_NAV_ITEMS = [

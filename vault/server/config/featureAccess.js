@@ -13,6 +13,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   usage: true,
   mood: true,
   newsDigest: true,
+  student: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);
