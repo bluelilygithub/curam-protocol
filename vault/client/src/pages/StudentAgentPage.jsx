@@ -1,12 +1,9 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
 import { useIcon } from '../providers/IconProvider';
 
+/** Student → Quiz (placeholder). */
 export default function StudentAgentPage() {
-  const location = useLocation();
   const getIcon = useIcon();
-  const tab = location.pathname.includes('/student/cards') ? 'cards' : 'quiz';
-  const title = tab === 'cards' ? 'Cards' : 'Quiz';
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
@@ -21,7 +18,7 @@ export default function StudentAgentPage() {
           {getIcon('graduation-cap', { size: 22, style: { color: 'var(--color-primary)' } })}
         </div>
         <p className="text-base font-medium mb-1" style={{ color: 'var(--color-text)' }}>
-          {title}
+          Quiz
         </p>
         <p className="text-sm text-center max-w-xs" style={{ color: 'var(--color-muted)' }}>
           Coming soon

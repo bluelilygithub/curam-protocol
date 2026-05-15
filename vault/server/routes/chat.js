@@ -13,6 +13,7 @@ const { getModelsForUser } = require('../services/modelResolver');
 const { embedText } = require('../services/embeddings');
 const { callModel } = require('../services/callModel');
 const { FEATURE_ACCESS_DEFAULTS } = require('../config/featureAccess');
+const { getStudentCardsRoutine } = require('../prompts/studentCardsRoutine');
 
 const chatLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -50,6 +51,41 @@ async function canMembersSelectModel() {
   );
   const rawValue = String(rows[0]?.value ?? FEATURE_ACCESS_DEFAULTS.memberModelSelection).trim().toLowerCase();
   return rawValue !== 'false' && rawValue !== '0' && rawValue !== 'off';
+}
+
+async function canAccessStudentWorkspaceFeature(user) {
+  if (user?.isAdmin) return true;
+  const { rows } = await pool.query(
+    "SELECT value FROM workspace_settings WHERE key = 'feature_student' LIMIT 1"
+  );
+  const raw = String(rows[0]?.value ?? FEATURE_ACCESS_DEFAULTS.student).trim().toLowerCase();
+  return raw !== 'false' && raw !== '0' && raw !== 'off';
+}
+
+/** System blocks for Student → Cards (no project RAG; routine is cached). */
+async function buildStudentCardsSystemBlocks(userId, userTimezone) {
+  const blocks = [];
+  const routine = getStudentCardsRoutine();
+  blocks.push({ type: 'text', text: routine, cache_control: { type: 'ephemeral' } });
+
+  const now = new Date();
+  const todayStr = userTimezone
+    ? new Intl.DateTimeFormat('en-CA', { timeZone: userTimezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+    : now.toISOString().slice(0, 10);
+  const tail = [`Today's date is ${todayStr}.`, 'You are in the Student / Cards area of Curam Vault. Follow your study-assistant instructions; stay in character.'];
+  if (userId) {
+    const profile = await getUserProfile(userId);
+    const location = [profile.user_city, profile.user_state, profile.user_country].filter(Boolean).join(', ');
+    if (profile.user_name || location) {
+      let sentence = 'You are speaking with';
+      if (profile.user_name) sentence += ` ${profile.user_name}`;
+      if (location) sentence += `, located in ${location}`;
+      sentence += '.';
+      tail.push(sentence);
+    }
+  }
+  blocks.push({ type: 'text', text: tail.join('\n\n') });
+  return { blocks, ragFallbackActive: false };
 }
 
 
@@ -460,14 +496,21 @@ router.post('/test-model', async (req, res) => {
 
 // POST /api/chat
 router.post('/', chatLimiter, async (req, res) => {
-  const { messages, projectId, sessionId, attachmentIds, urlAttachments, inlineImages, model: reqModel, temperature: reqTemp, personaId, reasoning, webSearch, userTimezone } = req.body;
+  const { messages, projectId, sessionId, attachmentIds, urlAttachments, inlineImages, model: reqModel, temperature: reqTemp, personaId, reasoning, webSearch, userTimezone, studentCards: bodyStudentCards } = req.body;
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
+  const studentCards = !!bodyStudentCards;
+  if (studentCards && !(await canAccessStudentWorkspaceFeature(req.user))) {
+    return res.status(403).json({ error: 'Feature disabled for member accounts' });
+  }
+
+  const pid = studentCards ? null : (projectId != null && projectId !== '' ? Number(projectId) : null);
+
   // Async setup — runs before SSE headers are set so errors return JSON 500
-  const { rows: projRows } = projectId
-    ? await pool.query('SELECT * FROM projects WHERE id=$1', [projectId])
+  const { rows: projRows } = pid
+    ? await pool.query('SELECT * FROM projects WHERE id=$1', [pid])
     : { rows: [] };
   const project = projRows[0] || null;
   const sid = sessionId || `session-${Date.now()}`;
@@ -481,9 +524,13 @@ router.post('/', chatLimiter, async (req, res) => {
       ? lastMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
       : '';
 
+  const effectiveWebSearch = studentCards ? false : !!webSearch;
+
   // Array of { type, text, cache_control? } blocks — used directly by Anthropic;
   // joined to a plain string for Gemini (which does not support content-block system params).
-  const { blocks: systemBlocks, ragFallbackActive } = await buildSystemPrompt(project, personaId, sid, !!webSearch, userMessage, req.user?.id ?? null, userTimezone || null);
+  const { blocks: systemBlocks, ragFallbackActive } = studentCards
+    ? await buildStudentCardsSystemBlocks(req.user?.id ?? null, userTimezone || null)
+    : await buildSystemPrompt(project, personaId, sid, effectiveWebSearch, userMessage, req.user?.id ?? null, userTimezone || null);
 
   // Check if this session is summarized
   const { rows: sessionRows } = await pool.query('SELECT * FROM sessions WHERE "sessionId"=$1', [sid]);
@@ -491,10 +538,10 @@ router.post('/', chatLimiter, async (req, res) => {
 
   // Load all project Files API documents (PDFs uploaded to Anthropic) for persistent context
   const projectFileBlocks = [];
-  if (projectId) {
+  if (pid) {
     const { rows: apiFiles } = await pool.query(
       'SELECT id, name, "anthropicFileId" FROM files WHERE "projectId"=$1 AND "anthropicFileId" IS NOT NULL',
-      [projectId]
+      [pid]
     );
     for (const f of apiFiles) {
       projectFileBlocks.push({ type: 'document', source: { type: 'file', file_id: f.anthropicFileId } });
@@ -562,8 +609,8 @@ router.post('/', chatLimiter, async (req, res) => {
   try {
     const canSelectChatModel = req.user?.isAdmin || await canMembersSelectModel();
     const model = canSelectChatModel
-      ? (reqModel || project?.model || standardModel)
-      : (project?.model || standardModel);
+      ? (reqModel || (studentCards ? standardModel : project?.model) || standardModel)
+      : (studentCards ? standardModel : project?.model || standardModel);
     if (!model) {
       throw new Error('No model configured. Ask an admin to configure models in Settings.');
     }
@@ -585,7 +632,7 @@ router.post('/', chatLimiter, async (req, res) => {
         systemInstruction: systemPrompt,
         generationConfig: { temperature, maxOutputTokens: 8192 },
       };
-      if (webSearch) geminiConfig.tools = [{ googleSearch: {} }];
+      if (effectiveWebSearch) geminiConfig.tools = [{ googleSearch: {} }];
       const gModel = genai.getGenerativeModel(geminiConfig);
 
       const history = apiMessages.slice(0, -1).map(m => ({
@@ -683,7 +730,7 @@ router.post('/', chatLimiter, async (req, res) => {
       } else {
         streamParams.temperature = temperature;
       }
-      if (webSearch) {
+      if (effectiveWebSearch) {
         streamParams.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }];
       }
       // Build beta header — combine features that require it
@@ -694,7 +741,7 @@ router.post('/', chatLimiter, async (req, res) => {
       const betaFeatures = [];
       if (hasCacheControl) betaFeatures.push('prompt-caching-2024-07-31');
       if (hasFileRefs) betaFeatures.push('files-api-2025-04-14');
-      if (webSearch) betaFeatures.push('web-search-2025-03-05');
+      if (effectiveWebSearch) betaFeatures.push('web-search-2025-03-05');
       const streamOptions = betaFeatures.length > 0
         ? { headers: { 'anthropic-beta': betaFeatures.join(',') } }
         : {};
@@ -747,16 +794,16 @@ router.post('/', chatLimiter, async (req, res) => {
           }
           await pool.query(
             'INSERT INTO messages ("sessionId","projectId",role,content) VALUES ($1,$2,$3,$4)',
-            [sid, projectId, 'user', storedContent]
+            [sid, pid, 'user', storedContent]
           );
           await pool.query(
             'INSERT INTO messages ("sessionId","projectId",role,content) VALUES ($1,$2,$3,$4)',
-            [sid, projectId, 'assistant', fullContent]
+            [sid, pid, 'assistant', fullContent]
           );
-          if (projectId) {
+          if (pid) {
             await pool.query(
               'INSERT INTO search_index(type,"projectId",title,body) VALUES ($1,$2,$3,$4)',
-              ['message', String(projectId), `Chat: ${sid}`, fullContent.substring(0, 500)]
+              ['message', String(pid), `Chat: ${sid}`, fullContent.substring(0, 500)]
             );
           }
 
@@ -771,7 +818,7 @@ router.post('/', chatLimiter, async (req, res) => {
             } else {
               await pool.query(
                 'INSERT INTO sessions ("sessionId","projectId","userId","inputTokens","outputTokens") VALUES ($1,$2,$3,$4,$5)',
-                [sid, projectId, req.user?.id ?? null, inputTokens, outputTokens]
+                [sid, pid, req.user?.id ?? null, inputTokens, outputTokens]
               );
             }
           }
@@ -782,7 +829,7 @@ router.post('/', chatLimiter, async (req, res) => {
             pool.query(
               `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature, cache_read_tokens, cache_creation_tokens)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-              [req.user.id, sid, model, inputTokens, outputTokens, cost, 'chat', cacheReadTokens, cacheCreationTokens]
+              [req.user.id, sid, model, inputTokens, outputTokens, cost, studentCards ? 'student_cards' : 'chat', cacheReadTokens, cacheCreationTokens]
             ).catch(err => console.error('[usage] log error:', err.message));
           }
 
@@ -793,22 +840,25 @@ router.post('/', chatLimiter, async (req, res) => {
             const userSnippet = lastUser.content.substring(0, 300);
             const aiSnippet = fullContent.substring(0, 300);
             const titleModel = (lightModel.startsWith('claude-') && !model.startsWith('claude-')) ? model : lightModel;
+            const titleHint = studentCards
+              ? 'This is a Student study session (flashcards/slides/summaries). '
+              : '';
             callModel(
               titleModel,
-              `Generate a concise 4-6 word title for this conversation. Return only the title, no punctuation, no quotes.\n\nUser: ${userSnippet}\n\nAssistant: ${aiSnippet}`,
+              `${titleHint}Generate a concise 4-6 word title for this conversation. Return only the title, no punctuation, no quotes.\n\nUser: ${userSnippet}\n\nAssistant: ${aiSnippet}`,
               { maxTokens: 20 }
             ).then(title => {
               if (title) {
                 pool.query(
                   'INSERT INTO sessions ("sessionId","projectId",title) VALUES ($1,$2,$3) ON CONFLICT ("sessionId") DO UPDATE SET title=EXCLUDED.title',
-                  [sid, projectId, title]
+                  [sid, pid, title]
                 ).catch(() => {});
               }
             }).catch(() => {});
           }
 
           // Background: regenerate session summary for project-level RAG
-          if (projectId) {
+          if (pid) {
             generateAndStoreSessionSummary(sid, req.user?.id ?? null, model).catch(() => {});
           }
         }

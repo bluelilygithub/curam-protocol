@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import api from '../utils/apiClient';
 
-export function useChat({ projectId }) {
+export function useChat({ projectId, studentCards = false }) {
   const [messages, setMessages] = useState([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [sessionId, setSessionId] = useState(null);
@@ -57,11 +57,27 @@ export function useChat({ projectId }) {
         temperature,
         personaId: personaId || undefined,
         reasoning: reasoning || undefined,
-        webSearch: webSearch,
+        webSearch: studentCards ? false : webSearch,
         userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        ...(studentCards ? { studentCards: true } : {}),
       }, controller.signal);
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const errBody = await res.json();
+          if (errBody?.error) msg = errBody.error;
+        } catch { /* ignore */ }
+        setStreamError({ code: res.status === 403 ? 'forbidden' : 'http', message: msg, hint: '' });
+        setMessages((prev) => {
+          const next = [...prev];
+          const last = next[next.length - 1];
+          if (last?.role === 'assistant' && !last.content) next.pop();
+          if (next[next.length - 1]?.role === 'user') next.pop();
+          return next;
+        });
+        return;
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -160,7 +176,7 @@ export function useChat({ projectId }) {
       setIsSearching(false);
       abortRef.current = null;
     }
-  }, [messages, projectId, sessionId]);
+  }, [messages, projectId, sessionId, studentCards]);
 
   const stopStreaming = useCallback(() => abortRef.current?.abort(), []);
 
@@ -213,9 +229,9 @@ export function useChat({ projectId }) {
     }
     // Re-send
     if (lastUserContent) {
-      await sendMessage(lastUserContent, attachmentIds || [], attachmentMeta || [], model, urlAttachments || [], temperature || 0.7, personaId, reasoning, [], webSearch);
+      await sendMessage(lastUserContent, attachmentIds || [], attachmentMeta || [], model, urlAttachments || [], temperature || 0.7, personaId, reasoning, [], studentCards ? false : webSearch);
     }
-  }, [isStreaming, sessionId, sendMessage]);
+  }, [isStreaming, sessionId, sendMessage, studentCards]);
 
   return { messages, isStreaming, isSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, regenerate, streamError, clearStreamError, ragFallbackActive };
 }
