@@ -5,7 +5,7 @@ import { exportChatJson, exportChatPdf, exportProject } from '../utils/exportHel
 import EmailModal from './EmailModal';
 import api from '../utils/apiClient';
 
-function ExportMenu({ sessionId, projectId }) {
+function ExportMenu({ sessionId, projectId, pdfTitle, emailDefaultSubject, minimal, pendingSession }) {
   const [open, setOpen] = useState(false);
   const [showEmail, setShowEmail] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -22,20 +22,36 @@ function ExportMenu({ sessionId, projectId }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  if (!sessionId && !projectId) return null;
+  if (!sessionId && !projectId && !pendingSession) return null;
+
+  if (pendingSession && !sessionId && !projectId) {
+    return (
+      <button
+        type="button"
+        disabled
+        className="flex items-center gap-1 text-xs px-2 py-1.5 rounded border opacity-50 cursor-not-allowed"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+        title="Export and email unlock once this session is connected (right after the first message starts)."
+      >
+        {getIcon('download', { size: 13 })}
+        <span className="hidden sm:inline">Export</span>
+        {getIcon('chevron-down', { size: 12 })}
+      </button>
+    );
+  }
 
   const items = [
     sessionId && {
       label: 'Export Chat PDF',
       icon: 'download',
-      action: () => exportChatPdf(sessionId),
+      action: () => exportChatPdf(sessionId, pdfTitle),
     },
     sessionId && {
       label: 'Export Chat JSON',
       icon: 'download',
       action: () => exportChatJson(sessionId),
     },
-    projectId && {
+    !minimal && projectId && {
       label: 'Export Project',
       icon: 'download',
       action: () => exportProject(projectId),
@@ -45,7 +61,7 @@ function ExportMenu({ sessionId, projectId }) {
       icon: 'mail',
       action: () => { setShowEmail(true); setOpen(false); },
     },
-    sessionId && {
+    !minimal && sessionId && {
       label: 'Extract Tasks',
       icon: 'list-checks',
       action: async () => {
@@ -100,7 +116,11 @@ function ExportMenu({ sessionId, projectId }) {
       </div>
 
       {showEmail && (
-        <EmailModal sessionId={sessionId} onClose={() => setShowEmail(false)} />
+        <EmailModal
+          sessionId={sessionId}
+          onClose={() => setShowEmail(false)}
+          defaultSubject={emailDefaultSubject || 'Chat Export'}
+        />
       )}
 
       {toast && (

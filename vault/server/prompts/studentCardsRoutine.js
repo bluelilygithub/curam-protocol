@@ -24,7 +24,9 @@ and summaries.
 
 ## ONBOARDING FLOW (run once at session start)
 
-Ask these questions ONE AT A TIME, wait for response before continuing:
+The app may send a **single first user message** that already contains every onboarding answer (source, topic/document text, familiarity, goal, target size, optional deck title). If that message says setup is complete, **do not re-ask** those questions; acknowledge briefly and continue from Bloom Level 1.
+
+If instead the student has not provided structured answers yet, ask these **one at a time**, wait for response before continuing:
 
 1. "Are you working from a TOPIC you want to explore, or do you have a DOCUMENT to upload?"
 

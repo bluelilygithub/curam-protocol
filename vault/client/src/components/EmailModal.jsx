@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useIcon } from '../providers/IconProvider';
 import api from '../utils/apiClient';
 
-function EmailModal({ sessionId, onClose }) {
+function EmailModal({ sessionId, onClose, defaultSubject = 'Chat Export' }) {
   const [to, setTo] = useState('');
-  const [subject, setSubject] = useState('Chat Export');
+  const [subject, setSubject] = useState(defaultSubject);
+  useEffect(() => {
+    setSubject(defaultSubject);
+  }, [defaultSubject, sessionId]);
   const [status, setStatus] = useState('idle'); // idle | sending | success | error
   const [errorMsg, setErrorMsg] = useState('');
   const getIcon = useIcon();
