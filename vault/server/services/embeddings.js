@@ -3,27 +3,48 @@
 const { pool } = require('../db');
 
 const EMBEDDING_DIM = 768;
+const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004';
+
+const EMBEDDING_ENDPOINTS = [
+  model => `https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent`,
+  model => `https://generativelanguage.googleapis.com/v1/models/${model}:embedContent`,
+];
 
 async function embedText(text) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/embedding-001:embedContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: { parts: [{ text }] } }),
+    let lastStatus = 0;
+    let lastMsg = '';
+
+    for (const buildUrl of EMBEDDING_ENDPOINTS) {
+      const res = await fetch(
+        `${buildUrl(EMBEDDING_MODEL)}?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: { parts: [{ text }] } }),
+        }
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        return data.embedding?.values || null;
       }
-    );
-    if (!res.ok) {
-      const msg = await res.text().catch(() => '');
-      console.error(`[embeddings] embedText failed ${res.status}: ${msg.slice(0, 200)}`);
-      return null;
+
+      if (res.status !== 404) {
+        const msg = await res.text().catch(() => '');
+        console.error(`[embeddings] embedText failed ${res.status}: ${msg.slice(0, 200)}`);
+        return null;
+      }
+
+      lastStatus = res.status;
+      lastMsg = await res.text().catch(() => '');
     }
-    const data = await res.json();
-    return data.embedding?.values || null;
+
+    console.error(`[embeddings] embedText failed ${lastStatus || 404}: ${lastMsg.slice(0, 200)}`);
+    return null;
   } catch (err) {
     console.error('[embeddings] embedText error:', err.message);
     return null;
