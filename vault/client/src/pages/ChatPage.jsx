@@ -428,7 +428,7 @@ function ChatPage({ general = false }) {
       .catch(() => {});
   }, [projectId]);
 
-  const effectiveModel = (canSelectModel ? chatModel : null) || project?.model || defaultModel || 'claude-sonnet-4-6';
+  const effectiveModel = (canSelectModel ? chatModel : null) || project?.model || defaultModel || MODELS[0]?.id || '';
   // Clear preflight error when model changes
   const prevEffectiveModelRef = useRef(effectiveModel);
   if (prevEffectiveModelRef.current !== effectiveModel) { prevEffectiveModelRef.current = effectiveModel; setPreflightError(null); }
@@ -460,6 +460,14 @@ function ChatPage({ general = false }) {
     if (!text && inlineImages.length === 0) return;
     if (isStreaming) return;
     if (urlAttachments.some(u => u.status === 'fetching')) return;
+    if (!effectiveModel) {
+      setPreflightError({
+        code: 'model',
+        message: 'No model configured.',
+        hint: 'Ask an admin to configure models in Settings.',
+      });
+      return;
+    }
     // Pre-flight: block send if the provider key is confirmed missing
     const modelIsGemini = effectiveModel.startsWith('gemini-');
     const provider = modelIsGemini ? 'gemini' : 'anthropic';

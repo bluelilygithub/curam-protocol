@@ -6,7 +6,7 @@ import { mdComponents } from '../utils/mdComponents';
 import useAuthStore from '../store/authStore';
 import useSettingsStore from '../store/settingsStore';
 import api from '../utils/apiClient';
-import { MODELS } from '../utils/models';
+import { useModels } from '../hooks/useModels';
 import FilePreviewDrawer from '../components/FilePreviewDrawer';
 
 const MODES = [
@@ -189,10 +189,11 @@ function FileDropZone({ label, doc, onDoc, onClear }) {
 
 function ComparisonPage() {
   const getIcon = useIcon();
+  const { models } = useModels();
   const [docA, setDocA] = useState(null);
   const [docB, setDocB] = useState(null);
   const [mode, setMode] = useState('diff');
-  const [model, setModel] = useState('claude-sonnet-4-6');
+  const [model, setModel] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -204,6 +205,10 @@ function ComparisonPage() {
   const [saveProjects, setSaveProjects] = useState([]);
   const [saveStatus, setSaveStatus] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!model && models.length > 0) setModel(models[0].id);
+  }, [model, models]);
 
   useEffect(() => {
     if (!result || saveProjects.length > 0) return;
@@ -231,7 +236,7 @@ function ComparisonPage() {
     }
   };
 
-  const canRun = docA && docB && !loading;
+  const canRun = docA && docB && !!model && !loading;
 
   const handleRun = async () => {
     if (!canRun) return;
@@ -358,7 +363,7 @@ function ComparisonPage() {
             className="text-xs px-2.5 py-1.5 rounded-lg border outline-none"
             style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
           >
-            {MODELS.map(m => (
+            {models.map(m => (
               <option key={m.id} value={m.id}>{m.emoji} {m.name}</option>
             ))}
           </select>

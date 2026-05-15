@@ -564,6 +564,9 @@ router.post('/', chatLimiter, async (req, res) => {
     const model = canSelectChatModel
       ? (reqModel || project?.model || standardModel)
       : (project?.model || standardModel);
+    if (!model) {
+      throw new Error('No model configured. Ask an admin to configure models in Settings.');
+    }
     const temperature = typeof reqTemp === 'number' ? Math.max(0, Math.min(1, reqTemp)) : 0.7;
 
     let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, cacheCreationTokens = 0;

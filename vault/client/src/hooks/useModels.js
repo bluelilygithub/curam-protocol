@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/apiClient';
-import { MODELS as DEFAULT_MODELS } from '../utils/models';
 
 export function useModels() {
-  const [models, setModels] = useState(DEFAULT_MODELS);
+  const [models, setModels] = useState([]);
   const [defaultModel, setDefaultModel] = useState('');
   const [branchEvalModel, setBranchEvalModel] = useState('');
   const [loading, setLoading] = useState(true);

@@ -78,6 +78,9 @@ router.post('/', async (req, res) => {
   const { standard: standardModel } = await getModelsForUser(req.user?.id);
   const canSelectProjectModel = req.user?.isAdmin || await canMembersSelectModel();
   const projectModel = canSelectProjectModel ? (model || standardModel) : standardModel;
+  if (!projectModel) {
+    return res.status(400).json({ error: 'No model configured. Ask an admin to configure models in Settings.' });
+  }
 
   try {
     const { rows } = await pool.query(
@@ -159,6 +162,9 @@ router.put('/:id', async (req, res) => {
     const resolvedModel = canSelectProjectModel
       ? (model ?? p.model ?? standardModel)
       : standardModel;
+    if (!resolvedModel) {
+      return res.status(400).json({ error: 'No model configured. Ask an admin to configure models in Settings.' });
+    }
 
     await pool.query(
       `UPDATE projects SET

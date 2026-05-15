@@ -6,12 +6,10 @@ import { mdComponents } from '../utils/mdComponents';
 import useAuthStore from '../store/authStore';
 import useSettingsStore from '../store/settingsStore';
 import api from '../utils/apiClient';
-import { MODELS } from '../utils/models';
+import { useModels } from '../hooks/useModels';
 
-const DEBATE_MODELS = MODELS;
-
-function getDebateModelById(id) {
-  return DEBATE_MODELS.find((m) => m.id === id) || MODELS[1];
+function getDebateModelById(id, models) {
+  return models.find((m) => m.id === id) || models[0] || { id: '', name: 'Unconfigured', emoji: '🤖', label: 'Model' };
 }
 
 function LoadingDots() {
@@ -37,12 +35,13 @@ function DebatePage() {
   const getIcon = useIcon();
   const { token } = useAuthStore();
   const { allowedFileTypes } = useSettingsStore();
+  const { models } = useModels();
 
   // Setup state
   const [phase, setPhase] = useState('setup');
   const [topic, setTopic] = useState('');
-  const [modelA, setModelA] = useState('claude-haiku-4-5-20251001');
-  const [modelB, setModelB] = useState('claude-sonnet-4-6');
+  const [modelA, setModelA] = useState('');
+  const [modelB, setModelB] = useState('');
   const [saveDebate, setSaveDebate] = useState(false);
   const [saveProjectId, setSaveProjectId] = useState('');
   const [projects, setProjects] = useState([]);
@@ -74,8 +73,14 @@ function DebatePage() {
     : currentRoundData;
   const isViewingHistory = viewingRound !== null;
 
-  const modelAInfo = getDebateModelById(modelA);
-  const modelBInfo = getDebateModelById(modelB);
+  const modelAInfo = getDebateModelById(modelA, models);
+  const modelBInfo = getDebateModelById(modelB, models);
+
+  useEffect(() => {
+    if (models.length === 0) return;
+    if (!modelA) setModelA(models[0].id);
+    if (!modelB) setModelB((models[1] || models[0]).id);
+  }, [modelA, modelB, models]);
 
   // Load projects when user enables save
   useEffect(() => {
@@ -109,7 +114,7 @@ function DebatePage() {
   };
 
   const handleStart = async () => {
-    if (!topic.trim()) return;
+    if (!topic.trim() || !modelA || !modelB) return;
     setLoading(true);
     setError('');
     try {
@@ -255,7 +260,7 @@ function DebatePage() {
               className="text-sm px-2.5 py-2 rounded-xl border outline-none"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
             >
-              {DEBATE_MODELS.map(m => <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.label}</option>)}
+              {models.map(m => <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.label}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
@@ -266,7 +271,7 @@ function DebatePage() {
               className="text-sm px-2.5 py-2 rounded-xl border outline-none"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
             >
-              {DEBATE_MODELS.map(m => <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.label}</option>)}
+              {models.map(m => <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.label}</option>)}
             </select>
           </div>
         </div>
@@ -346,7 +351,7 @@ function DebatePage() {
 
         <button
           onClick={handleStart}
-          disabled={!topic.trim() || loading}
+          disabled={!topic.trim() || !modelA || !modelB || loading}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium self-start"
           style={{
             background: topic.trim() && !loading ? 'var(--color-primary)' : 'var(--color-border)',

@@ -7,7 +7,7 @@ import { useIcon } from '../providers/IconProvider';
 import FileUploader from '../components/FileUploader';
 import FileList from '../components/FileList';
 import { downloadProjectMd } from '../utils/exportMd';
-import { MODELS, TYPE_FIELDS } from '../utils/models';
+import { TYPE_FIELDS } from '../utils/models';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import EmotionWheel from '../components/mood/EmotionWheel';
 import MoodDot from '../components/mood/MoodDot';
@@ -53,7 +53,7 @@ function ProjectDetail() {
   const [showSessions, setShowSessions] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [availableModels, setAvailableModels] = useState(MODELS);
+  const [availableModels, setAvailableModels] = useState([]);
   const [pinnedUrls, setPinnedUrls] = useState([]);
   const [urlInput, setUrlInput] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);

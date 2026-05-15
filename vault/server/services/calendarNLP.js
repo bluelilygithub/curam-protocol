@@ -212,11 +212,14 @@ Output: {"timeMin":"${dates.ago90}","timeMax":"${dates.future90}","searchQuery":
  * @param {string} [today]      - ISO date YYYY-MM-DD (defaults to current date)
  * @returns {Promise<{ timeMin, timeMax, searchQuery, maxResults, calendarId, intent }>}
  */
-async function translateToCalendarQuery(userMessage, today, modelId = 'claude-haiku-4-5-20251001') {
+async function translateToCalendarQuery(userMessage, today, modelId = null) {
   const todayStr = today || new Date().toISOString().slice(0, 10);
   const dates    = calculateDates(todayStr);
 
   let raw = '';
+  if (!modelId) {
+    return { timeMin: dates.todayStart, timeMax: dates.future30, searchQuery: userMessage, maxResults: CALENDAR_LIMITS.default, calendarId: 'primary', intent: 'list' };
+  }
   try {
     raw = await callModel(modelId, userMessage, { maxTokens: 200, system: buildSystemPrompt(dates) });
   } catch {

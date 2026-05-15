@@ -94,7 +94,7 @@ async function initSchema() {
         "createdAt"        TIMESTAMPTZ DEFAULT NOW(),
         "updatedAt"        TIMESTAMPTZ DEFAULT NOW(),
         "sortOrder"        INTEGER DEFAULT 0,
-        model              TEXT DEFAULT 'claude-sonnet-4-6',
+        model              TEXT,
         "projectType"      TEXT,
         "typeConfig"       TEXT,
         "folderId"         INTEGER,
@@ -165,6 +165,7 @@ async function initSchema() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON tasks("userId", "isMilestone") WHERE "isMilestone" = 1`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "startDate" DATE DEFAULT NULL`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "targetEndDate" DATE DEFAULT NULL`);
+    await client.query(`ALTER TABLE projects ALTER COLUMN model DROP DEFAULT`);
 
     // ── News Digest ───────────────────────────────────────────────────────────
     await client.query(`

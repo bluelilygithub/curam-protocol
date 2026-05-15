@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MODELS, PROJECT_TYPES, TYPE_FIELDS } from '../utils/models';
+import { PROJECT_TYPES, TYPE_FIELDS } from '../utils/models';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
@@ -17,9 +17,9 @@ function NewProjectModal({ onClose, onCreate }) {
   const canSelectModel = isAdmin || featureAccess.memberModelSelection !== false;
   const [name, setName] = useState('');
   const [selectedType, setSelectedType] = useState(() => PROJECT_TYPES.find(t => t.id === 'research') || null);
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
+  const [selectedModel, setSelectedModel] = useState('');
   const [typeConfig, setTypeConfig] = useState(() => buildDefaultTypeConfig('research'));
-  const [availableModels, setAvailableModels] = useState(MODELS);
+  const [availableModels, setAvailableModels] = useState([]);
   const [creating, setCreating] = useState(false);
   const [clientId, setClientId] = useState('');
   const [clients, setClients] = useState([]);
@@ -33,19 +33,24 @@ function NewProjectModal({ onClose, onCreate }) {
       }
     }).catch(() => {});
     api.get('/api/settings').then(r => r.json()).then(data => {
+      let nextDefaultModel = '';
       if (data.vault_models) {
         try {
           const parsed = JSON.parse(data.vault_models);
-          if (Array.isArray(parsed) && parsed.length > 0) setAvailableModels(parsed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAvailableModels(parsed);
+            nextDefaultModel = parsed[0]?.id || '';
+          }
         } catch {}
       }
-      if (data.default_model) setSelectedModel(data.default_model);
+      if (data.default_model) nextDefaultModel = data.default_model;
+      if (nextDefaultModel) setSelectedModel(nextDefaultModel);
     }).catch(() => {});
   }, []);
 
   useEffect(() => { nameRef.current?.focus(); }, []);
 
-  const findModel = (id) => availableModels.find(m => m.id === id) || MODELS.find(m => m.id === id);
+  const findModel = (id) => availableModels.find(m => m.id === id);
 
   const handleTypeSelect = (type) => {
     setSelectedType(type);
@@ -237,7 +242,7 @@ function NewProjectModal({ onClose, onCreate }) {
                 ))}
               </div>
 
-              {selectedType && (
+              {selectedType && activeModel && (
                 <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
                   <span style={{ color: 'var(--color-primary)' }}>Why {activeModel.name}?</span>{' '}
                   {selectedType.model === selectedModel ? selectedType.reason : activeModel.desc}

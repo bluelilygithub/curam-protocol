@@ -219,12 +219,15 @@ Output: {"gmailQuery":"from:Sarah OR to:Sarah subject:contract","intent":"thread
  * @param {string} [today]      - ISO date YYYY-MM-DD (defaults to current date)
  * @returns {Promise<{ gmailQuery: string, intent: string, maxResults: number, responseMode: string }>}
  */
-async function translateToGmailQuery(userMessage, today, modelId = 'claude-haiku-4-5-20251001') {
+async function translateToGmailQuery(userMessage, today, modelId = null) {
   const todayStr = today || new Date().toISOString().slice(0, 10);
   const dates = calculateDates(todayStr);
   const systemPrompt = buildSystemPrompt(dates);
 
   let raw = '';
+  if (!modelId) {
+    return { gmailQuery: userMessage, intent: 'list', maxResults: GMAIL_LIMITS.default, responseMode: 'list' };
+  }
   try {
     raw = await callModel(modelId, userMessage, { maxTokens: 200, system: systemPrompt });
   } catch {

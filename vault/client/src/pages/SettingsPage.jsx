@@ -694,7 +694,7 @@ function SettingsPage() {
           </div>
         </div>
         <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-          Add, edit, or remove models. The model ID must match the exact API identifier (e.g. <code>claude-sonnet-4-6</code>).
+          Add, edit, or remove models. The model ID must match the exact API identifier from your provider.
         </p>
 
         {/* Default model selector */}
@@ -703,7 +703,7 @@ function SettingsPage() {
             Default model
           </label>
           <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-            Used for general chat and new projects when no specific model is set.
+            Used for general chat and as the default for new projects.
           </p>
           <select
             value={defaultModel}
@@ -711,7 +711,7 @@ function SettingsPage() {
             className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
-            <option value="">System default (claude-sonnet-4-6)</option>
+            <option value="">No default selected</option>
             {models.map(m => (
               <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
             ))}
@@ -751,7 +751,7 @@ function SettingsPage() {
                 <input
                   className="w-full px-3 py-2 rounded-lg border text-xs outline-none font-mono"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                  placeholder="e.g. claude-haiku-4-5-20251001"
+                  placeholder="e.g. provider-model-id"
                   value={modelForm.id}
                   onChange={e => setModelForm(f => ({ ...f, id: e.target.value }))}
                 />
