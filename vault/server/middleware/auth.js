@@ -1,6 +1,7 @@
 'use strict';
 
 const { pool } = require('../db');
+const { FEATURE_ACCESS_DEFAULTS, FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
 
 async function requireAuth(req, res, next) {
   // Skip auth for health check and auth routes
@@ -40,4 +41,35 @@ function requireAdmin(req, res, next) {
   return next();
 }
 
-module.exports = { requireAuth, requireAdmin };
+async function loadFeatureAccess() {
+  const { rows } = await pool.query(
+    "SELECT key, value FROM workspace_settings WHERE key LIKE 'feature_%'"
+  );
+  const out = { ...FEATURE_ACCESS_DEFAULTS };
+  for (const r of rows) {
+    const rawKey = String(r.key || '');
+    const featureKey = rawKey.replace(/^feature_/, '');
+    if (!FEATURE_ACCESS_KEYS.includes(featureKey)) continue;
+    const rawValue = String(r.value || '').trim().toLowerCase();
+    out[featureKey] = rawValue !== 'false' && rawValue !== '0' && rawValue !== 'off';
+  }
+  return out;
+}
+
+function requireFeature(featureKey) {
+  return async function featureGuard(req, res, next) {
+    try {
+      if (!FEATURE_ACCESS_KEYS.includes(featureKey)) return next();
+      if (req.user?.isAdmin) return next();
+      const access = await loadFeatureAccess();
+      if (access[featureKey] === false) {
+        return res.status(403).json({ error: 'Feature disabled for member accounts' });
+      }
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  };
+}
+
+module.exports = { requireAuth, requireAdmin, requireFeature };

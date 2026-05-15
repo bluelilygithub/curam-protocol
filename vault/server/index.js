@@ -56,7 +56,7 @@ app.use('/api/shared', require('./routes/sharedTasks'));
 app.use('/api/gmail', require('./routes/gmail'));
 app.use('/api/calendar', require('./routes/calendar'));
 
-const { requireAuth, requireAdmin } = require('./middleware/auth');
+const { requireAuth, requireAdmin, requireFeature } = require('./middleware/auth');
 app.use('/api', requireAuth);
 
 app.use('/api/user', requireAuth, require('./routes/user'));
@@ -75,25 +75,25 @@ app.use('/api/prompts', require('./routes/prompts'));
 app.use('/api/folders', require('./routes/folders'));
 app.use('/api/personas', require('./routes/personas'));
 app.use('/api/pinned-urls', require('./routes/pinnedUrls'));
-app.use('/api/compare', require('./routes/compare'));
-app.use('/api/debate', require('./routes/debate'));
+app.use('/api/compare', requireFeature('compare'), require('./routes/compare'));
+app.use('/api/debate', requireFeature('debate'), require('./routes/debate'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/admin', requireAdmin, require('./routes/admin'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/task-templates', require('./routes/taskTemplates'));
-app.use('/api/goals', require('./routes/goals'));
-app.use('/api/mission', require('./routes/mission'));
+app.use('/api/goals', requireFeature('goals'), require('./routes/goals'));
+app.use('/api/mission', requireFeature('goals'), require('./routes/mission'));
 app.use('/api/notes', require('./routes/notes'));
 app.use('/api/session-files', require('./routes/sessionFiles'));
-app.use('/api/chains', require('./routes/chains'));
+app.use('/api/chains', requireFeature('chains'), require('./routes/chains'));
 app.use('/api/bookmarks', require('./routes/bookmarks'));
 app.use('/api/backup', require('./routes/backup'));
-app.use('/api/graph',    require('./routes/graph'));
-app.use('/api/finance', require('./routes/finance'));
-app.use('/api/usage', require('./routes/usage'));
-app.use('/api/mood', require('./routes/mood'));
-app.use('/api/clients', require('./routes/clients'));
-app.use('/api/news-digest', require('./routes/newsDigest'));
+app.use('/api/graph', requireFeature('graph'), require('./routes/graph'));
+app.use('/api/finance', requireFeature('finance'), require('./routes/finance'));
+app.use('/api/usage', requireFeature('usage'), require('./routes/usage'));
+app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
+app.use('/api/clients', requireFeature('clients'), require('./routes/clients'));
+app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/newsDigest'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

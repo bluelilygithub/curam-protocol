@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../../utils/mobileConfig';
+import { DEFAULT_FEATURE_ACCESS } from '../../utils/featureAccess';
 
 export default function MobileNavDropdown({ onClose, isAdmin = false }) {
   const location = useLocation();
   const [items, setItems] = useState(null);
+  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const ref = useRef(null);
 
   useEffect(() => {
@@ -21,8 +23,34 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
     });
   }, []);
 
+  useEffect(() => {
+    api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
+      if (data?.flags && typeof data.flags === 'object') {
+        setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
+      }
+    }).catch(() => {});
+  }, []);
+
   const visible = (items ? items : DEFAULT_NAV_ITEMS)
     .filter(i => i.enabled !== false)
+    .filter(i => {
+      if (isAdmin) return true;
+      const featureByNavId = {
+        clients: 'clients',
+        goals: 'goals',
+        chains: 'chains',
+        graph: 'graph',
+        debate: 'debate',
+        compare: 'compare',
+        finance: 'finance',
+        usage: 'usage',
+        mood: 'mood',
+        news: 'newsDigest',
+      };
+      const featureKey = featureByNavId[i.id];
+      if (!featureKey) return true;
+      return featureAccess[featureKey] !== false;
+    })
     .filter(i => (i.id === 'admin' ? isAdmin : true));
 
   return (

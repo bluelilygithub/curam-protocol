@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { FEATURE_ACCESS_DEFAULTS, FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
 
 // GET /api/settings
 router.get('/', async (req, res) => {
@@ -28,6 +29,47 @@ router.post('/', async (req, res) => {
       await pool.query(
         'INSERT INTO settings ("userId", key, value) VALUES ($1, $2, $3) ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value',
         [req.user.id, key, String(value)]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/feature-access
+router.get('/feature-access', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT key, value FROM workspace_settings WHERE key LIKE 'feature_%'"
+    );
+    const flags = { ...FEATURE_ACCESS_DEFAULTS };
+    rows.forEach((r) => {
+      const featureKey = String(r.key || '').replace(/^feature_/, '');
+      if (!FEATURE_ACCESS_KEYS.includes(featureKey)) return;
+      const rawValue = String(r.value || '').trim().toLowerCase();
+      flags[featureKey] = rawValue !== 'false' && rawValue !== '0' && rawValue !== 'off';
+    });
+    res.json({ flags });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/settings/feature-access  — body: { flags: { finance: true, ... } }
+router.post('/feature-access', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  const flags = req.body?.flags;
+  if (!flags || typeof flags !== 'object') return res.status(400).json({ error: 'flags object required' });
+
+  try {
+    for (const key of FEATURE_ACCESS_KEYS) {
+      if (typeof flags[key] !== 'boolean') continue;
+      await pool.query(
+        `INSERT INTO workspace_settings (key, value, "updatedAt")
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+        [`feature_${key}`, flags[key] ? 'true' : 'false']
       );
     }
     res.json({ ok: true });

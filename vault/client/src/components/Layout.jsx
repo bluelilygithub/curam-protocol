@@ -12,6 +12,7 @@ import InquirySession from './mood/InquirySession';
 import TourButton from './TourButton';
 import Toast from './Toast';
 import useSettingsStore from '../store/settingsStore';
+import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 
 function Layout() {
   const isMobileNow = () => typeof window !== 'undefined' && window.innerWidth < 640;
@@ -35,6 +36,7 @@ function Layout() {
   const [showInquirySession,  setShowInquirySession]  = useState(false);
   const [inquiryReminderSettings, setInquiryReminderSettings] = useState(null);
   const [missionReminderDue,  setMissionReminderDue]  = useState(false);
+  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
 
   useEffect(() => {
     if (sessionStorage.getItem('tasksAlertDismissed')) return;
@@ -64,6 +66,17 @@ function Layout() {
     fetchBookmarkCount();
     window.addEventListener('vault:bookmark-changed', fetchBookmarkCount);
     return () => window.removeEventListener('vault:bookmark-changed', fetchBookmarkCount);
+  }, []);
+
+  useEffect(() => {
+    api.get('/api/settings/feature-access')
+      .then(r => r.json())
+      .then(data => {
+        if (data?.flags && typeof data.flags === 'object') {
+          setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -201,6 +214,11 @@ function Layout() {
     navigate('/login', { replace: true });
   };
 
+  const canUseFeature = (key) => {
+    if (user?.isAdmin) return true;
+    return featureAccess[key] !== false;
+  };
+
   // Sidebar styles differ on mobile (fixed overlay) vs desktop (push)
   const sidebarStyle = isMobile
     ? {
@@ -335,14 +353,16 @@ function Layout() {
             {getIcon('pen-line', { size: 16 })}
           </Link>
 
-          <Link
-            to="/clients"
-            className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
-            style={{ color: location.pathname.startsWith('/clients') ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Clients"
-          >
-            {getIcon('briefcase', { size: 16 })}
-          </Link>
+          {canUseFeature('clients') && (
+            <Link
+              to="/clients"
+              className="w-7 h-7 hidden sm:flex items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname.startsWith('/clients') ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Clients"
+            >
+              {getIcon('briefcase', { size: 16 })}
+            </Link>
+          )}
 
           <Link
             to="/tasks"
@@ -353,17 +373,19 @@ function Layout() {
             {getIcon('list-checks', { size: 16 })}
           </Link>
 
-          <Link
-            to="/goals"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
-            style={{ color: location.pathname === '/goals' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Goals"
-          >
-            {getIcon('target', { size: 16 })}
-            {missionReminderDue && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full" style={{ background: '#f59e0b' }} />
-            )}
-          </Link>
+          {canUseFeature('goals') && (
+            <Link
+              to="/goals"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
+              style={{ color: location.pathname === '/goals' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Goals"
+            >
+              {getIcon('target', { size: 16 })}
+              {missionReminderDue && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full" style={{ background: '#f59e0b' }} />
+              )}
+            </Link>
+          )}
 
           <Link
             to="/history"
@@ -380,77 +402,93 @@ function Layout() {
             )}
           </Link>
 
-<Link
-            to="/chains"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
-            style={{ color: location.pathname === '/chains' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Prompt Chains"
-          >
-            ⛓
-          </Link>
+          {canUseFeature('chains') && (
+            <Link
+              to="/chains"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+              style={{ color: location.pathname === '/chains' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Prompt Chains"
+            >
+              ⛓
+            </Link>
+          )}
 
-          <Link
-            to="/graph"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
-            style={{ color: location.pathname === '/graph' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Knowledge Graph"
-          >
-            {getIcon('share-2', { size: 16 })}
-          </Link>
+          {canUseFeature('graph') && (
+            <Link
+              to="/graph"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname === '/graph' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Knowledge Graph"
+            >
+              {getIcon('share-2', { size: 16 })}
+            </Link>
+          )}
 
-          <Link
-            to="/debate"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
-            style={{ color: location.pathname === '/debate' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Multi-Model Debate"
-          >
-            {getIcon('debate', { size: 16 })}
-          </Link>
+          {canUseFeature('debate') && (
+            <Link
+              to="/debate"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname === '/debate' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Multi-Model Debate"
+            >
+              {getIcon('debate', { size: 16 })}
+            </Link>
+          )}
 
-          <Link
-            to="/compare"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
-            style={{ color: location.pathname === '/compare' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Document Compare"
-          >
-            {getIcon('compare', { size: 16 })}
-          </Link>
+          {canUseFeature('compare') && (
+            <Link
+              to="/compare"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname === '/compare' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Document Compare"
+            >
+              {getIcon('compare', { size: 16 })}
+            </Link>
+          )}
 
-          <Link
-            to="/finance"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
-            style={{ color: location.pathname === '/finance' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Finance"
-          >
-            💰
-          </Link>
+          {canUseFeature('finance') && (
+            <Link
+              to="/finance"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+              style={{ color: location.pathname === '/finance' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Finance"
+            >
+              💰
+            </Link>
+          )}
 
-          <Link
-            to="/usage"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
-            style={{ color: location.pathname === '/usage' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Usage & Cost"
-          >
-            ⚡
-          </Link>
+          {canUseFeature('usage') && (
+            <Link
+              to="/usage"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+              style={{ color: location.pathname === '/usage' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Usage & Cost"
+            >
+              ⚡
+            </Link>
+          )}
 
-          <Link
-            to="/mood"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
-            style={{ color: location.pathname === '/mood' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="Mood"
-          >
-            🫀
-          </Link>
+          {canUseFeature('mood') && (
+            <Link
+              to="/mood"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+              style={{ color: location.pathname === '/mood' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Mood"
+            >
+              🫀
+            </Link>
+          )}
 
-          <Link
-            to="/news-digest"
-            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
-            style={{ color: location.pathname === '/news-digest' ? 'var(--color-primary)' : 'var(--color-muted)' }}
-            title="News Digest"
-          >
-            📰
-          </Link>
+          {canUseFeature('newsDigest') && (
+            <Link
+              to="/news-digest"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+              style={{ color: location.pathname === '/news-digest' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="News Digest"
+            >
+              📰
+            </Link>
+          )}
 
           {user?.isAdmin && (
             <Link

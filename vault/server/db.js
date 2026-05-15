@@ -292,6 +292,14 @@ async function initSchema() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS workspace_settings (
+        key         TEXT PRIMARY KEY,
+        value       TEXT NOT NULL,
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS search_logs (
         id          SERIAL PRIMARY KEY,
         query       TEXT,

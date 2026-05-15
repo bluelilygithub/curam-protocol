@@ -24,6 +24,7 @@ import { startCalendarTour, TOUR_KEY as CALENDAR_TOUR_KEY } from '../utils/tours
 import { startGraphTour, TOUR_KEY as GRAPH_TOUR_KEY } from '../utils/tours/graphTour';
 import ConfirmModal from '../components/ConfirmModal';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
+import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -65,7 +66,7 @@ function SettingsPage() {
   const [newFeedUrl,    setNewFeedUrl]    = useState('');
 
   const BUDGET_PRESETS = [0.10, 0.25, 0.50, 1.00, 5.00];
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const getIcon = useIcon();
 
   const [profileName, setProfileName] = useState('');
@@ -91,13 +92,45 @@ function SettingsPage() {
   const [mobileTiles, setMobileTiles] = useState(() => DEFAULT_TILES.map(t => ({ ...t })));
   const [mobileNavItems, setMobileNavItems] = useState(() => DEFAULT_NAV_ITEMS.map(i => ({ ...i })));
   const [mobileSaved, setMobileSaved] = useState(false);
+  const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const [featureAccessSaved, setFeatureAccessSaved] = useState(false);
 
-  const TABS = ['Appearance', 'Profile', 'AI & Chat', 'Tasks', 'Goals', 'Integrations', 'News Digest', 'Mobile', 'Tours'];
+  const TABS = [
+    'Appearance',
+    'Profile',
+    'AI & Chat',
+    'Tasks',
+    'Goals',
+    'Integrations',
+    'News Digest',
+    'Mobile',
+    ...(user?.isAdmin ? ['Feature Access'] : []),
+    'Tours',
+  ];
 
   function selectTab(t) {
     setTab(t);
     localStorage.setItem('settingsTab', t);
   }
+
+  useEffect(() => {
+    const allowedTabs = [
+      'Appearance',
+      'Profile',
+      'AI & Chat',
+      'Tasks',
+      'Goals',
+      'Integrations',
+      'News Digest',
+      'Mobile',
+      ...(user?.isAdmin ? ['Feature Access'] : []),
+      'Tours',
+    ];
+    if (!allowedTabs.includes(tab)) {
+      setTab('Appearance');
+      localStorage.setItem('settingsTab', 'Appearance');
+    }
+  }, [tab, user?.isAdmin]);
 
   useEffect(() => {
     api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
@@ -142,6 +175,12 @@ function SettingsPage() {
       if (data.time)    setDigestTime(data.time);
       if (data.days)    setDigestDays(data.days);
       if (data.sources) setDigestSources(data.sources);
+    }).catch(() => {});
+
+    api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
+      if (data?.flags && typeof data.flags === 'object') {
+        setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
+      }
     }).catch(() => {});
   }, []);
 
@@ -1743,6 +1782,58 @@ function SettingsPage() {
           {mobileSaved ? 'Saved ✓' : 'Save Mobile Settings'}
         </button>
       </>
+      )}
+
+      {/* Feature Access tab */}
+      {tab === 'Feature Access' && user?.isAdmin && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Member Feature Access
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Toggle features for all non-admin member accounts. Admins always retain access.
+        </p>
+
+        <div className="space-y-2">
+          {FEATURE_ACCESS_OPTIONS.map((opt) => {
+            const enabled = featureAccess[opt.key] !== false;
+            return (
+              <div
+                key={opt.key}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl border"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', opacity: enabled ? 1 : 0.55 }}
+              >
+                <span className="flex-1 text-sm" style={{ color: 'var(--color-text)' }}>
+                  {opt.label}
+                </span>
+                <button
+                  onClick={() => setFeatureAccess((prev) => ({ ...prev, [opt.key]: !enabled }))}
+                  className="text-xs px-3 py-1 rounded-lg border font-medium transition-all hover:opacity-80"
+                  style={{
+                    borderColor: enabled ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: enabled ? 'var(--color-primary)' : 'var(--color-muted)',
+                    background: 'transparent',
+                  }}
+                >
+                  {enabled ? 'On' : 'Off'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={async () => {
+            await api.post('/api/settings/feature-access', { flags: featureAccess }).catch(() => {});
+            setFeatureAccessSaved(true);
+            setTimeout(() => setFeatureAccessSaved(false), 2000);
+          }}
+          className="mt-4 px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+          style={{ background: featureAccessSaved ? '#22c55e' : 'var(--color-primary)' }}
+        >
+          {featureAccessSaved ? 'Saved ✓' : 'Save Feature Access'}
+        </button>
+      </section>
       )}
 
       </div>{/* end space-y-10 content area */}
