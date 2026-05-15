@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MODELS, PROJECT_TYPES, TYPE_FIELDS } from '../utils/models';
 import api from '../utils/apiClient';
+import useAuthStore from '../store/authStore';
 
 function buildDefaultTypeConfig(typeId) {
   const fields = TYPE_FIELDS[typeId];
@@ -9,6 +10,8 @@ function buildDefaultTypeConfig(typeId) {
 }
 
 function NewProjectModal({ onClose, onCreate }) {
+  const { user } = useAuthStore();
+  const isAdmin = !!user?.isAdmin;
   const [name, setName] = useState('');
   const [selectedType, setSelectedType] = useState(() => PROJECT_TYPES.find(t => t.id === 'research') || null);
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
@@ -38,7 +41,7 @@ function NewProjectModal({ onClose, onCreate }) {
 
   const handleTypeSelect = (type) => {
     setSelectedType(type);
-    if (availableModels.find(m => m.id === type.model)) setSelectedModel(type.model);
+    if (isAdmin && availableModels.find(m => m.id === type.model)) setSelectedModel(type.model);
     setTypeConfig(buildDefaultTypeConfig(type.id));
   };
 
@@ -49,7 +52,7 @@ function NewProjectModal({ onClose, onCreate }) {
     try {
       await onCreate({
         name: name.trim(),
-        model: selectedModel,
+        ...(isAdmin ? { model: selectedModel } : {}),
         projectType: selectedType?.id || null,
         typeConfig: selectedType ? typeConfig : null,
         clientId: clientId ? Number(clientId) : null,
@@ -76,7 +79,9 @@ function NewProjectModal({ onClose, onCreate }) {
         <div className="px-6 pt-6 pb-4">
           <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>New Project</h2>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Choose a type so we can recommend the right AI model.
+            {isAdmin
+              ? 'Choose a type so we can recommend the right AI model.'
+              : 'Choose a type to shape project behavior. AI model is managed by your admin.'}
           </p>
         </div>
 
@@ -184,7 +189,8 @@ function NewProjectModal({ onClose, onCreate }) {
               </div>
             )}
 
-            {/* Model selector */}
+            {/* Model selector (admin only) */}
+            {isAdmin && (
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
@@ -230,6 +236,7 @@ function NewProjectModal({ onClose, onCreate }) {
                 </p>
               )}
             </div>
+            )}
           </div>
 
           {/* Footer */}

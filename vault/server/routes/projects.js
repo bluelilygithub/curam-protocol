@@ -67,13 +67,14 @@ router.post('/', async (req, res) => {
   if (!name) return res.status(400).json({ error: 'name is required' });
 
   const { standard: standardModel } = await getModelsForUser(req.user?.id);
+  const projectModel = req.user?.isAdmin ? (model || standardModel) : standardModel;
 
   try {
     const { rows } = await pool.query(
       `INSERT INTO projects (name, goal, problem, audience, "techStack", constraints, "successCriteria", tone, notes, model, "projectType", "typeConfig", "clientId", "startDate", "targetEndDate", "userId")
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
       [name, goal || '', problem || '', audience || '', techStack || '', constraints || '',
-       successCriteria || '', tone || '', notes || '', model || standardModel,
+       successCriteria || '', tone || '', notes || '', projectModel,
        projectType || null, typeConfig ? JSON.stringify(typeConfig) : null, clientId || null,
        startDate || null, targetEndDate || null, req.user.id]
     );
@@ -144,6 +145,10 @@ router.put('/:id', async (req, res) => {
     if (!existing[0]) return res.status(404).json({ error: 'Not found' });
     const p = existing[0];
 
+    const resolvedModel = req.user?.isAdmin
+      ? (model ?? p.model ?? standardModel)
+      : standardModel;
+
     await pool.query(
       `UPDATE projects SET
         name=$1, goal=$2, problem=$3, audience=$4, "techStack"=$5, constraints=$6,
@@ -160,7 +165,7 @@ router.put('/:id', async (req, res) => {
         successCriteria ?? p.successCriteria,
         tone ?? p.tone,
         notes ?? p.notes,
-        model ?? p.model ?? standardModel,
+        resolvedModel,
         projectType ?? p.projectType ?? null,
         typeConfig !== undefined ? JSON.stringify(typeConfig) : (p.typeConfig ?? null),
         folderId !== undefined ? folderId : p.folderId,
