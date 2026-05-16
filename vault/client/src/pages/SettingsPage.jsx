@@ -25,6 +25,7 @@ import { startGraphTour, TOUR_KEY as GRAPH_TOUR_KEY } from '../utils/tours/graph
 import ConfirmModal from '../components/ConfirmModal';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
 import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
+import UsersAdminPanel from '../components/UsersAdminPanel';
 
 function SettingsPage() {
   const navigate = useNavigate();
@@ -105,6 +106,7 @@ function SettingsPage() {
         'Integrations',
         'News Digest',
         'Mobile',
+        'Members',
         'Feature Access',
         'Tours',
       ]
@@ -126,6 +128,7 @@ function SettingsPage() {
           'Integrations',
           'News Digest',
           'Mobile',
+          'Members',
           'Feature Access',
           'Tours',
         ]
@@ -286,7 +289,7 @@ function SettingsPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className={(tab === 'Members' && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
       <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
         Settings
       </h1>
@@ -1786,6 +1789,13 @@ function SettingsPage() {
           {mobileSaved ? 'Saved ✓' : 'Save Mobile Settings'}
         </button>
       </>
+      )}
+
+      {/* Members (admin) */}
+      {tab === 'Members' && user?.isAdmin && (
+      <section>
+        <UsersAdminPanel />
+      </section>
       )}
 
       {/* Feature Access tab */}
