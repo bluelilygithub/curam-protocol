@@ -413,6 +413,37 @@ async function buildMessageContent(text, attachmentIds, urlAttachments, inlineIm
   return blocks;
 }
 
+const MAX_URL_TEXT_PERSIST = 120000;
+
+/** Prepend fetched URL text so DB-stored user rows replay context (aligned with buildMessageContent labels). */
+function prependUrlAttachmentsPlainText(text, urlAttachments) {
+  if (!urlAttachments || !urlAttachments.length) return text;
+  const parts = [];
+  let total = 0;
+  for (const ua of urlAttachments) {
+    const raw = typeof ua.content === 'string' ? ua.content.trim() : '';
+    if (!raw) continue;
+    const label = ua.url?.startsWith('gmail://') ? 'Email thread' : 'Web page';
+    let body = raw;
+    if (total + body.length > MAX_URL_TEXT_PERSIST) {
+      body = `${body.slice(0, Math.max(0, MAX_URL_TEXT_PERSIST - total))}\n\n[URL content truncated for storage]`;
+    }
+    total += body.length;
+    parts.push(`[${label}: ${ua.title || ua.url}]\n\n${body}`);
+    if (total >= MAX_URL_TEXT_PERSIST) break;
+  }
+  if (!parts.length) return text;
+  return `${parts.join('\n\n---\n\n')}\n\n---\n\n${text}`;
+}
+
+function findLastUserIndex(messages) {
+  if (!Array.isArray(messages)) return -1;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role === 'user') return i;
+  }
+  return -1;
+}
+
 function classifyStreamError(err) {
   const msg = err.message || '';
   const status = err.status || err.statusCode || 0;
@@ -559,7 +590,8 @@ router.post('/', chatLimiter, async (req, res) => {
       postSummaryMsgs = rows;
     }
 
-    const lastUserMsg = messages[messages.length - 1];
+    const lastUserIdx = findLastUserIndex(messages);
+    const lastUserMsg = lastUserIdx >= 0 ? messages[lastUserIdx] : null;
     apiMessages = [
       { role: 'user', content: `[Summary of previous conversation]\n\n${sessionMeta.summaryContent}` },
       { role: 'assistant', content: 'OK.' },
@@ -571,9 +603,9 @@ router.post('/', chatLimiter, async (req, res) => {
       apiMessages.push({ role: lastUserMsg.role, content: lastUserMsg.content });
     }
   } else {
+    const lastUserIdx = findLastUserIndex(messages);
     apiMessages = await Promise.all(messages.map(async (m, i) => {
-      const isLast = i === messages.length - 1;
-      if (isLast && m.role === 'user' && (attachmentIds?.length || urlAttachments?.length || inlineImages?.length)) {
+      if (i === lastUserIdx && m.role === 'user' && (attachmentIds?.length || urlAttachments?.length || inlineImages?.length)) {
         return { role: 'user', content: await buildMessageContent(m.content, attachmentIds, urlAttachments, inlineImages) };
       }
       return { role: m.role, content: m.content };
@@ -779,9 +811,13 @@ router.post('/', chatLimiter, async (req, res) => {
     // Persist messages — wrapped separately so errors don't write to ended response
     try {
       if (messages.length > 0) {
-        const lastUser = messages[messages.length - 1];
-        if (lastUser.role === 'user') {
+        const lastUserIdx = findLastUserIndex(messages);
+        const lastUser = lastUserIdx >= 0 ? messages[lastUserIdx] : null;
+        if (lastUser && lastUser.role === 'user') {
           let storedContent = lastUser.content;
+          if (urlAttachments?.length) {
+            storedContent = prependUrlAttachmentsPlainText(storedContent, urlAttachments);
+          }
           if (attachmentIds?.length) {
             const names = await Promise.all(attachmentIds.map(async id => {
               const { rows } = await pool.query('SELECT name FROM files WHERE id=$1', [id]);
