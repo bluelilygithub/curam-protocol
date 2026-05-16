@@ -1,11 +1,16 @@
 'use strict';
 
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const multer = require('multer');
 const router = express.Router();
 const { pool } = require('../db');
 const sendEmail = require('../utils/sendEmail');
 const { FEATURE_ACCESS_DEFAULTS } = require('../config/featureAccess');
 const { buildStudyDeckPdfBuffer } = require('../services/studyDeckPdf');
+const { extractStudyUploadFromPath, isCodeFile } = require('../services/studyUploadExtract');
 
 async function canAccessStudentWorkspaceFeature(user) {
   if (user?.isAdmin) return true;
@@ -21,6 +26,23 @@ router.use(async (req, res, next) => {
     return res.status(403).json({ error: 'Student feature is disabled for this workspace.' });
   }
   next();
+});
+
+const studyTmpDir = path.join(os.tmpdir(), 'vault-student-study-tmp');
+const studyUploadMulter = multer({
+  dest: studyTmpDir,
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const nameLower = file.originalname.toLowerCase();
+    if (ext === '.env' || nameLower === '.env' || nameLower.endsWith('/.env')) {
+      return cb(new Error('File type not accepted'));
+    }
+    if (isCodeFile(file.originalname)) return cb(null, true);
+    const okExt = ['.pdf', '.txt', '.md', '.json', '.csv', '.xlsx', '.xls', '.docx', '.doc', '.ods', '.odt'].includes(ext);
+    if (okExt) return cb(null, true);
+    return cb(new Error('File type not accepted'));
+  },
 });
 
 function escapeHtml(str) {
@@ -91,13 +113,79 @@ function buildDeckEmailHtml(title, payload) {
 router.get('/', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, title, kind, "sessionId", "createdAt", "updatedAt"
-       FROM study_decks WHERE "userId"=$1 ORDER BY "updatedAt" DESC LIMIT 200`,
+      `SELECT id, title, kind, "sessionId", "createdAt", "updatedAt", "listOrder"
+       FROM study_decks WHERE "userId"=$1
+       ORDER BY "listOrder" ASC, "updatedAt" DESC
+       LIMIT 200`,
       [req.user.id]
     );
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/extract-file', (req, res, next) => {
+  try {
+    fs.mkdirSync(studyTmpDir, { recursive: true });
+  } catch { /* ignore */ }
+  studyUploadMulter.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Upload failed' });
+    next();
+  });
+}, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const fp = req.file.path;
+  try {
+    const { extractedText, name } = await extractStudyUploadFromPath(
+      fp,
+      req.file.originalname,
+      req.file.mimetype
+    );
+    res.json({ name, extractedText });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Extraction failed' });
+  } finally {
+    try {
+      fs.unlinkSync(fp);
+    } catch { /* ignore */ }
+  }
+});
+
+router.post('/reorder', async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids array required' });
+  }
+  const numeric = ids.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
+  if (numeric.length !== ids.length) return res.status(400).json({ error: 'invalid ids' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: cnt } = await client.query(
+      `SELECT COUNT(*)::int AS n FROM study_decks WHERE "userId"=$1 AND id = ANY($2::int[])`,
+      [req.user.id, numeric]
+    );
+    if (Number(cnt[0]?.n) !== numeric.length) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Invalid deck id' });
+    }
+    await client.query(
+      `UPDATE study_decks d
+       SET "listOrder" = u.ord - 1, "updatedAt" = NOW()
+       FROM unnest($2::int[]) WITH ORDINALITY AS u(id, ord)
+       WHERE d.id = u.id AND d."userId" = $1`,
+      [req.user.id, numeric]
+    );
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    try {
+      await client.query('ROLLBACK');
+    } catch { /* ignore */ }
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
   }
 });
 
@@ -108,10 +196,15 @@ router.post('/', async (req, res) => {
     const k = kind && String(kind).trim() ? String(kind).trim().slice(0, 40) : 'mixed';
     const t = title != null ? String(title).slice(0, 500) : '';
     const sid = sessionId && String(sessionId).trim() ? String(sessionId).trim().slice(0, 200) : null;
+    const { rows: mx } = await pool.query(
+      `SELECT COALESCE(MAX("listOrder"), -1) + 1 AS n FROM study_decks WHERE "userId"=$1`,
+      [req.user.id]
+    );
+    const listOrder = Number(mx[0]?.n) || 0;
     const { rows } = await pool.query(
-      `INSERT INTO study_decks ("userId", title, kind, payload, "sessionId")
-       VALUES ($1,$2,$3,$4::jsonb,$5) RETURNING *`,
-      [req.user.id, t, k, JSON.stringify(payload), sid]
+      `INSERT INTO study_decks ("userId", title, kind, payload, "sessionId", "listOrder")
+       VALUES ($1,$2,$3,$4::jsonb,$5,$6) RETURNING *`,
+      [req.user.id, t, k, JSON.stringify(payload), sid, listOrder]
     );
     res.json(rows[0]);
   } catch (err) {

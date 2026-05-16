@@ -4,6 +4,7 @@ import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import useToastStore from '../store/toastStore';
 
 export default function StudentSavedDecksPage() {
   const { user } = useAuthStore();
@@ -15,6 +16,7 @@ export default function StudentSavedDecksPage() {
   const [rows, setRows] = useState([]);
   const [load, setLoad] = useState(true);
   const [deleteId, setDeleteId] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -44,6 +46,49 @@ export default function StudentSavedDecksPage() {
     if (!canUseStudent) return;
     refresh();
   }, [canUseStudent, refresh]);
+
+  const persistOrder = useCallback(async (ordered) => {
+    try {
+      const res = await api.post('/api/study-decks/reorder', { ids: ordered.map((r) => r.id) });
+      if (!res.ok) throw new Error('reorder failed');
+    } catch {
+      useToastStore.getState().addToast('Could not save order', 'error');
+      refresh();
+    }
+  }, [refresh]);
+
+  const onDragStart = useCallback((e, id) => {
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(id));
+  }, []);
+
+  const onDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback((e, targetId) => {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData('text/plain');
+    const fromId = Number(raw);
+    setDraggingId(null);
+    if (!Number.isFinite(fromId) || fromId <= 0 || fromId === targetId) return;
+    setRows((prev) => {
+      const fromIx = prev.findIndex((r) => r.id === fromId);
+      const toIx = prev.findIndex((r) => r.id === targetId);
+      if (fromIx === -1 || toIx === -1) return prev;
+      const next = [...prev];
+      const [removed] = next.splice(fromIx, 1);
+      next.splice(toIx, 0, removed);
+      persistOrder(next);
+      return next;
+    });
+  }, [persistOrder]);
+
+  const onDragEnd = useCallback(() => {
+    setDraggingId(null);
+  }, []);
 
   if (!canUseStudent) {
     return (
@@ -81,7 +126,7 @@ export default function StudentSavedDecksPage() {
           </Link>
         </div>
         <p className="text-sm mb-6" style={{ color: 'var(--color-muted)' }}>
-          Bookmark this page to return to your saved sets. Open a deck in Cards to study, export PDF, or email.
+          Bookmark this page to return to your saved sets. Drag the handle to reorder. Open a deck in Cards to study, export PDF, or email.
         </p>
         {load ? (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>
@@ -92,9 +137,27 @@ export default function StudentSavedDecksPage() {
             {rows.map((row) => (
               <li
                 key={row.id}
-                className="rounded-xl border px-4 py-3 flex flex-wrap items-center gap-3 transition-opacity hover:opacity-90"
-                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                draggable
+                onDragStart={(e) => onDragStart(e, row.id)}
+                onDragOver={onDragOver}
+                onDrop={(e) => onDrop(e, row.id)}
+                onDragEnd={onDragEnd}
+                className="rounded-xl border px-2 py-2 sm:px-4 sm:py-3 flex flex-wrap items-center gap-2 sm:gap-3 transition-opacity hover:opacity-95"
+                style={{
+                  borderColor: 'var(--color-border)',
+                  background: 'var(--color-surface)',
+                  opacity: draggingId === row.id ? 0.55 : 1,
+                  cursor: 'grab',
+                }}
               >
+                <span
+                  className="flex-shrink-0 px-1 cursor-grab active:cursor-grabbing"
+                  style={{ color: 'var(--color-muted)' }}
+                  title="Drag to reorder"
+                  aria-hidden
+                >
+                  {getIcon('grip-vertical', { size: 16 })}
+                </span>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>{row.title || 'Untitled deck'}</div>
                   <div className="text-[10px] mt-1 uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
@@ -102,7 +165,7 @@ export default function StudentSavedDecksPage() {
                     {row.updatedAt ? ` · ${new Date(row.updatedAt).toLocaleDateString()}` : ''}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end">
                   <button
                     type="button"
                     onClick={() => navigate(`/student/cards?deck=${row.id}`)}

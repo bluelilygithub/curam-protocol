@@ -36,13 +36,16 @@ export const mdComponents = {
       </code>
     );
   },
-  p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
-  ul: ({ children }) => <ul className="mb-3 pl-4 space-y-1">{children}</ul>,
-  ol: ({ children }) => <ol className="mb-3 pl-4 space-y-1">{children}</ol>,
-  li: ({ children }) => <li className="list-disc">{children}</li>,
-  h1: ({ children }) => <h1 className="text-base font-semibold mt-4 mb-2">{children}</h1>,
-  h2: ({ children }) => <h2 className="text-sm font-semibold mt-3 mb-1.5">{children}</h2>,
-  h3: ({ children }) => <h3 className="text-sm font-medium mt-2 mb-1">{children}</h3>,
+  p: ({ children }) => <p className="mb-3.5 last:mb-0 leading-relaxed">{children}</p>,
+  ul: ({ children }) => <ul className="mb-4 pl-5 space-y-1.5 list-disc">{children}</ul>,
+  ol: ({ children }) => <ol className="mb-4 pl-5 space-y-1.5 list-decimal">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  h1: ({ children }) => <h1 className="text-lg font-semibold mt-6 mb-3 first:mt-0" style={{ color: 'var(--color-text)' }}>{children}</h1>,
+  h2: ({ children }) => <h2 className="text-base font-semibold mt-5 mb-2.5 first:mt-0" style={{ color: 'var(--color-text)' }}>{children}</h2>,
+  h3: ({ children }) => <h3 className="text-sm font-semibold mt-4 mb-2 first:mt-0" style={{ color: 'var(--color-text)' }}>{children}</h3>,
+  strong: ({ children }) => <strong className="font-semibold" style={{ color: 'var(--color-text)' }}>{children}</strong>,
+  em: ({ children }) => <em className="italic" style={{ color: 'var(--color-text)' }}>{children}</em>,
+  hr: () => <hr className="my-6 border-0 border-t" style={{ borderColor: 'var(--color-border)' }} />,
   table: ({ children }) => (
     <div style={{ overflowX: 'auto', margin: '0.75em 0' }}>
       <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '0.875em' }}>

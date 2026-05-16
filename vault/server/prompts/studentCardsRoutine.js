@@ -30,8 +30,8 @@ If instead the student has not provided structured answers yet, ask these **one 
 
 1. "Are you working from a TOPIC you want to explore, or do you have a DOCUMENT to upload?"
 
-2. If TOPIC → "What is the topic? Give me as much or as little detail as you like."
-   If DOCUMENT → "Please paste or upload your document now."
+2. If TOPIC → "What is the topic? Give me as much or as little detail as you like, or add a reference URL in the app."
+   If DOCUMENT → "Use Upload file, Add URL, and/or optional notes in the app — you do not have to paste the full document in chat."
 
 3. "What is your current level of familiarity with this subject?"
    [Options: Beginner / Some background / Fairly confident / Just need a quick review]

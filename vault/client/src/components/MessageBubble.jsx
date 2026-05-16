@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { useIcon } from '../providers/IconProvider';
 import { downloadResponseMd } from '../utils/exportMd';
 import { mdComponents } from '../utils/mdComponents';
@@ -19,7 +20,7 @@ function parseFilesPrefix(content) {
 const COLLAPSE_CHAR_THRESHOLD = 2500;
 const COLLAPSED_HEIGHT = 220; // px
 
-function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isPaused, onSpeak, onPause, onResume, onStop }) {
+function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isPaused, onSpeak, onPause, onResume, onStop, markdownVariant = 'default' }) {
   const isUser = message.role === 'user';
   const [showThinking, setShowThinking] = useState(false);
   const getIcon = useIcon();
@@ -38,6 +39,14 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
   // null = use default (collapse non-latest long messages); true/false = explicit user toggle
   const [userCollapsed, setUserCollapsed] = useState(null);
   const collapsed = canCollapse && (userCollapsed !== null ? userCollapsed : !isLatest);
+
+  const remarkPlugins = useMemo(
+    () => (markdownVariant === 'comfortable' ? [remarkGfm, remarkBreaks] : [remarkGfm]),
+    [markdownVariant]
+  );
+  const proseWrapClass = markdownVariant === 'comfortable'
+    ? 'prose prose-base max-w-none text-[15px] leading-relaxed'
+    : 'prose prose-sm max-w-none text-sm leading-relaxed';
 
   if (isUser) {
     // Live attachments (current session) take priority; fall back to parsing history text
@@ -208,14 +217,14 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
           <div data-message-content>
             <div className="relative">
               <div
-                className="prose prose-sm max-w-none text-sm leading-relaxed"
+                className={proseWrapClass}
                 style={{
                   color: 'var(--color-text)',
                   ...(collapsed ? { maxHeight: `${COLLAPSED_HEIGHT}px`, overflow: 'hidden' } : {}),
                 }}
               >
                 <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
+                  remarkPlugins={remarkPlugins}
                   components={mdComponents}
                 >
                   {message.content}

@@ -6,6 +6,7 @@ import EmailModal from '../components/EmailModal';
 import { useChat } from '../hooks/useChat';
 import { useModels } from '../hooks/useModels';
 import { useVoice } from '../hooks/useVoice';
+import { useUrlAttachment } from '../hooks/useUrlAttachment';
 import useAuthStore from '../store/authStore';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
@@ -60,20 +61,25 @@ function parseRequestedFlashcardCount(setup) {
   return Math.min(100, n);
 }
 
-function buildStudyBootstrap(setup, deckTitle) {
+function buildStudyBootstrap(setup, deckTitle, { hasUrlAttachments = false } = {}) {
   const src = setup.source === 'topic' ? 'TOPIC' : setup.source === 'document' ? 'DOCUMENT' : '';
-  const heading = setup.source === 'topic' ? 'Topic / focus' : 'Document (pasted below)';
+  const heading = setup.source === 'topic' ? 'Topic / focus' : 'Document';
   const countLine = (setup.count && setup.count.trim()) ? setup.count.trim() : 'you decide';
   const titleBlock = (deckTitle && deckTitle.trim()) ? `Deck title: ${deckTitle.trim()}\n\n` : '';
   const nCards = parseRequestedFlashcardCount(setup);
   const exactFlash = (setup.goal === 'flashcards' || setup.goal === 'both') && nCards
     ? `\n\nImportant: I want exactly ${nCards} flashcards. Put all ${nCards} in one \`vault-deck\` JSON snapshot (flashcards array length = ${nCards}) in your first substantive reply that includes cards. If you truly cannot, say why and give the closest you can.`
     : '';
+  const detailTrim = (setup.detail || '').trim();
+  const block2 = detailTrim
+    ? `${heading}:\n${detailTrim}`
+    : (hasUrlAttachments
+      ? `${heading}:\n(Web page content is attached to this message — use it as the primary source.)`
+      : `${heading}:\n`);
   return `${titleBlock}I've completed the setup cards. Use my answers below — do not repeat onboarding questions I already answered; continue from the appropriate point in your flow.
 
 1. Source: ${src}
-2. ${heading}:
-${setup.detail.trim()}
+2. ${block2}
 
 3. Familiarity: ${famLabel(setup.familiarity)}
 4. Today I want: ${goalLabel(setup.goal)}
@@ -96,7 +102,7 @@ function buildSetupSummaryItems(setup, { includeCountIfEmpty = false } = {}) {
     items.push({
       key: 'source',
       q: 'Working from',
-      a: setup.source === 'topic' ? 'A topic to explore' : 'A document (pasted text)',
+      a: setup.source === 'topic' ? 'A topic to explore' : 'A document, file, or link',
     });
   }
   const d = (setup.detail || '').trim();
@@ -124,7 +130,7 @@ function buildSetupSummaryItems(setup, { includeCountIfEmpty = false } = {}) {
 function wizardProgressItems(setup, setupStep) {
   const items = [];
   if (setupStep >= 1 && setup.source) {
-    items.push({ key: 'source', q: 'Working from', a: setup.source === 'topic' ? 'Topic' : 'Document' });
+    items.push({ key: 'source', q: 'Working from', a: setup.source === 'topic' ? 'Topic' : 'Document / link' });
   }
   if (setupStep >= 2 && (setup.detail || '').trim()) {
     items.push({
@@ -190,6 +196,17 @@ export default function StudentCardsChatPage() {
   });
 
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking, isSpeaking, isPaused } = useVoice();
+
+  const {
+    urlAttachments: setupUrlAttachments,
+    addUrl: addSetupUrl,
+    remove: removeSetupUrl,
+    clear: clearSetupUrls,
+  } = useUrlAttachment();
+
+  const [studyExtractBusy, setStudyExtractBusy] = useState(false);
+  const [studyExtractErr, setStudyExtractErr] = useState('');
+  const [setupUrlDraft, setSetupUrlDraft] = useState('');
 
   const [phase, setPhase] = useState('setup');
   const [setupStep, setSetupStep] = useState(0);
@@ -352,7 +369,10 @@ export default function StudentCardsChatPage() {
     setSavedSetup(null);
     setDeckTitle('');
     setSavedDeckId(null);
-  }, []);
+    clearSetupUrls();
+    setStudyExtractErr('');
+    setSetupUrlDraft('');
+  }, [clearSetupUrls]);
 
   const handleEditSetup = useCallback(() => {
     if (isListening) stopListening();
@@ -421,21 +441,55 @@ export default function StudentCardsChatPage() {
   }, [parsedDeck, deckHasPersistableContent, deckSaveBusy, phase, deckTitle, sessionId, savedDeckId, handleDeckSaved]);
 
   const canAdvanceFromStep = useCallback(() => {
+    const setupUrlsReady = setupUrlAttachments.some((u) => u.status === 'ready' && (u.content || '').trim());
     if (setupStep === 0) return !!setup.source;
-    if (setupStep === 1) return setup.detail.trim().length > 0;
+    if (setupStep === 1) return setup.detail.trim().length > 0 || setupUrlsReady;
     if (setupStep === 2) return !!setup.familiarity;
     if (setupStep === 3) return !!setup.goal;
     return true;
-  }, [setupStep, setup]);
+  }, [setupStep, setup, setupUrlAttachments]);
 
   const handleBeginStudySession = useCallback(async () => {
-    if (!setup.source || !setup.detail.trim() || !setup.familiarity || !setup.goal || isStreaming) return;
+    const setupUrlsReady = setupUrlAttachments.some((u) => u.status === 'ready' && (u.content || '').trim());
+    if (!setup.source || (!setup.detail.trim() && !setupUrlsReady) || !setup.familiarity || !setup.goal || isStreaming) return;
     setSavedSetup({ ...setup });
     setSavedDeckId(null);
-    const text = buildStudyBootstrap(setup, deckTitle);
+    const readyUrlPayload = setupUrlAttachments
+      .filter((u) => u.status === 'ready' && (u.content || '').trim())
+      .map((u) => ({ url: u.url, title: u.title || u.url, content: u.content }));
+    const hasUrlAttachments = readyUrlPayload.length > 0;
+    const text = buildStudyBootstrap(setup, deckTitle, { hasUrlAttachments });
     setPhase('chat');
-    await sendMessage(text, [], [], effectiveModel, [], temperature, null, false, [], false);
-  }, [setup, deckTitle, isStreaming, sendMessage, effectiveModel, temperature]);
+    await sendMessage(text, [], [], effectiveModel, readyUrlPayload, temperature, null, false, [], false);
+  }, [setup, deckTitle, isStreaming, sendMessage, effectiveModel, temperature, setupUrlAttachments]);
+
+  const handleStudyFileChange = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setStudyExtractBusy(true);
+    setStudyExtractErr('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await api.postForm('/api/study-decks/extract-file', fd);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not read file');
+      const text = (data.extractedText || '').trim();
+      if (!text) throw new Error('No text could be extracted from this file.');
+      const label = data.name || file.name;
+      setSetup((s) => ({
+        ...s,
+        detail: s.detail.trim()
+          ? `${s.detail.trim()}\n\n--- From file: ${label} ---\n${text}`
+          : text,
+      }));
+    } catch (err) {
+      setStudyExtractErr(err.message || 'Upload failed');
+    } finally {
+      setStudyExtractBusy(false);
+    }
+  }, []);
 
   if (!canUseStudent) {
     return (
@@ -533,7 +587,7 @@ export default function StudentCardsChatPage() {
                   className="p-4 rounded-xl border text-left text-sm font-medium transition-opacity hover:opacity-80 shadow-sm"
                   style={choiceCardStyle(setup.source === 'document')}
                 >
-                  A document (paste)
+                  A document, file, or link
                 </button>
               </div>
             </>
@@ -542,18 +596,117 @@ export default function StudentCardsChatPage() {
           {setupStep === 1 && (
             <>
               <h2 className="text-base font-semibold mb-2" style={{ color: 'var(--color-text)' }}>
-                {setup.source === 'topic' ? 'What is the topic?' : 'Paste your document'}
+                {setup.source === 'topic' ? 'What is the topic?' : 'Add your source material'}
               </h2>
               <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
                 {setup.source === 'topic'
-                  ? 'Give as much or as little detail as you like.'
-                  : 'Paste the full text here, or the longest excerpt you have.'}
+                  ? 'Describe the topic, or attach a reference URL below. You can combine both.'
+                  : 'Upload a file (PDF, Word, text, etc.), embed a web page URL, and/or add optional notes in the box — no need to paste the full document if you upload or link it.'}
               </p>
+
+              {setup.source === 'document' && (
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+                      Upload file
+                    </label>
+                    <input
+                      type="file"
+                      accept=".pdf,.txt,.md,.json,.csv,.doc,.docx,.xls,.xlsx,.ods,.odt,.js,.jsx,.ts,.tsx,.py,.html,.css,.sql,.sh"
+                      disabled={studyExtractBusy}
+                      onChange={handleStudyFileChange}
+                      className="block w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:cursor-pointer"
+                      style={{ color: 'var(--color-text)' }}
+                    />
+                    {studyExtractBusy && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Extracting text from file…</p>
+                    )}
+                    {studyExtractErr && (
+                      <p className="text-xs mt-1" style={{ color: '#ef4444' }}>{studyExtractErr}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+                      Web page URL
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        type="url"
+                        value={setupUrlDraft}
+                        onChange={(e) => setSetupUrlDraft(e.target.value)}
+                        placeholder="https://…"
+                        className="flex-1 min-w-[160px] text-sm px-3 py-2 rounded-xl border outline-none"
+                        style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { if (setupUrlDraft.trim()) { addSetupUrl(setupUrlDraft); setSetupUrlDraft(''); } }}
+                        className="text-xs px-3 py-2 rounded-lg border transition-opacity hover:opacity-70"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+                      >
+                        Add URL
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {setup.source === 'topic' && (
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+                      Reference URL (optional)
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        type="url"
+                        value={setupUrlDraft}
+                        onChange={(e) => setSetupUrlDraft(e.target.value)}
+                        placeholder="https://…"
+                        className="flex-1 min-w-[160px] text-sm px-3 py-2 rounded-xl border outline-none"
+                        style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { if (setupUrlDraft.trim()) { addSetupUrl(setupUrlDraft); setSetupUrlDraft(''); } }}
+                        className="text-xs px-3 py-2 rounded-lg border transition-opacity hover:opacity-70"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+                      >
+                        Add URL
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {setupUrlAttachments.length > 0 && (
+                <ul className="mb-3 space-y-1.5">
+                  {setupUrlAttachments.map((u) => (
+                    <li
+                      key={u.url}
+                      className="flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg border"
+                      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                    >
+                      <span className="truncate" style={{ color: u.status === 'error' ? '#ef4444' : 'var(--color-text)' }}>
+                        {u.status === 'fetching' && 'Fetching… '}
+                        {u.status === 'error' && `Failed: ${u.url}`}
+                        {u.status === 'ready' && (u.title || u.url)}
+                      </span>
+                      <button type="button" className="flex-shrink-0 hover:opacity-70" style={{ color: 'var(--color-muted)' }} onClick={() => removeSetupUrl(u.url)}>Remove</button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <label className="block text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+                {setup.source === 'topic' ? 'Topic details' : 'Optional notes or pasted excerpt'}
+              </label>
               <textarea
                 ref={detailTextareaRef}
                 value={setup.detail}
                 onChange={(e) => setSetup((s) => ({ ...s, detail: e.target.value }))}
                 rows={8}
+                placeholder={setup.source === 'topic' ? 'Describe what you want to study…' : 'Optional: extra instructions, short excerpt, or leave blank if the file/URL above is enough.'}
                 className="w-full text-sm px-3 py-2 rounded-xl border outline-none resize-y min-h-[120px]"
                 style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
               />
@@ -917,6 +1070,7 @@ export default function StudentCardsChatPage() {
                       messageIndex={i}
                       isLatest={isLastAssistant}
                       searching={false}
+                      markdownVariant="comfortable"
                       isSpeaking={isLastAssistant && isTTSAvailable ? isSpeaking : false}
                       isPaused={isLastAssistant && isTTSAvailable ? isPaused : false}
                       onSpeak={isLastAssistant && isTTSAvailable && msg.role === 'assistant' ? () => speak(speakContent) : undefined}
@@ -1087,7 +1241,7 @@ export default function StudentCardsChatPage() {
         >
           <div
             role="dialog"
-            className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl border shadow-2xl p-5"
+            className="w-full max-w-[min(96vw,900px)] max-h-[88vh] overflow-y-auto rounded-xl border shadow-2xl p-5 sm:p-6"
             style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             onClick={(e) => e.stopPropagation()}
           >

@@ -501,9 +501,11 @@ async function initSchema() {
         payload         JSONB NOT NULL DEFAULT '{}',
         "sessionId"     TEXT REFERENCES sessions("sessionId") ON DELETE SET NULL,
         "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
-        "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
+        "updatedAt"     TIMESTAMPTZ DEFAULT NOW(),
+        "listOrder"     INTEGER NOT NULL DEFAULT 0
       )
     `);
+    await client.query(`ALTER TABLE study_decks ADD COLUMN IF NOT EXISTS "listOrder" INTEGER NOT NULL DEFAULT 0`);
 
     // ── Finance ───────────────────────────────────────────────────────────────
     await client.query(`
