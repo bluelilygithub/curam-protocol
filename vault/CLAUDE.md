@@ -20,6 +20,8 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `server/middleware/auth.js` — 32-byte hex token lookup in `auth_sessions` + `requireAdmin` guard
 - `server/routes/admin.js` — admin dashboard stats/monitor + user management endpoints
 - `server/routes/chat.js` — `buildSystemPrompt()`, prompt caching, SSE streaming, model routing
+- `server/services/modelResolver.js` — **`getModelsForUser()`**: resolves **`light`** / **`standard`** / Gemini / DeepSeek from Settings (see **Model selection**)
+- `client/src/hooks/useModels.js` — loads **`vault_models`** + **`default_model`** + **`branch_eval_model`** via `/api/settings`
 - `client/src/utils/apiClient.js` — authenticated fetch wrapper; **use this for all `/api/` calls**
 - `client/src/store/authStore.js` — Zustand auth (token, user); persisted
 - `client/src/providers/IconProvider.jsx` — `getIcon(name, props)` semantic map; add icons here before using
@@ -53,7 +55,7 @@ Token-based, not JWT. 32-byte random hex stored in `auth_sessions` table. Every 
 
 ## AI / Streaming
 
-**Provider routing:** `modelId.startsWith('gemini-')` → Google SDK. Everything else → Anthropic. No config table — the model ID is the source of truth.
+**Provider routing:** `modelId.startsWith('gemini-')` → Google SDK. Everything else → Anthropic. **`modelResolver` + defaults + overrides:** see **[Model selection](#model-selection)**.
 
 **Prompt caching (Anthropic):** `buildSystemPrompt()` returns an array of content blocks with `cache_control: { type: 'ephemeral' }`, ordered by change frequency. Max 4 cache breakpoints. The final block (today's date, web search notice) is never cached.
 
@@ -80,7 +82,46 @@ const lines = buf.split('\n');
 buf = lines.pop(); // keep partial line
 ```
 
-**Model selection:** Haiku 4.5 for background tasks (auto-title, KR suggestions, NLP). Sonnet 4.6 for primary chat.
+---
+
+## Model selection
+
+**Rule:** The workspace default for *which model id runs* comes from **Settings** (`vault_models` + optional **`default_model`**), resolved on the server by **`getModelsForUser(userId)`** in **`server/services/modelResolver.js`**. Do not hardcode Anthropic/Gemini/DeepSeek **ids** as fallbacks for user-facing chat or “default” behaviour — adding new literals for routing belongs only in **`vault_models`** (or pricing / static catalog exceptions below).
+
+**Settings keys (`settings` table, per `userId`):**
+
+| Key | Role |
+|---|---|
+| **`vault_models`** | JSON array of `{ id, name, emoji, … }` — allowed ids for this user’s UI and resolver input order |
+| **`default_model`** | Optional. If present **and** that `id` is in **`vault_models`**, it becomes the **`standard`** tier; otherwise **`standard`** is the **first** id in **`vault_models`** |
+| **`branch_eval_model`** | Separate from chat default — branch-suggestion evaluation only |
+
+If the user has no **`vault_models`** row (or empty list), resolver uses the **first admin’s** **`vault_models` / `default_model`**.
+
+**Resolver tiers (server):**
+
+- **`standard`** — “default model” slot for substantive work: primary chat stream (when no stricter override), new projects (when member may not choose), compare default, mood, PDF analysis default, chain step fallback when step has no `model`, etc.
+- **`light`** — cheaper path for background calls: session summaries, suggestion chips, NLP on selections, task/goal helpers, Gmail/Calendar summaries, etc. **Not** the same as **`default_model`** unless your configured list/order makes them align.
+- **`gemini`** / **`deepseek`** — first matching id from **`vault_models`** for provider-specific fallbacks.
+
+**Primary chat precedence** (`server/routes/chat.js`): requested body `model` (when caller may supply it) → project **`projects.model`** (or Student Cards path rules) → **`standard`**.
+
+**Explicit overrides users expect:**
+
+- **Per-session / header model** (`chatModel`) when **Feature Access → Model Selection (Members)** is on (`feature_memberModelSelection` in `workspace_settings`; `memberModelSelection` in **`featureAccess`** on the client) — frontend: `effectiveModel = … || project?.model || defaultModel || first in loaded list`; server must honour `model` on the request where applicable.
+- **Per-project** `projects.model` — stored default for that workspace.
+- **Chains** — each step can set its own `model`; unresolved steps use **`standard`**.
+- **Debate / multi-model** — user picks models per side; not governed by **`default_model`** alone.
+
+**Frontend:**
+
+- **`useModels`** + Settings **AI & Chat** tab persist **`vault_models`** and **`default_model`** via **`POST /api/settings`**.
+- **`client/src/utils/models.js`** — seed list for reset, tours, **`PROJECT_TYPES` recommendations**, and display helpers. **`getModelShortName(id)`** shows **`emoji name`** only when `id` is in that catalog; unknown ids render as **the raw string** (no silent substitute).
+
+**Exceptions (hardcoded ids allowed):**
+
+- **Pricing / cost estimates** (`costCalculator.js`, `pricing.js`) — tariff tables keyed by id; unknown ids fall back heuristically for **cost display**, not for **which model ran**.
+- **Legacy / migration** artefacts (e.g. old SQL defaults in backup files) — not runtime behaviour.
 
 ---
 

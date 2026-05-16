@@ -321,12 +321,15 @@ export const TYPE_FIELDS = {
 };
 
 export function getModelById(id) {
-  return MODELS.find(m => m.id === id) || MODELS[1]; // default Sonnet
+  if (!id) return null;
+  return MODELS.find(m => m.id === id) || null;
 }
 
+/** Label for UI; ids from Settings but not in MODELS[] show verbatim (never a bogus default name). */
 export function getModelShortName(id) {
   const m = getModelById(id);
-  return `${m.emoji} ${m.name}`;
+  if (m) return `${m.emoji} ${m.name}`;
+  return id ? String(id) : '—';
 }
 
 export function isGeminiModel(id) {

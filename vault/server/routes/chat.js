@@ -105,7 +105,7 @@ function toDeepSeekMessages(systemBlocks, messages) {
 }
 
 // Generates a ~150-word summary of a session and stores it + its embedding.
-// Fired background after each reply — cheap (Haiku) and fire-and-forget.
+// Fired background after each reply — uses resolver `light` model; fire-and-forget.
 async function generateAndStoreSessionSummary(sid, userId, modelHint = null) {
   try {
     const { rows: msgs } = await pool.query(
@@ -1312,7 +1312,7 @@ router.post('/sessions/:sessionId/branch', async (req, res) => {
   }
 });
 
-// POST /api/chat/suggestions — generate follow-up suggestions via Haiku
+// POST /api/chat/suggestions — generate follow-up suggestions via resolver `light` model
 router.post('/suggestions', async (req, res) => {
   const { sessionId, messages: clientMessages, model: activeModel } = req.body;
   if (!sessionId) return res.status(400).json({ suggestions: [] });

@@ -237,7 +237,7 @@ Previously the "standard" model slot (used for all general chat and new projects
 **Changes:**
 - `modelResolver.js` now fetches both `vault_models` and `default_model` settings in one query. If `default_model` is set, it overrides the positional standard-slot logic.
 - `useModels` hook exposes `defaultModel` and `saveDefaultModel`, loaded from the `default_model` settings key.
-- Settings page (AI & Chat tab) shows a "Default model" `<select>` above the model list, populated from configured models. Blank option = system default (Sonnet 4.6). Saves instantly on change.
+- Settings page (AI & Chat tab) shows a "Default model" `<select>` above the model list, populated from configured models. Leaving it blank clears **`default_model`** so **`standard`** in **`modelResolver`** falls back to the first id in **`vault_models`**. Saves instantly on change.
 - `NewProjectModal` loads `default_model` on open and uses it as the initial model instead of the hardcoded `claude-haiku-4-5-20251001`.
 
 ---

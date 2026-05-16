@@ -706,7 +706,7 @@ function SettingsPage() {
             Default model
           </label>
           <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-            Used for general chat and as the default for new projects.
+            Used for general chat and as the default for new projects when you can pick a model. Clearing the selection removes the explicit default so the first entry in your configured model list is used (same rules as the server model resolver).
           </p>
           <select
             value={defaultModel}
