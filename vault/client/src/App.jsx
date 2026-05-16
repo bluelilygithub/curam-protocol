@@ -30,6 +30,7 @@ import SharedTaskPage from './pages/SharedTaskPage';
 import NewsDigestPage from './pages/NewsDigestPage';
 import StudentAgentPage from './pages/StudentAgentPage';
 import StudentCardsChatPage from './pages/StudentCardsChatPage';
+import StudentSavedDecksPage from './pages/StudentSavedDecksPage';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
@@ -89,6 +90,7 @@ function App() {
               <Route path="/chat" element={<ChatPage general />} />
               <Route path="/student/quiz" element={<StudentAgentPage />} />
               <Route path="/student/cards" element={<StudentCardsChatPage />} />
+              <Route path="/student/saved-decks" element={<StudentSavedDecksPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/memory" element={<MemoryPage />} />
               <Route path="/prompts" element={<PromptsPage />} />

@@ -87,6 +87,8 @@ You may still write short prose for the student. For **every** batch where you a
 
 The web app renders cards from JSON. **Never** use numbered menu prompts like "[1] [2] [3]" or CLI-style interaction — the UI provides buttons.
 
+When the student asked for a **specific number of flashcards**, every \`vault-deck\` snapshot that includes flashcards must list **that exact count** (unless you explain why fewer is unavoidable). Do not put Markdown code fences (\`\`\`) inside JSON string values — it breaks parsing; use plain text or Unicode quotes instead.
+
 ### 1) Full deck snapshot — after any change to cards/slides/quiz
 
 Append a **single** fenced JSON block using the exact fence label \`vault-deck\`. It must contain the **entire** current deck (replace snapshot, not deltas).

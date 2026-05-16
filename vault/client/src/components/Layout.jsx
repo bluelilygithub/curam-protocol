@@ -573,9 +573,19 @@ function Layout() {
             views={[
               { mode: 'quiz', icon: 'clipboard-list', label: 'Quiz' },
               { mode: 'cards', icon: 'layers', label: 'Cards' },
+              { mode: 'saved-decks', icon: 'library', label: 'Saved' },
             ]}
-            activeView={location.pathname.includes('/student/cards') ? 'cards' : 'quiz'}
-            onViewChange={(mode) => navigate(`/student/${mode}`)}
+            activeView={
+              location.pathname.includes('/student/saved-decks')
+                ? 'saved-decks'
+                : location.pathname.includes('/student/cards')
+                  ? 'cards'
+                  : 'quiz'
+            }
+            onViewChange={(mode) => {
+              if (mode === 'saved-decks') navigate('/student/saved-decks');
+              else navigate(`/student/${mode}`);
+            }}
           />
         )}
 

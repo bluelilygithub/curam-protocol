@@ -118,6 +118,19 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
                 >
                   Cards
                 </Link>
+                <Link
+                  to="/student/saved-decks"
+                  onClick={onClose}
+                  className="flex items-center px-4 py-3 text-sm border-b hover:opacity-70 transition-opacity"
+                  style={{
+                    color: location.pathname === '/student/saved-decks' ? 'var(--color-primary)' : 'var(--color-text)',
+                    borderColor: 'var(--color-border)',
+                    fontWeight: location.pathname === '/student/saved-decks' ? 600 : 400,
+                    background: location.pathname === '/student/saved-decks' ? 'var(--color-bg)' : undefined,
+                  }}
+                >
+                  Saved decks
+                </Link>
               </React.Fragment>
             );
           }

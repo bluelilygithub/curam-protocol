@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import MessageBubble from '../components/MessageBubble';
 import StudentDeckPanel from '../components/StudentDeckPanel';
 import EmailModal from '../components/EmailModal';
@@ -49,11 +49,25 @@ function goalLabel(id) {
   return GOALS.find((g) => g.id === id)?.label || id;
 }
 
+function parseRequestedFlashcardCount(setup) {
+  const c = (setup.count || '').trim().toLowerCase();
+  if (!c || c.includes('decide')) return null;
+  const m = c.match(/(\d+)\s*(?:flash)?cards?/i) || c.match(/\b(\d+)\s*x\b/i) || c.match(/^\s*(\d+)\s*$/);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  if (!Number.isFinite(n) || n < 1) return null;
+  return Math.min(100, n);
+}
+
 function buildStudyBootstrap(setup, deckTitle) {
   const src = setup.source === 'topic' ? 'TOPIC' : setup.source === 'document' ? 'DOCUMENT' : '';
   const heading = setup.source === 'topic' ? 'Topic / focus' : 'Document (pasted below)';
   const countLine = (setup.count && setup.count.trim()) ? setup.count.trim() : 'you decide';
   const titleBlock = (deckTitle && deckTitle.trim()) ? `Deck title: ${deckTitle.trim()}\n\n` : '';
+  const nCards = parseRequestedFlashcardCount(setup);
+  const exactFlash = (setup.goal === 'flashcards' || setup.goal === 'both') && nCards
+    ? `\n\nImportant: I want exactly ${nCards} flashcards. Put all ${nCards} in one \`vault-deck\` JSON snapshot (flashcards array length = ${nCards}) in your first substantive reply that includes cards. If you truly cannot, say why and give the closest you can.`
+    : '';
   return `${titleBlock}I've completed the setup cards. Use my answers below — do not repeat onboarding questions I already answered; continue from the appropriate point in your flow.
 
 1. Source: ${src}
@@ -63,6 +77,7 @@ ${setup.detail.trim()}
 3. Familiarity: ${famLabel(setup.familiarity)}
 4. Today I want: ${goalLabel(setup.goal)}
 5. Target size: ${countLine}
+${exactFlash}
 
 Please acknowledge briefly and proceed.`;
 }
@@ -258,6 +273,41 @@ export default function StudentCardsChatPage() {
       setLibraryLoad(false);
     }
   }, []);
+
+  const clearDeckSearchParam = useCallback(() => {
+    setSearchParams((prev) => {
+      const n = new URLSearchParams(prev);
+      if (!n.has('deck')) return prev;
+      n.delete('deck');
+      return n;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const dismissLibraryDetail = useCallback(() => {
+    setLibraryDetail(null);
+    clearDeckSearchParam();
+  }, [clearDeckSearchParam]);
+
+  const deckSearchId = searchParams.get('deck');
+
+  useEffect(() => {
+    if (!deckSearchId) return;
+    const id = Number(deckSearchId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get(`/api/study-decks/${id}`);
+        if (!res.ok) return;
+        const d = await res.json();
+        if (cancelled || !d?.id) return;
+        setPageTab('library');
+        setLibraryDetail(d);
+        refreshLibrary();
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [deckSearchId, refreshLibrary]);
 
   useEffect(() => {
     if (pageTab === 'library') refreshLibrary();
@@ -579,7 +629,7 @@ export default function StudentCardsChatPage() {
         <div className="flex items-center gap-1 ml-2">
           <button
             type="button"
-            onClick={() => { setPageTab('session'); setLibraryDetail(null); }}
+            onClick={() => { setPageTab('session'); setLibraryDetail(null); clearDeckSearchParam(); }}
             className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70"
             style={{
               borderColor: 'var(--color-border)',
@@ -591,7 +641,7 @@ export default function StudentCardsChatPage() {
           </button>
           <button
             type="button"
-            onClick={() => { setPageTab('library'); setLibraryDetail(null); }}
+            onClick={() => { setPageTab('library'); setLibraryDetail(null); clearDeckSearchParam(); }}
             className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70 flex items-center gap-1"
             style={{
               borderColor: 'var(--color-border)',
@@ -603,6 +653,14 @@ export default function StudentCardsChatPage() {
             Saved
           </button>
         </div>
+        <Link
+          to="/student/saved-decks"
+          className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70 flex items-center gap-1 flex-shrink-0"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+        >
+          {getIcon('library', { size: 12 })}
+          <span className="hidden sm:inline">All saved</span>
+        </Link>
         <span className="flex-1" />
         {canSelectModel && (
           <div className="relative">
@@ -970,7 +1028,7 @@ export default function StudentCardsChatPage() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center px-4"
           style={{ background: 'rgba(0,0,0,0.45)' }}
-          onClick={() => setLibraryDetail(null)}
+          onClick={() => dismissLibraryDetail()}
         >
           <div
             role="dialog"
@@ -980,7 +1038,7 @@ export default function StudentCardsChatPage() {
           >
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{libraryDetail.title || 'Saved deck'}</h3>
-              <button type="button" className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }} onClick={() => setLibraryDetail(null)}>Close</button>
+              <button type="button" className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }} onClick={() => dismissLibraryDetail()}>Close</button>
             </div>
             <StudentDeckPanel
               title={libraryDetail.title}
@@ -995,7 +1053,7 @@ export default function StudentCardsChatPage() {
                   type="button"
                   onClick={() => {
                     const sid = libraryDetail.sessionId;
-                    setLibraryDetail(null);
+                    dismissLibraryDetail();
                     setSearchParams({ session: sid });
                     sessionBootRef.current = false;
                     loadHistory(sid).then(() => {
@@ -1015,7 +1073,7 @@ export default function StudentCardsChatPage() {
                   setDeckEmailSubjectHint(libraryDetail.title || 'Study deck');
                   setDeckEmailTargetId(libraryDetail.id);
                   setShowDeckEmail(true);
-                  setLibraryDetail(null);
+                  dismissLibraryDetail();
                 }}
                 className="text-xs px-3 py-2 rounded-lg border transition-opacity hover:opacity-70 flex items-center gap-1"
                 style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
