@@ -3,6 +3,7 @@ import { useIcon } from '../providers/IconProvider';
 import { deckPayloadToPlainText } from '../utils/studyDeckText';
 import api from '../utils/apiClient';
 import { downloadBlob } from '../utils/exportHelpers';
+import useToastStore from '../store/toastStore';
 
 function FlashcardFace({ label, text, small }) {
   return (
@@ -154,6 +155,7 @@ export default function StudentDeckPanel({
         });
         const data = await res.json();
         if (onSaved) onSaved(data);
+        useToastStore.getState().addToast('Deck updated');
       } else {
         const res = await api.post('/api/study-decks', {
           title: title || 'Study deck',
@@ -163,9 +165,11 @@ export default function StudentDeckPanel({
         });
         const data = await res.json();
         if (onSaved) onSaved(data);
+        useToastStore.getState().addToast('Deck saved');
       }
     } catch (e) {
       console.error(e);
+      useToastStore.getState().addToast('Could not save deck', 'error');
     } finally {
       setSaving(false);
     }

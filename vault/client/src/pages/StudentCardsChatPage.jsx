@@ -11,6 +11,7 @@ import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import ExportMenu from '../components/ExportMenu';
+import useToastStore from '../store/toastStore';
 import { extractLatestVaultDeck, extractLatestVaultChoices, stripVaultMachineBlocks } from '../utils/studyDeckParse';
 
 const TEMPERATURES = [
@@ -204,6 +205,7 @@ export default function StudentCardsChatPage() {
   const [showDeckEmail, setShowDeckEmail] = useState(false);
   const [deckEmailTargetId, setDeckEmailTargetId] = useState(null);
   const [deckEmailSubjectHint, setDeckEmailSubjectHint] = useState('');
+  const [deckSaveBusy, setDeckSaveBusy] = useState(false);
   const sessionBootRef = useRef(false);
 
   const [input, setInput] = useState('');
@@ -249,6 +251,13 @@ export default function StudentCardsChatPage() {
   }, [searchParams, loadHistory]);
 
   const parsedDeck = useMemo(() => extractLatestVaultDeck(messages), [messages]);
+  const deckHasPersistableContent = useMemo(() => {
+    if (!parsedDeck || typeof parsedDeck !== 'object') return false;
+    const fc = Array.isArray(parsedDeck.flashcards) ? parsedDeck.flashcards.length : 0;
+    const sl = Array.isArray(parsedDeck.slides) ? parsedDeck.slides.length : 0;
+    const qz = Array.isArray(parsedDeck.quiz) ? parsedDeck.quiz.length : 0;
+    return fc + sl + qz > 0;
+  }, [parsedDeck]);
   const choicePrompt = useMemo(() => {
     if (isStreaming) return null;
     return extractLatestVaultChoices(messages);
@@ -378,6 +387,38 @@ export default function StudentCardsChatPage() {
     if (row?.id) setSavedDeckId(row.id);
     refreshLibrary();
   }, [refreshLibrary]);
+
+  const handleLibraryDeckSaved = useCallback((row) => {
+    if (row?.id) {
+      setLibraryDetail((d) => (d && Number(d.id) === Number(row.id) ? { ...d, ...row } : d));
+    }
+    refreshLibrary();
+  }, [refreshLibrary]);
+
+  const handlePersistDeck = useCallback(async () => {
+    if (!parsedDeck || !deckHasPersistableContent || deckSaveBusy || phase !== 'chat') return;
+    setDeckSaveBusy(true);
+    try {
+      const title = (deckTitle || '').trim() || 'Study deck';
+      const kind = parsedDeck.kind || 'mixed';
+      const body = { title, kind, payload: parsedDeck };
+      if (sessionId) body.sessionId = sessionId;
+      const res = savedDeckId
+        ? await api.patch(`/api/study-decks/${savedDeckId}`, body)
+        : await api.post('/api/study-decks', body);
+      if (!res.ok) {
+        useToastStore.getState().addToast('Could not save deck', 'error');
+        return;
+      }
+      const data = await res.json();
+      if (data?.id) handleDeckSaved(data);
+      useToastStore.getState().addToast(savedDeckId ? 'Deck updated' : 'Deck saved');
+    } catch {
+      useToastStore.getState().addToast('Could not save deck', 'error');
+    } finally {
+      setDeckSaveBusy(false);
+    }
+  }, [parsedDeck, deckHasPersistableContent, deckSaveBusy, phase, deckTitle, sessionId, savedDeckId, handleDeckSaved]);
 
   const canAdvanceFromStep = useCallback(() => {
     if (setupStep === 0) return !!setup.source;
@@ -661,6 +702,20 @@ export default function StudentCardsChatPage() {
           {getIcon('library', { size: 12 })}
           <span className="hidden sm:inline">All saved</span>
         </Link>
+        {phase === 'chat' && pageTab === 'session' && deckHasPersistableContent && (
+          <button
+            type="button"
+            onClick={handlePersistDeck}
+            disabled={deckSaveBusy}
+            className="text-xs px-2 py-1 rounded-lg border transition-opacity hover:opacity-70 disabled:opacity-40 flex items-center gap-1 flex-shrink-0 font-medium"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-surface)' }}
+            title={savedDeckId ? 'Update this deck in your library' : 'Save this deck to your library'}
+          >
+            {deckSaveBusy ? getIcon('loader', { size: 12 }) : getIcon('archive', { size: 12 })}
+            <span className="hidden sm:inline">{savedDeckId ? 'Update saved' : 'Save deck'}</span>
+            <span className="sm:hidden">{savedDeckId ? 'Update' : 'Save'}</span>
+          </button>
+        )}
         <span className="flex-1" />
         {canSelectModel && (
           <div className="relative">
@@ -764,7 +819,7 @@ export default function StudentCardsChatPage() {
               {libraryLoad ? (
                 <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>
               ) : libraryRows.length === 0 ? (
-                <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No saved decks yet. During a session, use Save deck on the current deck.</p>
+                <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No saved decks yet. In Cards, after the assistant generates a deck, use Save deck in the top bar or under Current deck.</p>
               ) : (
                 <ul className="space-y-2">
                   {libraryRows.map((row) => (
@@ -1045,7 +1100,7 @@ export default function StudentCardsChatPage() {
               payload={libraryDetail.payload}
               sessionId={libraryDetail.sessionId}
               savedDeckId={libraryDetail.id}
-              hideSave
+              onSaved={handleLibraryDeckSaved}
             />
             <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
               {libraryDetail.sessionId && (

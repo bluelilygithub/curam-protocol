@@ -86,7 +86,7 @@ export default function StudentSavedDecksPage() {
         {load ? (
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No saved decks yet. During a Cards session, use Save deck on the current deck.</p>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No saved decks yet. In Cards, after the assistant builds a deck, use Save deck in the top bar or under Current deck.</p>
         ) : (
           <ul className="space-y-2">
             {rows.map((row) => (
