@@ -3,6 +3,24 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { formatDuration } from '../../utils/quizConstants';
 
+function buildLocalSummary(attempt, results) {
+  const wrong = results.filter((r) => !r.correct);
+  const subs = [...new Set(wrong.map((r) => r.subtopic).filter(Boolean))];
+  const passed = attempt.passed;
+  let summary = `You scored ${attempt.scorePercent}% on “${attempt.title}”. `;
+  if (passed) {
+    summary += wrong.length
+      ? `You passed, but missed ${wrong.length} question${wrong.length === 1 ? '' : 's'} — review those below.`
+      : 'Excellent — you answered every question correctly.';
+  } else {
+    summary += `You did not reach the ${attempt.passmark}% pass mark. Review the incorrect answers and explanations below.`;
+  }
+  const focusAreas = subs.length
+    ? subs.slice(0, 4)
+    : (wrong.length ? ['Re-read the questions you missed'] : ['Keep practising this topic']);
+  return { summary, focusAreas };
+}
+
 function confidenceStats(results) {
   const buckets = { High: { ok: 0, total: 0 }, Medium: { ok: 0, total: 0 }, Low: { ok: 0, total: 0 } };
   results.forEach((r) => {
@@ -73,17 +91,21 @@ export default function QuizResults() {
   const [summaryTried, setSummaryTried] = useState(false);
 
   useEffect(() => {
+    setSummaryTried(false);
+    setSummary(null);
+    setSummaryError('');
+    setSummaryLoad(false);
     (async () => {
       setLoad(true);
-      setSummary(null);
-      setSummaryError('');
       try {
         const res = await api.get(`/api/student-quizzes/attempts/${attemptId}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Not found');
         setAttempt(data);
-        if (data.performanceSummary?.summary) {
-          setSummary(data.performanceSummary);
+        const cached = data.performanceSummary;
+        if (cached?.summary) {
+          setSummary(cached);
+          setSummaryTried(true);
         }
       } catch (err) {
         setError(err.message);
@@ -100,20 +122,29 @@ export default function QuizResults() {
       const res = await api.post(`/api/student-quizzes/attempts/${attemptId}/summary`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not generate summary');
+      if (!data.summary) throw new Error('Summary was empty. Try again.');
       setSummary(data);
     } catch (err) {
-      setSummaryError(err.message);
+      if (attempt?.questionResults) {
+        setSummary(buildLocalSummary(attempt, attempt.questionResults));
+        setSummaryError('');
+      } else {
+        setSummaryError(err.message);
+      }
     } finally {
       setSummaryLoad(false);
     }
-  }, [attemptId]);
+  }, [attemptId, attempt]);
+
+  const loadSummaryWithFlag = useCallback(async () => {
+    setSummaryTried(true);
+    await loadSummary();
+  }, [loadSummary]);
 
   useEffect(() => {
-    if (!attempt || summary || summaryLoad || summaryTried) return;
-    if (attempt.performanceSummary?.summary) return;
-    setSummaryTried(true);
-    loadSummary();
-  }, [attempt, summary, summaryLoad, summaryTried, loadSummary]);
+    if (!attempt || summary?.summary || summaryLoad || summaryTried) return;
+    loadSummaryWithFlag();
+  }, [attempt, summary, summaryLoad, summaryTried, loadSummaryWithFlag]);
 
   const results = attempt?.questionResults || [];
   const correct = results.filter((r) => r.correct);
@@ -171,7 +202,7 @@ export default function QuizResults() {
             <p className="text-xs" style={{ color: '#ef4444' }}>{summaryError}</p>
             <button
               type="button"
-              onClick={loadSummary}
+              onClick={loadSummaryWithFlag}
               className="text-xs hover:opacity-70 transition-opacity"
               style={{ color: 'var(--color-primary)' }}
             >
@@ -181,6 +212,11 @@ export default function QuizResults() {
         )}
         {summary?.summary && (
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{summary.summary}</p>
+        )}
+        {!summaryLoad && !summaryError && !summary?.summary && (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            Preparing your feedback…
+          </p>
         )}
         {summary?.focusAreas?.length > 0 && (
           <div className="mt-3">

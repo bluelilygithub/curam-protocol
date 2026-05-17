@@ -233,11 +233,19 @@ router.post('/attempts/:attemptId/summary', async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
     const row = rows[0];
 
-    if (row.performanceSummary && typeof row.performanceSummary === 'object') {
-      return res.json(row.performanceSummary);
+    let cachedSummary = row.performanceSummary;
+    if (typeof cachedSummary === 'string') {
+      try { cachedSummary = JSON.parse(cachedSummary); } catch { cachedSummary = null; }
+    }
+    if (cachedSummary?.summary) {
+      return res.json(cachedSummary);
     }
 
-    const results = Array.isArray(row.questionResults) ? row.questionResults : [];
+    let questionResults = row.questionResults;
+    if (typeof questionResults === 'string') {
+      try { questionResults = JSON.parse(questionResults); } catch { questionResults = []; }
+    }
+    const results = Array.isArray(questionResults) ? questionResults : [];
     const wrong = results.filter((r) => !r.correct);
     const subtopics = [...new Set(wrong.map((r) => r.subtopic).filter(Boolean))];
 
@@ -265,18 +273,33 @@ Return JSON only: { "summary": "...", "focusAreas": ["...", "..."] }`;
       return res.status(502).json({ error: 'Could not parse performance summary' });
     }
 
+    let summaryText = String(parsed.summary || parsed.performance_summary || '').trim();
+    let focusAreas = Array.isArray(parsed.focusAreas)
+      ? parsed.focusAreas
+      : (Array.isArray(parsed.focus_areas) ? parsed.focus_areas : []);
+    focusAreas = focusAreas.map((s) => String(s).trim()).filter(Boolean).slice(0, 6);
+
+    if (!summaryText && focusAreas.length) {
+      summaryText = `You scored ${row.scorePercent}%. Focus your next study session on: ${focusAreas.join('; ')}.`;
+    }
+    if (!summaryText) {
+      return res.status(502).json({ error: 'Could not parse performance summary' });
+    }
+
     const payload = {
-      summary: String(parsed.summary || '').trim(),
-      focusAreas: Array.isArray(parsed.focusAreas)
-        ? parsed.focusAreas.map((s) => String(s).trim()).filter(Boolean).slice(0, 6)
-        : [],
+      summary: summaryText,
+      focusAreas,
       generatedAt: new Date().toISOString(),
     };
 
-    await pool.query(
-      'UPDATE student_quiz_attempts SET "performanceSummary"=$1 WHERE id=$2 AND "userId"=$3',
-      [JSON.stringify(payload), attemptId, req.user.id]
-    );
+    try {
+      await pool.query(
+        'UPDATE student_quiz_attempts SET "performanceSummary"=$1 WHERE id=$2 AND "userId"=$3',
+        [JSON.stringify(payload), attemptId, req.user.id]
+      );
+    } catch (saveErr) {
+      console.error('[student-quizzes] summary save:', saveErr.message);
+    }
 
     res.json(payload);
   } catch (err) {
