@@ -103,7 +103,7 @@ function ChatPage({ general = false }) {
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
   const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
-  const { models: MODELS, defaultModel, loading: modelsLoading } = useModels();
+  const { models: MODELS, defaultModel } = useModels();
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, isSpeaking, isPaused, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
   const { urlAttachments, addUrl, addManual: addManualAttachment, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
@@ -460,24 +460,17 @@ function ChatPage({ general = false }) {
     if (!text && inlineImages.length === 0) return;
     if (isStreaming) return;
     if (urlAttachments.some(u => u.status === 'fetching')) return;
-    if (modelsLoading) return;
-    if (!effectiveModel) {
-      setPreflightError({
-        code: 'model',
-        message: 'No model configured.',
-        hint: 'Ask an admin to set models in Settings → AI & Chat (vault_models and default model).',
-      });
-      return;
-    }
-    // Pre-flight: block send if the provider key is confirmed missing
-    const modelIsGemini = effectiveModel.startsWith('gemini-');
-    const provider = modelIsGemini ? 'gemini' : 'anthropic';
-    if (modelStatus[provider] === false) {
-      const hint = modelIsGemini
-        ? 'Add GEMINI_API_KEY to your Railway environment variables.'
-        : 'Add ANTHROPIC_API_KEY to your Railway environment variables.';
-      setPreflightError({ code: 'auth', message: `${modelIsGemini ? 'Gemini' : 'Anthropic'} API key is not configured.`, hint });
-      return;
+    // Model id is optional here — server resolves via getModelsForUser (admin default for members).
+    if (effectiveModel) {
+      const modelIsGemini = effectiveModel.startsWith('gemini-');
+      const provider = modelIsGemini ? 'gemini' : 'anthropic';
+      if (modelStatus[provider] === false) {
+        const hint = modelIsGemini
+          ? 'Add GEMINI_API_KEY to your Railway environment variables.'
+          : 'Add ANTHROPIC_API_KEY to your Railway environment variables.';
+        setPreflightError({ code: 'auth', message: `${modelIsGemini ? 'Gemini' : 'Anthropic'} API key is not configured.`, hint });
+        return;
+      }
     }
     setPreflightError(null);
     const ids = attachments.map(a => a.id);
@@ -506,7 +499,7 @@ function ChatPage({ general = false }) {
     setInlineImages([]);
     setSuggestions([]);
     setActiveArtifacts(null);
-    await sendMessage(text, ids, meta, effectiveModel, readyUrls, temperature, selectedPersonaId, reasoning, imgPayload, webSearch);
+    await sendMessage(text, ids, meta, effectiveModel || null, readyUrls, temperature, selectedPersonaId, reasoning, imgPayload, webSearch);
     setTimeout(fetchSessions, 2000);
   };
 

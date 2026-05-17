@@ -22,6 +22,17 @@ router.get('/', async (req, res) => {
     const { rows } = await pool.query('SELECT key, value FROM settings WHERE "userId"=$1', [req.user.id]);
     const result = {};
     rows.forEach((r) => { result[r.key] = r.value; });
+
+    const resolved = await getVaultModelsConfigForUser(req.user.id);
+    if (resolved.models.length > 0) {
+      if (!result.vault_models) {
+        result.vault_models = JSON.stringify(resolved.models);
+      }
+      if (!result.default_model && resolved.defaultModel) {
+        result.default_model = resolved.defaultModel;
+      }
+    }
+
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
