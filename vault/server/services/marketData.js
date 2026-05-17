@@ -1,21 +1,16 @@
 'use strict';
 
 /**
- * Shares market data — Twelve Data API (twelvedata.com, free tier: 800 req/day).
- * Set TWELVE_DATA_API_KEY in Railway environment variables.
- * FX: Frankfurter (no key required).
+ * Shares market data.
+ *
+ * US stocks (NYSE / NASDAQ) → Finnhub   (FINNHUB_API_KEY, free tier: 60 req/min, no daily cap)
+ * ASX stocks               → Alpha Vantage (ALPHA_VANTAGE_API_KEY, free tier: 25 req/day)
+ * USD/AUD rate             → Frankfurter  (no key required)
  */
 
-const TWELVE_DATA_BASE = 'https://api.twelvedata.com';
 const FETCH_TIMEOUT_MS = 20000;
 
-function getApiKey() {
-  return String(process.env.TWELVE_DATA_API_KEY || '').trim();
-}
-
-function canFetchQuotes() {
-  return Boolean(getApiKey());
-}
+// ─── helpers ────────────────────────────────────────────────────────────────
 
 function normalizeExchange(exchange) {
   const u = String(exchange || '').toUpperCase();
@@ -28,50 +23,78 @@ function isUsExchange(ex) {
   return ex === 'NYSE' || ex === 'NASDAQ';
 }
 
-/** Strip .AX suffix if present — Twelve Data uses bare symbols with exchange param */
-function toTwelveDataSymbol(symbol, exchange) {
-  const s = String(symbol || '').trim().toUpperCase();
-  const ex = normalizeExchange(exchange);
-  if (ex === 'ASX') return s.replace(/\.AX$/i, '');
-  return s.replace(/\.AX$/i, '');
+function toUsSymbol(symbol) {
+  return String(symbol || '').trim().toUpperCase().replace(/\.AX$/i, '');
 }
+
+function toAsxSymbol(symbol) {
+  const base = String(symbol || '').trim().toUpperCase().replace(/\.AX$/i, '');
+  return `${base}.AX`;
+}
+
+// ─── Finnhub (US) ────────────────────────────────────────────────────────────
+
+function getFinnhubToken() {
+  return String(process.env.FINNHUB_API_KEY || '').trim();
+}
+
+async function getFinnhubQuote(symbol) {
+  const token = getFinnhubToken();
+  if (!token) throw new Error('FINNHUB_API_KEY not set');
+  const sym = toUsSymbol(symbol);
+  const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(sym)}&token=${encodeURIComponent(token)}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`Finnhub HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.error) throw new Error(`Finnhub: ${data.error}`);
+  const current = Number(data.c);
+  const previousClose = Number(data.pc);
+  if (!current || current <= 0) throw new Error(`Finnhub: no price for ${sym}`);
+  return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'USD', source: 'finnhub' };
+}
+
+// ─── Alpha Vantage (ASX) ────────────────────────────────────────────────────
+
+function getAlphaVantageKey() {
+  return String(process.env.ALPHA_VANTAGE_API_KEY || '').trim();
+}
+
+async function getAlphaVantageQuote(symbol) {
+  const key = getAlphaVantageKey();
+  if (!key) throw new Error('ALPHA_VANTAGE_API_KEY not set');
+  const sym = toAsxSymbol(symbol);
+  const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(sym)}&apikey=${encodeURIComponent(key)}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`Alpha Vantage HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.Note || data.Information) throw new Error(`Alpha Vantage rate limit: ${data.Note || data.Information}`);
+  const gq = data['Global Quote'];
+  if (!gq || !gq['05. price']) throw new Error(`Alpha Vantage: no quote returned for ${sym}`);
+  const current = Number(gq['05. price']);
+  const previousClose = Number(gq['08. previous close']);
+  if (!current || current <= 0) throw new Error(`Alpha Vantage: zero price for ${sym}`);
+  return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'AUD', source: 'alphavantage' };
+}
+
+// ─── public API ─────────────────────────────────────────────────────────────
 
 async function getQuote(symbol, exchange) {
-  const key = getApiKey();
-  if (!key) throw new Error('TWELVE_DATA_API_KEY not set — add it to Railway environment variables');
-
   const ex = normalizeExchange(exchange);
-  const sym = toTwelveDataSymbol(symbol, ex);
-
-  const params = new URLSearchParams({ symbol: sym, apikey: key });
-  if (ex === 'ASX') params.set('exchange', 'ASX');
-  // NYSE/NASDAQ: Twelve Data defaults to US markets, no exchange param needed
-
-  const url = `${TWELVE_DATA_BASE}/quote?${params}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`Twelve Data HTTP ${res.status}`);
-
-  const data = await res.json();
-
-  if (data.status === 'error' || data.code) {
-    throw new Error(`Twelve Data: ${data.message || JSON.stringify(data)}`);
-  }
-
-  const current = Number(data.close);
-  const previousClose = Number(data.previous_close);
-
-  if (!current || current <= 0) throw new Error(`No price returned for ${sym}`);
-
-  const currency = isUsExchange(ex) ? 'USD' : (data.currency || 'AUD');
-
-  return {
-    symbol: sym,
-    current,
-    previousClose: previousClose > 0 ? previousClose : current,
-    currency,
-    source: 'twelvedata',
-  };
+  if (ex === 'ASX') return getAlphaVantageQuote(symbol);
+  return getFinnhubQuote(symbol);
 }
+
+function canFetchQuotes() {
+  return Boolean(getFinnhubToken()) || Boolean(getAlphaVantageKey());
+}
+
+function canFetchExchange(exchange) {
+  const ex = normalizeExchange(exchange);
+  if (ex === 'ASX') return Boolean(getAlphaVantageKey());
+  return Boolean(getFinnhubToken());
+}
+
+// ─── FX ──────────────────────────────────────────────────────────────────────
 
 let usdAudCache = { rate: null, at: 0 };
 const FX_CACHE_MS = 5 * 60 * 1000;
@@ -100,8 +123,8 @@ module.exports = {
   getQuote,
   getUsdToAudRate,
   priceToAud,
-  toTwelveDataSymbol,
   normalizeExchange,
   isUsExchange,
   canFetchQuotes,
+  canFetchExchange,
 };

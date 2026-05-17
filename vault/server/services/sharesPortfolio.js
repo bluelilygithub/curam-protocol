@@ -3,6 +3,14 @@
 const { pool } = require('../db');
 const marketData = require('./marketData');
 
+/**
+ * In-memory quote cache — avoids burning Alpha Vantage's 25 req/day limit when
+ * the user opens the page multiple times, and lets the US cron use stale ASX
+ * quotes (and vice versa) without calling the wrong API.
+ */
+const quoteCache = new Map(); // key: `${symbol}:${exchange}` → { data, at }
+const QUOTE_CACHE_USER_MS = 15 * 60 * 1000; // 15 min for user-facing requests
+
 function num(v) {
   return Number(v) || 0;
 }
@@ -66,7 +74,17 @@ function computeCashFromActivity(trades, ledgerRows) {
   return cash;
 }
 
-async function fetchQuotesForHoldings(holdings) {
+/**
+ * Fetch quotes for a list of holdings.
+ *
+ * @param {Array}    holdings       - from computeHoldings()
+ * @param {string[]|null} exchangeFilter - if set, only fetch fresh prices for
+ *   these exchanges (e.g. ['ASX'] for the ASX cron run); stale cache is used
+ *   for all other exchanges so we don't burn the wrong API's quota.
+ *   Pass null for user-facing calls — all exchanges are refreshed but a 15-min
+ *   cache prevents hammering Alpha Vantage on repeated page loads.
+ */
+async function fetchQuotesForHoldings(holdings, exchangeFilter = null) {
   if (holdings.length === 0) {
     return { quotes: {}, usdAud: null, quoteError: null };
   }
@@ -79,12 +97,34 @@ async function fetchQuotesForHoldings(holdings) {
 
   const quotes = {};
   const errors = [];
+
   for (const h of holdings) {
+    const key = `${h.symbol}:${h.exchange}`;
+    const ex = marketData.normalizeExchange(h.exchange);
+    const inFilter = !exchangeFilter || exchangeFilter.includes(ex);
+
+    if (!inFilter) {
+      // Not being polled this run — use whatever is in cache (may be stale)
+      const cached = quoteCache.get(key);
+      if (cached) quotes[key] = cached.data;
+      continue;
+    }
+
+    // For user-facing requests (no filter) honour a 15-min cache to avoid
+    // burning Alpha Vantage's 25-req/day limit on repeated page loads.
+    if (!exchangeFilter) {
+      const cached = quoteCache.get(key);
+      if (cached && Date.now() - cached.at < QUOTE_CACHE_USER_MS) {
+        quotes[key] = cached.data;
+        continue;
+      }
+    }
+
     try {
       const q = await marketData.getQuote(h.symbol, h.exchange);
       const priceAud = marketData.priceToAud(q.current, q.currency, usdAud);
       const prevAud = marketData.priceToAud(q.previousClose, q.currency, usdAud);
-      quotes[`${h.symbol}:${h.exchange}`] = {
+      const qdata = {
         priceAud,
         previousCloseAud: prevAud,
         dayChangePct: prevAud > 0 ? ((priceAud - prevAud) / prevAud) * 100 : 0,
@@ -92,10 +132,16 @@ async function fetchQuotesForHoldings(holdings) {
         currency: q.currency,
         source: q.source,
       };
+      quotes[key] = qdata;
+      quoteCache.set(key, { data: qdata, at: Date.now() });
     } catch (err) {
       errors.push(`${h.symbol} (${h.exchange}): ${err.message}`);
+      // Fall back to stale cache rather than leaving the position priceless
+      const cached = quoteCache.get(key);
+      if (cached) quotes[key] = cached.data;
     }
   }
+
   return {
     quotes,
     usdAud,
@@ -117,11 +163,11 @@ async function getTradesAndLedger(userId) {
   return { trades: tradesRes.rows, ledger: ledgerRes.rows };
 }
 
-async function buildDashboard(userId) {
+async function buildDashboard(userId, exchangeFilter = null) {
   const { trades, ledger } = await getTradesAndLedger(userId);
   const holdings = computeHoldings(trades);
   const cashAud = computeCashFromActivity(trades, ledger);
-  const { quotes, usdAud, quoteError } = await fetchQuotesForHoldings(holdings);
+  const { quotes, usdAud, quoteError } = await fetchQuotesForHoldings(holdings, exchangeFilter);
 
   let holdingsValueAud = 0;
   let costBasisAud = 0;
@@ -168,8 +214,8 @@ async function buildDashboard(userId) {
   };
 }
 
-async function recordSnapshots(userId) {
-  const dash = await buildDashboard(userId);
+async function recordSnapshots(userId, exchangeFilter = null) {
+  const dash = await buildDashboard(userId, exchangeFilter);
   const now = new Date();
   await pool.query(
     `INSERT INTO share_portfolio_snapshots
