@@ -7,7 +7,18 @@
  */
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
-const YAHOO_CHART = 'https://query1.finance.yahoo.com/v8/finance/chart';
+const YAHOO_CHART_HOSTS = [
+  'https://query1.finance.yahoo.com/v8/finance/chart',
+  'https://query2.finance.yahoo.com/v8/finance/chart',
+];
+
+const BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  Accept: 'application/json,text/plain,*/*',
+  'Accept-Language': 'en-AU,en;q=0.9',
+};
+
+const FETCH_TIMEOUT_MS = 20000;
 
 function getFinnhubToken() {
   return String(process.env.FINNHUB_API_KEY || '').trim();
@@ -45,6 +56,34 @@ function toFinnhubSymbol(symbol, exchange) {
   return toYahooSymbol(symbol, exchange);
 }
 
+function toStooqSymbol(symbol) {
+  const base = String(symbol || '').trim().toUpperCase().replace(/\.AX$/i, '');
+  if (!base) return '';
+  return `${base.toLowerCase()}.au`;
+}
+
+function stooqDateCompact(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}${m}${day}`;
+}
+
+async function fetchText(url, options = {}) {
+  let res;
+  try {
+    res = await fetch(url, {
+      ...options,
+      headers: { ...BROWSER_HEADERS, ...(options.headers || {}) },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new Error(err.cause?.message || err.message || 'fetch failed');
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.text();
+}
+
 async function finnhubGet(path, params = {}) {
   const token = getFinnhubToken();
   if (!token) {
@@ -78,25 +117,86 @@ async function finnhubGet(path, params = {}) {
 
 async function getYahooQuote(symbol, exchange) {
   const sym = toYahooSymbol(symbol, exchange);
-  const url = `${YAHOO_CHART}/${encodeURIComponent(sym)}?interval=1d&range=5d`;
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CuramVault/1.0)' },
+  let lastErr;
+  for (const host of YAHOO_CHART_HOSTS) {
+    try {
+      const url = `${host}/${encodeURIComponent(sym)}?interval=1d&range=5d`;
+      const text = await fetchText(url);
+      const data = JSON.parse(text);
+      const meta = data?.chart?.result?.[0]?.meta;
+      const current = Number(meta?.regularMarketPrice);
+      const previousClose = Number(
+        meta?.chartPreviousClose ?? meta?.previousClose ?? meta?.regularMarketPreviousClose
+      );
+      if (!current || current <= 0) throw new Error(`No price in response`);
+      const ex = normalizeExchange(exchange);
+      const currency = isUsExchange(ex) ? 'USD' : 'AUD';
+      return {
+        symbol: sym,
+        current,
+        previousClose: previousClose > 0 ? previousClose : current,
+        currency,
+        source: 'yahoo',
+      };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw new Error(`Yahoo quote failed for ${sym}: ${lastErr?.message || 'unknown'}`);
+}
+
+/** Stooq — reliable for ASX from server environments (e.g. Railway) */
+async function getStooqAsxQuote(symbol) {
+  const stooqSym = toStooqSymbol(symbol);
+  const yahooSym = toYahooSymbol(symbol, 'ASX');
+  if (!stooqSym) throw new Error('Invalid ASX symbol');
+
+  const now = new Date();
+  const d2 = stooqDateCompact(now);
+  const d1 = stooqDateCompact(new Date(now.getTime() - 10 * 86400000));
+  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSym)}&i=d&d1=${d1}&d2=${d2}`;
+
+  const text = await fetchText(url);
+  const lines = text.trim().split(/\r?\n/).filter((line) => {
+    const t = line.trim();
+    return t && !/^date/i.test(t) && !/^symbol/i.test(t);
   });
-  if (!res.ok) {
-    throw new Error(`Yahoo quote failed for ${sym} (${res.status})`);
+
+  if (!lines.length) throw new Error(`No Stooq history for ${stooqSym}`);
+
+  const parseClose = (line) => {
+    const cols = line.split(',');
+    const close = Number(cols[4] ?? cols[cols.length - 2]);
+    return close;
+  };
+
+  const current = parseClose(lines[lines.length - 1]);
+  const previousClose = lines.length > 1 ? parseClose(lines[lines.length - 2]) : current;
+
+  if (!current || current <= 0) throw new Error(`No Stooq close for ${stooqSym}`);
+
+  return {
+    symbol: yahooSym,
+    current,
+    previousClose: previousClose > 0 ? previousClose : current,
+    currency: 'AUD',
+    source: 'stooq',
+  };
+}
+
+async function getAsxQuote(symbol) {
+  const errors = [];
+  try {
+    return await getStooqAsxQuote(symbol);
+  } catch (err) {
+    errors.push(`Stooq: ${err.message}`);
   }
-  const data = await res.json();
-  const meta = data?.chart?.result?.[0]?.meta;
-  const current = Number(meta?.regularMarketPrice);
-  const previousClose = Number(
-    meta?.chartPreviousClose ?? meta?.previousClose ?? meta?.regularMarketPreviousClose
-  );
-  if (!current || current <= 0) {
-    throw new Error(`No Yahoo quote for ${sym}`);
+  try {
+    return await getYahooQuote(symbol, 'ASX');
+  } catch (err) {
+    errors.push(`Yahoo: ${err.message}`);
   }
-  const ex = normalizeExchange(exchange);
-  const currency = isUsExchange(ex) ? 'USD' : 'AUD';
-  return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency, source: 'yahoo' };
+  throw new Error(errors.join('; '));
 }
 
 async function getFinnhubQuote(symbol, exchange) {
@@ -114,20 +214,11 @@ async function getFinnhubQuote(symbol, exchange) {
   return { symbol: sym, current, previousClose, currency, source: 'finnhub' };
 }
 
-/** Quote with Finnhub first (US), Yahoo fallback on 403 or for ASX preference */
+/** ASX: Stooq → Yahoo. US: Finnhub → Yahoo. Never Finnhub for ASX (free tier 403). */
 async function getQuote(symbol, exchange) {
   const ex = normalizeExchange(exchange);
   if (ex === 'ASX') {
-    try {
-      return await getYahooQuote(symbol, ex);
-    } catch (yahooErr) {
-      if (!hasFinnhubKey()) throw yahooErr;
-      try {
-        return await getFinnhubQuote(symbol, ex);
-      } catch (fhErr) {
-        throw new Error(`${yahooErr.message}; Finnhub: ${fhErr.message}`);
-      }
-    }
+    return getAsxQuote(symbol);
   }
   if (hasFinnhubKey()) {
     try {
