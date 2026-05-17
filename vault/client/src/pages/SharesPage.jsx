@@ -272,12 +272,6 @@ export default function SharesPage() {
           </button>
         </div>
 
-        {!dashboard?.finnhubConfigured && (
-          <p className="text-xs mb-4 px-3 py-2 rounded-md" style={{ background: '#fef3c7', color: '#92400e' }}>
-            Optional: FINNHUB_API_KEY on Railway improves US quotes. ASX uses Yahoo; FX uses Frankfurter (no key).
-          </p>
-        )}
-
         {dashboard?.quoteError && (
           <p className="text-xs mb-4 px-3 py-2 rounded-md" style={{ background: '#fef3c7', color: '#92400e' }}>
             Quote warning: {dashboard.quoteError}

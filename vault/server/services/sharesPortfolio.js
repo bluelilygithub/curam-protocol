@@ -164,7 +164,6 @@ async function buildDashboard(userId) {
     unrealizedPnlPct: holdings.length ? unrealizedPnlPct : null,
     usdAud,
     quoteError,
-    finnhubConfigured: marketData.hasFinnhubKey(),
     quotesAvailable: marketData.canFetchQuotes(),
   };
 }
