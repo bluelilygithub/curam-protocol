@@ -1,26 +1,21 @@
 'use strict';
 
 /**
- * Shares market data.
- * Quotes: Yahoo Finance chart API (same data source as Python yfinance).
- * The Origin + Referer headers are required — without them Railway gets blocked.
- * FX: Frankfurter (no key needed).
+ * Shares market data — Twelve Data API (twelvedata.com, free tier: 800 req/day).
+ * Set TWELVE_DATA_API_KEY in Railway environment variables.
+ * FX: Frankfurter (no key required).
  */
 
-const YAHOO_HOSTS = [
-  'https://query2.finance.yahoo.com/v8/finance/chart',
-  'https://query1.finance.yahoo.com/v8/finance/chart',
-];
-
-const YAHOO_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-  Accept: 'application/json,text/plain,*/*',
-  'Accept-Language': 'en-AU,en;q=0.9',
-  Origin: 'https://finance.yahoo.com',
-  Referer: 'https://finance.yahoo.com/',
-};
-
+const TWELVE_DATA_BASE = 'https://api.twelvedata.com';
 const FETCH_TIMEOUT_MS = 20000;
+
+function getApiKey() {
+  return String(process.env.TWELVE_DATA_API_KEY || '').trim();
+}
+
+function canFetchQuotes() {
+  return Boolean(getApiKey());
+}
 
 function normalizeExchange(exchange) {
   const u = String(exchange || '').toUpperCase();
@@ -33,66 +28,49 @@ function isUsExchange(ex) {
   return ex === 'NYSE' || ex === 'NASDAQ';
 }
 
-/** Yahoo/yfinance symbol: COH → COH.AX for ASX, AAPL stays AAPL */
-function toYahooSymbol(symbol, exchange) {
+/** Strip .AX suffix if present — Twelve Data uses bare symbols with exchange param */
+function toTwelveDataSymbol(symbol, exchange) {
   const s = String(symbol || '').trim().toUpperCase();
   const ex = normalizeExchange(exchange);
-  if (!s) return '';
-  if (ex === 'ASX') {
-    return s.endsWith('.AX') ? s : `${s.replace(/\.AX$/i, '')}.AX`;
-  }
+  if (ex === 'ASX') return s.replace(/\.AX$/i, '');
   return s.replace(/\.AX$/i, '');
 }
 
 async function getQuote(symbol, exchange) {
+  const key = getApiKey();
+  if (!key) throw new Error('TWELVE_DATA_API_KEY not set — add it to Railway environment variables');
+
   const ex = normalizeExchange(exchange);
-  const sym = toYahooSymbol(symbol, ex);
-  let lastErr;
+  const sym = toTwelveDataSymbol(symbol, ex);
 
-  for (const host of YAHOO_HOSTS) {
-    try {
-      const url = `${host}/${encodeURIComponent(sym)}?interval=1d&range=1mo`;
-      const res = await fetch(url, {
-        headers: YAHOO_HEADERS,
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-      if (!res.ok) throw new Error(`Yahoo returned ${res.status}`);
+  const params = new URLSearchParams({ symbol: sym, apikey: key });
+  if (ex === 'ASX') params.set('exchange', 'ASX');
+  // NYSE/NASDAQ: Twelve Data defaults to US markets, no exchange param needed
 
-      const data = await res.json();
-      const result = data?.chart?.result?.[0];
-      if (!result) throw new Error('empty chart result');
+  const url = `${TWELVE_DATA_BASE}/quote?${params}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`Twelve Data HTTP ${res.status}`);
 
-      const meta = result.meta || {};
-      let current = Number(meta.regularMarketPrice);
-      let previousClose = Number(
-        meta.chartPreviousClose ?? meta.previousClose ?? meta.regularMarketPreviousClose
-      );
+  const data = await res.json();
 
-      if (!current || current <= 0) {
-        const closes = result.indicators?.quote?.[0]?.close?.filter(Boolean) ?? [];
-        if (closes.length) {
-          current = Number(closes[closes.length - 1]);
-          previousClose = closes.length > 1 ? Number(closes[closes.length - 2]) : current;
-        }
-      }
-
-      if (!current || current <= 0) throw new Error('no price in response');
-
-      const currency = isUsExchange(ex) ? 'USD' : (meta.currency || 'AUD');
-
-      return {
-        symbol: sym,
-        current,
-        previousClose: previousClose > 0 ? previousClose : current,
-        currency,
-        source: 'yahoo',
-      };
-    } catch (err) {
-      lastErr = err;
-    }
+  if (data.status === 'error' || data.code) {
+    throw new Error(`Twelve Data: ${data.message || JSON.stringify(data)}`);
   }
 
-  throw new Error(`Yahoo chart failed for ${sym}: ${lastErr?.message || 'unknown'}`);
+  const current = Number(data.close);
+  const previousClose = Number(data.previous_close);
+
+  if (!current || current <= 0) throw new Error(`No price returned for ${sym}`);
+
+  const currency = isUsExchange(ex) ? 'USD' : (data.currency || 'AUD');
+
+  return {
+    symbol: sym,
+    current,
+    previousClose: previousClose > 0 ? previousClose : current,
+    currency,
+    source: 'twelvedata',
+  };
 }
 
 let usdAudCache = { rate: null, at: 0 };
@@ -118,15 +96,11 @@ function priceToAud(price, currency, usdAud) {
   return price * usdAud;
 }
 
-function canFetchQuotes() {
-  return true;
-}
-
 module.exports = {
   getQuote,
   getUsdToAudRate,
   priceToAud,
-  toYahooSymbol,
+  toTwelveDataSymbol,
   normalizeExchange,
   isUsExchange,
   canFetchQuotes,
