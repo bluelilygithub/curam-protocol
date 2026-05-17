@@ -1,7 +1,7 @@
 'use strict';
 
 const { pool } = require('../db');
-const finnhub = require('./finnhub');
+const marketData = require('./marketData');
 
 function num(v) {
   return Number(v) || 0;
@@ -63,35 +63,40 @@ function computeCashFromActivity(trades, ledgerRows) {
 }
 
 async function fetchQuotesForHoldings(holdings) {
-  if (!finnhub.isConfigured() || holdings.length === 0) {
-    return { quotes: {}, usdAud: null, quoteError: finnhub.isConfigured() ? null : 'NO_API_KEY' };
+  if (holdings.length === 0) {
+    return { quotes: {}, usdAud: null, quoteError: null };
   }
   let usdAud;
   try {
-    usdAud = await finnhub.getUsdToAudRate();
+    usdAud = await marketData.getUsdToAudRate();
   } catch (err) {
     return { quotes: {}, usdAud: null, quoteError: err.message };
   }
 
   const quotes = {};
-  let quoteError = null;
+  const errors = [];
   for (const h of holdings) {
     try {
-      const q = await finnhub.getQuote(h.symbol, h.exchange);
-      const priceAud = finnhub.priceToAud(q.current, q.currency, usdAud);
-      const prevAud = finnhub.priceToAud(q.previousClose, q.currency, usdAud);
+      const q = await marketData.getQuote(h.symbol, h.exchange);
+      const priceAud = marketData.priceToAud(q.current, q.currency, usdAud);
+      const prevAud = marketData.priceToAud(q.previousClose, q.currency, usdAud);
       quotes[`${h.symbol}:${h.exchange}`] = {
         priceAud,
         previousCloseAud: prevAud,
         dayChangePct: prevAud > 0 ? ((priceAud - prevAud) / prevAud) * 100 : 0,
         nativePrice: q.current,
         currency: q.currency,
+        source: q.source,
       };
     } catch (err) {
-      quoteError = quoteError || err.message;
+      errors.push(`${h.symbol} (${h.exchange}): ${err.message}`);
     }
   }
-  return { quotes, usdAud, quoteError };
+  return {
+    quotes,
+    usdAud,
+    quoteError: errors.length ? errors.join(' · ') : null,
+  };
 }
 
 async function getTradesAndLedger(userId) {
@@ -155,7 +160,8 @@ async function buildDashboard(userId) {
     unrealizedPnlPct: holdings.length ? unrealizedPnlPct : null,
     usdAud,
     quoteError,
-    finnhubConfigured: finnhub.isConfigured(),
+    finnhubConfigured: marketData.hasFinnhubKey(),
+    quotesAvailable: marketData.canFetchQuotes(),
   };
 }
 

@@ -3,7 +3,7 @@
 const cron = require('node-cron');
 const { pool } = require('../db');
 const portfolio = require('../services/sharesPortfolio');
-const finnhub = require('../services/finnhub');
+const marketData = require('../services/marketData');
 
 let cronTask = null;
 
@@ -31,7 +31,7 @@ async function getActiveShareUserIds() {
 }
 
 async function runSharesPoll() {
-  if (!finnhub.isConfigured()) return;
+  if (!marketData.canFetchQuotes()) return;
   const label = marketContextLabel();
   const userIds = await getActiveShareUserIds();
   if (!userIds.length) return;

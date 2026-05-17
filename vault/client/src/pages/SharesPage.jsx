@@ -206,7 +206,7 @@ export default function SharesPage() {
           <button
             type="button"
             onClick={handleRefresh}
-            disabled={refreshing || !dashboard?.finnhubConfigured}
+            disabled={refreshing}
             className="text-sm px-3 py-1.5 rounded-md hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
             style={{ background: 'var(--color-primary)', color: '#fff' }}
           >
@@ -216,11 +216,11 @@ export default function SharesPage() {
 
         {!dashboard?.finnhubConfigured && (
           <p className="text-xs mb-4 px-3 py-2 rounded-md" style={{ background: '#fef3c7', color: '#92400e' }}>
-            Add FINNHUB_API_KEY on Railway for live prices. Trades and cash still work offline.
+            Optional: FINNHUB_API_KEY on Railway improves US quotes. ASX uses Yahoo; FX uses Frankfurter (no key).
           </p>
         )}
 
-        {dashboard?.quoteError && dashboard?.finnhubConfigured && (
+        {dashboard?.quoteError && (
           <p className="text-xs mb-4 px-3 py-2 rounded-md" style={{ background: '#fef3c7', color: '#92400e' }}>
             Quote warning: {dashboard.quoteError}
           </p>

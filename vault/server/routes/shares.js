@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const finnhub = require('../services/finnhub');
+const marketData = require('../services/marketData');
 const portfolio = require('../services/sharesPortfolio');
 
 function normalizeSymbolInput(symbol, exchange) {
@@ -46,10 +46,7 @@ router.post('/refresh', async (req, res) => {
 // GET /api/shares/fx
 router.get('/fx', async (req, res) => {
   try {
-    if (!finnhub.isConfigured()) {
-      return res.status(503).json({ error: 'FINNHUB_API_KEY is not configured' });
-    }
-    const usdAud = await finnhub.getUsdToAudRate();
+    const usdAud = await marketData.getUsdToAudRate();
     res.json({ usdAud });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -88,10 +85,7 @@ router.post('/trades', async (req, res) => {
     const currency = ex === 'NYSE' ? 'USD' : 'AUD';
     let fxRateToAud = null;
     if (currency === 'USD') {
-      if (!finnhub.isConfigured()) {
-        return res.status(503).json({ error: 'FINNHUB_API_KEY required to convert USD trades to AUD' });
-      }
-      fxRateToAud = await finnhub.getUsdToAudRate();
+      fxRateToAud = await marketData.getUsdToAudRate();
     }
 
     const { rows } = await pool.query(
