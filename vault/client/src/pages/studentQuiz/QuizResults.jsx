@@ -6,7 +6,8 @@ import { formatDuration } from '../../utils/quizConstants';
 function confidenceStats(results) {
   const buckets = { High: { ok: 0, total: 0 }, Medium: { ok: 0, total: 0 }, Low: { ok: 0, total: 0 } };
   results.forEach((r) => {
-    const c = r.confidence || 'Medium';
+    if (!r.confidence) return;
+    const c = r.confidence;
     if (!buckets[c]) buckets[c] = { ok: 0, total: 0 };
     buckets[c].total += 1;
     if (r.correct) buckets[c].ok += 1;
@@ -53,7 +54,9 @@ function QuestionRow({ r, showCorrect }) {
       {r.flagged && (
         <p className="text-xs" style={{ color: '#f59e0b' }}>Flagged for review</p>
       )}
-      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Confidence: {r.confidence}</p>
+      {r.confidence && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Confidence: {r.confidence}</p>
+      )}
     </li>
   );
 }
@@ -64,15 +67,24 @@ export default function QuizResults() {
   const [attempt, setAttempt] = useState(null);
   const [load, setLoad] = useState(true);
   const [error, setError] = useState('');
+  const [summary, setSummary] = useState(null);
+  const [summaryLoad, setSummaryLoad] = useState(false);
+  const [summaryError, setSummaryError] = useState('');
+  const [summaryTried, setSummaryTried] = useState(false);
 
   useEffect(() => {
     (async () => {
       setLoad(true);
+      setSummary(null);
+      setSummaryError('');
       try {
         const res = await api.get(`/api/student-quizzes/attempts/${attemptId}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Not found');
         setAttempt(data);
+        if (data.performanceSummary?.summary) {
+          setSummary(data.performanceSummary);
+        }
       } catch (err) {
         setError(err.message);
       } finally {
@@ -81,10 +93,33 @@ export default function QuizResults() {
     })();
   }, [attemptId]);
 
+  const loadSummary = useCallback(async () => {
+    setSummaryLoad(true);
+    setSummaryError('');
+    try {
+      const res = await api.post(`/api/student-quizzes/attempts/${attemptId}/summary`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not generate summary');
+      setSummary(data);
+    } catch (err) {
+      setSummaryError(err.message);
+    } finally {
+      setSummaryLoad(false);
+    }
+  }, [attemptId]);
+
+  useEffect(() => {
+    if (!attempt || summary || summaryLoad || summaryTried) return;
+    if (attempt.performanceSummary?.summary) return;
+    setSummaryTried(true);
+    loadSummary();
+  }, [attempt, summary, summaryLoad, summaryTried, loadSummary]);
+
   const results = attempt?.questionResults || [];
   const correct = results.filter((r) => r.correct);
   const incorrect = results.filter((r) => !r.correct);
   const conf = useMemo(() => confidenceStats(results), [results]);
+  const hasConfidenceData = results.some((r) => r.confidence);
 
   const retakeWrong = useCallback(() => {
     const wrongIds = incorrect.map((r) => r.questionId);
@@ -127,7 +162,52 @@ export default function QuizResults() {
         className="rounded-2xl border p-4"
         style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
       >
+        <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Performance summary</h2>
+        {summaryLoad && (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Generating personalised feedback…</p>
+        )}
+        {summaryError && (
+          <div className="space-y-2">
+            <p className="text-xs" style={{ color: '#ef4444' }}>{summaryError}</p>
+            <button
+              type="button"
+              onClick={loadSummary}
+              className="text-xs hover:opacity-70 transition-opacity"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {summary?.summary && (
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{summary.summary}</p>
+        )}
+        {summary?.focusAreas?.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>
+              Focus on next
+            </p>
+            <ul className="space-y-1.5">
+              {summary.focusAreas.map((area) => (
+                <li key={area} className="text-sm flex gap-2" style={{ color: 'var(--color-text)' }}>
+                  <span style={{ color: 'var(--color-primary)' }}>→</span>
+                  {area}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
+      {hasConfidenceData && (
+      <section
+        className="rounded-2xl border p-4"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
         <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Confidence accuracy</h2>
+        <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+          How often your confidence matched whether you were right (multiple choice & short answer).
+        </p>
         <ul className="space-y-1 text-xs" style={{ color: 'var(--color-muted)' }}>
           {['High', 'Medium', 'Low'].map((level) => {
             const b = conf[level];
@@ -140,6 +220,7 @@ export default function QuizResults() {
           })}
         </ul>
       </section>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <Link

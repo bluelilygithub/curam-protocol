@@ -218,6 +218,73 @@ router.get('/attempts', async (req, res) => {
   }
 });
 
+router.post('/attempts/:attemptId/summary', async (req, res) => {
+  const attemptId = Number(req.params.attemptId);
+  if (!attemptId) return res.status(400).json({ error: 'Invalid attempt id' });
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT a."questionResults", a."scorePercent", a.passed, q.title, q.topic, q.level, a."performanceSummary"
+       FROM student_quiz_attempts a
+       JOIN student_quizzes q ON q.id = a."quizId"
+       WHERE a.id=$1 AND a."userId"=$2`,
+      [attemptId, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+    const row = rows[0];
+
+    if (row.performanceSummary && typeof row.performanceSummary === 'object') {
+      return res.json(row.performanceSummary);
+    }
+
+    const results = Array.isArray(row.questionResults) ? row.questionResults : [];
+    const wrong = results.filter((r) => !r.correct);
+    const subtopics = [...new Set(wrong.map((r) => r.subtopic).filter(Boolean))];
+
+    const { standard: model } = await getModelsForUser(req.user?.id);
+    if (!model) return res.status(400).json({ error: 'No model configured in Settings.' });
+
+    const wrongLines = wrong.slice(0, 15).map((r, i) =>
+      `${i + 1}. [${r.subtopic || 'General'}] Q: ${r.question}\n   Student: ${r.studentAnswer || '—'}\n   Correct: ${r.correctAnswer || '—'}`
+    ).join('\n');
+
+    const prompt = `You are a study coach. The student completed a quiz on "${row.topic}" (${row.level}, title: "${row.title}").
+Score: ${row.scorePercent}% (${row.passed ? 'passed' : 'did not pass'}).
+
+Incorrect or weak answers:
+${wrongLines || '(none — perfect score)'}
+
+Subtopics missed: ${subtopics.join(', ') || 'none'}
+
+Write a brief, encouraging performance summary (2–4 sentences) and list 2–4 specific focus areas to study next.
+Return JSON only: { "summary": "...", "focusAreas": ["...", "..."] }`;
+
+    const raw = await callModel(model, prompt, { maxTokens: 800 });
+    const parsed = parseModelJson(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return res.status(502).json({ error: 'Could not parse performance summary' });
+    }
+
+    const payload = {
+      summary: String(parsed.summary || '').trim(),
+      focusAreas: Array.isArray(parsed.focusAreas)
+        ? parsed.focusAreas.map((s) => String(s).trim()).filter(Boolean).slice(0, 6)
+        : [],
+      generatedAt: new Date().toISOString(),
+    };
+
+    await pool.query(
+      'UPDATE student_quiz_attempts SET "performanceSummary"=$1 WHERE id=$2 AND "userId"=$3',
+      [JSON.stringify(payload), attemptId, req.user.id]
+    );
+
+    res.json(payload);
+  } catch (err) {
+    console.error('[student-quizzes summary]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/attempts/:attemptId', async (req, res) => {
   try {
     const attemptId = Number(req.params.attemptId);
@@ -243,6 +310,7 @@ router.get('/attempts/:attemptId', async (req, res) => {
       createdAt: row.createdAt,
       questionResults: row.questionResults,
       questionPool: row.questionPool,
+      performanceSummary: row.performanceSummary || null,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

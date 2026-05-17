@@ -13,6 +13,29 @@ export const QUESTION_TYPE_OPTIONS = [
 
 export const CONFIDENCE_LEVELS = ['Low', 'Medium', 'High'];
 
+/** Confidence is useful for MC / short answer — not for quick T/F. */
+export function usesConfidence(type) {
+  return type === 'multiple_choice' || type === 'short_answer';
+}
+
+/** Parse AI/student text to true | false | null. */
+export function parseBoolish(value) {
+  const t = String(value ?? '').trim().toLowerCase();
+  if (!t) return null;
+  if (t === 'true' || t === 't' || t === 'yes' || t === '1') return 'true';
+  if (t === 'false' || t === 'f' || t === 'no' || t === '0') return 'false';
+  if (/^true\b/.test(t) || (t.includes('true') && !t.includes('false'))) return 'true';
+  if (/^false\b/.test(t) || t.includes('false')) return 'false';
+  return null;
+}
+
+export function formatBoolAnswer(value) {
+  const b = parseBoolish(value);
+  if (b === 'true') return 'True';
+  if (b === 'false') return 'False';
+  return String(value ?? '').trim() || '—';
+}
+
 export function formatQuizTypes(types) {
   if (!Array.isArray(types) || !types.length) return '—';
   return types
@@ -40,8 +63,10 @@ export function markObjective(question, studentAnswer) {
   const correct = String(question.correct_answer ?? '').trim().toLowerCase();
   const given = String(studentAnswer ?? '').trim().toLowerCase();
   if (question.type === 'true_false') {
-    const norm = (v) => (v === 'true' || v === 't' || v === 'yes' ? 'true' : v === 'false' || v === 'f' || v === 'no' ? 'false' : v);
-    return norm(given) === norm(correct);
+    const expected = parseBoolish(correct);
+    const actual = parseBoolish(given);
+    if (expected && actual) return expected === actual;
+    return given === correct;
   }
   if (question.type === 'multiple_choice') {
     if (given === correct) return true;

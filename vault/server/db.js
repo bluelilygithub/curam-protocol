@@ -534,9 +534,11 @@ async function initSchema() {
         "timeTakenMs"     INTEGER NOT NULL DEFAULT 0,
         passed            BOOLEAN NOT NULL DEFAULT FALSE,
         "questionResults" JSONB NOT NULL DEFAULT '[]',
+        "performanceSummary" JSONB,
         "createdAt"       TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    await client.query(`ALTER TABLE student_quiz_attempts ADD COLUMN IF NOT EXISTS "performanceSummary" JSONB`);
 
     // ── Finance ───────────────────────────────────────────────────────────────
     await client.query(`

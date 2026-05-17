@@ -7,6 +7,8 @@ import {
   pickQuestions,
   markObjective,
   formatDuration,
+  usesConfidence,
+  formatBoolAnswer,
 } from '../../utils/quizConstants';
 
 export default function QuizTake() {
@@ -158,14 +160,14 @@ export default function QuizTake() {
         studentAnswer,
         correctAnswer: current.correct_answer,
         explanation: current.explanation,
-        confidence,
+        confidence: usesConfidence(current.type) ? confidence : null,
         flagged,
         score10,
         feedback,
         options: current.options,
       };
 
-      if (!correct && current.type !== 'short_answer') {
+      if (!correct) {
         setReveal(result);
         setSubmitting(false);
         return;
@@ -185,8 +187,11 @@ export default function QuizTake() {
         <p className="text-sm font-medium" style={{ color: '#ef4444' }}>Incorrect</p>
         <p className="text-sm" style={{ color: 'var(--color-text)' }}>{reveal.question}</p>
         <div className="rounded-xl border p-3 text-sm space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-          <p style={{ color: 'var(--color-muted)' }}>Your answer: {reveal.studentAnswer}</p>
-          <p style={{ color: 'var(--color-text)' }}>Correct answer: {reveal.correctAnswer}</p>
+          <p style={{ color: 'var(--color-muted)' }}>Your answer: {reveal.type === 'true_false' ? formatBoolAnswer(reveal.studentAnswer) : reveal.studentAnswer}</p>
+          <p style={{ color: 'var(--color-text)' }}>Correct answer: {reveal.type === 'true_false' ? formatBoolAnswer(reveal.correctAnswer) : reveal.correctAnswer}</p>
+          {reveal.type === 'short_answer' && reveal.feedback && (
+            <p style={{ color: 'var(--color-muted)' }}>{reveal.feedback}</p>
+          )}
           {reveal.explanation && <p style={{ color: 'var(--color-muted)' }}>{reveal.explanation}</p>}
         </div>
         <button
@@ -290,8 +295,9 @@ export default function QuizTake() {
         />
       )}
 
+      {usesConfidence(current.type) && (
       <div className="mb-4">
-        <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Confidence</p>
+        <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>How confident are you?</p>
         <div className="flex gap-2 flex-wrap">
           {CONFIDENCE_LEVELS.map((c) => (
             <button
@@ -309,6 +315,7 @@ export default function QuizTake() {
           ))}
         </div>
       </div>
+      )}
 
       <label className="flex items-center gap-2 text-xs mb-4 cursor-pointer" style={{ color: 'var(--color-muted)' }}>
         <input type="checkbox" checked={flagged} onChange={(e) => setFlagged(e.target.checked)} />
