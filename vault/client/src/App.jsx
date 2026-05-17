@@ -28,9 +28,15 @@ import UsagePage from './pages/UsagePage';
 import MoodPage from './pages/MoodPage';
 import SharedTaskPage from './pages/SharedTaskPage';
 import NewsDigestPage from './pages/NewsDigestPage';
-import StudentAgentPage from './pages/StudentAgentPage';
 import StudentCardsChatPage from './pages/StudentCardsChatPage';
 import StudentSavedDecksPage from './pages/StudentSavedDecksPage';
+import StudentQuizLayout from './pages/studentQuiz/StudentQuizLayout';
+import QuizDashboard from './pages/studentQuiz/QuizDashboard';
+import QuizLibrary from './pages/studentQuiz/QuizLibrary';
+import QuizTakePicker from './pages/studentQuiz/QuizTakePicker';
+import QuizTake from './pages/studentQuiz/QuizTake';
+import QuizResultsList from './pages/studentQuiz/QuizResultsList';
+import QuizResults from './pages/studentQuiz/QuizResults';
 import LoginPage from './pages/LoginPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
@@ -88,7 +94,14 @@ function App() {
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/projects/:id/chat" element={<ChatPage />} />
               <Route path="/chat" element={<ChatPage general />} />
-              <Route path="/student/quiz" element={<StudentAgentPage />} />
+              <Route path="/student/quiz" element={<StudentQuizLayout />}>
+                <Route index element={<QuizDashboard />} />
+                <Route path="library" element={<QuizLibrary />} />
+                <Route path="take" element={<QuizTakePicker />} />
+                <Route path="take/:quizId" element={<QuizTake />} />
+                <Route path="results" element={<QuizResultsList />} />
+                <Route path="results/:attemptId" element={<QuizResults />} />
+              </Route>
               <Route path="/student/cards" element={<StudentCardsChatPage />} />
               <Route path="/student/saved-decks" element={<StudentSavedDecksPage />} />
               <Route path="/settings" element={<SettingsPage />} />

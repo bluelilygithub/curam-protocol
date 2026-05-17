@@ -507,6 +507,37 @@ async function initSchema() {
     `);
     await client.query(`ALTER TABLE study_decks ADD COLUMN IF NOT EXISTS "listOrder" INTEGER NOT NULL DEFAULT 0`);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS student_quizzes (
+        id              SERIAL PRIMARY KEY,
+        "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title           TEXT NOT NULL DEFAULT '',
+        category        TEXT NOT NULL DEFAULT '',
+        topic           TEXT NOT NULL DEFAULT '',
+        level           TEXT NOT NULL DEFAULT '1st year',
+        "questionCount" INTEGER NOT NULL DEFAULT 10,
+        "questionTypes" JSONB NOT NULL DEFAULT '[]',
+        passmark        INTEGER NOT NULL DEFAULT 80,
+        tags            TEXT[] NOT NULL DEFAULT '{}',
+        "questionPool"  JSONB NOT NULL DEFAULT '[]',
+        "createdAt"     TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS student_quiz_attempts (
+        id                SERIAL PRIMARY KEY,
+        "userId"          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "quizId"          INTEGER NOT NULL REFERENCES student_quizzes(id) ON DELETE CASCADE,
+        "scorePercent"    NUMERIC(5,2) NOT NULL DEFAULT 0,
+        "timeTakenMs"     INTEGER NOT NULL DEFAULT 0,
+        passed            BOOLEAN NOT NULL DEFAULT FALSE,
+        "questionResults" JSONB NOT NULL DEFAULT '[]',
+        "createdAt"       TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ── Finance ───────────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS fin_accounts (
@@ -759,6 +790,9 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_project_id  ON notes(project_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_session  ON messages("sessionId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_study_decks_user  ON study_decks("userId", "updatedAt" DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_student_quizzes_user ON student_quizzes("userId", "updatedAt" DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_student_quiz_attempts_user ON student_quiz_attempts("userId", "createdAt" DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_student_quiz_attempts_quiz ON student_quiz_attempts("quizId", "createdAt" DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_project     ON tasks("projectId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_project  ON sessions("projectId")`);
 
