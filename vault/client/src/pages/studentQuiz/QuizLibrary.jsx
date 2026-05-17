@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
 import { ACADEMIC_LEVELS, QUESTION_TYPE_OPTIONS, formatQuizTypes } from '../../utils/quizConstants';
+import QuizBuildingModal from '../../components/studentQuiz/QuizBuildingModal';
 
 const EMPTY_FORM = {
   title: '',
@@ -63,8 +65,10 @@ export default function QuizLibrary() {
       setError('Select at least one question type.');
       return;
     }
-    setGenerating(true);
-    setError('');
+    flushSync(() => {
+      setGenerating(true);
+      setError('');
+    });
     try {
       const res = await api.post('/api/student-quizzes', form);
       const data = await res.json();
@@ -93,6 +97,8 @@ export default function QuizLibrary() {
   };
 
   return (
+    <>
+      {generating && <QuizBuildingModal title={form.title.trim() || 'New quiz'} />}
     <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -218,11 +224,6 @@ export default function QuizLibrary() {
             </div>
           </div>
           {error && <p className="text-sm" style={{ color: '#ef4444' }}>{error}</p>}
-          {generating && (
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-              Generating question pool… this may take a minute.
-            </p>
-          )}
           <button
             type="submit"
             disabled={generating}
@@ -303,5 +304,6 @@ export default function QuizLibrary() {
         </ul>
       )}
     </div>
+    </>
   );
 }

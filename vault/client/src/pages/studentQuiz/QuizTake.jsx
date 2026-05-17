@@ -1,21 +1,23 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import api from '../../utils/apiClient';
-import { useIcon } from '../../providers/IconProvider';
 import {
   CONFIDENCE_LEVELS,
   pickQuestions,
   markObjective,
   formatDuration,
   usesConfidence,
-  formatBoolAnswer,
+  isMultiSelectQuestion,
+  serializeMultiAnswer,
+  formatAnswerDisplay,
+  formatCorrectAnswersDisplay,
 } from '../../utils/quizConstants';
+import QuizProgressBar from '../../components/studentQuiz/QuizProgressBar';
 
 export default function QuizTake() {
   const { quizId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const getIcon = useIcon();
   const qid = Number(quizId);
   const wrongOnly = searchParams.get('wrongOnly') === '1';
 
@@ -24,6 +26,7 @@ export default function QuizTake() {
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [draft, setDraft] = useState('');
+  const [draftSelected, setDraftSelected] = useState([]);
   const [confidence, setConfidence] = useState('Medium');
   const [flagged, setFlagged] = useState(false);
   const [load, setLoad] = useState(true);
@@ -77,6 +80,7 @@ export default function QuizTake() {
     const nextAnswers = [...answers, result];
     setAnswers(nextAnswers);
     setDraft('');
+    setDraftSelected([]);
     setConfidence('Medium');
     setFlagged(false);
     setReveal(null);
@@ -123,7 +127,10 @@ export default function QuizTake() {
     let correct = false;
     let score10 = null;
     let feedback = '';
-    const studentAnswer = draft.trim();
+    const multi = isMultiSelectQuestion(current);
+    const studentAnswer = multi
+      ? serializeMultiAnswer(draftSelected)
+      : draft.trim();
 
     try {
       if (current.type === 'short_answer') {
@@ -143,22 +150,29 @@ export default function QuizTake() {
           setSubmitting(false);
           return;
         }
-        if (current.type === 'multiple_choice' && !studentAnswer) {
+        if (multi && !draftSelected.length) {
+          setError('Select one or more answers');
+          setSubmitting(false);
+          return;
+        }
+        if (current.type === 'multiple_choice' && !multi && !studentAnswer) {
           setError('Select an answer');
           setSubmitting(false);
           return;
         }
-        correct = markObjective(current, studentAnswer);
+        correct = markObjective(current, multi ? draftSelected : studentAnswer);
       }
 
       const result = {
         questionId: current.id,
         subtopic: current.subtopic,
-        type: current.type,
+        type: multi ? 'multiple_select' : current.type,
         question: current.question,
         correct,
         studentAnswer,
-        correctAnswer: current.correct_answer,
+        correctAnswer: formatCorrectAnswersDisplay(current),
+        correct_answers: current.correct_answers,
+        allow_multiple: current.allow_multiple,
         explanation: current.explanation,
         confidence: usesConfidence(current.type) ? confidence : null,
         flagged,
@@ -179,16 +193,38 @@ export default function QuizTake() {
     } finally {
       setSubmitting(false);
     }
-  }, [current, submitting, draft, confidence, flagged, advanceWithResult]);
+  }, [current, submitting, draft, draftSelected, confidence, flagged, advanceWithResult]);
+
+  const progressCompleted = index + 1;
+
+  const toggleMultiOption = (opt) => {
+    setDraftSelected((prev) => {
+      const has = prev.includes(opt);
+      return has ? prev.filter((x) => x !== opt) : [...prev, opt];
+    });
+  };
+  const progressLabel = questions.length
+    ? `Question ${Math.min(index + 1, questions.length)} of ${questions.length}`
+    : '';
 
   if (reveal) {
+    const revealQ = {
+      type: reveal.type,
+      correct_answer: reveal.correctAnswer,
+      correct_answers: reveal.correct_answers,
+      allow_multiple: reveal.allow_multiple,
+      options: reveal.options,
+    };
     return (
       <div className="p-4 sm:p-6 max-w-xl mx-auto space-y-4">
+        {questions.length > 0 && (
+          <QuizProgressBar completed={progressCompleted} total={questions.length} label={progressLabel} />
+        )}
         <p className="text-sm font-medium" style={{ color: '#ef4444' }}>Incorrect</p>
         <p className="text-sm" style={{ color: 'var(--color-text)' }}>{reveal.question}</p>
         <div className="rounded-xl border p-3 text-sm space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-          <p style={{ color: 'var(--color-muted)' }}>Your answer: {reveal.type === 'true_false' ? formatBoolAnswer(reveal.studentAnswer) : reveal.studentAnswer}</p>
-          <p style={{ color: 'var(--color-text)' }}>Correct answer: {reveal.type === 'true_false' ? formatBoolAnswer(reveal.correctAnswer) : reveal.correctAnswer}</p>
+          <p style={{ color: 'var(--color-muted)' }}>Your answer: {formatAnswerDisplay(revealQ, reveal.studentAnswer)}</p>
+          <p style={{ color: 'var(--color-text)' }}>Correct answer: {formatCorrectAnswersDisplay(revealQ)}</p>
           {reveal.type === 'short_answer' && reveal.feedback && (
             <p style={{ color: 'var(--color-muted)' }}>{reveal.feedback}</p>
           )}
@@ -224,7 +260,7 @@ export default function QuizTake() {
 
   if (!current) return null;
 
-  const progress = `${index + 1} of ${questions.length}`;
+  const multiSelect = isMultiSelectQuestion(current);
 
   return (
     <div className="p-4 sm:p-6 max-w-xl mx-auto pb-24">
@@ -232,9 +268,7 @@ export default function QuizTake() {
         <Link to="/student/quiz/take" className="hover:opacity-70 transition-opacity">← Quizzes</Link>
         <span>{formatDuration(elapsed)}</span>
       </div>
-      <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-primary)' }}>
-        Question {progress}
-      </p>
+      <QuizProgressBar completed={progressCompleted} total={questions.length} label={progressLabel} />
       <h2 className="text-base font-medium mb-4" style={{ color: 'var(--color-text)' }}>{current.question}</h2>
 
       {current.type === 'true_false' && (
@@ -257,31 +291,47 @@ export default function QuizTake() {
         </div>
       )}
 
-      {current.type === 'multiple_choice' && (
-        <ul className="space-y-2 mb-4">
-          {(current.options || []).map((opt, i) => {
-            const letter = String.fromCharCode(65 + i);
-            const val = opt;
-            const selected = draft === val;
-            return (
-              <li key={letter}>
-                <button
-                  type="button"
-                  onClick={() => setDraft(val)}
-                  className="w-full text-left px-3 py-2.5 rounded-xl border text-sm hover:opacity-70 transition-opacity"
-                  style={{
-                    borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
-                    background: selected ? 'var(--color-bg)' : 'var(--color-surface)',
-                    color: 'var(--color-text)',
-                  }}
-                >
-                  <span className="font-semibold mr-2" style={{ color: 'var(--color-muted)' }}>{letter}</span>
-                  {opt}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+      {(current.type === 'multiple_choice' || current.type === 'multiple_select') && (
+        <>
+          {multiSelect && (
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>Select all that apply</p>
+          )}
+          <ul className="space-y-2 mb-4">
+            {(current.options || []).map((opt, i) => {
+              const letter = String.fromCharCode(65 + i);
+              const selected = multiSelect ? draftSelected.includes(opt) : draft === opt;
+              return (
+                <li key={letter}>
+                  <button
+                    type="button"
+                    onClick={() => (multiSelect ? toggleMultiOption(opt) : setDraft(opt))}
+                    className="w-full text-left px-3 py-2.5 rounded-xl border text-sm hover:opacity-70 transition-opacity flex items-start gap-2"
+                    style={{
+                      borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
+                      background: selected ? 'var(--color-bg)' : 'var(--color-surface)',
+                      color: 'var(--color-text)',
+                    }}
+                  >
+                    <span
+                      className="shrink-0 w-4 h-4 mt-0.5 rounded border flex items-center justify-center text-[10px]"
+                      style={{
+                        borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
+                        background: selected ? 'var(--color-primary)' : 'transparent',
+                        color: selected ? '#fff' : 'transparent',
+                      }}
+                    >
+                      {selected ? '✓' : ''}
+                    </span>
+                    <span>
+                      <span className="font-semibold mr-2" style={{ color: 'var(--color-muted)' }}>{letter}</span>
+                      {opt}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
       {current.type === 'short_answer' && (

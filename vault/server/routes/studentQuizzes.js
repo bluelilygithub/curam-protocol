@@ -49,16 +49,39 @@ function mapQuizRow(row) {
 
 function normalizeQuestion(q, index) {
   const id = q.id != null ? String(q.id) : `q-${index + 1}`;
-  const type = ['true_false', 'multiple_choice', 'short_answer'].includes(q.type) ? q.type : 'multiple_choice';
+  let type = ['true_false', 'multiple_choice', 'multiple_select', 'short_answer'].includes(q.type)
+    ? q.type
+    : 'multiple_choice';
+
   let options = q.options;
-  if (type === 'multiple_choice' && !Array.isArray(options)) options = [];
+  if (!Array.isArray(options)) options = [];
   if (type === 'true_false') options = ['True', 'False'];
+
+  const allowMultiple = !!q.allow_multiple || type === 'multiple_select';
+  if (type === 'multiple_choice' && allowMultiple) type = 'multiple_select';
+
+  let correctAnswers = q.correct_answers;
+  if (!correctAnswers && q.correct_answer != null) {
+    const ca = q.correct_answer;
+    if (Array.isArray(ca)) correctAnswers = ca;
+    else if (typeof ca === 'string' && (ca.includes('|') || ca.includes(';'))) {
+      correctAnswers = ca.split(ca.includes('|') ? '|' : ';').map((s) => s.trim()).filter(Boolean);
+    } else correctAnswers = [String(ca)];
+  }
+  if (!Array.isArray(correctAnswers)) correctAnswers = [];
+
+  const correct_answer = allowMultiple && correctAnswers.length
+    ? correctAnswers.map(String).join('|')
+    : (correctAnswers[0] != null ? String(correctAnswers[0]) : (q.correct_answer != null ? String(q.correct_answer) : ''));
+
   return {
     id,
     type,
     question: String(q.question || '').trim(),
-    options: type === 'multiple_choice' ? options.map(String) : (type === 'true_false' ? ['True', 'False'] : []),
-    correct_answer: q.correct_answer != null ? String(q.correct_answer) : '',
+    options: (type === 'multiple_choice' || type === 'multiple_select') ? options.map(String) : (type === 'true_false' ? ['True', 'False'] : []),
+    correct_answer,
+    correct_answers: correctAnswers.length ? correctAnswers.map(String) : undefined,
+    allow_multiple: allowMultiple,
     explanation: String(q.explanation || '').trim(),
     subtopic: String(q.subtopic || 'General').trim(),
   };
@@ -73,10 +96,11 @@ async function generateQuestionPoolForUser(userId, { topic, level, types, count 
   const prompt = `Generate ${n} quiz questions on the topic: ${topic}. Academic level: ${level}.
 Question types to include: ${typesStr}.
 For each question return JSON with:
-{ "id", "type" ("true_false"|"multiple_choice"|"short_answer"), "question", "options" (array, for MC only), "correct_answer", "explanation", "subtopic" }
+{ "id", "type" ("true_false"|"multiple_choice"|"multiple_select"|"short_answer"), "question", "options" (array, for MC types), "correct_answer", "correct_answers" (optional array for multiple_select), "allow_multiple" (optional bool), "explanation", "subtopic" }
 For short_answer, correct_answer should be a model answer with key concepts.
 For true_false, correct_answer must be "true" or "false" (lowercase).
-For multiple_choice, options must be exactly 4 strings; correct_answer must match one option text exactly.
+For multiple_choice, options must be exactly 4 strings; correct_answer must match exactly one option text.
+For multiple_select, use type "multiple_select" OR multiple_choice with allow_multiple true; correct_answers must be an array of 2+ option texts that are all correct (student must select all and only those).
 Return a JSON array only, no other text.`;
 
   const raw = await callModel(model, prompt, { maxTokens: 16000 });
@@ -454,7 +478,7 @@ router.post('/', async (req, res) => {
   }
 
   const types = Array.isArray(questionTypes) && questionTypes.length
-    ? questionTypes.filter((t) => ['true_false', 'multiple_choice', 'short_answer'].includes(t))
+    ? questionTypes.filter((t) => ['true_false', 'multiple_choice', 'multiple_select', 'short_answer'].includes(t))
     : ['multiple_choice', 'true_false'];
 
   try {

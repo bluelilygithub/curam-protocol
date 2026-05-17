@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/apiClient';
-import { formatDuration } from '../../utils/quizConstants';
+import { formatDuration, formatAnswerDisplay, formatCorrectAnswersDisplay } from '../../utils/quizConstants';
 
 function buildLocalSummary(attempt, results) {
   const wrong = results.filter((r) => !r.correct);
@@ -34,6 +34,13 @@ function confidenceStats(results) {
 }
 
 function QuestionRow({ r, showCorrect }) {
+  const qMeta = {
+    type: r.type,
+    correct_answer: r.correctAnswer,
+    correct_answers: r.correct_answers,
+    allow_multiple: r.allow_multiple,
+    options: r.options,
+  };
   return (
     <li
       className="rounded-xl border p-3 text-sm space-y-2"
@@ -51,11 +58,11 @@ function QuestionRow({ r, showCorrect }) {
       {!r.correct && (
         <>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-            Your answer: <span style={{ color: 'var(--color-text)' }}>{r.studentAnswer || '—'}</span>
+            Your answer: <span style={{ color: 'var(--color-text)' }}>{formatAnswerDisplay(qMeta, r.studentAnswer)}</span>
           </p>
           {showCorrect && (
             <p className="text-xs" style={{ color: 'var(--color-text)' }}>
-              Correct: {r.correctAnswer}
+              Correct: {formatCorrectAnswersDisplay(qMeta)}
             </p>
           )}
           {r.explanation && (

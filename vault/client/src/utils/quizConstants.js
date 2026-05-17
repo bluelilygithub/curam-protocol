@@ -7,7 +7,8 @@ export const ACADEMIC_LEVELS = [
 
 export const QUESTION_TYPE_OPTIONS = [
   { value: 'true_false', label: 'True / False' },
-  { value: 'multiple_choice', label: 'Multiple choice' },
+  { value: 'multiple_choice', label: 'Multiple choice (one answer)' },
+  { value: 'multiple_select', label: 'Multiple choice (select all that apply)' },
   { value: 'short_answer', label: 'Short answer' },
 ];
 
@@ -15,7 +16,90 @@ export const CONFIDENCE_LEVELS = ['Low', 'Medium', 'High'];
 
 /** Confidence is useful for MC / short answer — not for quick T/F. */
 export function usesConfidence(type) {
-  return type === 'multiple_choice' || type === 'short_answer';
+  return type === 'multiple_choice' || type === 'multiple_select' || type === 'short_answer';
+}
+
+export function isMultiSelectQuestion(question) {
+  if (!question) return false;
+  if (question.type === 'multiple_select') return true;
+  if (question.allow_multiple) return true;
+  if (question.type === 'multiple_choice') {
+    const ca = question.correct_answers ?? question.correct_answer;
+    if (Array.isArray(ca) && ca.length > 1) return true;
+    if (typeof ca === 'string' && (ca.includes('|') || ca.includes(';'))) return true;
+  }
+  return false;
+}
+
+export function isSingleChoiceQuestion(question) {
+  return question?.type === 'multiple_choice' && !isMultiSelectQuestion(question);
+}
+
+export function parseCorrectAnswers(question) {
+  const raw = question.correct_answers ?? question.correct_answer;
+  if (Array.isArray(raw)) return raw.map((s) => String(s).trim()).filter(Boolean);
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s) return [];
+    if (s.startsWith('[')) {
+      try {
+        const p = JSON.parse(s);
+        if (Array.isArray(p)) return p.map((x) => String(x).trim()).filter(Boolean);
+      } catch { /* ignore */ }
+    }
+    if (s.includes('|')) return s.split('|').map((x) => x.trim()).filter(Boolean);
+    if (s.includes(';')) return s.split(';').map((x) => x.trim()).filter(Boolean);
+    return [s];
+  }
+  return [];
+}
+
+export function normalizeOptionText(text, options = []) {
+  const t = String(text ?? '').trim().toLowerCase();
+  if (t.length === 1 && t >= 'a' && t <= 'z') {
+    const idx = t.charCodeAt(0) - 97;
+    if (options[idx] != null) return String(options[idx]).trim().toLowerCase();
+  }
+  const match = options.find((o) => String(o).trim().toLowerCase() === t);
+  return match ? String(match).trim().toLowerCase() : t;
+}
+
+export function serializeMultiAnswer(selected) {
+  return (selected || []).map((s) => String(s).trim()).filter(Boolean).join('|||');
+}
+
+export function parseMultiAnswer(value) {
+  if (Array.isArray(value)) return value.map((s) => String(s).trim()).filter(Boolean);
+  if (!value) return [];
+  return String(value).split('|||').map((s) => s.trim()).filter(Boolean);
+}
+
+export function formatAnswerDisplay(question, answer) {
+  if (isMultiSelectQuestion(question)) {
+    return parseMultiAnswer(answer).join(', ') || '—';
+  }
+  if (question?.type === 'true_false') return formatBoolAnswer(answer);
+  return String(answer ?? '').trim() || '—';
+}
+
+export function formatCorrectAnswersDisplay(question) {
+  if (isMultiSelectQuestion(question)) {
+    return parseCorrectAnswers(question).join(', ') || '—';
+  }
+  if (question?.type === 'true_false') return formatBoolAnswer(question.correct_answer);
+  return String(question?.correct_answer ?? '').trim() || '—';
+}
+
+export function markMultiSelect(question, selectedList) {
+  const correct = parseCorrectAnswers(question).map((s) => normalizeOptionText(s, question.options));
+  const selected = (selectedList || []).map((s) => normalizeOptionText(s, question.options));
+  const cSet = new Set(correct.filter(Boolean));
+  const sSet = new Set(selected.filter(Boolean));
+  if (!cSet.size || sSet.size !== cSet.size) return false;
+  for (const c of cSet) {
+    if (!sSet.has(c)) return false;
+  }
+  return true;
 }
 
 /** Parse AI/student text to true | false | null. */
@@ -58,8 +142,15 @@ export function pickQuestions(pool, count) {
   return shuffleArray(pool).slice(0, n);
 }
 
-/** Client-side mark for T/F and MC. */
+/** Client-side mark for T/F, MC, and multi-select. */
 export function markObjective(question, studentAnswer) {
+  if (isMultiSelectQuestion(question)) {
+    const selected = Array.isArray(studentAnswer)
+      ? studentAnswer
+      : parseMultiAnswer(studentAnswer);
+    return markMultiSelect(question, selected);
+  }
+
   const correct = String(question.correct_answer ?? '').trim().toLowerCase();
   const given = String(studentAnswer ?? '').trim().toLowerCase();
   if (question.type === 'true_false') {
