@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BookOpen, Plus, Trash2, Copy, Check, Play } from 'lucide-react';
 import api from '../utils/apiClient';
 import PromptVariableModal from '../components/PromptVariableModal';
 import { extractVariables } from '../utils/promptVariables';
+import useProjectStore from '../store/projectStore';
+import useToastStore from '../store/toastStore';
 
 function PromptsPage() {
+  const navigate = useNavigate();
+  const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const [prompts, setPrompts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', tags: '' });
@@ -36,17 +41,30 @@ function PromptsPage() {
     setPrompts(prev => prev.filter(p => p.id !== id));
   };
 
-  const handleCopy = (id, content) => {
-    navigator.clipboard.writeText(content);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
+  const handleCopy = async (id, content) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      useToastStore.getState().addToast('Could not copy to clipboard', 'error');
+    }
+  };
+
+  const openInChat = (filled) => {
+    if (activeProjectId) {
+      navigate(`/projects/${activeProjectId}/chat`, { state: { draft: filled } });
+    } else {
+      navigate('/chat', { state: { draft: filled } });
+    }
+    useToastStore.getState().addToast('Prompt loaded in chat — review and send when ready', 'success');
   };
 
   const handleUse = (content) => {
     if (extractVariables(content).length > 0) {
       setVarModal({ content });
     } else {
-      navigator.clipboard.writeText(content);
+      openInChat(content);
     }
   };
 
@@ -160,13 +178,13 @@ function PromptsPage() {
                     </span>
                   )}
                 </span>
-                <button onClick={() => handleUse(p.content)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0" style={{ color: 'var(--color-primary)' }} title="Use prompt">
+                <button type="button" onClick={() => handleUse(p.content)} className="hover:opacity-70 transition-opacity flex-shrink-0 p-1" style={{ color: 'var(--color-primary)' }} title="Open in chat">
                   <Play size={14} />
                 </button>
-                <button onClick={() => handleCopy(p.id, p.content)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0" style={{ color: 'var(--color-muted)' }} title="Copy">
+                <button type="button" onClick={() => handleCopy(p.id, p.content)} className="hover:opacity-70 transition-opacity flex-shrink-0 p-1" style={{ color: 'var(--color-muted)' }} title="Copy to clipboard">
                   {copiedId === p.id ? <Check size={14} style={{ color: 'var(--color-primary)' }} /> : <Copy size={14} />}
                 </button>
-                <button onClick={() => handleDelete(p.id)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity flex-shrink-0" style={{ color: 'var(--color-muted)' }} title="Delete">
+                <button type="button" onClick={() => handleDelete(p.id)} className="hover:opacity-70 transition-opacity flex-shrink-0 p-1" style={{ color: 'var(--color-muted)' }} title="Delete">
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -187,7 +205,7 @@ function PromptsPage() {
       {varModal && (
         <PromptVariableModal
           content={varModal.content}
-          onInsert={(filled) => { navigator.clipboard.writeText(filled); setVarModal(null); }}
+          onInsert={(filled) => { openInChat(filled); setVarModal(null); }}
           onClose={() => setVarModal(null)}
         />
       )}
