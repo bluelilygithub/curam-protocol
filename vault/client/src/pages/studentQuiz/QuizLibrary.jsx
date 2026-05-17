@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
 import { ACADEMIC_LEVELS, QUESTION_TYPE_OPTIONS, formatQuizTypes } from '../../utils/quizConstants';
-import QuizBuildingModal from '../../components/studentQuiz/QuizBuildingModal';
+import { useQuizBuild } from './quizBuildContext';
 
 const EMPTY_FORM = {
   title: '',
@@ -21,12 +20,13 @@ const EMPTY_FORM = {
 export default function QuizLibrary() {
   const getIcon = useIcon();
   const navigate = useNavigate();
+  const { buildState, startQuizBuild, endQuizBuild } = useQuizBuild();
+  const generating = !!buildState;
   const [rows, setRows] = useState([]);
   const [categories, setCategories] = useState([]);
   const [load, setLoad] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState(null);
 
@@ -58,31 +58,34 @@ export default function QuizLibrary() {
     });
   };
 
-  const handleCreate = async (e) => {
+  const handleCreate = (e) => {
     e.preventDefault();
     if (!form.title.trim() || !form.topic.trim() || generating) return;
     if (!form.questionTypes.length) {
       setError('Select at least one question type.');
       return;
     }
-    flushSync(() => {
-      setGenerating(true);
-      setError('');
-    });
-    try {
-      const res = await api.post('/api/student-quizzes', form);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create quiz');
-      useToastStore.getState().addToast('Quiz created', 'success');
-      setForm(EMPTY_FORM);
-      setShowForm(false);
-      await refresh();
-      navigate(`/student/quiz/take/${data.id}`);
-    } catch (err) {
-      setError(err.message || 'Generation failed');
-    } finally {
-      setGenerating(false);
-    }
+    const payload = { ...form };
+    const title = form.title.trim();
+    setError('');
+    startQuizBuild(title);
+
+    (async () => {
+      try {
+        const res = await api.post('/api/student-quizzes', payload);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to create quiz');
+        useToastStore.getState().addToast('Quiz created', 'success');
+        setForm(EMPTY_FORM);
+        setShowForm(false);
+        await refresh();
+        navigate(`/student/quiz/take/${data.id}`);
+      } catch (err) {
+        setError(err.message || 'Generation failed');
+      } finally {
+        endQuizBuild();
+      }
+    })();
   };
 
   const handleDelete = async (id) => {
@@ -97,8 +100,6 @@ export default function QuizLibrary() {
   };
 
   return (
-    <>
-      {generating && <QuizBuildingModal title={form.title.trim() || 'New quiz'} />}
     <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -304,6 +305,5 @@ export default function QuizLibrary() {
         </ul>
       )}
     </div>
-    </>
   );
 }

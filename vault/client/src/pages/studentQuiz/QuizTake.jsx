@@ -195,7 +195,27 @@ export default function QuizTake() {
     }
   }, [current, submitting, draft, draftSelected, confidence, flagged, advanceWithResult]);
 
+  const progressLabel = questions.length
+    ? `Question ${Math.min(index + 1, questions.length)} of ${questions.length}`
+    : '';
   const progressCompleted = index + 1;
+  const progressSublabel = questions.length
+    ? `${answers.length} of ${questions.length} answered`
+    : '';
+
+  const progressBlock = questions.length > 0 ? (
+    <div
+      className="sticky top-0 z-10 -mx-4 px-4 sm:-mx-6 sm:px-6 pt-1 pb-2 mb-2"
+      style={{ background: 'var(--color-bg)' }}
+    >
+      <QuizProgressBar
+        completed={progressCompleted}
+        total={questions.length}
+        label={progressLabel}
+        sublabel={progressSublabel}
+      />
+    </div>
+  ) : null;
 
   const toggleMultiOption = (opt) => {
     setDraftSelected((prev) => {
@@ -203,9 +223,6 @@ export default function QuizTake() {
       return has ? prev.filter((x) => x !== opt) : [...prev, opt];
     });
   };
-  const progressLabel = questions.length
-    ? `Question ${Math.min(index + 1, questions.length)} of ${questions.length}`
-    : '';
 
   if (reveal) {
     const revealQ = {
@@ -217,9 +234,7 @@ export default function QuizTake() {
     };
     return (
       <div className="p-4 sm:p-6 max-w-xl mx-auto space-y-4">
-        {questions.length > 0 && (
-          <QuizProgressBar completed={progressCompleted} total={questions.length} label={progressLabel} />
-        )}
+        {progressBlock}
         <p className="text-sm font-medium" style={{ color: '#ef4444' }}>Incorrect</p>
         <p className="text-sm" style={{ color: 'var(--color-text)' }}>{reveal.question}</p>
         <div className="rounded-xl border p-3 text-sm space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -268,7 +283,7 @@ export default function QuizTake() {
         <Link to="/student/quiz/take" className="hover:opacity-70 transition-opacity">← Quizzes</Link>
         <span>{formatDuration(elapsed)}</span>
       </div>
-      <QuizProgressBar completed={progressCompleted} total={questions.length} label={progressLabel} />
+      {progressBlock}
       <h2 className="text-base font-medium mb-4" style={{ color: 'var(--color-text)' }}>{current.question}</h2>
 
       {current.type === 'true_false' && (

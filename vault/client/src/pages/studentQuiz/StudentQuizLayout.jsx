@@ -1,8 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import useAuthStore from '../../store/authStore';
 import api from '../../utils/apiClient';
 import { DEFAULT_FEATURE_ACCESS } from '../../utils/featureAccess';
+import QuizBuildingModal from '../../components/studentQuiz/QuizBuildingModal';
+import { QuizBuildContext } from './quizBuildContext';
 
 const TABS = [
   { to: '/student/quiz', end: true, label: 'Dashboard' },
@@ -16,7 +18,21 @@ export default function StudentQuizLayout() {
   const isAdmin = !!user?.isAdmin;
   const location = useLocation();
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
+  const [buildState, setBuildState] = useState(null);
   const canUseStudent = isAdmin || featureAccess.student !== false;
+
+  const startQuizBuild = useCallback((title) => {
+    setBuildState({ title: title?.trim() || 'New quiz' });
+  }, []);
+
+  const endQuizBuild = useCallback(() => {
+    setBuildState(null);
+  }, []);
+
+  const buildContext = useMemo(
+    () => ({ buildState, startQuizBuild, endQuizBuild }),
+    [buildState, startQuizBuild, endQuizBuild],
+  );
 
   useEffect(() => {
     api.get('/api/settings/feature-access')
@@ -42,7 +58,9 @@ export default function StudentQuizLayout() {
   const hideSubNav = /\/student\/quiz\/take\/\d+/.test(location.pathname);
 
   return (
+    <QuizBuildContext.Provider value={buildContext}>
     <div className="flex flex-col h-full min-h-0 overflow-hidden" style={{ background: 'var(--color-bg)' }}>
+      {buildState && <QuizBuildingModal title={buildState.title} />}
       {!hideSubNav && (
         <div
           className="flex-shrink-0 px-4 pt-3 pb-0 border-b overflow-x-auto"
@@ -76,5 +94,6 @@ export default function StudentQuizLayout() {
         <Outlet />
       </div>
     </div>
+    </QuizBuildContext.Provider>
   );
 }
