@@ -1084,6 +1084,65 @@ async function initSchema() {
     console.warn('[db] Could not add summaryEmbedding column (pgvector may be missing):', err.message);
   }
 
+  // ── Shares portfolio ──────────────────────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_trades (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      symbol          TEXT NOT NULL,
+      exchange        TEXT NOT NULL CHECK (exchange IN ('ASX', 'NYSE')),
+      side            TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
+      quantity        NUMERIC(18, 6) NOT NULL CHECK (quantity > 0),
+      "pricePerShare" NUMERIC(18, 6) NOT NULL CHECK ("pricePerShare" >= 0),
+      currency        TEXT NOT NULL CHECK (currency IN ('AUD', 'USD')),
+      "fxRateToAud"   NUMERIC(18, 8),
+      "feesAud"       NUMERIC(18, 2) NOT NULL DEFAULT 0,
+      "tradedAt"      TIMESTAMPTZ NOT NULL,
+      notes           TEXT,
+      "createdAt"     TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_cash_ledger (
+      id          SERIAL PRIMARY KEY,
+      "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type        TEXT NOT NULL CHECK (type IN ('deposit', 'withdraw')),
+      "amountAud" NUMERIC(18, 2) NOT NULL CHECK ("amountAud" > 0),
+      note        TEXT,
+      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_portfolio_snapshots (
+      id                  BIGSERIAL PRIMARY KEY,
+      "userId"            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "totalValueAud"     NUMERIC(18, 2) NOT NULL,
+      "holdingsValueAud"  NUMERIC(18, 2) NOT NULL,
+      "cashAud"           NUMERIC(18, 2) NOT NULL,
+      "costBasisAud"      NUMERIC(18, 2) NOT NULL,
+      "recordedAt"        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_share_portfolio_snapshots_user_time
+      ON share_portfolio_snapshots ("userId", "recordedAt" DESC)
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_symbol_snapshots (
+      id           BIGSERIAL PRIMARY KEY,
+      "userId"     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      symbol       TEXT NOT NULL,
+      "priceAud"   NUMERIC(18, 6) NOT NULL,
+      "valueAud"   NUMERIC(18, 2) NOT NULL,
+      quantity     NUMERIC(18, 6) NOT NULL,
+      "recordedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_share_symbol_snapshots_user_sym_time
+      ON share_symbol_snapshots ("userId", symbol, "recordedAt" DESC)
+  `);
+
   console.log('[db] Schema ready');
 }
 

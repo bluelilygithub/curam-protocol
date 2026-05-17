@@ -4,6 +4,7 @@ export const DEFAULT_TILES = [
   { id: 'tasks',    label: 'Tasks',        enabled: true },
   { id: 'projects', label: 'Projects',     enabled: true },
   { id: 'finance',  label: 'Finance',      enabled: true },
+  { id: 'shares',   label: 'Shares',       enabled: true },
   { id: 'history',  label: 'Chat History', enabled: true },
   { id: 'notes',    label: 'Notes',        enabled: true },
   { id: 'student',  label: 'Student',      enabled: true },
@@ -11,6 +12,7 @@ export const DEFAULT_TILES = [
 
 export const FEATURE_BY_TILE_ID = {
   finance: 'finance',
+  shares: 'shares',
   student: 'student',
 };
 
@@ -20,6 +22,7 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'notes',     label: 'Notes',           path: '/notes',       enabled: true },
   { id: 'goals',     label: 'Goals',           path: '/goals',       enabled: true },
   { id: 'finance',   label: 'Finance',         path: '/finance',     enabled: true },
+  { id: 'shares',    label: 'Shares',          path: '/shares',      enabled: true },
   { id: 'chat',      label: 'General Chat',    path: '/chat',        enabled: true },
   { id: 'history',   label: 'Chat History',    path: '/history',     enabled: true },
   { id: 'studentSection', label: 'Student',    path: '/student/quiz', enabled: true },

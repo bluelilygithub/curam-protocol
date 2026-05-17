@@ -472,6 +472,17 @@ function Layout() {
             </Link>
           )}
 
+          {canUseFeature('shares') && (
+            <Link
+              to="/shares"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+              style={{ color: location.pathname === '/shares' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Shares"
+            >
+              📈
+            </Link>
+          )}
+
           {canUseFeature('usage') && (
             <Link
               to="/usage"

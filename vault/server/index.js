@@ -96,6 +96,7 @@ app.use('/api/usage', requireFeature('usage'), require('./routes/usage'));
 app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
 app.use('/api/clients', requireFeature('clients'), require('./routes/clients'));
 app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/newsDigest'));
+app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');
@@ -114,6 +115,7 @@ app.use((err, req, res, next) => {
 
 // Start cron jobs
 const { startNewsDigestCron } = require('./cron/newsDigestCron');
+const { startSharesCron } = require('./cron/sharesCron');
 
 // Poll until schema is ready, then seed and start listening
 async function start() {
@@ -129,6 +131,7 @@ async function start() {
 
   await seedInitialUser().catch(err => console.error('Seed error:', err));
   startNewsDigestCron();
+  startSharesCron();
 
   app.listen(PORT, () => {
     console.log('Vault server running on port ' + PORT);

@@ -14,6 +14,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   mood: true,
   newsDigest: true,
   student: true,
+  shares: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

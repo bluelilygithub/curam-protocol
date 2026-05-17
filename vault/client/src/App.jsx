@@ -28,6 +28,7 @@ import UsagePage from './pages/UsagePage';
 import MoodPage from './pages/MoodPage';
 import SharedTaskPage from './pages/SharedTaskPage';
 import NewsDigestPage from './pages/NewsDigestPage';
+import SharesPage from './pages/SharesPage';
 import StudentCardsChatPage from './pages/StudentCardsChatPage';
 import StudentSavedDecksPage from './pages/StudentSavedDecksPage';
 import StudentQuizLayout from './pages/studentQuiz/StudentQuizLayout';
@@ -124,6 +125,7 @@ function App() {
               <Route path="/usage" element={<UsagePage />} />
               <Route path="/mood" element={<MoodPage />} />
               <Route path="/news-digest" element={<NewsDigestPage />} />
+              <Route path="/shares" element={<SharesPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

@@ -12,6 +12,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   mood: true,
   newsDigest: true,
   student: true,
+  shares: true,
 };
 
 export const FEATURE_ACCESS_OPTIONS = [
@@ -28,5 +29,6 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'mood', label: 'Mood' },
   { key: 'newsDigest', label: 'News Digest' },
   { key: 'student', label: 'Student (Quiz & Cards)' },
+  { key: 'shares', label: 'Shares' },
 ];
 
