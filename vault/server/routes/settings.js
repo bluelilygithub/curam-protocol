@@ -4,6 +4,17 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { FEATURE_ACCESS_DEFAULTS, FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
+const { getVaultModelsConfigForUser } = require('../services/modelResolver');
+
+// GET /api/settings/effective-models — vault_models + default_model (user or admin fallback)
+router.get('/effective-models', async (req, res) => {
+  try {
+    const config = await getVaultModelsConfigForUser(req.user.id);
+    res.json(config);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // GET /api/settings
 router.get('/', async (req, res) => {

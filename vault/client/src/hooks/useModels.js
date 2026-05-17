@@ -8,16 +8,30 @@ export function useModels() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const res = await api.get('/api/settings');
-      const data = await res.json();
-      if (data.vault_models) {
-        const parsed = JSON.parse(data.vault_models);
-        if (Array.isArray(parsed) && parsed.length > 0) setModels(parsed);
+      const [effectiveRes, settingsRes] = await Promise.all([
+        api.get('/api/settings/effective-models'),
+        api.get('/api/settings'),
+      ]);
+      if (effectiveRes.ok) {
+        const data = await effectiveRes.json();
+        if (Array.isArray(data.models) && data.models.length > 0) {
+          setModels(data.models);
+        }
+        if (data.defaultModel) {
+          setDefaultModel(data.defaultModel);
+        } else if (data.models?.[0]?.id) {
+          setDefaultModel(data.models[0].id);
+        }
       }
-      if (data.default_model) setDefaultModel(data.default_model);
-      if (data.branch_eval_model) setBranchEvalModel(data.branch_eval_model);
-    } catch {}
+      if (settingsRes.ok) {
+        const settings = await settingsRes.json();
+        if (settings.branch_eval_model) setBranchEvalModel(settings.branch_eval_model);
+      }
+    } catch {
+      /* keep empty — chat preflight will surface missing config */
+    }
     setLoading(false);
   }, []);
 

@@ -103,7 +103,7 @@ function ChatPage({ general = false }) {
   const projectId = general ? null : (projectIdParam ? Number(projectIdParam) : activeProjectId);
 
   const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
-  const { models: MODELS, defaultModel } = useModels();
+  const { models: MODELS, defaultModel, loading: modelsLoading } = useModels();
   const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, isSpeaking, isPaused, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
   const { urlAttachments, addUrl, addManual: addManualAttachment, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
@@ -460,11 +460,12 @@ function ChatPage({ general = false }) {
     if (!text && inlineImages.length === 0) return;
     if (isStreaming) return;
     if (urlAttachments.some(u => u.status === 'fetching')) return;
+    if (modelsLoading) return;
     if (!effectiveModel) {
       setPreflightError({
         code: 'model',
         message: 'No model configured.',
-        hint: 'Ask an admin to configure models in Settings.',
+        hint: 'Ask an admin to set models in Settings → AI & Chat (vault_models and default model).',
       });
       return;
     }
