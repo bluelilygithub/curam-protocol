@@ -32,6 +32,25 @@ function todayInputValue() {
   return d.toISOString().slice(0, 16);
 }
 
+function toDatetimeLocal(iso) {
+  const d = new Date(iso);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+const EMPTY_TRADE_FORM = {
+  symbol: '',
+  exchange: 'ASX',
+  side: 'buy',
+  quantity: '',
+  pricePerShare: '',
+  feesAud: '0',
+  tradedAt: todayInputValue(),
+  notes: '',
+};
+
+const EMPTY_CASH_FORM = { type: 'deposit', amountAud: '', note: '' };
+
 export default function SharesPage() {
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
@@ -47,17 +66,10 @@ export default function SharesPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [tradeForm, setTradeForm] = useState({
-    symbol: '',
-    exchange: 'ASX',
-    side: 'buy',
-    quantity: '',
-    pricePerShare: '',
-    feesAud: '0',
-    tradedAt: todayInputValue(),
-    notes: '',
-  });
-  const [cashForm, setCashForm] = useState({ type: 'deposit', amountAud: '', note: '' });
+  const [tradeForm, setTradeForm] = useState({ ...EMPTY_TRADE_FORM, tradedAt: todayInputValue() });
+  const [cashForm, setCashForm] = useState({ ...EMPTY_CASH_FORM });
+  const [editingTradeId, setEditingTradeId] = useState(null);
+  const [editingCashId, setEditingCashId] = useState(null);
   const [deleteTradeId, setDeleteTradeId] = useState(null);
   const [deleteCashId, setDeleteCashId] = useState(null);
 
@@ -118,39 +130,83 @@ export default function SharesPage() {
     }
   };
 
+  const cancelTradeEdit = () => {
+    setEditingTradeId(null);
+    setTradeForm({ ...EMPTY_TRADE_FORM, tradedAt: todayInputValue() });
+  };
+
+  const startEditTrade = (t) => {
+    setEditingTradeId(t.id);
+    setDeleteTradeId(null);
+    setTradeForm({
+      symbol: t.symbol,
+      exchange: t.exchange === 'NYSE' || t.exchange === 'NASDAQ' ? t.exchange : 'ASX',
+      side: t.side,
+      quantity: String(t.quantity),
+      pricePerShare: String(t.pricePerShare),
+      feesAud: String(t.feesAud ?? 0),
+      tradedAt: toDatetimeLocal(t.tradedAt),
+      notes: t.notes || '',
+    });
+    setTab('trades');
+  };
+
   const submitTrade = async (e) => {
     e.preventDefault();
+    const payload = {
+      ...tradeForm,
+      quantity: Number(tradeForm.quantity),
+      pricePerShare: Number(tradeForm.pricePerShare),
+      feesAud: Number(tradeForm.feesAud) || 0,
+      tradedAt: new Date(tradeForm.tradedAt).toISOString(),
+    };
     try {
-      const res = await api.post('/api/shares/trades', {
-        ...tradeForm,
-        quantity: Number(tradeForm.quantity),
-        pricePerShare: Number(tradeForm.pricePerShare),
-        feesAud: Number(tradeForm.feesAud) || 0,
-        tradedAt: new Date(tradeForm.tradedAt).toISOString(),
-      });
+      const res = editingTradeId
+        ? await api.put(`/api/shares/trades/${editingTradeId}`, payload)
+        : await api.post('/api/shares/trades', payload);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save trade');
-      addToast('Trade recorded', 'success');
-      setTradeForm((f) => ({ ...f, symbol: '', quantity: '', pricePerShare: '', notes: '' }));
+      const wasEdit = Boolean(editingTradeId);
+      addToast(wasEdit ? 'Trade updated' : 'Trade recorded', 'success');
+      cancelTradeEdit();
       await loadAll();
-      setTab('portfolio');
+      if (!wasEdit) setTab('portfolio');
     } catch (err) {
       addToast(err.message, 'error');
     }
   };
 
+  const cancelCashEdit = () => {
+    setEditingCashId(null);
+    setCashForm({ ...EMPTY_CASH_FORM });
+  };
+
+  const startEditCash = (c) => {
+    setEditingCashId(c.id);
+    setDeleteCashId(null);
+    setCashForm({
+      type: c.type,
+      amountAud: String(c.amountAud),
+      note: c.note || '',
+    });
+    setTab('cash');
+  };
+
   const submitCash = async (e) => {
     e.preventDefault();
+    const payload = {
+      type: cashForm.type,
+      amountAud: Number(cashForm.amountAud),
+      note: cashForm.note || null,
+    };
     try {
-      const res = await api.post('/api/shares/cash', {
-        type: cashForm.type,
-        amountAud: Number(cashForm.amountAud),
-        note: cashForm.note || null,
-      });
+      const res = editingCashId
+        ? await api.put(`/api/shares/cash/${editingCashId}`, payload)
+        : await api.post('/api/shares/cash', payload);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to save cash entry');
-      addToast('Cash entry recorded', 'success');
-      setCashForm({ type: 'deposit', amountAud: '', note: '' });
+      addToast(editingCashId ? 'Cash entry updated' : 'Cash entry recorded', 'success');
+      cancelCashEdit();
       await loadAll();
     } catch (err) {
       addToast(err.message, 'error');
@@ -165,6 +221,7 @@ export default function SharesPage() {
         throw new Error(data.error || 'Delete failed');
       }
       addToast('Trade removed', 'success');
+      if (editingTradeId === id) cancelTradeEdit();
       setDeleteTradeId(null);
       await loadAll();
     } catch (err) {
@@ -180,6 +237,7 @@ export default function SharesPage() {
         throw new Error(data.error || 'Delete failed');
       }
       addToast('Cash entry removed', 'success');
+      if (editingCashId === id) cancelCashEdit();
       setDeleteCashId(null);
       await loadAll();
     } catch (err) {
@@ -274,12 +332,6 @@ export default function SharesPage() {
                   ))}
                 </div>
 
-                {dashboard?.usdAud && (
-                  <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
-                    USD/AUD: {Number(dashboard.usdAud).toFixed(4)}
-                  </p>
-                )}
-
                 {!dashboard?.positions?.length ? (
                   <p className="text-sm py-8 text-center" style={{ color: 'var(--color-muted)' }}>
                     No open positions. Record a buy under Trades.
@@ -321,7 +373,9 @@ export default function SharesPage() {
             {tab === 'trades' && (
               <>
                 <form onSubmit={submitTrade} className="mb-8 p-4 rounded-lg border space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Record trade</p>
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    {editingTradeId ? 'Edit trade' : 'Record trade'}
+                  </p>
                   <>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                       <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -343,8 +397,9 @@ export default function SharesPage() {
                           className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
                           style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
                         >
-                          <option value="ASX">ASX (AUD)</option>
-                          <option value="NYSE">NYSE (USD → AUD)</option>
+                          <option value="ASX">ASX</option>
+                          <option value="NYSE">NYSE</option>
+                          <option value="NASDAQ">NASDAQ</option>
                         </select>
                       </label>
                       <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -373,7 +428,7 @@ export default function SharesPage() {
                         />
                       </label>
                       <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Price / share ({tradeForm.exchange === 'NYSE' ? 'USD' : 'AUD'})
+                        Price / share (AUD)
                         <input
                           required
                           type="number"
@@ -410,13 +465,25 @@ export default function SharesPage() {
                       </label>
                     </div>
                   </>
-                  <button
-                    type="submit"
-                    className="text-sm px-4 py-2 rounded-md hover:opacity-70 transition-opacity duration-200"
-                    style={{ background: 'var(--color-primary)', color: '#fff' }}
-                  >
-                    Save trade
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                      <button
+                        type="submit"
+                        className="text-sm px-4 py-2 rounded-md hover:opacity-70 transition-opacity duration-200"
+                        style={{ background: 'var(--color-primary)', color: '#fff' }}
+                      >
+                        {editingTradeId ? 'Update trade' : 'Save trade'}
+                      </button>
+                      {editingTradeId && (
+                        <button
+                          type="button"
+                          onClick={cancelTradeEdit}
+                          className="text-sm px-4 py-2 rounded-md border hover:opacity-70 transition-opacity duration-200"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                  </div>
                 </form>
 
                 <ul className="space-y-2">
@@ -428,7 +495,7 @@ export default function SharesPage() {
                     >
                       <span style={{ color: 'var(--color-text)' }}>
                         <span className={t.side === 'buy' ? 'text-green-600' : 'text-red-500'}>{t.side}</span>
-                        {' '}{t.quantity} × {t.symbol} ({t.exchange}) @ {t.pricePerShare} {t.currency}
+                        {' '}{t.quantity} × {t.symbol} ({t.exchange}) @ {fmtAud(t.pricePerShare)}
                         <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>
                           {new Date(t.tradedAt).toLocaleString()}
                         </span>
@@ -439,7 +506,10 @@ export default function SharesPage() {
                           <button type="button" onClick={() => setDeleteTradeId(null)} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>No</button>
                         </span>
                       ) : (
-                        <button type="button" onClick={() => setDeleteTradeId(t.id)} className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Delete</button>
+                        <span className="flex gap-3 text-xs">
+                          <button type="button" onClick={() => startEditTrade(t)} className="hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Edit</button>
+                          <button type="button" onClick={() => setDeleteTradeId(t.id)} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Delete</button>
+                        </span>
                       )}
                     </li>
                   ))}
@@ -453,7 +523,9 @@ export default function SharesPage() {
             {tab === 'cash' && (
               <>
                 <form onSubmit={submitCash} className="mb-8 p-4 rounded-lg border space-y-3 max-w-md" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Cash (AUD)</p>
+                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+                    {editingCashId ? 'Edit cash' : 'Cash (AUD)'}
+                  </p>
                   <select
                     value={cashForm.type}
                     onChange={(e) => setCashForm((f) => ({ ...f, type: e.target.value }))}
@@ -481,13 +553,25 @@ export default function SharesPage() {
                     className="w-full px-2 py-1.5 rounded border text-sm"
                     style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
                   />
-                  <button
-                    type="submit"
-                    className="text-sm px-4 py-2 rounded-md hover:opacity-70 transition-opacity duration-200"
-                    style={{ background: 'var(--color-primary)', color: '#fff' }}
-                  >
-                    Save
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      className="text-sm px-4 py-2 rounded-md hover:opacity-70 transition-opacity duration-200"
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}
+                    >
+                      {editingCashId ? 'Update' : 'Save'}
+                    </button>
+                    {editingCashId && (
+                      <button
+                        type="button"
+                        onClick={cancelCashEdit}
+                        className="text-sm px-4 py-2 rounded-md border hover:opacity-70 transition-opacity duration-200"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
                 </form>
                 <p className="text-sm mb-3" style={{ color: 'var(--color-text)' }}>
                   Balance (incl. trade settlements): <strong>{fmtAud(dashboard?.cashAud)}</strong>
@@ -509,7 +593,10 @@ export default function SharesPage() {
                           <button type="button" onClick={() => setDeleteCashId(null)} style={{ color: 'var(--color-muted)' }}>No</button>
                         </span>
                       ) : (
-                        <button type="button" onClick={() => setDeleteCashId(c.id)} className="text-xs hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Delete</button>
+                        <span className="flex gap-3 text-xs">
+                          <button type="button" onClick={() => startEditCash(c)} className="hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Edit</button>
+                          <button type="button" onClick={() => setDeleteCashId(c.id)} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Delete</button>
+                        </span>
                       )}
                     </li>
                   ))}

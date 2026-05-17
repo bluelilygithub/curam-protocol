@@ -1143,6 +1143,17 @@ async function initSchema() {
       ON share_symbol_snapshots ("userId", symbol, "recordedAt" DESC)
   `);
 
+  await pool.query(`
+    DO $$
+    BEGIN
+      ALTER TABLE share_trades DROP CONSTRAINT IF EXISTS share_trades_exchange_check;
+      ALTER TABLE share_trades
+        ADD CONSTRAINT share_trades_exchange_check
+        CHECK (exchange IN ('ASX', 'NYSE', 'NASDAQ'));
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END $$
+  `);
+
   console.log('[db] Schema ready');
 }
 

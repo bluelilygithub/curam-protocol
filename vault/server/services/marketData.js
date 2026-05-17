@@ -17,10 +17,24 @@ function hasFinnhubKey() {
   return Boolean(getFinnhubToken());
 }
 
+function isUsExchange(exchange) {
+  return exchange === 'NYSE' || exchange === 'NASDAQ';
+}
+
+function normalizeExchange(exchange) {
+  const u = String(exchange || '').toUpperCase();
+  if (u === 'NYE' || u === 'NY') return 'NYSE';
+  if (u === 'ASX') return 'ASX';
+  if (u === 'NASDAQ') return 'NASDAQ';
+  if (u === 'NYSE') return 'NYSE';
+  return 'ASX';
+}
+
 function toYahooSymbol(symbol, exchange) {
   const s = String(symbol || '').trim().toUpperCase();
+  const ex = normalizeExchange(exchange);
   if (!s) return '';
-  if (exchange === 'ASX') {
+  if (ex === 'ASX') {
     if (s.endsWith('.AX')) return s;
     return `${s.replace(/\.AX$/i, '')}.AX`;
   }
@@ -80,7 +94,8 @@ async function getYahooQuote(symbol, exchange) {
   if (!current || current <= 0) {
     throw new Error(`No Yahoo quote for ${sym}`);
   }
-  const currency = exchange === 'NYSE' ? 'USD' : 'AUD';
+  const ex = normalizeExchange(exchange);
+  const currency = isUsExchange(ex) ? 'USD' : 'AUD';
   return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency, source: 'yahoo' };
 }
 
@@ -94,13 +109,14 @@ async function getFinnhubQuote(symbol, exchange) {
     err.code = 'NO_QUOTE';
     throw err;
   }
-  const currency = exchange === 'NYSE' ? 'USD' : 'AUD';
+  const ex = normalizeExchange(exchange);
+  const currency = isUsExchange(ex) ? 'USD' : 'AUD';
   return { symbol: sym, current, previousClose, currency, source: 'finnhub' };
 }
 
-/** Quote with Finnhub first (NYSE), Yahoo fallback on 403 or for ASX preference */
+/** Quote with Finnhub first (US), Yahoo fallback on 403 or for ASX preference */
 async function getQuote(symbol, exchange) {
-  const ex = exchange === 'NYSE' ? 'NYSE' : 'ASX';
+  const ex = normalizeExchange(exchange);
   if (ex === 'ASX') {
     try {
       return await getYahooQuote(symbol, ex);
@@ -198,6 +214,8 @@ module.exports = {
   getUsdToAudRate,
   priceToAud,
   toFinnhubSymbol: toYahooSymbol,
+  normalizeExchange,
+  isUsExchange,
   isConfigured,
   hasFinnhubKey,
   canFetchQuotes,

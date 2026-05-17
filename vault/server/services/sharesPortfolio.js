@@ -7,9 +7,13 @@ function num(v) {
   return Number(v) || 0;
 }
 
+/** Stored trade prices are AUD; legacy USD rows still use fxRateToAud */
 function tradeProceedsAud(t) {
-  const fx = t.currency === 'USD' ? num(t.fxRateToAud) : 1;
-  return num(t.quantity) * num(t.pricePerShare) * fx + num(t.feesAud);
+  const subtotal = num(t.quantity) * num(t.pricePerShare) + num(t.feesAud);
+  if (t.currency === 'USD' && num(t.fxRateToAud) > 0) {
+    return subtotal * num(t.fxRateToAud);
+  }
+  return subtotal;
 }
 
 function computeHoldings(trades) {
