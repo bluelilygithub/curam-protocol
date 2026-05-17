@@ -439,7 +439,7 @@ router.get('/', async (req, res) => {
       `SELECT id, title, category, topic, level, "questionCount", "questionTypes", passmark, tags,
               jsonb_array_length("questionPool") AS "poolSize", "createdAt", "updatedAt"
        FROM student_quizzes WHERE "userId"=$1
-       ORDER BY "updatedAt" DESC`,
+       ORDER BY "listOrder" ASC, "updatedAt" DESC`,
       [req.user.id]
     );
     res.json(rows.map((r) => ({
@@ -493,10 +493,16 @@ router.post('/', async (req, res) => {
       ? tags.split(',').map((t) => t.trim()).filter(Boolean)
       : (Array.isArray(tags) ? tags.map(String) : []);
 
+    const { rows: orderRows } = await pool.query(
+      'SELECT COALESCE(MAX("listOrder"), -1) + 1 AS next FROM student_quizzes WHERE "userId"=$1',
+      [req.user.id]
+    );
+    const listOrder = Number(orderRows[0]?.next) || 0;
+
     const { rows } = await pool.query(
       `INSERT INTO student_quizzes
-        ("userId", title, category, topic, level, "questionCount", "questionTypes", passmark, tags, "questionPool")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        ("userId", title, category, topic, level, "questionCount", "questionTypes", passmark, tags, "questionPool", "listOrder")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
       [
         req.user.id,
@@ -509,12 +515,49 @@ router.post('/', async (req, res) => {
         Math.max(0, Math.min(100, Number(passmark) || 80)),
         tagList,
         JSON.stringify(questionPool),
+        listOrder,
       ]
     );
     res.status(201).json(mapQuizRow(rows[0]));
   } catch (err) {
     console.error('[student-quizzes create]', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/reorder', async (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids array required' });
+  }
+  const numeric = ids.map((x) => Number(x)).filter((x) => Number.isFinite(x) && x > 0);
+  if (numeric.length !== ids.length) return res.status(400).json({ error: 'invalid ids' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: cnt } = await client.query(
+      `SELECT COUNT(*)::int AS n FROM student_quizzes WHERE "userId"=$1 AND id = ANY($2::int[])`,
+      [req.user.id, numeric]
+    );
+    if (Number(cnt[0]?.n) !== numeric.length) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Invalid quiz id' });
+    }
+    await client.query(
+      `UPDATE student_quizzes q
+       SET "listOrder" = u.ord - 1, "updatedAt" = NOW()
+       FROM unnest($2::int[]) WITH ORDINALITY AS u(id, ord)
+       WHERE q.id = u.id AND q."userId" = $1`,
+      [req.user.id, numeric]
+    );
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

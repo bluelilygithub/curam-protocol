@@ -524,6 +524,7 @@ async function initSchema() {
         "updatedAt"     TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    await client.query(`ALTER TABLE student_quizzes ADD COLUMN IF NOT EXISTS "listOrder" INTEGER NOT NULL DEFAULT 0`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS student_quiz_attempts (

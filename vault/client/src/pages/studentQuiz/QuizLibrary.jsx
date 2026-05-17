@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../../utils/apiClient';
 import { useIcon } from '../../providers/IconProvider';
 import useToastStore from '../../store/toastStore';
-import { ACADEMIC_LEVELS, QUESTION_TYPE_OPTIONS, formatQuizTypes } from '../../utils/quizConstants';
+import { ACADEMIC_LEVELS, QUESTION_TYPE_OPTIONS } from '../../utils/quizConstants';
 import { useQuizBuild } from './quizBuildContext';
 
 const EMPTY_FORM = {
@@ -29,6 +29,7 @@ export default function QuizLibrary() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [error, setError] = useState('');
   const [deleteId, setDeleteId] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
 
   const refresh = useCallback(async () => {
     setLoad(true);
@@ -49,6 +50,48 @@ export default function QuizLibrary() {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const persistOrder = useCallback(async (ordered) => {
+    try {
+      const res = await api.post('/api/student-quizzes/reorder', { ids: ordered.map((r) => r.id) });
+      if (!res.ok) throw new Error('reorder failed');
+    } catch {
+      useToastStore.getState().addToast('Could not save order', 'error');
+      refresh();
+    }
+  }, [refresh]);
+
+  const onDragStart = useCallback((e, id) => {
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(id));
+  }, []);
+
+  const onDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback((e, targetId) => {
+    e.preventDefault();
+    const fromId = Number(e.dataTransfer.getData('text/plain'));
+    setDraggingId(null);
+    if (!Number.isFinite(fromId) || fromId <= 0 || fromId === targetId) return;
+    setRows((prev) => {
+      const fromIx = prev.findIndex((r) => r.id === fromId);
+      const toIx = prev.findIndex((r) => r.id === targetId);
+      if (fromIx === -1 || toIx === -1) return prev;
+      const next = [...prev];
+      const [removed] = next.splice(fromIx, 1);
+      next.splice(toIx, 0, removed);
+      persistOrder(next);
+      return next;
+    });
+  }, [persistOrder]);
+
+  const onDragEnd = useCallback(() => {
+    setDraggingId(null);
+  }, []);
 
   const toggleType = (value) => {
     setForm((f) => {
@@ -105,7 +148,7 @@ export default function QuizLibrary() {
         <div>
           <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Quiz Library</h1>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Create quizzes with AI-generated question pools (2× your per-attempt count).
+            Create quizzes with AI-generated question pools. Drag cards to reorder.
           </p>
         </div>
         <button
@@ -247,22 +290,36 @@ export default function QuizLibrary() {
           {rows.map((q) => (
             <li
               key={q.id}
-              className="rounded-2xl border p-4"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              draggable
+              onDragStart={(e) => onDragStart(e, q.id)}
+              onDragOver={onDragOver}
+              onDrop={(e) => onDrop(e, q.id)}
+              onDragEnd={onDragEnd}
+              className="rounded-2xl border px-2 py-2 sm:px-3 sm:py-3 flex flex-wrap items-center gap-2 sm:gap-3 transition-opacity"
+              style={{
+                background: 'var(--color-surface)',
+                borderColor: 'var(--color-border)',
+                opacity: draggingId === q.id ? 0.55 : 1,
+                cursor: 'grab',
+              }}
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{q.title}</h3>
-                  {q.category && (
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--color-primary)' }}>{q.category}</p>
-                  )}
-                  <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--color-muted)' }}>{q.topic}</p>
-                  <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
-                    {q.questionCount} per attempt · pool {q.poolSize} · pass {q.passmark}% · {formatQuizTypes(q.questionTypes)}
-                  </p>
-                </div>
+              <span
+                className="flex-shrink-0 px-1 cursor-grab active:cursor-grabbing"
+                style={{ color: 'var(--color-muted)' }}
+                title="Drag to reorder"
+                aria-hidden
+              >
+                {getIcon('grip-vertical', { size: 16 })}
+              </span>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>{q.title}</h3>
+                {q.category ? (
+                  <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-primary)' }}>{q.category}</p>
+                ) : (
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Uncategorised</p>
+                )}
               </div>
-              <div className="flex gap-2 mt-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-shrink-0 w-full sm:w-auto justify-end">
                 <Link
                   to={`/student/quiz/take/${q.id}`}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium text-white hover:opacity-80 transition-opacity"
@@ -275,7 +332,7 @@ export default function QuizLibrary() {
                     <button
                       type="button"
                       onClick={() => handleDelete(q.id)}
-                      className="px-3 py-1.5 rounded-lg text-xs text-white"
+                      className="px-3 py-1.5 rounded-lg text-xs text-white hover:opacity-80 transition-opacity"
                       style={{ background: '#ef4444' }}
                     >
                       Confirm delete
