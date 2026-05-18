@@ -43,6 +43,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import AuthGuard from './components/AuthGuard';
 import SearchPalette from './components/SearchPalette';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
+import ProcessingModal from './components/ProcessingModal';
 import useAuthStore from './store/authStore';
 
 function HomeRoute() {
@@ -83,6 +84,7 @@ function App() {
       <IconProvider>
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <SearchPalette />
+          <ProcessingModal />
           {showShortcuts && <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />}
           <Routes>
             <Route path="/login" element={<LoginPage />} />

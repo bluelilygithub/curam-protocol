@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
+import useProcessingStore from '../store/processingStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 import SimpleLineChart from '../components/shares/SimpleLineChart';
 import AllocationPie from '../components/shares/AllocationPie';
@@ -56,6 +57,7 @@ export default function SharesPage() {
   const { user } = useAuthStore();
   const isAdmin = user?.isAdmin;
   const addToast = useToastStore((s) => s.addToast);
+  const { startProcessing, stopProcessing } = useProcessingStore();
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const canUseShares = isAdmin || featureAccess.shares !== false;
 
@@ -122,6 +124,7 @@ export default function SharesPage() {
 
   const handleGenerateNews = async () => {
     setGeneratingNews(true);
+    startProcessing('Generating daily briefing…', 'Searching news and analysing price movements for your holdings.');
     try {
       const res = await api.post('/api/shares/news/generate');
       const data = await res.json();
@@ -133,11 +136,13 @@ export default function SharesPage() {
       addToast(err.message, 'error');
     } finally {
       setGeneratingNews(false);
+      stopProcessing();
     }
   };
 
   const handleGenerateSummary = async () => {
     setGeneratingSummary(true);
+    startProcessing('Generating 30-day summary…', 'Reviewing daily signals and market movements over the past month.');
     try {
       const res = await api.post('/api/shares/news/generate-summary');
       const data = await res.json();
@@ -148,6 +153,7 @@ export default function SharesPage() {
       addToast(err.message, 'error');
     } finally {
       setGeneratingSummary(false);
+      stopProcessing();
     }
   };
 

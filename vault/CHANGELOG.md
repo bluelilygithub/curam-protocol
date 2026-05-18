@@ -4,11 +4,49 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-19 (3)
+
+**Feature + Fix:** Global `ProcessingModal` for long-running operations; fix `slice is not a function` in 30-day summary.
+
+**ProcessingModal:** A new global blocking overlay renders whenever any long-running server operation is in progress. It shows a spinner, a descriptive message, an optional detail line, and a "please don't navigate away" warning. It also attaches a `beforeunload` listener to prevent accidental tab close or reload. The overlay is rendered once in `App.jsx` and driven by `processingStore` (Zustand). Trigger from any component via `startProcessing(message, detail?)` / `stopProcessing()`. Currently used by: Shares News "Generate today" and "30-day summary" buttons.
+
+**Server fix:** `buildSummaryPrompt()` in `sharesNewsService.js` called `.slice(0, 10)` directly on `dailyBriefings[0]?.date`. PostgreSQL's `pg` driver can return `DATE` columns as JavaScript `Date` objects, which are truthy but lack `.slice`. All date references in that function now go through `String(b.date).slice(0, 10)`.
+
+**New files:** `client/src/store/processingStore.js`, `client/src/components/ProcessingModal.jsx`. **Modified files:** `client/src/App.jsx`, `client/src/pages/SharesPage.jsx`, `server/services/sharesNewsService.js`.
+
+---
+
+## 2026-05-19 (2)
+
+**Feature + Fix:** Shares News — 30-day monthly summaries; date accordion; timezone from admin profile; JSONB parse fix.
+
+**Monthly summaries:** `sharesNewsService.generateMonthlySummary()` reads the last 30 days of daily briefings and asks the AI to assess market trends and evaluate signal accuracy. Stored with `type='monthly_summary'` and never auto-deleted (daily entries are pruned after 45 days). A "30-day summary" button on the News tab triggers generation. Cron also runs on the 1st of each month at 4:30 AM. Summary cards show per-stock trend, signal accuracy, and an overall advice quality assessment. `share_news_briefings` gained a `type` column and a new unique index (`idx_share_news_user_date_sym_v2`) to allow both daily and monthly rows for the same date.
+
+**Accordion UI:** Daily briefings are now collapsed by default. Clicking a date row opens it; opening another closes the previous one. The collapsed header shows the date, stock count, and the highest-priority signal badge (bearish > bullish > watch > neutral). Most recent date defaults to open.
+
+**Timezone:** Moved the timezone setting from a generic `workspace_settings` key to the admin user's `user_timezone` profile field. `GET /api/settings/workspace-timezone` now queries the first admin's `settings` row. All server crons (`sharesCron.js`, `newsDigestCron.js`) and `sharesNewsService.js` read this value dynamically. `SharesPage` fetches and passes it to `NewsTab` so the "Today" label matches server-stored dates. `SettingsPage` timezone selector moved from the News Digest tab to the Profile tab.
+
+**JSONB fix:** The `headlines` column is `JSONB`. PostgreSQL's `pg` driver returns JSONB as an already-parsed JS object, not a string. `JSON.parse(pgJsonbValue)` silently produces `{}` (via error catch), stripping all monthly summary metadata. Fixed with a `parseJsonb()` helper that checks `typeof` before parsing.
+
+**Modified files:** `server/db.js`, `server/services/sharesNewsService.js`, `server/routes/sharesNews.js`, `server/cron/sharesCron.js`, `server/cron/newsDigestCron.js`, `server/routes/settings.js`, `client/src/pages/SharesPage.jsx`, `client/src/pages/SettingsPage.jsx`.
+
+---
+
+## 2026-05-19 (1)
+
+**Fix:** `getSydneyDate is not defined` in `sharesNewsService.js`.
+
+After renaming `getSydneyDate()` to `getDateInTz()`, two lingering calls to the old name remained in `getFinnhubNews()`. Server threw at runtime when generating daily news. Fixed by replacing those calls with `new Date().toISOString().slice(0, 10)` (UTC is appropriate there — Finnhub's date range is a UTC query window, not a stored date).
+
+**Modified files:** `server/services/sharesNewsService.js`.
+
+---
+
 ## 2026-05-18 (3)
 
 **Feature:** Shares — daily AI news briefings tab.
 
-New **News** tab on the Shares page. Each morning at 4 AM Sydney time (or on demand via "Generate today"), `sharesNewsService.js` fetches recent news for each holding (Finnhub company news for US stocks; web search for ASX), plus a Nasdaq market summary, and makes a single `callModel` call (using the user's `standard` tier model). The AI returns a paragraph per stock and a market paragraph, each with a `bullish / bearish / watch / neutral` signal. Results stored in `share_news_briefings` and displayed in the News tab grouped by date with colour-coded signal badges. 30 days of history kept. Stocks with nothing material to report are omitted.
+New **News** tab on the Shares page. Each morning at 4 AM (workspace timezone) or on demand via "Generate today", `sharesNewsService.js` fetches recent news for each holding (Finnhub company news for US stocks; web search for ASX), plus a Nasdaq market summary, and makes a single `callModel` call (using the user's `standard` tier model). The AI returns a paragraph per stock and a market paragraph, each with a `bullish / bearish / watch / neutral` signal. Results stored in `share_news_briefings` and displayed in the News tab grouped by date with colour-coded signal badges. 45 days of daily history kept. Stocks with nothing material to report are omitted.
 
 **New files:** `server/services/sharesNewsService.js`, `server/routes/sharesNews.js`. **Modified files:** `server/db.js` (`share_news_briefings` table), `server/cron/sharesCron.js` (4 AM news cron), `server/index.js` (route registration), `client/src/pages/SharesPage.jsx` (News tab + `NewsTab` + `SignalBadge` components).
 

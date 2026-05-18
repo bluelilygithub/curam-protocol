@@ -7,7 +7,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 ## Stack
 
 **Backend:** Node.js/Express · PostgreSQL 15 + pgvector · `pg` (no ORM) · node-cron · multer  
-**Frontend:** React 18 + Vite · Zustand (3 stores, persisted) · React Router v6 · Tailwind CSS  
+**Frontend:** React 18 + Vite · Zustand (4 stores) · React Router v6 · Tailwind CSS  
 **AI:** Anthropic SDK (streaming + prompt caching) · Google Generative AI SDK (Gemini + embeddings)  
 **Deploy:** Railway · `vault/railway.toml` · push `version-7` branch → auto-deploy
 
@@ -24,13 +24,15 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `client/src/hooks/useModels.js` — loads **`vault_models`** + **`default_model`** + **`branch_eval_model`** via `/api/settings`
 - `client/src/utils/apiClient.js` — authenticated fetch wrapper; **use this for all `/api/` calls**
 - `client/src/store/authStore.js` — Zustand auth (token, user); persisted
+- `client/src/store/processingStore.js` — global long-running operation state; drives `ProcessingModal`
+- `client/src/components/ProcessingModal.jsx` — **global blocking overlay** for slow operations; rendered once in `App.jsx`
 - `client/src/providers/IconProvider.jsx` — `getIcon(name, props)` semantic map; add icons here before using
 - `client/src/providers/ThemeProvider.jsx` — writes `--color-*` CSS vars to `<head>` on mount/change
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
 - `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
-- `server/services/sharesNewsService.js` — daily news briefings: Finnhub/web search → single AI call → `share_news_briefings`
+- `server/services/sharesNewsService.js` — daily briefings + monthly summaries: Finnhub/web search → AI → `share_news_briefings`
 - `server/routes/shares.js` — CRUD for trades + cash, dashboard, charts, refresh
-- `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`
+- `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`, `POST /api/shares/news/generate-summary`
 
 ---
 
@@ -170,7 +172,27 @@ Three tiers, each injected into the system prompt in order:
 
 **Icons:** Always via `getIcon(name, { size: n })` from `IconProvider`. Add to the semantic map before using — never import Lucide directly in components.
 
-**Z-index convention:** dropdowns `z-20` · mobile sidebar `z-40` · modals `z-50` · toasts `z-[9999]`
+**Z-index convention:** dropdowns `z-20` · mobile sidebar `z-40` · modals `z-50` · ProcessingModal `z-[9998]` · toasts `z-[9999]`
+
+### ProcessingModal — global blocking overlay
+
+**Use this for any operation that takes >2 seconds and must not be interrupted.**
+
+```javascript
+const { startProcessing, stopProcessing } = useProcessingStore();
+
+// In your async handler:
+startProcessing('Descriptive action label…', 'Optional detail sentence.');
+try {
+  await longRunningOperation();
+} finally {
+  stopProcessing();
+}
+```
+
+`ProcessingModal` is rendered once in `App.jsx`. It reads `processingStore`, displays a full-screen overlay with a spinning loader, the message, and a "please don't navigate away" warning. It also attaches a `beforeunload` listener to catch tab close / reload while active.
+
+**When to use:** AI generation, bulk imports, file processing, any server call expected to take >2 s. **Do not use** for instant CRUD operations — those use `toastStore` success/error toasts only.
 
 ---
 
@@ -198,7 +220,7 @@ Three tiers, each injected into the system prompt in order:
 - Multi-user `"userId"` columns added post-hoc. Every query filters by `"userId"=$1`.
 - `share_trades.exchange` CHECK constraint `('ASX','NYSE','NASDAQ')` added via `ALTER TABLE` (post-DDL, inside `DO $$ ... EXCEPTION WHEN OTHERS THEN NULL $$` to survive re-runs).
 - `share_trades.pricePerShare` is stored in **AUD** for all new trades. Legacy USD rows carry `currency='USD'` + `fxRateToAud` for backward compatibility.
-- `share_news_briefings`: `symbol IS NULL` row = market summary for that date. Unique index on `(userId, date, COALESCE(symbol,''), COALESCE(exchange,''))` — re-running `generate` deletes then re-inserts today's rows.
+- `share_news_briefings`: `symbol IS NULL` row = market summary for that date. `type` column: `'daily'` (45-day retention, auto-pruned) or `'monthly_summary'` (never deleted). Unique index `idx_share_news_user_date_sym_v2` on `(userId, date, COALESCE(symbol,''), COALESCE(exchange,''), type)`. Daily generate deletes then re-inserts today's `type='daily'` rows. Monthly summaries stored separately and retained permanently. **`DATE` columns from pg come back as strings `'YYYY-MM-DD'`; always `String(b.date).slice(0,10)` before string ops — do not assume it's always a primitive.**
 
 ---
 
@@ -212,11 +234,14 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 
 - **Holdings + P&L:** `computeHoldingsAndRealized()` in `sharesPortfolio.js` processes trades chronologically (avg-cost method). Returns open holdings + realized P&L per sell. `buildDashboard()` fetches live quotes and returns `positions`, `realized`, `totalRealizedPnlAud`, `unrealizedPnlAud`.
 - **Quotes:** Finnhub (`FINNHUB_API_KEY`) for NYSE/NASDAQ; Alpha Vantage (`ALPHA_VANTAGE_API_KEY`) for ASX. Frankfurter for USD→AUD. In-memory quote cache (15 min for user page loads) prevents burning Alpha Vantage's 25 req/day free-tier limit.
-- **Cron schedules** (Australia/Sydney TZ): ASX snapshots 5 AM + 1 PM; US snapshots every 2 h; news briefings 4 AM.
+- **Cron schedules** (timezone = admin user's `user_timezone` setting, fallback `Australia/Sydney`): ASX snapshots 5 AM + 1 PM; US snapshots every 2 h; daily news briefings 4 AM; monthly summary 1st of month 4:30 AM.
 - **Exchange filter:** cron passes `['ASX']` or `['NYSE','NASDAQ']` to `recordSnapshots()` so each run only calls the relevant quote API; stale cache covers the other exchange for the portfolio snapshot.
-- **News tab:** `sharesNewsService.js` fetches Finnhub company news (US) or web search (ASX), plus a Nasdaq market search, then makes one AI call (`callModel` → `standard` tier) producing per-stock paragraphs + `bullish/bearish/watch/neutral` signals. Stored in `share_news_briefings`. Manual "Generate today" button + 4 AM cron. 30-day history shown.
+- **Timezone:** All date storage and cron scheduling use the admin user's `user_timezone` profile setting (read via `GET /api/settings/workspace-timezone`, which queries the first admin's `settings` row). Hardcoded `Australia/Sydney` was removed in favour of this dynamic lookup.
+- **News tab — daily briefings:** `sharesNewsService.generateDailyBriefing()` fetches Finnhub company news (US) or web search (ASX), plus a Nasdaq market search, then makes one AI call (`callModel` → `standard` tier) producing per-stock paragraphs + `bullish/bearish/watch/neutral` signals. Stored with `type='daily'`. Auto-pruned after 45 days. Manual "Generate today" button triggers `ProcessingModal`. UI groups by date in an **accordion** — one day open at a time, most recent open by default, collapsed header shows signal badge and stock count.
+- **News tab — 30-day summaries:** `sharesNewsService.generateMonthlySummary()` reads 30 days of daily briefings, sends to AI for trend + signal-accuracy review. Stored with `type='monthly_summary'`, never deleted. Triggered via "30-day summary" button (also uses `ProcessingModal`). Cron also runs on the 1st of each month.
+- **JSONB from pg:** `headlines` column is JSONB. The `pg` driver returns JSONB as a parsed JS object, not a string. Always use `typeof val === 'string' ? JSON.parse(val) : val` pattern — never `JSON.parse(pgJsonbValue)` directly.
 - **Tables:** `share_trades`, `share_cash_ledger`, `share_portfolio_snapshots`, `share_symbol_snapshots`, `share_news_briefings`.
-- **Routes:** `server/routes/shares.js` (CRUD + dashboard + charts + refresh), `server/routes/sharesNews.js` (news).
+- **Routes:** `server/routes/sharesNews.js` registered **before** `server/routes/shares.js` in `server/index.js` to prevent the broader prefix from consuming `/api/shares/news/*` requests.
 - **Feature flag:** `shares` in `featureAccess` — admin controls member access.
 - **All prices entered in AUD.** Legacy USD rows: `currency='USD'` + `fxRateToAud` stored for backward compat.
 - **ASX quote history:** see `vault/docs/shares-api-research.md` for full account of failed providers before Alpha Vantage.
