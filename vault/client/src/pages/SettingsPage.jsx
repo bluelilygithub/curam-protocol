@@ -59,10 +59,12 @@ function SettingsPage() {
     { name: 'Sky News',           url: 'https://feeds.skynews.com/feeds/rss/world.xml',     enabled: true },
     { name: 'Google News',        url: '__google_news__',                                    enabled: true },
   ];
-  const [digestTime,    setDigestTime]    = useState('07:00');
-  const [digestDays,    setDigestDays]    = useState([0, 1, 2, 3, 4, 5, 6]);
-  const [digestSources, setDigestSources] = useState(DEFAULT_DIGEST_SOURCES);
-  const [digestSaved,   setDigestSaved]   = useState(false);
+  const [digestTime,        setDigestTime]        = useState('07:00');
+  const [digestDays,        setDigestDays]        = useState([0, 1, 2, 3, 4, 5, 6]);
+  const [digestSources,     setDigestSources]     = useState(DEFAULT_DIGEST_SOURCES);
+  const [digestSaved,       setDigestSaved]       = useState(false);
+  const [workspaceTimezone, setWorkspaceTimezone] = useState('Australia/Sydney');
+  const [tzSaved,           setTzSaved]           = useState(false);
   const [newFeedName,   setNewFeedName]   = useState('');
   const [newFeedUrl,    setNewFeedUrl]    = useState('');
 
@@ -184,6 +186,10 @@ function SettingsPage() {
       if (data.sources) setDigestSources(data.sources);
     }).catch(() => {});
 
+    api.get('/api/settings/workspace-timezone').then(r => r.json()).then(data => {
+      if (data.timezone) setWorkspaceTimezone(data.timezone);
+    }).catch(() => {});
+
     api.get('/api/settings/feature-access').then(r => r.json()).then(data => {
       if (data?.flags && typeof data.flags === 'object') {
         setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
@@ -284,7 +290,19 @@ function SettingsPage() {
       setDigestSaved(true);
       setTimeout(() => setDigestSaved(false), 2000);
     } catch {
-      // silent — toast not imported in scope here, server errors will show on next load
+      // silent
+    }
+  }
+
+  async function saveWorkspaceTimezone() {
+    try {
+      const res = await api.post('/api/settings/workspace-timezone', { timezone: workspaceTimezone });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Invalid timezone');
+      setTzSaved(true);
+      setTimeout(() => setTzSaved(false), 2000);
+    } catch (err) {
+      alert(err.message);
     }
   }
 
@@ -1181,10 +1199,68 @@ function SettingsPage() {
       {tab === 'News Digest' && (
       <section>
         <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Workspace timezone
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Used by all automated schedules — news digest, shares briefings, and quote polling. Must be a valid IANA timezone name (e.g. Australia/Sydney). Takes effect on next server restart.
+        </p>
+        <div className="flex items-center gap-3 mb-8">
+          <select
+            value={workspaceTimezone}
+            onChange={e => setWorkspaceTimezone(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border text-sm outline-none"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            <optgroup label="Australia">
+              <option value="Australia/Sydney">Australia/Sydney (AEST/AEDT)</option>
+              <option value="Australia/Melbourne">Australia/Melbourne (AEST/AEDT)</option>
+              <option value="Australia/Brisbane">Australia/Brisbane (AEST)</option>
+              <option value="Australia/Adelaide">Australia/Adelaide (ACST/ACDT)</option>
+              <option value="Australia/Perth">Australia/Perth (AWST)</option>
+              <option value="Australia/Darwin">Australia/Darwin (ACST)</option>
+              <option value="Australia/Hobart">Australia/Hobart (AEST/AEDT)</option>
+            </optgroup>
+            <optgroup label="Pacific">
+              <option value="Pacific/Auckland">Pacific/Auckland (NZST/NZDT)</option>
+            </optgroup>
+            <optgroup label="Asia">
+              <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
+              <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+              <option value="Asia/Hong_Kong">Asia/Hong_Kong (HKT)</option>
+              <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+            </optgroup>
+            <optgroup label="Europe">
+              <option value="Europe/London">Europe/London (GMT/BST)</option>
+              <option value="Europe/Paris">Europe/Paris (CET/CEST)</option>
+              <option value="Europe/Berlin">Europe/Berlin (CET/CEST)</option>
+            </optgroup>
+            <optgroup label="Americas">
+              <option value="America/New_York">America/New_York (ET)</option>
+              <option value="America/Chicago">America/Chicago (CT)</option>
+              <option value="America/Denver">America/Denver (MT)</option>
+              <option value="America/Los_Angeles">America/Los_Angeles (PT)</option>
+              <option value="America/Toronto">America/Toronto (ET)</option>
+              <option value="America/Vancouver">America/Vancouver (PT)</option>
+            </optgroup>
+            <optgroup label="Other">
+              <option value="UTC">UTC</option>
+            </optgroup>
+          </select>
+          <button
+            type="button"
+            onClick={saveWorkspaceTimezone}
+            className="text-sm px-4 py-1.5 rounded-md hover:opacity-70 transition-opacity duration-200"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}
+          >
+            {tzSaved ? 'Saved' : 'Save'}
+          </button>
+        </div>
+
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
           Schedule
         </h2>
         <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-          When the daily digest runs automatically. Uses Australia/Sydney time.
+          When the daily digest runs automatically (uses workspace timezone above).
         </p>
 
         <div className="mb-5">

@@ -11,6 +11,17 @@ let usCronTask = null;
 let newsCronTask = null;
 let summaryMonthCronTask = null;
 
+async function getWorkspaceTimezone() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT value FROM workspace_settings WHERE key='workspace_timezone' LIMIT 1`
+    );
+    return rows[0]?.value?.trim() || 'Australia/Sydney';
+  } catch {
+    return 'Australia/Sydney';
+  }
+}
+
 async function getActiveShareUserIds() {
   const { rows } = await pool.query(`
     SELECT DISTINCT "userId" AS id FROM share_trades
@@ -40,26 +51,29 @@ async function runSharesPoll(exchanges) {
   }
 }
 
-function startSharesCron() {
+async function startSharesCron() {
   if (asxCronTask) asxCronTask.stop();
   if (usCronTask) usCronTask.stop();
+  if (newsCronTask) newsCronTask.stop();
   if (summaryMonthCronTask) summaryMonthCronTask.stop();
 
-  // ASX: 5 AM and 1 PM Sydney time (Alpha Vantage — 25 req/day, so 2 polls/day)
+  const tz = await getWorkspaceTimezone();
+
+  // ASX: 5 AM and 1 PM (Alpha Vantage — 25 req/day, so 2 polls/day)
   asxCronTask = cron.schedule(
     '0 5,13 * * *',
     () => runSharesPoll(['ASX']),
-    { timezone: 'Australia/Sydney' }
+    { timezone: tz }
   );
 
   // US markets: every 2 hours, 12 times per day (Finnhub — no daily cap)
   usCronTask = cron.schedule(
     '0 0,2,4,6,8,10,12,14,16,18,20,22 * * *',
     () => runSharesPoll(['NYSE', 'NASDAQ']),
-    { timezone: 'Australia/Sydney' }
+    { timezone: tz }
   );
 
-  // News briefings: 4 AM daily Sydney time (after overnight US session closes)
+  // News briefings: 4 AM daily (after overnight US session closes)
   newsCronTask = cron.schedule(
     '0 4 * * *',
     async () => {
@@ -72,10 +86,10 @@ function startSharesCron() {
         }
       }
     },
-    { timezone: 'Australia/Sydney' }
+    { timezone: tz }
   );
 
-  // 30-day summary: 1st of each month at 4:30 AM Sydney (after daily briefing finishes)
+  // 30-day summary: 1st of each month at 4:30 AM (after daily briefing finishes)
   summaryMonthCronTask = cron.schedule(
     '30 4 1 * *',
     async () => {
@@ -88,10 +102,10 @@ function startSharesCron() {
         }
       }
     },
-    { timezone: 'Australia/Sydney' }
+    { timezone: tz }
   );
 
-  console.log('[shares-cron] ASX: 5 AM + 1 PM | US: every 2 h | News: 4 AM | Monthly summary: 1st of month 4:30 AM (Sydney)');
+  console.log(`[shares-cron] ASX: 5 AM + 1 PM | US: every 2 h | News: 4 AM | Monthly summary: 1st 4:30 AM (tz: ${tz})`);
 }
 
 module.exports = { startSharesCron, runSharesPoll };

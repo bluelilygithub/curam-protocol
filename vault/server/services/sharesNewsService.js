@@ -22,13 +22,27 @@ const sharesPortfolio = require('./sharesPortfolio');
 
 const FETCH_TIMEOUT_MS = 15000;
 
-// Returns 'YYYY-MM-DD' in Australia/Sydney timezone.
-// toISOString() is UTC — at 4 AM Sydney (= ~6 PM UTC prev day) it returns yesterday's date.
-function getSydneyDate(offsetDays = 0) {
+// Returns 'YYYY-MM-DD' in the given IANA timezone.
+// toISOString() is UTC — at 4 AM Sydney (= ~6 PM UTC prev day) it returns yesterday's date,
+// which caused manual re-runs to overwrite the cron's entry. Always use workspace timezone.
+function getDateInTz(tz, offsetDays = 0) {
   const d = offsetDays
     ? new Date(Date.now() - offsetDays * 24 * 60 * 60 * 1000)
     : new Date();
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(d);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
+}
+
+// Reads the workspace-level IANA timezone from workspace_settings.
+// Falls back to Australia/Sydney if not configured.
+async function getWorkspaceTimezone() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT value FROM workspace_settings WHERE key='workspace_timezone' LIMIT 1`
+    );
+    return rows[0]?.value?.trim() || 'Australia/Sydney';
+  } catch {
+    return 'Australia/Sydney';
+  }
 }
 
 // ─── web search (same providers as webSearch.js route) ────────────────────────
@@ -136,8 +150,7 @@ Rules:
 - The market summary covers broad Nasdaq/ASX conditions relevant to the portfolio.
 - Return ONLY valid JSON — no markdown, no explanation outside the JSON.`;
 
-function buildDailyPrompt(holdings, newsMap, marketNews) {
-  const today = getSydneyDate();
+function buildDailyPrompt(holdings, newsMap, marketNews, today) {
   const lines = [`Date: ${today}\n\nPORTFOLIO HOLDINGS:`];
 
   for (const h of holdings) {
@@ -171,8 +184,8 @@ Only include stocks with something noteworthy. Omit stocks with no significant n
   return lines.join('\n');
 }
 
-async function generateBriefings(holdings, newsMap, marketNews, modelId) {
-  const prompt = buildDailyPrompt(holdings, newsMap, marketNews);
+async function generateBriefings(holdings, newsMap, marketNews, modelId, today) {
+  const prompt = buildDailyPrompt(holdings, newsMap, marketNews, today);
   const raw = await callModel(modelId, prompt, { maxTokens: 1500, system: DAILY_SYSTEM_PROMPT });
 
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -188,7 +201,8 @@ async function generateBriefings(holdings, newsMap, marketNews, modelId) {
 // ─── generateDailyBriefing ────────────────────────────────────────────────────
 
 async function generateDailyBriefing(userId) {
-  const today = getSydneyDate();
+  const tz = await getWorkspaceTimezone();
+  const today = getDateInTz(tz);
 
   // Always delete today's daily entries first — allows re-generation from cron or manual trigger
   await pool.query(
@@ -220,7 +234,7 @@ async function generateDailyBriefing(userId) {
   const modelId = tiers.standard || tiers.light || tiers.gemini;
   if (!modelId) throw new Error('No model configured for user — check vault_models in Settings');
 
-  const briefings = await generateBriefings(holdings, newsMap, marketNews, modelId);
+  const briefings = await generateBriefings(holdings, newsMap, marketNews, modelId, today);
 
   // Store per-stock briefings
   const stockBriefings = Array.isArray(briefings.stocks) ? briefings.stocks : [];
@@ -251,7 +265,7 @@ async function generateDailyBriefing(userId) {
   }
 
   // Prune daily entries older than 45 days (monthly_summary rows are never deleted)
-  const cutoff = getSydneyDate(45);
+  const cutoff = getDateInTz(tz, 45);
   await pool.query(
     `DELETE FROM share_news_briefings WHERE "userId"=$1 AND type='daily' AND date < $2`,
     [userId, cutoff]
@@ -315,8 +329,9 @@ function buildSummaryPrompt(dailyBriefings, today) {
 }
 
 async function generateMonthlySummary(userId) {
-  const today = getSydneyDate();
-  const thirtyDaysAgo = getSydneyDate(30);
+  const tz = await getWorkspaceTimezone();
+  const today = getDateInTz(tz);
+  const thirtyDaysAgo = getDateInTz(tz, 30);
 
   const { rows: dailyBriefings } = await pool.query(
     `SELECT date, symbol, exchange, content, signal, "priceChangePct"
@@ -377,7 +392,8 @@ async function generateMonthlySummary(userId) {
 
 async function getBriefingsForUser(userId) {
   // Daily: last 45 days. Monthly summaries: all (never deleted).
-  const cutoff = getSydneyDate(45);
+  const tz = await getWorkspaceTimezone();
+  const cutoff = getDateInTz(tz, 45);
   const { rows } = await pool.query(
     `SELECT id, date, symbol, exchange, content, signal, headlines, "priceChangePct", "createdAt", type
      FROM share_news_briefings

@@ -39,14 +39,26 @@ async function getScheduleSettings() {
   }
 }
 
+async function getWorkspaceTimezone() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT value FROM workspace_settings WHERE key='workspace_timezone' LIMIT 1`
+    );
+    return rows[0]?.value?.trim() || 'Australia/Sydney';
+  } catch {
+    return 'Australia/Sydney';
+  }
+}
+
 async function scheduleDigestCron() {
   if (cronTask) { cronTask.stop(); cronTask = null; }
   const { time, days } = await getScheduleSettings();
+  const tz = await getWorkspaceTimezone();
   const [hour, minute] = time.split(':').map(Number);
   const daysPattern = days.length === 7 ? '*' : days.join(',');
   const schedule = `${minute} ${hour} * * ${daysPattern}`;
-  cronTask = cron.schedule(schedule, runDailyDigest, { timezone: 'Australia/Sydney' });
-  console.log(`[news-cron] Scheduled daily digest at ${time} on days [${days}]`);
+  cronTask = cron.schedule(schedule, runDailyDigest, { timezone: tz });
+  console.log(`[news-cron] Scheduled daily digest at ${time} on days [${days}] (tz: ${tz})`);
 }
 
 /**
