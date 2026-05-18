@@ -289,13 +289,13 @@ function buildSummaryPrompt(dailyBriefings, today) {
 
   for (const b of dailyBriefings) {
     if (!b.symbol) {
-      marketEntries.push(`${b.date}: [${b.signal}] ${String(b.content || '').slice(0, 150)}`);
+      marketEntries.push(`${String(b.date).slice(0, 10)}: [${b.signal}] ${String(b.content || '').slice(0, 150)}`);
     } else {
       const key = `${b.symbol}:${b.exchange}`;
       if (!byStock[key]) byStock[key] = { symbol: b.symbol, exchange: b.exchange, entries: [] };
       const move = b.priceChangePct != null ? `${Number(b.priceChangePct).toFixed(2)}%` : 'n/a';
       byStock[key].entries.push(
-        `${b.date}: signal=${b.signal}, move=${move} — ${String(b.content || '').slice(0, 100)}`
+        `${String(b.date).slice(0, 10)}: signal=${b.signal}, move=${move} — ${String(b.content || '').slice(0, 100)}`
       );
     }
   }
@@ -313,7 +313,7 @@ function buildSummaryPrompt(dailyBriefings, today) {
     data.entries.forEach((e) => lines.push('  ' + e));
   }
 
-  const periodStart = (dailyBriefings[0]?.date || '').slice(0, 10) || today;
+  const periodStart = String(dailyBriefings[0]?.date || '').slice(0, 10) || today;
   lines.push(`\nRespond with ONLY this JSON (no markdown):
 {
   "overview": "3–5 sentence summary of market conditions, portfolio highlights, and key events over the period",
