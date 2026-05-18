@@ -756,17 +756,13 @@ function SignalBadge({ signal }) {
 // ─── News tab ─────────────────────────────────────────────────────────────────
 
 function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGenerate, onGenerateSummary }) {
-  // Use workspace timezone (same one the server uses to store dates) so "Today" label matches.
-  // Falls back to browser locale if not loaded yet.
   const today = workspaceTz
     ? new Intl.DateTimeFormat('en-CA', { timeZone: workspaceTz }).format(new Date())
     : new Date().toLocaleDateString('en-CA');
 
-  // Separate monthly summaries from daily briefings
   const monthlySummaries = briefings.filter((b) => b.type === 'monthly_summary');
   const daily = briefings.filter((b) => b.type !== 'monthly_summary');
 
-  // Group daily by date
   const byDate = {};
   for (const b of daily) {
     const d = b.date.slice(0, 10);
@@ -777,12 +773,26 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGene
   const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
   const hasToday = !!byDate[today];
 
+  // Accordion — default to most recent date open
+  const [openDate, setOpenDate] = React.useState(() => dates[0] || null);
+  // Keep openDate in sync when dates list first loads
+  React.useEffect(() => {
+    if (!openDate && dates.length) setOpenDate(dates[0]);
+  }, [dates.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const fmtDate = (dateStr) =>
     dateStr === today
       ? 'Today'
       : new Date(dateStr + 'T12:00:00').toLocaleDateString('en-AU', {
           weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
         });
+
+  // pg returns JSONB columns as already-parsed JS objects — handle both string and object
+  const parseJsonb = (val) => {
+    if (!val) return {};
+    if (typeof val === 'string') { try { return JSON.parse(val); } catch { return {}; } }
+    return val;
+  };
 
   return (
     <div>
@@ -791,7 +801,7 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGene
         <div>
           <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Daily briefings</p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Auto-generated at 4 AM Sydney · 45-day history · monthly summaries retained permanently
+            Auto-generated at 4 AM · 45-day history · monthly summaries retained permanently
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -822,7 +832,7 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGene
         </p>
       )}
 
-      {/* Monthly summaries section */}
+      {/* Monthly summaries */}
       {monthlySummaries.length > 0 && (
         <div className="mb-10">
           <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-muted)' }}>
@@ -830,14 +840,10 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGene
           </p>
           <div className="space-y-4">
             {monthlySummaries.map((s) => {
-              let meta = {};
-              try { meta = JSON.parse(s.headlines || '{}'); } catch (_) {}
+              const meta = parseJsonb(s.headlines);
+              const stocks = Array.isArray(meta.stocks) ? meta.stocks : [];
               return (
-                <div
-                  key={s.id}
-                  className="p-4 rounded-lg border"
-                  style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}
-                >
+                <div key={s.id} className="p-4 rounded-lg border" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}>
                   <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                     <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
                       {fmtDate(s.date.slice(0, 10))}
@@ -848,20 +854,14 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGene
                       </span>
                     )}
                   </div>
-
-                  {/* Overview */}
                   <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--color-text)' }}>{s.content}</p>
-
-                  {/* Per-stock assessments */}
-                  {Array.isArray(meta.stocks) && meta.stocks.length > 0 && (
+                  {stocks.length > 0 && (
                     <div className="space-y-2 mb-3">
-                      {meta.stocks.map((stock, i) => (
+                      {stocks.map((stock, i) => (
                         <div key={i} className="text-xs p-2 rounded" style={{ background: 'var(--color-bg)' }}>
                           <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{stock.symbol}</span>
                           <span className="ml-1.5" style={{ color: 'var(--color-muted)' }}>{stock.exchange}</span>
-                          {stock.trend && (
-                            <span className="ml-2" style={{ color: 'var(--color-text)' }}>{stock.trend}</span>
-                          )}
+                          {stock.trend && <span className="ml-2" style={{ color: 'var(--color-text)' }}>{stock.trend}</span>}
                           {stock.signalAccuracy && (
                             <p className="mt-0.5 italic" style={{ color: 'var(--color-muted)' }}>{stock.signalAccuracy}</p>
                           )}
@@ -869,8 +869,6 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGene
                       ))}
                     </div>
                   )}
-
-                  {/* Advice quality */}
                   {meta.adviceQuality && (
                     <p className="text-xs italic border-t pt-2 mt-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
                       Advice quality: {meta.adviceQuality}
@@ -883,64 +881,95 @@ function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGene
         </div>
       )}
 
-      {/* Daily briefings */}
+      {/* Daily briefings — accordion, one day open at a time */}
       {!dates.length && !generating && !generatingSummary && (
         <p className="text-sm text-center py-12" style={{ color: 'var(--color-muted)' }}>
           No briefings yet. Click "Generate today" to create today's briefing.
         </p>
       )}
 
-      {dates.map((date) => {
-        const { market, stocks } = byDate[date];
-        return (
-          <div key={date} className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-muted)' }}>
-              {fmtDate(date)}
-            </p>
+      <div className="space-y-2">
+        {dates.map((date) => {
+          const { market, stocks } = byDate[date];
+          const isOpen = openDate === date;
+          const allSignals = [market, ...stocks].filter(Boolean).map((b) => b.signal);
+          // Show the most severe signal in the collapsed header
+          const headerSignal = allSignals.includes('bearish') ? 'bearish'
+            : allSignals.includes('bullish') ? 'bullish'
+            : allSignals.includes('watch') ? 'watch'
+            : allSignals.length ? 'neutral' : null;
 
-            {market && (
-              <div className="mb-4 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Market overview</span>
-                  <SignalBadge signal={market.signal} />
+          return (
+            <div key={date} className="rounded-lg border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+              {/* Accordion header */}
+              <button
+                type="button"
+                onClick={() => setOpenDate(isOpen ? null : date)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:opacity-70 transition-opacity duration-200 text-left"
+                style={{ background: 'var(--color-surface)' }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{fmtDate(date)}</span>
+                  <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                    {stocks.length} stock{stocks.length !== 1 ? 's' : ''}{market ? ' · market' : ''}
+                  </span>
+                  {headerSignal && <SignalBadge signal={headerSignal} />}
                 </div>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{market.content}</p>
-              </div>
-            )}
+                <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>{isOpen ? '▲' : '▼'}</span>
+              </button>
 
-            {stocks.length > 0 && (
-              <div className="space-y-3">
-                {stocks.map((b) => (
-                  <div key={b.id} className="p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{b.symbol}</span>
-                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{b.exchange}</span>
-                      {b.priceChangePct != null && (
-                        <span className="text-xs font-medium" style={{ color: Number(b.priceChangePct) >= 0 ? '#22c55e' : '#ef4444' }}>
-                          {Number(b.priceChangePct) >= 0 ? '+' : ''}{Number(b.priceChangePct).toFixed(2)}%
-                        </span>
-                      )}
-                      <SignalBadge signal={b.signal} />
+              {/* Accordion body */}
+              {isOpen && (
+                <div className="px-4 pb-4 pt-1">
+                  {market && (
+                    <div className="mb-4 p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Market overview</span>
+                        <SignalBadge signal={market.signal} />
+                      </div>
+                      <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{market.content}</p>
                     </div>
-                    <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{b.content}</p>
-                    {Array.isArray(b.headlines) && b.headlines.length > 0 && (
-                      <ul className="mt-2 space-y-0.5">
-                        {b.headlines.slice(0, 3).map((h, i) => (
-                          <li key={i} className="text-xs" style={{ color: 'var(--color-muted)' }}>· {h}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                  )}
 
-            {!market && !stocks.length && (
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing to report for this date.</p>
-            )}
-          </div>
-        );
-      })}
+                  {stocks.length > 0 && (
+                    <div className="space-y-3">
+                      {stocks.map((b) => {
+                        const headlines = Array.isArray(b.headlines) ? b.headlines : parseJsonb(b.headlines);
+                        return (
+                          <div key={b.id} className="p-3 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+                            <div className="flex items-center gap-3 mb-1.5 flex-wrap">
+                              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{b.symbol}</span>
+                              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{b.exchange}</span>
+                              {b.priceChangePct != null && (
+                                <span className="text-xs font-medium" style={{ color: Number(b.priceChangePct) >= 0 ? '#22c55e' : '#ef4444' }}>
+                                  {Number(b.priceChangePct) >= 0 ? '+' : ''}{Number(b.priceChangePct).toFixed(2)}%
+                                </span>
+                              )}
+                              <SignalBadge signal={b.signal} />
+                            </div>
+                            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{b.content}</p>
+                            {Array.isArray(headlines) && headlines.length > 0 && (
+                              <ul className="mt-2 space-y-0.5">
+                                {headlines.slice(0, 3).map((h, i) => (
+                                  <li key={i} className="text-xs" style={{ color: 'var(--color-muted)' }}>· {h}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {!market && !stocks.length && (
+                    <p className="text-xs py-2" style={{ color: 'var(--color-muted)' }}>Nothing to report for this date.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
