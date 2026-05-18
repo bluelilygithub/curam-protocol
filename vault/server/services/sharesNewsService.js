@@ -11,7 +11,7 @@
 
 const { pool } = require('../db');
 const { callModel } = require('./callModel');
-const { getModelsForUser } = require('./modelResolver');
+const { getModelsForUser } = require('./modelResolver'); // returns { light, standard, gemini, deepseek }
 const sharesPortfolio = require('./sharesPortfolio');
 
 const FETCH_TIMEOUT_MS = 15000;
@@ -213,10 +213,10 @@ async function generateDailyBriefing(userId) {
   // Fetch Nasdaq market news
   const marketNews = await webSearch('Nasdaq stock market news today technology stocks');
 
-  // Resolve model
-  const { models } = await getModelsForUser(userId);
-  const modelId = models[0]?.id;
-  if (!modelId) throw new Error('No model configured for user');
+  // Resolve model — use standard tier, fall back to light
+  const tiers = await getModelsForUser(userId);
+  const modelId = tiers.standard || tiers.light || tiers.gemini;
+  if (!modelId) throw new Error('No model configured for user — check vault_models in Settings');
 
   // Generate briefings via AI
   const briefings = await generateBriefings(holdings, newsMap, marketNews, modelId);
