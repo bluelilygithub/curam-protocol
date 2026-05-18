@@ -106,8 +106,9 @@ async function webSearch(query) {
 async function getFinnhubNews(symbol) {
   const token = String(process.env.FINNHUB_API_KEY || '').trim();
   if (!token) return [];
-  const to = getSydneyDate();
-  const from = getSydneyDate(2);
+  // Date range for Finnhub API query — UTC is fine here (not stored, just a query window)
+  const to   = new Date().toISOString().slice(0, 10);
+  const from = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   try {
     const res = await fetch(
       `https://finnhub.io/api/v1/company-news?symbol=${encodeURIComponent(symbol)}&from=${from}&to=${to}&token=${encodeURIComponent(token)}`,

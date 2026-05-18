@@ -65,6 +65,7 @@ export default function SharesPage() {
   const [trades, setTrades] = useState([]);
   const [cashRows, setCashRows] = useState([]);
   const [newsBriefings, setNewsBriefings] = useState([]);
+  const [workspaceTz, setWorkspaceTz] = useState('');
   const [generatingNews, setGeneratingNews] = useState(false);
   const [generatingSummary, setGeneratingSummary] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -89,19 +90,21 @@ export default function SharesPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashRes, chartRes, tradesRes, cashRes, newsRes] = await Promise.all([
+      const [dashRes, chartRes, tradesRes, cashRes, newsRes, tzRes] = await Promise.all([
         api.get('/api/shares/dashboard'),
         api.get('/api/shares/charts'),
         api.get('/api/shares/trades'),
         api.get('/api/shares/cash'),
         api.get('/api/shares/news'),
+        api.get('/api/settings/workspace-timezone'),
       ]);
-      const [dash, chartData, tradeList, cashList, newsList] = await Promise.all([
+      const [dash, chartData, tradeList, cashList, newsList, tzData] = await Promise.all([
         dashRes.json(),
         chartRes.json(),
         tradesRes.json(),
         cashRes.json(),
         newsRes.json(),
+        tzRes.json(),
       ]);
       if (!dashRes.ok) throw new Error(dash.error || 'Failed to load dashboard');
       setDashboard(dash);
@@ -109,6 +112,7 @@ export default function SharesPage() {
       setTrades(Array.isArray(tradeList) ? tradeList : []);
       setCashRows(Array.isArray(cashList) ? cashList : []);
       setNewsBriefings(Array.isArray(newsList) ? newsList : []);
+      if (tzData?.timezone) setWorkspaceTz(tzData.timezone);
     } catch (err) {
       addToast(err.message || 'Failed to load shares', 'error');
     } finally {
@@ -713,6 +717,7 @@ export default function SharesPage() {
             {tab === 'news' && (
               <NewsTab
                 briefings={newsBriefings}
+                workspaceTz={workspaceTz}
                 generating={generatingNews}
                 generatingSummary={generatingSummary}
                 onGenerate={handleGenerateNews}
@@ -750,9 +755,12 @@ function SignalBadge({ signal }) {
 
 // ─── News tab ─────────────────────────────────────────────────────────────────
 
-function NewsTab({ briefings, generating, generatingSummary, onGenerate, onGenerateSummary }) {
-  // Use local date (browser timezone) — server stores dates in Sydney TZ
-  const today = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD' in local TZ
+function NewsTab({ briefings, workspaceTz, generating, generatingSummary, onGenerate, onGenerateSummary }) {
+  // Use workspace timezone (same one the server uses to store dates) so "Today" label matches.
+  // Falls back to browser locale if not loaded yet.
+  const today = workspaceTz
+    ? new Intl.DateTimeFormat('en-CA', { timeZone: workspaceTz }).format(new Date())
+    : new Date().toLocaleDateString('en-CA');
 
   // Separate monthly summaries from daily briefings
   const monthlySummaries = briefings.filter((b) => b.type === 'monthly_summary');
