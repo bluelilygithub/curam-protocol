@@ -24,32 +24,55 @@ function tradeProceedsAud(t) {
   return subtotal;
 }
 
-function computeHoldings(trades) {
+/**
+ * Process all trades in chronological order, computing:
+ *  - open holdings (quantity > 0)
+ *  - realized P&L for every sell (using average-cost method)
+ */
+function computeHoldingsAndRealized(trades) {
   const sorted = [...trades].sort(
     (a, b) => new Date(a.tradedAt) - new Date(b.tradedAt) || a.id - b.id
   );
   const map = {};
+  const realized = [];
+
   for (const t of sorted) {
     const key = `${t.symbol}:${t.exchange}`;
     if (!map[key]) {
-      map[key] = {
-        symbol: t.symbol,
-        exchange: t.exchange,
-        quantity: 0,
-        costBasisAud: 0,
-      };
+      map[key] = { symbol: t.symbol, exchange: t.exchange, quantity: 0, costBasisAud: 0 };
     }
     const h = map[key];
-    const aud = tradeProceedsAud(t);
     const qty = num(t.quantity);
+    const priceAud = num(t.pricePerShare);
+    const feesAud = num(t.feesAud);
+
     if (t.side === 'buy') {
       h.quantity += qty;
-      h.costBasisAud += aud;
+      h.costBasisAud += qty * priceAud + feesAud;
     } else {
       if (h.quantity <= 0) continue;
       const avg = h.costBasisAud / h.quantity;
       const sellQty = Math.min(qty, h.quantity);
-      h.costBasisAud -= avg * sellQty;
+      const costAud = avg * sellQty;
+      // Sell proceeds: price × qty minus fees (fees reduce what you receive)
+      const proceedsAud = sellQty * priceAud - feesAud;
+      const pnlAud = proceedsAud - costAud;
+
+      realized.push({
+        tradeId: t.id,
+        symbol: t.symbol,
+        exchange: t.exchange,
+        quantity: sellQty,
+        sellPriceAud: priceAud,
+        avgCostAud: avg,
+        proceedsAud,
+        costAud,
+        pnlAud,
+        pnlPct: costAud > 0 ? (pnlAud / costAud) * 100 : null,
+        tradedAt: t.tradedAt,
+      });
+
+      h.costBasisAud -= costAud;
       h.quantity -= sellQty;
       if (h.quantity < 1e-8) {
         h.quantity = 0;
@@ -57,7 +80,16 @@ function computeHoldings(trades) {
       }
     }
   }
-  return Object.values(map).filter(h => h.quantity > 0);
+
+  return {
+    holdings: Object.values(map).filter((h) => h.quantity > 0),
+    realized,
+  };
+}
+
+/** Convenience wrapper — returns open holdings only (used by cron + chart). */
+function computeHoldings(trades) {
+  return computeHoldingsAndRealized(trades).holdings;
 }
 
 function computeCashFromActivity(trades, ledgerRows) {
@@ -165,7 +197,7 @@ async function getTradesAndLedger(userId) {
 
 async function buildDashboard(userId, exchangeFilter = null) {
   const { trades, ledger } = await getTradesAndLedger(userId);
-  const holdings = computeHoldings(trades);
+  const { holdings, realized } = computeHoldingsAndRealized(trades);
   const cashAud = computeCashFromActivity(trades, ledger);
   const { quotes, usdAud, quoteError } = await fetchQuotesForHoldings(holdings, exchangeFilter);
 
@@ -200,14 +232,18 @@ async function buildDashboard(userId, exchangeFilter = null) {
   const unrealizedPnlAud = holdingsValueAud - costBasisAud;
   const unrealizedPnlPct = costBasisAud > 0 ? (unrealizedPnlAud / costBasisAud) * 100 : null;
 
+  const totalRealizedPnlAud = realized.reduce((s, r) => s + r.pnlAud, 0);
+
   return {
     positions,
+    realized: realized.sort((a, b) => new Date(b.tradedAt) - new Date(a.tradedAt)),
     cashAud,
     holdingsValueAud,
     totalValueAud,
     costBasisAud,
     unrealizedPnlAud: holdings.length ? unrealizedPnlAud : null,
     unrealizedPnlPct: holdings.length ? unrealizedPnlPct : null,
+    totalRealizedPnlAud: realized.length ? totalRealizedPnlAud : null,
     usdAud,
     quoteError,
     quotesAvailable: marketData.canFetchQuotes(),

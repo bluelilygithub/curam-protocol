@@ -51,26 +51,6 @@ function parseTradeBody(body) {
   };
 }
 
-// GET /api/shares/debug — temporary, remove after diagnosing holdings issue
-router.get('/debug', async (req, res) => {
-  try {
-    const { trades } = await portfolio.getTradesAndLedger(req.user.id);
-    const sorted = [...trades].sort(
-      (a, b) => new Date(a.tradedAt) - new Date(b.tradedAt) || a.id - b.id
-    );
-    const holdings = portfolio.computeHoldings(trades);
-    res.json({
-      rawTrades: sorted.map((t) => ({
-        id: t.id, symbol: t.symbol, exchange: t.exchange,
-        side: t.side, quantity: t.quantity, tradedAt: t.tradedAt,
-      })),
-      computedHoldings: holdings,
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // GET /api/shares/dashboard
 router.get('/dashboard', async (req, res) => {
   try {

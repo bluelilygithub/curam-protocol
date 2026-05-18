@@ -325,6 +325,14 @@ export default function SharesPage() {
                     </div>
                   ))}
                 </div>
+                {dashboard?.totalRealizedPnlAud != null && (
+                  <div className="mb-4 px-3 py-2 rounded-lg border text-sm flex items-center gap-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                    <span style={{ color: 'var(--color-muted)' }}>Realised P&L</span>
+                    <span className="font-semibold" style={{ color: dashboard.totalRealizedPnlAud >= 0 ? '#22c55e' : '#ef4444' }}>
+                      {fmtAud(dashboard.totalRealizedPnlAud)}
+                    </span>
+                  </div>
+                )}
 
                 {!dashboard?.positions?.length ? (
                   <p className="text-sm py-8 text-center" style={{ color: 'var(--color-muted)' }}>
@@ -359,6 +367,41 @@ export default function SharesPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+                {dashboard?.realized?.length > 0 && (
+                  <div className="mt-6">
+                    <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>REALISED TRADES</p>
+                    <div className="overflow-x-auto border rounded-lg" style={{ borderColor: 'var(--color-border)' }}>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr style={{ background: 'var(--color-surface)' }}>
+                            {['Symbol', 'Exch', 'Qty', 'Sell price', 'Avg cost', 'Proceeds', 'P&L', 'Date'].map((h) => (
+                              <th key={h} className="text-left px-3 py-2 text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dashboard.realized.map((r) => (
+                            <tr key={r.tradeId} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                              <td className="px-3 py-2 font-medium" style={{ color: 'var(--color-text)' }}>{r.symbol}</td>
+                              <td className="px-3 py-2" style={{ color: 'var(--color-muted)' }}>{r.exchange}</td>
+                              <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>{r.quantity}</td>
+                              <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>{fmtAud(r.sellPriceAud)}</td>
+                              <td className="px-3 py-2" style={{ color: 'var(--color-muted)' }}>{fmtAud(r.avgCostAud)}</td>
+                              <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>{fmtAud(r.proceedsAud)}</td>
+                              <td className="px-3 py-2 font-medium" style={{ color: r.pnlAud >= 0 ? '#22c55e' : '#ef4444' }}>
+                                {fmtAud(r.pnlAud)}
+                                {r.pnlPct != null && <span className="ml-1 text-xs opacity-70">({fmtPct(r.pnlPct)})</span>}
+                              </td>
+                              <td className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                                {new Date(r.tradedAt).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </>
