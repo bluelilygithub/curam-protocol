@@ -32,12 +32,15 @@ function getDateInTz(tz, offsetDays = 0) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d);
 }
 
-// Reads the workspace-level IANA timezone from workspace_settings.
-// Falls back to Australia/Sydney if not configured.
+// Reads the admin user's timezone from their Profile settings.
+// Falls back to Australia/Sydney if not set.
 async function getWorkspaceTimezone() {
   try {
     const { rows } = await pool.query(
-      `SELECT value FROM workspace_settings WHERE key='workspace_timezone' LIMIT 1`
+      `SELECT s.value FROM settings s
+       JOIN users u ON u.id = s."userId"
+       WHERE s.key = 'user_timezone' AND u."isAdmin" = TRUE
+       ORDER BY u.id ASC LIMIT 1`
     );
     return rows[0]?.value?.trim() || 'Australia/Sydney';
   } catch {

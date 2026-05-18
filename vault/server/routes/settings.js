@@ -100,40 +100,17 @@ router.post('/feature-access', async (req, res) => {
   }
 });
 
-// GET /api/settings/workspace-timezone — returns the workspace IANA timezone
+// GET /api/settings/workspace-timezone — returns the admin user's timezone (system default)
 router.get('/workspace-timezone', async (_req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT value FROM workspace_settings WHERE key='workspace_timezone' LIMIT 1`
+      `SELECT s.value FROM settings s
+       JOIN users u ON u.id = s."userId"
+       WHERE s.key = 'user_timezone' AND u."isAdmin" = TRUE
+       ORDER BY u.id ASC LIMIT 1`
     );
     res.json({ timezone: rows[0]?.value?.trim() || 'Australia/Sydney' });
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/settings/workspace-timezone — admin only; body: { timezone: 'Australia/Sydney' }
-router.post('/workspace-timezone', async (req, res) => {
-  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
-  const { timezone } = req.body || {};
-  // Basic IANA format validation: letters, digits, underscore, forward-slash, plus, minus
-  if (!timezone || typeof timezone !== 'string' || !/^[A-Za-z][A-Za-z0-9_+\-\/]+$/.test(timezone.trim())) {
-    return res.status(400).json({ error: 'Invalid IANA timezone string' });
-  }
-  try {
-    // Verify the timezone is actually valid before storing
-    new Intl.DateTimeFormat('en-CA', { timeZone: timezone.trim() }).format(new Date());
-    await pool.query(
-      `INSERT INTO workspace_settings (key, value, "updatedAt")
-       VALUES ('workspace_timezone', $1, NOW())
-       ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, "updatedAt"=NOW()`,
-      [timezone.trim()]
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    if (err.message?.includes('Invalid time zone')) {
-      return res.status(400).json({ error: `Unknown timezone: ${timezone}` });
-    }
     res.status(500).json({ error: err.message });
   }
 });

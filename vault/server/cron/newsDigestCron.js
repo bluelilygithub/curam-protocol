@@ -42,7 +42,10 @@ async function getScheduleSettings() {
 async function getWorkspaceTimezone() {
   try {
     const { rows } = await pool.query(
-      `SELECT value FROM workspace_settings WHERE key='workspace_timezone' LIMIT 1`
+      `SELECT s.value FROM settings s
+       JOIN users u ON u.id = s."userId"
+       WHERE s.key = 'user_timezone' AND u."isAdmin" = TRUE
+       ORDER BY u.id ASC LIMIT 1`
     );
     return rows[0]?.value?.trim() || 'Australia/Sydney';
   } catch {
