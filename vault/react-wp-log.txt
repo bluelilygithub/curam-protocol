@@ -1,0 +1,344 @@
+2026-05-04T23:30:28.602631509Z [inf]  100.64.0.3 - - [04/May/2026:23:30:25 +0000] "GET /.well-known/sg-hosted-ping HTTP/1.1" 404 12215 "-" "Avalon API Client"
+2026-05-04T23:31:58.316206554Z [inf]  100.64.0.4 - - [04/May/2026:23:31:53 +0000] "GET /assets/images/phase-2-roadmap.jpeg HTTP/1.1" 200 0 "https://www.curam-ai.com.au" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+2026-05-04T23:39:39.216559597Z [inf]  100.64.0.5 - - [04/May/2026:23:39:30 +0000] "GET /industries/legal-services.html HTTP/1.1" 200 9331 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot) Chrome/119.0.6045.214 Safari/537.36"
+2026-05-04T23:40:49.858661019Z [inf]  100.64.0.6 - - [04/May/2026:23:40:49 +0000] "HEAD /industries/legal-services.html HTTP/1.1" 200 0 "-" "Mozilla/5.0 AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/605.1.15"
+2026-05-04T23:42:34.905580365Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-04T23:42:34.905589823Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-04T23:42:34.905595645Z [inf]    prompt: 'Week\tCore Focus\tNew Add‑ons\n1\tSecurity & scaffold '
+2026-05-04T23:42:34.905599962Z [inf]  }
+2026-05-04T23:42:34.905605038Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-04T23:42:34.905610212Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-04T23:42:34.905614468Z [inf]    prompt: 'Week\tCore Focus\tNew Add‑ons\n1\tSecurity & scaffold '
+2026-05-04T23:42:34.905619120Z [inf]  }
+2026-05-04T23:42:34.905624576Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-04T23:42:34.905629661Z [err]  [embeddings] embedText failed 404: {
+2026-05-04T23:42:34.905634001Z [err]    "error": {
+2026-05-04T23:42:34.905638597Z [err]      "code": 404,
+2026-05-04T23:42:34.905642608Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-04T23:42:34.905646576Z [inf]  [ctx] related_sessions found=1 project=21
+2026-05-04T23:42:34.905651277Z [inf]  [ModelAdvisor] classify failed Unexpected end of JSON input
+2026-05-04T23:42:34.905655839Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-04T23:42:34.905660967Z [err]  [embeddings] embedText failed 404: {
+2026-05-04T23:42:34.905665846Z [err]    "error": {
+2026-05-04T23:42:34.905670044Z [err]      "code": 404,
+2026-05-04T23:42:34.905674587Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-04T23:42:34.905679781Z [inf]  [ctx] related_sessions found=1 project=21
+2026-05-04T23:42:40.821950555Z [inf]  [suggestions] model=deepseek-v4-flash msgs=6 sid=session-1777925512619
+2026-05-04T23:42:42.132372831Z [inf]  [suggestions] raw=["How to demo HITL effectively?", "What compliance certificate should we export?", "When to test fallback timeout scenar
+2026-05-04T23:42:42.132377609Z [inf]  [suggestions] parsed=3
+2026-05-04T23:42:48.800630054Z [err]  2026-05-04 23:42:48.300 UTC [253274] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-04T23:42:48.800635988Z [err]  2026-05-04 23:42:48.300 UTC [253274] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-04T23:42:48.865356042Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-04T23:42:48.865368307Z [inf]  [session-summary] stored (text-only) sid=session-1777925512619 model=deepseek-v4-flash words=285
+2026-05-04T23:42:48.865608244Z [err]  [embeddings] embedText failed 404: {
+2026-05-04T23:42:48.865611796Z [err]    "error": {
+2026-05-04T23:42:48.865615880Z [err]      "code": 404,
+2026-05-04T23:42:49.236358698Z [err]  2026-05-04 23:42:49.233 UTC [253275] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-04T23:42:49.236364586Z [err]  2026-05-04 23:42:49.233 UTC [253275] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-04T23:42:49.241336974Z [err]  [embeddings] embedText failed 404: {
+2026-05-04T23:42:49.241344068Z [err]    "error": {
+2026-05-04T23:42:49.241350657Z [err]      "code": 404,
+2026-05-04T23:42:49.241356897Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-04T23:42:49.895001636Z [inf]  [session-summary] stored (text-only) sid=session-1777925512619 model=deepseek-v4-flash words=134
+2026-05-04T23:43:39.342665893Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-04T23:43:39.342672812Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-04T23:43:39.342678692Z [inf]    prompt: 'Give me the table that includes the entire list of'
+2026-05-04T23:43:39.342683936Z [inf]  }
+2026-05-04T23:43:40.491247709Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-04T23:43:41.119053518Z [err]  [embeddings] embedText failed 404: {
+2026-05-04T23:43:41.119058706Z [err]    "error": {
+2026-05-04T23:43:41.119065838Z [err]      "code": 404,
+2026-05-04T23:43:41.119071909Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-04T23:43:41.119078059Z [inf]  [ctx] related_sessions found=1 project=21
+2026-05-04T23:44:10.532316175Z [err]  2026-05-04 23:44:09.849 UTC [253280] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-04T23:44:10.532325204Z [err]  2026-05-04 23:44:09.849 UTC [253280] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-04T23:44:10.606954241Z [inf]  [suggestions] model=deepseek-v4-flash msgs=6 sid=session-1777925512619
+2026-05-04T23:44:10.606961203Z [inf]  [suggestions] raw=
+2026-05-04T23:44:10.606973261Z [inf]  [suggestions] parsed=0
+2026-05-04T23:44:10.606980084Z [err]  [embeddings] embedText failed 404: {
+2026-05-04T23:44:10.606986703Z [err]    "error": {
+2026-05-04T23:44:10.606992216Z [err]      "code": 404,
+2026-05-04T23:44:10.606998298Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-04T23:44:10.607004324Z [inf]  [session-summary] stored (text-only) sid=session-1777925512619 model=deepseek-v4-flash words=245
+2026-05-04T23:44:30.643203524Z [err]  2026-05-04 23:44:20.796 UTC [76] LOG:  checkpoint starting: time
+2026-05-04T23:44:30.643210691Z [err]  2026-05-04 23:44:22.923 UTC [76] LOG:  checkpoint complete: wrote 22 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.107 s, sync=0.007 s, total=2.128 s; sync files=19, longest=0.005 s, average=0.001 s; distance=86 kB, estimate=188 kB; lsn=0/6D15F88, redo lsn=0/6D15F30
+2026-05-04T23:46:02.960116709Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-04T23:46:02.960129702Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-04T23:46:02.960137240Z [inf]    prompt: 'Consolidated Feature/Benefit Table – Grouped by De'
+2026-05-04T23:46:02.960144132Z [inf]  }
+2026-05-04T23:46:06.791899422Z [inf]  [ModelAdvisor] classify failed Unexpected end of JSON input
+2026-05-04T23:46:07.021185638Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-04T23:46:07.189029232Z [err]  [embeddings] embedText failed 404: {
+2026-05-04T23:46:07.189044153Z [err]    "error": {
+2026-05-04T23:46:07.189052789Z [err]      "code": 404,
+2026-05-04T23:46:07.189058682Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-04T23:46:07.189064505Z [inf]  [ctx] related_sessions found=2 project=21
+2026-05-04T23:46:57.216875172Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-04T23:46:57.216888298Z [inf]  [session-summary] stored (text-only) sid=session-1777938367008 model=deepseek-v4-flash words=75
+2026-05-04T23:46:57.216930446Z [inf]  [suggestions] model=deepseek-v4-flash msgs=2 sid=session-1777938367008
+2026-05-04T23:46:57.216938532Z [inf]  [suggestions] raw=["What are the dependencies for sub-rows?", "How to implement idle timeout exactly?", "Which deliverable sets have missi
+2026-05-04T23:46:57.216944695Z [inf]  [suggestions] parsed=3
+2026-05-04T23:46:57.216974161Z [err]  [embeddings] embedText failed 404: {
+2026-05-04T23:46:57.216981002Z [err]    "error": {
+2026-05-04T23:46:57.216986491Z [err]      "code": 404,
+2026-05-04T23:47:02.085881305Z [err]  2026-05-04 23:46:54.647 UTC [253294] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-04T23:47:02.085885831Z [err]  2026-05-04 23:46:54.647 UTC [253294] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-04T23:49:22.876294259Z [err]  2026-05-04 23:49:21.024 UTC [76] LOG:  checkpoint starting: time
+2026-05-04T23:49:23.459048125Z [err]  2026-05-04 23:49:23.451 UTC [76] LOG:  checkpoint complete: wrote 25 buffers (0.2%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.408 s, sync=0.008 s, total=2.428 s; sync files=21, longest=0.005 s, average=0.001 s; distance=96 kB, estimate=178 kB; lsn=0/6D2E150, redo lsn=0/6D2E0F8
+2026-05-05T00:00:45.387560003Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-05T00:00:45.387568490Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-05T00:00:45.387581811Z [inf]    prompt: 'You have listed 23 feature/benefit items and sub-t'
+2026-05-05T00:00:45.387589580Z [inf]  }
+2026-05-05T00:00:45.387596177Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-05T00:00:45.387607863Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:00:45.387615534Z [err]    "error": {
+2026-05-05T00:00:45.387622615Z [err]      "code": 404,
+2026-05-05T00:00:45.387634635Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:00:45.387643737Z [inf]  [ctx] related_sessions found=2 project=21
+2026-05-05T00:02:05.879641944Z [inf]  [suggestions] model=deepseek-v4-flash msgs=4 sid=session-1777938367008
+2026-05-05T00:02:05.879650136Z [inf]  [suggestions] raw=
+2026-05-05T00:02:05.879656235Z [inf]  [suggestions] parsed=0
+2026-05-05T00:02:05.879662246Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:02:05.879668560Z [err]    "error": {
+2026-05-05T00:02:05.879674520Z [err]      "code": 404,
+2026-05-05T00:02:05.879680192Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:02:05.879685954Z [inf]  [session-summary] stored (text-only) sid=session-1777938367008 model=deepseek-v4-flash words=193
+2026-05-05T00:02:08.888811369Z [err]  2026-05-05 00:02:03.298 UTC [253352] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-05T00:02:08.888814631Z [err]  2026-05-05 00:02:03.298 UTC [253352] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-05T00:04:29.503050480Z [err]  2026-05-05 00:04:21.748 UTC [76] LOG:  checkpoint starting: time
+2026-05-05T00:04:29.503061375Z [err]  2026-05-05 00:04:23.975 UTC [76] LOG:  checkpoint complete: wrote 23 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.207 s, sync=0.008 s, total=2.227 s; sync files=20, longest=0.005 s, average=0.001 s; distance=90 kB, estimate=170 kB; lsn=0/6D44960, redo lsn=0/6D44908
+2026-05-05T00:08:55.036137341Z [inf]  100.64.0.7 - - [05/May/2026:00:08:54 +0000] "GET /tag/ai-deception/ HTTP/1.1" 404 12215 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)"
+2026-05-05T00:20:47.675573143Z [inf]    prompt: 'There is no storyline associated with any of this\n'
+2026-05-05T00:20:47.675592007Z [inf]  }
+2026-05-05T00:20:47.675605915Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-05T00:20:47.675614278Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-05T00:20:47.675688478Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-05T00:20:47.675695247Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-05T00:20:47.675712976Z [inf]    prompt: 'There is no storyline associated with any of this\n'
+2026-05-05T00:20:47.675721426Z [inf]  }
+2026-05-05T00:20:47.675728753Z [inf]  [ModelAdvisor] result { mismatch: true, suggestedTier: 'premium', complexity: 'complex' }
+2026-05-05T00:20:47.675735799Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-05T00:20:47.675742869Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:20:47.675751071Z [err]    "error": {
+2026-05-05T00:20:47.675757388Z [err]      "code": 404,
+2026-05-05T00:20:47.675764816Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:20:47.675772014Z [inf]  [ctx] related_sessions found=2 project=21
+2026-05-05T00:20:56.862297498Z [inf]  100.64.0.8 - - [05/May/2026:00:20:55 +0000] "GET /the-limitations-of-large-language-models-in-logic-and-reasoning/ HTTP/1.1" 404 12215 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm) Chrome/116.0.1938.76 Safari/537.36"
+2026-05-05T00:21:48.044392607Z [inf]  [suggestions] model=deepseek-v4-flash msgs=6 sid=session-1777938367008
+2026-05-05T00:21:50.861335207Z [inf]  [suggestions] raw=
+2026-05-05T00:21:50.861341998Z [inf]  [suggestions] parsed=0
+2026-05-05T00:21:56.212298313Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:21:56.212303203Z [err]    "error": {
+2026-05-05T00:21:56.212307961Z [err]      "code": 404,
+2026-05-05T00:21:56.212313286Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:21:56.214904207Z [inf]  [session-summary] stored (text-only) sid=session-1777938367008 model=deepseek-v4-flash words=275
+2026-05-05T00:21:56.764631572Z [err]  2026-05-05 00:21:56.203 UTC [253413] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-05T00:21:56.764637694Z [err]  2026-05-05 00:21:56.203 UTC [253413] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-05T00:24:26.765602564Z [err]  2026-05-05 00:24:22.372 UTC [76] LOG:  checkpoint starting: time
+2026-05-05T00:24:26.765610137Z [err]  2026-05-05 00:24:24.802 UTC [76] LOG:  checkpoint complete: wrote 25 buffers (0.2%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.407 s, sync=0.008 s, total=2.430 s; sync files=21, longest=0.006 s, average=0.001 s; distance=94 kB, estimate=162 kB; lsn=0/6D5C1D8, redo lsn=0/6D5C180
+2026-05-05T00:26:47.063147065Z [inf]  100.64.0.9 - - [05/May/2026:00:26:37 +0000] "GET /robots.txt HTTP/1.1" 404 12215 "-" "Mozilla/5.0 (Linux; Android 5.0) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 (compatible; Bytespider; spider-feedback@bytedance.com)"
+2026-05-05T00:27:26.727627507Z [inf]  100.64.0.10 - - [05/May/2026:00:27:24 +0000] "GET /robots.txt HTTP/1.1" 404 12215 "-" "Mozilla/5.0 (Linux; Android 5.0) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36 (compatible; Bytespider; spider-feedback@bytedance.com)"
+2026-05-05T00:27:34.395474238Z [inf]  100.64.0.11 - - [05/May/2026:00:27:34 +0000] "GET /.well-known/sg-hosted-ping HTTP/1.1" 404 12215 "-" "Avalon API Client"
+2026-05-05T00:31:35.301661481Z [inf]  100.64.0.11 - - [05/May/2026:00:31:26 +0000] "GET /robots.txt HTTP/1.1" 404 12215 "-" "AliyunSecBot/Aliyun (AliyunSecBot@service.alibaba.com)"
+2026-05-05T00:31:35.301664934Z [inf]  100.64.0.3 - - [05/May/2026:00:31:27 +0000] "GET /roi.html?industry=government HTTP/1.1" 200 4939 "-" "AliyunSecBot/Aliyun (AliyunSecBot@service.alibaba.com)"
+2026-05-05T00:33:08.867811416Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-05T00:33:08.867818042Z [inf]    currentModelId: 'deepseek-v4-pro',
+2026-05-05T00:33:08.867828669Z [inf]    prompt: 'review my plan.  how i can package it for my team '
+2026-05-05T00:33:08.867839114Z [inf]  }
+2026-05-05T00:33:11.660296080Z [inf]  [ModelAdvisor] result { mismatch: true, suggestedTier: 'standard', complexity: 'moderate' }
+2026-05-05T00:33:17.858022106Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-05T00:33:17.858028092Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:33:17.858033237Z [err]    "error": {
+2026-05-05T00:33:17.858038302Z [err]      "code": 404,
+2026-05-05T00:33:17.858043326Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:33:17.858048538Z [inf]  [ctx] related_sessions found=2 project=21
+2026-05-05T00:34:27.098269601Z [err]  2026-05-05 00:34:23.000 UTC [76] LOG:  checkpoint starting: time
+2026-05-05T00:34:27.098278397Z [err]  2026-05-05 00:34:23.318 UTC [76] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.301 s, sync=0.004 s, total=0.318 s; sync files=2, longest=0.004 s, average=0.002 s; distance=2 kB, estimate=146 kB; lsn=0/6D5CCE0, redo lsn=0/6D5CC88
+2026-05-05T00:34:27.141331014Z [inf]  [suggestions] model=deepseek-v4-flash msgs=6 sid=session-1777938367008
+2026-05-05T00:34:28.257868741Z [inf]  [suggestions] raw=["How do we prove time savings to executives?", "What narrative structure sells safety first?", "Can we prototype a
+2026-05-05T00:34:28.257879396Z [inf]  [suggestions] parsed=0
+2026-05-05T00:35:09.468563644Z [inf]  [ModelAdvisor] result { mismatch: true, suggestedTier: 'standard', complexity: 'moderate' }
+2026-05-05T00:35:09.468662830Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-05T00:35:09.468670589Z [inf]    currentModelId: 'deepseek-v4-pro',
+2026-05-05T00:35:09.468678191Z [inf]    prompt: 'my expectaton is to create this prototype as a dem'
+2026-05-05T00:35:09.468684876Z [inf]  }
+2026-05-05T00:35:17.262848852Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-05T00:35:17.262855512Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:35:17.262862863Z [err]    "error": {
+2026-05-05T00:35:17.262870210Z [err]      "code": 404,
+2026-05-05T00:35:17.262882822Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:35:17.262890302Z [inf]  [ctx] related_sessions found=2 project=21
+2026-05-05T00:36:20.255388745Z [inf]  [session-summary] stored (text-only) sid=session-1777938367008 model=deepseek-v4-flash words=282
+2026-05-05T00:36:20.255420146Z [inf]  [suggestions] model=deepseek-v4-flash msgs=6 sid=session-1777938367008
+2026-05-05T00:36:20.255428822Z [inf]  [suggestions] raw=
+2026-05-05T00:36:20.255437512Z [inf]  [suggestions] parsed=0
+2026-05-05T00:36:20.255449320Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:36:20.255457097Z [err]    "error": {
+2026-05-05T00:36:20.255465133Z [err]      "code": 404,
+2026-05-05T00:36:20.255472188Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:36:26.699773088Z [err]  2026-05-05 00:36:18.158 UTC [253463] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-05T00:36:26.699776041Z [err]  2026-05-05 00:36:18.158 UTC [253463] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-05T00:39:01.025483148Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-05T00:39:01.025489612Z [inf]    currentModelId: 'deepseek-v4-pro',
+2026-05-05T00:39:01.025502579Z [inf]    prompt: 'I had intended to build this before going to the c'
+2026-05-05T00:39:01.025510207Z [inf]  }
+2026-05-05T00:39:01.025516971Z [inf]  [ModelAdvisor] result { mismatch: true, suggestedTier: 'standard', complexity: 'moderate' }
+2026-05-05T00:39:02.952515773Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-05T00:39:02.952528125Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:39:02.952536055Z [err]    "error": {
+2026-05-05T00:39:02.952547120Z [err]      "code": 404,
+2026-05-05T00:39:02.952552342Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:39:02.952557572Z [inf]  [ctx] related_sessions found=2 project=21
+2026-05-05T00:39:26.939595638Z [err]  2026-05-05 00:39:22.416 UTC [76] LOG:  checkpoint starting: time
+2026-05-05T00:39:26.939601430Z [err]  2026-05-05 00:39:24.543 UTC [76] LOG:  checkpoint complete: wrote 22 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.107 s, sync=0.007 s, total=2.127 s; sync files=19, longest=0.005 s, average=0.001 s; distance=89 kB, estimate=140 kB; lsn=0/6D73330, redo lsn=0/6D732D8
+2026-05-05T00:39:32.705820914Z [inf]  [suggestions] model=deepseek-v4-flash msgs=6 sid=session-1777938367008
+2026-05-05T00:39:33.808447443Z [inf]  [suggestions] raw=[
+2026-05-05T00:39:33.808452152Z [inf]    "How to make UI/UX impressive quickly?",
+2026-05-05T00:39:33.808456522Z [inf]    "What visual clues show time savings?",
+2026-05-05T00:39:33.808460534Z [inf]    "How to build trust without sho
+2026-05-05T00:39:33.808464829Z [inf]  [suggestions] parsed=3
+2026-05-05T00:39:38.828197425Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:39:38.828204823Z [err]    "error": {
+2026-05-05T00:39:38.828212665Z [err]      "code": 404,
+2026-05-05T00:39:38.828220362Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:39:38.828228187Z [inf]  [session-summary] stored (text-only) sid=session-1777938367008 model=deepseek-v4-flash words=273
+2026-05-05T00:39:46.558224482Z [err]  2026-05-05 00:39:38.547 UTC [253472] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-05T00:39:46.558230098Z [err]  2026-05-05 00:39:38.547 UTC [253472] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-05T00:44:28.176276255Z [err]  2026-05-05 00:44:22.642 UTC [76] LOG:  checkpoint starting: time
+2026-05-05T00:44:28.176282294Z [err]  2026-05-05 00:44:24.971 UTC [76] LOG:  checkpoint complete: wrote 24 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.308 s, sync=0.009 s, total=2.330 s; sync files=21, longest=0.007 s, average=0.001 s; distance=94 kB, estimate=136 kB; lsn=0/6D8ADB0, redo lsn=0/6D8AD58
+2026-05-05T00:50:12.373517471Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-05T00:50:12.373524944Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-05T00:50:12.373532037Z [inf]    prompt: 'but this is reduced to a simple upload / extract j'
+2026-05-05T00:50:12.373539457Z [inf]  }
+2026-05-05T00:50:12.373547389Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-05T00:50:12.373554648Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:50:12.373561512Z [err]    "error": {
+2026-05-05T00:50:12.373568812Z [err]      "code": 404,
+2026-05-05T00:50:12.373575470Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:50:12.373583720Z [inf]  [ctx] related_sessions found=2 project=21
+2026-05-05T00:50:31.770209062Z [inf]  [suggestions] model=deepseek-v4-flash msgs=6 sid=session-1777938367008
+2026-05-05T00:50:31.770222033Z [inf]  [suggestions] raw=
+2026-05-05T00:50:31.770230393Z [inf]  [suggestions] parsed=0
+2026-05-05T00:50:35.620382716Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:50:35.620387629Z [err]    "error": {
+2026-05-05T00:50:35.620392013Z [err]      "code": 404,
+2026-05-05T00:50:35.620395708Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:50:35.620399990Z [inf]  [session-summary] stored (text-only) sid=session-1777938367008 model=deepseek-v4-flash words=318
+2026-05-05T00:50:39.445742905Z [err]  2026-05-05 00:50:35.236 UTC [253508] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-05T00:50:39.445750514Z [err]  2026-05-05 00:50:35.236 UTC [253508] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-05T00:51:25.259157860Z [err]      "code": 404,
+2026-05-05T00:51:25.259168149Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:51:25.259174508Z [inf]  [ctx] related_sessions found=2 project=21
+2026-05-05T00:51:25.259367737Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-05T00:51:25.259374007Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-05T00:51:25.259380008Z [inf]    prompt: 'again, I could do this will copilot'
+2026-05-05T00:51:25.259385577Z [inf]  }
+2026-05-05T00:51:25.259391726Z [inf]  [ctx] project="Fsace" brief_fields=6
+2026-05-05T00:51:25.259397700Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:51:25.259403938Z [err]    "error": {
+2026-05-05T00:51:45.266418315Z [inf]  [suggestions] model=deepseek-v4-flash msgs=6 sid=session-1777938367008
+2026-05-05T00:51:45.266424221Z [inf]  [suggestions] raw=[
+2026-05-05T00:51:45.266466190Z [inf]    "What specific differentiators set your demo apart?",
+2026-05-05T00:51:45.266472926Z [inf]    "How can UI/UX highlight technical advantages?",
+2026-05-05T00:51:45.266479498Z [inf]    "Will own
+2026-05-05T00:51:45.266486795Z [inf]  [suggestions] parsed=3
+2026-05-05T00:51:48.088117278Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T00:51:48.088122392Z [err]    "error": {
+2026-05-05T00:51:48.088127147Z [err]      "code": 404,
+2026-05-05T00:51:48.088131815Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T00:51:48.088136483Z [inf]  [session-summary] stored (text-only) sid=session-1777938367008 model=deepseek-v4-flash words=287
+2026-05-05T00:51:49.029168719Z [err]  2026-05-05 00:51:47.690 UTC [253513] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-05T00:51:49.029173276Z [err]  2026-05-05 00:51:47.690 UTC [253513] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-05T00:54:30.332535266Z [err]  2026-05-05 00:54:23.168 UTC [76] LOG:  checkpoint starting: time
+2026-05-05T00:54:30.332542126Z [err]  2026-05-05 00:54:25.496 UTC [76] LOG:  checkpoint complete: wrote 24 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=2.308 s, sync=0.008 s, total=2.328 s; sync files=21, longest=0.005 s, average=0.001 s; distance=75 kB, estimate=130 kB; lsn=0/6D9DB18, redo lsn=0/6D9DA88
+2026-05-05T00:57:06.055933298Z [inf]  Starting Container
+2026-05-05T00:57:08.042563088Z [inf]  ROI Calculator blueprint registered successfully at /roi-calculator
+2026-05-05T00:57:08.042566400Z [err]  [2026-05-05 00:57:07 +0000] [1] [INFO] Starting gunicorn 25.3.0
+2026-05-05T00:57:08.042570211Z [err]  [2026-05-05 00:57:07 +0000] [1] [INFO] Listening at: http://0.0.0.0:3001 (1)
+2026-05-05T00:57:08.042572931Z [err]  [2026-05-05 00:57:07 +0000] [1] [INFO] Using worker: sync
+2026-05-05T00:57:08.042576214Z [err]  [2026-05-05 00:57:07 +0000] [97] [INFO] Booting worker with pid: 97
+2026-05-05T00:57:08.042578871Z [err]  [2026-05-05 00:57:07 +0000] [98] [INFO] Booting worker with pid: 98
+2026-05-05T00:57:08.042581910Z [err]  [2026-05-05 00:57:07 +0000] [99] [INFO] Booting worker with pid: 99
+2026-05-05T00:57:08.042584804Z [err]  [2026-05-05 00:57:07 +0000] [100] [INFO] Booting worker with pid: 100
+2026-05-05T00:57:08.042587646Z [err]  [2026-05-05 00:57:07 +0000] [1] [INFO] Control socket listening at /root/.gunicorn/gunicorn.ctl
+2026-05-05T00:57:12.626005474Z [inf]  Stopping Container
+2026-05-05T00:57:20.324760782Z [err]  [2026-05-05 00:57:11 +0000] [1] [INFO] Shutting down: Master
+2026-05-05T00:57:20.324772425Z [err]  [2026-05-05 00:57:10 +0000] [1] [INFO] Handling signal: term
+2026-05-05T00:57:20.324780753Z [err]  [2026-05-05 00:57:10 +0000] [100] [INFO] Worker exiting (pid: 100)
+2026-05-05T00:57:20.324783941Z [err]  [2026-05-05 00:57:10 +0000] [97] [INFO] Worker exiting (pid: 97)
+2026-05-05T00:57:20.324786601Z [err]  [2026-05-05 00:57:10 +0000] [99] [INFO] Worker exiting (pid: 99)
+2026-05-05T00:57:20.324792306Z [err]  [2026-05-05 00:57:10 +0000] [98] [INFO] Worker exiting (pid: 98)
+2026-05-05T00:57:25.666444521Z [err]  npm error signal SIGTERM
+2026-05-05T00:57:25.666458151Z [err]  npm error command sh -c node server/index.js
+2026-05-05T00:57:25.666465120Z [err]  npm error A complete log of this run can be found in: /root/.npm/_logs/2026-05-04T22_38_27_639Z-debug-0.log
+2026-05-05T00:57:25.666504622Z [err]  npm error path /app
+2026-05-05T00:57:25.666512557Z [err]  npm error command failed
+2026-05-05T00:57:26.749579898Z [inf]  Stopping Container
+2026-05-05T00:57:26.749954520Z [inf]  Mounting volume on: /var/lib/containers/railwayapp/bind-mounts/ef04437a-fcbe-4e4b-9488-18d5b3874022/vol_4ddn9zujmgw5kgax
+2026-05-05T00:57:27.474990143Z [inf]  
+2026-05-05T00:57:27.475001983Z [inf]  > project-vault@1.0.0 start
+2026-05-05T00:57:27.475010188Z [inf]  > node server/index.js
+2026-05-05T00:57:27.475018017Z [inf]  
+2026-05-05T00:57:27.475086012Z [err]  npm warn config production Use `--omit=dev` instead.
+2026-05-05T00:57:27.510503205Z [err]  [security] ENCRYPTION_KEY is not set — gmail_tokens will be stored unencrypted. Generate a key with: openssl rand -hex 32
+2026-05-05T00:57:28.203708624Z [inf]  Starting Container
+2026-05-05T00:57:28.542859290Z [err]  (node:41) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-05-05T00:57:28.542868738Z [err]  (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-05-05T00:57:28.542873914Z [inf]  [db] PostgreSQL connected
+2026-05-05T00:57:28.546266281Z [inf]  Vault server running on port 3001
+2026-05-05T00:57:28.567112889Z [inf]  [news-cron] Scheduled daily digest at 07:00 on days [0,1,2,3,4,5,6]
+2026-05-05T00:57:29.559423226Z [err]  [db] pgvector extension not available — RAG embeddings disabled: extension "vector" is not available
+2026-05-05T00:57:29.559430394Z [err]  [db] Could not create/migrate file_chunks table (pgvector may be missing): type "vector" does not exist
+2026-05-05T00:57:29.559437356Z [err]  [db] Could not create idx_file_chunks_file_id: relation "file_chunks" does not exist
+2026-05-05T00:57:29.559445593Z [err]  [db] Could not create IVFFlat index on file_chunks (normal on empty table): relation "file_chunks" does not exist
+2026-05-05T00:57:29.559452712Z [inf]  [db] Schema ready
+2026-05-05T00:57:29.559460031Z [err]  [db] Could not add summaryEmbedding column (pgvector may be missing): type "vector" does not exist
+2026-05-05T00:57:30.819046129Z [err]  2026-05-05 00:57:28.784 UTC [253535] ERROR:  extension "vector" is not available
+2026-05-05T00:57:30.819054413Z [err]  2026-05-05 00:57:28.784 UTC [253535] DETAIL:  Could not open extension control file "/usr/share/postgresql/17/extension/vector.control": No such file or directory.
+2026-05-05T00:57:30.819059232Z [err]  2026-05-05 00:57:28.784 UTC [253535] HINT:  The extension must first be installed on the system where PostgreSQL is running.
+2026-05-05T00:57:30.819065277Z [err]  2026-05-05 00:57:28.784 UTC [253535] STATEMENT:  CREATE EXTENSION IF NOT EXISTS vector
+2026-05-05T00:57:30.819069032Z [err]  2026-05-05 00:57:28.788 UTC [253536] ERROR:  type "vector" does not exist at character 339
+2026-05-05T00:57:30.819073315Z [err]  2026-05-05 00:57:28.788 UTC [253536] STATEMENT:  
+2026-05-05T00:57:30.819076382Z [err]  	      CREATE TABLE IF NOT EXISTS file_chunks (
+2026-05-05T00:57:30.819079714Z [err]  	        id          SERIAL PRIMARY KEY,
+2026-05-05T00:57:30.819083326Z [err]  	        file_id     INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+2026-05-05T00:57:30.819086511Z [err]  	        project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+2026-05-05T00:57:30.819089783Z [err]  	        chunk_index INTEGER NOT NULL,
+2026-05-05T00:57:30.819094541Z [err]  	        chunk_text  TEXT NOT NULL,
+2026-05-05T00:57:30.819097324Z [err]  	        embedding   vector(768),
+2026-05-05T00:57:30.819100215Z [err]  	        created_at  TIMESTAMPTZ DEFAULT NOW()
+2026-05-05T00:57:30.819104342Z [err]  	      )
+2026-05-05T00:57:30.819107336Z [err]  	    
+2026-05-05T00:57:30.819110337Z [err]  2026-05-05 00:57:28.820 UTC [253537] ERROR:  relation "file_chunks" does not exist
+2026-05-05T00:57:30.819113399Z [err]  2026-05-05 00:57:28.820 UTC [253537] STATEMENT:  CREATE INDEX IF NOT EXISTS idx_file_chunks_file_id ON file_chunks(file_id)
+2026-05-05T00:57:30.819116320Z [err]  2026-05-05 00:57:28.854 UTC [253538] ERROR:  relation "file_chunks" does not exist
+2026-05-05T00:57:30.820544498Z [err]  2026-05-05 00:57:28.854 UTC [253538] STATEMENT:  
+2026-05-05T00:57:30.820547897Z [err]  	      CREATE INDEX IF NOT EXISTS idx_file_chunks_embedding
+2026-05-05T00:57:30.820554404Z [err]  	        ON file_chunks USING ivfflat (embedding vector_cosine_ops)
+2026-05-05T00:57:30.820557281Z [err]  	        WITH (lists = 100)
+2026-05-05T00:57:30.820559991Z [err]  	    
+2026-05-05T00:57:30.820562605Z [err]  2026-05-05 00:57:29.107 UTC [253539] ERROR:  type "vector" does not exist at character 66
+2026-05-05T00:57:30.820567424Z [err]  2026-05-05 00:57:29.107 UTC [253539] STATEMENT:  ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "summaryEmbedding" vector(768)
+2026-05-05T00:57:34.696677032Z [inf]  Stopping Container
+2026-05-05T00:59:30.601361752Z [err]  2026-05-05 00:59:23.595 UTC [76] LOG:  checkpoint starting: time
+2026-05-05T00:59:30.601370304Z [err]  2026-05-05 00:59:25.424 UTC [76] LOG:  checkpoint complete: wrote 20 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.810 s, sync=0.008 s, total=1.830 s; sync files=13, longest=0.005 s, average=0.001 s; distance=107 kB, estimate=127 kB; lsn=0/6DB8A00, redo lsn=0/6DB89A8
+2026-05-05T01:03:39.771782693Z [inf]  100.64.0.2 - - [05/May/2026:01:03:38 +0000] "GET /robots.txt HTTP/1.1" 404 12215 "-" "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.4027.90 Safari/537.36 Edge/18.18362"
+2026-05-05T01:11:51.982421423Z [inf]    prompt: 'I need something that will identify security manag'
+2026-05-05T01:11:51.982431146Z [inf]  }
+2026-05-05T01:11:51.982505999Z [inf]  [ModelAdvisor] analyse-prompt hit {
+2026-05-05T01:11:51.982511414Z [inf]    currentModelId: 'deepseek-v4-flash',
+2026-05-05T01:11:53.111493341Z [err]      "code": 404,
+2026-05-05T01:11:53.111503203Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T01:11:53.111588409Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T01:11:53.111592846Z [err]    "error": {
+2026-05-05T01:12:27.869176221Z [err]  2026-05-05 01:12:26.040 UTC [253582] ERROR:  column "summaryEmbedding" of relation "sessions" does not exist at character 33
+2026-05-05T01:12:27.869182131Z [err]  2026-05-05 01:12:26.040 UTC [253582] STATEMENT:  UPDATE sessions SET summary=$1, "summaryEmbedding"=$2, "updatedAt"=NOW() WHERE "sessionId"=$3
+2026-05-05T01:12:32.628049556Z [err]  [embeddings] embedText failed 404: {
+2026-05-05T01:12:32.628053349Z [err]    "error": {
+2026-05-05T01:12:32.628057920Z [err]      "code": 404,
+2026-05-05T01:12:32.628062047Z [err]      "message": "models/embedding-001 is not found for API version v1, or is not supported for embedContent. Call ListModels to see the list of available models and thei
+2026-05-05T01:14:28.534964928Z [err]  2026-05-05 01:14:23.724 UTC [76] LOG:  checkpoint starting: time
+2026-05-05T01:14:28.534976725Z [err]  2026-05-05 01:14:27.955 UTC [76] LOG:  checkpoint complete: wrote 43 buffers (0.3%); 0 WAL file(s) added, 0 removed, 0 recycled; write=4.211 s, sync=0.008 s, total=4.232 s; sync files=29, longest=0.006 s, average=0.001 s; distance=186 kB, estimate=186 kB; lsn=0/6DE7260, redo lsn=0/6DE7208
+2026-05-05T01:19:30.457987854Z [err]  2026-05-05 01:19:24.054 UTC [76] LOG:  checkpoint starting: time
+2026-05-05T01:19:30.457992754Z [err]  2026-05-05 01:19:25.077 UTC [76] LOG:  checkpoint complete: wrote 11 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=1.005 s, sync=0.007 s, total=1.023 s; sync files=4, longest=0.005 s, average=0.002 s; distance=15 kB, estimate=169 kB; lsn=0/6DEB1A8, redo lsn=0/6DEB118
+2026-05-05T01:37:56.428566994Z [inf]  100.64.0.3 - - [05/May/2026:01:37:54 +0000] "GET /.well-known/sg-hosted-ping HTTP/1.1" 404 12215 "-" "Avalon API Client"

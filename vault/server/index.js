@@ -96,8 +96,9 @@ app.use('/api/usage', requireFeature('usage'), require('./routes/usage'));
 app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
 app.use('/api/clients', requireFeature('clients'), require('./routes/clients'));
 app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/newsDigest'));
-app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
+// /api/shares/news must be registered before /api/shares to prevent prefix match interception
 app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNews'));
+app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

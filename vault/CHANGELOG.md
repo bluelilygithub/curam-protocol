@@ -4,6 +4,44 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-18 (3)
+
+**Feature:** Shares — daily AI news briefings tab.
+
+New **News** tab on the Shares page. Each morning at 4 AM Sydney time (or on demand via "Generate today"), `sharesNewsService.js` fetches recent news for each holding (Finnhub company news for US stocks; web search for ASX), plus a Nasdaq market summary, and makes a single `callModel` call (using the user's `standard` tier model). The AI returns a paragraph per stock and a market paragraph, each with a `bullish / bearish / watch / neutral` signal. Results stored in `share_news_briefings` and displayed in the News tab grouped by date with colour-coded signal badges. 30 days of history kept. Stocks with nothing material to report are omitted.
+
+**New files:** `server/services/sharesNewsService.js`, `server/routes/sharesNews.js`. **Modified files:** `server/db.js` (`share_news_briefings` table), `server/cron/sharesCron.js` (4 AM news cron), `server/index.js` (route registration), `client/src/pages/SharesPage.jsx` (News tab + `NewsTab` + `SignalBadge` components).
+
+---
+
+## 2026-05-18 (2)
+
+**Feature:** Shares — portfolio tracker (Phase 1 + 2 complete).
+
+New **Shares** page (`/shares`) gated by the `shares` feature flag. Supports ASX, NYSE, and NASDAQ.
+
+**Portfolio tab:** open holdings with live quotes, unrealised P&L, and a **Realised P&L** banner + table showing closed positions (avg-cost method). **Trades tab:** add/edit/delete buy and sell entries; all prices in AUD. **Cash tab:** add/edit/delete cash deposits and withdrawals. **Charts tab:** portfolio value over time (SVG line chart), allocation pie, and unrealised P&L bars.
+
+**Market data:** Finnhub for NYSE/NASDAQ quotes + company news; Alpha Vantage for ASX quotes (25 req/day free tier — conserved with a 15-minute in-memory cache and 2×/day cron polls). Frankfurter API for USD→AUD conversion. See `vault/docs/shares-api-research.md` for the full account of providers trialled before settling on this stack.
+
+**Cron:** separate schedules (Australia/Sydney timezone) — ASX at 5 AM + 1 PM; US every 2 hours across the clock. Exchange filter passed through so each cron only calls its own quote provider.
+
+**Realized P&L:** `computeHoldingsAndRealized()` in `sharesPortfolio.js` uses the average-cost method, fees-on-sells included. Fully sold positions drop from the holdings table.
+
+**New files:** `server/routes/shares.js`, `server/routes/sharesNews.js`, `server/services/marketData.js`, `server/services/sharesPortfolio.js`, `server/cron/sharesCron.js`, `client/src/pages/SharesPage.jsx`, `client/src/components/shares/{SimpleLineChart,AllocationPie,HorizontalBars}.jsx`. **Modified files:** `server/db.js` (5 new tables), `server/index.js`, `server/config/featureAccess.js`, `client/src/utils/featureAccess.js`, `client/src/App.jsx`, `client/src/components/Layout.jsx`, `client/src/utils/mobileConfig.js`.
+
+---
+
+## 2026-05-18 (1)
+
+**Fix:** Prompt Library → "No model configured" error for members.
+
+Members without explicit model settings could not use Prompt Library → Chat → Send because `ChatPage.jsx` ran a client-side preflight that blocked the message when `effectiveModel` resolved to null. The server resolves models correctly via `getModelsForUser` (falling back to the admin's configured models), so the client guard was incorrect. Removed the `if (!effectiveModel)` block and the `modelsLoading` early-return from `ChatPage.jsx`. Also updated `GET /api/settings` to enrich the response with the resolved `vault_models` and `default_model` for users who have no explicit settings rows, ensuring the client's model selector populates correctly.
+
+**Modified files:** `client/src/pages/ChatPage.jsx`, `server/routes/settings.js`.
+
+---
+
 ## 2026-05-15
 
 **Feature:** Admin user management + admin-only access control.

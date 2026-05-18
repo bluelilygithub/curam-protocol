@@ -1165,12 +1165,22 @@ async function initSchema() {
       signal           TEXT CHECK (signal IN ('bullish', 'bearish', 'watch', 'neutral')),
       headlines        JSONB DEFAULT '[]',
       "priceChangePct" NUMERIC(8, 4),
-      "createdAt"      TIMESTAMPTZ DEFAULT NOW()
+      "createdAt"      TIMESTAMPTZ DEFAULT NOW(),
+      type             TEXT NOT NULL DEFAULT 'daily'
     )
   `);
+  // Add type column to existing tables (idempotent)
   await pool.query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_share_news_user_date_sym
-      ON share_news_briefings ("userId", date, COALESCE(symbol, ''), COALESCE(exchange, ''))
+    DO $$ BEGIN
+      ALTER TABLE share_news_briefings ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'daily';
+    EXCEPTION WHEN OTHERS THEN NULL; END $$
+  `);
+  // Drop old unique index (didn't include type) and recreate with type included
+  // This is a one-time migration — old index disappears on first boot after deploy
+  await pool.query(`DROP INDEX IF EXISTS idx_share_news_user_date_sym`);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_share_news_user_date_sym_v2
+      ON share_news_briefings ("userId", date, COALESCE(symbol, ''), COALESCE(exchange, ''), type)
   `);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_share_news_user_date

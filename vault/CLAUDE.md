@@ -16,7 +16,7 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 ## Key Files
 
 - `server/index.js` — Express entry, route registration order matters (shared routes before requireAuth)
-- `server/db.js` — all 39 tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
+- `server/db.js` — all 44 tables in one file; every statement idempotent (`IF NOT EXISTS`); runs on every boot
 - `server/middleware/auth.js` — 32-byte hex token lookup in `auth_sessions` + `requireAdmin` guard
 - `server/routes/admin.js` — admin dashboard stats/monitor + user management endpoints
 - `server/routes/chat.js` — `buildSystemPrompt()`, prompt caching, SSE streaming, model routing
@@ -26,6 +26,11 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `client/src/store/authStore.js` — Zustand auth (token, user); persisted
 - `client/src/providers/IconProvider.jsx` — `getIcon(name, props)` semantic map; add icons here before using
 - `client/src/providers/ThemeProvider.jsx` — writes `--color-*` CSS vars to `<head>` on mount/change
+- `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
+- `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
+- `server/services/sharesNewsService.js` — daily news briefings: Finnhub/web search → single AI call → `share_news_briefings`
+- `server/routes/shares.js` — CRUD for trades + cash, dashboard, charts, refresh
+- `server/routes/sharesNews.js` — `GET /api/shares/news`, `POST /api/shares/news/generate`
 
 ---
 
@@ -184,21 +189,37 @@ Three tiers, each injected into the system prompt in order:
 
 ## Schema Notes
 
-- 39 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
+- 44 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
 - `sessions.sessionId` is `TEXT PRIMARY KEY` (UUID), not SERIAL.
 - `users."isAdmin"` is `BOOLEAN NOT NULL DEFAULT FALSE`; first user is promoted to admin during bootstrap/backfill.
 - `tasks."order"` double-quoted everywhere (SQL reserved word).
 - `tasks."keyResultId"` FK added via `ALTER TABLE` after `key_results` is created (avoids forward reference).
 - `gmail_tokens.expiryDate` is `BIGINT` (Unix ms). Cast to `Number()` in routes.
 - Multi-user `"userId"` columns added post-hoc. Every query filters by `"userId"=$1`.
+- `share_trades.exchange` CHECK constraint `('ASX','NYSE','NASDAQ')` added via `ALTER TABLE` (post-DDL, inside `DO $$ ... EXCEPTION WHEN OTHERS THEN NULL $$` to survive re-runs).
+- `share_trades.pricePerShare` is stored in **AUD** for all new trades. Legacy USD rows carry `currency='USD'` + `fxRateToAud` for backward compatibility.
+- `share_news_briefings`: `symbol IS NULL` row = market summary for that date. Unique index on `(userId, date, COALESCE(symbol,''), COALESCE(exchange,''))` — re-running `generate` deletes then re-inserts today's rows.
 
 ---
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker)
 
 **Student → Quiz** (`/student/quiz/*`): Dashboard, Quiz Library (AI-generated pools via `POST /api/student-quizzes`), Take Quiz, Results. Uses **`getModelsForUser` `standard`** for generation/marking — not hardcoded model ids. Tables: `student_quizzes`, `student_quiz_attempts`. Routes: `server/routes/studentQuizzes.js`.
+
+**Shares** (`/shares`): Personal share portfolio tracker. Tabs: Portfolio · Trades · Cash · Charts · News.
+
+- **Holdings + P&L:** `computeHoldingsAndRealized()` in `sharesPortfolio.js` processes trades chronologically (avg-cost method). Returns open holdings + realized P&L per sell. `buildDashboard()` fetches live quotes and returns `positions`, `realized`, `totalRealizedPnlAud`, `unrealizedPnlAud`.
+- **Quotes:** Finnhub (`FINNHUB_API_KEY`) for NYSE/NASDAQ; Alpha Vantage (`ALPHA_VANTAGE_API_KEY`) for ASX. Frankfurter for USD→AUD. In-memory quote cache (15 min for user page loads) prevents burning Alpha Vantage's 25 req/day free-tier limit.
+- **Cron schedules** (Australia/Sydney TZ): ASX snapshots 5 AM + 1 PM; US snapshots every 2 h; news briefings 4 AM.
+- **Exchange filter:** cron passes `['ASX']` or `['NYSE','NASDAQ']` to `recordSnapshots()` so each run only calls the relevant quote API; stale cache covers the other exchange for the portfolio snapshot.
+- **News tab:** `sharesNewsService.js` fetches Finnhub company news (US) or web search (ASX), plus a Nasdaq market search, then makes one AI call (`callModel` → `standard` tier) producing per-stock paragraphs + `bullish/bearish/watch/neutral` signals. Stored in `share_news_briefings`. Manual "Generate today" button + 4 AM cron. 30-day history shown.
+- **Tables:** `share_trades`, `share_cash_ledger`, `share_portfolio_snapshots`, `share_symbol_snapshots`, `share_news_briefings`.
+- **Routes:** `server/routes/shares.js` (CRUD + dashboard + charts + refresh), `server/routes/sharesNews.js` (news).
+- **Feature flag:** `shares` in `featureAccess` — admin controls member access.
+- **All prices entered in AUD.** Legacy USD rows: `currency='USD'` + `fxRateToAud` stored for backward compat.
+- **ASX quote history:** see `vault/docs/shares-api-research.md` for full account of failed providers before Alpha Vantage.
 
 ---
 
@@ -215,6 +236,8 @@ Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Pr
 | `APP_URL` | Public URL (OAuth redirects, password reset emails) |
 | `SEED_EMAIL` / `SEED_PASSWORD` | Auto-created user on first boot |
 | `INVITE_CODE` | Required for new user registration |
+| `FINNHUB_API_KEY` | Shares — NYSE/NASDAQ quotes + company news (free tier, no IP block on Railway) |
+| `ALPHA_VANTAGE_API_KEY` | Shares — ASX quotes (free tier: 25 req/day; cron polls 2×/day + 15 min cache for UI) |
 
 ---
 

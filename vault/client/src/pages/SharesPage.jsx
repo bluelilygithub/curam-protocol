@@ -66,6 +66,7 @@ export default function SharesPage() {
   const [cashRows, setCashRows] = useState([]);
   const [newsBriefings, setNewsBriefings] = useState([]);
   const [generatingNews, setGeneratingNews] = useState(false);
+  const [generatingSummary, setGeneratingSummary] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -128,6 +129,21 @@ export default function SharesPage() {
       addToast(err.message, 'error');
     } finally {
       setGeneratingNews(false);
+    }
+  };
+
+  const handleGenerateSummary = async () => {
+    setGeneratingSummary(true);
+    try {
+      const res = await api.post('/api/shares/news/generate-summary');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate summary');
+      if (Array.isArray(data.briefings)) setNewsBriefings(data.briefings);
+      addToast(data.message || '30-day summary generated', 'success');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setGeneratingSummary(false);
     }
   };
 
@@ -698,7 +714,9 @@ export default function SharesPage() {
               <NewsTab
                 briefings={newsBriefings}
                 generating={generatingNews}
+                generatingSummary={generatingSummary}
                 onGenerate={handleGenerateNews}
+                onGenerateSummary={handleGenerateSummary}
               />
             )}
           </>
@@ -732,65 +750,146 @@ function SignalBadge({ signal }) {
 
 // ─── News tab ─────────────────────────────────────────────────────────────────
 
-function NewsTab({ briefings, generating, onGenerate }) {
-  // Group by date
+function NewsTab({ briefings, generating, generatingSummary, onGenerate, onGenerateSummary }) {
+  // Use local date (browser timezone) — server stores dates in Sydney TZ
+  const today = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD' in local TZ
+
+  // Separate monthly summaries from daily briefings
+  const monthlySummaries = briefings.filter((b) => b.type === 'monthly_summary');
+  const daily = briefings.filter((b) => b.type !== 'monthly_summary');
+
+  // Group daily by date
   const byDate = {};
-  for (const b of briefings) {
+  for (const b of daily) {
     const d = b.date.slice(0, 10);
     if (!byDate[d]) byDate[d] = { market: null, stocks: [] };
     if (!b.symbol) byDate[d].market = b;
     else byDate[d].stocks.push(b);
   }
   const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+  const hasToday = !!byDate[today];
 
-  const today = new Date().toISOString().slice(0, 10);
-  const hasToday = byDate[today] != null;
+  const fmtDate = (dateStr) =>
+    dateStr === today
+      ? 'Today'
+      : new Date(dateStr + 'T12:00:00').toLocaleDateString('en-AU', {
+          weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
+        });
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
           <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Daily briefings</p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Auto-generated at 4 AM Sydney · covers your holdings + Nasdaq conditions
+            Auto-generated at 4 AM Sydney · 45-day history · monthly summaries retained permanently
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onGenerate}
-          disabled={generating}
-          className="text-sm px-4 py-2 rounded-md hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
-          style={{ background: 'var(--color-primary)', color: '#fff' }}
-        >
-          {generating ? 'Generating…' : hasToday ? 'Regenerate today' : 'Generate today'}
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onGenerateSummary}
+            disabled={generatingSummary || generating}
+            className="text-sm px-3 py-1.5 rounded-md border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            {generatingSummary ? 'Generating…' : '30-day summary'}
+          </button>
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={generating || generatingSummary}
+            className="text-sm px-4 py-1.5 rounded-md hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}
+          >
+            {generating ? 'Generating…' : hasToday ? 'Regenerate today' : 'Generate today'}
+          </button>
+        </div>
       </div>
 
-      {!dates.length && !generating && (
-        <p className="text-sm text-center py-12" style={{ color: 'var(--color-muted)' }}>
-          No briefings yet. Click Generate to create today's briefing.
+      {(generating || generatingSummary) && (
+        <p className="text-sm text-center py-8" style={{ color: 'var(--color-muted)' }}>
+          {generatingSummary ? 'Reviewing 30 days and generating summary…' : 'Searching news and generating briefing…'}
         </p>
       )}
 
-      {generating && (
-        <p className="text-sm text-center py-8" style={{ color: 'var(--color-muted)' }}>
-          Searching news and generating briefing…
+      {/* Monthly summaries section */}
+      {monthlySummaries.length > 0 && (
+        <div className="mb-10">
+          <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-muted)' }}>
+            30-day summaries
+          </p>
+          <div className="space-y-4">
+            {monthlySummaries.map((s) => {
+              let meta = {};
+              try { meta = JSON.parse(s.headlines || '{}'); } catch (_) {}
+              return (
+                <div
+                  key={s.id}
+                  className="p-4 rounded-lg border"
+                  style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}
+                >
+                  <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                    <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                      {fmtDate(s.date.slice(0, 10))}
+                    </span>
+                    {meta.period && (
+                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                        {meta.period}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Overview */}
+                  <p className="text-sm leading-relaxed mb-3" style={{ color: 'var(--color-text)' }}>{s.content}</p>
+
+                  {/* Per-stock assessments */}
+                  {Array.isArray(meta.stocks) && meta.stocks.length > 0 && (
+                    <div className="space-y-2 mb-3">
+                      {meta.stocks.map((stock, i) => (
+                        <div key={i} className="text-xs p-2 rounded" style={{ background: 'var(--color-bg)' }}>
+                          <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{stock.symbol}</span>
+                          <span className="ml-1.5" style={{ color: 'var(--color-muted)' }}>{stock.exchange}</span>
+                          {stock.trend && (
+                            <span className="ml-2" style={{ color: 'var(--color-text)' }}>{stock.trend}</span>
+                          )}
+                          {stock.signalAccuracy && (
+                            <p className="mt-0.5 italic" style={{ color: 'var(--color-muted)' }}>{stock.signalAccuracy}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Advice quality */}
+                  {meta.adviceQuality && (
+                    <p className="text-xs italic border-t pt-2 mt-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+                      Advice quality: {meta.adviceQuality}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Daily briefings */}
+      {!dates.length && !generating && !generatingSummary && (
+        <p className="text-sm text-center py-12" style={{ color: 'var(--color-muted)' }}>
+          No briefings yet. Click "Generate today" to create today's briefing.
         </p>
       )}
 
       {dates.map((date) => {
         const { market, stocks } = byDate[date];
-        const label = date === today
-          ? 'Today'
-          : new Date(date + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-
         return (
           <div key={date} className="mb-8">
             <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-muted)' }}>
-              {label}
+              {fmtDate(date)}
             </p>
 
-            {/* Market summary */}
             {market && (
               <div className="mb-4 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                 <div className="flex items-center justify-between mb-2">
@@ -801,7 +900,6 @@ function NewsTab({ briefings, generating, onGenerate }) {
               </div>
             )}
 
-            {/* Per-stock briefings */}
             {stocks.length > 0 && (
               <div className="space-y-3">
                 {stocks.map((b) => (

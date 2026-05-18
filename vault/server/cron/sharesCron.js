@@ -4,11 +4,12 @@ const cron = require('node-cron');
 const { pool } = require('../db');
 const portfolio = require('../services/sharesPortfolio');
 const marketData = require('../services/marketData');
-const { generateDailyBriefing } = require('../services/sharesNewsService');
+const { generateDailyBriefing, generateMonthlySummary } = require('../services/sharesNewsService');
 
 let asxCronTask = null;
 let usCronTask = null;
 let newsCronTask = null;
+let summaryMonthCronTask = null;
 
 async function getActiveShareUserIds() {
   const { rows } = await pool.query(`
@@ -42,6 +43,7 @@ async function runSharesPoll(exchanges) {
 function startSharesCron() {
   if (asxCronTask) asxCronTask.stop();
   if (usCronTask) usCronTask.stop();
+  if (summaryMonthCronTask) summaryMonthCronTask.stop();
 
   // ASX: 5 AM and 1 PM Sydney time (Alpha Vantage — 25 req/day, so 2 polls/day)
   asxCronTask = cron.schedule(
@@ -73,7 +75,23 @@ function startSharesCron() {
     { timezone: 'Australia/Sydney' }
   );
 
-  console.log('[shares-cron] ASX: 5 AM + 1 PM | US: every 2 h | News: 4 AM (Sydney)');
+  // 30-day summary: 1st of each month at 4:30 AM Sydney (after daily briefing finishes)
+  summaryMonthCronTask = cron.schedule(
+    '30 4 1 * *',
+    async () => {
+      const userIds = await getActiveShareUserIds();
+      for (const userId of userIds) {
+        try {
+          await generateMonthlySummary(userId);
+        } catch (err) {
+          console.error(`[shares-cron] monthly summary user ${userId}:`, err.message);
+        }
+      }
+    },
+    { timezone: 'Australia/Sydney' }
+  );
+
+  console.log('[shares-cron] ASX: 5 AM + 1 PM | US: every 2 h | News: 4 AM | Monthly summary: 1st of month 4:30 AM (Sydney)');
 }
 
 module.exports = { startSharesCron, runSharesPoll };

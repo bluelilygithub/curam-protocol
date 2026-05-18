@@ -1,0 +1,32 @@
+Read the codebase and the demo foundation 
+already built before touching anything.
+
+Build the Fsace demo — an engineering firm client.
+
+STEP 1: Create the Fsace org
+- org_type = 'demo'
+- Assign document-analyzer to their manifest
+- Set is_configured = true
+
+STEP 2: Document Analyzer agent
+- New file: server/agents/demoSuite/documentAnalyzer.js
+- Follow the exact pattern of existing agents in this repo
+- Input: PDF or image upload
+- Single Claude call — structured extraction prompt
+  tuned for engineering documents (contracts, 
+  specs, scope of work, RFIs)
+- Output: extracted fields, confidence scores, 
+  flagged clauses with risk level and recommended action
+- Stream response via existing SSE pattern
+- Usage logging inherited via existing agent routing
+
+STEP 3: Client page
+- New file: client/src/pages/demo/DocumentAnalyzer.jsx
+- File upload UI
+- Streaming results panel
+- Structured output: extracted fields, flagged 
+  clauses, confidence scores
+- Run cost and token count from usage logs
+- Match existing demo UI style exactly
+
+Stop and confirm after each step.

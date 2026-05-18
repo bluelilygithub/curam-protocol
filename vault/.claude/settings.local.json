@@ -35,7 +35,11 @@
       "Bash(rm -rf \"attached_assets/zapier_plugin_review/\")",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\micha\\\\Local Sites\\\\curam-protocol\\\\vault\\\\client\\\\src\" -Recurse -Filter \"*.tsx\" -o Name)",
+      "Bash(Select-Object -First 30)",
+      "Bash(dir *)",
+      "Bash(git *)"
     ]
   }
 }
