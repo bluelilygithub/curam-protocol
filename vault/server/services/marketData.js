@@ -69,7 +69,11 @@ async function getAlphaVantageQuote(symbol) {
   const data = await res.json();
   if (data.Note || data.Information) throw new Error(`Alpha Vantage rate limit: ${data.Note || data.Information}`);
   const gq = data['Global Quote'];
-  if (!gq || !gq['05. price']) throw new Error(`Alpha Vantage: no quote returned for ${sym}`);
+  if (!gq || !gq['05. price']) {
+    // Log the raw response to Railway logs so we can diagnose coverage/symbol issues
+    console.warn(`[marketData] Alpha Vantage raw response for ${sym}:`, JSON.stringify(data).slice(0, 300));
+    throw new Error(`Alpha Vantage: no quote returned for ${sym} (check Railway logs for raw response)`);
+  }
   const current = Number(gq['05. price']);
   const previousClose = Number(gq['08. previous close']);
   if (!current || current <= 0) throw new Error(`Alpha Vantage: zero price for ${sym}`);
