@@ -13,6 +13,7 @@ const TABS = [
   { id: 'trades', label: 'Trades' },
   { id: 'cash', label: 'Cash' },
   { id: 'charts', label: 'Charts' },
+  { id: 'news', label: 'News' },
 ];
 
 const fmtAud = (n) => {
@@ -63,6 +64,8 @@ export default function SharesPage() {
   const [charts, setCharts] = useState(null);
   const [trades, setTrades] = useState([]);
   const [cashRows, setCashRows] = useState([]);
+  const [newsBriefings, setNewsBriefings] = useState([]);
+  const [generatingNews, setGeneratingNews] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -85,29 +88,48 @@ export default function SharesPage() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashRes, chartRes, tradesRes, cashRes] = await Promise.all([
+      const [dashRes, chartRes, tradesRes, cashRes, newsRes] = await Promise.all([
         api.get('/api/shares/dashboard'),
         api.get('/api/shares/charts'),
         api.get('/api/shares/trades'),
         api.get('/api/shares/cash'),
+        api.get('/api/shares/news'),
       ]);
-      const [dash, chartData, tradeList, cashList] = await Promise.all([
+      const [dash, chartData, tradeList, cashList, newsList] = await Promise.all([
         dashRes.json(),
         chartRes.json(),
         tradesRes.json(),
         cashRes.json(),
+        newsRes.json(),
       ]);
       if (!dashRes.ok) throw new Error(dash.error || 'Failed to load dashboard');
       setDashboard(dash);
       setCharts(chartData);
       setTrades(Array.isArray(tradeList) ? tradeList : []);
       setCashRows(Array.isArray(cashList) ? cashList : []);
+      setNewsBriefings(Array.isArray(newsList) ? newsList : []);
     } catch (err) {
       addToast(err.message || 'Failed to load shares', 'error');
     } finally {
       setLoading(false);
     }
   }, [addToast]);
+
+  const handleGenerateNews = async () => {
+    setGeneratingNews(true);
+    try {
+      const res = await api.post('/api/shares/news/generate');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate briefing');
+      if (Array.isArray(data.briefings)) setNewsBriefings(data.briefings);
+      addToast(data.message || 'Briefing generated', 'success');
+      setTab('news');
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setGeneratingNews(false);
+    }
+  };
 
   useEffect(() => {
     if (canUseShares) loadAll();
@@ -671,9 +693,148 @@ export default function SharesPage() {
                 ))}
               </>
             )}
+
+            {tab === 'news' && (
+              <NewsTab
+                briefings={newsBriefings}
+                generating={generatingNews}
+                onGenerate={handleGenerateNews}
+              />
+            )}
           </>
         )}
       </>
+    </div>
+  );
+}
+
+// ─── Signal badge ─────────────────────────────────────────────────────────────
+
+const SIGNAL_STYLES = {
+  bullish: { bg: '#22c55e', label: 'Bullish' },
+  bearish: { bg: '#ef4444', label: 'Bearish' },
+  watch:   { bg: '#f59e0b', label: 'Watch' },
+  neutral: { bg: '#888888', label: 'Neutral' },
+};
+
+function SignalBadge({ signal }) {
+  const s = SIGNAL_STYLES[signal] || SIGNAL_STYLES.neutral;
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+      style={{ background: s.bg + '22', color: s.bg }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: s.bg }} />
+      {s.label}
+    </span>
+  );
+}
+
+// ─── News tab ─────────────────────────────────────────────────────────────────
+
+function NewsTab({ briefings, generating, onGenerate }) {
+  // Group by date
+  const byDate = {};
+  for (const b of briefings) {
+    const d = b.date.slice(0, 10);
+    if (!byDate[d]) byDate[d] = { market: null, stocks: [] };
+    if (!b.symbol) byDate[d].market = b;
+    else byDate[d].stocks.push(b);
+  }
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+  const today = new Date().toISOString().slice(0, 10);
+  const hasToday = byDate[today] != null;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Daily briefings</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+            Auto-generated at 4 AM Sydney · covers your holdings + Nasdaq conditions
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onGenerate}
+          disabled={generating}
+          className="text-sm px-4 py-2 rounded-md hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          {generating ? 'Generating…' : hasToday ? 'Regenerate today' : 'Generate today'}
+        </button>
+      </div>
+
+      {!dates.length && !generating && (
+        <p className="text-sm text-center py-12" style={{ color: 'var(--color-muted)' }}>
+          No briefings yet. Click Generate to create today's briefing.
+        </p>
+      )}
+
+      {generating && (
+        <p className="text-sm text-center py-8" style={{ color: 'var(--color-muted)' }}>
+          Searching news and generating briefing…
+        </p>
+      )}
+
+      {dates.map((date) => {
+        const { market, stocks } = byDate[date];
+        const label = date === today
+          ? 'Today'
+          : new Date(date + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+        return (
+          <div key={date} className="mb-8">
+            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-muted)' }}>
+              {label}
+            </p>
+
+            {/* Market summary */}
+            {market && (
+              <div className="mb-4 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-text)' }}>Market overview</span>
+                  <SignalBadge signal={market.signal} />
+                </div>
+                <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{market.content}</p>
+              </div>
+            )}
+
+            {/* Per-stock briefings */}
+            {stocks.length > 0 && (
+              <div className="space-y-3">
+                {stocks.map((b) => (
+                  <div key={b.id} className="p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)' }}>
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{b.symbol}</span>
+                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{b.exchange}</span>
+                      {b.priceChangePct != null && (
+                        <span className="text-xs font-medium" style={{ color: Number(b.priceChangePct) >= 0 ? '#22c55e' : '#ef4444' }}>
+                          {Number(b.priceChangePct) >= 0 ? '+' : ''}{Number(b.priceChangePct).toFixed(2)}%
+                        </span>
+                      )}
+                      <SignalBadge signal={b.signal} />
+                    </div>
+                    <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{b.content}</p>
+                    {Array.isArray(b.headlines) && b.headlines.length > 0 && (
+                      <ul className="mt-2 space-y-0.5">
+                        {b.headlines.slice(0, 3).map((h, i) => (
+                          <li key={i} className="text-xs" style={{ color: 'var(--color-muted)' }}>· {h}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!market && !stocks.length && (
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Nothing to report for this date.</p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1154,6 +1154,29 @@ async function initSchema() {
     END $$
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_news_briefings (
+      id               BIGSERIAL PRIMARY KEY,
+      "userId"         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      date             DATE NOT NULL,
+      symbol           TEXT,
+      exchange         TEXT,
+      content          TEXT NOT NULL,
+      signal           TEXT CHECK (signal IN ('bullish', 'bearish', 'watch', 'neutral')),
+      headlines        JSONB DEFAULT '[]',
+      "priceChangePct" NUMERIC(8, 4),
+      "createdAt"      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_share_news_user_date_sym
+      ON share_news_briefings ("userId", date, COALESCE(symbol, ''), COALESCE(exchange, ''))
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_share_news_user_date
+      ON share_news_briefings ("userId", date DESC)
+  `);
+
   console.log('[db] Schema ready');
 }
 

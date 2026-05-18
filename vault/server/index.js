@@ -97,6 +97,7 @@ app.use('/api/mood', requireFeature('mood'), require('./routes/mood'));
 app.use('/api/clients', requireFeature('clients'), require('./routes/clients'));
 app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/newsDigest'));
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
+app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNews'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

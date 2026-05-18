@@ -4,9 +4,11 @@ const cron = require('node-cron');
 const { pool } = require('../db');
 const portfolio = require('../services/sharesPortfolio');
 const marketData = require('../services/marketData');
+const { generateDailyBriefing } = require('../services/sharesNewsService');
 
 let asxCronTask = null;
 let usCronTask = null;
+let newsCronTask = null;
 
 async function getActiveShareUserIds() {
   const { rows } = await pool.query(`
@@ -55,7 +57,23 @@ function startSharesCron() {
     { timezone: 'Australia/Sydney' }
   );
 
-  console.log('[shares-cron] ASX snapshots: 5 AM + 1 PM Sydney | US snapshots: every 2 h');
+  // News briefings: 4 AM daily Sydney time (after overnight US session closes)
+  newsCronTask = cron.schedule(
+    '0 4 * * *',
+    async () => {
+      const userIds = await getActiveShareUserIds();
+      for (const userId of userIds) {
+        try {
+          await generateDailyBriefing(userId);
+        } catch (err) {
+          console.error(`[shares-cron] news briefing user ${userId}:`, err.message);
+        }
+      }
+    },
+    { timezone: 'Australia/Sydney' }
+  );
+
+  console.log('[shares-cron] ASX: 5 AM + 1 PM | US: every 2 h | News: 4 AM (Sydney)');
 }
 
 module.exports = { startSharesCron, runSharesPoll };
