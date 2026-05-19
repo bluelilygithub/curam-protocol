@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import ProjectSidebar from './ProjectSidebar';
 import PageToolbar from './PageToolbar';
@@ -27,6 +27,53 @@ function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const getIcon = useIcon();
+
+  const SIDEBAR_MIN = 180;
+  const SIDEBAR_MAX = 520;
+  const SIDEBAR_DEFAULT = 240;
+
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = parseInt(localStorage.getItem('vault:sidebarWidth'), 10);
+    return saved && saved >= SIDEBAR_MIN && saved <= SIDEBAR_MAX ? saved : SIDEBAR_DEFAULT;
+  });
+  const isResizing = useRef(false);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
+
+  // Global mouse handlers for sidebar drag-resize (desktop only)
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!isResizing.current) return;
+      const delta = e.clientX - resizeStartX.current;
+      const next = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, resizeStartWidth.current + delta));
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      if (!isResizing.current) return;
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setSidebarWidth((w) => {
+        localStorage.setItem('vault:sidebarWidth', String(w));
+        return w;
+      });
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  const startResize = (e) => {
+    e.preventDefault();
+    isResizing.current = true;
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = sidebarWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [reminderModal,       setReminderModal]       = useState(null); // { time, overdue, today }
@@ -228,8 +275,8 @@ function Layout() {
         left: 0,
         bottom: 0,
         zIndex: 40,
-        width: '240px',
-        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-240px)',
+        width: `${sidebarWidth}px`,
+        transform: sidebarOpen ? 'translateX(0)' : `translateX(-${sidebarWidth}px)`,
         transition: 'transform 0.2s ease',
         borderRight: '1px solid var(--color-border)',
         background: 'var(--color-surface)',
@@ -238,14 +285,15 @@ function Layout() {
         overflow: 'hidden',
       }
     : {
-        width: sidebarOpen ? '240px' : '0px',
-        transition: 'width 0.2s',
+        width: sidebarOpen ? `${sidebarWidth}px` : '0px',
+        transition: isResizing.current ? 'none' : 'width 0.2s',
         borderRight: '1px solid var(--color-border)',
         background: 'var(--color-surface)',
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
         overflow: 'hidden',
+        position: 'relative',
       };
 
   return (
@@ -268,6 +316,36 @@ function Layout() {
           onClose={() => setSidebarOpen(false)}
           showHabits={canUseFeature('goals') && canUseFeature('habitsSidebar')}
         />
+        {/* Drag-to-resize handle — desktop only */}
+        {!isMobile && sidebarOpen && (
+          <div
+            onMouseDown={startResize}
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: 0,
+              width: '5px',
+              height: '100%',
+              cursor: 'col-resize',
+              zIndex: 10,
+            }}
+            className="group"
+          >
+            {/* Thin visible line that brightens on hover / while dragging */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                width: '2px',
+                height: '100%',
+                background: 'var(--color-border)',
+                transition: 'background 0.15s',
+              }}
+              className="group-hover:opacity-100"
+            />
+          </div>
+        )}
       </aside>
 
       {/* Main */}
