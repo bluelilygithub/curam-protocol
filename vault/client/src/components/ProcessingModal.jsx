@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import useProcessingStore from '../store/processingStore';
-import { getIcon } from '../providers/IconProvider';
+import { useIcon } from '../providers/IconProvider';
 
 /**
  * Global processing overlay.
@@ -14,6 +14,7 @@ import { getIcon } from '../providers/IconProvider';
  *   const { startProcessing, stopProcessing } = useProcessingStore();
  */
 export default function ProcessingModal() {
+  const getIcon = useIcon();
   const { message, detail } = useProcessingStore();
 
   // Warn browser-level navigation (reload / tab close) while processing
