@@ -1301,7 +1301,7 @@ router.post('/sessions/:sessionId/restore', async (req, res) => {
            s."userId"=$2
            OR EXISTS (SELECT 1 FROM projects p WHERE p.id=s."projectId" AND p."userId"=$2)
          )
-       RETURNING s."sessionId", s."projectId", s.title`,
+       RETURNING "sessionId", "projectId", title`,
       [req.params.sessionId, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Deleted chat not found' });
@@ -1323,7 +1323,7 @@ router.delete('/sessions/:sessionId', async (req, res) => {
            s."userId"=$2
            OR EXISTS (SELECT 1 FROM projects p WHERE p.id=s."projectId" AND p."userId"=$2)
          )
-       RETURNING s."sessionId"`,
+       RETURNING "sessionId"`,
       [req.params.sessionId, req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Chat not found' });
