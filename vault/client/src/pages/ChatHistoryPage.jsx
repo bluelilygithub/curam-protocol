@@ -67,6 +67,9 @@ export default function ChatHistoryPage() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [deletedSessions, setDeletedSessions] = useState([]);
+  const [deletedLoading, setDeletedLoading] = useState(false);
+  const [restoringSid, setRestoringSid] = useState(null);
 
   // ── Bookmarks ─────────────────────────────────────────────────────────────
   const [bookmarks, setBookmarks] = useState([]);
@@ -93,6 +96,28 @@ export default function ChatHistoryPage() {
       setSessions([]);
     } finally {
       setLoading(false);
+    }
+  }, [period, customFrom, customTo]);
+
+  const loadDeletedHistory = useCallback(async () => {
+    setDeletedLoading(true);
+    try {
+      let from, to;
+      if (period === 'custom') {
+        from = customFrom || '2000-01-01';
+        to = customTo ? customTo + 'T23:59:59' : '2099-12-31';
+      } else if (period === 'all') {
+        from = '2000-01-01'; to = '2099-12-31';
+      } else {
+        ({ from, to } = getPeriodDates(period));
+      }
+      const res = await api.get(`/api/chat/deleted-history?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`);
+      const data = await res.json();
+      setDeletedSessions(Array.isArray(data) ? data : []);
+    } catch (_) {
+      setDeletedSessions([]);
+    } finally {
+      setDeletedLoading(false);
     }
   }, [period, customFrom, customTo]);
 
@@ -130,6 +155,10 @@ export default function ChatHistoryPage() {
   }, [tab, loadBookmarks]);
 
   useEffect(() => {
+    if (tab === 'deleted') loadDeletedHistory();
+  }, [tab, loadDeletedHistory]);
+
+  useEffect(() => {
     const handler = () => { if (tab === 'bookmarks') loadBookmarks(); };
     window.addEventListener('vault:bookmark-changed', handler);
     return () => window.removeEventListener('vault:bookmark-changed', handler);
@@ -142,6 +171,20 @@ export default function ChatHistoryPage() {
     setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: sessionId })), 80);
   }
 
+  async function restoreSession(sessionId) {
+    setRestoringSid(sessionId);
+    try {
+      const res = await api.post(`/api/chat/sessions/${sessionId}/restore`);
+      if (!res.ok) throw new Error('Restore failed');
+      await Promise.all([loadHistory(), loadDeletedHistory()]);
+      document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
+    } catch (_) {
+      // Keep the row visible so the user can retry.
+    } finally {
+      setRestoringSid(null);
+    }
+  }
+
   // ── Derived data ──────────────────────────────────────────────────────────
   const filteredSessions = search.trim()
     ? sessions.filter(s =>
@@ -150,6 +193,13 @@ export default function ChatHistoryPage() {
         (s.lastMsg || '').toLowerCase().includes(search.toLowerCase())
       )
     : sessions;
+  const filteredDeletedSessions = search.trim()
+    ? deletedSessions.filter(s =>
+        (s.title || '').toLowerCase().includes(search.toLowerCase()) ||
+        (s.projectName || '').toLowerCase().includes(search.toLowerCase()) ||
+        (s.lastMsg || '').toLowerCase().includes(search.toLowerCase())
+      )
+    : deletedSessions;
 
   // Group bookmarks by sessionId preserving order of first occurrence
   const bookmarkGroups = bookmarks.reduce((groups, bm) => {
@@ -185,6 +235,28 @@ export default function ChatHistoryPage() {
             }}
           >
             History
+          </button>
+          <button
+            onClick={() => setTab('deleted')}
+            className="px-4 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5"
+            style={{
+              background: tab === 'deleted' ? 'var(--color-primary)' : 'var(--color-surface)',
+              color: tab === 'deleted' ? '#fff' : 'var(--color-text)',
+              borderLeft: '1px solid var(--color-border)',
+            }}
+          >
+            Deleted
+            {deletedSessions.length > 0 && (
+              <span
+                className="px-1.5 py-0.5 rounded-full text-xs font-bold leading-none"
+                style={{
+                  background: tab === 'deleted' ? 'rgba(255,255,255,0.3)' : '#ef4444',
+                  color: '#fff',
+                }}
+              >
+                {deletedSessions.length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setTab('bookmarks')}
@@ -323,6 +395,131 @@ export default function ChatHistoryPage() {
           {!loading && filteredSessions.length > 0 && (
             <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
               {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''}
+              {search ? ` matching "${search}"` : ''}
+            </p>
+          )}
+        </>
+      )}
+
+      {/* ── DELETED TAB ─────────────────────────────────────────────────── */}
+      {tab === 'deleted' && (
+        <>
+          <div className="rounded-2xl border px-4 py-3 text-sm" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+            Deleted chats are hidden from projects, folders, search, and chat context. Restore a chat to put it back where it was.
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {PERIODS.map(p => (
+              <button
+                key={p.key}
+                onClick={() => setPeriod(p.key)}
+                className="px-3 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                style={{
+                  background: period === p.key ? 'var(--color-primary)' : 'var(--color-surface)',
+                  borderColor: period === p.key ? 'var(--color-primary)' : 'var(--color-border)',
+                  color: period === p.key ? '#fff' : 'var(--color-text)',
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {period === 'custom' && (
+            <div className="flex items-center gap-3">
+              <input
+                type="date"
+                value={customFrom}
+                onChange={e => setCustomFrom(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border text-xs outline-none"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>to</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={e => setCustomTo(e.target.value)}
+                className="px-3 py-1.5 rounded-lg border text-xs outline-none"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </div>
+          )}
+
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--color-muted)' }}>
+              {getIcon('search', { size: 14 })}
+            </span>
+            <input
+              type="text"
+              placeholder="Filter deleted chats…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-xl border text-sm outline-none"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </div>
+
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+            {deletedLoading ? (
+              <div className="space-y-px">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="px-4 py-3 animate-pulse flex gap-3 items-start" style={{ background: 'var(--color-surface)' }}>
+                    <div className="rounded w-24 h-3 mt-1" style={{ background: 'var(--color-border)' }} />
+                    <div className="flex-1 space-y-2">
+                      <div className="rounded w-1/2 h-3" style={{ background: 'var(--color-border)' }} />
+                      <div className="rounded w-3/4 h-2.5" style={{ background: 'var(--color-border)' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredDeletedSessions.length === 0 ? (
+              <div className="px-4 py-12 text-center text-sm" style={{ color: 'var(--color-muted)' }}>
+                No deleted chats found for this period.
+              </div>
+            ) : (
+              filteredDeletedSessions.map((s, i) => (
+                <div
+                  key={s.sessionId}
+                  className="w-full text-left px-4 py-3 flex items-start gap-4 border-b last:border-b-0"
+                  style={{
+                    background: i % 2 === 0 ? 'var(--color-surface)' : 'var(--color-bg)',
+                    borderColor: 'var(--color-border)',
+                  }}
+                >
+                  <div className="flex-shrink-0 w-28 text-right">
+                    <div className="text-xs font-medium truncate" style={{ color: 'var(--color-primary)' }}>
+                      {s.projectName || 'General'}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                      {s.deletedAt ? `Deleted ${new Date(s.deletedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` : ''}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                      {s.title || `Session ${s.sessionId.slice(-8)}`}
+                    </div>
+                    {s.lastMsg && (
+                      <div className="text-xs mt-0.5 line-clamp-2" style={{ color: 'var(--color-muted)' }}>
+                        {s.lastMsg.substring(0, 160)}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => restoreSession(s.sessionId)}
+                    disabled={restoringSid === s.sessionId}
+                    className="flex-shrink-0 self-center px-3 py-1.5 rounded-lg border text-xs font-medium hover:opacity-70 disabled:opacity-50"
+                    style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
+                  >
+                    {restoringSid === s.sessionId ? 'Restoring…' : 'Restore'}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {!deletedLoading && filteredDeletedSessions.length > 0 && (
+            <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
+              {filteredDeletedSessions.length} deleted chat{filteredDeletedSessions.length !== 1 ? 's' : ''}
               {search ? ` matching "${search}"` : ''}
             </p>
           )}

@@ -21,6 +21,12 @@ router.get('/', async (req, res) => {
           WHERE ap.id::text = si."projectId"
             AND ap."archived_at" IS NOT NULL
         )
+        AND NOT EXISTS (
+          SELECT 1 FROM sessions ds
+          WHERE si.type = 'message'
+            AND si.title = 'Chat: ' || ds."sessionId"
+            AND ds."deletedAt" IS NOT NULL
+        )
         AND (
           si."projectId" IS NULL
           OR EXISTS (

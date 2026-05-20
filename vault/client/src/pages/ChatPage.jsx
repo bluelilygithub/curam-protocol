@@ -800,6 +800,7 @@ function ChatPage({ general = false }) {
     clearMessages();
     setConfirmDeleteSession(false);
     fetchSessions();
+    document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
   };
 
   const handleDeleteSessionById = async (sid) => {
@@ -807,6 +808,7 @@ function ChatPage({ general = false }) {
     if (sid === sessionId) clearMessages();
     setConfirmDeleteSid(null);
     fetchSessions();
+    document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
   };
 
   const handleToggleStar = async () => {
@@ -993,7 +995,7 @@ function ChatPage({ general = false }) {
                     >
                       {confirmDeleteSid === s.sessionId ? (
                         <div className="flex items-center gap-2 flex-1">
-                          <span className="text-xs text-red-500 flex-1">Delete?</span>
+                          <span className="text-xs text-red-500 flex-1">Move to Deleted?</span>
                           <button onClick={() => handleDeleteSessionById(s.sessionId)} className="text-xs px-2 py-0.5 rounded bg-red-500 text-white">Yes</button>
                           <button onClick={() => setConfirmDeleteSid(null)} className="text-xs" style={{ color: 'var(--color-muted)' }}>No</button>
                         </div>
@@ -1270,7 +1272,7 @@ function ChatPage({ general = false }) {
               }] : []),
               { label: 'Download', icon: 'file-down', onClick: () => downloadChatMd(messages, sessionTitle || sessionId, project?.name) },
               { divider: true, key: 'sep' },
-              { label: 'Delete chat', icon: 'trash', danger: true, onClick: () => setConfirmDeleteSession(true) },
+              { label: 'Move to Deleted', icon: 'trash', danger: true, onClick: () => setConfirmDeleteSession(true) },
             ]}
           />
         )}
@@ -1279,8 +1281,8 @@ function ChatPage({ general = false }) {
       {/* Banners */}
       {confirmDeleteSession && (
         <div className="flex-shrink-0 mx-4 mt-3 px-4 py-3 rounded-xl border flex items-center gap-3" style={{ background: '#fff1f2', borderColor: '#fca5a5' }}>
-          <span className="text-sm text-red-700 flex-1">Delete this chat? All messages will be permanently removed.</span>
-          <button onClick={handleDeleteSession} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-red-500">Delete</button>
+          <span className="text-sm text-red-700 flex-1">Move this chat to Deleted? You can restore it from Chat History.</span>
+          <button onClick={handleDeleteSession} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-red-500">Move to Deleted</button>
           <button onClick={() => setConfirmDeleteSession(false)} className="text-xs" style={{ color: 'var(--color-muted)' }}>Cancel</button>
         </div>
       )}

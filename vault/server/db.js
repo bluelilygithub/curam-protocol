@@ -238,6 +238,7 @@ async function initSchema() {
         "summarizedAt"   TIMESTAMPTZ,
         "createdAt"      TIMESTAMPTZ DEFAULT NOW(),
         "updatedAt"      TIMESTAMPTZ DEFAULT NOW(),
+        "deletedAt"      TIMESTAMPTZ,
         starred          INTEGER DEFAULT 0,
         "inputTokens"    INTEGER DEFAULT 0,
         "outputTokens"   INTEGER DEFAULT 0,
@@ -1077,12 +1078,14 @@ async function initSchema() {
   `);
 
   // ── Session summaries for project RAG ────────────────────────────────────
+  await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS summary TEXT`);
   try {
     await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "summaryEmbedding" vector(768)`);
   } catch (err) {
     console.warn('[db] Could not add summaryEmbedding column (pgvector may be missing):', err.message);
   }
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_sessions_deleted_at ON sessions("deletedAt")`);
 
   // ── Shares portfolio ──────────────────────────────────────────────────────
   await pool.query(`

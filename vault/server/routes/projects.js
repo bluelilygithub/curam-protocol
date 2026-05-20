@@ -36,9 +36,9 @@ router.get('/', async (req, res) => {
   const archived = req.query.archived === 'true';
   try {
     const { rows } = await pool.query(`
-      SELECT p.*, COUNT(DISTINCT m."sessionId") as "chatCount", c.name AS "clientName"
+      SELECT p.*, COUNT(DISTINCT s."sessionId") as "chatCount", c.name AS "clientName"
       FROM projects p
-      LEFT JOIN messages m ON m."projectId" = p.id
+      LEFT JOIN sessions s ON s."projectId" = p.id AND s."deletedAt" IS NULL
       LEFT JOIN clients c ON c.id = p."clientId"
       WHERE p."userId"=$1 AND ${archived ? 'p."archived_at" IS NOT NULL' : 'p."archived_at" IS NULL'}
       GROUP BY p.id, c.name

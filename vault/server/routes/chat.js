@@ -292,6 +292,7 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
             const { rows } = await pool.query(
               `SELECT title, summary FROM sessions
                WHERE "projectId"=$1 AND "sessionId"!=$2
+                 AND "deletedAt" IS NULL
                  AND summary IS NOT NULL AND "summaryEmbedding" IS NOT NULL
                ORDER BY "summaryEmbedding" <=> $3::vector
                LIMIT 5`,
@@ -305,7 +306,8 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
       if (relatedSessions.length === 0) {
         const { rows } = await pool.query(
           `SELECT title, summary FROM sessions
-           WHERE "projectId"=$1 AND "sessionId"!=$2 AND summary IS NOT NULL
+           WHERE "projectId"=$1 AND "sessionId"!=$2
+             AND "deletedAt" IS NULL AND summary IS NOT NULL
            ORDER BY "updatedAt" DESC LIMIT 5`,
           [project.id, sid]
         );
@@ -557,15 +559,19 @@ router.post('/', chatLimiter, async (req, res) => {
 
   const effectiveWebSearch = studentCards ? false : !!webSearch;
 
+  // Check session metadata before building prompt context so deleted chats cannot
+  // continue streaming or participate in project RAG.
+  const { rows: sessionRows } = await pool.query('SELECT * FROM sessions WHERE "sessionId"=$1', [sid]);
+  const sessionMeta = sessionRows[0] || null;
+  if (sessionMeta?.deletedAt) {
+    return res.status(410).json({ error: 'This chat is deleted. Restore it from Chat History before continuing.' });
+  }
+
   // Array of { type, text, cache_control? } blocks — used directly by Anthropic;
   // joined to a plain string for Gemini (which does not support content-block system params).
   const { blocks: systemBlocks, ragFallbackActive } = studentCards
     ? await buildStudentCardsSystemBlocks(req.user?.id ?? null, userTimezone || null)
     : await buildSystemPrompt(project, personaId, sid, effectiveWebSearch, userMessage, req.user?.id ?? null, userTimezone || null);
-
-  // Check if this session is summarized
-  const { rows: sessionRows } = await pool.query('SELECT * FROM sessions WHERE "sessionId"=$1', [sid]);
-  const sessionMeta = sessionRows[0] || null;
 
   // Load all project Files API documents (PDFs uploaded to Anthropic) for persistent context
   const projectFileBlocks = [];
@@ -886,8 +892,11 @@ router.post('/', chatLimiter, async (req, res) => {
             ).then(title => {
               if (title) {
                 pool.query(
-                  'INSERT INTO sessions ("sessionId","projectId",title) VALUES ($1,$2,$3) ON CONFLICT ("sessionId") DO UPDATE SET title=EXCLUDED.title',
-                  [sid, pid, title]
+                  `INSERT INTO sessions ("sessionId","projectId","userId",title) VALUES ($1,$2,$3,$4)
+                   ON CONFLICT ("sessionId") DO UPDATE SET
+                     title=EXCLUDED.title,
+                     "userId"=COALESCE(sessions."userId", EXCLUDED."userId")`,
+                  [sid, pid, req.user?.id ?? null, title]
                 ).catch(() => {});
               }
             }).catch(() => {});
@@ -1057,7 +1066,7 @@ router.get('/sessions/general', async (req, res) => {
         COALESCE(s."outputTokens", 0) as "outputTokens"
       FROM messages m
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
-      WHERE m."projectId" IS NULL AND s."userId"=$1
+      WHERE m."projectId" IS NULL AND s."userId"=$1 AND s."deletedAt" IS NULL
       GROUP BY m."sessionId", s."sessionId"
       ORDER BY MIN(m."createdAt") ASC
       LIMIT 30
@@ -1087,6 +1096,7 @@ router.get('/all-history', async (req, res) => {
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
       LEFT JOIN projects p ON p.id = m."projectId"
       WHERE m."createdAt" >= $1 AND m."createdAt" <= $2
+        AND s."deletedAt" IS NULL
         AND (s."userId" = $3 OR (m."projectId" IS NOT NULL AND p."userId" = $3))
       GROUP BY m."sessionId"
       ORDER BY MAX(m."createdAt") DESC
@@ -1095,6 +1105,38 @@ router.get('/all-history', async (req, res) => {
     res.json(rows);
   } catch (err) {
     console.error('[all-history]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/chat/deleted-history?from=ISO&to=ISO — restorable deleted sessions
+router.get('/deleted-history', async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const fromDate = from || '2000-01-01';
+    const toDate = to || '2099-12-31';
+    const { rows } = await pool.query(`
+      SELECT
+        s."sessionId",
+        s.title,
+        s."projectId",
+        p.name as "projectName",
+        COALESCE(MAX(m."createdAt"), s."updatedAt", s."createdAt") as "lastAt",
+        s."deletedAt",
+        (SELECT content FROM messages m2 WHERE m2."sessionId" = s."sessionId" AND m2.role = 'assistant' ORDER BY m2."createdAt" DESC LIMIT 1) as "lastMsg"
+      FROM sessions s
+      LEFT JOIN messages m ON m."sessionId" = s."sessionId"
+      LEFT JOIN projects p ON p.id = s."projectId"
+      WHERE s."deletedAt" IS NOT NULL
+        AND s."deletedAt" >= $1 AND s."deletedAt" <= $2
+        AND (s."userId" = $3 OR (s."projectId" IS NOT NULL AND p."userId" = $3))
+      GROUP BY s."sessionId", p.name
+      ORDER BY s."deletedAt" DESC
+      LIMIT 300
+    `, [fromDate, toDate, req.user.id]);
+    res.json(rows);
+  } catch (err) {
+    console.error('[deleted-history]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1110,10 +1152,11 @@ router.get('/sessions/:projectId', async (req, res) => {
         COALESCE(s."outputTokens", 0) as "outputTokens"
       FROM messages m
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
-      WHERE m."projectId"=$1
+      LEFT JOIN projects p ON p.id = m."projectId"
+      WHERE m."projectId"=$1 AND p."userId"=$2 AND s."deletedAt" IS NULL
       GROUP BY m."sessionId", s."sessionId"
       ORDER BY MIN(m."createdAt") ASC
-    `, [req.params.projectId]);
+    `, [req.params.projectId, req.user.id]);
     res.json(rows);
   } catch (err) {
     console.error('[sessions/:projectId]', err);
@@ -1124,6 +1167,18 @@ router.get('/sessions/:projectId', async (req, res) => {
 // GET /api/chat/history/:sessionId
 router.get('/history/:sessionId', async (req, res) => {
   try {
+    const { rows: sessionRows } = await pool.query(
+      `SELECT s."sessionId", s."deletedAt"
+       FROM sessions s
+       LEFT JOIN projects p ON p.id = s."projectId"
+       WHERE s."sessionId"=$1
+         AND (s."userId"=$2 OR (s."projectId" IS NOT NULL AND p."userId"=$2))`,
+      [req.params.sessionId, req.user.id]
+    );
+    const session = sessionRows[0];
+    if (!session) return res.status(404).json({ error: 'Chat not found' });
+    if (session.deletedAt) return res.status(410).json({ error: 'This chat is deleted. Restore it from Chat History before opening.' });
+
     const { rows } = await pool.query(
       'SELECT * FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC',
       [req.params.sessionId]
@@ -1210,8 +1265,8 @@ router.post('/sessions/:sessionId/summarize', async (req, res) => {
     } else {
       const pid = msgs[0]?.projectId;
       await pool.query(
-        'INSERT INTO sessions ("sessionId","projectId","isSummarized","summaryContent","summarizedAt") VALUES ($1,$2,1,$3,NOW())',
-        [sessionId, pid, summary]
+        'INSERT INTO sessions ("sessionId","projectId","userId","isSummarized","summaryContent","summarizedAt") VALUES ($1,$2,$3,1,$4,NOW())',
+        [sessionId, pid, req.user?.id ?? null, summary]
       );
     }
     res.json({ summary });
@@ -1234,11 +1289,44 @@ router.delete('/messages/pair', async (req, res) => {
   }
 });
 
-// DELETE /api/chat/sessions/:sessionId — delete session + all its messages
+// POST /api/chat/sessions/:sessionId/restore — restore a soft-deleted session
+router.post('/sessions/:sessionId/restore', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE sessions s
+       SET "deletedAt"=NULL, "updatedAt"=NOW()
+       WHERE s."sessionId"=$1
+         AND s."deletedAt" IS NOT NULL
+         AND (
+           s."userId"=$2
+           OR EXISTS (SELECT 1 FROM projects p WHERE p.id=s."projectId" AND p."userId"=$2)
+         )
+       RETURNING s."sessionId", s."projectId", s.title`,
+      [req.params.sessionId, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Deleted chat not found' });
+    res.json({ ok: true, session: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/chat/sessions/:sessionId — move session to Deleted Chats
 router.delete('/sessions/:sessionId', async (req, res) => {
   try {
-    await pool.query('DELETE FROM messages WHERE "sessionId"=$1', [req.params.sessionId]);
-    await pool.query('DELETE FROM sessions WHERE "sessionId"=$1', [req.params.sessionId]);
+    const { rows } = await pool.query(
+      `UPDATE sessions s
+       SET "deletedAt"=NOW(), "updatedAt"=NOW()
+       WHERE s."sessionId"=$1
+         AND s."deletedAt" IS NULL
+         AND (
+           s."userId"=$2
+           OR EXISTS (SELECT 1 FROM projects p WHERE p.id=s."projectId" AND p."userId"=$2)
+         )
+       RETURNING s."sessionId"`,
+      [req.params.sessionId, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Chat not found' });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1283,10 +1371,11 @@ router.post('/sessions/:sessionId/branch', async (req, res) => {
     try {
       await client.query('BEGIN');
       await client.query(
-        'INSERT INTO sessions ("sessionId","projectId",title,"branchedFrom") VALUES ($1,$2,$3,$4)',
+        'INSERT INTO sessions ("sessionId","projectId","userId",title,"branchedFrom") VALUES ($1,$2,$3,$4,$5)',
         [
           newSessionId,
           session?.projectId || toKeep[0]?.projectId || null,
+          req.user?.id ?? null,
           session?.title ? `Branch of: ${session.title}` : 'Branched chat',
           req.params.sessionId,
         ]

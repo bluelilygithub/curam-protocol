@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-20
+
+**Feature:** Restorable deleted chats.
+
+Chat deletion is now reversible. `sessions` gained a nullable `"deletedAt"` timestamp; deleting a chat moves it to Deleted instead of removing `sessions` and `messages`. Normal chat lists, project/folder counts, Chat History, bookmarks, global search, and project-session RAG all ignore deleted sessions. Chat History now has a **Deleted** tab where users can filter deleted chats and restore them back to their original General or project location.
+
+**Modified files:** `server/db.js`, `server/routes/chat.js`, `server/routes/projects.js`, `server/routes/search.js`, `server/routes/bookmarks.js`, `client/src/pages/ChatPage.jsx`, `client/src/pages/ChatHistoryPage.jsx`, `client/src/components/ProjectSidebar.jsx`.
+
+---
+
 ## 2026-05-19 (3)
 
 **Feature + Fix:** Global `ProcessingModal` for long-running operations; fix `slice is not a function` in 30-day summary.

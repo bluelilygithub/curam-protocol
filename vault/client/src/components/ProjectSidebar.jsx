@@ -36,11 +36,23 @@ function ProjectSidebar({ onClose, showHabits = true }) {
   const [touchpointForm, setTouchpointForm] = useState(null); // null | { type, date, note }
   const [tpSaving, setTpSaving] = useState(false);
 
-  useEffect(() => { fetchProjects(); }, []);
   useEffect(() => {
-    api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
-    api.get('/api/chat/sessions/general').then(r => r.json()).then(setGeneralSessions).catch(() => {});
-  }, []);
+    const loadSessionLists = () => {
+      fetchProjects();
+      api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
+      api.get('/api/chat/sessions/general').then(r => r.json()).then(setGeneralSessions).catch(() => {});
+      if (expandedProjectId) {
+        api.get(`/api/chat/sessions/${expandedProjectId}`)
+          .then(r => r.json())
+          .then(sessions => setProjectSessions(prev => ({ ...prev, [expandedProjectId]: sessions })))
+          .catch(() => {});
+      }
+    };
+
+    loadSessionLists();
+    document.addEventListener('vault:sessions-changed', loadSessionLists);
+    return () => document.removeEventListener('vault:sessions-changed', loadSessionLists);
+  }, [expandedProjectId, fetchProjects]);
 
   // Tour: expand 7 Habits section on request
   useEffect(() => {

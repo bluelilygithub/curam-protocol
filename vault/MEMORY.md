@@ -46,7 +46,7 @@ Two separate applications in one repo (`version-7` branch, main branch for PRs):
 ## DB Tables (PostgreSQL — 27 tables)
 Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions`, `folders`, `personas`, `prompts`, `memory`, `pinned_urls`, `debates`, `settings`, `password_resets`
 - `users` table includes `"isAdmin" BOOLEAN NOT NULL DEFAULT FALSE` (admin authorization source of truth)
-- `sessions` table: `sessionId TEXT PK`, `projectId`, `userId`, `title`, `summary TEXT`, `"summaryEmbedding" vector(768)`, `isSummarized`, `summaryContent`, `inputTokens`, `outputTokens`, `starred`, `personaId`, `branchedFrom`
+- `sessions` table: `sessionId TEXT PK`, `projectId`, `userId`, `title`, `"deletedAt"` (soft-delete/restore), `summary TEXT`, `"summaryEmbedding" vector(768)`, `isSummarized`, `summaryContent`, `inputTokens`, `outputTokens`, `starred`, `personaId`, `branchedFrom`
 - `settings` table: `key TEXT PRIMARY KEY, value TEXT` — stores GEMINI_API_KEY, SEARCH_API_KEY, MAIL_CHANNEL_API_KEY
 - `password_resets` table: token, email, expiresAt (1 hour TTL)
 
@@ -82,8 +82,8 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 - User has a **Brave Search API key** — `SEARCH_API_KEY` starts with `BSA`
 - **Gemini models** added everywhere models are selectable: `gemini-2.0-flash` and `gemini-2.5-pro-preview-05-06`; defined in `models.js` with `provider: 'gemini'`; server routes `chat.js` and `compare.js` detect via `isGemini()` and use Google Generative AI SDK
 - **General Chat** (`/chat` route, `<ChatPage general />`) — project-free chat workspace; sessions stored with `projectId = null`; "General" section in sidebar with expandable session list and "+" button
-- **Chat History** (`/history`) — `ChatHistoryPage.jsx` with date filter chips (All time, Today, Yesterday, This Week, Last 7 days, This Month, Last Month, Last 30 days, Custom); text search; click row to navigate to session
-- **Session delete from dropdown** — native `<select>` replaced with custom dropdown in ChatPage header; each session row has a hover trash icon with inline "Delete? Yes / No" confirm; supports deleting non-active sessions
+- **Chat History** (`/history`) — `ChatHistoryPage.jsx` with History / Deleted / Bookmarks tabs; date filter chips (All time, Today, Yesterday, This Week, Last 7 days, This Month, Last Month, Last 30 days, Custom); text search; click active rows to navigate to session; Deleted tab restores soft-deleted chats
+- **Session delete from dropdown** — native `<select>` replaced with custom dropdown in ChatPage header; each session row has a hover trash icon with inline "Move to Deleted? Yes / No" confirm; supports deleting non-active sessions; deletion sets `sessions."deletedAt"` so messages can be restored from Chat History
 - **Finance** (`/finance`) — small business accounting: Invoices, Clients, Suppliers, Expenses, Wages, Journal, Accounts (chart), Codes (tx codes), BAS (GST quarters), **Balances** (trial balance tab — all-time cumulative DR/CR per account, verifies double-entry is working), Settings. Backend: `server/routes/finance.js`. Frontend: `client/src/pages/FinancePage.jsx`. All expense/invoice-paid/wage entries auto-create double-entry journal entries. `GET /api/finance/trial-balance` aggregates journal lines per account.
 - **Tasks** (`/tasks`) — full task management; see Tasks section below
 - **Goals** (`/goals`) — OKR-lite Goal Setting; Objectives → Key Results → Tasks; see Goals section below

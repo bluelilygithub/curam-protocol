@@ -213,6 +213,7 @@ try {
 
 - 44 tables. All schema in `server/db.js`. No migration tool — idempotent DDL on every boot.
 - `sessions.sessionId` is `TEXT PRIMARY KEY` (UUID), not SERIAL.
+- `sessions."deletedAt"` is a soft-delete timestamp. Chat delete moves sessions to Deleted; messages remain for restore. Normal lists/search/RAG must filter `s."deletedAt" IS NULL`.
 - `users."isAdmin"` is `BOOLEAN NOT NULL DEFAULT FALSE`; first user is promoted to admin during bootstrap/backfill.
 - `tasks."order"` double-quoted everywhere (SQL reserved word).
 - `tasks."keyResultId"` FK added via `ALTER TABLE` after `key_results` is created (avoids forward reference).

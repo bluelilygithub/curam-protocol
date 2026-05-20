@@ -46,6 +46,7 @@ router.get('/', async (req, res) => {
       JOIN messages m ON m.id = b."messageId"
       JOIN sessions s ON s."sessionId" = b."sessionId"
       LEFT JOIN projects p ON p.id = s."projectId"
+      WHERE s."deletedAt" IS NULL
       ORDER BY b."createdAt" DESC
     `);
     res.json(rows);

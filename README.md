@@ -142,7 +142,7 @@ npm run dev
 
 | Feature | Description |
 |---|---|
-| **Chat** | Multi-model chat (Claude + Gemini); project sessions + general chat; chat history; `@search`, `@gmail`, `@mention` tasks/files/prompts |
+| **Chat** | Multi-model chat (Claude + Gemini); project sessions + general chat; chat history with restorable deleted chats; `@search`, `@gmail`, `@mention` tasks/files/prompts |
 | **Tasks** | Full task manager — list, Kanban, calendar, Eisenhower Matrix views; subtasks, templates, effort tracking, time logging, dependencies, Focus Mode (Pomodoro), weekly review, CSV import, public sharing |
 | **Goals** | OKR-lite — Objectives → Key Results → Tasks; AI-suggested KRs; Personal Mission Statement wizard; Renewal Balance Dashboard; Getting Started Wizard (7-step guided setup) |
 | **Document Compare** | Side-by-side SSE streaming comparison; 4 modes; save to project |
@@ -176,7 +176,7 @@ PostgreSQL. Schema and connection pool in `vault/server/db.js`. On Railway, conn
 | `auth_sessions` | Active login tokens (32-byte hex, 24-hour expiry) |
 | `password_resets` | Email-based reset tokens (1-hour expiry) |
 | `projects` | Project workspaces with context briefs, persona, model |
-| `sessions` | Chat session metadata — title, star, summary, token counts |
+| `sessions` | Chat session metadata — title, star, soft-delete timestamp, summary, token counts |
 | `messages` | Chat message history |
 | `files` | Uploaded files with extracted text + AI summaries |
 | `personas` | Saved AI personas |
