@@ -22,6 +22,7 @@ const chatLimiter = rateLimit({
 });
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const BRANCH_SUMMARY_PREFIX = '[[VAULT_BRANCH_SUMMARY]]\n';
 
 // In-process cache for user profile settings — data changes rarely, skip DB hit per message.
 const profileCache = new Map(); // userId → { data, expiresAt }
@@ -1055,6 +1056,183 @@ router.post('/sessions/branch-from-followup', async (req, res) => {
   }
 });
 
+// PATCH /api/chat/sessions/:sessionId/project — move an existing chat into a project
+router.patch('/sessions/:sessionId/project', async (req, res) => {
+  const { projectId } = req.body || {};
+  const targetProjectId = projectId != null && projectId !== '' ? Number(projectId) : null;
+  if (!targetProjectId) return res.status(400).json({ error: 'projectId required' });
+
+  try {
+    const { rows: projectRows } = await pool.query(
+      'SELECT id, name FROM projects WHERE id=$1 AND "userId"=$2 AND "archived_at" IS NULL',
+      [targetProjectId, req.user.id]
+    );
+    const project = projectRows[0];
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const { rows: sessionRows } = await pool.query(
+      `SELECT s."sessionId", s."projectId", s.title, s."userId", p."userId" AS "projectOwnerId"
+       FROM sessions s
+       LEFT JOIN projects p ON p.id=s."projectId"
+       WHERE s."sessionId"=$1
+         AND s."deletedAt" IS NULL
+         AND (s."userId"=$2 OR (s."projectId" IS NOT NULL AND p."userId"=$2))`,
+      [req.params.sessionId, req.user.id]
+    );
+    const session = sessionRows[0];
+    if (!session) return res.status(404).json({ error: 'Chat not found' });
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'UPDATE sessions SET "projectId"=$1, "updatedAt"=NOW() WHERE "sessionId"=$2',
+        [targetProjectId, req.params.sessionId]
+      );
+      await client.query(
+        'UPDATE messages SET "projectId"=$1 WHERE "sessionId"=$2',
+        [targetProjectId, req.params.sessionId]
+      );
+      await client.query(
+        `DELETE FROM search_index WHERE type='message' AND title=$1`,
+        [`Chat: ${req.params.sessionId}`]
+      );
+      const { rows: assistantRows } = await client.query(
+        `SELECT content FROM messages WHERE "sessionId"=$1 AND role='assistant' ORDER BY "createdAt" ASC`,
+        [req.params.sessionId]
+      );
+      for (const msg of assistantRows) {
+        await client.query(
+          'INSERT INTO search_index(type,"projectId",title,body) VALUES ($1,$2,$3,$4)',
+          ['message', String(targetProjectId), `Chat: ${req.params.sessionId}`, String(msg.content || '').substring(0, 500)]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    res.json({ ok: true, session: { ...session, projectId: targetProjectId, projectName: project.name } });
+    generateAndStoreSessionSummary(req.params.sessionId, req.user?.id ?? null).catch(() => {});
+  } catch (err) {
+    console.error('[move-session-project]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/chat/sessions/:sessionId/branch-response — create a project chat
+// from the latest assistant response, preceded by a collapsible source summary.
+router.post('/sessions/:sessionId/branch-response', async (req, res) => {
+  const { projectId, title, messageIndex, messages: clientMessages } = req.body || {};
+  const targetProjectId = projectId != null && projectId !== '' ? Number(projectId) : null;
+  const branchTitle = String(title || '').trim();
+  if (!targetProjectId || !branchTitle) return res.status(400).json({ error: 'projectId and title required' });
+
+  try {
+    const { rows: projectRows } = await pool.query(
+      'SELECT id, name FROM projects WHERE id=$1 AND "userId"=$2 AND "archived_at" IS NULL',
+      [targetProjectId, req.user.id]
+    );
+    const project = projectRows[0];
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    let sourceSession = null;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const { rows: sessionRows } = await pool.query(
+        `SELECT s."sessionId", s."projectId", s.title, p."userId" AS "projectOwnerId"
+         FROM sessions s
+         LEFT JOIN projects p ON p.id=s."projectId"
+         WHERE s."sessionId"=$1
+           AND s."deletedAt" IS NULL
+           AND (s."userId"=$2 OR (s."projectId" IS NOT NULL AND p."userId"=$2))`,
+        [req.params.sessionId, req.user.id]
+      );
+      sourceSession = sessionRows[0] || null;
+      if (sourceSession) break;
+      await new Promise(resolve => setTimeout(resolve, 150));
+    }
+    if (!sourceSession) return res.status(404).json({ error: 'Source chat not found' });
+
+    const { rows: dbMessages } = await pool.query(
+      'SELECT role, content FROM messages WHERE "sessionId"=$1 ORDER BY "createdAt" ASC',
+      [req.params.sessionId]
+    );
+    const suppliedMessages = Array.isArray(clientMessages)
+      ? clientMessages
+          .filter(m => m && (m.role === 'user' || m.role === 'assistant'))
+          .map(m => ({ role: m.role, content: String(m.content || '') }))
+      : [];
+    const sourceMessages = suppliedMessages.length >= dbMessages.length ? suppliedMessages : dbMessages;
+    if (sourceMessages.length === 0) return res.status(400).json({ error: 'No source messages to branch' });
+
+    const selectedMessage = sourceMessages[Number(messageIndex)];
+    if (!selectedMessage || selectedMessage.role !== 'assistant' || !selectedMessage.content.trim()) {
+      return res.status(400).json({ error: 'Selected response not found' });
+    }
+
+    const transcript = sourceMessages
+      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+      .join('\n\n');
+    const { standard: standardModel } = await getModelsForUser(req.user?.id);
+    if (!standardModel) {
+      return res.status(400).json({ error: 'No model configured. Ask an admin to configure models in Settings.' });
+    }
+    const summary = await callModel(
+      standardModel,
+      `Summarise this entire source conversation for a new branch chat. Capture the user's goals, important context, decisions, constraints, and any unresolved next steps. Keep it concise but complete. Plain text only.\n\n${transcript}`,
+      { maxTokens: 1600 }
+    );
+    if (!summary) return res.status(500).json({ error: 'Failed to generate branch summary' });
+
+    const newSessionId = `branch-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const summaryContent = `${BRANCH_SUMMARY_PREFIX}${summary.trim()}`;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'INSERT INTO sessions ("sessionId","projectId","userId",title,"branchedFrom",summary) VALUES ($1,$2,$3,$4,$5,$6)',
+        [newSessionId, targetProjectId, req.user?.id ?? null, branchTitle, req.params.sessionId, summary.trim()]
+      );
+      await client.query(
+        'INSERT INTO messages ("sessionId","projectId",role,content,"createdAt") VALUES ($1,$2,$3,$4,NOW())',
+        [newSessionId, targetProjectId, 'assistant', summaryContent]
+      );
+      await client.query(
+        `INSERT INTO messages ("sessionId","projectId",role,content,"createdAt")
+         VALUES ($1,$2,$3,$4,NOW() + INTERVAL '1 millisecond')`,
+        [newSessionId, targetProjectId, 'assistant', selectedMessage.content]
+      );
+      await client.query(
+        'INSERT INTO search_index(type,"projectId",title,body) VALUES ($1,$2,$3,$4)',
+        ['message', String(targetProjectId), `Chat: ${newSessionId}`, `${summary}\n\n${selectedMessage.content}`.substring(0, 500)]
+      );
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    res.json({ sessionId: newSessionId, projectId: targetProjectId });
+
+    embedText(summary).then(embedding => {
+      if (!embedding) return;
+      const vec = `[${embedding.join(',')}]`;
+      pool.query(
+        `UPDATE sessions SET "summaryEmbedding"=$1 WHERE "sessionId"=$2`,
+        [vec, newSessionId]
+      ).catch(err => console.error('[branch-response] summary embed error:', err.message));
+    }).catch(() => {});
+  } catch (err) {
+    console.error('[branch-response]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/chat/sessions/general — sessions with no project (must be before :projectId)
 router.get('/sessions/general', async (req, res) => {
   try {
@@ -1068,8 +1246,8 @@ router.get('/sessions/general', async (req, res) => {
       LEFT JOIN sessions s ON s."sessionId" = m."sessionId"
       WHERE m."projectId" IS NULL AND s."userId"=$1 AND s."deletedAt" IS NULL
       GROUP BY m."sessionId", s."sessionId"
-      ORDER BY MIN(m."createdAt") ASC
-      LIMIT 30
+      ORDER BY MAX(m."createdAt") DESC
+      LIMIT 100
     `, [req.user.id]);
     res.json(rows);
   } catch (err) {

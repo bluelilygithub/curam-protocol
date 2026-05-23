@@ -12,9 +12,14 @@ function ProjectSidebar({ onClose, showHabits = true }) {
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
   const [draggedId, setDraggedId] = useState(null);
+  const [draggedSessionId, setDraggedSessionId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [dragOverFolderId, setDragOverFolderId] = useState(null);
+  const [dragOverProjectId, setDragOverProjectId] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [moveSessionTarget, setMoveSessionTarget] = useState(null);
+  const [moveSessionProjectId, setMoveSessionProjectId] = useState('');
+  const [moveSessionSaving, setMoveSessionSaving] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const getIcon = useIcon();
@@ -86,6 +91,11 @@ function ProjectSidebar({ onClose, showHabits = true }) {
   };
 
   const handleDragStart = (e, id) => { setDraggedId(id); e.dataTransfer.effectAllowed = 'move'; };
+  const handleSessionDragStart = (e, sessionId) => {
+    setDraggedSessionId(sessionId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', sessionId);
+  };
   const handleDragOver = (e, id) => { e.preventDefault(); if (id !== draggedId) setDragOverId(id); };
   const handleDrop = (e, targetId) => {
     e.preventDefault();
@@ -100,7 +110,67 @@ function ProjectSidebar({ onClose, showHabits = true }) {
     setDraggedId(null);
     setDragOverId(null);
   };
-  const handleDragEnd = () => { setDraggedId(null); setDragOverId(null); setDragOverFolderId(null); };
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDraggedSessionId(null);
+    setDragOverId(null);
+    setDragOverFolderId(null);
+    setDragOverProjectId(null);
+  };
+
+  const moveSessionToProject = async (sessionId, projectId) => {
+    if (!sessionId || !projectId) return;
+    await api.patch(`/api/chat/sessions/${sessionId}/project`, { projectId });
+    await fetchProjects();
+    const sessions = await api.get('/api/chat/sessions/general').then(r => r.json());
+    const targetSessions = await api.get(`/api/chat/sessions/${projectId}`).then(r => r.json()).catch(() => []);
+    setGeneralSessions(sessions);
+    setProjectSessions(prev => ({ ...prev, [projectId]: targetSessions }));
+    document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
+  };
+
+  const handleProjectDragOver = (e, projectId) => {
+    if (draggedSessionId) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDragOverProjectId(projectId);
+      return;
+    }
+    handleDragOver(e, projectId);
+  };
+
+  const handleProjectDrop = async (e, projectId) => {
+    if (draggedSessionId) {
+      e.preventDefault();
+      e.stopPropagation();
+      const sid = draggedSessionId;
+      setDraggedSessionId(null);
+      setDragOverProjectId(null);
+      await moveSessionToProject(sid, projectId);
+      setExpandedProjectId(projectId);
+      return;
+    }
+    handleDrop(e, projectId);
+  };
+
+  const openMoveSessionModal = (session) => {
+    setMoveSessionTarget(session);
+    setMoveSessionProjectId(projects[0]?.id ? String(projects[0].id) : '');
+  };
+
+  const confirmMoveSession = async () => {
+    if (!moveSessionTarget || !moveSessionProjectId) return;
+    setMoveSessionSaving(true);
+    try {
+      const targetProjectId = Number(moveSessionProjectId);
+      await moveSessionToProject(moveSessionTarget.sessionId, targetProjectId);
+      setExpandedProjectId(targetProjectId);
+      setMoveSessionTarget(null);
+      setMoveSessionProjectId('');
+    } finally {
+      setMoveSessionSaving(false);
+    }
+  };
 
   const handleFolderDrop = async (e, folderId) => {
     e.preventDefault();
@@ -176,20 +246,35 @@ function ProjectSidebar({ onClose, showHabits = true }) {
           </button>
         </div>
         {generalExpanded && generalSessions.length > 0 && (
-          <div className="mt-0.5 space-y-0.5">
-            {generalSessions.slice(0, 8).map(s => (
-              <button
+          <div className="mt-0.5 space-y-0.5 max-h-52 overflow-y-auto pr-1">
+            {generalSessions.map(s => (
+              <div
                 key={s.sessionId}
-                onClick={() => {
-                  navigate('/chat');
-                  setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: s.sessionId })), 80);
-                  if (onClose) onClose();
-                }}
-                className="w-full text-left px-3 py-1 rounded-md text-xs truncate transition-colors hover:opacity-70"
-                style={{ color: 'var(--color-muted)', paddingLeft: '2rem' }}
+                draggable
+                onDragStart={(e) => handleSessionDragStart(e, s.sessionId)}
+                onDragEnd={handleDragEnd}
+                className="group flex items-center gap-1 rounded-md"
               >
-                {s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}
-              </button>
+                <button
+                  onClick={() => {
+                    navigate('/chat');
+                    setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: s.sessionId })), 80);
+                    if (onClose) onClose();
+                  }}
+                  className="flex-1 text-left px-3 py-1 rounded-md text-xs truncate transition-colors hover:opacity-70"
+                  style={{ color: 'var(--color-muted)', paddingLeft: '2rem' }}
+                >
+                  {s.title || `${new Date(s.startedAt).toLocaleDateString()} · ${s.sessionId.slice(-6)}`}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); openMoveSessionModal(s); }}
+                  className="w-5 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity flex-shrink-0"
+                  style={{ color: 'var(--color-muted)' }}
+                  title="Move to project"
+                >
+                  {getIcon('arrow-right', { size: 11 })}
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -265,6 +350,47 @@ function ProjectSidebar({ onClose, showHabits = true }) {
         </div>
       )}
 
+      {moveSessionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move chat to project</h3>
+            <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+              Move "{moveSessionTarget.title || `Session ${moveSessionTarget.sessionId.slice(-6)}`}" out of General.
+            </p>
+            <select
+              value={moveSessionProjectId}
+              onChange={e => setMoveSessionProjectId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border text-sm outline-none mb-5"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              {folders.map(folder => {
+                const folderProjects = projects.filter(p => p.folderId === folder.id);
+                if (folderProjects.length === 0) return null;
+                return (
+                  <optgroup key={folder.id} label={folder.name}>
+                    {folderProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </optgroup>
+                );
+              })}
+              <optgroup label="Unfoldered">
+                {projects.filter(p => !p.folderId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </optgroup>
+            </select>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setMoveSessionTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button
+                onClick={confirmMoveSession}
+                disabled={!moveSessionProjectId || moveSessionSaving}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-white hover:opacity-80 transition-opacity disabled:opacity-50"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {moveSessionSaving ? 'Moving…' : 'Move'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Project list */}
       <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
         {/* Render project row helper */}
@@ -280,12 +406,14 @@ function ProjectSidebar({ onClose, showHabits = true }) {
                 className="group relative"
                 draggable
                 onDragStart={(e) => handleDragStart(e, project.id)}
-                onDragOver={(e) => handleDragOver(e, project.id)}
-                onDrop={(e) => handleDrop(e, project.id)}
+                onDragOver={(e) => handleProjectDragOver(e, project.id)}
+                onDrop={(e) => handleProjectDrop(e, project.id)}
                 onDragEnd={handleDragEnd}
                 style={{
                   opacity: draggedId === project.id ? 0.4 : 1,
                   borderLeft: dragOverId === project.id ? '2px solid var(--color-primary)' : '2px solid transparent',
+                  outline: dragOverProjectId === project.id ? '1px dashed var(--color-primary)' : 'none',
+                  borderRadius: dragOverProjectId === project.id ? '0.5rem' : undefined,
                 }}
               >
                 {isRenaming ? (

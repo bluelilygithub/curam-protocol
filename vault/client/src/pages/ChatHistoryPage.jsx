@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import MoodDot from '../components/mood/MoodDot';
+import useProjectStore from '../store/projectStore';
 
 function getPeriodDates(key) {
   const now = new Date();
@@ -57,8 +58,13 @@ const PERIODS = [
 export default function ChatHistoryPage() {
   const navigate = useNavigate();
   const getIcon = useIcon();
+  const { projects, fetchProjects } = useProjectStore();
 
   const [tab, setTab] = useState('history');
+  const [folders, setFolders] = useState([]);
+  const [moveSessionTarget, setMoveSessionTarget] = useState(null);
+  const [moveSessionProjectId, setMoveSessionProjectId] = useState('');
+  const [moveSessionSaving, setMoveSessionSaving] = useState(false);
 
   // ── History ──────────────────────────────────────────────────────────────────
   const [period, setPeriod] = useState('all');
@@ -151,6 +157,11 @@ export default function ChatHistoryPage() {
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
   useEffect(() => {
+    fetchProjects();
+    api.get('/api/folders').then(r => r.json()).then(setFolders).catch(() => {});
+  }, [fetchProjects]);
+
+  useEffect(() => {
     if (tab === 'bookmarks') loadBookmarks();
   }, [tab, loadBookmarks]);
 
@@ -182,6 +193,29 @@ export default function ChatHistoryPage() {
       // Keep the row visible so the user can retry.
     } finally {
       setRestoringSid(null);
+    }
+  }
+
+  function openMoveSessionModal(session) {
+    setMoveSessionTarget(session);
+    setMoveSessionProjectId(projects[0]?.id ? String(projects[0].id) : '');
+  }
+
+  async function confirmMoveSession() {
+    if (!moveSessionTarget || !moveSessionProjectId) return;
+    setMoveSessionSaving(true);
+    try {
+      await api.patch(`/api/chat/sessions/${moveSessionTarget.sessionId}/project`, {
+        projectId: Number(moveSessionProjectId),
+      });
+      setMoveSessionTarget(null);
+      setMoveSessionProjectId('');
+      await Promise.all([loadHistory(), fetchProjects()]);
+      document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
+    } catch (_) {
+      // Keep the modal open so the user can retry.
+    } finally {
+      setMoveSessionSaving(false);
     }
   }
 
@@ -385,6 +419,16 @@ export default function ChatHistoryPage() {
                   </div>
                   <div className="flex-shrink-0 self-center flex items-center gap-2" style={{ color: 'var(--color-muted)' }}>
                     {moodMap !== null && <MoodDot entityType="session" entityId={s.sessionId} entityTitle={s.title} dominantEmotion={moodMap[`session:${s.sessionId}`]} />}
+                    {!s.projectId && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openMoveSessionModal(s); }}
+                        className="px-2 py-1 rounded-md border text-xs hover:opacity-70 transition-opacity"
+                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
+                        title="Move General chat to a project"
+                      >
+                        Move
+                      </button>
+                    )}
                     {getIcon('chevron-right', { size: 14 })}
                   </div>
                 </div>
@@ -616,6 +660,47 @@ export default function ChatHistoryPage() {
             </div>
           )}
         </>
+      )}
+
+      {moveSessionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div className="w-full max-w-sm mx-4 rounded-2xl border shadow-xl p-6" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Move chat to project</h3>
+            <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+              Move "{moveSessionTarget.title || `Session ${moveSessionTarget.sessionId.slice(-8)}`}" out of General.
+            </p>
+            <select
+              value={moveSessionProjectId}
+              onChange={e => setMoveSessionProjectId(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border text-sm outline-none mb-5"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              {folders.map(folder => {
+                const folderProjects = projects.filter(p => p.folderId === folder.id);
+                if (folderProjects.length === 0) return null;
+                return (
+                  <optgroup key={folder.id} label={folder.name}>
+                    {folderProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </optgroup>
+                );
+              })}
+              <optgroup label="Unfoldered">
+                {projects.filter(p => !p.folderId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </optgroup>
+            </select>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setMoveSessionTarget(null)} className="px-4 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Cancel</button>
+              <button
+                onClick={confirmMoveSession}
+                disabled={!moveSessionProjectId || moveSessionSaving}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-white hover:opacity-80 transition-opacity disabled:opacity-50"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {moveSessionSaving ? 'Moving…' : 'Move'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

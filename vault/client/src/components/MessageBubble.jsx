@@ -19,12 +19,14 @@ function parseFilesPrefix(content) {
 
 const COLLAPSE_CHAR_THRESHOLD = 2500;
 const COLLAPSED_HEIGHT = 220; // px
+const BRANCH_SUMMARY_PREFIX = '[[VAULT_BRANCH_SUMMARY]]\n';
 
-function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isPaused, onSpeak, onPause, onResume, onStop, markdownVariant = 'default' }) {
+function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, onBranchResponse, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isPaused, onSpeak, onPause, onResume, onStop, markdownVariant = 'default' }) {
   const isUser = message.role === 'user';
   const [showThinking, setShowThinking] = useState(false);
   const getIcon = useIcon();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   // Compute code blocks only when message content changes (not on every parent re-render)
   const codeBlocks = useMemo(
@@ -47,6 +49,11 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
   const proseWrapClass = markdownVariant === 'comfortable'
     ? 'prose prose-base max-w-none text-[15px] leading-relaxed'
     : 'prose prose-sm max-w-none text-sm leading-relaxed';
+  const branchSummary = useMemo(() => (
+    !isUser && typeof message.content === 'string' && message.content.startsWith(BRANCH_SUMMARY_PREFIX)
+      ? message.content.slice(BRANCH_SUMMARY_PREFIX.length).trim()
+      : null
+  ), [isUser, message.content]);
 
   if (isUser) {
     // Live attachments (current session) take priority; fall back to parsing history text
@@ -213,7 +220,26 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
             <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: 'var(--color-primary)', animationDelay: '300ms' }} />
           </div>
           )
-        ) : message.content === '' ? null : (
+        ) : message.content === '' ? null : branchSummary ? (
+          <div data-message-content>
+            <button
+              onClick={() => setSummaryOpen(v => !v)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium hover:opacity-70 transition-opacity"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              {getIcon(summaryOpen ? 'chevron-down' : 'chevron-right', { size: 12 })}
+              Summary of source chat
+            </button>
+            {summaryOpen && (
+              <div
+                className="mt-2 px-3 py-2.5 rounded-xl border text-xs leading-relaxed whitespace-pre-wrap"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                {branchSummary}
+              </div>
+            )}
+          </div>
+        ) : (
           <div data-message-content>
             <div className="relative">
               <div
@@ -271,6 +297,16 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, messageInd
               >
                 {getIcon('external-link', { size: 10 })}
                 {codeBlocks.length > 1 ? `${codeBlocks.length} artifacts` : 'Artifact'}
+              </button>
+            )}
+            {onBranchResponse && (
+              <button
+                onClick={onBranchResponse}
+                className="w-6 h-6 flex items-center justify-center rounded-md"
+                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
+                title="Branch this response into a new chat"
+              >
+                {getIcon('git-branch', { size: 11 })}
               </button>
             )}
             {message.id && onToggleBookmark && (

@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
 import { useVoice } from '../hooks/useVoice';
 import { useFileAttachment } from '../hooks/useFileAttachment';
@@ -45,7 +45,7 @@ const TEMPERATURES = [
 // not when the user types in the input field.
 const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
-  suggestions, onDelete, onBranch, onOpenArtifact, onSuggestionSelect, onBranchFollowup, canBranch, isBranching,
+  suggestions, onDelete, onBranch, onBranchResponse, onOpenArtifact, onSuggestionSelect, onBranchFollowup, canBranch, isBranching,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
   isTTSAvailable, isSpeaking, isPaused, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
   wideChat,
@@ -64,6 +64,7 @@ const MemoMessageList = React.memo(function MemoMessageList({
               onDelete={msg.role === 'user' && !isStreaming ? onDelete : undefined}
               onOpenArtifact={msg.role === 'assistant' ? onOpenArtifact : undefined}
               onBranch={msg.role === 'user' && !!sessionId && !isStreaming ? onBranch : undefined}
+              onBranchResponse={isLastAssistant && !!sessionId && !isStreaming ? () => onBranchResponse(i, msg) : undefined}
               searching={isLastAssistant && isAiSearching}
               bookmarked={msg.id ? !!bookmarkedMap[msg.id] : false}
               onToggleBookmark={onToggleBookmark}
@@ -95,6 +96,7 @@ const MemoMessageList = React.memo(function MemoMessageList({
 function ChatPage({ general = false }) {
   const { id: projectIdParam } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const isAdmin = !!user?.isAdmin;
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
@@ -193,6 +195,11 @@ function ChatPage({ general = false }) {
   // Follow-up suggestions
   const [suggestions, setSuggestions] = useState([]);
   const [isBranching, setIsBranching] = useState(false);
+  const [branchResponseTarget, setBranchResponseTarget] = useState(null);
+  const [branchResponseTitle, setBranchResponseTitle] = useState('');
+  const [branchResponseProjectId, setBranchResponseProjectId] = useState('');
+  const [branchResponseError, setBranchResponseError] = useState('');
+  const [branchFolders, setBranchFolders] = useState([]);
 
   // Prompt picker
   const [showPromptPicker, setShowPromptPicker] = useState(false);
@@ -244,6 +251,10 @@ function ChatPage({ general = false }) {
         setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
       }
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.get('/api/folders').then(r => r.json()).then(setBranchFolders).catch(() => {});
   }, []);
 
   const currentSession = sessions.find(s => s.sessionId === sessionId);
@@ -878,6 +889,47 @@ function ChatPage({ general = false }) {
     }
   }, [sessionId, loadHistory, fetchSessions]);
 
+  const openBranchResponseModal = useCallback(async (messageIndex, message) => {
+    if (!sessionId || !message?.content) return;
+    setBranchResponseTarget({ messageIndex, content: message.content });
+    setBranchResponseTitle(sessionTitle ? `${sessionTitle} branch` : 'Branched response');
+    setBranchResponseError('');
+
+    const latestProjects = await fetchProjects().catch(() => projects);
+    api.get('/api/folders').then(r => r.json()).then(setBranchFolders).catch(() => {});
+    const defaultProjectId = projectId || latestProjects?.[0]?.id || projects[0]?.id || '';
+    setBranchResponseProjectId(defaultProjectId ? String(defaultProjectId) : '');
+  }, [fetchProjects, projectId, projects, sessionId, sessionTitle]);
+
+  const handleBranchResponse = useCallback(async () => {
+    if (!sessionId || !branchResponseTarget || !branchResponseProjectId || !branchResponseTitle.trim()) return;
+    setIsBranching(true);
+    setBranchResponseError('');
+    try {
+      const res = await api.post(`/api/chat/sessions/${sessionId}/branch-response`, {
+        projectId: Number(branchResponseProjectId),
+        title: branchResponseTitle.trim(),
+        messageIndex: branchResponseTarget.messageIndex,
+        messages: messages.map(m => ({ role: m.role, content: m.content || '' })),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to branch response');
+      if (data.sessionId && data.projectId) {
+        setBranchResponseTarget(null);
+        setSuggestions([]);
+        setActiveArtifacts(null);
+        setActive(data.projectId);
+        document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
+        navigate(`/projects/${data.projectId}/chat`);
+        setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: data.sessionId })), 120);
+      }
+    } catch (err) {
+      setBranchResponseError(err.message || 'Failed to branch response');
+    } finally {
+      setIsBranching(false);
+    }
+  }, [branchResponseProjectId, branchResponseTarget, branchResponseTitle, messages, navigate, sessionId, setActive]);
+
   const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
   const hasInput = input.trim().length > 0;
 
@@ -1461,6 +1513,7 @@ function ChatPage({ general = false }) {
                 suggestions={suggestions}
                 onDelete={deleteMessagePair}
                 onBranch={handleBranch}
+                onBranchResponse={openBranchResponseModal}
                 onOpenArtifact={handleOpenArtifact}
                 onSuggestionSelect={stableSuggestionSelect}
                 onBranchFollowup={handleBranchFromFollowup}
@@ -2057,6 +2110,76 @@ function ChatPage({ general = false }) {
           onInsert={(filled) => { promptVarModal.onInsert(filled); setPromptVarModal(null); }}
           onClose={() => setPromptVarModal(null)}
         />
+      )}
+
+      {branchResponseTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }}>
+          <div
+            className="w-full max-w-md mx-4 rounded-2xl border shadow-xl p-6"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+          >
+            <h3 className="text-base font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Branch latest response</h3>
+            <p className="text-xs mb-5" style={{ color: 'var(--color-muted)' }}>
+              This creates a project chat with a collapsed summary of this thread, followed by the latest response.
+            </p>
+            <div className="space-y-4">
+              <label className="block">
+                <span className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Title</span>
+                <input
+                  value={branchResponseTitle}
+                  onChange={e => setBranchResponseTitle(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  autoFocus
+                />
+              </label>
+              <label className="block">
+                <span className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>Project</span>
+                <select
+                  value={branchResponseProjectId}
+                  onChange={e => setBranchResponseProjectId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {branchFolders.map(folder => {
+                    const folderProjects = projects.filter(p => p.folderId === folder.id);
+                    if (folderProjects.length === 0) return null;
+                    return (
+                      <optgroup key={folder.id} label={folder.name}>
+                        {folderProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </optgroup>
+                    );
+                  })}
+                  <optgroup label="Unfoldered">
+                    {projects.filter(p => !p.folderId).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </optgroup>
+                </select>
+              </label>
+              {branchResponseError && (
+                <div className="px-3 py-2 rounded-xl border text-xs" style={{ background: '#fff1f2', borderColor: '#fca5a5', color: '#991b1b' }}>
+                  {branchResponseError}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2 justify-end mt-6">
+              <button
+                onClick={() => setBranchResponseTarget(null)}
+                className="px-4 py-2 rounded-xl text-xs border"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBranchResponse}
+                disabled={!branchResponseTitle.trim() || !branchResponseProjectId || isBranching}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-white hover:opacity-80 transition-opacity disabled:opacity-50"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                {isBranching ? 'Creating…' : 'Create branch'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Branching loading modal */}
