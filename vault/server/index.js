@@ -39,6 +39,8 @@ const { pool } = require('./db');
 // Env var diagnostics — visible in Railway logs on every boot
 const _mpKey = String(process.env.METAL_PRICE_API_KEY || '').trim();
 console.log('[env] METAL_PRICE_API_KEY:', _mpKey ? `set (${_mpKey.length} chars, starts ${_mpKey.slice(0, 4)}…)` : 'NOT SET');
+const _metalKeys = Object.keys(process.env).filter(k => k.toUpperCase().includes('METAL') || k.toUpperCase().includes('GOLD'));
+console.log('[env] Metal/Gold keys in process.env:', _metalKeys.length ? _metalKeys.join(', ') : '(none)');
 
 async function seedInitialUser() {
   const { SEED_EMAIL, SEED_PASSWORD } = process.env;
