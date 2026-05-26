@@ -80,28 +80,30 @@ async function getAlphaVantageQuote(symbol) {
   return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'AUD', source: 'alphavantage' };
 }
 
-// ─── Gold spot (Coinbase public API — no key, no rate limit) ─────────────────
-// GET https://api.coinbase.com/v2/exchange-rates?currency=XAU
-// Returns XAU spot in all currencies including AUD. No auth required.
+// ─── Gold spot (metalpriceapi.com — 100 req/month free tier) ─────────────────
+// 12-hour cache = max ~62 calls/month. METAL_PRICE_API_KEY env var required.
 
 let goldSpotCache = { data: null, at: 0 };
-const GOLD_CACHE_MS = 15 * 60 * 1000; // 15 min
+const GOLD_CACHE_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 async function getGoldSpotAud() {
   if (goldSpotCache.data && Date.now() - goldSpotCache.at < GOLD_CACHE_MS) {
     return goldSpotCache.data;
   }
-  const res = await fetch('https://api.coinbase.com/v2/exchange-rates?currency=XAU', {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-  });
-  if (!res.ok) throw new Error(`Coinbase API HTTP ${res.status} fetching gold spot`);
+  const key = String(process.env.METAL_PRICE_API_KEY || '').trim();
+  if (!key) throw new Error('METAL_PRICE_API_KEY not set');
+  const res = await fetch(
+    `https://api.metalpriceapi.com/v1/latest?api_key=${encodeURIComponent(key)}&base=XAU&currencies=AUD,USD`,
+    { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
+  );
+  if (!res.ok) throw new Error(`metalpriceapi HTTP ${res.status}`);
   const body = await res.json();
-  const rates = body?.data?.rates;
-  const audPerOz = Number(rates?.AUD);
-  const usdPerOz = Number(rates?.USD);
+  if (!body.success) throw new Error(`metalpriceapi: ${body.error?.message || 'request failed'}`);
+  const audPerOz = Number(body.rates?.AUD);
+  const usdPerOz = Number(body.rates?.USD);
   if (!audPerOz || audPerOz <= 0) {
-    console.warn('[marketData] Coinbase XAU raw:', JSON.stringify(body).slice(0, 300));
-    throw new Error('Coinbase: no XAU/AUD rate returned');
+    console.warn('[marketData] metalpriceapi raw:', JSON.stringify(body).slice(0, 300));
+    throw new Error('metalpriceapi: no XAU/AUD rate returned');
   }
   const result = { audPerOz, usdPerOz, usdAud: usdPerOz > 0 ? audPerOz / usdPerOz : null };
   goldSpotCache = { data: result, at: Date.now() };
