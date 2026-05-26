@@ -83,12 +83,25 @@ async function getAlphaVantageQuote(symbol) {
 // ─── Gold spot (Finnhub OANDA:XAU_USD → AUD) ────────────────────────────────
 
 async function getGoldSpotUsd() {
+  // Primary: Yahoo Finance GC=F (gold futures, used as spot proxy — no key needed)
+  try {
+    const res = await fetch(
+      'https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=1d',
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const price = Number(data?.chart?.result?.[0]?.meta?.regularMarketPrice);
+      if (price > 0) return price;
+    }
+  } catch (_) {}
+
+  // Fallback: metals.live
   const res = await fetch('https://api.metals.live/v1/spot/gold', {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`metals.live HTTP ${res.status} fetching gold spot`);
+  if (!res.ok) throw new Error(`Gold spot unavailable (Yahoo + metals.live both failed)`);
   const data = await res.json();
-  // Returns an array: [{ gold: 3200.50 }]
   const price = Number(Array.isArray(data) ? data[0]?.gold : data?.gold);
   if (!price || price <= 0) throw new Error('metals.live: no gold price returned');
   return price;
