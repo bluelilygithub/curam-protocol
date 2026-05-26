@@ -99,6 +99,7 @@ app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/news
 // /api/shares/news must be registered before /api/shares to prevent prefix match interception
 app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNews'));
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
+app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

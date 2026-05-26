@@ -4,6 +4,18 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-05-26
+
+**Feature:** Precious metals tracker — Metals tab in Shares.
+
+New **Metals** tab on the Shares page for tracking physical gold (and other XAU/XAG) holdings. Purchases are recorded with total troy oz, total price paid (AUD), optional spot price at time of purchase (auto-fetched via Finnhub `OANDA:XAU_USD` → Frankfurter USD/AUD), and a description field. A coin calculator (count × coin weight oz) auto-fills the total oz field.
+
+The tab shows a summary row (total oz, total cost, current spot value, unrealised P&L) plus average premium paid over spot at purchase. Each purchase row shows date, description, weight, paid, spot at buy, premium %, current value, and per-row P&L. "Refresh spot" and inline "Use current" button keep the live price up to date. Uses the existing Finnhub API key — no new dependency.
+
+**New files:** `server/routes/metals.js`. **Modified files:** `server/db.js` (new `metal_purchases` table), `server/services/marketData.js` (`getGoldSpotAud()`), `server/index.js` (route registration under `requireFeature('shares')`), `client/src/pages/SharesPage.jsx` (Metals tab + MetalsTab component).
+
+---
+
 ## 2026-05-20
 
 **Feature:** Restorable deleted chats.

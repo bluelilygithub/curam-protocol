@@ -1190,6 +1190,22 @@ async function initSchema() {
       ON share_news_briefings ("userId", date DESC)
   `);
 
+  // ── Precious metals ───────────────────────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS metal_purchases (
+      id              SERIAL PRIMARY KEY,
+      "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      metal           TEXT NOT NULL DEFAULT 'XAU',
+      description     TEXT,
+      "weightOz"      NUMERIC(12, 4) NOT NULL,
+      "paidAud"       NUMERIC(18, 2) NOT NULL,
+      "spotAudPerOz"  NUMERIC(18, 4),
+      "purchasedAt"   DATE NOT NULL DEFAULT CURRENT_DATE,
+      notes           TEXT,
+      "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   console.log('[db] Schema ready');
 }
 

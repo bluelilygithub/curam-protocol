@@ -15,6 +15,7 @@ const TABS = [
   { id: 'cash', label: 'Cash' },
   { id: 'charts', label: 'Charts' },
   { id: 'news', label: 'News' },
+  { id: 'metals', label: 'Metals' },
 ];
 
 const fmtAud = (n) => {
@@ -730,9 +731,471 @@ export default function SharesPage() {
                 onGenerateSummary={handleGenerateSummary}
               />
             )}
+
+            {tab === 'metals' && <MetalsTab />}
           </>
         )}
       </>
+    </div>
+  );
+}
+
+// ─── Metals tab ───────────────────────────────────────────────────────────────
+
+const EMPTY_METAL_FORM = {
+  description: '',
+  coinCount: '',
+  coinWeightOz: '0.25',
+  weightOz: '',
+  paidAud: '',
+  spotAudPerOz: '',
+  purchasedAt: new Date().toISOString().slice(0, 10),
+  notes: '',
+};
+
+function MetalsTab() {
+  const addToast = useToastStore((s) => s.addToast);
+  const [purchases, setPurchases] = React.useState([]);
+  const [spot, setSpot] = React.useState(null);
+  const [spotError, setSpotError] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [fetchingSpot, setFetchingSpot] = React.useState(false);
+  const [form, setForm] = React.useState({ ...EMPTY_METAL_FORM });
+  const [editingId, setEditingId] = React.useState(null);
+  const [deleteId, setDeleteId] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+
+  const loadPurchases = React.useCallback(async () => {
+    try {
+      const res = await api.get('/api/metals/purchases');
+      const data = await res.json();
+      setPurchases(Array.isArray(data) ? data : []);
+    } catch (err) {
+      addToast('Failed to load metal purchases', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast]);
+
+  const fetchSpot = React.useCallback(async () => {
+    setFetchingSpot(true);
+    setSpotError(null);
+    try {
+      const res = await api.get('/api/metals/spot');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch spot');
+      setSpot(data);
+      return data.audPerOz;
+    } catch (err) {
+      setSpotError(err.message);
+      return null;
+    } finally {
+      setFetchingSpot(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadPurchases();
+    fetchSpot();
+  }, [loadPurchases, fetchSpot]);
+
+  const handleFetchSpotForForm = async () => {
+    const audPerOz = await fetchSpot();
+    if (audPerOz != null) {
+      setForm((f) => ({ ...f, spotAudPerOz: audPerOz.toFixed(2) }));
+    }
+  };
+
+  const computeWeightOz = (count, coinOz) => {
+    const c = Number(count);
+    const w = Number(coinOz);
+    if (c > 0 && w > 0) return (c * w).toFixed(4);
+    return '';
+  };
+
+  const handleCoinFieldChange = (field, value) => {
+    setForm((f) => {
+      const next = { ...f, [field]: value };
+      next.weightOz = computeWeightOz(
+        field === 'coinCount' ? value : f.coinCount,
+        field === 'coinWeightOz' ? value : f.coinWeightOz,
+      );
+      return next;
+    });
+  };
+
+  const startEdit = (p) => {
+    setEditingId(p.id);
+    setDeleteId(null);
+    setForm({
+      description: p.description || '',
+      coinCount: '',
+      coinWeightOz: '0.25',
+      weightOz: String(p.weightOz),
+      paidAud: String(p.paidAud),
+      spotAudPerOz: p.spotAudPerOz != null ? String(p.spotAudPerOz) : '',
+      purchasedAt: String(p.purchasedAt).slice(0, 10),
+      notes: p.notes || '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm({ ...EMPTY_METAL_FORM, purchasedAt: new Date().toISOString().slice(0, 10) });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    const payload = {
+      metal: 'XAU',
+      description: form.description || null,
+      weightOz: Number(form.weightOz),
+      paidAud: Number(form.paidAud),
+      spotAudPerOz: form.spotAudPerOz ? Number(form.spotAudPerOz) : null,
+      purchasedAt: form.purchasedAt,
+      notes: form.notes || null,
+    };
+    try {
+      const res = editingId
+        ? await api.put(`/api/metals/purchases/${editingId}`, payload)
+        : await api.post('/api/metals/purchases', payload);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save');
+      addToast(editingId ? 'Purchase updated' : 'Purchase recorded', 'success');
+      cancelEdit();
+      await loadPurchases();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async (id) => {
+    try {
+      const res = await api.delete(`/api/metals/purchases/${id}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Delete failed');
+      }
+      addToast('Purchase removed', 'success');
+      if (editingId === id) cancelEdit();
+      setDeleteId(null);
+      await loadPurchases();
+    } catch (err) {
+      addToast(err.message, 'error');
+    }
+  };
+
+  // Summary calculations
+  const totalOz = purchases.reduce((s, p) => s + Number(p.weightOz), 0);
+  const totalCostAud = purchases.reduce((s, p) => s + Number(p.paidAud), 0);
+  const currentValueAud = spot?.audPerOz != null ? totalOz * spot.audPerOz : null;
+  const pnlAud = currentValueAud != null ? currentValueAud - totalCostAud : null;
+  const pnlPct = totalCostAud > 0 && pnlAud != null ? (pnlAud / totalCostAud) * 100 : null;
+
+  const avgPremiumPct = (() => {
+    const withSpot = purchases.filter((p) => p.spotAudPerOz != null && Number(p.spotAudPerOz) > 0);
+    if (!withSpot.length) return null;
+    const weightedPremium = withSpot.reduce((s, p) => {
+      const paid = Number(p.paidAud);
+      const spotVal = Number(p.spotAudPerOz) * Number(p.weightOz);
+      return s + ((paid - spotVal) / spotVal) * 100;
+    }, 0);
+    return weightedPremium / withSpot.length;
+  })();
+
+  if (loading) return <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading…</p>;
+
+  return (
+    <div>
+      {/* Summary cards */}
+      {purchases.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+          {[
+            { label: 'Total oz (XAU)', value: totalOz > 0 ? `${totalOz.toFixed(4)} oz` : '—' },
+            { label: 'Total cost', value: fmtAud(totalCostAud) },
+            {
+              label: 'Spot value',
+              value: fmtAud(currentValueAud),
+              sub: spot?.audPerOz ? `${fmtAud(spot.audPerOz)}/oz` : null,
+            },
+            {
+              label: 'Unrealised P&L',
+              value: pnlPct != null ? fmtPct(pnlPct) : '—',
+              sub: pnlAud != null ? fmtAud(pnlAud) : null,
+              pnl: pnlAud,
+            },
+          ].map((card) => (
+            <div
+              key={card.label}
+              className="rounded-lg p-3 border"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+            >
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{card.label}</p>
+              <p
+                className="text-lg font-semibold mt-1"
+                style={{ color: card.pnl != null ? (card.pnl >= 0 ? '#22c55e' : '#ef4444') : 'var(--color-text)' }}
+              >
+                {card.value}
+              </p>
+              {card.sub && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>{card.sub}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {avgPremiumPct != null && (
+        <div className="mb-4 px-3 py-2 rounded-lg border text-sm flex items-center gap-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <span style={{ color: 'var(--color-muted)' }}>Avg premium over spot at purchase</span>
+          <span className="font-semibold" style={{ color: avgPremiumPct >= 0 ? 'var(--color-text)' : '#22c55e' }}>
+            {avgPremiumPct >= 0 ? '+' : ''}{avgPremiumPct.toFixed(2)}%
+          </span>
+        </div>
+      )}
+
+      {spotError && (
+        <p className="text-xs mb-4 px-3 py-2 rounded-md" style={{ background: '#fef3c7', color: '#92400e' }}>
+          Spot price unavailable: {spotError}
+        </p>
+      )}
+
+      {/* Refresh spot */}
+      <div className="flex items-center justify-between mb-6">
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+          Gold spot (XAU/AUD){spot?.audPerOz ? `: ${fmtAud(spot.audPerOz)}/oz` : ''}
+          {spot?.usdPerOz ? ` · USD ${spot.usdPerOz.toFixed(2)}/oz` : ''}
+        </p>
+        <button
+          type="button"
+          onClick={fetchSpot}
+          disabled={fetchingSpot}
+          className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+        >
+          {fetchingSpot ? 'Fetching…' : 'Refresh spot'}
+        </button>
+      </div>
+
+      {/* Add / Edit form */}
+      <form onSubmit={handleSubmit} className="mb-8 p-4 rounded-lg border space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+          {editingId ? 'Edit purchase' : 'Record purchase'}
+        </p>
+
+        <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+          Description (optional)
+          <input
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+            placeholder="e.g. 11 × 1/4oz Gold Sovereigns"
+            className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </label>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+            No. of coins
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={form.coinCount}
+              onChange={(e) => handleCoinFieldChange('coinCount', e.target.value)}
+              placeholder="11"
+              className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          </label>
+          <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+            Coin weight (oz)
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={form.coinWeightOz}
+              onChange={(e) => handleCoinFieldChange('coinWeightOz', e.target.value)}
+              placeholder="0.25"
+              className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          </label>
+          <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+            Total weight (oz)
+            <input
+              required
+              type="number"
+              min="0"
+              step="any"
+              value={form.weightOz}
+              onChange={(e) => setForm((f) => ({ ...f, weightOz: e.target.value }))}
+              placeholder="2.75"
+              className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          </label>
+          <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+            Total paid (AUD)
+            <input
+              required
+              type="number"
+              min="0"
+              step="any"
+              value={form.paidAud}
+              onChange={(e) => setForm((f) => ({ ...f, paidAud: e.target.value }))}
+              placeholder="0.00"
+              className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+            Purchase date
+            <input
+              required
+              type="date"
+              value={form.purchasedAt}
+              onChange={(e) => setForm((f) => ({ ...f, purchasedAt: e.target.value }))}
+              className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+            />
+          </label>
+          <label className="block text-xs col-span-2" style={{ color: 'var(--color-muted)' }}>
+            Spot price at purchase (AUD/oz)
+            <div className="flex gap-2 mt-1">
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={form.spotAudPerOz}
+                onChange={(e) => setForm((f) => ({ ...f, spotAudPerOz: e.target.value }))}
+                placeholder="auto-fetched"
+                className="flex-1 px-2 py-1.5 rounded border text-sm"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+              />
+              <button
+                type="button"
+                onClick={handleFetchSpotForForm}
+                disabled={fetchingSpot}
+                className="text-xs px-3 py-1.5 rounded border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40 whitespace-nowrap"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                {fetchingSpot ? '…' : 'Use current'}
+              </button>
+            </div>
+          </label>
+        </div>
+
+        <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+          Notes (optional)
+          <input
+            value={form.notes}
+            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            placeholder="Mint, dealer, etc."
+            className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </label>
+
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="text-sm px-4 py-2 rounded-md hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}
+          >
+            {saving ? 'Saving…' : editingId ? 'Update' : 'Save purchase'}
+          </button>
+          {editingId && (
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="text-sm px-4 py-2 rounded-md border hover:opacity-70 transition-opacity duration-200"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      </form>
+
+      {/* Purchase list */}
+      {!purchases.length ? (
+        <p className="text-sm text-center py-8" style={{ color: 'var(--color-muted)' }}>
+          No purchases recorded yet.
+        </p>
+      ) : (
+        <div className="overflow-x-auto border rounded-lg" style={{ borderColor: 'var(--color-border)' }}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr style={{ background: 'var(--color-surface)' }}>
+                {['Date', 'Description', 'Weight', 'Paid', 'Spot at buy', 'Premium', 'Current value', 'P&L', ''].map((h) => (
+                  <th key={h} className="text-left px-3 py-2 text-xs font-medium whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {purchases.map((p) => {
+                const oz = Number(p.weightOz);
+                const paid = Number(p.paidAud);
+                const spotAtBuy = p.spotAudPerOz != null ? Number(p.spotAudPerOz) : null;
+                const spotValAtBuy = spotAtBuy != null ? spotAtBuy * oz : null;
+                const premiumPct = spotValAtBuy != null && spotValAtBuy > 0
+                  ? ((paid - spotValAtBuy) / spotValAtBuy) * 100 : null;
+                const currentVal = spot?.audPerOz != null ? oz * spot.audPerOz : null;
+                const rowPnl = currentVal != null ? currentVal - paid : null;
+                const rowPnlPct = paid > 0 && rowPnl != null ? (rowPnl / paid) * 100 : null;
+                return (
+                  <tr key={p.id} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>
+                      {String(p.purchasedAt).slice(0, 10)}
+                    </td>
+                    <td className="px-3 py-2" style={{ color: 'var(--color-text)' }}>
+                      {p.description || <span style={{ color: 'var(--color-muted)' }}>XAU</span>}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
+                      {oz.toFixed(4)} oz
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
+                      {fmtAud(paid)}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>
+                      {spotAtBuy != null ? fmtAud(spotAtBuy) : '—'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
+                      {premiumPct != null ? `+${premiumPct.toFixed(2)}%` : '—'}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--color-text)' }}>
+                      {fmtAud(currentVal)}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap font-medium" style={{ color: rowPnl != null ? (rowPnl >= 0 ? '#22c55e' : '#ef4444') : 'var(--color-muted)' }}>
+                      {rowPnlPct != null ? fmtPct(rowPnlPct) : '—'}
+                      {rowPnl != null && <span className="ml-1 text-xs opacity-70">({fmtAud(rowPnl)})</span>}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {deleteId === p.id ? (
+                        <span className="flex gap-2 text-xs">
+                          <button type="button" onClick={() => confirmDelete(p.id)} style={{ color: '#ef4444' }}>Yes</button>
+                          <button type="button" onClick={() => setDeleteId(null)} style={{ color: 'var(--color-muted)' }}>No</button>
+                        </span>
+                      ) : (
+                        <span className="flex gap-3 text-xs">
+                          <button type="button" onClick={() => startEdit(p)} className="hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Edit</button>
+                          <button type="button" onClick={() => setDeleteId(p.id)} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Delete</button>
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

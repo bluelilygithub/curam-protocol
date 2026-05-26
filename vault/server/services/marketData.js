@@ -80,6 +80,26 @@ async function getAlphaVantageQuote(symbol) {
   return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'AUD', source: 'alphavantage' };
 }
 
+// ─── Gold spot (Finnhub OANDA:XAU_USD → AUD) ────────────────────────────────
+
+async function getGoldSpotUsd() {
+  const token = getFinnhubToken();
+  if (!token) throw new Error('FINNHUB_API_KEY not set — cannot fetch gold spot');
+  const url = `https://finnhub.io/api/v1/quote?symbol=OANDA:XAU_USD&token=${encodeURIComponent(token)}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`Finnhub HTTP ${res.status} fetching gold spot`);
+  const data = await res.json();
+  if (data.error) throw new Error(`Finnhub gold: ${data.error}`);
+  const current = Number(data.c);
+  if (!current || current <= 0) throw new Error('Finnhub: no gold spot price returned');
+  return current;
+}
+
+async function getGoldSpotAud() {
+  const [usdPerOz, usdAud] = await Promise.all([getGoldSpotUsd(), getUsdToAudRate()]);
+  return { audPerOz: usdPerOz * usdAud, usdPerOz, usdAud };
+}
+
 // ─── public API ─────────────────────────────────────────────────────────────
 
 async function getQuote(symbol, exchange) {
@@ -126,6 +146,7 @@ function priceToAud(price, currency, usdAud) {
 module.exports = {
   getQuote,
   getUsdToAudRate,
+  getGoldSpotAud,
   priceToAud,
   normalizeExchange,
   isUsExchange,
