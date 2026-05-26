@@ -36,6 +36,10 @@ if (!fs.existsSync(uploadDir)) {
 // Require db early — triggers connection + schema creation automatically
 const { pool } = require('./db');
 
+// Env var diagnostics — visible in Railway logs on every boot
+const _mpKey = String(process.env.METAL_PRICE_API_KEY || '').trim();
+console.log('[env] METAL_PRICE_API_KEY:', _mpKey ? `set (${_mpKey.length} chars, starts ${_mpKey.slice(0, 4)}…)` : 'NOT SET');
+
 async function seedInitialUser() {
   const { SEED_EMAIL, SEED_PASSWORD } = process.env;
   if (!SEED_EMAIL || !SEED_PASSWORD) return;
