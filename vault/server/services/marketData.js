@@ -80,36 +80,32 @@ async function getAlphaVantageQuote(symbol) {
   return { symbol: sym, current, previousClose: previousClose > 0 ? previousClose : current, currency: 'AUD', source: 'alphavantage' };
 }
 
-// ─── Gold spot (Alpha Vantage XAU/USD → AUD) ────────────────────────────────
-// Uses existing ALPHA_VANTAGE_API_KEY via CURRENCY_EXCHANGE_RATE endpoint.
-// 60-min server cache protects the 25 req/day free-tier quota.
+// ─── Gold spot (Coinbase public API — no key, no rate limit) ─────────────────
+// GET https://api.coinbase.com/v2/exchange-rates?currency=XAU
+// Returns XAU spot in all currencies including AUD. No auth required.
 
-let goldSpotCache = { usdPerOz: null, at: 0 };
-const GOLD_CACHE_MS = 60 * 60 * 1000;
-
-async function getGoldSpotUsd() {
-  if (goldSpotCache.usdPerOz && Date.now() - goldSpotCache.at < GOLD_CACHE_MS) {
-    return goldSpotCache.usdPerOz;
-  }
-  const key = getAlphaVantageKey();
-  if (!key) throw new Error('ALPHA_VANTAGE_API_KEY not set — cannot fetch gold spot');
-  const url = `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey=${encodeURIComponent(key)}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`Alpha Vantage HTTP ${res.status} fetching gold spot`);
-  const data = await res.json();
-  if (data.Note || data.Information) throw new Error(`Alpha Vantage rate limit: ${data.Note || data.Information}`);
-  const rate = Number(data?.['Realtime Currency Exchange Rate']?.['5. Exchange Rate']);
-  if (!rate || rate <= 0) {
-    console.warn('[marketData] Alpha Vantage XAU/USD raw:', JSON.stringify(data).slice(0, 300));
-    throw new Error('Alpha Vantage: no XAU/USD rate returned');
-  }
-  goldSpotCache = { usdPerOz: rate, at: Date.now() };
-  return rate;
-}
+let goldSpotCache = { data: null, at: 0 };
+const GOLD_CACHE_MS = 15 * 60 * 1000; // 15 min
 
 async function getGoldSpotAud() {
-  const [usdPerOz, usdAud] = await Promise.all([getGoldSpotUsd(), getUsdToAudRate()]);
-  return { audPerOz: usdPerOz * usdAud, usdPerOz, usdAud };
+  if (goldSpotCache.data && Date.now() - goldSpotCache.at < GOLD_CACHE_MS) {
+    return goldSpotCache.data;
+  }
+  const res = await fetch('https://api.coinbase.com/v2/exchange-rates?currency=XAU', {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Coinbase API HTTP ${res.status} fetching gold spot`);
+  const body = await res.json();
+  const rates = body?.data?.rates;
+  const audPerOz = Number(rates?.AUD);
+  const usdPerOz = Number(rates?.USD);
+  if (!audPerOz || audPerOz <= 0) {
+    console.warn('[marketData] Coinbase XAU raw:', JSON.stringify(body).slice(0, 300));
+    throw new Error('Coinbase: no XAU/AUD rate returned');
+  }
+  const result = { audPerOz, usdPerOz, usdAud: usdPerOz > 0 ? audPerOz / usdPerOz : null };
+  goldSpotCache = { data: result, at: Date.now() };
+  return result;
 }
 
 // ─── public API ─────────────────────────────────────────────────────────────
