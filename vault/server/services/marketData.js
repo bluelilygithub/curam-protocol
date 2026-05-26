@@ -83,16 +83,15 @@ async function getAlphaVantageQuote(symbol) {
 // ─── Gold spot (Finnhub OANDA:XAU_USD → AUD) ────────────────────────────────
 
 async function getGoldSpotUsd() {
-  const token = getFinnhubToken();
-  if (!token) throw new Error('FINNHUB_API_KEY not set — cannot fetch gold spot');
-  const url = `https://finnhub.io/api/v1/quote?symbol=OANDA:XAU_USD&token=${encodeURIComponent(token)}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (!res.ok) throw new Error(`Finnhub HTTP ${res.status} fetching gold spot`);
+  const res = await fetch('https://api.metals.live/v1/spot/gold', {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`metals.live HTTP ${res.status} fetching gold spot`);
   const data = await res.json();
-  if (data.error) throw new Error(`Finnhub gold: ${data.error}`);
-  const current = Number(data.c);
-  if (!current || current <= 0) throw new Error('Finnhub: no gold spot price returned');
-  return current;
+  // Returns an array: [{ gold: 3200.50 }]
+  const price = Number(Array.isArray(data) ? data[0]?.gold : data?.gold);
+  if (!price || price <= 0) throw new Error('metals.live: no gold price returned');
+  return price;
 }
 
 async function getGoldSpotAud() {
