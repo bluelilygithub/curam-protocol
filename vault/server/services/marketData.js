@@ -92,20 +92,24 @@ async function getGoldSpotAud() {
   }
   const key = String(process.env.METAL_PRICE_API_KEY || '').trim();
   if (!key) throw new Error('METAL_PRICE_API_KEY not set');
+  // base=USD, currencies=XAU → rates.XAU = troy oz per USD → invert for USD/oz
+  // Then convert USD→AUD via Frankfurter to avoid ambiguity in XAU-based rates
   const res = await fetch(
-    `https://api.metalpriceapi.com/v1/latest?api_key=${encodeURIComponent(key)}&base=XAU&currencies=AUD,USD`,
+    `https://api.metalpriceapi.com/v1/latest?api_key=${encodeURIComponent(key)}&base=USD&currencies=XAU`,
     { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
   );
   if (!res.ok) throw new Error(`metalpriceapi HTTP ${res.status}`);
   const body = await res.json();
   if (!body.success) throw new Error(`metalpriceapi: ${body.error?.message || 'request failed'}`);
-  const audPerOz = Number(body.rates?.AUD);
-  const usdPerOz = Number(body.rates?.USD);
-  if (!audPerOz || audPerOz <= 0) {
+  const xauPerUsd = Number(body.rates?.XAU);
+  if (!xauPerUsd || xauPerUsd <= 0) {
     console.warn('[marketData] metalpriceapi raw:', JSON.stringify(body).slice(0, 300));
-    throw new Error('metalpriceapi: no XAU/AUD rate returned');
+    throw new Error('metalpriceapi: no XAU/USD rate returned');
   }
-  const result = { audPerOz, usdPerOz, usdAud: usdPerOz > 0 ? audPerOz / usdPerOz : null };
+  const usdPerOz = 1 / xauPerUsd;
+  const usdAud = await getUsdToAudRate();
+  const audPerOz = usdPerOz * usdAud;
+  const result = { audPerOz, usdPerOz, usdAud };
   goldSpotCache = { data: result, at: Date.now() };
   return result;
 }
