@@ -966,7 +966,7 @@ function MetalsTab() {
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           Gold spot (XAU/AUD){spot?.audPerOz ? `: ${fmtAud(spot.audPerOz)}/oz` : ''}
           {spot?.usdPerOz ? ` · USD ${spot.usdPerOz.toFixed(2)}/oz` : ''}
-          {spot?.fetchedAt ? ` · as at ${new Date(spot.fetchedAt).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
+          {spot?.priceAt ? ` · EOD price as of ${new Date(spot.priceAt).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}` : ''}
         </p>
         <button
           type="button"

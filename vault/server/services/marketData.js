@@ -84,7 +84,7 @@ async function getAlphaVantageQuote(symbol) {
 // 12-hour cache = max ~62 calls/month. METAL_PRICE_API_KEY env var required.
 
 let goldSpotCache = { data: null, at: 0 };
-const GOLD_CACHE_MS = 12 * 60 * 60 * 1000; // 12 hours
+const GOLD_CACHE_MS = 24 * 60 * 60 * 1000; // 24 hours — free tier is EOD prices
 
 async function getGoldSpotAud({ force = false } = {}) {
   if (!force && goldSpotCache.data && Date.now() - goldSpotCache.at < GOLD_CACHE_MS) {
@@ -109,7 +109,9 @@ async function getGoldSpotAud({ force = false } = {}) {
   const usdPerOz = 1 / xauPerUsd;
   const usdAud = await getUsdToAudRate();
   const audPerOz = usdPerOz * usdAud;
-  const result = { audPerOz, usdPerOz, usdAud, fetchedAt: new Date().toISOString() };
+  // body.timestamp = Unix seconds when the rate was last set by the provider (EOD on free tier)
+  const priceAt = body.timestamp ? new Date(body.timestamp * 1000).toISOString() : new Date().toISOString();
+  const result = { audPerOz, usdPerOz, usdAud, priceAt };
   goldSpotCache = { data: result, at: Date.now() };
   return result;
 }
