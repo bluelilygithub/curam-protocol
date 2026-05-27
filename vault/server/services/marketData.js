@@ -109,7 +109,7 @@ async function getGoldSpotAud() {
   const usdPerOz = 1 / xauPerUsd;
   const usdAud = await getUsdToAudRate();
   const audPerOz = usdPerOz * usdAud;
-  const result = { audPerOz, usdPerOz, usdAud };
+  const result = { audPerOz, usdPerOz, usdAud, fetchedAt: new Date().toISOString() };
   goldSpotCache = { data: result, at: Date.now() };
   return result;
 }

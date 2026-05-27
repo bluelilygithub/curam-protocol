@@ -966,6 +966,7 @@ function MetalsTab() {
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           Gold spot (XAU/AUD){spot?.audPerOz ? `: ${fmtAud(spot.audPerOz)}/oz` : ''}
           {spot?.usdPerOz ? ` · USD ${spot.usdPerOz.toFixed(2)}/oz` : ''}
+          {spot?.fetchedAt ? ` · as at ${new Date(spot.fetchedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
         </p>
         <button
           type="button"
