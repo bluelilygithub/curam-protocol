@@ -8,7 +8,7 @@ const marketData = require('../services/marketData');
 // GET /api/metals/spot
 router.get('/spot', async (req, res) => {
   try {
-    const spot = await marketData.getGoldSpotAud();
+    const spot = await marketData.getGoldSpotAud({ force: req.query.force === 'true' });
     res.json(spot);
   } catch (err) {
     res.status(500).json({ error: err.message });

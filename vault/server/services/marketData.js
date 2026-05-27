@@ -86,8 +86,8 @@ async function getAlphaVantageQuote(symbol) {
 let goldSpotCache = { data: null, at: 0 };
 const GOLD_CACHE_MS = 12 * 60 * 60 * 1000; // 12 hours
 
-async function getGoldSpotAud() {
-  if (goldSpotCache.data && Date.now() - goldSpotCache.at < GOLD_CACHE_MS) {
+async function getGoldSpotAud({ force = false } = {}) {
+  if (!force && goldSpotCache.data && Date.now() - goldSpotCache.at < GOLD_CACHE_MS) {
     return goldSpotCache.data;
   }
   const key = String(process.env.METAL_PRICE_API_KEY || '').trim();

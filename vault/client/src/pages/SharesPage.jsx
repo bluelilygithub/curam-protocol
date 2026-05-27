@@ -777,11 +777,11 @@ function MetalsTab() {
     }
   }, [addToast]);
 
-  const fetchSpot = React.useCallback(async () => {
+  const fetchSpot = React.useCallback(async ({ force = false } = {}) => {
     setFetchingSpot(true);
     setSpotError(null);
     try {
-      const res = await api.get('/api/metals/spot');
+      const res = await api.get(`/api/metals/spot${force ? '?force=true' : ''}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch spot');
       setSpot(data);
@@ -800,7 +800,7 @@ function MetalsTab() {
   }, [loadPurchases, fetchSpot]);
 
   const handleFetchSpotForForm = async () => {
-    const audPerOz = await fetchSpot();
+    const audPerOz = await fetchSpot({ force: true });
     if (audPerOz != null) {
       setForm((f) => ({ ...f, spotAudPerOz: audPerOz.toFixed(2) }));
     }
@@ -966,11 +966,11 @@ function MetalsTab() {
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
           Gold spot (XAU/AUD){spot?.audPerOz ? `: ${fmtAud(spot.audPerOz)}/oz` : ''}
           {spot?.usdPerOz ? ` · USD ${spot.usdPerOz.toFixed(2)}/oz` : ''}
-          {spot?.fetchedAt ? ` · as at ${new Date(spot.fetchedAt).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+          {spot?.fetchedAt ? ` · as at ${new Date(spot.fetchedAt).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}
         </p>
         <button
           type="button"
-          onClick={fetchSpot}
+          onClick={() => fetchSpot({ force: true })}
           disabled={fetchingSpot}
           className="text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity duration-200 disabled:opacity-40"
           style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
