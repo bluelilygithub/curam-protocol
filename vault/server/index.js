@@ -22,7 +22,13 @@ const PORT = process.env.PORT || 3001;
 app.set('trust proxy', 1);
 
 app.use(helmet({
-  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'frame-src': ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
+      'child-src': ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
+    },
+  } : false,
 }));
 
 app.use(express.json({ limit: '10mb' }));
@@ -101,6 +107,7 @@ app.use('/api/news-digest', requireFeature('newsDigest'), require('./routes/news
 app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNews'));
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
+app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

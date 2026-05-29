@@ -13,6 +13,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   newsDigest: true,
   student: true,
   shares: true,
+  youtube: true,
 };
 
 export const FEATURE_ACCESS_OPTIONS = [
@@ -30,5 +31,6 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'newsDigest', label: 'News Digest' },
   { key: 'student', label: 'Student (Quiz & Cards)' },
   { key: 'shares', label: 'Shares' },
+  { key: 'youtube', label: 'YouTube' },
 ];
 

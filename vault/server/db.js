@@ -1206,6 +1206,40 @@ async function initSchema() {
     )
   `);
 
+  // ── YouTube ───────────────────────────────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_search_history (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      query         TEXT NOT NULL,
+      filters       JSONB NOT NULL DEFAULT '{}',
+      "resultCount" INTEGER NOT NULL DEFAULT 0,
+      "createdAt"   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_youtube_search_history_user
+      ON youtube_search_history ("userId", "createdAt" DESC)
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS youtube_favourites (
+      id            SERIAL PRIMARY KEY,
+      "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      "videoId"     TEXT NOT NULL,
+      title         TEXT NOT NULL,
+      channel       TEXT,
+      thumbnail     TEXT,
+      duration      TEXT,
+      "viewCount"   TEXT,
+      "publishedAt" TIMESTAMPTZ,
+      "createdAt"   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_youtube_favourites_user_video
+      ON youtube_favourites ("userId", "videoId")
+  `);
+
   console.log('[db] Schema ready');
 }
 

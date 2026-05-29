@@ -561,6 +561,17 @@ function Layout() {
             </Link>
           )}
 
+          {canUseFeature('youtube') && (
+            <Link
+              to="/youtube"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity text-sm"
+              style={{ color: location.pathname === '/youtube' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="YouTube"
+            >
+              📺
+            </Link>
+          )}
+
           {canUseFeature('usage') && (
             <Link
               to="/usage"
