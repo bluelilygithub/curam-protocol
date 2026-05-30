@@ -25,6 +25,7 @@ app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'img-src':   ["'self'", 'data:', 'blob:', 'https://i.ytimg.com'],
       'frame-src': ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
       'child-src': ["'self'", 'https://www.youtube-nocookie.com', 'https://www.youtube.com'],
     },
