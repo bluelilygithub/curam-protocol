@@ -3,6 +3,7 @@
 /**
  * YouTube search, history, and favourites.
  *
+ * POST /parse-query          — NLP parse of natural language input → structured search params
  * GET  /search              — search YouTube videos (saves to history)
  * GET  /history             — user's recent searches (last 30)
  * DELETE /history/:id       — remove a history entry
@@ -17,6 +18,8 @@ const https   = require('https');
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const { getModelsForUser } = require('../services/modelResolver');
+const { callModel } = require('../services/callModel');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -53,6 +56,56 @@ function ytGet(path) {
     req.end();
   });
 }
+
+// ── NLP parse ────────────────────────────────────────────────────────────────
+
+const PARSE_SYSTEM = `You parse natural language YouTube search requests into structured search parameters.
+
+Return ONLY valid JSON — no markdown, no explanation:
+{
+  "q":           "the clean search query string",
+  "order":       "relevance" | "date" | "viewCount" | "rating",
+  "duration":    "any" | "short" | "medium" | "long",
+  "publishedKey": "" | "hour" | "today" | "week" | "month" | "year",
+  "reasoning":   "one short sentence explaining what you extracted"
+}
+
+Rules:
+- "short" = under 4 minutes, "medium" = 4-20 min, "long" = over 20 min
+- publishedKey: "" = any time, "hour" = past hour, "today" = past day, "week" = past 7 days, "month" = past 30 days, "year" = past year
+- Strip duration/time/sort intent words from q — q should be just the topic
+- If no filter intent, return defaults: order=relevance, duration=any, publishedKey=""
+- q must not be empty`;
+
+router.post('/parse-query', async (req, res) => {
+  const { input } = req.body;
+  if (!input?.trim()) return res.status(400).json({ error: 'input required' });
+
+  try {
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const raw = await callModel(lightModel, input.trim(), {
+      maxTokens: 200,
+      system: PARSE_SYSTEM,
+    });
+
+    const jsonStr = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+    const parsed = JSON.parse(jsonStr);
+
+    const valid = {
+      q:            String(parsed.q || input.trim()),
+      order:        ['relevance', 'date', 'viewCount', 'rating'].includes(parsed.order) ? parsed.order : 'relevance',
+      duration:     ['any', 'short', 'medium', 'long'].includes(parsed.duration) ? parsed.duration : 'any',
+      publishedKey: ['', 'hour', 'today', 'week', 'month', 'year'].includes(parsed.publishedKey) ? parsed.publishedKey : '',
+      reasoning:    String(parsed.reasoning || ''),
+    };
+
+    res.json(valid);
+  } catch (err) {
+    console.error('[youtube/parse-query]', err.message);
+    // Graceful fallback — return raw input as q, no filters
+    res.json({ q: input.trim(), order: 'relevance', duration: 'any', publishedKey: '', reasoning: '' });
+  }
+});
 
 // ── Search ────────────────────────────────────────────────────────────────────
 

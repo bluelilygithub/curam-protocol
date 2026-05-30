@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import useAuthStore from '../store/authStore';
 import useToastStore from '../store/toastStore';
 import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
+import { useVoice } from '../hooks/useVoice';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,6 +38,12 @@ function timeAgo(iso) {
   return `${Math.floor(d / 365)}y ago`;
 }
 
+function looksLikeNLP(text) {
+  if (text.trim().split(/\s+/).length > 3) return true;
+  const keywords = /\b(short|medium|long|video|tutorial|today|week|month|year|hour|recent|latest|popular|views|rating|new|old)\b/i;
+  return keywords.test(text);
+}
+
 // ── Filter options ────────────────────────────────────────────────────────────
 
 const PUBLISHED_AFTER_OPTIONS = [
@@ -56,11 +63,15 @@ const DURATION_OPTIONS = [
 ];
 
 const ORDER_OPTIONS = [
-  { label: 'Relevance',   value: 'relevance' },
-  { label: 'Date',        value: 'date'      },
-  { label: 'View count',  value: 'viewCount' },
-  { label: 'Rating',      value: 'rating'    },
+  { label: 'Relevance',  value: 'relevance' },
+  { label: 'Date',       value: 'date'      },
+  { label: 'View count', value: 'viewCount' },
+  { label: 'Rating',     value: 'rating'    },
 ];
+
+const PUBLISHED_LABEL = Object.fromEntries(PUBLISHED_AFTER_OPTIONS.map(o => [o.key, o.label]));
+const DURATION_LABEL  = Object.fromEntries(DURATION_OPTIONS.map(o => [o.value, o.label]));
+const ORDER_LABEL     = Object.fromEntries(ORDER_OPTIONS.map(o => [o.value, o.label]));
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -85,12 +96,12 @@ const btnBase = {
   fontSize: '0.875rem',
 };
 
-// ── Video Card (search results grid) ─────────────────────────────────────────
+// ── Video Card ────────────────────────────────────────────────────────────────
 
 function VideoCard({ video, isFav, onPlay, onToggleFav }) {
-  const dur  = parseDuration(video.duration);
+  const dur   = parseDuration(video.duration);
   const views = fmtViews(video.viewCount);
-  const ago  = timeAgo(video.publishedAt);
+  const ago   = timeAgo(video.publishedAt);
 
   return (
     <div
@@ -107,47 +118,27 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
       onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.12)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; }}
     >
-      {/* Thumbnail */}
       <div
         style={{ position: 'relative', aspectRatio: '16/9', background: '#000', overflow: 'hidden' }}
         onClick={() => onPlay(video)}
       >
         {video.thumbnail && (
-          <img
-            src={video.thumbnail}
-            alt={video.title}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
+          <img src={video.thumbnail} alt={video.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         )}
-        <div style={{
-          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.2)',
-        }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.9)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="#ef4444"><polygon points="5,3 19,12 5,21"/></svg>
           </div>
         </div>
         {dur && (
-          <span style={{
-            position: 'absolute', bottom: 6, right: 6,
-            background: 'rgba(0,0,0,0.8)', color: '#fff',
-            fontSize: '0.7rem', fontWeight: 600, padding: '1px 5px', borderRadius: 4,
-          }}>
+          <span style={{ position: 'absolute', bottom: 6, right: 6, background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '0.7rem', fontWeight: 600, padding: '1px 5px', borderRadius: 4 }}>
             {dur}
           </span>
         )}
       </div>
 
-      {/* Info */}
       <div style={{ padding: '0.6rem 0.75rem', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <p
-          style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3, margin: 0 }}
-          onClick={() => onPlay(video)}
-          title={video.title}
-        >
+        <p style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3, margin: 0 }} onClick={() => onPlay(video)} title={video.title}>
           {video.title.length > 80 ? video.title.slice(0, 80) + '…' : video.title}
         </p>
         <p style={{ fontSize: '0.7rem', color: 'var(--color-muted)', margin: 0 }}>{video.channel}</p>
@@ -173,8 +164,8 @@ function VideoCard({ video, isFav, onPlay, onToggleFav }) {
 // ── Favourites row ────────────────────────────────────────────────────────────
 
 function FavCard({ fav, onPlay, onRemove }) {
-  const dur   = parseDuration(fav.duration);
-  const views = fmtViews(fav.viewCount || fav.view_count);
+  const dur     = parseDuration(fav.duration);
+  const views   = fmtViews(fav.viewCount || fav.view_count);
   const videoId = fav.videoId || fav.video_id;
 
   const playable = {
@@ -188,15 +179,8 @@ function FavCard({ fav, onPlay, onRemove }) {
   };
 
   return (
-    <div style={{
-      display: 'flex', gap: '0.75rem', padding: '0.6rem',
-      borderRadius: '0.5rem', border: '1px solid var(--color-border)',
-      background: 'var(--color-surface)', alignItems: 'center',
-    }}>
-      <div
-        onClick={() => onPlay(playable)}
-        style={{ position: 'relative', flexShrink: 0, width: 112, height: 63, borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'pointer' }}
-      >
+    <div style={{ display: 'flex', gap: '0.75rem', padding: '0.6rem', borderRadius: '0.5rem', border: '1px solid var(--color-border)', background: 'var(--color-surface)', alignItems: 'center' }}>
+      <div onClick={() => onPlay(playable)} style={{ position: 'relative', flexShrink: 0, width: 112, height: 63, borderRadius: 6, overflow: 'hidden', background: '#000', cursor: 'pointer' }}>
         {fav.thumbnail && <img src={fav.thumbnail} alt={fav.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
         {dur && (
           <span style={{ position: 'absolute', bottom: 3, right: 4, background: 'rgba(0,0,0,0.8)', color: '#fff', fontSize: '0.65rem', fontWeight: 600, padding: '1px 4px', borderRadius: 3 }}>
@@ -205,21 +189,14 @@ function FavCard({ fav, onPlay, onRemove }) {
         )}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p
-          onClick={() => onPlay(playable)}
-          style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', margin: 0, cursor: 'pointer' }}
-        >
+        <p onClick={() => onPlay(playable)} style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--color-text)', margin: 0, cursor: 'pointer' }}>
           {fav.title.length > 90 ? fav.title.slice(0, 90) + '…' : fav.title}
         </p>
         <p style={{ fontSize: '0.7rem', color: 'var(--color-muted)', margin: '2px 0 0' }}>
           {fav.channel}{views ? ` · ${views}` : ''}
         </p>
       </div>
-      <button
-        onClick={() => onRemove(videoId)}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: 'var(--color-muted)', flexShrink: 0 }}
-        title="Remove"
-      >
+      <button onClick={() => onRemove(videoId)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: 'var(--color-muted)', flexShrink: 0 }} title="Remove">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
@@ -236,26 +213,8 @@ function VideoModal({ video, isFav, onClose, onToggleFav }) {
   }, [onClose]);
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.85)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '1rem',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: 'var(--color-surface)',
-          borderRadius: '1rem',
-          overflow: 'hidden',
-          width: '100%',
-          maxWidth: 900,
-          boxShadow: '0 25px 60px rgba(0,0,0,0.5)',
-        }}
-      >
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-surface)', borderRadius: '1rem', overflow: 'hidden', width: '100%', maxWidth: 900, boxShadow: '0 25px 60px rgba(0,0,0,0.5)' }}>
         <div style={{ position: 'relative', aspectRatio: '16/9', background: '#000' }}>
           <iframe
             src={`https://www.youtube.com/embed/${video.id}?rel=0`}
@@ -266,7 +225,6 @@ function VideoModal({ video, isFav, onClose, onToggleFav }) {
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
           />
         </div>
-
         <div style={{ padding: '0.75rem 1rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-text)', margin: 0, lineHeight: 1.3 }}>{video.title}</p>
@@ -275,41 +233,13 @@ function VideoModal({ video, isFav, onClose, onToggleFav }) {
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-            <button
-              onClick={() => onToggleFav(video)}
-              title={isFav ? 'Remove from favourites' : 'Save to favourites'}
-              style={{
-                ...btnBase,
-                padding: '0.35rem 0.75rem', fontSize: '0.75rem',
-                background: isFav ? '#fee2e2' : 'var(--color-bg)',
-                border: `1px solid ${isFav ? '#fca5a5' : 'var(--color-border)'}`,
-                color: isFav ? '#ef4444' : 'var(--color-muted)',
-              }}
-            >
+            <button onClick={() => onToggleFav(video)} title={isFav ? 'Remove from favourites' : 'Save to favourites'} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: isFav ? '#fee2e2' : 'var(--color-bg)', border: `1px solid ${isFav ? '#fca5a5' : 'var(--color-border)'}`, color: isFav ? '#ef4444' : 'var(--color-muted)' }}>
               {isFav ? '♥ Saved' : '♡ Save'}
             </button>
-            <a
-              href={`https://www.youtube.com/watch?v=${video.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                ...btnBase,
-                padding: '0.35rem 0.75rem', fontSize: '0.75rem',
-                background: '#ef4444', color: '#fff', textDecoration: 'none',
-                display: 'inline-flex', alignItems: 'center',
-              }}
-            >
+            <a href={`https://www.youtube.com/watch?v=${video.id}`} target="_blank" rel="noopener noreferrer" style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: '#ef4444', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
               Open on YouTube
             </a>
-            <button
-              onClick={onClose}
-              style={{
-                ...btnBase,
-                padding: '0.35rem 0.75rem', fontSize: '0.75rem',
-                background: 'var(--color-bg)', border: '1px solid var(--color-border)',
-                color: 'var(--color-muted)',
-              }}
-            >
+            <button onClick={onClose} style={{ ...btnBase, padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'var(--color-bg)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}>
               Close
             </button>
           </div>
@@ -328,12 +258,17 @@ export default function YoutubePage() {
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const canUse = isAdmin || featureAccess.youtube !== false;
 
+  const { isSTTAvailable, isListening, transcript, interimText, startListening, stopListening } = useVoice();
+  const prevTranscriptRef = useRef('');
+
   const [tab, setTab] = useState('search');
 
   const [query,        setQuery]        = useState('');
   const [order,        setOrder]        = useState('relevance');
   const [duration,     setDuration]     = useState('any');
   const [publishedKey, setPublishedKey] = useState('');
+  const [parsing,      setParsing]      = useState(false);
+  const [interpreted,  setInterpreted]  = useState(null); // { q, order, duration, publishedKey, reasoning }
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState('');
   const [videos,       setVideos]       = useState([]);
@@ -355,6 +290,15 @@ export default function YoutubePage() {
     loadHistory();
   }, []);
 
+  // When mic finishes, populate query and auto-search
+  useEffect(() => {
+    if (transcript && transcript !== prevTranscriptRef.current) {
+      prevTranscriptRef.current = transcript;
+      setQuery(transcript);
+      runSearch(transcript);
+    }
+  }, [transcript]);
+
   function loadFavs() {
     api.get('/api/youtube/favourites').then(r => r.json()).then((rows) => {
       setFavs(Array.isArray(rows) ? rows : []);
@@ -368,18 +312,48 @@ export default function YoutubePage() {
     }).catch(() => {});
   }
 
-  async function handleSearch(e) {
-    e?.preventDefault();
-    if (!query.trim()) return;
+  async function runSearch(rawInput, overrideParams = null) {
+    const input = (rawInput ?? query).trim();
+    if (!input) return;
+
     setLoading(true);
     setError('');
     setVideos([]);
+    setInterpreted(null);
+
+    let searchQ        = input;
+    let searchOrder    = order;
+    let searchDuration = duration;
+    let searchPubKey   = publishedKey;
+
+    if (overrideParams) {
+      searchQ        = overrideParams.q;
+      searchOrder    = overrideParams.order;
+      searchDuration = overrideParams.duration;
+      searchPubKey   = overrideParams.publishedKey;
+    } else if (looksLikeNLP(input)) {
+      setParsing(true);
+      try {
+        const parsed = await api.post('/api/youtube/parse-query', { input }).then(r => r.json());
+        if (!parsed.error) {
+          searchQ        = parsed.q;
+          searchOrder    = parsed.order;
+          searchDuration = parsed.duration;
+          searchPubKey   = parsed.publishedKey;
+          setQuery(parsed.q);
+          setOrder(parsed.order);
+          setDuration(parsed.duration);
+          setPublishedKey(parsed.publishedKey);
+          setInterpreted(parsed);
+        }
+      } catch { /* fall through with raw input */ }
+      setParsing(false);
+    }
 
     try {
-      const pub = PUBLISHED_AFTER_OPTIONS.find((o) => o.key === publishedKey);
+      const pub = PUBLISHED_AFTER_OPTIONS.find((o) => o.key === searchPubKey);
       const publishedAfter = pub?.getIso ? pub.getIso() : '';
-
-      const params = new URLSearchParams({ q: query.trim(), order, duration });
+      const params = new URLSearchParams({ q: searchQ, order: searchOrder, duration: searchDuration });
       if (publishedAfter) params.set('publishedAfter', publishedAfter);
 
       const data = await api.get(`/api/youtube/search?${params}`).then(r => r.json());
@@ -393,6 +367,11 @@ export default function YoutubePage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSearch(e) {
+    e?.preventDefault();
+    await runSearch(query);
   }
 
   const toggleFav = useCallback(async (video) => {
@@ -435,23 +414,9 @@ export default function YoutubePage() {
     setOrder(ord);
     setDuration(dur);
     setPublishedKey('');
-    setTab('search');
-    setLoading(true);
-    setError('');
-    setVideos([]);
+    setInterpreted(null);
 
-    try {
-      const params = new URLSearchParams({ q, order: ord, duration: dur });
-      const data = await api.get(`/api/youtube/search?${params}`).then(r => r.json());
-      if (data.error) throw new Error(data.error);
-      setVideos(data.videos ?? []);
-      setTotalResults(data.totalResults ?? 0);
-      loadHistory();
-    } catch (err) {
-      setError(err.message || 'Search failed');
-    } finally {
-      setLoading(false);
-    }
+    await runSearch(q, { q, order: ord, duration: dur, publishedKey: '' });
   }
 
   const tabBtn = (key, label, badge) => (
@@ -467,12 +432,7 @@ export default function YoutubePage() {
     >
       {label}
       {badge > 0 && (
-        <span style={{
-          marginLeft: 5, fontSize: '0.65rem', fontWeight: 700,
-          background: tab === key ? 'rgba(255,255,255,0.3)' : 'var(--color-border)',
-          padding: '0px 5px', borderRadius: 10,
-          color: tab === key ? '#fff' : 'var(--color-muted)',
-        }}>
+        <span style={{ marginLeft: 5, fontSize: '0.65rem', fontWeight: 700, background: tab === key ? 'rgba(255,255,255,0.3)' : 'var(--color-border)', padding: '0px 5px', borderRadius: 10, color: tab === key ? '#fff' : 'var(--color-muted)' }}>
           {badge}
         </span>
       )}
@@ -480,6 +440,8 @@ export default function YoutubePage() {
   );
 
   if (!canUse) return <Navigate to="/" replace />;
+
+  const isBusy = loading || parsing;
 
   return (
     <div className="p-5 max-w-7xl mx-auto" style={{ fontFamily: 'inherit' }}>
@@ -498,24 +460,43 @@ export default function YoutubePage() {
       </div>
 
       {/* Search form */}
-      <form onSubmit={handleSearch} style={{ marginBottom: '1.25rem' }}>
+      <form onSubmit={handleSearch} style={{ marginBottom: '1rem' }}>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <div style={{ flex: '1 1 240px', minWidth: 200 }}>
+          <div style={{ flex: '1 1 240px', minWidth: 200, position: 'relative' }}>
             <input
               type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search topic…"
+              value={isListening ? (interimText || query) : query}
+              onChange={(e) => { setQuery(e.target.value); setInterpreted(null); }}
+              placeholder={isListening ? 'Listening…' : 'Search or describe what you want…'}
               style={{
-                width: '100%', padding: '0.5rem 0.75rem',
-                borderRadius: '0.5rem', border: '2px solid var(--color-border)',
+                width: '100%', padding: '0.5rem 2.5rem 0.5rem 0.75rem',
+                borderRadius: '0.5rem', border: `2px solid ${isListening ? '#ef4444' : 'var(--color-border)'}`,
                 background: 'var(--color-bg)', color: 'var(--color-text)',
                 fontSize: '0.875rem', fontFamily: 'inherit', outline: 'none',
                 boxSizing: 'border-box',
               }}
-              onFocus={(e)  => (e.target.style.borderColor = 'var(--color-primary)')}
-              onBlur={(e)   => (e.target.style.borderColor = 'var(--color-border)')}
+              onFocus={(e)  => { if (!isListening) e.target.style.borderColor = 'var(--color-primary)'; }}
+              onBlur={(e)   => { if (!isListening) e.target.style.borderColor = 'var(--color-border)'; }}
+              readOnly={isListening}
             />
+            {/* Mic button inside input */}
+            {isSTTAvailable && (
+              <button
+                type="button"
+                onClick={() => isListening ? stopListening() : startListening()}
+                title={isListening ? 'Stop recording' : 'Search by voice'}
+                style={{
+                  position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                  color: isListening ? '#ef4444' : 'var(--color-muted)',
+                  animation: isListening ? 'pulse 1s infinite' : 'none',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={isListening ? '#ef4444' : 'currentColor'}>
+                  <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm-7 9a7 7 0 0 0 14 0h2a9 9 0 0 1-8 8.94V23h-2v-2.06A9 9 0 0 1 3 12h2z"/>
+                </svg>
+              </button>
+            )}
           </div>
 
           <select value={order}        onChange={(e) => setOrder(e.target.value)}        style={selectStyle}>
@@ -532,19 +513,39 @@ export default function YoutubePage() {
 
           <button
             type="submit"
-            disabled={loading || !query.trim()}
+            disabled={isBusy || !query.trim()}
             style={{
               ...btnBase,
               padding: '0.5rem 1.25rem',
-              background: loading || !query.trim() ? 'var(--color-border)' : '#ef4444',
+              background: isBusy || !query.trim() ? 'var(--color-border)' : '#ef4444',
               color: '#fff',
-              cursor: loading || !query.trim() ? 'not-allowed' : 'pointer',
+              cursor: isBusy || !query.trim() ? 'not-allowed' : 'pointer',
             }}
           >
-            {loading ? 'Searching…' : 'Search'}
+            {parsing ? 'Thinking…' : loading ? 'Searching…' : 'Search'}
           </button>
         </div>
       </form>
+
+      {/* Interpreted strip */}
+      {interpreted && !isBusy && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: '0.5rem',
+          marginBottom: '1rem', padding: '0.5rem 0.75rem',
+          borderRadius: '0.5rem', background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)', fontSize: '0.75rem',
+        }}>
+          <span style={{ color: 'var(--color-primary)', fontWeight: 700, flexShrink: 0 }}>✦ AI</span>
+          <span style={{ color: 'var(--color-muted)' }}>
+            Searched for <strong style={{ color: 'var(--color-text)' }}>"{interpreted.q}"</strong>
+            {interpreted.order !== 'relevance' && <> · sorted by <strong style={{ color: 'var(--color-text)' }}>{ORDER_LABEL[interpreted.order]}</strong></>}
+            {interpreted.duration !== 'any' && <> · <strong style={{ color: 'var(--color-text)' }}>{DURATION_LABEL[interpreted.duration]}</strong></>}
+            {interpreted.publishedKey && <> · <strong style={{ color: 'var(--color-text)' }}>{PUBLISHED_LABEL[interpreted.publishedKey]}</strong></>}
+            {interpreted.reasoning && <> — <em>{interpreted.reasoning}</em></>}
+          </span>
+          <button onClick={() => setInterpreted(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-muted)', marginLeft: 'auto', flexShrink: 0 }}>✕</button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1rem' }}>
@@ -563,35 +564,29 @@ export default function YoutubePage() {
       {/* ── Search Results ─────────────────────────────────────────────────── */}
       {tab === 'search' && (
         <div>
-          {videos.length === 0 && !loading && (
-            <div style={{
-              textAlign: 'center', padding: '4rem 2rem',
-              background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-              borderRadius: '1rem',
-            }}>
+          {isBusy && (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--color-muted)', fontSize: '0.9rem' }}>
+              {parsing ? 'Understanding your request…' : 'Searching YouTube…'}
+            </div>
+          )}
+          {!isBusy && videos.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
               <svg width="48" height="48" viewBox="0 0 24 24" fill="#d1d5db" style={{ margin: '0 auto 1rem' }}>
                 <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
               </svg>
               <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>
-                Enter a topic above to search YouTube videos.
+                Enter a topic above or describe what you want to find.
               </p>
             </div>
           )}
-
-          {videos.length > 0 && (
+          {!isBusy && videos.length > 0 && (
             <>
               <p style={{ fontSize: '0.75rem', color: 'var(--color-muted)', marginBottom: '0.75rem' }}>
                 Showing {videos.length} of ~{totalResults.toLocaleString()} results
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
                 {videos.map((v) => (
-                  <VideoCard
-                    key={v.id}
-                    video={v}
-                    isFav={favSet.has(v.id)}
-                    onPlay={setActiveVideo}
-                    onToggleFav={toggleFav}
-                  />
+                  <VideoCard key={v.id} video={v} isFav={favSet.has(v.id)} onPlay={setActiveVideo} onToggleFav={toggleFav} />
                 ))}
               </div>
             </>
@@ -603,14 +598,8 @@ export default function YoutubePage() {
       {tab === 'favourites' && (
         <div>
           {favs.length === 0 ? (
-            <div style={{
-              textAlign: 'center', padding: '4rem 2rem',
-              background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-              borderRadius: '1rem',
-            }}>
-              <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>
-                No saved videos yet. Click the heart icon on any video to save it.
-              </p>
+            <div style={{ textAlign: 'center', padding: '4rem 2rem', background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem' }}>
+              <p style={{ color: 'var(--color-muted)', fontSize: '0.9rem' }}>No saved videos yet. Click the heart icon on any video to save it.</p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -633,25 +622,15 @@ export default function YoutubePage() {
 
       {/* ── History ────────────────────────────────────────────────────────── */}
       {tab === 'history' && (
-        <div style={{
-          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-          borderRadius: '1rem', overflow: 'hidden',
-        }}>
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '1rem', overflow: 'hidden' }}>
           {history.length === 0 ? (
-            <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-muted)', fontSize: '0.875rem' }}>
-              No search history yet.
-            </p>
+            <p style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-muted)', fontSize: '0.875rem' }}>No search history yet.</p>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ background: 'var(--color-bg)' }}>
                   {['Query', 'Filters', 'Results', 'When', ''].map((h) => (
-                    <th key={h} style={{
-                      padding: '0.6rem 0.9rem', textAlign: 'left',
-                      fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase',
-                      letterSpacing: '0.06em', color: 'var(--color-muted)',
-                      borderBottom: '1px solid var(--color-border)',
-                    }}>{h}</th>
+                    <th key={h} style={{ padding: '0.6rem 0.9rem', textAlign: 'left', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-muted)', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -665,41 +644,13 @@ export default function YoutubePage() {
                   ].filter(Boolean);
                   return (
                     <tr key={row.id} style={{ borderTop: '1px solid var(--color-border)' }}>
-                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-text)', fontWeight: 600 }}>
-                        {row.query}
-                      </td>
-                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)' }}>
-                        {filterParts.length ? filterParts.join(', ') : '—'}
-                      </td>
-                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)' }}>
-                        {row.resultCount ?? row.result_count}
-                      </td>
-                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>
-                        {timeAgo(row.createdAt || row.created_at)}
-                      </td>
+                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-text)', fontWeight: 600 }}>{row.query}</td>
+                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)' }}>{filterParts.length ? filterParts.join(', ') : '—'}</td>
+                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)' }}>{row.resultCount ?? row.result_count}</td>
+                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{timeAgo(row.createdAt || row.created_at)}</td>
                       <td style={{ padding: '0.6rem 0.9rem', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <button
-                          onClick={() => replaySearch(row)}
-                          style={{
-                            fontSize: '0.7rem', fontWeight: 600, padding: '2px 8px',
-                            borderRadius: 5, border: '1px solid var(--color-primary)',
-                            background: 'none', color: 'var(--color-primary)', cursor: 'pointer',
-                            marginRight: 6, fontFamily: 'inherit',
-                          }}
-                        >
-                          Re-run
-                        </button>
-                        <button
-                          onClick={() => deleteHistory(row.id)}
-                          style={{
-                            fontSize: '0.7rem', padding: '2px 6px',
-                            borderRadius: 5, border: '1px solid var(--color-border)',
-                            background: 'none', color: 'var(--color-muted)', cursor: 'pointer',
-                            fontFamily: 'inherit',
-                          }}
-                        >
-                          ×
-                        </button>
+                        <button onClick={() => replaySearch(row)} style={{ fontSize: '0.7rem', fontWeight: 600, padding: '2px 8px', borderRadius: 5, border: '1px solid var(--color-primary)', background: 'none', color: 'var(--color-primary)', cursor: 'pointer', marginRight: 6, fontFamily: 'inherit' }}>Re-run</button>
+                        <button onClick={() => deleteHistory(row.id)} style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: 5, border: '1px solid var(--color-border)', background: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontFamily: 'inherit' }}>×</button>
                       </td>
                     </tr>
                   );
@@ -719,6 +670,13 @@ export default function YoutubePage() {
           onToggleFav={toggleFav}
         />
       )}
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
   );
 }
