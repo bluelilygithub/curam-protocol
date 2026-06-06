@@ -480,7 +480,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   try {
     const { standard } = await getModelsForUser(req.user?.id);
     const lines = emails.map((e, i) =>
-      `[${i + 1}] ID: ${e.id}\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
+      `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
     ).join('\n\n');
 
     const message = await anthropic.messages.create({
@@ -498,24 +498,27 @@ Categories (pick one per email):
 
 ${lines}
 
-Return format — JSON array only, no markdown, no explanation:
-[{"id":"<id>","category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`,
+Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
+[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`,
       }],
     });
 
     const text = message.content[0].text.trim();
-    const match = text.match(/\[[\s\S]*\]/);
+    // Strip markdown code fences if present
+    const stripped = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+    const match = stripped.match(/\[[\s\S]*\]/);
     if (match) classifications = JSON.parse(match[0]);
   } catch (err) {
     console.error('[gmail/inbox/classify] Claude error:', err.message);
     classificationFailed = true;
   }
 
-  const map = new Map(classifications.map(c => [c.id, c]));
-  const enriched = emails.map(e => ({
+  // Map by 1-based index (avoids Gmail ID truncation/reformatting by Claude)
+  const byIndex = new Map(classifications.map(c => [c.index, c]));
+  const enriched = emails.map((e, i) => ({
     ...e,
-    category: map.get(e.id)?.category || 'fyi',
-    one_line_summary: map.get(e.id)?.one_line_summary || e.snippet.slice(0, 80),
+    category: byIndex.get(i + 1)?.category || 'fyi',
+    one_line_summary: byIndex.get(i + 1)?.one_line_summary || e.snippet.slice(0, 80),
   }));
 
   res.json({ emails: enriched, classificationFailed });
