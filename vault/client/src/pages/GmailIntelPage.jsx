@@ -170,6 +170,9 @@ export default function GmailIntelPage() {
         <button
           onClick={async () => {
             try {
+              // Disconnect first so the callback does a fresh INSERT,
+              // avoiding the fallback to any previously-encrypted refresh token.
+              await api.post('/api/gmail/disconnect');
               const res = await api.get('/api/gmail/auth?returnTo=/gmail-intel');
               const data = await res.json();
               if (data.authUrl) window.location.href = data.authUrl;
