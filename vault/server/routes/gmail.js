@@ -9,6 +9,7 @@ const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { translateToGmailQuery, GMAIL_LIMITS } = require('../services/gmailNLP');
 const { getModelsForUser } = require('../services/modelResolver');
+const { callModel } = require('../services/callModel');
 const { encrypt, decrypt } = require('../utils/encryption');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -483,12 +484,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
       `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
     ).join('\n\n');
 
-    const message = await anthropic.messages.create({
-      model: standard,
-      max_tokens: 4096,
-      messages: [{
-        role: 'user',
-        content: `Classify these ${emails.length} inbox emails for a professional. Return ONLY a JSON array.
+    const prompt = `Classify these ${emails.length} inbox emails for a professional. Return ONLY a JSON array.
 
 Categories (pick one per email):
 - urgent: requires action soon, time-sensitive
@@ -499,12 +495,9 @@ Categories (pick one per email):
 ${lines}
 
 Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
-[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`,
-      }],
-    });
+[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`;
 
-    const text = message.content[0].text.trim();
-    // Strip markdown code fences if present
+    const text = await callModel(standard, prompt, { maxTokens: 4096 });
     const stripped = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
     const match = stripped.match(/\[[\s\S]*\]/);
     if (match) classifications = JSON.parse(match[0]);
