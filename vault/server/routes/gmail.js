@@ -553,14 +553,14 @@ function formatEmailAge(ms) {
   return `${Math.floor(hours / 24)}d`;
 }
 
-async function fetchInboxEmails(userId) {
+async function fetchInboxEmails(userId, maxResults = 100) {
   const oauth2Client = await getAuthClient(userId);
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
   // threads.list deduplicates conversations (one entry per thread, not per message)
   const listRes = await gmail.users.threads.list({
     userId: 'me',
-    maxResults: 100,
+    maxResults,
     labelIds: ['INBOX'],
   });
   const threadList = listRes.data.threads || [];
@@ -604,9 +604,15 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
     return res.json({ ...cached.result, cachedAt: cached.ts });
   }
 
+  // Read user's email count preference
+  const { rows: countRows } = await pool.query(
+    'SELECT value FROM settings WHERE "userId"=$1 AND key=$2', [userId, 'gmail_intel_email_count']
+  ).catch(() => ({ rows: [] }));
+  const maxResults = Math.min(parseInt(countRows[0]?.value || '100', 10), 100);
+
   let emails;
   try {
-    emails = await fetchInboxEmails(userId);
+    emails = await fetchInboxEmails(userId, maxResults);
   } catch (err) {
     console.error('[gmail/inbox/classify] fetch error:', err.message);
     if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {

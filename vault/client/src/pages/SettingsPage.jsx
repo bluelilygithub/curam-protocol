@@ -91,6 +91,10 @@ function SettingsPage() {
   const [missionLastReviewed, setMissionLastReviewed] = useState(null);
   const [missionSnoozedUntil, setMissionSnoozedUntil] = useState(null);
 
+  // Inbox Intel settings
+  const [gmailIntelRefreshInterval, setGmailIntelRefreshInterval] = useState('10');
+  const [gmailIntelEmailCount, setGmailIntelEmailCount]           = useState('100');
+
   const [mobileTiles, setMobileTiles] = useState(() => DEFAULT_TILES.map(t => ({ ...t })));
   const [mobileNavItems, setMobileNavItems] = useState(() => DEFAULT_NAV_ITEMS.map(i => ({ ...i })));
   const [mobileSaved, setMobileSaved] = useState(false);
@@ -172,6 +176,8 @@ function SettingsPage() {
       if (data.mission_review_frequency)   setMissionReviewFreq(data.mission_review_frequency);
       setMissionLastReviewed(data.mission_last_reviewed_at || null);
       setMissionSnoozedUntil(data.mission_review_snoozed_until || null);
+      if (data.gmail_intel_refresh_interval) setGmailIntelRefreshInterval(data.gmail_intel_refresh_interval);
+      if (data.gmail_intel_email_count)      setGmailIntelEmailCount(data.gmail_intel_email_count);
       if (data.mobile_dashboard_tiles) {
         try { setMobileTiles(mergeWithDefaults(JSON.parse(data.mobile_dashboard_tiles), DEFAULT_TILES)); } catch {}
       }
@@ -1394,6 +1400,52 @@ function SettingsPage() {
           <div data-tour="gmail-connect"><GmailConnect /></div>
           <div data-tour="calendar-connect"><CalendarConnect /></div>
           <DriveConnect />
+        </div>
+
+        {/* Inbox Intel settings */}
+        <h3 className="text-sm font-semibold mt-8 mb-3" style={{ color: 'var(--color-text)' }}>Inbox Intel</h3>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Auto-refresh interval</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>How often Inbox Intel polls for new emails</p>
+            </div>
+            <select
+              value={gmailIntelRefreshInterval}
+              onChange={e => {
+                setGmailIntelRefreshInterval(e.target.value);
+                api.post('/api/settings', { key: 'gmail_intel_refresh_interval', value: e.target.value }).catch(() => {});
+              }}
+              className="ml-4 px-3 py-1.5 rounded-lg border text-sm outline-none"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+            >
+              <option value="off">Off</option>
+              <option value="5">Every 5 min</option>
+              <option value="10">Every 10 min</option>
+              <option value="15">Every 15 min</option>
+              <option value="30">Every 30 min</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Emails to fetch</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Number of inbox threads fetched and classified</p>
+            </div>
+            <select
+              value={gmailIntelEmailCount}
+              onChange={e => {
+                setGmailIntelEmailCount(e.target.value);
+                api.post('/api/settings', { key: 'gmail_intel_email_count', value: e.target.value }).catch(() => {});
+              }}
+              className="ml-4 px-3 py-1.5 rounded-lg border text-sm outline-none"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+            >
+              <option value="25">25 emails</option>
+              <option value="50">50 emails</option>
+              <option value="100">100 emails</option>
+            </select>
+          </div>
         </div>
       </section>
       )}

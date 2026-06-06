@@ -13,7 +13,7 @@ const CATEGORY_BG = {
   fyi: 'rgba(59,130,246,0.1)',
   noise: 'rgba(148,163,184,0.1)',
 };
-const REFRESH_MS = 5 * 60 * 1000;
+const DEFAULT_REFRESH_MS = 10 * 60 * 1000;
 
 function cleanSender(from) {
   const nameMatch = from.match(/^"?([^"<]+)"?\s*</);
@@ -311,6 +311,7 @@ export default function GmailIntelPage() {
   const [cachedAt, setCachedAt] = useState(null);
   const [countdown, setCountdown] = useState(REFRESH_MS / 1000);
   const [selectedEmail, setSelectedEmail] = useState(null);
+  const [refreshMs, setRefreshMs] = useState(DEFAULT_REFRESH_MS);
   const navigate = useNavigate();
   const addToast = useToastStore((s) => s.addToast);
   const getIcon = useIcon();
@@ -345,20 +346,23 @@ export default function GmailIntelPage() {
     }
   }, [addToast]);
 
-  const scheduleRefresh = useCallback(() => {
+  const scheduleRefresh = useCallback((ms) => {
+    const interval = ms ?? refreshMs;
     clearTimeout(refreshTimer.current);
     clearInterval(countdownInterval.current);
-    let secs = REFRESH_MS / 1000;
+    if (interval === 0) { setCountdown(0); return; } // "off"
+    let secs = interval / 1000;
     setCountdown(secs);
     countdownInterval.current = setInterval(() => {
       secs -= 1;
       setCountdown(Math.max(0, secs));
       if (secs <= 0) clearInterval(countdownInterval.current);
     }, 1000);
+    // Always force-refresh on timer tick so new emails are fetched
     refreshTimer.current = setTimeout(() => {
-      load(true).then(scheduleRefresh);
-    }, REFRESH_MS);
-  }, [load]);
+      load(true, true).then(() => scheduleRefresh(interval));
+    }, interval);
+  }, [load, refreshMs]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -370,7 +374,16 @@ export default function GmailIntelPage() {
   }, []);
 
   useEffect(() => {
-    load().then(scheduleRefresh);
+    // Load refresh interval from user settings then start
+    api.get('/api/settings')
+      .then(r => r.json())
+      .then(data => {
+        const raw = data.gmail_intel_refresh_interval;
+        const ms = raw === 'off' ? 0 : (parseInt(raw || '10', 10) * 60 * 1000);
+        setRefreshMs(ms);
+        load().then(() => scheduleRefresh(ms));
+      })
+      .catch(() => load().then(() => scheduleRefresh()));
     return () => {
       clearTimeout(refreshTimer.current);
       clearInterval(countdownInterval.current);
@@ -479,9 +492,11 @@ export default function GmailIntelPage() {
               <h1 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Inbox Intel</h1>
               {lastRefresh && (
                 <div className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                  {cachedAt
-                    ? `Cached · refreshes in ${mins}:${String(secs).padStart(2, '0')}`
-                    : `Updated ${lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · next in ${mins}:${String(secs).padStart(2, '0')}`}
+                  {refreshMs === 0
+                    ? `Updated ${lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · auto-refresh off`
+                    : cachedAt
+                      ? `Cached · refreshes in ${mins}:${String(secs).padStart(2, '0')}`
+                      : `Updated ${lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · next in ${mins}:${String(secs).padStart(2, '0')}`}
                 </div>
               )}
             </div>
