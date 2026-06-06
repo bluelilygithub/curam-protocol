@@ -72,6 +72,53 @@ router.get('/status', async (req, res) => {
   }
 });
 
+// GET /api/gmail/diagnose — full auth diagnostic (safe, no token values exposed)
+router.get('/diagnose', async (req, res) => {
+  const result = {
+    env: {
+      GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
+      GOOGLE_CLIENT_SECRET: !!process.env.GOOGLE_CLIENT_SECRET,
+      GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || null,
+      ENCRYPTION_KEY: !!process.env.ENCRYPTION_KEY,
+    },
+    token: null,
+    apiTest: null,
+  };
+
+  try {
+    const { rows } = await pool.query('SELECT * FROM gmail_tokens WHERE "userId"=$1', [req.user.id]);
+    if (!rows[0]) {
+      result.token = { exists: false };
+    } else {
+      const row = rows[0];
+      const rawAccess  = row.accessToken  || '';
+      const rawRefresh = row.refreshToken || '';
+      result.token = {
+        exists: true,
+        email: row.email,
+        expiryDate: row.expiryDate,
+        scope: row.scope,
+        accessTokenFormat:  rawAccess.split(':').length  === 3 ? 'encrypted' : 'plaintext',
+        refreshTokenFormat: rawRefresh.split(':').length === 3 ? 'encrypted' : 'plaintext',
+        encryptionKeyPresent: !!process.env.ENCRYPTION_KEY,
+      };
+
+      // Try a live API call
+      try {
+        const gmail = await getGmailClient(req.user.id);
+        const profile = await gmail.users.getProfile({ userId: 'me' });
+        result.apiTest = { ok: true, email: profile.data.emailAddress, messagesTotal: profile.data.messagesTotal };
+      } catch (apiErr) {
+        result.apiTest = { ok: false, error: apiErr.message, code: apiErr.code };
+      }
+    }
+  } catch (dbErr) {
+    result.token = { exists: false, dbError: dbErr.message };
+  }
+
+  res.json(result);
+});
+
 // GET /api/gmail/auth — generate OAuth URL
 router.get('/auth', gmailAuthLimiter, async (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {

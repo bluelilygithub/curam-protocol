@@ -61,6 +61,8 @@ export default function GmailIntelPage() {
   const [classificationFailed, setClassificationFailed] = useState(false);
   const [notConnected, setNotConnected] = useState(false);
   const [tokenExpired, setTokenExpired] = useState(false);
+  const [diag, setDiag] = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -156,28 +158,40 @@ export default function GmailIntelPage() {
   const mins = Math.floor(countdown / 60);
   const secs = Math.floor(countdown % 60);
 
-  if (tokenExpired) {
+  if (tokenExpired || notConnected) {
+    const runDiag = async () => {
+      setDiagLoading(true);
+      try {
+        const res = await api.get('/api/gmail/diagnose');
+        const data = await res.json();
+        setDiag(data);
+      } catch (err) {
+        setDiag({ error: err.message });
+      } finally {
+        setDiagLoading(false);
+      }
+    };
+
     return (
-      <div
-        className="flex flex-col items-center justify-center gap-4"
-        style={{ height: '100%', color: 'var(--color-muted)' }}
-      >
-        <div style={{ fontSize: 40 }}>🔑</div>
-        <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Gmail session expired</div>
-        <div className="text-sm text-center max-w-xs">
-          Your Gmail token is no longer valid. Reconnect to continue.
+      <div className="flex flex-col items-center justify-center gap-4 px-6" style={{ height: '100%', color: 'var(--color-muted)' }}>
+        <div style={{ fontSize: 40 }}>{tokenExpired ? '🔑' : '📬'}</div>
+        <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+          {tokenExpired ? 'Gmail session expired' : 'Gmail not connected'}
         </div>
+        <div className="text-sm text-center max-w-xs">
+          {tokenExpired ? 'Token invalid. Disconnect then reconnect to refresh.' : 'Connect your Gmail account to use Inbox Intel.'}
+        </div>
+
         <button
           onClick={async () => {
             try {
-              // Disconnect first so the callback does a fresh INSERT,
-              // avoiding the fallback to any previously-encrypted refresh token.
               await api.post('/api/gmail/disconnect');
               const res = await api.get('/api/gmail/auth?returnTo=/gmail-intel');
               const data = await res.json();
               if (data.authUrl) window.location.href = data.authUrl;
-            } catch {
-              addToast('Failed to start Gmail auth', 'error');
+              else addToast(data.error || 'No auth URL returned', 'error');
+            } catch (err) {
+              addToast('Failed to start Gmail auth: ' + err.message, 'error');
             }
           }}
           className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
@@ -185,31 +199,28 @@ export default function GmailIntelPage() {
         >
           Reconnect Gmail
         </button>
+
+        <button
+          onClick={runDiag}
+          disabled={diagLoading}
+          className="text-xs underline hover:opacity-60 transition-opacity"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          {diagLoading ? 'Running diagnostics…' : 'Run diagnostics'}
+        </button>
+
+        {diag && (
+          <div
+            className="w-full max-w-md rounded-xl border p-4 text-xs font-mono"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+          >
+            {JSON.stringify(diag, null, 2)}
+          </div>
+        )}
       </div>
     );
   }
 
-  if (notConnected) {
-    return (
-      <div
-        className="flex flex-col items-center justify-center gap-4"
-        style={{ height: '100%', color: 'var(--color-muted)' }}
-      >
-        <div style={{ fontSize: 40 }}>📬</div>
-        <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Gmail not connected</div>
-        <div className="text-sm text-center max-w-xs">
-          Connect your Gmail account in Settings to use Inbox Intel.
-        </div>
-        <button
-          onClick={() => navigate('/settings')}
-          className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
-          style={{ background: 'var(--color-primary)' }}
-        >
-          Go to Settings
-        </button>
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col overflow-hidden" style={{ height: '100%' }}>
