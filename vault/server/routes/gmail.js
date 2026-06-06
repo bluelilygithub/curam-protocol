@@ -278,8 +278,8 @@ router.post('/disconnect', async (req, res) => {
   }
 });
 
-// Build authenticated Gmail client for a user
-async function getGmailClient(userId) {
+// Build OAuth2 client for a user, sets credentials and registers token refresh persister
+async function getAuthClient(userId) {
   const { rows } = await pool.query('SELECT * FROM gmail_tokens WHERE "userId"=$1', [userId]);
   if (!rows[0]) throw new Error('Gmail not connected');
   const row = rows[0];
@@ -289,12 +289,10 @@ async function getGmailClient(userId) {
     access_token: decrypt(row.accessToken),
     refresh_token: decrypt(row.refreshToken),
     token_type: row.tokenType || 'Bearer',
-    // BIGINT comes back as string from pg — convert to number
     expiry_date: row.expiryDate ? Number(row.expiryDate) : undefined,
     scope: row.scope || undefined,
   });
 
-  // Persist refreshed access token (fire-and-forget — event listener can't be async)
   oauth2Client.on('tokens', (tokens) => {
     if (tokens.access_token) {
       pool.query(
@@ -304,7 +302,73 @@ async function getGmailClient(userId) {
     }
   });
 
+  return oauth2Client;
+}
+
+async function getGmailClient(userId) {
+  const oauth2Client = await getAuthClient(userId);
   return google.gmail({ version: 'v1', auth: oauth2Client });
+}
+
+// Parse multipart Gmail batch response — each part is an HTTP response with a JSON body
+function parseBatchResponse(responseText, contentType) {
+  const m = contentType.match(/boundary=([^\s;,]+)/i);
+  if (!m) return [];
+  const boundary = m[1].replace(/^["']|["']$/g, '');
+  const results = [];
+  for (const part of responseText.split(`--${boundary}`)) {
+    if (!part.includes('{')) continue;
+    const idx = part.lastIndexOf('\r\n\r\n');
+    if (idx === -1) continue;
+    const candidate = part.slice(idx + 4).trim();
+    if (!candidate.startsWith('{')) continue;
+    try { results.push(JSON.parse(candidate)); } catch {}
+  }
+  return results;
+}
+
+// Fetch message metadata in bulk — up to 100 messages per HTTP request via Gmail batch endpoint
+async function batchFetchMessages(accessToken, messageIds) {
+  const results = [];
+  for (let i = 0; i < messageIds.length; i += 100) {
+    const chunk = messageIds.slice(i, i + 100);
+    const boundary = `vaultbatch${Date.now()}${i}`;
+    const body = chunk.map(id =>
+      `--${boundary}\r\nContent-Type: application/http\r\n\r\nGET /gmail/v1/users/me/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date\r\n\r\n`
+    ).join('') + `--${boundary}--`;
+
+    const res = await fetch('https://www.googleapis.com/batch/gmail/v1', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': `multipart/mixed; boundary="${boundary}"`,
+      },
+      body,
+    });
+    results.push(...parseBatchResponse(await res.text(), res.headers.get('content-type') || ''));
+  }
+  return results;
+}
+
+// Extract attachment metadata from a message payload (does not download)
+function extractAttachments(payload) {
+  const attachments = [];
+  function walk(parts) {
+    if (!parts) return;
+    for (const part of parts) {
+      if (part.filename && part.body?.attachmentId) {
+        attachments.push({
+          filename: part.filename,
+          mimeType: part.mimeType || 'application/octet-stream',
+          size: part.body.size || 0,
+          attachmentId: part.body.attachmentId,
+        });
+      }
+      if (part.parts) walk(part.parts);
+    }
+  }
+  walk(payload?.parts);
+  return attachments;
 }
 
 // Decode base64url email body part
@@ -402,13 +466,35 @@ router.get('/thread/:threadId', gmailThreadLimiter, async (req, res) => {
         to: getHeader(headers, 'To'),
         subject: getHeader(headers, 'Subject'),
         date: getHeader(headers, 'Date'),
-        body: extractBody(msg.payload).substring(0, 3000),
+        body: extractBody(msg.payload).substring(0, 5000),
+        attachments: extractAttachments(msg.payload),
       };
     });
 
     res.json({ messages });
   } catch (err) {
     console.error('[gmail] Thread error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/gmail/attachment/:messageId/:attachmentId?filename=&mimeType=
+router.get('/attachment/:messageId/:attachmentId', gmailThreadLimiter, async (req, res) => {
+  try {
+    const gmail = await getGmailClient(req.user.id);
+    const att = await gmail.users.messages.attachments.get({
+      userId: 'me',
+      messageId: req.params.messageId,
+      id: req.params.attachmentId,
+    });
+    const buffer = Buffer.from(att.data.data, 'base64');
+    const filename = req.query.filename || 'attachment';
+    const mimeType = req.query.mimeType || 'application/octet-stream';
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.send(buffer);
+  } catch (err) {
+    console.error('[gmail/attachment]', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -421,6 +507,10 @@ const gmailInboxClassifyLimiter = rateLimit({
   message: { error: 'Too many classify requests, please try again later.' },
 });
 
+// In-memory classify cache — per user, 10 min TTL (single Railway instance)
+const classifyCache = new Map(); // userId -> { ts: number, result: object }
+const CLASSIFY_CACHE_MS = 10 * 60 * 1000;
+
 function formatEmailAge(ms) {
   if (ms <= 0) return 'just now';
   const mins = Math.floor(ms / 60000);
@@ -432,41 +522,58 @@ function formatEmailAge(ms) {
 }
 
 async function fetchInboxEmails(userId) {
-  const gmail = await getGmailClient(userId);
+  const oauth2Client = await getAuthClient(userId);
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
   const listRes = await gmail.users.messages.list({
     userId: 'me',
-    maxResults: 50,
+    maxResults: 100,
     labelIds: ['INBOX'],
   });
   const messages = listRes.data.messages || [];
-  return Promise.all(
-    messages.map(async (msg) => {
-      const detail = await gmail.users.messages.get({
-        userId: 'me',
-        id: msg.id,
-        format: 'metadata',
-        metadataHeaders: ['From', 'Subject', 'Date'],
-      });
-      const headers = detail.data.payload?.headers || [];
-      const internalDate = parseInt(detail.data.internalDate || '0');
+  if (!messages.length) return [];
+
+  // Single HTTP round-trip for all message metadata via Gmail batch endpoint
+  const { token: accessToken } = await oauth2Client.getAccessToken();
+  const details = await batchFetchMessages(accessToken, messages.map(m => m.id));
+
+  const detailMap = new Map(details.map(d => [d.id, d]));
+  const now = Date.now();
+
+  return messages
+    .map(msg => {
+      const detail = detailMap.get(msg.id);
+      if (!detail) return null;
+      const headers = detail.payload?.headers || [];
+      const internalDate = parseInt(detail.internalDate || '0');
       return {
-        id: msg.id,
+        id: detail.id,
+        threadId: detail.threadId,
         sender: getHeader(headers, 'From'),
         subject: getHeader(headers, 'Subject'),
-        snippet: (detail.data.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&'),
-        isUnread: (detail.data.labelIds || []).includes('UNREAD'),
+        snippet: (detail.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&'),
+        isUnread: (detail.labelIds || []).includes('UNREAD'),
         internalDate,
-        age: formatEmailAge(Date.now() - internalDate),
+        age: formatEmailAge(now - internalDate),
       };
     })
-  );
+    .filter(Boolean);
 }
 
-// GET /api/gmail/inbox/classify — fetch + Claude-classify last 50 inbox emails
+// GET /api/gmail/inbox/classify — fetch + classify inbox; cached 10 min, bust with ?refresh=1
 router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
+  const userId = req.user.id;
+  const forceRefresh = req.query.refresh === '1';
+
+  // Return cached result if fresh
+  const cached = classifyCache.get(userId);
+  if (!forceRefresh && cached && (Date.now() - cached.ts) < CLASSIFY_CACHE_MS) {
+    return res.json({ ...cached.result, cachedAt: cached.ts });
+  }
+
   let emails;
   try {
-    emails = await fetchInboxEmails(req.user.id);
+    emails = await fetchInboxEmails(userId);
   } catch (err) {
     console.error('[gmail/inbox/classify] fetch error:', err.message);
     if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {
@@ -479,7 +586,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   let classificationFailed = false;
 
   try {
-    const { standard } = await getModelsForUser(req.user?.id);
+    const { standard } = await getModelsForUser(userId);
     const lines = emails.map((e, i) =>
       `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
     ).join('\n\n');
@@ -502,11 +609,10 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
     const match = stripped.match(/\[[\s\S]*\]/);
     if (match) classifications = JSON.parse(match[0]);
   } catch (err) {
-    console.error('[gmail/inbox/classify] Claude error:', err.message);
+    console.error('[gmail/inbox/classify] model error:', err.message);
     classificationFailed = true;
   }
 
-  // Map by 1-based index (avoids Gmail ID truncation/reformatting by Claude)
   const byIndex = new Map(classifications.map(c => [c.index, c]));
   const enriched = emails.map((e, i) => ({
     ...e,
@@ -514,7 +620,9 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
     one_line_summary: byIndex.get(i + 1)?.one_line_summary || e.snippet.slice(0, 80),
   }));
 
-  res.json({ emails: enriched, classificationFailed });
+  const result = { emails: enriched, classificationFailed };
+  classifyCache.set(userId, { ts: Date.now(), result });
+  res.json({ ...result, cachedAt: null });
 });
 
 // GET /api/gmail/inbox — raw fetch of last 50 inbox emails (no AI)
