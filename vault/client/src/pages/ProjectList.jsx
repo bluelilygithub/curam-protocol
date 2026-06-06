@@ -585,6 +585,17 @@ function ProjectList() {
         <div className="flex-1 overflow-auto p-6">
           <div className="max-w-4xl mx-auto">
             <GoalsWidget enabled={canUseFeature('goals')} />
+
+            <button
+              onClick={() => navigate('/chat')}
+              className="w-full flex items-center gap-2.5 px-4 py-3 rounded-2xl border mb-6 transition-opacity hover:opacity-70"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+            >
+              {getIcon('message-square', { size: 15, style: { color: 'var(--color-primary)' } })}
+              <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>New Chat</span>
+              <span className="ml-auto text-xs" style={{ color: 'var(--color-muted)' }}>Start a conversation →</span>
+            </button>
+
             <TasksWidget />
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Projects</h1>

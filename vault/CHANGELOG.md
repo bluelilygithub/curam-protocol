@@ -4,6 +4,26 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-07
+
+**Feature:** Dashboard — New Chat button above My Tasks widget.
+
+A full-width "New Chat" card now appears on the home dashboard (`ProjectList.jsx`) between the Goals widget and the My Tasks widget. Navigates to `/chat` (General chat). Styled to match the GoalsWidget/TasksWidget card style with primary-colour icon and `hover:opacity-70`.
+
+**Modified files:** `client/src/pages/ProjectList.jsx`.
+
+---
+
+**Feature:** Sidebar — collapsed icon rail as default startup state.
+
+Desktop sidebar now starts **collapsed** (48px icon rail) on first load instead of fully expanded. When collapsed, the sidebar shows five icon-only navigation buttons: New Chat · Home · Tasks · Chat History · Settings, with active-route primary-colour highlight. User preference is persisted in `localStorage` key `vault:sidebarOpen`. The toggle button in the top bar and the `vault:toggle-sidebar` keyboard event both read/write this key. Mobile behaviour is unchanged (hidden slide-in overlay; no icon rail).
+
+`ProjectSidebar` accepts a new `collapsed` prop; `Layout` passes `collapsed={!sidebarOpen && !isMobile}`. The icon rail is an early-return before the full sidebar JSX, so all hooks still initialise (session/project data loads in the background, ready when the sidebar expands).
+
+**Modified files:** `client/src/components/Layout.jsx`, `client/src/components/ProjectSidebar.jsx`.
+
+---
+
 ## 2026-06-06
 
 **Feature:** Inbox Intel — AI-classified Gmail dashboard.

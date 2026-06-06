@@ -160,7 +160,7 @@ Three tiers, each injected into the system prompt in order:
 
 **Default palette (warm-sand):** bg `#F5F5F0` · surface `#EEEEE8` · border `#D8D8D0` · primary `#CC785C` · text `#1A1A1A` · muted `#888888`
 
-**Layout:** Full-viewport flex row: sidebar (240px fixed) + main (flex-1). Use `100dvh` with `100vh` fallback. Single responsive breakpoint: `sm` (640px).
+**Layout:** Full-viewport flex row: sidebar + main (flex-1). Use `100dvh` with `100vh` fallback. Single responsive breakpoint: `sm` (640px). Sidebar has three states: **expanded** (user's saved width, 180–520px, default 240px) · **collapsed** (48px icon rail, desktop default on first load) · **hidden** (mobile only, fixed overlay). Desktop state persisted in `localStorage` key `vault:sidebarOpen`. `ProjectSidebar` receives `collapsed` prop from `Layout`; collapsed renders icon-only rail, full renders the complete project/session tree.
 
 **Hover:** Always `hover:opacity-60` or `hover:opacity-70`. Never colour-shift hover. Works across all themes without per-theme tokens.
 

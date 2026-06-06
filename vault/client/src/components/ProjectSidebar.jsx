@@ -5,7 +5,7 @@ import { useIcon } from '../providers/IconProvider';
 import NewProjectModal from './NewProjectModal';
 import api from '../utils/apiClient';
 
-function ProjectSidebar({ onClose, showHabits = true }) {
+function ProjectSidebar({ onClose, showHabits = true, collapsed = false }) {
   const { projects, activeProjectId, fetchProjects, setActive, create, update, reorder, remove, archive } = useProjectStore();
   const [showModal, setShowModal] = useState(false);
   const [renamingId, setRenamingId] = useState(null);
@@ -207,6 +207,31 @@ function ProjectSidebar({ onClose, showHabits = true }) {
   };
 
   const isGeneralActive = location.pathname === '/chat';
+
+  if (collapsed) {
+    const railItems = [
+      { icon: 'message-circle', title: 'New Chat', action: () => { document.dispatchEvent(new CustomEvent('vault:new-chat')); navigate('/chat'); }, active: location.pathname === '/chat' },
+      { icon: 'home', title: 'Home', action: () => navigate('/'), active: location.pathname === '/' },
+      { icon: 'list-checks', title: 'Tasks', action: () => navigate('/tasks'), active: location.pathname === '/tasks' },
+      { icon: 'clock', title: 'Chat History', action: () => navigate('/history'), active: location.pathname === '/history' },
+      { icon: 'settings', title: 'Settings', action: () => navigate('/settings'), active: location.pathname === '/settings' },
+    ];
+    return (
+      <div className="flex flex-col h-full w-full items-center py-3 gap-1">
+        {railItems.map(item => (
+          <button
+            key={item.title}
+            onClick={item.action}
+            title={item.title}
+            className="w-9 h-9 flex items-center justify-center rounded-lg hover:opacity-60 transition-opacity"
+            style={{ color: item.active ? 'var(--color-primary)' : 'var(--color-muted)' }}
+          >
+            {getIcon(item.icon, { size: 16 })}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full w-full">

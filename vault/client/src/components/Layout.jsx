@@ -18,8 +18,12 @@ import { DEFAULT_FEATURE_ACCESS } from '../utils/featureAccess';
 function Layout() {
   const isMobileNow = () => typeof window !== 'undefined' && window.innerWidth < 640;
 
-  // Start closed on mobile, open on desktop
-  const [sidebarOpen, setSidebarOpen] = useState(!isMobileNow());
+  // Start closed on mobile; on desktop default collapsed, persist user preference
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (isMobileNow()) return false;
+    const saved = localStorage.getItem('vault:sidebarOpen');
+    return saved === null ? false : saved === 'true';
+  });
   const [isMobile, setIsMobile] = useState(isMobileNow());
 
   const { token, user, clearAuth } = useAuthStore();
@@ -248,7 +252,11 @@ function Layout() {
 
   // External toggle event (keyboard shortcut etc.)
   useEffect(() => {
-    const handler = () => setSidebarOpen(v => !v);
+    const handler = () => setSidebarOpen(v => {
+      const next = !v;
+      localStorage.setItem('vault:sidebarOpen', String(next));
+      return next;
+    });
     document.addEventListener('vault:toggle-sidebar', handler);
     return () => document.removeEventListener('vault:toggle-sidebar', handler);
   }, []);
@@ -285,7 +293,7 @@ function Layout() {
         overflow: 'hidden',
       }
     : {
-        width: sidebarOpen ? `${sidebarWidth}px` : '0px',
+        width: sidebarOpen ? `${sidebarWidth}px` : '48px',
         transition: isResizing.current ? 'none' : 'width 0.2s',
         borderRight: '1px solid var(--color-border)',
         background: 'var(--color-surface)',
@@ -315,6 +323,7 @@ function Layout() {
         <ProjectSidebar
           onClose={() => setSidebarOpen(false)}
           showHabits={canUseFeature('goals') && canUseFeature('habitsSidebar')}
+          collapsed={!sidebarOpen && !isMobile}
         />
         {/* Drag-to-resize handle — desktop only */}
         {!isMobile && sidebarOpen && (
@@ -356,7 +365,11 @@ function Layout() {
           style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
         >
           <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+            onClick={() => setSidebarOpen(v => {
+              const next = !v;
+              if (!isMobile) localStorage.setItem('vault:sidebarOpen', String(next));
+              return next;
+            })}
             className="w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity flex-shrink-0"
             style={{ color: 'var(--color-muted)' }}
             title="Toggle sidebar"
