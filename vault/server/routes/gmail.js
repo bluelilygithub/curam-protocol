@@ -147,8 +147,8 @@ router.get('/auth', gmailAuthLimiter, async (req, res) => {
   const returnTo = (rawReturn && /^\/[a-zA-Z0-9/_-]*$/.test(rawReturn)) ? rawReturn : '/settings';
   try {
     await pool.query(
-      'INSERT INTO settings (key, value) VALUES ($1, $2)',
-      [`gmail_oauth_state_${state}`, JSON.stringify({ userId: req.user.id, expiresAt, returnTo })]
+      'INSERT INTO settings ("userId", key, value) VALUES ($1, $2, $3)',
+      [req.user.id, `gmail_oauth_state_${state}`, JSON.stringify({ userId: req.user.id, expiresAt, returnTo })]
     );
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -203,10 +203,10 @@ router.get('/callback', async (req, res) => {
       : `${appUrl}/settings?gmailError=${encodeURIComponent(msg)}`;
 
     if (new Date(expiresAt) < new Date()) {
-      await pool.query('DELETE FROM settings WHERE key=$1', [stateKey]);
+      await pool.query('DELETE FROM settings WHERE "userId"=$1 AND key=$2', [userId, stateKey]);
       return res.redirect(errorRedirect('state_expired'));
     }
-    await pool.query('DELETE FROM settings WHERE key=$1', [stateKey]);
+    await pool.query('DELETE FROM settings WHERE "userId"=$1 AND key=$2', [userId, stateKey]);
 
     const oauth2Client = getOAuth2Client();
     const { tokens } = await oauth2Client.getToken(code);
