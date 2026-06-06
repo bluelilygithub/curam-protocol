@@ -22,6 +22,7 @@ const semanticMap = {
   'more-vertical': { lucide: 'MoreVertical' },
   upload: { lucide: 'Upload' },
   'file-text': { lucide: 'FileText' },
+  receipt: { lucide: 'Receipt' },
   'file-image': { lucide: 'FileImage' },
   send: { lucide: 'Send' },
   home: { lucide: 'Home' },

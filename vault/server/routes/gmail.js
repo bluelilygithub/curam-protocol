@@ -629,7 +629,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
     console.log(`[gmail/inbox/classify] using model: ${standard}, emails: ${emails.length}`);
 
     const lines = emails.map((e, i) =>
-      `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
+      `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}${e.hasAttachment ? '\nHasAttachment: yes' : ''}`
     ).join('\n\n');
 
     const prompt = `Classify these ${emails.length} inbox emails for a professional. Return ONLY a JSON array.
@@ -640,10 +640,12 @@ Categories (pick one per email):
 - fyi: informational, no action required
 - noise: newsletters, automated notifications, promotions
 
+isInvoice (boolean): true if the email is or contains an invoice, receipt, bill, tax invoice, statement, or payment request — infer from subject line, sender name, or preview. Common signals: "invoice", "INV-", "receipt", "tax invoice", "statement", "amount due", "payment due", "bill", sender is a billing system (Xero, QuickBooks, Stripe, PayPal, etc.).
+
 ${lines}
 
 Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
-[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`;
+[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>","isInvoice":false},...]`;
 
     const { text, inputTokens, outputTokens } = await callModel(standard, prompt, { maxTokens: 8192, returnUsage: true });
     console.log(`[gmail/inbox/classify] response length: ${text.length}, tokens in=${inputTokens} out=${outputTokens}, first 200: ${text.slice(0, 200)}`);
@@ -676,6 +678,7 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
     ...e,
     category: byIndex.get(i + 1)?.category || 'fyi',
     one_line_summary: byIndex.get(i + 1)?.one_line_summary || e.snippet.slice(0, 80),
+    isInvoice: byIndex.get(i + 1)?.isInvoice === true,
   }));
 
   const result = { emails: enriched, classificationFailed };

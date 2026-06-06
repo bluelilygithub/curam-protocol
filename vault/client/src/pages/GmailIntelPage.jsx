@@ -278,6 +278,11 @@ function EmailRow({ email, onClick, getIcon }) {
               {email.replyCount + 1}
             </span>
           )}
+          {email.isInvoice && (
+            <span className="flex-shrink-0" style={{ color: '#f59e0b' }} title="Invoice / bill detected">
+              {getIcon('receipt', { size: 12 })}
+            </span>
+          )}
           {email.hasAttachment && (
             <span className="flex-shrink-0" style={{ color: 'var(--color-muted)' }} title="Has attachment">
               {getIcon('file', { size: 11 })}
