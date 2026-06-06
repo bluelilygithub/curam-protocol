@@ -165,14 +165,22 @@ export default function GmailIntelPage() {
         <div style={{ fontSize: 40 }}>🔑</div>
         <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Gmail session expired</div>
         <div className="text-sm text-center max-w-xs">
-          Your Gmail token is no longer valid. Disconnect and reconnect Gmail in Settings.
+          Your Gmail token is no longer valid. Reconnect to continue.
         </div>
         <button
-          onClick={() => navigate('/settings')}
+          onClick={async () => {
+            try {
+              const res = await api.get('/api/gmail/auth');
+              const data = await res.json();
+              if (data.authUrl) window.location.href = data.authUrl;
+            } catch {
+              addToast('Failed to start Gmail auth', 'error');
+            }
+          }}
           className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
           style={{ background: 'var(--color-primary)' }}
         >
-          Go to Settings
+          Reconnect Gmail
         </button>
       </div>
     );
