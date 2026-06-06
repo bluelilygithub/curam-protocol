@@ -2,17 +2,17 @@
 
 /**
  * Provider-agnostic non-streaming model call.
- * Routes to Anthropic, DeepSeek, or Gemini based on model ID prefix —
- * same logic as the main chat streaming route, but for background tasks.
+ * Routes to Anthropic, DeepSeek, or Gemini based on model ID prefix.
  *
  * @param {string} modelId
  * @param {string} userPrompt
  * @param {object} [opts]
  * @param {number} [opts.maxTokens=500]
- * @param {string} [opts.system]       - system prompt (all providers)
- * @returns {Promise<string>}
+ * @param {string} [opts.system]
+ * @param {boolean} [opts.returnUsage=false] - if true, returns { text, inputTokens, outputTokens }
+ * @returns {Promise<string|{text:string,inputTokens:number,outputTokens:number}>}
  */
-async function callModel(modelId, userPrompt, { maxTokens = 500, system = null } = {}) {
+async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false } = {}) {
   if (!modelId) throw new Error('callModel: modelId required');
 
   if (modelId.startsWith('gemini-')) {
@@ -26,7 +26,13 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null }
       generationConfig: { maxOutputTokens: maxTokens },
     });
     const result = await gModel.generateContent(userPrompt);
-    return result.response.text().trim();
+    const text = result.response.text().trim();
+    if (!returnUsage) return text;
+    return {
+      text,
+      inputTokens: result.response.usageMetadata?.promptTokenCount || 0,
+      outputTokens: result.response.usageMetadata?.candidatesTokenCount || 0,
+    };
   }
 
   if (modelId.startsWith('deepseek-')) {
@@ -42,7 +48,13 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null }
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `DeepSeek error ${res.status}`);
-    return data.choices?.[0]?.message?.content?.trim() || '';
+    const text = data.choices?.[0]?.message?.content?.trim() || '';
+    if (!returnUsage) return text;
+    return {
+      text,
+      inputTokens: data.usage?.prompt_tokens || 0,
+      outputTokens: data.usage?.completion_tokens || 0,
+    };
   }
 
   // Anthropic
@@ -53,7 +65,13 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null }
   const params = { model: modelId, max_tokens: maxTokens, messages: [{ role: 'user', content: userPrompt }] };
   if (system) params.system = system;
   const response = await client.messages.create(params);
-  return response.content[0]?.text?.trim() || '';
+  const text = response.content[0]?.text?.trim() || '';
+  if (!returnUsage) return text;
+  return {
+    text,
+    inputTokens: response.usage?.input_tokens || 0,
+    outputTokens: response.usage?.output_tokens || 0,
+  };
 }
 
 module.exports = { callModel };

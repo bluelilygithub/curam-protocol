@@ -10,6 +10,7 @@ const { requireAuth } = require('../middleware/auth');
 const { translateToGmailQuery, GMAIL_LIMITS } = require('../services/gmailNLP');
 const { getModelsForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
+const { calculateCost } = require('../services/costCalculator');
 const { encrypt, decrypt } = require('../utils/encryption');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -638,8 +639,18 @@ ${lines}
 Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
 [{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`;
 
-    const text = await callModel(standard, prompt, { maxTokens: 8192 });
-    console.log(`[gmail/inbox/classify] response length: ${text.length}, first 200: ${text.slice(0, 200)}`);
+    const { text, inputTokens, outputTokens } = await callModel(standard, prompt, { maxTokens: 8192, returnUsage: true });
+    console.log(`[gmail/inbox/classify] response length: ${text.length}, tokens in=${inputTokens} out=${outputTokens}, first 200: ${text.slice(0, 200)}`);
+
+    // Log to usage_logs (fire-and-forget)
+    if (inputTokens || outputTokens) {
+      const cost = calculateCost(standard, inputTokens, outputTokens);
+      pool.query(
+        `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
+         VALUES ($1, NULL, $2, $3, $4, $5, 'gmail_intel')`,
+        [userId, standard, inputTokens, outputTokens, cost]
+      ).catch(err => console.error('[gmail/inbox/classify] usage log error:', err.message));
+    }
     const stripped = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
     const match = stripped.match(/\[[\s\S]*\]/);
     if (match) {
