@@ -86,20 +86,27 @@ function ThreadPanel({ email, onClose, addToast, getIcon }) {
     }
   };
 
-  const downloadAttachment = async (messageId, att) => {
+  const openAttachment = async (messageId, att) => {
     try {
       const params = new URLSearchParams({ filename: att.filename, mimeType: att.mimeType });
       const res = await api.get(`/api/gmail/attachment/${messageId}/${att.attachmentId}?${params}`);
-      if (!res.ok) throw new Error('Download failed');
+      if (!res.ok) throw new Error('Failed to fetch attachment');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = att.filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      const viewable = att.mimeType?.startsWith('image/') || att.mimeType === 'application/pdf';
+      if (viewable) {
+        window.open(url, '_blank');
+        // Revoke after a short delay to allow the tab to load
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = att.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
     } catch (err) {
-      addToast('Download failed: ' + err.message, 'error');
+      addToast('Failed to open attachment: ' + err.message, 'error');
     }
   };
 
@@ -174,18 +181,22 @@ function ThreadPanel({ email, onClose, addToast, getIcon }) {
 
                 {msg.attachments?.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {msg.attachments.map(att => (
-                      <button
-                        key={att.attachmentId}
-                        onClick={() => downloadAttachment(msg.id, att)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border hover:opacity-70 transition-opacity"
-                        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
-                      >
-                        {getIcon('file', { size: 12 })}
-                        <span className="truncate max-w-[160px]">{att.filename}</span>
-                        {att.size > 0 && <span style={{ color: 'var(--color-muted)' }}>{fmtBytes(att.size)}</span>}
-                      </button>
-                    ))}
+                    {msg.attachments.map(att => {
+                      const viewable = att.mimeType?.startsWith('image/') || att.mimeType === 'application/pdf';
+                      return (
+                        <button
+                          key={att.attachmentId}
+                          onClick={() => openAttachment(msg.id, att)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border hover:opacity-70 transition-opacity"
+                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'var(--color-bg)' }}
+                          title={viewable ? 'Open in new tab' : 'Download'}
+                        >
+                          {getIcon(viewable ? 'external-link' : 'file-down', { size: 12 })}
+                          <span className="truncate max-w-[160px]">{att.filename}</span>
+                          {att.size > 0 && <span style={{ color: 'var(--color-muted)' }}>{fmtBytes(att.size)}</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -237,7 +248,7 @@ function ThreadPanel({ email, onClose, addToast, getIcon }) {
 }
 
 // ── Email row ─────────────────────────────────────────────────────────────────
-function EmailRow({ email, onClick }) {
+function EmailRow({ email, onClick, getIcon }) {
   return (
     <button
       onClick={onClick}
@@ -255,10 +266,25 @@ function EmailRow({ email, onClick }) {
         {email.category}
       </span>
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
-          {cleanSender(email.sender)}
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span className="text-sm font-medium truncate" style={{ color: 'var(--color-text)' }}>
+            {cleanSender(email.sender)}
+          </span>
+          {email.replyCount > 0 && (
+            <span
+              className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded-full font-medium"
+              style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+            >
+              {email.replyCount + 1}
+            </span>
+          )}
+          {email.hasAttachment && (
+            <span className="flex-shrink-0" style={{ color: 'var(--color-muted)' }} title="Has attachment">
+              {getIcon('file', { size: 11 })}
+            </span>
+          )}
         </div>
-        <div className="text-xs truncate mt-0.5" style={{ color: 'var(--color-muted)' }}>
+        <div className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>
           {email.one_line_summary}
         </div>
       </div>
@@ -553,6 +579,7 @@ export default function GmailIntelPage() {
                       key={e.id}
                       email={e}
                       onClick={() => setSelectedEmail(e)}
+                      getIcon={getIcon}
                     />
                   ))}
                 </div>

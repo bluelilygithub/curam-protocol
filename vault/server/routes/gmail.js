@@ -350,6 +350,37 @@ async function batchFetchMessages(accessToken, messageIds) {
   return results;
 }
 
+// Fetch full thread details in bulk — reply count + attachment detection
+async function batchFetchThreads(accessToken, threadIds) {
+  const results = [];
+  for (let i = 0; i < threadIds.length; i += 100) {
+    const chunk = threadIds.slice(i, i + 100);
+    const boundary = `vaultbatch${Date.now()}${i}`;
+    const body = chunk.map(id =>
+      `--${boundary}\r\nContent-Type: application/http\r\n\r\nGET /gmail/v1/users/me/threads/${id}?format=metadata\r\n\r\n`
+    ).join('') + `--${boundary}--`;
+
+    const res = await fetch('https://www.googleapis.com/batch/gmail/v1', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': `multipart/mixed; boundary="${boundary}"`,
+      },
+      body,
+    });
+    results.push(...parseBatchResponse(await res.text(), res.headers.get('content-type') || ''));
+  }
+  return results;
+}
+
+// Heuristic: multipart/mixed top-level mimeType indicates an attachment
+function threadHasAttachment(messages) {
+  return (messages || []).some(m =>
+    m.payload?.mimeType === 'multipart/mixed' ||
+    m.payload?.mimeType === 'multipart/related'
+  );
+}
+
 // Extract attachment metadata from a message payload (does not download)
 function extractAttachments(payload) {
   const attachments = [];
@@ -525,39 +556,40 @@ async function fetchInboxEmails(userId) {
   const oauth2Client = await getAuthClient(userId);
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
-  const listRes = await gmail.users.messages.list({
+  // threads.list deduplicates conversations (one entry per thread, not per message)
+  const listRes = await gmail.users.threads.list({
     userId: 'me',
     maxResults: 100,
     labelIds: ['INBOX'],
   });
-  const messages = listRes.data.messages || [];
-  if (!messages.length) return [];
+  const threadList = listRes.data.threads || [];
+  if (!threadList.length) return [];
 
-  // Single HTTP round-trip for all message metadata via Gmail batch endpoint
   const { token: accessToken } = await oauth2Client.getAccessToken();
-  const details = await batchFetchMessages(accessToken, messages.map(m => m.id));
+  // Batch fetch full thread metadata — gives reply count + attachment heuristic in 1 HTTP call
+  const threads = await batchFetchThreads(accessToken, threadList.map(t => t.id));
 
-  const detailMap = new Map(details.map(d => [d.id, d]));
   const now = Date.now();
-
-  return messages
-    .map(msg => {
-      const detail = detailMap.get(msg.id);
-      if (!detail) return null;
-      const headers = detail.payload?.headers || [];
-      const internalDate = parseInt(detail.internalDate || '0');
+  return threads
+    .filter(t => t?.id && t?.messages?.length)
+    .map(thread => {
+      const messages = thread.messages;
+      const lastMsg = messages[messages.length - 1];
+      const headers = lastMsg?.payload?.headers || [];
+      const internalDate = parseInt(lastMsg?.internalDate || '0');
       return {
-        id: detail.id,
-        threadId: detail.threadId,
+        id: lastMsg.id,
+        threadId: thread.id,
         sender: getHeader(headers, 'From'),
         subject: getHeader(headers, 'Subject'),
-        snippet: (detail.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&'),
-        isUnread: (detail.labelIds || []).includes('UNREAD'),
+        snippet: (lastMsg.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&'),
+        isUnread: messages.some(m => (m.labelIds || []).includes('UNREAD')),
+        hasAttachment: threadHasAttachment(messages),
+        replyCount: messages.length - 1,
         internalDate,
         age: formatEmailAge(now - internalDate),
       };
-    })
-    .filter(Boolean);
+    });
 }
 
 // GET /api/gmail/inbox/classify — fetch + classify inbox; cached 10 min, bust with ?refresh=1
@@ -587,6 +619,8 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
 
   try {
     const { standard } = await getModelsForUser(userId);
+    console.log(`[gmail/inbox/classify] using model: ${standard}, emails: ${emails.length}`);
+
     const lines = emails.map((e, i) =>
       `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
     ).join('\n\n');
@@ -604,10 +638,17 @@ ${lines}
 Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
 [{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`;
 
-    const text = await callModel(standard, prompt, { maxTokens: 4096 });
+    const text = await callModel(standard, prompt, { maxTokens: 8192 });
+    console.log(`[gmail/inbox/classify] response length: ${text.length}, first 200: ${text.slice(0, 200)}`);
     const stripped = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
     const match = stripped.match(/\[[\s\S]*\]/);
-    if (match) classifications = JSON.parse(match[0]);
+    if (match) {
+      classifications = JSON.parse(match[0]);
+      console.log(`[gmail/inbox/classify] parsed ${classifications.length} classifications`);
+    } else {
+      console.warn('[gmail/inbox/classify] no JSON array found in response');
+      classificationFailed = true;
+    }
   } catch (err) {
     console.error('[gmail/inbox/classify] model error:', err.message);
     classificationFailed = true;
@@ -621,7 +662,10 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
   }));
 
   const result = { emails: enriched, classificationFailed };
-  classifyCache.set(userId, { ts: Date.now(), result });
+  // Don't cache failed classifications — next load will retry
+  if (!classificationFailed) {
+    classifyCache.set(userId, { ts: Date.now(), result });
+  }
   res.json({ ...result, cachedAt: null });
 });
 
