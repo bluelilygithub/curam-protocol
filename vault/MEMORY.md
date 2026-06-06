@@ -47,7 +47,7 @@ Two separate applications in one repo (`version-7` branch, main branch for PRs):
 Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions`, `folders`, `personas`, `prompts`, `memory`, `pinned_urls`, `debates`, `settings`, `password_resets`
 - `users` table includes `"isAdmin" BOOLEAN NOT NULL DEFAULT FALSE` (admin authorization source of truth)
 - `sessions` table: `sessionId TEXT PK`, `projectId`, `userId`, `title`, `"deletedAt"` (soft-delete/restore), `summary TEXT`, `"summaryEmbedding" vector(768)`, `isSummarized`, `summaryContent`, `inputTokens`, `outputTokens`, `starred`, `personaId`, `branchedFrom`
-- `settings` table: `key TEXT PRIMARY KEY, value TEXT` — stores GEMINI_API_KEY, SEARCH_API_KEY, MAIL_CHANNEL_API_KEY
+- `settings` table: `"userId" TEXT NOT NULL, key TEXT, value TEXT` — composite unique on `("userId", key)`; insert/update pattern: `INSERT INTO settings ("userId", key, value) VALUES ($1,$2,$3) ON CONFLICT ("userId", key) DO UPDATE SET value=EXCLUDED.value`; delete: `DELETE FROM settings WHERE "userId"=$1 AND key=$2`. DDL in db.js is stale (shows `key TEXT PRIMARY KEY`) — prod table has userId column added post-creation.
 - `password_resets` table: token, email, expiresAt (1 hour TTL)
 
 ## Railway Environment Variables
@@ -189,12 +189,16 @@ Key tables: `users`, `auth_sessions`, `projects`, `files`, `messages`, `sessions
 ## Local Setup Issues
 See `local-setup-issues.md` for details on the broken Node.js environment.
 
+## AI Model Calls (background / non-streaming)
+Use `callModel(modelId, prompt, { maxTokens, system })` from `server/services/callModel.js` for all non-streaming AI calls. It routes to Anthropic, Gemini, or DeepSeek based on model ID prefix — do NOT call provider SDKs directly. Resolve the model first: `const { standard } = await getModelsForUser(userId)` then `await callModel(standard, prompt, { maxTokens: N })`.
+
 ## Gmail Integration
 - **Routes:** `vault/server/routes/gmail.js` (registered BEFORE requireAuth in index.js; has internal auth middleware that skips /callback)
 - **DB:** `gmail_tokens` table (userId, accessToken, refreshToken, expiryDate, scope, email)
 - **Env vars:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
 - **OAuth flow:** `/api/gmail/auth` → returns authUrl → client navigates → Google → `/api/gmail/callback` → redirect to `/settings?gmailConnected=1`
-- **Endpoints:** `GET /status`, `GET /auth`, `GET /callback`, `POST /disconnect`, `GET /search?q=`, `GET /thread/:threadId`, `POST /ask` (SSE)
+- **Endpoints:** `GET /status`, `GET /auth`, `GET /callback`, `POST /disconnect`, `GET /search?q=`, `GET /thread/:threadId`, `POST /ask` (SSE), `GET /inbox`, `GET /inbox/classify`, `GET /diagnose`
+- **Inbox Intel:** `client/src/pages/GmailIntelPage.jsx` at `/gmail-intel`; classifies last 50 inbox emails via `callModel` standard tier; feature flag `gmailIntel` in featureAccess; auth route accepts `?returnTo=` param to redirect back after OAuth
 - **Frontend:** `GmailConnect.jsx` in SettingsPage "Integrations" section; `@gmail` in AtMentionDropdown triggers Gmail search modal in ChatPage
 - **Thread attachment:** Gmail threads added via `addManual()` from `useUrlAttachment` as `gmail://thread/<id>` URLs; `buildMessageContent` in chat.js uses `[Email thread: ...]` label
 - **Package:** `googleapis` ^144.0.0 added to package.json dependencies
