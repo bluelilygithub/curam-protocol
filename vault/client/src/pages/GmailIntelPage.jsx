@@ -182,6 +182,21 @@ export default function GmailIntelPage() {
       }
     };
 
+    const startAuth = async () => {
+      try {
+        await api.post('/api/gmail/disconnect');
+        const res = await api.get('/api/gmail/auth?returnTo=/gmail-intel');
+        const data = await res.json();
+        if (data.authUrl) {
+          window.location.href = data.authUrl;
+        } else {
+          addToast(data.error || 'No auth URL returned', 'error');
+        }
+      } catch (err) {
+        addToast('Failed: ' + err.message, 'error');
+      }
+    };
+
     return (
       <div className="flex flex-col items-center justify-center gap-4 px-6" style={{ height: '100%', color: 'var(--color-muted)' }}>
         <div style={{ fontSize: 40 }}>{tokenExpired ? '🔑' : '📬'}</div>
@@ -193,17 +208,7 @@ export default function GmailIntelPage() {
         </div>
 
         <button
-          onClick={async () => {
-            try {
-              await api.post('/api/gmail/disconnect');
-              const res = await api.get('/api/gmail/auth?returnTo=/gmail-intel');
-              const data = await res.json();
-              if (data.authUrl) window.location.href = data.authUrl;
-              else addToast(data.error || 'No auth URL returned', 'error');
-            } catch (err) {
-              addToast('Failed to start Gmail auth: ' + err.message, 'error');
-            }
-          }}
+          onClick={startAuth}
           className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
           style={{ background: 'var(--color-primary)' }}
         >
@@ -229,11 +234,22 @@ export default function GmailIntelPage() {
         </button>
 
         {diag && (
-          <div
-            className="w-full max-w-md rounded-xl border p-4 text-xs font-mono"
-            style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
-          >
-            {JSON.stringify(diag, null, 2)}
+          <div className="w-full max-w-md flex flex-col gap-2">
+            {diag.authUrlPreview && (
+              <div
+                className="rounded-xl border px-4 py-3 text-xs"
+                style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)', wordBreak: 'break-all' }}
+              >
+                <div className="font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Generated auth URL (first 300 chars)</div>
+                {diag.authUrlPreview}
+              </div>
+            )}
+            <div
+              className="rounded-xl border p-4 text-xs font-mono"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+            >
+              {JSON.stringify({ ...diag, authUrlPreview: undefined }, null, 2)}
+            </div>
           </div>
         )}
       </div>

@@ -74,6 +74,20 @@ router.get('/status', async (req, res) => {
 
 // GET /api/gmail/diagnose — full auth diagnostic (safe, no token values exposed)
 router.get('/diagnose', async (req, res) => {
+  const oauthConfigured = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI);
+  let authUrl = null;
+  if (oauthConfigured) {
+    try {
+      const testClient = getOAuth2Client();
+      authUrl = testClient.generateAuthUrl({
+        access_type: 'offline',
+        scope: ['https://www.googleapis.com/auth/gmail.readonly'],
+        state: 'diag-test',
+        prompt: 'consent',
+      });
+    } catch (_) {}
+  }
+
   const result = {
     env: {
       GOOGLE_CLIENT_ID: !!process.env.GOOGLE_CLIENT_ID,
@@ -81,6 +95,7 @@ router.get('/diagnose', async (req, res) => {
       GOOGLE_REDIRECT_URI: process.env.GOOGLE_REDIRECT_URI || null,
       ENCRYPTION_KEY: !!process.env.ENCRYPTION_KEY,
     },
+    authUrlPreview: authUrl ? authUrl.slice(0, 300) + '…' : null,
     token: null,
     apiTest: null,
   };
