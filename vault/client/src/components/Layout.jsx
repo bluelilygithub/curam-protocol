@@ -572,6 +572,17 @@ function Layout() {
             </Link>
           )}
 
+          {canUseFeature('gmailIntel') && (
+            <Link
+              to="/gmail-intel"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname === '/gmail-intel' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Inbox Intel"
+            >
+              {getIcon('inbox', { size: 16 })}
+            </Link>
+          )}
+
           {canUseFeature('usage') && (
             <Link
               to="/usage"

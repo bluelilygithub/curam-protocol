@@ -91,6 +91,7 @@ const semanticMap = {
   'layers': { lucide: 'Layers' },
   square: { lucide: 'Square' },
   library: { lucide: 'Library' },
+  inbox: { lucide: 'InboxIcon' },
 };
 
 const IconContext = createContext(null);

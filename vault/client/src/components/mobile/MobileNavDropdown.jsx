@@ -45,6 +45,7 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
         finance: 'finance',
         shares: 'shares',
         youtube: 'youtube',
+        gmailIntel: 'gmailIntel',
         usage: 'usage',
         mood: 'mood',
         news: 'newsDigest',

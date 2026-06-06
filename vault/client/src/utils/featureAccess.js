@@ -14,6 +14,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   student: true,
   shares: true,
   youtube: true,
+  gmailIntel: true,
 };
 
 export const FEATURE_ACCESS_OPTIONS = [
@@ -32,5 +33,6 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'student', label: 'Student (Quiz & Cards)' },
   { key: 'shares', label: 'Shares' },
   { key: 'youtube', label: 'YouTube' },
+  { key: 'gmailIntel', label: 'Inbox Intel' },
 ];
 

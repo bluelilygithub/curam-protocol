@@ -4,6 +4,20 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-06
+
+**Feature:** Inbox Intel — AI-classified Gmail dashboard.
+
+New `/gmail-intel` page that fetches the last 50 inbox messages and classifies them in a single Claude prompt. Each email is assigned one of four categories: **urgent** (action required, time-sensitive), **waiting** (sender blocked on a reply from the user), **fyi** (informational, no action needed), or **noise** (newsletters, automations, promotions). Claude also writes a one-line summary (max 12 words) per email.
+
+The dashboard shows four metric cards (Urgent / Waiting / Unread / Noise), category filter pills, and a client-side search that filters by summary, sender, or subject. Emails are grouped by category when viewing All. An amber banner appears if Claude classification fails — raw emails are shown without categorisation rather than crashing. The page auto-refreshes every 5 minutes with a live countdown. A "not connected" empty state links users to Settings when no Gmail token exists.
+
+Uses the existing `getGmailClient()` helper and stored OAuth tokens from `gmail_tokens` — no additional OAuth setup required. Classification uses the `standard` model tier via `getModelsForUser`. The inbox classify endpoint is rate-limited to 10 requests/min. The feature is gated behind a new `gmailIntel` flag in feature access (default enabled), visible in the Admin feature access panel.
+
+**New files:** `client/src/pages/GmailIntelPage.jsx`. **Modified files:** `server/routes/gmail.js` (two new routes: `GET /api/gmail/inbox` and `GET /api/gmail/inbox/classify`), `client/src/App.jsx`, `client/src/components/Layout.jsx`, `client/src/components/mobile/MobileNavDropdown.jsx`, `client/src/providers/IconProvider.jsx`, `client/src/utils/featureAccess.js`, `client/src/utils/mobileConfig.js`.
+
+---
+
 ## 2026-05-26
 
 **Feature:** Precious metals tracker — Metals tab in Shares.

@@ -30,6 +30,7 @@ import SharedTaskPage from './pages/SharedTaskPage';
 import NewsDigestPage from './pages/NewsDigestPage';
 import SharesPage from './pages/SharesPage';
 import YoutubePage from './pages/YoutubePage';
+import GmailIntelPage from './pages/GmailIntelPage';
 import StudentCardsChatPage from './pages/StudentCardsChatPage';
 import StudentSavedDecksPage from './pages/StudentSavedDecksPage';
 import StudentQuizLayout from './pages/studentQuiz/StudentQuizLayout';
@@ -130,6 +131,7 @@ function App() {
               <Route path="/news-digest" element={<NewsDigestPage />} />
               <Route path="/shares" element={<SharesPage />} />
               <Route path="/youtube" element={<YoutubePage />} />
+              <Route path="/gmail-intel" element={<GmailIntelPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

@@ -339,6 +339,123 @@ router.get('/thread/:threadId', gmailThreadLimiter, async (req, res) => {
   }
 });
 
+// --- Inbox Intel ---
+
+const gmailInboxClassifyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Too many classify requests, please try again later.' },
+});
+
+function formatEmailAge(ms) {
+  if (ms <= 0) return 'just now';
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+async function fetchInboxEmails(userId) {
+  const gmail = await getGmailClient(userId);
+  const listRes = await gmail.users.messages.list({
+    userId: 'me',
+    maxResults: 50,
+    labelIds: ['INBOX'],
+  });
+  const messages = listRes.data.messages || [];
+  return Promise.all(
+    messages.map(async (msg) => {
+      const detail = await gmail.users.messages.get({
+        userId: 'me',
+        id: msg.id,
+        format: 'metadata',
+        metadataHeaders: ['From', 'Subject', 'Date'],
+      });
+      const headers = detail.data.payload?.headers || [];
+      const internalDate = parseInt(detail.data.internalDate || '0');
+      return {
+        id: msg.id,
+        sender: getHeader(headers, 'From'),
+        subject: getHeader(headers, 'Subject'),
+        snippet: (detail.data.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&'),
+        isUnread: (detail.data.labelIds || []).includes('UNREAD'),
+        internalDate,
+        age: formatEmailAge(Date.now() - internalDate),
+      };
+    })
+  );
+}
+
+// GET /api/gmail/inbox/classify — fetch + Claude-classify last 50 inbox emails
+router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
+  let emails;
+  try {
+    emails = await fetchInboxEmails(req.user.id);
+  } catch (err) {
+    console.error('[gmail/inbox/classify] fetch error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+
+  let classifications = [];
+  let classificationFailed = false;
+
+  try {
+    const { standard } = await getModelsForUser(req.user?.id);
+    const lines = emails.map((e, i) =>
+      `[${i + 1}] ID: ${e.id}\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
+    ).join('\n\n');
+
+    const message = await anthropic.messages.create({
+      model: standard,
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: `Classify these ${emails.length} inbox emails for a professional. Return ONLY a JSON array.
+
+Categories (pick one per email):
+- urgent: requires action soon, time-sensitive
+- waiting: sender is blocked on or waiting for a reply from me
+- fyi: informational, no action required
+- noise: newsletters, automated notifications, promotions
+
+${lines}
+
+Return format — JSON array only, no markdown, no explanation:
+[{"id":"<id>","category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`,
+      }],
+    });
+
+    const text = message.content[0].text.trim();
+    const match = text.match(/\[[\s\S]*\]/);
+    if (match) classifications = JSON.parse(match[0]);
+  } catch (err) {
+    console.error('[gmail/inbox/classify] Claude error:', err.message);
+    classificationFailed = true;
+  }
+
+  const map = new Map(classifications.map(c => [c.id, c]));
+  const enriched = emails.map(e => ({
+    ...e,
+    category: map.get(e.id)?.category || 'fyi',
+    one_line_summary: map.get(e.id)?.one_line_summary || e.snippet.slice(0, 80),
+  }));
+
+  res.json({ emails: enriched, classificationFailed });
+});
+
+// GET /api/gmail/inbox — raw fetch of last 50 inbox emails (no AI)
+router.get('/inbox', async (req, res) => {
+  try {
+    const emails = await fetchInboxEmails(req.user.id);
+    res.json(emails);
+  } catch (err) {
+    console.error('[gmail/inbox] error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/gmail/ask — SSE: attach thread content and ask AI
 router.post('/ask', gmailAskLimiter, async (req, res) => {
   const { threadId, question } = req.body;
