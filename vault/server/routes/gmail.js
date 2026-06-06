@@ -147,7 +147,7 @@ router.get('/auth', gmailAuthLimiter, async (req, res) => {
   const returnTo = (rawReturn && /^\/[a-zA-Z0-9/_-]*$/.test(rawReturn)) ? rawReturn : '/settings';
   try {
     await pool.query(
-      'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value',
+      'INSERT INTO settings (key, value) VALUES ($1, $2)',
       [`gmail_oauth_state_${state}`, JSON.stringify({ userId: req.user.id, expiresAt, returnTo })]
     );
   } catch (err) {
