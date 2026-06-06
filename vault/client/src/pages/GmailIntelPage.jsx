@@ -309,7 +309,7 @@ export default function GmailIntelPage() {
   const [search, setSearch] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
   const [cachedAt, setCachedAt] = useState(null);
-  const [countdown, setCountdown] = useState(REFRESH_MS / 1000);
+  const [countdown, setCountdown] = useState(DEFAULT_REFRESH_MS / 1000);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [refreshMs, setRefreshMs] = useState(DEFAULT_REFRESH_MS);
   const navigate = useNavigate();
