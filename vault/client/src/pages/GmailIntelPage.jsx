@@ -60,6 +60,7 @@ export default function GmailIntelPage() {
   const [loading, setLoading] = useState(true);
   const [classificationFailed, setClassificationFailed] = useState(false);
   const [notConnected, setNotConnected] = useState(false);
+  const [tokenExpired, setTokenExpired] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -76,6 +77,10 @@ export default function GmailIntelPage() {
       const res = await api.get('/api/gmail/inbox/classify');
       const data = await res.json();
       if (!res.ok) {
+        if (data.error === 'gmail_token_expired' || data.error?.includes('invalid_grant')) {
+          setTokenExpired(true);
+          return;
+        }
         if (data.error?.includes('not connected') || data.error?.includes('not configured')) {
           setNotConnected(true);
           return;
@@ -86,7 +91,9 @@ export default function GmailIntelPage() {
       setClassificationFailed(!!data.classificationFailed);
       setLastRefresh(new Date());
     } catch (err) {
-      if (err.message?.includes('not connected') || err.message?.includes('not configured')) {
+      if (err.message?.includes('invalid_grant')) {
+        setTokenExpired(true);
+      } else if (err.message?.includes('not connected') || err.message?.includes('not configured')) {
         setNotConnected(true);
       } else {
         addToast('Failed to load inbox: ' + err.message, 'error');
@@ -148,6 +155,28 @@ export default function GmailIntelPage() {
 
   const mins = Math.floor(countdown / 60);
   const secs = Math.floor(countdown % 60);
+
+  if (tokenExpired) {
+    return (
+      <div
+        className="flex flex-col items-center justify-center gap-4"
+        style={{ height: '100%', color: 'var(--color-muted)' }}
+      >
+        <div style={{ fontSize: 40 }}>🔑</div>
+        <div className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Gmail session expired</div>
+        <div className="text-sm text-center max-w-xs">
+          Your Gmail token is no longer valid. Disconnect and reconnect Gmail in Settings.
+        </div>
+        <button
+          onClick={() => navigate('/settings')}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
+          style={{ background: 'var(--color-primary)' }}
+        >
+          Go to Settings
+        </button>
+      </div>
+    );
+  }
 
   if (notConnected) {
     return (

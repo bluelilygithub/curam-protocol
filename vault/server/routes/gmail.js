@@ -395,6 +395,9 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
     emails = await fetchInboxEmails(req.user.id);
   } catch (err) {
     console.error('[gmail/inbox/classify] fetch error:', err.message);
+    if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {
+      return res.status(400).json({ error: 'gmail_token_expired' });
+    }
     return res.status(500).json({ error: err.message });
   }
 
@@ -452,6 +455,9 @@ router.get('/inbox', async (req, res) => {
     res.json(emails);
   } catch (err) {
     console.error('[gmail/inbox] error:', err.message);
+    if (err.message?.includes('invalid_grant') || err.message?.includes('Token has been expired')) {
+      return res.status(400).json({ error: 'gmail_token_expired' });
+    }
     res.status(500).json({ error: err.message });
   }
 });
