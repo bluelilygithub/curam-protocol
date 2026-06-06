@@ -170,7 +170,7 @@ export default function GmailIntelPage() {
         <button
           onClick={async () => {
             try {
-              const res = await api.get('/api/gmail/auth');
+              const res = await api.get('/api/gmail/auth?returnTo=/gmail-intel');
               const data = await res.json();
               if (data.authUrl) window.location.href = data.authUrl;
             } catch {

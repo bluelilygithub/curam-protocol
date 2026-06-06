@@ -80,10 +80,13 @@ router.get('/auth', gmailAuthLimiter, async (req, res) => {
 
   const state = require('crypto').randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  // Sanitise returnTo: only allow internal paths (no protocol, no host)
+  const rawReturn = req.query.returnTo;
+  const returnTo = (rawReturn && /^\/[a-zA-Z0-9/_-]*$/.test(rawReturn)) ? rawReturn : '/settings';
   try {
     await pool.query(
       'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value',
-      [`gmail_oauth_state_${state}`, JSON.stringify({ userId: req.user.id, expiresAt })]
+      [`gmail_oauth_state_${state}`, JSON.stringify({ userId: req.user.id, expiresAt, returnTo })]
     );
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -126,12 +129,13 @@ router.get('/callback', async (req, res) => {
       return res.redirect(`${appUrl}/settings?gmailError=invalid_state`);
     }
 
-    let userId, expiresAt;
+    let userId, expiresAt, returnTo;
     try {
-      ({ userId, expiresAt } = JSON.parse(stateRows[0].value));
+      ({ userId, expiresAt, returnTo } = JSON.parse(stateRows[0].value));
     } catch {
       return res.redirect(`${appUrl}/settings?gmailError=invalid_state`);
     }
+    const successRedirect = returnTo ? `${appUrl}${returnTo}` : `${appUrl}/settings?gmailConnected=1`;
 
     if (new Date(expiresAt) < new Date()) {
       await pool.query('DELETE FROM settings WHERE key=$1', [stateKey]);
@@ -178,7 +182,7 @@ router.get('/callback', async (req, res) => {
       );
     }
 
-    res.redirect(`${appUrl}/settings?gmailConnected=1`);
+    res.redirect(successRedirect);
   } catch (err) {
     console.error('[gmail] OAuth callback error:', err);
     res.redirect(`${appUrl}/settings?gmailError=${encodeURIComponent(err.message)}`);
