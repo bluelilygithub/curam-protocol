@@ -183,10 +183,13 @@ router.get('/callback', async (req, res) => {
       return res.redirect(`${appUrl}/settings?gmailError=invalid_state`);
     }
     const successRedirect = returnTo ? `${appUrl}${returnTo}` : `${appUrl}/settings?gmailConnected=1`;
+    const errorRedirect = (msg) => returnTo
+      ? `${appUrl}${returnTo}?gmailError=${encodeURIComponent(msg)}`
+      : `${appUrl}/settings?gmailError=${encodeURIComponent(msg)}`;
 
     if (new Date(expiresAt) < new Date()) {
       await pool.query('DELETE FROM settings WHERE key=$1', [stateKey]);
-      return res.redirect(`${appUrl}/settings?gmailError=state_expired`);
+      return res.redirect(errorRedirect('state_expired'));
     }
     await pool.query('DELETE FROM settings WHERE key=$1', [stateKey]);
 
@@ -232,7 +235,11 @@ router.get('/callback', async (req, res) => {
     res.redirect(successRedirect);
   } catch (err) {
     console.error('[gmail] OAuth callback error:', err);
-    res.redirect(`${appUrl}/settings?gmailError=${encodeURIComponent(err.message)}`);
+    // Use returnTo for error redirect if we parsed it from state, else fall back to settings
+    const errDest = typeof errorRedirect === 'function'
+      ? errorRedirect(err.message)
+      : `${appUrl}/settings?gmailError=${encodeURIComponent(err.message)}`;
+    res.redirect(errDest);
   }
 });
 

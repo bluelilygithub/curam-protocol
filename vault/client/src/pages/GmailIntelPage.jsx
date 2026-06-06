@@ -63,6 +63,7 @@ export default function GmailIntelPage() {
   const [tokenExpired, setTokenExpired] = useState(false);
   const [diag, setDiag] = useState(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  const [authError, setAuthError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -119,6 +120,15 @@ export default function GmailIntelPage() {
       load(true).then(scheduleRefresh);
     }, REFRESH_MS);
   }, [load]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get('gmailError');
+    if (err) {
+      setAuthError(decodeURIComponent(err));
+      window.history.replaceState({}, '', '/gmail-intel');
+    }
+  }, []);
 
   useEffect(() => {
     load().then(scheduleRefresh);
@@ -199,6 +209,15 @@ export default function GmailIntelPage() {
         >
           Reconnect Gmail
         </button>
+
+        {authError && (
+          <div
+            className="w-full max-w-md rounded-xl border px-4 py-3 text-xs font-mono"
+            style={{ borderColor: '#ef4444', background: 'rgba(239,68,68,0.06)', color: '#ef4444', wordBreak: 'break-all' }}
+          >
+            OAuth error: {authError}
+          </div>
+        )}
 
         <button
           onClick={runDiag}
