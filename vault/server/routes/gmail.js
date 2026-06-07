@@ -645,6 +645,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   });
 
   let classificationFailed = false;
+  let classificationError = null;
 
   if (needsClassification.length > 0) {
     try {
@@ -717,6 +718,7 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
     } catch (err) {
       console.error('[gmail/inbox/classify] model error:', err.message);
       classificationFailed = true;
+      classificationError = err.message;
     }
   } else {
     console.log(`[gmail/inbox/classify] all ${emails.length} threads already classified — skipping model call`);
@@ -734,7 +736,7 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
 
   const result = { emails: enriched, classificationFailed };
   classifyCache.set(userId, { ts: Date.now(), result });
-  res.json({ ...result, cachedAt: null });
+  res.json({ ...result, cachedAt: null, ...(classificationError ? { _debug: classificationError } : {}) });
 });
 
 // GET /api/gmail/inbox — raw fetch of last 50 inbox emails (no AI)
