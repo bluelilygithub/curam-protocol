@@ -248,7 +248,7 @@ function ThreadPanel({ email, onClose, addToast, getIcon }) {
 }
 
 // ── Expense modal ─────────────────────────────────────────────────────────────
-function ExpenseModal({ email, onClose, addToast, getIcon }) {
+function ExpenseModal({ email, onClose, onActioned, addToast, getIcon }) {
   const dateStr = email.internalDate
     ? new Date(email.internalDate).toISOString().slice(0, 10)
     : new Date().toISOString().slice(0, 10);
@@ -260,9 +260,30 @@ function ExpenseModal({ email, onClose, addToast, getIcon }) {
     amount: '',
     gstIncluded: true,
   });
+  const [extracting, setExtracting] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Auto-extract from PDF on open if attachment present
+  useEffect(() => {
+    if (!email.hasAttachment) return;
+    setExtracting(true);
+    api.post(`/api/gmail/threads/${email.threadId}/extract-invoice`, {})
+      .then(r => r.json())
+      .then(data => {
+        if (data.extracted) {
+          setForm(f => ({
+            ...f,
+            description: data.description || f.description,
+            supplier: data.supplier || f.supplier,
+            amount: data.amount != null ? String(data.amount) : f.amount,
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setExtracting(false));
+  }, [email.threadId, email.hasAttachment]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -282,6 +303,9 @@ function ExpenseModal({ email, onClose, addToast, getIcon }) {
         const d = await res.json();
         throw new Error(d.error || 'Failed');
       }
+      // Mark thread as actioned
+      await api.post(`/api/gmail/threads/${email.threadId}/action`, {}).catch(() => {});
+      onActioned(email.threadId);
       addToast('Expense created', 'success');
       onClose();
     } catch (err) {
@@ -296,7 +320,12 @@ function ExpenseModal({ email, onClose, addToast, getIcon }) {
       <div className="rounded-2xl border shadow-xl w-full max-w-md p-6 space-y-4"
            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>Add Expense</h3>
+          <div>
+            <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>Add Expense</h3>
+            {extracting && (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Reading invoice PDF…</p>
+            )}
+          </div>
           <button onClick={onClose} className="hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>
             {getIcon('x', { size: 16 })}
           </button>
@@ -345,7 +374,7 @@ function ExpenseModal({ email, onClose, addToast, getIcon }) {
                 className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 required
-                autoFocus
+                autoFocus={!extracting}
               />
             </div>
           </div>
@@ -368,10 +397,10 @@ function ExpenseModal({ email, onClose, addToast, getIcon }) {
               style={{ color: 'var(--color-muted)' }}>
               Cancel
             </button>
-            <button type="submit" disabled={saving}
+            <button type="submit" disabled={saving || extracting}
               className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-opacity hover:opacity-70"
               style={{ background: 'var(--color-primary)', color: '#fff' }}>
-              {saving ? 'Saving…' : 'Save expense'}
+              {saving ? 'Saving…' : extracting ? 'Extracting…' : 'Save expense'}
             </button>
           </div>
         </form>
@@ -431,15 +460,23 @@ function EmailRow({ email, onClick, onAddExpense, getIcon }) {
       </div>
       <div className="flex-shrink-0 flex items-center gap-2 pt-0.5">
         {email.isInvoice && (
-          <button
-            onClick={e => { e.stopPropagation(); onAddExpense(email); }}
-            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-opacity hover:opacity-70"
-            style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}
-            title="Add as expense"
-          >
-            {getIcon('plus', { size: 10 })}
-            Expense
-          </button>
+          email.actioned ? (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium"
+              style={{ background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>
+              {getIcon('check', { size: 10 })}
+              Actioned
+            </span>
+          ) : (
+            <button
+              onClick={e => { e.stopPropagation(); onAddExpense(email); }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-opacity hover:opacity-70"
+              style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}
+              title="Add as expense"
+            >
+              {getIcon('plus', { size: 10 })}
+              Expense
+            </button>
+          )
         )}
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{email.age}</span>
       </div>
@@ -799,6 +836,7 @@ export default function GmailIntelPage() {
         <ExpenseModal
           email={expenseModal}
           onClose={() => setExpenseModal(null)}
+          onActioned={(threadId) => setEmails(prev => prev.map(e => e.threadId === threadId ? { ...e, actioned: true } : e))}
           addToast={addToast}
           getIcon={getIcon}
         />

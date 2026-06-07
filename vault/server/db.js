@@ -1251,6 +1251,7 @@ async function initSchema() {
       PRIMARY KEY ("userId", "threadId")
     )
   `);
+  await pool.query(`ALTER TABLE gmail_classifications ADD COLUMN IF NOT EXISTS actioned BOOLEAN DEFAULT FALSE`);
 
   console.log('[db] Schema ready');
 }

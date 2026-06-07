@@ -636,7 +636,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   // Load stored classifications for current inbox threads
   const threadIds = emails.map(e => e.threadId);
   const { rows: stored } = await pool.query(
-    `SELECT "threadId", "lastMessageId", category, "oneLine"
+    `SELECT "threadId", "lastMessageId", category, "oneLine", actioned
      FROM gmail_classifications WHERE "userId"=$1 AND "threadId"=ANY($2)`,
     [userId, threadIds]
   ).catch(() => ({ rows: [] }));
@@ -735,12 +735,94 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
       category: s?.category || 'fyi',
       one_line_summary: s?.oneLine || e.snippet.slice(0, 80),
       isInvoice: INVOICE_SUBJECT_RE.test(e.subject || '') || INVOICE_SENDER_RE.test(e.sender || '') || INVOICE_SUBJECT_RE.test(e.snippet || ''),
+      actioned: !!storedMap.get(e.threadId)?.actioned,
     };
   });
 
   const result = { emails: enriched, classificationFailed };
   classifyCache.set(userId, { ts: Date.now(), result });
   res.json({ ...result, cachedAt: null, ...(classificationError ? { _debug: classificationError } : {}) });
+});
+
+// POST /api/gmail/threads/:threadId/extract-invoice — download PDF attachment + extract fields via LLM
+router.post('/threads/:threadId/extract-invoice', async (req, res) => {
+  const userId = req.user.id;
+  const { threadId } = req.params;
+  try {
+    const oauth2Client = await getAuthClient(userId);
+    const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+    // Get full thread to find PDF attachments
+    const threadRes = await gmail.users.threads.get({ userId: 'me', id: threadId, format: 'full' });
+    const messages = threadRes.data.messages || [];
+
+    // Find first PDF part across all messages
+    let pdfBase64 = null;
+    outer: for (const msg of messages) {
+      const parts = msg.payload?.parts || (msg.payload ? [msg.payload] : []);
+      for (const part of parts) {
+        if (part.mimeType === 'application/pdf' || part.filename?.toLowerCase().endsWith('.pdf')) {
+          if (part.body?.attachmentId) {
+            const attRes = await gmail.users.messages.attachments.get({
+              userId: 'me', messageId: msg.id, id: part.body.attachmentId,
+            });
+            pdfBase64 = attRes.data.data; // URL-safe base64
+            break outer;
+          }
+        }
+      }
+    }
+
+    if (!pdfBase64) return res.json({ extracted: false });
+
+    const { standard } = await getModelsForUser(userId);
+    if (!standard || !standard.startsWith('claude-')) {
+      return res.json({ extracted: false, reason: 'PDF extraction requires an Anthropic model as standard' });
+    }
+
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    // Convert URL-safe base64 to standard base64
+    const standardBase64 = pdfBase64.replace(/-/g, '+').replace(/_/g, '/');
+
+    const response = await client.messages.create({
+      model: standard,
+      max_tokens: 512,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: standardBase64 } },
+          { type: 'text', text: 'Extract from this invoice: 1) a short description of the goods/services (max 80 chars), 2) total amount payable as a number (no currency symbol), 3) supplier/vendor name. Return only JSON: {"description":"...","amount":0.00,"supplier":""}' },
+        ],
+      }],
+    });
+
+    const text = response.content[0]?.text?.trim() || '';
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return res.json({ extracted: false });
+    const data = JSON.parse(match[0]);
+    res.json({ extracted: true, description: data.description || '', amount: data.amount || '', supplier: data.supplier || '' });
+  } catch (err) {
+    console.error('[gmail/extract-invoice]', err.message);
+    res.json({ extracted: false, error: err.message });
+  }
+});
+
+// POST /api/gmail/threads/:threadId/action — mark thread as actioned in gmail_classifications
+router.post('/threads/:threadId/action', async (req, res) => {
+  const userId = req.user.id;
+  const { threadId } = req.params;
+  try {
+    await pool.query(
+      `INSERT INTO gmail_classifications ("userId","threadId","lastMessageId",category,actioned)
+       VALUES ($1,$2,''::text,'fyi',true)
+       ON CONFLICT ("userId","threadId") DO UPDATE SET actioned=true`,
+      [userId, threadId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET /api/gmail/inbox — raw fetch of last 50 inbox emails (no AI)
