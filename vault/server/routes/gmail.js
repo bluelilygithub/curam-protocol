@@ -748,43 +748,56 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
 router.post('/threads/:threadId/extract-invoice', async (req, res) => {
   const userId = req.user.id;
   const { threadId } = req.params;
+  const logPrefix = `[gmail/extract-invoice] thread=${threadId}`;
   try {
     const oauth2Client = await getAuthClient(userId);
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
     // Get full thread to find PDF attachments
+    console.log(`${logPrefix} fetching thread (format=full)`);
     const threadRes = await gmail.users.threads.get({ userId: 'me', id: threadId, format: 'full' });
     const messages = threadRes.data.messages || [];
+    console.log(`${logPrefix} messages=${messages.length}`);
 
     // Find first PDF part across all messages
     let pdfBase64 = null;
+    let pdfFilename = null;
     outer: for (const msg of messages) {
       const parts = msg.payload?.parts || (msg.payload ? [msg.payload] : []);
       for (const part of parts) {
+        console.log(`${logPrefix} part mimeType=${part.mimeType} filename=${part.filename || '(none)'} attachmentId=${part.body?.attachmentId || '(none)'}`);
         if (part.mimeType === 'application/pdf' || part.filename?.toLowerCase().endsWith('.pdf')) {
           if (part.body?.attachmentId) {
+            console.log(`${logPrefix} downloading attachment id=${part.body.attachmentId} filename=${part.filename}`);
             const attRes = await gmail.users.messages.attachments.get({
               userId: 'me', messageId: msg.id, id: part.body.attachmentId,
             });
-            pdfBase64 = attRes.data.data; // URL-safe base64
+            pdfBase64 = attRes.data.data;
+            pdfFilename = part.filename;
+            console.log(`${logPrefix} downloaded ${pdfFilename}, base64 length=${pdfBase64?.length}`);
             break outer;
           }
         }
       }
     }
 
-    if (!pdfBase64) return res.json({ extracted: false });
+    if (!pdfBase64) {
+      console.log(`${logPrefix} no PDF attachment found — parts logged above`);
+      return res.json({ extracted: false, reason: 'No PDF attachment found' });
+    }
 
     const { standard } = await getModelsForUser(userId);
+    console.log(`${logPrefix} standard model=${standard}`);
     if (!standard || !standard.startsWith('claude-')) {
-      return res.json({ extracted: false, reason: 'PDF extraction requires an Anthropic model as standard' });
+      console.log(`${logPrefix} skipping — model is not Anthropic`);
+      return res.json({ extracted: false, reason: `PDF extraction requires an Anthropic model; configured model is "${standard}"` });
     }
 
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    // Convert URL-safe base64 to standard base64
     const standardBase64 = pdfBase64.replace(/-/g, '+').replace(/_/g, '/');
 
+    console.log(`${logPrefix} calling ${standard} with PDF document block`);
     const response = await client.messages.create({
       model: standard,
       max_tokens: 512,
@@ -797,13 +810,27 @@ router.post('/threads/:threadId/extract-invoice', async (req, res) => {
       }],
     });
 
+    const inputTokens = response.usage?.input_tokens || 0;
+    const outputTokens = response.usage?.output_tokens || 0;
     const text = response.content[0]?.text?.trim() || '';
+    console.log(`${logPrefix} model response tokens in=${inputTokens} out=${outputTokens} text="${text.slice(0, 200)}"`);
+
+    pool.query(
+      `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
+       VALUES ($1, NULL, $2, $3, $4, $5, 'gmail_invoice_extract')`,
+      [userId, standard, inputTokens, outputTokens, calculateCost(standard, inputTokens, outputTokens)]
+    ).catch(err => console.error(`${logPrefix} usage log error:`, err.message));
+
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return res.json({ extracted: false });
+    if (!match) {
+      console.log(`${logPrefix} no JSON found in model response`);
+      return res.json({ extracted: false, reason: 'Model did not return JSON', rawResponse: text.slice(0, 300) });
+    }
     const data = JSON.parse(match[0]);
+    console.log(`${logPrefix} extracted description="${data.description}" amount=${data.amount} supplier="${data.supplier}"`);
     res.json({ extracted: true, description: data.description || '', amount: data.amount || '', supplier: data.supplier || '' });
   } catch (err) {
-    console.error('[gmail/extract-invoice]', err.message);
+    console.error(`${logPrefix} ERROR:`, err.message);
     res.json({ extracted: false, error: err.message });
   }
 });

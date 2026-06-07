@@ -279,6 +279,8 @@ function ExpenseModal({ email, onClose, onActioned, addToast, getIcon }) {
             supplier: data.supplier || f.supplier,
             amount: data.amount != null ? String(data.amount) : f.amount,
           }));
+        } else {
+          console.warn('[extract-invoice] not extracted:', data.reason || data.error || 'unknown');
         }
       })
       .catch(() => {})
