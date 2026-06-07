@@ -1463,8 +1463,13 @@ function SettingsPage() {
               className="ml-4 px-3 py-1.5 rounded-lg border text-sm outline-none"
               style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
             >
-              <option value="">(use default model)</option>
-              {models.filter(m => m.id.startsWith('claude-')).map(m => (
+              <option value="">(auto — uses branch eval model if Claude)</option>
+              {[
+                ...models.filter(m => m.id.startsWith('claude-')),
+                ...(branchEvalModel && branchEvalModel.startsWith('claude-') && !models.find(m => m.id === branchEvalModel)
+                  ? [{ id: branchEvalModel, name: branchEvalModel }]
+                  : []),
+              ].map(m => (
                 <option key={m.id} value={m.id}>{m.name || m.id}</option>
               ))}
             </select>

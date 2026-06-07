@@ -787,11 +787,14 @@ router.post('/threads/:threadId/extract-invoice', async (req, res) => {
     }
 
     const { standard } = await getModelsForUser(userId);
-    const { rows: pdfModelRows } = await pool.query(
-      `SELECT value FROM settings WHERE "userId"=$1 AND key='gmail_pdf_model'`, [userId]
+    const { rows: settingRows } = await pool.query(
+      `SELECT key, value FROM settings WHERE "userId"=$1 AND key IN ('gmail_pdf_model','branch_eval_model')`, [userId]
     ).catch(() => ({ rows: [] }));
-    const pdfModel = pdfModelRows[0]?.value || standard;
-    console.log(`${logPrefix} standard model=${standard}, pdf model=${pdfModel}`);
+    const settingMap = Object.fromEntries(settingRows.map(r => [r.key, r.value]));
+    const pdfModel = settingMap.gmail_pdf_model
+      || (standard?.startsWith('claude-') ? standard : null)
+      || (settingMap.branch_eval_model?.startsWith('claude-') ? settingMap.branch_eval_model : null);
+    console.log(`${logPrefix} standard=${standard}, branch_eval=${settingMap.branch_eval_model}, pdf model resolved=${pdfModel}`);
     if (!pdfModel || !pdfModel.startsWith('claude-')) {
       console.log(`${logPrefix} skipping — pdf model "${pdfModel}" is not Anthropic. Set a PDF model in Settings → Inbox Intel.`);
       return res.json({ extracted: false, reason: `PDF extraction requires an Anthropic model. Configured model: "${pdfModel}". Set one in Settings → Inbox Intel.` });
