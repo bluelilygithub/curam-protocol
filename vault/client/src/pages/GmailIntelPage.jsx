@@ -311,6 +311,7 @@ export default function GmailIntelPage() {
   const [diagLoading, setDiagLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [sortMode, setSortMode] = useState('category');
   const [search, setSearch] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
   const [cachedAt, setCachedAt] = useState(null);
@@ -415,6 +416,7 @@ export default function GmailIntelPage() {
     );
   });
 
+  const sortedByDate = [...filtered].sort((a, b) => (b.internalDate || 0) - (a.internalDate || 0));
   const grouped = activeFilter === 'all'
     ? CATEGORY_ORDER.map(cat => ({ cat, rows: filtered.filter(e => e.category === cat) })).filter(g => g.rows.length > 0)
     : [{ cat: activeFilter, rows: filtered }];
@@ -550,6 +552,21 @@ export default function GmailIntelPage() {
                 </button>
               ))}
             </div>
+            <div className="flex items-center gap-0.5 border rounded-lg overflow-hidden flex-shrink-0" style={{ borderColor: 'var(--color-border)' }}>
+              {[{ key: 'category', label: 'Category' }, { key: 'date', label: 'Date' }].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setSortMode(key)}
+                  className="px-2.5 py-1 text-xs font-medium transition-all"
+                  style={{
+                    background: sortMode === key ? 'var(--color-primary)' : 'transparent',
+                    color: sortMode === key ? '#fff' : 'var(--color-muted)',
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="flex-1 relative">
               <span className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--color-muted)' }}>
                 {getIcon('search', { size: 12 })}
@@ -579,12 +596,18 @@ export default function GmailIntelPage() {
             <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--color-muted)' }}>
               <style>{`@keyframes vault-spin{to{transform:rotate(360deg)}}`}</style>
               <div className="w-6 h-6 rounded-full border-2" style={{ borderColor: 'var(--color-border)', borderTopColor: 'var(--color-primary)', animation: 'vault-spin 0.7s linear infinite' }} />
-              <span className="text-sm">Fetching and classifying 100 emails…</span>
+              <span className="text-sm">Fetching and classifying emails…</span>
             </div>
           ) : emails.length === 0 ? (
             <div className="text-center py-16 text-sm" style={{ color: 'var(--color-muted)' }}>No emails in inbox.</div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16 text-sm" style={{ color: 'var(--color-muted)' }}>No emails match this filter.</div>
+          ) : sortMode === 'date' ? (
+            <div className="flex flex-col gap-1.5">
+              {sortedByDate.map(e => (
+                <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} getIcon={getIcon} />
+              ))}
+            </div>
           ) : (
             grouped.map(({ cat, rows }) => (
               <div key={cat} className="mb-6">
@@ -595,12 +618,7 @@ export default function GmailIntelPage() {
                 )}
                 <div className="flex flex-col gap-1.5">
                   {rows.map(e => (
-                    <EmailRow
-                      key={e.id}
-                      email={e}
-                      onClick={() => setSelectedEmail(e)}
-                      getIcon={getIcon}
-                    />
+                    <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} getIcon={getIcon} />
                   ))}
                 </div>
               </div>

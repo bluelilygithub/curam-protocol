@@ -608,7 +608,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   const { rows: countRows } = await pool.query(
     'SELECT value FROM settings WHERE "userId"=$1 AND key=$2', [userId, 'gmail_intel_email_count']
   ).catch(() => ({ rows: [] }));
-  const maxResults = Math.min(parseInt(countRows[0]?.value || '100', 10), 100);
+  const maxResults = Math.min(parseInt(countRows[0]?.value || '100', 10), 200);
 
   let emails;
   try {
