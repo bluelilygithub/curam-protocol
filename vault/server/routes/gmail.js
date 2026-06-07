@@ -629,7 +629,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
     console.log(`[gmail/inbox/classify] using model: ${standard}, emails: ${emails.length}`);
 
     const lines = emails.map((e, i) =>
-      `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}${e.hasAttachment ? '\nHasAttachment: yes' : ''}`
+      `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
     ).join('\n\n');
 
     const prompt = `Classify these ${emails.length} inbox emails for a professional. Return ONLY a JSON array.
@@ -640,12 +640,10 @@ Categories (pick one per email):
 - fyi: informational, no action required
 - noise: newsletters, automated notifications, promotions
 
-isInvoice (boolean): true if the email is or contains an invoice, receipt, bill, tax invoice, statement, or payment request — infer from subject line, sender name, or preview. Be generous — when in doubt, mark true. Common signals: "invoice", "e-invoice", "einvoice", "INV-", "receipt", "tax invoice", "statement", "amount due", "payment due", "bill", "order confirmation" with a price, "your order" from a retailer or supplier, sender is a billing system (Xero, MYOB, QuickBooks, Stripe, PayPal, Shopify, WooCommerce, etc.). Subject patterns like "E-invoice for your order #..." or "Invoice #..." or "Receipt for..." always qualify.
-
 ${lines}
 
 Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
-[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>","isInvoice":false},...]`;
+[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`;
 
     const { text, inputTokens, outputTokens } = await callModel(standard, prompt, { maxTokens: 8192, returnUsage: true });
     console.log(`[gmail/inbox/classify] response length: ${text.length}, tokens in=${inputTokens} out=${outputTokens}, first 200: ${text.slice(0, 200)}`);
@@ -673,12 +671,15 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
     classificationFailed = true;
   }
 
+  const INVOICE_SUBJECT_RE = /\b(e-?invoice|invoice|receipt|tax invoice|statement|amount due|payment due|remittance|credit note|debit note|bill)\b|INV[-#\s]?\d|REC[-#\s]?\d/i;
+  const INVOICE_SENDER_RE = /xero|myob|quickbooks|intuit|stripe|paypal|shopify|woocommerce|afterpay|zip\s*pay|eway|pin\s*payments|square|braintree|adyen|invoiced\.com|billing@|accounts@|invoice@|noreply@.*invoice|invoices@/i;
+
   const byIndex = new Map(classifications.map(c => [c.index, c]));
   const enriched = emails.map((e, i) => ({
     ...e,
     category: byIndex.get(i + 1)?.category || 'fyi',
     one_line_summary: byIndex.get(i + 1)?.one_line_summary || e.snippet.slice(0, 80),
-    isInvoice: byIndex.get(i + 1)?.isInvoice === true,
+    isInvoice: INVOICE_SUBJECT_RE.test(e.subject || '') || INVOICE_SENDER_RE.test(e.sender || ''),
   }));
 
   const result = { emails: enriched, classificationFailed };
