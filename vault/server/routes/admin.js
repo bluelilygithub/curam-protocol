@@ -62,7 +62,7 @@ router.get('/stats', async (req, res) => {
 router.get('/monitor', async (req, res) => {
   const userId = req.user.id;
   try {
-    const [summaryRes, sessionsRes] = await Promise.all([
+    const [summaryRes, sessionsRes, featuresRes] = await Promise.all([
       pool.query(`
         SELECT
           COUNT(DISTINCT session_id)::INT               AS sessions_today,
@@ -97,6 +97,21 @@ router.get('/monitor', async (req, res) => {
         ORDER BY s."updatedAt" DESC
         LIMIT 25
       `, [userId]),
+      pool.query(`
+        SELECT
+          feature,
+          model_id                                          AS model,
+          COUNT(*)::INT                                     AS runs,
+          COALESCE(SUM(input_tokens)::INT, 0)               AS input_tokens,
+          COALESCE(SUM(output_tokens)::INT, 0)              AS output_tokens,
+          COALESCE(SUM(estimated_cost_usd)::FLOAT, 0)       AS total_cost,
+          MAX(created_at)                                   AS last_run
+        FROM usage_logs
+        WHERE session_id IS NULL
+          AND feature IS NOT NULL
+        GROUP BY feature, model_id
+        ORDER BY total_cost DESC
+      `, []),
     ]);
 
     const raw = summaryRes.rows[0];
@@ -116,6 +131,7 @@ router.get('/monitor', async (req, res) => {
         costToday:           raw.cost_today || 0,
       },
       sessions: sessionsRes.rows,
+      features: featuresRes.rows,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

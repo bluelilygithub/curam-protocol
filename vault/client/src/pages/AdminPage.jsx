@@ -434,7 +434,7 @@ function SessionMonitor() {
     return () => clearInterval(id);
   }, [autoRefresh, load]);
 
-  const { summary, sessions } = data || {};
+  const { summary, sessions, features } = data || {};
 
   return (
     <div className="space-y-6">
@@ -550,6 +550,39 @@ function SessionMonitor() {
       ) : (
         <div className="rounded-2xl border p-8 text-center text-sm" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
           No sessions yet.
+        </div>
+      )}
+
+      {/* Background feature usage */}
+      {features?.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Background Feature Usage (all-time)</h3>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+            <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+                  {['Feature', 'Model', 'Runs', 'Input tokens', 'Output tokens', 'Total cost', 'Last run'].map(h => (
+                    <th key={h} className="px-3 py-2.5 text-left font-semibold uppercase tracking-wider"
+                        style={{ color: 'var(--color-muted)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {features.map((f, i) => (
+                  <tr key={`${f.feature}-${f.model}`}
+                      style={{ borderBottom: i < features.length - 1 ? '1px solid var(--color-border)' : undefined, background: 'var(--color-surface)' }}>
+                    <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--color-text)' }}>{f.feature}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{f.model ? shortModel(f.model) : '—'}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-muted)' }}>{(f.runs || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-muted)' }}>{(f.input_tokens || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: 'var(--color-muted)' }}>{(f.output_tokens || 0).toLocaleString()}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium" style={{ color: 'var(--color-text)' }}>{fmtCost(f.total_cost)}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>{relativeTime(f.last_run)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
