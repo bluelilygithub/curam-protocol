@@ -247,12 +247,148 @@ function ThreadPanel({ email, onClose, addToast, getIcon }) {
   );
 }
 
-// ── Email row ─────────────────────────────────────────────────────────────────
-function EmailRow({ email, onClick, getIcon }) {
+// ── Expense modal ─────────────────────────────────────────────────────────────
+function ExpenseModal({ email, onClose, addToast, getIcon }) {
+  const dateStr = email.internalDate
+    ? new Date(email.internalDate).toISOString().slice(0, 10)
+    : new Date().toISOString().slice(0, 10);
+
+  const [form, setForm] = useState({
+    description: email.subject || '',
+    supplier: cleanSender(email.sender),
+    date: dateStr,
+    amount: '',
+    gstIncluded: true,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.amount || isNaN(parseFloat(form.amount))) {
+      addToast('Enter a valid amount', 'error'); return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.post('/api/finance/expenses', {
+        date: form.date,
+        description: form.description,
+        amount: parseFloat(form.amount),
+        gstIncluded: form.gstIncluded,
+        supplier: form.supplier || null,
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Failed');
+      }
+      addToast('Expense created', 'success');
+      onClose();
+    } catch (err) {
+      addToast(err.message, 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <button
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
+      <div className="rounded-2xl border shadow-xl w-full max-w-md p-6 space-y-4"
+           style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold" style={{ color: 'var(--color-text)' }}>Add Expense</h3>
+          <button onClick={onClose} className="hover:opacity-60 transition-opacity" style={{ color: 'var(--color-muted)' }}>
+            {getIcon('x', { size: 16 })}
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Description</label>
+            <input
+              value={form.description}
+              onChange={e => set('description', e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Supplier</label>
+            <input
+              value={form.supplier}
+              onChange={e => set('supplier', e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Date</label>
+              <input
+                type="date"
+                value={form.date}
+                onChange={e => set('date', e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Amount (AUD)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={form.amount}
+                onChange={e => set('amount', e.target.value)}
+                className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                required
+                autoFocus
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer text-sm" style={{ color: 'var(--color-text)' }}>
+            <input
+              type="checkbox"
+              checked={form.gstIncluded}
+              onChange={e => set('gstIncluded', e.target.checked)}
+            />
+            Amount includes GST
+          </label>
+          {form.gstIncluded && form.amount && !isNaN(parseFloat(form.amount)) && (
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              GST: ${(parseFloat(form.amount) / 11).toFixed(2)} · Ex-GST: ${(parseFloat(form.amount) - parseFloat(form.amount) / 11).toFixed(2)}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm transition-opacity hover:opacity-70"
+              style={{ color: 'var(--color-muted)' }}>
+              Cancel
+            </button>
+            <button type="submit" disabled={saving}
+              className="px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 transition-opacity hover:opacity-70"
+              style={{ background: 'var(--color-primary)', color: '#fff' }}>
+              {saving ? 'Saving…' : 'Save expense'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Email row ─────────────────────────────────────────────────────────────────
+function EmailRow({ email, onClick, onAddExpense, getIcon }) {
+  return (
+    <div
+      className="w-full flex items-start gap-3 rounded-xl border px-4 py-3 transition-colors text-left cursor-pointer hover:opacity-80"
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="w-full flex items-start gap-3 rounded-xl border px-4 py-3 transition-colors text-left hover:opacity-80"
+      onKeyDown={e => e.key === 'Enter' && onClick()}
       style={{
         borderColor: email.isUnread ? 'var(--color-primary)' : 'var(--color-border)',
         borderLeft: email.isUnread ? '3px solid var(--color-primary)' : undefined,
@@ -293,10 +429,21 @@ function EmailRow({ email, onClick, getIcon }) {
           {email.one_line_summary}
         </div>
       </div>
-      <div className="flex-shrink-0 text-xs pt-0.5" style={{ color: 'var(--color-muted)' }}>
-        {email.age}
+      <div className="flex-shrink-0 flex items-center gap-2 pt-0.5">
+        {email.isInvoice && (
+          <button
+            onClick={e => { e.stopPropagation(); onAddExpense(email); }}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-opacity hover:opacity-70"
+            style={{ background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}
+            title="Add as expense"
+          >
+            {getIcon('plus', { size: 10 })}
+            Expense
+          </button>
+        )}
+        <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{email.age}</span>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -317,6 +464,7 @@ export default function GmailIntelPage() {
   const [cachedAt, setCachedAt] = useState(null);
   const [countdown, setCountdown] = useState(DEFAULT_REFRESH_MS / 1000);
   const [selectedEmail, setSelectedEmail] = useState(null);
+  const [expenseModal, setExpenseModal] = useState(null);
   const [refreshMs, setRefreshMs] = useState(DEFAULT_REFRESH_MS);
   const navigate = useNavigate();
   const addToast = useToastStore((s) => s.addToast);
@@ -605,7 +753,7 @@ export default function GmailIntelPage() {
           ) : sortMode === 'date' ? (
             <div className="flex flex-col gap-1.5">
               {sortedByDate.map(e => (
-                <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} getIcon={getIcon} />
+                <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} getIcon={getIcon} />
               ))}
             </div>
           ) : (
@@ -618,7 +766,7 @@ export default function GmailIntelPage() {
                 )}
                 <div className="flex flex-col gap-1.5">
                   {rows.map(e => (
-                    <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} getIcon={getIcon} />
+                    <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} getIcon={getIcon} />
                   ))}
                 </div>
               </div>
@@ -644,6 +792,16 @@ export default function GmailIntelPage() {
             />
           </div>
         </>
+      )}
+
+      {/* Expense modal */}
+      {expenseModal && (
+        <ExpenseModal
+          email={expenseModal}
+          onClose={() => setExpenseModal(null)}
+          addToast={addToast}
+          getIcon={getIcon}
+        />
       )}
     </div>
   );
