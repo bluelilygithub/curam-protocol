@@ -1240,6 +1240,18 @@ async function initSchema() {
       ON youtube_favourites ("userId", "videoId")
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gmail_classifications (
+      "userId"        TEXT NOT NULL,
+      "threadId"      TEXT NOT NULL,
+      "lastMessageId" TEXT NOT NULL,
+      category        TEXT NOT NULL DEFAULT 'fyi',
+      "oneLine"       TEXT,
+      "classifiedAt"  TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY ("userId", "threadId")
+    )
+  `);
+
   console.log('[db] Schema ready');
 }
 

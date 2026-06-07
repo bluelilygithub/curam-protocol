@@ -6,6 +6,42 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ## 2026-06-07
 
+**Feature:** Gmail Intel — incremental DB-backed classification.
+
+The classify endpoint (`GET /api/gmail/inbox/classify`) now persists classifications in the `gmail_classifications` table (added to `server/db.js`). On each call it fetches inbox threads, queries the DB for stored results, and runs the AI model only on threads that are new or have a new `lastMessageId` (i.e. a new reply arrived). Results are batch-upserted back to the DB. The in-memory `classifyCache` is kept as a 2-minute request dedup guard only — not as the primary cache. This eliminates re-classifying hundreds of threads on every page load.
+
+Invoice detection (`isInvoice`) is still deterministic regex, applied post-enrichment on every call; not stored in DB.
+
+No model IDs hardcoded — uses `getModelsForUser(userId).standard`.
+
+**Modified files:** `server/db.js`, `server/routes/gmail.js`.
+
+---
+
+**Feature:** Gmail Intel — invoice icon indicator.
+
+Receipt icon (amber) shown in each email row when subject or sender matches invoice/billing regexes. Regex patterns compiled once at module level.
+
+**Modified files:** `server/routes/gmail.js`, `client/src/pages/GmailIntelPage.jsx`, `client/src/providers/IconProvider.jsx`.
+
+---
+
+**Feature:** Gmail Intel — date-order sort view.
+
+Toggle between Category (grouped) and Date (flat chronological) views in the filter bar. Date view renders all filtered emails sorted newest-first regardless of AI category.
+
+**Modified files:** `client/src/pages/GmailIntelPage.jsx`.
+
+---
+
+**Fix:** Gmail Intel — emails beyond position 100 not appearing.
+
+Raised `maxResults` cap from 100 to 200 in the Gmail threads list call. Email count is still user-configurable in Settings (up to 200).
+
+**Modified files:** `server/routes/gmail.js`.
+
+---
+
 **Feature:** Dashboard — New Chat button above My Tasks widget.
 
 A full-width "New Chat" card now appears on the home dashboard (`ProjectList.jsx`) between the Goals widget and the My Tasks widget. Navigates to `/chat` (General chat). Styled to match the GoalsWidget/TasksWidget card style with primary-colour icon and `hover:opacity-70`.

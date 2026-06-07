@@ -539,9 +539,13 @@ const gmailInboxClassifyLimiter = rateLimit({
   message: { error: 'Too many classify requests, please try again later.' },
 });
 
-// In-memory classify cache — per user, 10 min TTL (single Railway instance)
+// Short in-memory dedup — prevents hammering within 2 minutes between renders
 const classifyCache = new Map(); // userId -> { ts: number, result: object }
-const CLASSIFY_CACHE_MS = 10 * 60 * 1000;
+const CLASSIFY_DEDUP_MS = 2 * 60 * 1000;
+
+// Deterministic invoice detection — module-level so regexes compile once
+const INVOICE_SUBJECT_RE = /\b(e-?invoice|invoice|receipt|tax invoice|statement|amount due|payment due|remittance|credit note|debit note|bill)\b|INV[-#\s]?\d|REC[-#\s]?\d/i;
+const INVOICE_SENDER_RE = /xero|myob|quickbooks|intuit|stripe|paypal|shopify|woocommerce|afterpay|zip\s*pay|eway|pin\s*payments|square|braintree|adyen|invoiced\.com|billing@|accounts@|invoice@|noreply@.*invoice|invoices@/i;
 
 function formatEmailAge(ms) {
   if (ms <= 0) return 'just now';
@@ -593,14 +597,14 @@ async function fetchInboxEmails(userId, maxResults = 100) {
     });
 }
 
-// GET /api/gmail/inbox/classify — fetch + classify inbox; cached 10 min, bust with ?refresh=1
+// GET /api/gmail/inbox/classify — incremental: only classifies new/changed threads
 router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   const userId = req.user.id;
   const forceRefresh = req.query.refresh === '1';
 
-  // Return cached result if fresh
+  // 2-min dedup to prevent hammering on rapid page switches
   const cached = classifyCache.get(userId);
-  if (!forceRefresh && cached && (Date.now() - cached.ts) < CLASSIFY_CACHE_MS) {
+  if (!forceRefresh && cached && (Date.now() - cached.ts) < CLASSIFY_DEDUP_MS) {
     return res.json({ ...cached.result, cachedAt: cached.ts });
   }
 
@@ -621,18 +625,37 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 
-  let classifications = [];
+  if (!emails.length) {
+    return res.json({ emails: [], classificationFailed: false });
+  }
+
+  // Load stored classifications for current inbox threads
+  const threadIds = emails.map(e => e.threadId);
+  const { rows: stored } = await pool.query(
+    `SELECT "threadId", "lastMessageId", category, "oneLine"
+     FROM gmail_classifications WHERE "userId"=$1 AND "threadId"=ANY($2)`,
+    [userId, threadIds]
+  ).catch(() => ({ rows: [] }));
+  const storedMap = new Map(stored.map(r => [r.threadId, r]));
+
+  // Only classify threads with no stored record OR where last message has changed (new reply)
+  const needsClassification = emails.filter(e => {
+    const s = storedMap.get(e.threadId);
+    return !s || s.lastMessageId !== e.id;
+  });
+
   let classificationFailed = false;
 
-  try {
-    const { standard } = await getModelsForUser(userId);
-    console.log(`[gmail/inbox/classify] using model: ${standard}, emails: ${emails.length}`);
+  if (needsClassification.length > 0) {
+    try {
+      const { standard } = await getModelsForUser(userId);
+      console.log(`[gmail/inbox/classify] model: ${standard}, classifying ${needsClassification.length}/${emails.length} new/updated threads`);
 
-    const lines = emails.map((e, i) =>
-      `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
-    ).join('\n\n');
+      const lines = needsClassification.map((e, i) =>
+        `[${i + 1}]\nFrom: ${e.sender}\nSubject: ${e.subject}\nPreview: ${e.snippet}\nAge: ${e.age}`
+      ).join('\n\n');
 
-    const prompt = `Classify these ${emails.length} inbox emails for a professional. Return ONLY a JSON array.
+      const prompt = `Classify these ${needsClassification.length} inbox emails for a professional. Return ONLY a JSON array.
 
 Categories (pick one per email):
 - urgent: requires action soon, time-sensitive
@@ -645,48 +668,72 @@ ${lines}
 Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
 [{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`;
 
-    const { text, inputTokens, outputTokens } = await callModel(standard, prompt, { maxTokens: 8192, returnUsage: true });
-    console.log(`[gmail/inbox/classify] response length: ${text.length}, tokens in=${inputTokens} out=${outputTokens}, first 200: ${text.slice(0, 200)}`);
+      const { text, inputTokens, outputTokens } = await callModel(standard, prompt, { maxTokens: 4096, returnUsage: true });
+      console.log(`[gmail/inbox/classify] tokens in=${inputTokens} out=${outputTokens}`);
 
-    // Log to usage_logs (fire-and-forget)
-    if (inputTokens || outputTokens) {
-      const cost = calculateCost(standard, inputTokens, outputTokens);
-      pool.query(
-        `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
-         VALUES ($1, NULL, $2, $3, $4, $5, 'gmail_intel')`,
-        [userId, standard, inputTokens, outputTokens, cost]
-      ).catch(err => console.error('[gmail/inbox/classify] usage log error:', err.message));
-    }
-    const stripped = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
-    const match = stripped.match(/\[[\s\S]*\]/);
-    if (match) {
-      classifications = JSON.parse(match[0]);
-      console.log(`[gmail/inbox/classify] parsed ${classifications.length} classifications`);
-    } else {
-      console.warn('[gmail/inbox/classify] no JSON array found in response');
+      if (inputTokens || outputTokens) {
+        const cost = calculateCost(standard, inputTokens, outputTokens);
+        pool.query(
+          `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
+           VALUES ($1, NULL, $2, $3, $4, $5, 'gmail_intel')`,
+          [userId, standard, inputTokens, outputTokens, cost]
+        ).catch(err => console.error('[gmail/inbox/classify] usage log error:', err.message));
+      }
+
+      const stripped = text.replace(/^```[a-z]*\n?/i, '').replace(/\n?```$/i, '').trim();
+      const match = stripped.match(/\[[\s\S]*\]/);
+      if (match) {
+        const classifications = JSON.parse(match[0]);
+
+        // Batch upsert all new classifications in one query
+        const toStore = classifications
+          .map(c => ({ email: needsClassification[c.index - 1], category: c.category || 'fyi', oneLine: c.one_line_summary || '' }))
+          .filter(r => r.email);
+
+        if (toStore.length > 0) {
+          const vals = toStore.map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5},NOW())`).join(',');
+          const params = toStore.flatMap(r => [userId, r.email.threadId, r.email.id, r.category, r.oneLine]);
+          await pool.query(
+            `INSERT INTO gmail_classifications ("userId","threadId","lastMessageId",category,"oneLine","classifiedAt")
+             VALUES ${vals}
+             ON CONFLICT ("userId","threadId") DO UPDATE SET
+               "lastMessageId"=EXCLUDED."lastMessageId",
+               category=EXCLUDED.category,
+               "oneLine"=EXCLUDED."oneLine",
+               "classifiedAt"=EXCLUDED."classifiedAt"`,
+            params
+          ).catch(err => console.error('[gmail/inbox/classify] upsert error:', err.message));
+
+          // Merge into storedMap for the enrichment step below
+          for (const r of toStore) {
+            storedMap.set(r.email.threadId, { lastMessageId: r.email.id, category: r.category, oneLine: r.oneLine });
+          }
+        }
+        console.log(`[gmail/inbox/classify] stored ${toStore.length} classifications`);
+      } else {
+        console.warn('[gmail/inbox/classify] no JSON array found in response');
+        classificationFailed = true;
+      }
+    } catch (err) {
+      console.error('[gmail/inbox/classify] model error:', err.message);
       classificationFailed = true;
     }
-  } catch (err) {
-    console.error('[gmail/inbox/classify] model error:', err.message);
-    classificationFailed = true;
+  } else {
+    console.log(`[gmail/inbox/classify] all ${emails.length} threads already classified — skipping model call`);
   }
 
-  const INVOICE_SUBJECT_RE = /\b(e-?invoice|invoice|receipt|tax invoice|statement|amount due|payment due|remittance|credit note|debit note|bill)\b|INV[-#\s]?\d|REC[-#\s]?\d/i;
-  const INVOICE_SENDER_RE = /xero|myob|quickbooks|intuit|stripe|paypal|shopify|woocommerce|afterpay|zip\s*pay|eway|pin\s*payments|square|braintree|adyen|invoiced\.com|billing@|accounts@|invoice@|noreply@.*invoice|invoices@/i;
-
-  const byIndex = new Map(classifications.map(c => [c.index, c]));
-  const enriched = emails.map((e, i) => ({
-    ...e,
-    category: byIndex.get(i + 1)?.category || 'fyi',
-    one_line_summary: byIndex.get(i + 1)?.one_line_summary || e.snippet.slice(0, 80),
-    isInvoice: INVOICE_SUBJECT_RE.test(e.subject || '') || INVOICE_SENDER_RE.test(e.sender || ''),
-  }));
+  const enriched = emails.map(e => {
+    const s = storedMap.get(e.threadId);
+    return {
+      ...e,
+      category: s?.category || 'fyi',
+      one_line_summary: s?.oneLine || e.snippet.slice(0, 80),
+      isInvoice: INVOICE_SUBJECT_RE.test(e.subject || '') || INVOICE_SENDER_RE.test(e.sender || ''),
+    };
+  });
 
   const result = { emails: enriched, classificationFailed };
-  // Don't cache failed classifications — next load will retry
-  if (!classificationFailed) {
-    classifyCache.set(userId, { ts: Date.now(), result });
-  }
+  classifyCache.set(userId, { ts: Date.now(), result });
   res.json({ ...result, cachedAt: null });
 });
 
