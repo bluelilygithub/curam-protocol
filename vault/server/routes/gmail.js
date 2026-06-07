@@ -580,13 +580,17 @@ async function fetchInboxEmails(userId, maxResults = 100) {
     .map(thread => {
       const messages = thread.messages;
       const lastMsg = messages[messages.length - 1];
+      const firstMsg = messages[0];
       const headers = lastMsg?.payload?.headers || [];
+      const firstHeaders = firstMsg?.payload?.headers || [];
       const internalDate = parseInt(lastMsg?.internalDate || '0');
+      // Gmail omits Subject header from reply messages — fall back to first message's subject
+      const subject = getHeader(headers, 'Subject') || getHeader(firstHeaders, 'Subject');
       return {
         id: lastMsg.id,
         threadId: thread.id,
         sender: getHeader(headers, 'From'),
-        subject: getHeader(headers, 'Subject'),
+        subject,
         snippet: (lastMsg.snippet || '').replace(/&#39;/g, "'").replace(/&amp;/g, '&'),
         isUnread: messages.some(m => (m.labelIds || []).includes('UNREAD')),
         hasAttachment: threadHasAttachment(messages),
@@ -730,7 +734,7 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
       ...e,
       category: s?.category || 'fyi',
       one_line_summary: s?.oneLine || e.snippet.slice(0, 80),
-      isInvoice: INVOICE_SUBJECT_RE.test(e.subject || '') || INVOICE_SENDER_RE.test(e.sender || ''),
+      isInvoice: INVOICE_SUBJECT_RE.test(e.subject || '') || INVOICE_SENDER_RE.test(e.sender || '') || INVOICE_SUBJECT_RE.test(e.snippet || ''),
     };
   });
 
