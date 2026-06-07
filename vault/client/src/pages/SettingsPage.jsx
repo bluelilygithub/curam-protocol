@@ -94,6 +94,7 @@ function SettingsPage() {
   // Inbox Intel settings
   const [gmailIntelRefreshInterval, setGmailIntelRefreshInterval] = useState('10');
   const [gmailIntelEmailCount, setGmailIntelEmailCount]           = useState('100');
+  const [gmailPdfModel, setGmailPdfModel]                         = useState('');
 
   const [mobileTiles, setMobileTiles] = useState(() => DEFAULT_TILES.map(t => ({ ...t })));
   const [mobileNavItems, setMobileNavItems] = useState(() => DEFAULT_NAV_ITEMS.map(i => ({ ...i })));
@@ -178,6 +179,7 @@ function SettingsPage() {
       setMissionSnoozedUntil(data.mission_review_snoozed_until || null);
       if (data.gmail_intel_refresh_interval) setGmailIntelRefreshInterval(data.gmail_intel_refresh_interval);
       if (data.gmail_intel_email_count)      setGmailIntelEmailCount(data.gmail_intel_email_count);
+      if (data.gmail_pdf_model)              setGmailPdfModel(data.gmail_pdf_model);
       if (data.mobile_dashboard_tiles) {
         try { setMobileTiles(mergeWithDefaults(JSON.parse(data.mobile_dashboard_tiles), DEFAULT_TILES)); } catch {}
       }
@@ -1444,6 +1446,27 @@ function SettingsPage() {
               <option value="25">25 emails</option>
               <option value="50">50 emails</option>
               <option value="100">100 emails</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-between p-4 rounded-xl border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>PDF invoice model</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Model used to read PDF attachments on invoice emails — must be an Anthropic model</p>
+            </div>
+            <select
+              value={gmailPdfModel}
+              onChange={e => {
+                setGmailPdfModel(e.target.value);
+                api.post('/api/settings', { key: 'gmail_pdf_model', value: e.target.value }).catch(() => {});
+              }}
+              className="ml-4 px-3 py-1.5 rounded-lg border text-sm outline-none"
+              style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}
+            >
+              <option value="">(use default model)</option>
+              {models.filter(m => m.id.startsWith('claude-')).map(m => (
+                <option key={m.id} value={m.id}>{m.name || m.id}</option>
+              ))}
             </select>
           </div>
         </div>

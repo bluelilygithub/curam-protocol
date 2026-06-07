@@ -787,19 +787,23 @@ router.post('/threads/:threadId/extract-invoice', async (req, res) => {
     }
 
     const { standard } = await getModelsForUser(userId);
-    console.log(`${logPrefix} standard model=${standard}`);
-    if (!standard || !standard.startsWith('claude-')) {
-      console.log(`${logPrefix} skipping — model is not Anthropic`);
-      return res.json({ extracted: false, reason: `PDF extraction requires an Anthropic model; configured model is "${standard}"` });
+    const { rows: pdfModelRows } = await pool.query(
+      `SELECT value FROM settings WHERE "userId"=$1 AND key='gmail_pdf_model'`, [userId]
+    ).catch(() => ({ rows: [] }));
+    const pdfModel = pdfModelRows[0]?.value || standard;
+    console.log(`${logPrefix} standard model=${standard}, pdf model=${pdfModel}`);
+    if (!pdfModel || !pdfModel.startsWith('claude-')) {
+      console.log(`${logPrefix} skipping — pdf model "${pdfModel}" is not Anthropic. Set a PDF model in Settings → Inbox Intel.`);
+      return res.json({ extracted: false, reason: `PDF extraction requires an Anthropic model. Configured model: "${pdfModel}". Set one in Settings → Inbox Intel.` });
     }
 
     const Anthropic = require('@anthropic-ai/sdk');
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const standardBase64 = pdfBase64.replace(/-/g, '+').replace(/_/g, '/');
 
-    console.log(`${logPrefix} calling ${standard} with PDF document block`);
+    console.log(`${logPrefix} calling ${pdfModel} with PDF document block`);
     const response = await client.messages.create({
-      model: standard,
+      model: pdfModel,
       max_tokens: 512,
       messages: [{
         role: 'user',
@@ -818,7 +822,7 @@ router.post('/threads/:threadId/extract-invoice', async (req, res) => {
     pool.query(
       `INSERT INTO usage_logs (user_id, session_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
        VALUES ($1, NULL, $2, $3, $4, $5, 'gmail_invoice_extract')`,
-      [userId, standard, inputTokens, outputTokens, calculateCost(standard, inputTokens, outputTokens)]
+      [userId, pdfModel, inputTokens, outputTokens, calculateCost(pdfModel, inputTokens, outputTokens)]
     ).catch(err => console.error(`${logPrefix} usage log error:`, err.message));
 
     const match = text.match(/\{[\s\S]*\}/);
