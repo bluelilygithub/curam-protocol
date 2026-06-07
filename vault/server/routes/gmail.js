@@ -640,7 +640,7 @@ Categories (pick one per email):
 - fyi: informational, no action required
 - noise: newsletters, automated notifications, promotions
 
-isInvoice (boolean): true if the email is or contains an invoice, receipt, bill, tax invoice, statement, or payment request — infer from subject line, sender name, or preview. Common signals: "invoice", "INV-", "receipt", "tax invoice", "statement", "amount due", "payment due", "bill", sender is a billing system (Xero, QuickBooks, Stripe, PayPal, etc.).
+isInvoice (boolean): true if the email is or contains an invoice, receipt, bill, tax invoice, statement, or payment request — infer from subject line, sender name, or preview. Be generous — when in doubt, mark true. Common signals: "invoice", "e-invoice", "einvoice", "INV-", "receipt", "tax invoice", "statement", "amount due", "payment due", "bill", "order confirmation" with a price, "your order" from a retailer or supplier, sender is a billing system (Xero, MYOB, QuickBooks, Stripe, PayPal, Shopify, WooCommerce, etc.). Subject patterns like "E-invoice for your order #..." or "Invoice #..." or "Receipt for..." always qualify.
 
 ${lines}
 
