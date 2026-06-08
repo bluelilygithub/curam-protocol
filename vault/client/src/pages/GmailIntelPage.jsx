@@ -446,7 +446,7 @@ function EmailRow({ email, onClick, onAddExpense, onUnaction, getIcon }) {
             </span>
           )}
           {email.isInvoice && (
-            <span className="flex-shrink-0" style={{ color: '#f59e0b' }} title="Invoice / bill detected">
+            <span className="flex-shrink-0" style={{ color: '#f59e0b' }} title="Invoice / receipt detected">
               {getIcon('receipt', { size: 12 })}
             </span>
           )}
@@ -714,21 +714,6 @@ export default function GmailIntelPage() {
             </button>
           </div>
 
-          {/* Metric cards */}
-          <div className="grid grid-cols-4 gap-3 mb-4">
-            {[
-              { key: 'urgent', label: 'Urgent', color: '#ef4444' },
-              { key: 'waiting', label: 'Waiting', color: '#f59e0b' },
-              { key: 'unread', label: 'Unread', color: 'var(--color-primary)' },
-              { key: 'noise', label: 'Noise', color: '#94a3b8' },
-            ].map(({ key, label, color }) => (
-              <div key={key} className="rounded-xl border px-4 py-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                <div className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-muted)' }}>{label}</div>
-                <div className="text-2xl font-bold" style={{ color: loading ? 'var(--color-muted)' : color }}>{loading ? '—' : counts[key]}</div>
-              </div>
-            ))}
-          </div>
-
           {/* Filter pills + search */}
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
@@ -787,7 +772,7 @@ export default function GmailIntelPage() {
         )}
 
         {/* Email list */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className={`flex-1 px-6 py-4 ${sortMode === 'category' && activeFilter === 'all' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--color-muted)' }}>
               <style>{`@keyframes vault-spin{to{transform:rotate(360deg)}}`}</style>
@@ -804,14 +789,29 @@ export default function GmailIntelPage() {
                 <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} getIcon={getIcon} />
               ))}
             </div>
+          ) : activeFilter === 'all' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 min-h-0">
+              {CATEGORY_ORDER.map(cat => {
+                const rows = filtered.filter(e => e.category === cat);
+                return (
+                  <div key={cat} className="flex flex-col min-h-0 rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <div className="text-xs font-bold uppercase tracking-wide mb-2 flex-shrink-0" style={{ color: CATEGORY_COLOR[cat] }}>
+                      {CATEGORY_LABELS[cat]} · {rows.length}
+                    </div>
+                    <div className="flex flex-col gap-1.5 overflow-y-auto flex-1">
+                      {rows.length === 0 ? (
+                        <div className="text-xs py-4 text-center" style={{ color: 'var(--color-muted)' }}>None</div>
+                      ) : rows.map(e => (
+                        <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} getIcon={getIcon} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             grouped.map(({ cat, rows }) => (
               <div key={cat} className="mb-6">
-                {activeFilter === 'all' && (
-                  <div className="text-xs font-bold uppercase tracking-wide mb-2 px-1" style={{ color: CATEGORY_COLOR[cat] }}>
-                    {CATEGORY_LABELS[cat]} · {rows.length}
-                  </div>
-                )}
                 <div className="flex flex-col gap-1.5">
                   {rows.map(e => (
                     <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} getIcon={getIcon} />
