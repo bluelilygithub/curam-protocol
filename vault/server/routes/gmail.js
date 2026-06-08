@@ -543,9 +543,6 @@ const gmailInboxClassifyLimiter = rateLimit({
 const classifyCache = new Map(); // userId -> { ts: number, result: object }
 const CLASSIFY_DEDUP_MS = 2 * 60 * 1000;
 
-// Deterministic invoice detection — module-level so regexes compile once
-const INVOICE_SUBJECT_RE = /\b(e-?invoice|invoice|receipt|tax invoice|statement|amount due|payment due|remittance|credit note|debit note|bill)\b|INV[-#\s]?\d|REC[-#\s]?\d/i;
-const INVOICE_SENDER_RE = /xero|myob|quickbooks|intuit|stripe|paypal|shopify|woocommerce|afterpay|zip\s*pay|eway|pin\s*payments|square|braintree|adyen|invoiced\.com|billing@|accounts@|invoice@|noreply@.*invoice|invoices@/i;
 
 function formatEmailAge(ms) {
   if (ms <= 0) return 'just now';
@@ -636,7 +633,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   // Load stored classifications for current inbox threads
   const threadIds = emails.map(e => e.threadId);
   const { rows: stored } = await pool.query(
-    `SELECT "threadId", "lastMessageId", category, "oneLine", actioned
+    `SELECT "threadId", "lastMessageId", category, "oneLine", actioned, "isExpense"
      FROM gmail_classifications WHERE "userId"=$1 AND "threadId"=ANY($2)`,
     [userId, threadIds]
   ).catch(() => ({ rows: [] }));
@@ -668,10 +665,12 @@ Categories (pick one per email):
 - fyi: informational, no action required
 - noise: newsletters, automated notifications, promotions
 
+Set is_expense: true for any email that represents a financial document — invoice, receipt, purchase confirmation, payment confirmation, order confirmation, donation receipt, subscription charge, tax receipt, or any document showing an amount paid, owed, or received. This includes when the subject, preview, or sender strongly suggests a financial transaction.
+
 ${lines}
 
 Return format — JSON array only, no markdown, no explanation. Use the number from [N] as the index field:
-[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>"},...]`;
+[{"index":1,"category":"urgent|waiting|fyi|noise","one_line_summary":"<max 12 words>","is_expense":false},...]`;
 
       const { text, inputTokens, outputTokens } = await callModel(standard, prompt, { maxTokens: 4096, returnUsage: true });
       console.log(`[gmail/inbox/classify] tokens in=${inputTokens} out=${outputTokens}`);
@@ -692,26 +691,27 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
 
         // Batch upsert all new classifications in one query
         const toStore = classifications
-          .map(c => ({ email: needsClassification[c.index - 1], category: c.category || 'fyi', oneLine: c.one_line_summary || '' }))
+          .map(c => ({ email: needsClassification[c.index - 1], category: c.category || 'fyi', oneLine: c.one_line_summary || '', isExpense: !!c.is_expense }))
           .filter(r => r.email);
 
         if (toStore.length > 0) {
-          const vals = toStore.map((_, i) => `($${i * 5 + 1},$${i * 5 + 2},$${i * 5 + 3},$${i * 5 + 4},$${i * 5 + 5},NOW())`).join(',');
-          const params = toStore.flatMap(r => [userId, r.email.threadId, r.email.id, r.category, r.oneLine]);
+          const vals = toStore.map((_, i) => `($${i * 6 + 1},$${i * 6 + 2},$${i * 6 + 3},$${i * 6 + 4},$${i * 6 + 5},$${i * 6 + 6},NOW())`).join(',');
+          const params = toStore.flatMap(r => [userId, r.email.threadId, r.email.id, r.category, r.oneLine, r.isExpense]);
           await pool.query(
-            `INSERT INTO gmail_classifications ("userId","threadId","lastMessageId",category,"oneLine","classifiedAt")
+            `INSERT INTO gmail_classifications ("userId","threadId","lastMessageId",category,"oneLine","isExpense","classifiedAt")
              VALUES ${vals}
              ON CONFLICT ("userId","threadId") DO UPDATE SET
                "lastMessageId"=EXCLUDED."lastMessageId",
                category=EXCLUDED.category,
                "oneLine"=EXCLUDED."oneLine",
+               "isExpense"=EXCLUDED."isExpense",
                "classifiedAt"=EXCLUDED."classifiedAt"`,
             params
           ).catch(err => console.error('[gmail/inbox/classify] upsert error:', err.message));
 
           // Merge into storedMap for the enrichment step below
           for (const r of toStore) {
-            storedMap.set(r.email.threadId, { lastMessageId: r.email.id, category: r.category, oneLine: r.oneLine });
+            storedMap.set(r.email.threadId, { lastMessageId: r.email.id, category: r.category, oneLine: r.oneLine, isExpense: r.isExpense });
           }
         }
         console.log(`[gmail/inbox/classify] stored ${toStore.length} classifications`);
@@ -734,7 +734,7 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
       ...e,
       category: s?.category || 'fyi',
       one_line_summary: s?.oneLine || e.snippet.slice(0, 80),
-      isInvoice: INVOICE_SUBJECT_RE.test(e.subject || '') || INVOICE_SENDER_RE.test(e.sender || '') || INVOICE_SUBJECT_RE.test(e.snippet || ''),
+      isInvoice: !!storedMap.get(e.threadId)?.isExpense,
       actioned: !!storedMap.get(e.threadId)?.actioned,
     };
   });

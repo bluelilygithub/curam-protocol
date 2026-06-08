@@ -1252,6 +1252,9 @@ async function initSchema() {
     )
   `);
   await pool.query(`ALTER TABLE gmail_classifications ADD COLUMN IF NOT EXISTS actioned BOOLEAN DEFAULT FALSE`);
+  await pool.query(`ALTER TABLE gmail_classifications ADD COLUMN IF NOT EXISTS "isExpense" BOOLEAN`);
+  // Force re-classify rows without isExpense so LLM re-evaluates them with the new field
+  await pool.query(`UPDATE gmail_classifications SET "lastMessageId" = '' WHERE "isExpense" IS NULL`);
 
   console.log('[db] Schema ready');
 }
