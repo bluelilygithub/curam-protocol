@@ -633,7 +633,7 @@ router.get('/inbox/classify', gmailInboxClassifyLimiter, async (req, res) => {
   // Load stored classifications for current inbox threads
   const threadIds = emails.map(e => e.threadId);
   const { rows: stored } = await pool.query(
-    `SELECT "threadId", "lastMessageId", category, "oneLine", actioned, "isExpense"
+    `SELECT "threadId", "lastMessageId", category, "oneLine", actioned, "isExpense", acknowledged
      FROM gmail_classifications WHERE "userId"=$1 AND "threadId"=ANY($2)`,
     [userId, threadIds]
   ).catch(() => ({ rows: [] }));
@@ -709,9 +709,10 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
             params
           ).catch(err => console.error('[gmail/inbox/classify] upsert error:', err.message));
 
-          // Merge into storedMap for the enrichment step below
+          // Merge into storedMap for the enrichment step below (preserve acknowledged — not reset by re-classify)
           for (const r of toStore) {
-            storedMap.set(r.email.threadId, { lastMessageId: r.email.id, category: r.category, oneLine: r.oneLine, isExpense: r.isExpense });
+            const prev = storedMap.get(r.email.threadId);
+            storedMap.set(r.email.threadId, { lastMessageId: r.email.id, category: r.category, oneLine: r.oneLine, isExpense: r.isExpense, acknowledged: prev?.acknowledged ?? false });
           }
         }
         console.log(`[gmail/inbox/classify] stored ${toStore.length} classifications`);
@@ -736,6 +737,7 @@ Return format — JSON array only, no markdown, no explanation. Use the number f
       one_line_summary: s?.oneLine || e.snippet.slice(0, 80),
       isInvoice: !!storedMap.get(e.threadId)?.isExpense,
       actioned: !!storedMap.get(e.threadId)?.actioned,
+      acknowledged: !!storedMap.get(e.threadId)?.acknowledged,
     };
   });
 
@@ -866,6 +868,38 @@ router.post('/threads/:threadId/action', async (req, res) => {
       `INSERT INTO gmail_classifications ("userId","threadId","lastMessageId",category,actioned)
        VALUES ($1,$2,''::text,'fyi',true)
        ON CONFLICT ("userId","threadId") DO UPDATE SET actioned=true`,
+      [userId, threadId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/gmail/threads/:threadId/acknowledge — move email to Acknowledged silo
+router.post('/threads/:threadId/acknowledge', async (req, res) => {
+  const userId = req.user.id;
+  const { threadId } = req.params;
+  try {
+    await pool.query(
+      `INSERT INTO gmail_classifications ("userId","threadId","lastMessageId",category,acknowledged)
+       VALUES ($1,$2,''::text,'fyi',true)
+       ON CONFLICT ("userId","threadId") DO UPDATE SET acknowledged=true`,
+      [userId, threadId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/gmail/threads/:threadId/unacknowledge — restore email to quadrant
+router.post('/threads/:threadId/unacknowledge', async (req, res) => {
+  const userId = req.user.id;
+  const { threadId } = req.params;
+  try {
+    await pool.query(
+      `UPDATE gmail_classifications SET acknowledged=false WHERE "userId"=$1 AND "threadId"=$2`,
       [userId, threadId]
     );
     res.json({ ok: true });

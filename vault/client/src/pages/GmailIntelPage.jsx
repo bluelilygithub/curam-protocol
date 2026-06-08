@@ -412,7 +412,7 @@ function ExpenseModal({ email, onClose, onActioned, addToast, getIcon }) {
 }
 
 // ── Email row ─────────────────────────────────────────────────────────────────
-function EmailRow({ email, onClick, onAddExpense, onUnaction, getIcon }) {
+function EmailRow({ email, onClick, onAddExpense, onUnaction, onAcknowledge, onUnacknowledge, getIcon }) {
   return (
     <div
       className="w-full flex items-start gap-3 rounded-xl border px-4 py-3 transition-colors text-left cursor-pointer hover:opacity-80"
@@ -484,6 +484,28 @@ function EmailRow({ email, onClick, onAddExpense, onUnaction, getIcon }) {
             </button>
           )
         )}
+        {onAcknowledge && !email.acknowledged && (
+          <button
+            onClick={e => { e.stopPropagation(); onAcknowledge(email.threadId); }}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-opacity hover:opacity-60"
+            style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+            title="Dismiss to Acknowledged"
+          >
+            {getIcon('x', { size: 10 })}
+            Dismiss
+          </button>
+        )}
+        {onUnacknowledge && email.acknowledged && (
+          <button
+            onClick={e => { e.stopPropagation(); onUnacknowledge(email.threadId); }}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-opacity hover:opacity-60"
+            style={{ background: 'var(--color-bg)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+            title="Restore to inbox"
+          >
+            {getIcon('rotate-ccw', { size: 10 })}
+            Restore
+          </button>
+        )}
         <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{email.age}</span>
       </div>
     </div>
@@ -500,7 +522,7 @@ export default function GmailIntelPage() {
   const [diag, setDiag] = useState(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [authError, setAuthError] = useState(null);
-  const [activeFilter, setActiveFilter] = useState('all');
+  const [activeFilter, setActiveFilter] = useState('quadrant');
   const [sortMode, setSortMode] = useState('category');
   const [search, setSearch] = useState('');
   const [lastRefresh, setLastRefresh] = useState(null);
@@ -548,6 +570,16 @@ export default function GmailIntelPage() {
     setEmails(prev => prev.map(e => e.threadId === threadId ? { ...e, actioned: false } : e));
   }, []);
 
+  const handleAcknowledge = useCallback((threadId) => {
+    api.post(`/api/gmail/threads/${threadId}/acknowledge`, {}).catch(() => {});
+    setEmails(prev => prev.map(e => e.threadId === threadId ? { ...e, acknowledged: true } : e));
+  }, []);
+
+  const handleUnacknowledge = useCallback((threadId) => {
+    api.post(`/api/gmail/threads/${threadId}/unacknowledge`, {}).catch(() => {});
+    setEmails(prev => prev.map(e => e.threadId === threadId ? { ...e, acknowledged: false } : e));
+  }, []);
+
   const scheduleRefresh = useCallback((ms) => {
     const interval = ms ?? refreshMs;
     clearTimeout(refreshTimer.current);
@@ -592,17 +624,17 @@ export default function GmailIntelPage() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const active = emails.filter(e => !e.acknowledged);
   const counts = {
-    all: emails.length,
-    urgent: emails.filter(e => e.category === 'urgent').length,
-    waiting: emails.filter(e => e.category === 'waiting').length,
-    fyi: emails.filter(e => e.category === 'fyi').length,
-    noise: emails.filter(e => e.category === 'noise').length,
-    unread: emails.filter(e => e.isUnread).length,
+    quadrant: active.length,
+    urgent: active.filter(e => e.category === 'urgent').length,
+    waiting: active.filter(e => e.category === 'waiting').length,
+    fyi: active.filter(e => e.category === 'fyi').length,
+    noise: active.filter(e => e.category === 'noise').length,
+    acknowledged: emails.filter(e => e.acknowledged).length,
   };
 
-  const filtered = emails.filter(e => {
-    if (activeFilter !== 'all' && e.category !== activeFilter) return false;
+  const matchesSearch = (e) => {
     const q = search.toLowerCase();
     if (!q) return true;
     return (
@@ -610,10 +642,17 @@ export default function GmailIntelPage() {
       e.sender?.toLowerCase().includes(q) ||
       e.subject?.toLowerCase().includes(q)
     );
+  };
+
+  const filtered = emails.filter(e => {
+    if (activeFilter === 'acknowledged') return e.acknowledged && matchesSearch(e);
+    if (e.acknowledged) return false;
+    if (activeFilter !== 'quadrant' && e.category !== activeFilter) return false;
+    return matchesSearch(e);
   });
 
   const sortedByDate = [...filtered].sort((a, b) => (b.internalDate || 0) - (a.internalDate || 0));
-  const grouped = activeFilter === 'all'
+  const grouped = activeFilter === 'quadrant'
     ? CATEGORY_ORDER.map(cat => ({ cat, rows: filtered.filter(e => e.category === cat) })).filter(g => g.rows.length > 0)
     : [{ cat: activeFilter, rows: filtered }];
 
@@ -716,20 +755,26 @@ export default function GmailIntelPage() {
 
           {/* Filter pills + search */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              {['all', ...CATEGORY_ORDER].map(cat => (
+            <div className="flex items-center gap-1 flex-wrap">
+              {[
+                { key: 'quadrant', label: 'Quadrant' },
+                ...CATEGORY_ORDER.map(cat => ({ key: cat, label: CATEGORY_LABELS[cat] })),
+                { key: 'acknowledged', label: 'Acknowledged' },
+              ].map(({ key, label }) => (
                 <button
-                  key={cat}
-                  onClick={() => setActiveFilter(cat)}
+                  key={key}
+                  onClick={() => setActiveFilter(key)}
                   className="px-3 py-1 rounded-full text-xs font-medium transition-all"
                   style={{
-                    background: activeFilter === cat ? 'var(--color-primary)' : 'var(--color-bg)',
-                    color: activeFilter === cat ? '#fff' : 'var(--color-muted)',
-                    border: `1px solid ${activeFilter === cat ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                    background: activeFilter === key
+                      ? (key === 'acknowledged' ? '#6366f1' : 'var(--color-primary)')
+                      : 'var(--color-bg)',
+                    color: activeFilter === key ? '#fff' : 'var(--color-muted)',
+                    border: `1px solid ${activeFilter === key ? (key === 'acknowledged' ? '#6366f1' : 'var(--color-primary)') : 'var(--color-border)'}`,
                   }}
                 >
-                  {cat === 'all' ? 'All' : CATEGORY_LABELS[cat]}
-                  <span className="ml-1 opacity-75">{cat === 'all' ? counts.all : counts[cat]}</span>
+                  {label}
+                  {counts[key] > 0 && <span className="ml-1 opacity-75">{counts[key]}</span>}
                 </button>
               ))}
             </div>
@@ -772,7 +817,7 @@ export default function GmailIntelPage() {
         )}
 
         {/* Email list */}
-        <div className={`flex-1 px-6 py-4 ${sortMode === 'category' && activeFilter === 'all' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
+        <div className={`flex-1 px-6 py-4 ${sortMode === 'category' && activeFilter === 'quadrant' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto'}`}>
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--color-muted)' }}>
               <style>{`@keyframes vault-spin{to{transform:rotate(360deg)}}`}</style>
@@ -783,13 +828,23 @@ export default function GmailIntelPage() {
             <div className="text-center py-16 text-sm" style={{ color: 'var(--color-muted)' }}>No emails in inbox.</div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16 text-sm" style={{ color: 'var(--color-muted)' }}>No emails match this filter.</div>
+          ) : activeFilter === 'acknowledged' ? (
+            filtered.length === 0 ? (
+              <div className="text-center py-16 text-sm" style={{ color: 'var(--color-muted)' }}>No acknowledged emails.</div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {filtered.map(e => (
+                  <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} onUnacknowledge={handleUnacknowledge} getIcon={getIcon} />
+                ))}
+              </div>
+            )
           ) : sortMode === 'date' ? (
             <div className="flex flex-col gap-1.5">
               {sortedByDate.map(e => (
-                <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} getIcon={getIcon} />
+                <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} onAcknowledge={handleAcknowledge} getIcon={getIcon} />
               ))}
             </div>
-          ) : activeFilter === 'all' ? (
+          ) : activeFilter === 'quadrant' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 min-h-0">
               {CATEGORY_ORDER.map(cat => {
                 const rows = filtered.filter(e => e.category === cat);
@@ -802,7 +857,7 @@ export default function GmailIntelPage() {
                       {rows.length === 0 ? (
                         <div className="text-xs py-4 text-center" style={{ color: 'var(--color-muted)' }}>None</div>
                       ) : rows.map(e => (
-                        <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} getIcon={getIcon} />
+                        <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} onAcknowledge={handleAcknowledge} getIcon={getIcon} />
                       ))}
                     </div>
                   </div>
@@ -814,7 +869,7 @@ export default function GmailIntelPage() {
               <div key={cat} className="mb-6">
                 <div className="flex flex-col gap-1.5">
                   {rows.map(e => (
-                    <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} getIcon={getIcon} />
+                    <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} onAcknowledge={handleAcknowledge} getIcon={getIcon} />
                   ))}
                 </div>
               </div>
