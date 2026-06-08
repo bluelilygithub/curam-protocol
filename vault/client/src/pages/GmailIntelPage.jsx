@@ -412,7 +412,7 @@ function ExpenseModal({ email, onClose, onActioned, addToast, getIcon }) {
 }
 
 // ── Email row ─────────────────────────────────────────────────────────────────
-function EmailRow({ email, onClick, onAddExpense, getIcon }) {
+function EmailRow({ email, onClick, onAddExpense, onUnaction, getIcon }) {
   return (
     <div
       className="w-full flex items-start gap-3 rounded-xl border px-4 py-3 transition-colors text-left cursor-pointer hover:opacity-80"
@@ -463,11 +463,15 @@ function EmailRow({ email, onClick, onAddExpense, getIcon }) {
       <div className="flex-shrink-0 flex items-center gap-2 pt-0.5">
         {email.isInvoice && (
           email.actioned ? (
-            <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium"
-              style={{ background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}>
+            <button
+              onClick={e => { e.stopPropagation(); onUnaction(email.threadId); }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-opacity hover:opacity-60"
+              style={{ background: 'rgba(34,197,94,0.1)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
+              title="Click to undo actioned"
+            >
               {getIcon('check', { size: 10 })}
               Actioned
-            </span>
+            </button>
           ) : (
             <button
               onClick={e => { e.stopPropagation(); onAddExpense(email); }}
@@ -538,6 +542,11 @@ export default function GmailIntelPage() {
       setLoading(false);
     }
   }, [addToast]);
+
+  const handleUnaction = useCallback((threadId) => {
+    api.post(`/api/gmail/threads/${threadId}/unaction`, {}).catch(() => {});
+    setEmails(prev => prev.map(e => e.threadId === threadId ? { ...e, actioned: false } : e));
+  }, []);
 
   const scheduleRefresh = useCallback((ms) => {
     const interval = ms ?? refreshMs;
@@ -792,7 +801,7 @@ export default function GmailIntelPage() {
           ) : sortMode === 'date' ? (
             <div className="flex flex-col gap-1.5">
               {sortedByDate.map(e => (
-                <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} getIcon={getIcon} />
+                <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} getIcon={getIcon} />
               ))}
             </div>
           ) : (
@@ -805,7 +814,7 @@ export default function GmailIntelPage() {
                 )}
                 <div className="flex flex-col gap-1.5">
                   {rows.map(e => (
-                    <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} getIcon={getIcon} />
+                    <EmailRow key={e.id} email={e} onClick={() => setSelectedEmail(e)} onAddExpense={setExpenseModal} onUnaction={handleUnaction} getIcon={getIcon} />
                   ))}
                 </div>
               </div>

@@ -842,6 +842,21 @@ router.post('/threads/:threadId/extract-invoice', async (req, res) => {
   }
 });
 
+// POST /api/gmail/threads/:threadId/unaction — clear actioned flag
+router.post('/threads/:threadId/unaction', async (req, res) => {
+  const userId = req.user.id;
+  const { threadId } = req.params;
+  try {
+    await pool.query(
+      `UPDATE gmail_classifications SET actioned=false WHERE "userId"=$1 AND "threadId"=$2`,
+      [userId, threadId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/gmail/threads/:threadId/action — mark thread as actioned in gmail_classifications
 router.post('/threads/:threadId/action', async (req, res) => {
   const userId = req.user.id;
