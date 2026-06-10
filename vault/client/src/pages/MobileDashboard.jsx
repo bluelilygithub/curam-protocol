@@ -9,6 +9,7 @@ import ChatHistoryTile from '../components/mobile/ChatHistoryTile';
 import ProjectsTile from '../components/mobile/ProjectsTile';
 import NotesTile from '../components/mobile/NotesTile';
 import StudentTile from '../components/mobile/StudentTile';
+import SharesTile from '../components/mobile/SharesTile';
 
 const TILE_MAP = {
   tasks:    TasksTile,
@@ -17,6 +18,7 @@ const TILE_MAP = {
   projects: ProjectsTile,
   notes:    NotesTile,
   student:  StudentTile,
+  shares:   SharesTile,
 };
 
 export default function MobileDashboard() {
