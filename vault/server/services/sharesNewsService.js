@@ -19,6 +19,7 @@ const { pool } = require('../db');
 const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
 const sharesPortfolio = require('./sharesPortfolio');
+const { runtimeConfig } = require('../config/runtime');
 
 const FETCH_TIMEOUT_MS = 15000;
 
@@ -68,6 +69,8 @@ async function getSearchConfig() {
 }
 
 async function webSearch(query) {
+  if (runtimeConfig.disableWebSearch) return [];
+
   const { apiKey, provider } = await getSearchConfig();
   if (!apiKey) return [];
 

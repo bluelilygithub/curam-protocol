@@ -25,6 +25,8 @@ const semanticMap = {
   'file-text': { lucide: 'FileText' },
   receipt: { lucide: 'Receipt' },
   'file-image': { lucide: 'FileImage' },
+  image: { lucide: 'Image' },
+  palette: { lucide: 'Palette' },
   send: { lucide: 'Send' },
   home: { lucide: 'Home' },
   'stop-circle': { lucide: 'StopCircle' },

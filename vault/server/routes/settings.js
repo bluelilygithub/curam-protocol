@@ -5,6 +5,26 @@ const router = express.Router();
 const { pool } = require('../db');
 const { FEATURE_ACCESS_DEFAULTS, FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
 const { getVaultModelsConfigForUser } = require('../services/modelResolver');
+const { getPublicRuntimeConfig } = require('../config/runtime');
+
+const CONTENT_RESTRICTIONS_KEY = 'graphics_content_restrictions';
+const MOBILE_SETTING_KEYS = ['mobile_dashboard_tiles', 'mobile_nav_items'];
+
+function normalizeContentRestrictions(value) {
+  const source = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  return source
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .map((item) => item.slice(0, 200))
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 50);
+}
 
 // GET /api/settings/effective-models — vault_models + default_model (user or admin fallback)
 router.get('/effective-models', async (req, res) => {
@@ -14,6 +34,12 @@ router.get('/effective-models', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /api/settings/runtime — environment-derived runtime status for admins.
+router.get('/runtime', (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  res.json(getPublicRuntimeConfig());
 });
 
 // GET /api/settings
@@ -95,6 +121,100 @@ router.post('/feature-access', async (req, res) => {
       );
     }
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/mobile — workspace mobile visibility config for all users.
+router.get('/mobile', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT key, value FROM workspace_settings WHERE key = ANY($1)',
+      [MOBILE_SETTING_KEYS]
+    );
+    const result = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+
+    // Backwards-compatible fallback for configs saved before mobile became workspace-wide.
+    if (!result.mobile_dashboard_tiles || !result.mobile_nav_items) {
+      const { rows: userRows } = await pool.query(
+        'SELECT key, value FROM settings WHERE "userId"=$1 AND key = ANY($2)',
+        [req.user.id, MOBILE_SETTING_KEYS]
+      );
+      userRows.forEach((r) => {
+        if (!result[r.key]) result[r.key] = r.value;
+      });
+    }
+
+    res.json({
+      mobile_dashboard_tiles: result.mobile_dashboard_tiles || null,
+      mobile_nav_items: result.mobile_nav_items || null,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/settings/mobile — admin workspace mobile visibility config.
+router.post('/mobile', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  try {
+    const updates = {
+      mobile_dashboard_tiles: req.body?.mobile_dashboard_tiles,
+      mobile_nav_items: req.body?.mobile_nav_items,
+    };
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === undefined) continue;
+      const storedValue = typeof value === 'string' ? value : JSON.stringify(value);
+      await pool.query(
+        `INSERT INTO workspace_settings (key, value, "updatedAt")
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+        [key, storedValue]
+      );
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/content-restrictions — workspace graphics safety rules
+router.get('/content-restrictions', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT value FROM workspace_settings WHERE key=$1 LIMIT 1',
+      [CONTENT_RESTRICTIONS_KEY]
+    );
+    let restrictions = [];
+    if (rows[0]?.value) {
+      try {
+        restrictions = normalizeContentRestrictions(JSON.parse(rows[0].value));
+      } catch {
+        restrictions = [];
+      }
+    }
+    res.json({ restrictions });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/settings/content-restrictions — body: { restrictions: string[] }
+router.post('/content-restrictions', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  const restrictions = normalizeContentRestrictions(req.body?.restrictions);
+  try {
+    await pool.query(
+      `INSERT INTO workspace_settings (key, value, "updatedAt")
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+      [CONTENT_RESTRICTIONS_KEY, JSON.stringify(restrictions)]
+    );
+    res.json({ ok: true, restrictions });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

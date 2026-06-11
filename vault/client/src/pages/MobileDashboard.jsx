@@ -28,7 +28,7 @@ export default function MobileDashboard() {
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
 
   useEffect(() => {
-    api.get('/api/settings').then(r => r.json()).then(data => {
+    api.get('/api/settings/mobile').then(r => r.json()).then(data => {
       try {
         const saved = JSON.parse(data.mobile_dashboard_tiles || 'null');
         setTiles(mergeWithDefaults(saved, DEFAULT_TILES));

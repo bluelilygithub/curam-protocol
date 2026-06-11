@@ -585,6 +585,17 @@ function Layout() {
             </Link>
           )}
 
+          {canUseFeature('graphics') && (
+            <Link
+              to="/graphics"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname === '/graphics' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="Graphics"
+            >
+              {getIcon('palette', { size: 16 })}
+            </Link>
+          )}
+
           {canUseFeature('gmailIntel') && (
             <Link
               to="/gmail-intel"

@@ -1,11 +1,12 @@
 'use strict';
 
 const { Pool } = require('pg');
+const { runtimeConfig } = require('./config/runtime');
 
 // Enable SSL for any non-localhost host (Railway, Render, Supabase, etc.)
 function sslConfig() {
   try {
-    const u = new URL(process.env.DATABASE_URL || '');
+    const u = new URL(runtimeConfig.databaseUrl || '');
     const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
     return local ? false : { rejectUnauthorized: false };
   } catch (_) {
@@ -14,7 +15,7 @@ function sslConfig() {
 }
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: runtimeConfig.databaseUrl,
   ssl: sslConfig(),
   max: 10,
   idleTimeoutMillis: 30000,
@@ -541,6 +542,22 @@ async function initSchema() {
       )
     `);
     await client.query(`ALTER TABLE student_quiz_attempts ADD COLUMN IF NOT EXISTS "performanceSummary" JSONB`);
+
+    // ── Graphics gallery ──────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS graphics_gallery (
+        id            SERIAL PRIMARY KEY,
+        "userId"      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        prompt        TEXT NOT NULL,
+        "imageDataUrl" TEXT NOT NULL,
+        model         TEXT,
+        seed          TEXT,
+        width         INTEGER,
+        height        INTEGER,
+        metadata      JSONB,
+        "createdAt"   TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
 
     // ── Finance ───────────────────────────────────────────────────────────────
     await client.query(`

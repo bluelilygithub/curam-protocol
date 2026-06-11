@@ -3146,10 +3146,137 @@ function BalancesTab() {
   );
 }
 
+// ── Financial Position ────────────────────────────────────────────────────────
+
+function signedLabel(value, positiveLabel, negativeLabel) {
+  if (Math.abs(value) < 0.01) return 'Clear';
+  return value > 0 ? positiveLabel : negativeLabel;
+}
+
+function PositionCard({ label, value, sub, tone = 'neutral' }) {
+  const color = tone === 'good'
+    ? '#047857'
+    : tone === 'warn'
+      ? '#b45309'
+      : tone === 'bad'
+        ? '#b91c1c'
+        : 'var(--color-text)';
+
+  return (
+    <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+      <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>{label}</p>
+      <p className="text-2xl font-semibold" style={{ color }}>{fmt(value)}</p>
+      {sub && <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>{sub}</p>}
+    </div>
+  );
+}
+
+function PositionTab() {
+  const [rows, setRows] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      api.get('/api/finance/trial-balance').then(r => r.json()),
+      api.get('/api/finance/invoices').then(r => r.json()),
+    ])
+      .then(([balanceRows, invoiceRows]) => {
+        setRows(Array.isArray(balanceRows) ? balanceRows : []);
+        setInvoices(Array.isArray(invoiceRows) ? invoiceRows : []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="p-6 text-sm" style={{ color: 'var(--color-muted)' }}>Loading...</div>;
+
+  const rowByCode = (code) => rows.find(r => r.code === code);
+  const balance = (code) => normalBalance(rowByCode(code) || {});
+  const cash = balance('1000');
+  const receivables = invoices
+    .filter(inv => inv.status === 'sent')
+    .reduce((sum, inv) => sum + (parseFloat(inv.total) || 0), 0);
+  const gstPaid = balance('1200');
+  const gstCollected = balance('2200');
+  const gstNetPayable = gstCollected - gstPaid;
+  const creditCardRows = rows.filter(r => r.type === 'liability' && (String(r.code).startsWith('21') || /credit card/i.test(r.name || '')));
+  const creditCardOwed = creditCardRows.reduce((sum, row) => sum + Math.max(normalBalance(row), 0), 0);
+  const creditCardCredit = creditCardRows.reduce((sum, row) => sum + Math.max(-normalBalance(row), 0), 0);
+  const nearTermPosition = cash + receivables + creditCardCredit - creditCardOwed - gstNetPayable;
+
+  return (
+    <div className="p-6 max-w-5xl">
+      <div className="mb-5">
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Financial Position</h2>
+        <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+          A business-facing view of the ledger: cash, money owed to you, card debt, and GST position. Reconcile cash against your real bank balance.
+        </p>
+      </div>
+
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <PositionCard
+          label="Current cash position"
+          value={cash}
+          tone={cash >= 0 ? 'good' : 'bad'}
+          sub="Bank / Cash account balance"
+        />
+        <PositionCard
+          label="Money owed to you"
+          value={receivables}
+          tone={receivables > 0 ? 'warn' : 'neutral'}
+          sub="Sent invoices not marked paid"
+        />
+        <PositionCard
+          label="Credit cards owed"
+          value={creditCardOwed}
+          tone={creditCardOwed > 0 ? 'bad' : 'good'}
+          sub={creditCardCredit > 0 ? `${fmt(creditCardCredit)} card credit/overpayment` : 'Liability balance'}
+        />
+        <PositionCard
+          label="Net GST position"
+          value={Math.abs(gstNetPayable)}
+          tone={gstNetPayable > 0 ? 'warn' : 'good'}
+          sub={signedLabel(gstNetPayable, 'Estimated payable', 'Estimated refund/credit')}
+        />
+      </div>
+
+      <div className="rounded-xl border p-4 mb-5" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+        <p className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Near-term position</p>
+        <p className="text-3xl font-semibold" style={{ color: nearTermPosition >= 0 ? '#047857' : '#b91c1c' }}>
+          {fmt(nearTermPosition)}
+        </p>
+        <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+          Cash + unpaid sent invoices + card credits - card debt - net GST payable. This is a practical snapshot, not a formal financial statement.
+        </p>
+      </div>
+
+      {creditCardRows.length > 0 && (
+        <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="px-4 py-2 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)', background: 'var(--color-surface)' }}>
+            Credit card accounts
+          </div>
+          {creditCardRows.map(row => {
+            const bal = normalBalance(row);
+            return (
+              <div key={row.id} className="flex justify-between gap-4 px-4 py-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                <span className="text-sm" style={{ color: 'var(--color-text)' }}>{row.name}</span>
+                <span className="text-sm font-mono" style={{ color: bal > 0 ? '#b91c1c' : bal < 0 ? '#047857' : 'var(--color-text)' }}>
+                  {fmt(Math.abs(bal))} {bal > 0 ? 'owed' : bal < 0 ? 'credit' : ''}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings'];
-const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Balances', 'Settings']);
+const TABS = ['Dashboard', 'Invoices', 'Clients', 'Suppliers', 'Expenses', 'Wages', 'Interest', 'Journal', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings'];
+const NO_DATE_FILTER_TABS = new Set(['Clients', 'Suppliers', 'Accounts', 'Codes', 'BAS', 'Position', 'Balances', 'Settings']);
 
 export default function FinancePage() {
   const [tab, setTab] = useState('Dashboard');
@@ -3246,6 +3373,7 @@ export default function FinancePage() {
         {tab === 'Accounts'  && <AccountsTab />}
         {tab === 'Codes'     && <CodesTab />}
         {tab === 'BAS'       && <BASTab />}
+        {tab === 'Position'  && <PositionTab />}
         {tab === 'Balances'  && <BalancesTab />}
         {tab === 'Settings'  && <SettingsTab />}
       </div>

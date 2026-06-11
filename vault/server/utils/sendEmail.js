@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const https = require('https');
+const { runtimeConfig } = require('../config/runtime');
 
 async function getMailChannelKey() {
   try {
@@ -15,6 +16,11 @@ async function getMailChannelKey() {
  * @param {{ to: string, subject: string, html: string, from?: string }} opts
  */
 async function sendEmail({ to, subject, html, from }) {
+  if (runtimeConfig.disableEmail) {
+    console.log(`[runtime] Email disabled by DISABLE_EMAIL; skipped "${subject}" to ${to}`);
+    return;
+  }
+
   const mailChannelKey = await getMailChannelKey();
 
   if (mailChannelKey) {
