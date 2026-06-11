@@ -3,6 +3,7 @@ const express = require('express');
 const helmet = require('helmet');
 const path = require('path');
 const fs = require('fs');
+const { runtimeConfig } = require('./config/runtime');
 
 // Security check — warn if gmail token encryption key is absent
 try {
@@ -109,6 +110,7 @@ app.use('/api/shares/news', requireFeature('shares'), require('./routes/sharesNe
 app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
+app.use('/api/graphics', requireFeature('graphics'), require('./routes/graphics'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');
@@ -142,8 +144,12 @@ async function start() {
   }
 
   await seedInitialUser().catch(err => console.error('Seed error:', err));
-  startNewsDigestCron();
-  startSharesCron();
+  if (runtimeConfig.disableExternalCron) {
+    console.log('[runtime] External cron jobs disabled by DISABLE_EXTERNAL_CRON');
+  } else {
+    startNewsDigestCron();
+    startSharesCron();
+  }
 
   app.listen(PORT, () => {
     console.log('Vault server running on port ' + PORT);

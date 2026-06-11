@@ -81,9 +81,20 @@ function SettingsPage() {
   const [fileTypesSaved, setFileTypesSaved] = useState(false);
   const [showPwFields, setShowPwFields] = useState({ current: false, next: false, confirm: false });
   const [modelStatus, setModelStatus] = useState(null);
-  const { models, saveModels, defaultModel, saveDefaultModel, branchEvalModel, saveBranchEvalModel } = useModels();
+  const {
+    models,
+    saveModels,
+    defaultModel,
+    saveDefaultModel,
+    branchEvalModel,
+    saveBranchEvalModel,
+    graphicsModel,
+    saveGraphicsModel,
+  } = useModels();
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
   const [modelForm, setModelForm] = useState({});
+  const [graphicsModelOptions, setGraphicsModelOptions] = useState([]);
+  const [graphicsModelDraft, setGraphicsModelDraft] = useState('');
   const [showReopenWizardConfirm, setShowReopenWizardConfirm] = useState(false);
   const [showResetGoalsConfirm, setShowResetGoalsConfirm] = useState(false);
   const [tab, setTab] = useState(() => localStorage.getItem('settingsTab') || 'Appearance');
@@ -101,6 +112,9 @@ function SettingsPage() {
   const [mobileSaved, setMobileSaved] = useState(false);
   const [featureAccess, setFeatureAccess] = useState({ ...DEFAULT_FEATURE_ACCESS });
   const [featureAccessSaved, setFeatureAccessSaved] = useState(false);
+  const [runtimeInfo, setRuntimeInfo] = useState(null);
+  const [contentRestrictions, setContentRestrictions] = useState([]);
+  const [contentRestrictionsSaved, setContentRestrictionsSaved] = useState(false);
 
   const TABS = user?.isAdmin
     ? [
@@ -114,6 +128,8 @@ function SettingsPage() {
         'Mobile',
         'Members',
         'Feature Access',
+        'Content Restrictions',
+        'Environment',
         'Tours',
       ]
     : ['Appearance', 'Profile', 'Tasks'];
@@ -136,6 +152,8 @@ function SettingsPage() {
           'Mobile',
           'Members',
           'Feature Access',
+          'Content Restrictions',
+          'Environment',
           'Tours',
         ]
       : ['Appearance', 'Profile', 'Tasks'];
@@ -180,6 +198,9 @@ function SettingsPage() {
       if (data.gmail_intel_refresh_interval) setGmailIntelRefreshInterval(data.gmail_intel_refresh_interval);
       if (data.gmail_intel_email_count)      setGmailIntelEmailCount(data.gmail_intel_email_count);
       if (data.gmail_pdf_model)              setGmailPdfModel(data.gmail_pdf_model);
+    }).catch(() => {});
+
+    api.get('/api/settings/mobile').then(r => r.json()).then(data => {
       if (data.mobile_dashboard_tiles) {
         try { setMobileTiles(mergeWithDefaults(JSON.parse(data.mobile_dashboard_tiles), DEFAULT_TILES)); } catch {}
       }
@@ -200,7 +221,37 @@ function SettingsPage() {
         setFeatureAccess({ ...DEFAULT_FEATURE_ACCESS, ...data.flags });
       }
     }).catch(() => {});
+
+    api.get('/api/settings/content-restrictions').then(r => r.json()).then(data => {
+      if (Array.isArray(data?.restrictions)) {
+        setContentRestrictions(data.restrictions.length ? data.restrictions : ['']);
+      }
+    }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setGraphicsModelDraft(graphicsModel || '');
+  }, [graphicsModel]);
+
+  useEffect(() => {
+    if (!user?.isAdmin) return;
+    api.get('/api/graphics/models').then(r => r.json()).then(data => {
+      if (Array.isArray(data?.availableModels)) {
+        setGraphicsModelOptions(data.availableModels);
+      }
+      if (!graphicsModel && data?.selectedModel) {
+        setGraphicsModelDraft(data.selectedModel);
+      }
+    }).catch(() => {});
+  }, [user?.isAdmin, graphicsModel]);
+
+  useEffect(() => {
+    if (!user?.isAdmin) return;
+    api.get('/api/settings/runtime')
+      .then(r => r.json())
+      .then(setRuntimeInfo)
+      .catch(() => {});
+  }, [user?.isAdmin]);
 
   const EMPTY_MODEL = { emoji: '🤖', name: '', label: '', id: '', provider: 'anthropic', tagline: '', desc: '' };
 
@@ -299,8 +350,55 @@ function SettingsPage() {
     }
   }
 
+  function updateContentRestriction(index, value) {
+    setContentRestrictions(prev => prev.map((item, i) => (i === index ? value : item)));
+  }
+
+  function addContentRestriction() {
+    setContentRestrictions(prev => [...prev, '']);
+  }
+
+  function removeContentRestriction(index) {
+    setContentRestrictions(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length ? next : [''];
+    });
+  }
+
+  async function saveContentRestrictions() {
+    const restrictions = contentRestrictions
+      .map(item => item.trim())
+      .filter(Boolean);
+    const res = await api.post('/api/settings/content-restrictions', { restrictions }).catch(() => null);
+    if (res?.ok) {
+      const data = await res.json().catch(() => ({ restrictions }));
+      setContentRestrictions(data.restrictions?.length ? data.restrictions : ['']);
+      setContentRestrictionsSaved(true);
+      setTimeout(() => setContentRestrictionsSaved(false), 2000);
+    }
+  }
+
+  const runtimeRows = runtimeInfo ? [
+    ['Application environment', runtimeInfo.appEnv || 'unknown'],
+    ['Database source', runtimeInfo.databaseUrlSource || 'not configured'],
+    ['Database URL', runtimeInfo.safeDatabaseUrl || 'not configured'],
+    ['App URL', runtimeInfo.appUrl || 'not configured'],
+    ['Model provider', runtimeInfo.modelProvider || 'not configured'],
+    ['Ollama base URL', runtimeInfo.ollamaBaseUrl || 'not configured'],
+    ['Default local model', runtimeInfo.defaultLocalModel || 'not configured'],
+    ['Image provider', runtimeInfo.imageProvider || 'not configured'],
+    ['Local image API URL', runtimeInfo.localImageApiUrl || 'not configured'],
+    ['Local image model', runtimeInfo.localImageModel || 'not configured'],
+  ] : [];
+
+  const safetyRows = runtimeInfo ? [
+    ['Email disabled', runtimeInfo.disableEmail],
+    ['External cron disabled', runtimeInfo.disableExternalCron],
+    ['Web search disabled', runtimeInfo.disableWebSearch],
+  ] : [];
+
   return (
-    <div className={(tab === 'Members' && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
+    <div className={((tab === 'Members' || tab === 'Environment') && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
       <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
         Settings
       </h1>
@@ -803,6 +901,40 @@ function SettingsPage() {
               <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
             ))}
           </select>
+        </div>
+
+        {/* Graphics model selector */}
+        <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+            Graphics model
+          </label>
+          <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+            Used by the Graphics agent for image generation. In local ComfyUI this should match a checkpoint filename; in production it can be a hosted image model ID.
+          </p>
+          <input
+            list="graphics-model-options"
+            value={graphicsModelDraft}
+            onChange={e => setGraphicsModelDraft(e.target.value)}
+            onBlur={() => saveGraphicsModel(graphicsModelDraft.trim())}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                saveGraphicsModel(graphicsModelDraft.trim());
+                e.currentTarget.blur();
+              }
+            }}
+            placeholder="Use server default"
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none font-mono"
+            style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+          <datalist id="graphics-model-options">
+            {graphicsModelOptions.map(modelId => (
+              <option key={modelId} value={modelId} />
+            ))}
+          </datalist>
+          <p className="text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
+            Leave blank to use the server fallback. Available local checkpoints are suggested when ComfyUI is running.
+          </p>
         </div>
 
         {/* Add / Edit form */}
@@ -1820,7 +1952,7 @@ function SettingsPage() {
             Dashboard Tiles
           </h2>
           <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-            Choose which tiles appear on the mobile dashboard and their order.
+            Choose which tiles appear on the mobile dashboard for everyone. Member access is still controlled by Feature Access.
           </p>
           <div className="space-y-2">
             {mobileTiles.map((tile, idx) => (
@@ -1883,7 +2015,7 @@ function SettingsPage() {
             Navigation Menu
           </h2>
           <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-            Choose which features appear in the mobile navigation dropdown.
+            Choose which features appear in the mobile navigation dropdown for everyone. Admins always retain access to enabled routes; members also need Feature Access enabled.
           </p>
           <div className="space-y-1.5">
             {mobileNavItems.map((item, idx) => (
@@ -1913,8 +2045,10 @@ function SettingsPage() {
 
         <button
           onClick={async () => {
-            await api.post('/api/settings', { key: 'mobile_dashboard_tiles', value: JSON.stringify(mobileTiles) }).catch(() => {});
-            await api.post('/api/settings', { key: 'mobile_nav_items', value: JSON.stringify(mobileNavItems) }).catch(() => {});
+            await api.post('/api/settings/mobile', {
+              mobile_dashboard_tiles: mobileTiles,
+              mobile_nav_items: mobileNavItems,
+            }).catch(() => {});
             setMobileSaved(true);
             setTimeout(() => setMobileSaved(false), 2000);
           }}
@@ -1982,6 +2116,144 @@ function SettingsPage() {
         >
           {featureAccessSaved ? 'Saved ✓' : 'Save Feature Access'}
         </button>
+      </section>
+      )}
+
+      {/* Content Restrictions tab */}
+      {tab === 'Content Restrictions' && user?.isAdmin && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Graphics Content Restrictions
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Add content that graphics generation should avoid. These rows are injected into prompt refinement and the image model's negative prompt.
+        </p>
+
+        <div className="space-y-2">
+          {(contentRestrictions.length ? contentRestrictions : ['']).map((restriction, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={restriction}
+                onChange={e => updateContentRestriction(index, e.target.value)}
+                placeholder="e.g. graphic nudity, gore, realistic violence"
+                className="flex-1 px-3 py-2 rounded-xl border text-sm outline-none"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              />
+              <button
+                type="button"
+                onClick={() => removeContentRestriction(index)}
+                className="px-3 py-2 rounded-xl border text-xs hover:opacity-70"
+                style={{ borderColor: 'var(--color-border)', color: '#ef4444' }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={addContentRestriction}
+            className="px-4 py-2 rounded-xl text-sm font-medium border hover:opacity-80"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          >
+            + Add restriction
+          </button>
+          <button
+            type="button"
+            onClick={saveContentRestrictions}
+            className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+            style={{ background: contentRestrictionsSaved ? '#22c55e' : 'var(--color-primary)' }}
+          >
+            {contentRestrictionsSaved ? 'Saved ✓' : 'Save Restrictions'}
+          </button>
+        </div>
+
+        <p className="text-xs mt-4" style={{ color: 'var(--color-muted)' }}>
+          This is prompt-based protection for local image generation. Keep rows short and explicit, such as "graphic nudity" or "gore".
+        </p>
+      </section>
+      )}
+
+      {/* Environment tab */}
+      {tab === 'Environment' && user?.isAdmin && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Runtime Environment
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Runtime mode is read from server environment variables, not the database, so a restored production backup cannot accidentally flip local mode.
+        </p>
+
+        {!runtimeInfo ? (
+          <div className="text-sm" style={{ color: 'var(--color-muted)' }}>Loading runtime config...</div>
+        ) : (
+          <div className="space-y-4">
+            <div
+              className="rounded-xl border px-4 py-3"
+              style={{ borderColor: 'var(--color-border)', background: runtimeInfo.isLocal ? '#ecfdf5' : 'var(--color-surface)' }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-widest font-semibold" style={{ color: 'var(--color-muted)' }}>
+                    Current mode
+                  </p>
+                  <p className="text-lg font-semibold mt-1" style={{ color: runtimeInfo.isLocal ? '#047857' : 'var(--color-text)' }}>
+                    {runtimeInfo.isLocal ? 'Local Mac Mini' : 'Production'}
+                  </p>
+                </div>
+                <span
+                  className="text-xs px-3 py-1 rounded-full font-semibold"
+                  style={{
+                    color: runtimeInfo.isLocal ? '#047857' : 'var(--color-primary)',
+                    background: runtimeInfo.isLocal ? '#d1fae5' : 'var(--color-bg)',
+                  }}
+                >
+                  APP_ENV={runtimeInfo.appEnv}
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+              {runtimeRows.map(([label, value]) => (
+                <div
+                  key={label}
+                  className="flex items-start justify-between gap-4 px-4 py-3 border-b last:border-b-0"
+                  style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                >
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{label}</span>
+                  <span className="text-sm text-right break-all" style={{ color: 'var(--color-text)' }}>{value}</span>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: 'var(--color-muted)' }}>
+                Local safety flags
+              </h3>
+              <div className="grid sm:grid-cols-3 gap-2">
+                {safetyRows.map(([label, enabled]) => (
+                  <div
+                    key={label}
+                    className="rounded-xl border px-3 py-2"
+                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+                  >
+                    <p className="text-xs mb-1" style={{ color: 'var(--color-muted)' }}>{label}</p>
+                    <p className="text-sm font-semibold" style={{ color: enabled ? '#047857' : '#b45309' }}>
+                      {enabled ? 'On' : 'Off'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              To change runtime mode, update APP_ENV and the matching database URL in the server .env, then restart the app.
+            </p>
+          </div>
+        )}
       </section>
       )}
 

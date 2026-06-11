@@ -13,6 +13,7 @@ export const DEFAULT_TILES = [
 export const FEATURE_BY_TILE_ID = {
   finance: 'finance',
   shares: 'shares',
+  graphics: 'graphics',
   student: 'student',
   youtube: 'youtube',
 };
@@ -25,6 +26,7 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'finance',   label: 'Finance',         path: '/finance',     enabled: true },
   { id: 'shares',    label: 'Shares',          path: '/shares',      enabled: true },
   { id: 'youtube',   label: 'YouTube',         path: '/youtube',     enabled: true },
+  { id: 'graphics',  label: 'Graphics',        path: '/graphics',    enabled: true },
   { id: 'gmailIntel', label: 'Inbox Intel',   path: '/gmail-intel', enabled: true },
   { id: 'chat',      label: 'General Chat',    path: '/chat',        enabled: true },
   { id: 'history',   label: 'Chat History',    path: '/history',     enabled: true },

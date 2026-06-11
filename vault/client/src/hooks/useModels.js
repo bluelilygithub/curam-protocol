@@ -5,6 +5,7 @@ export function useModels() {
   const [models, setModels] = useState([]);
   const [defaultModel, setDefaultModel] = useState('');
   const [branchEvalModel, setBranchEvalModel] = useState('');
+  const [graphicsModel, setGraphicsModel] = useState('');
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -28,6 +29,7 @@ export function useModels() {
       if (settingsRes.ok) {
         const settings = await settingsRes.json();
         if (settings.branch_eval_model) setBranchEvalModel(settings.branch_eval_model);
+        if (settings.graphics_model) setGraphicsModel(settings.graphics_model);
       }
     } catch {
       /* keep empty — chat preflight will surface missing config */
@@ -52,5 +54,21 @@ export function useModels() {
     await api.post('/api/settings', { key: 'branch_eval_model', value: modelId });
   }, []);
 
-  return { models, saveModels, defaultModel, saveDefaultModel, branchEvalModel, saveBranchEvalModel, loading, reload: load };
+  const saveGraphicsModel = useCallback(async (modelId) => {
+    setGraphicsModel(modelId);
+    await api.post('/api/settings', { key: 'graphics_model', value: modelId });
+  }, []);
+
+  return {
+    models,
+    saveModels,
+    defaultModel,
+    saveDefaultModel,
+    branchEvalModel,
+    saveBranchEvalModel,
+    graphicsModel,
+    saveGraphicsModel,
+    loading,
+    reload: load,
+  };
 }

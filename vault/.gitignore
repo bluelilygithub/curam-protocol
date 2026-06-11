@@ -3,3 +3,5 @@ dist/
 data/
 uploads/
 .env
+.env.local
+.env.*.local

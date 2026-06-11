@@ -11,7 +11,7 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
   const ref = useRef(null);
 
   useEffect(() => {
-    api.get('/api/settings').then(r => r.json()).then(data => {
+    api.get('/api/settings/mobile').then(r => r.json()).then(data => {
       try {
         const saved = JSON.parse(data.mobile_nav_items || 'null');
         setItems(mergeWithDefaults(saved, DEFAULT_NAV_ITEMS));
@@ -45,6 +45,7 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
         finance: 'finance',
         shares: 'shares',
         youtube: 'youtube',
+        graphics: 'graphics',
         gmailIntel: 'gmailIntel',
         usage: 'usage',
         mood: 'mood',

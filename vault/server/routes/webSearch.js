@@ -3,6 +3,7 @@ const router = express.Router();
 const https = require('https');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
+const { runtimeConfig } = require('../config/runtime');
 
 const searchLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
@@ -37,6 +38,9 @@ function fetchJson(url, extraHeaders = {}) {
 router.get('/', searchLimiter, async (req, res) => {
   const { q } = req.query;
   if (!q?.trim()) return res.status(400).json({ error: 'Query required' });
+  if (runtimeConfig.disableWebSearch) {
+    return res.status(503).json({ error: 'Web search is disabled by DISABLE_WEB_SEARCH.' });
+  }
 
   let apiKey = process.env.SEARCH_API_KEY;
   let provider = (process.env.SEARCH_PROVIDER || '').toLowerCase();
