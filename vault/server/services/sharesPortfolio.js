@@ -354,7 +354,7 @@ async function getChartData(userId) {
 module.exports = {
   computeHoldings,
   computeCashFromActivity,
-  tradeProceedsAud,
+  tradeCashImpactAud,
   buildDashboard,
   recordSnapshots,
   getChartData,
