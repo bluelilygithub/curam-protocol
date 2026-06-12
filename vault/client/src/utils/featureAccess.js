@@ -15,6 +15,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   shares: true,
   youtube: true,
   graphics: true,
+  wellbeing: true,
   gmailIntel: true,
 };
 
@@ -35,6 +36,7 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'shares', label: 'Shares' },
   { key: 'youtube', label: 'YouTube' },
   { key: 'graphics', label: 'Graphics' },
+  { key: 'wellbeing', label: 'Wellbeing Check' },
   { key: 'gmailIntel', label: 'Inbox Intel' },
 ];
 

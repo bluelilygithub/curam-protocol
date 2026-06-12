@@ -9,6 +9,7 @@ The current branch adds two groups of changes:
 - Local/runtime configuration so the same application code can run safely against a local Mac Mini PostgreSQL copy or Railway production.
 - Finance UI improvements so the business-facing position is easier to understand than the accounting trial balance control totals.
 - Local graphics generation so prompts can produce article/story support images through ComfyUI on the Mac Mini.
+- Wellbeing & Personality Checks: four self-report tests, model-assisted insights, combined profile generation, PDF exports, and a reset/erase flow.
 
 These changes should be reviewed and tested locally before merging into `version-7`, because they touch environment configuration, database selection, cron behavior, email behavior, web search behavior, Finance reporting UI, member/mobile access controls, and the new Graphics workflow.
 
@@ -250,6 +251,9 @@ Before merging to `version-7` and deploying on Railway:
 - Confirm Admin `Settings -> Content Restrictions` contains the desired production restrictions before enabling Graphics for members.
 - Confirm Admin `Settings -> Feature Access -> Graphics` is set appropriately for members.
 - Confirm Admin `Settings -> Mobile` has Graphics enabled/disabled appropriately for mobile users.
+- Confirm Admin `Settings -> Feature Access -> Wellbeing` is enabled only for the intended production users.
+- Confirm Admin `Settings -> Mobile` has Wellbeing enabled/disabled appropriately for mobile users.
+- Confirm at least one text model is configured in `Settings -> AI & Chat` so wellbeing insights and combined profiles can use the configured model path.
 - Do not add local ComfyUI values to Railway:
   - `LOCAL_IMAGE_API_URL=http://127.0.0.1:8188`
   - `LOCAL_IMAGE_MODEL=DreamShaper_8_pruned.safetensors`
@@ -285,6 +289,32 @@ On the Mac Mini local environment:
 - Confirm `Settings -> Mobile` controls Graphics mobile visibility globally.
 - Confirm `Settings -> Feature Access` controls member access while admins retain access.
 - Confirm build passes with `npm run build`.
+
+## Wellbeing Production Migration
+
+The Wellbeing & Personality Checks feature uses idempotent table creation in `server/db.js`. There is no separate migration command for this feature.
+
+On first production boot after deployment, the app creates these tables if they do not already exist:
+
+- `wellbeing_attempts`
+- `ipip_neo_attempts`
+- `cerq_attempts`
+- `cope_attempts`
+
+Production deployment steps:
+
+1. Merge the wellbeing changes into the production branch.
+2. Run `npm run build`.
+3. Deploy/restart the production Node process.
+4. Confirm startup logs reach `[db] Schema ready`.
+5. Confirm the heart-pulse icon opens the wellbeing dashboard.
+6. Confirm the dashboard reset action is visible but requires confirmation.
+7. Submit one test attempt with a non-production test user.
+8. Confirm the attempt can be reviewed, deleted, and exported to PDF.
+9. Complete all four tests with a non-production test user and confirm the Combined Profile unlocks.
+10. Generate and export the Combined Profile PDF.
+
+Do not migrate local wellbeing test results into Railway production unless explicitly intending to copy personal test data.
 
 ## Known Follow-Up Work
 

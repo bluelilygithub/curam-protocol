@@ -92,6 +92,7 @@ const semanticMap = {
   'help-circle':    { lucide: 'HelpCircle' },
   'graduation-cap': { lucide: 'GraduationCap' },
   'clipboard-list': { lucide: 'ClipboardList' },
+  'heart-pulse': { lucide: 'HeartPulse' },
   'layers': { lucide: 'Layers' },
   square: { lucide: 'Square' },
   library: { lucide: 'Library' },

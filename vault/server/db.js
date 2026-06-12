@@ -259,6 +259,79 @@ async function initSchema() {
       )
     `);
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS wellbeing_attempts (
+        id                       SERIAL PRIMARY KEY,
+        "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "questionnaireVersion"   TEXT NOT NULL,
+        answers                  JSONB NOT NULL,
+        "totalScore"             INTEGER NOT NULL,
+        band                     TEXT NOT NULL,
+        "bandLabel"              TEXT NOT NULL,
+        analysis                 JSONB NOT NULL,
+        "safetyFlag"             BOOLEAN DEFAULT FALSE,
+        "suicidalThoughtScore"   INTEGER DEFAULT 0,
+        "createdAt"              TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_wellbeing_attempts_user_created
+      ON wellbeing_attempts("userId", "createdAt" DESC)
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ipip_neo_attempts (
+        id                       SERIAL PRIMARY KEY,
+        "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "questionnaireVersion"   TEXT NOT NULL,
+        answers                  JSONB NOT NULL,
+        "facetScores"            JSONB NOT NULL,
+        "domainScores"           JSONB NOT NULL,
+        analysis                 JSONB NOT NULL,
+        "createdAt"              TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_ipip_neo_attempts_user_created
+      ON ipip_neo_attempts("userId", "createdAt" DESC)
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cerq_attempts (
+        id                       SERIAL PRIMARY KEY,
+        "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "questionnaireVersion"   TEXT NOT NULL,
+        answers                  JSONB NOT NULL,
+        "scaleScores"            JSONB NOT NULL,
+        analysis                 JSONB NOT NULL,
+        "createdAt"              TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_cerq_attempts_user_created
+      ON cerq_attempts("userId", "createdAt" DESC)
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cope_attempts (
+        id                       SERIAL PRIMARY KEY,
+        "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "questionnaireVersion"   TEXT NOT NULL,
+        answers                  JSONB NOT NULL,
+        "scaleScores"            JSONB NOT NULL,
+        analysis                 JSONB NOT NULL,
+        "createdAt"              TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_cope_attempts_user_created
+      ON cope_attempts("userId", "createdAt" DESC)
+    `);
+
     // ── AI features ───────────────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS debates (

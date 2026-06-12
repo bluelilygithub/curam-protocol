@@ -111,6 +111,7 @@ app.use('/api/shares', requireFeature('shares'), require('./routes/shares'));
 app.use('/api/metals', requireFeature('shares'), require('./routes/metals'));
 app.use('/api/youtube', requireFeature('youtube'), require('./routes/youtube'));
 app.use('/api/graphics', requireFeature('graphics'), require('./routes/graphics'));
+app.use('/api/wellbeing', requireFeature('wellbeing'), require('./routes/wellbeing'));
 
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');

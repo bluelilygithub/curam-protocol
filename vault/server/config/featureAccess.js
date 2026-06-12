@@ -16,6 +16,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   student: true,
   shares: true,
   graphics: true,
+  wellbeing: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);

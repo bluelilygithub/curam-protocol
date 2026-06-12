@@ -4,6 +4,24 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-12
+
+**Feature:** Wellbeing & Personality Checks — four tests, deeper insights, combined profile, and reset flow.
+
+Added a full wellbeing assessment area behind the existing heart-pulse navigation. The dashboard now includes a BDI-style mood check, IPIP-NEO-120 personality inventory, CERQ-style cognitive coping check, and Brief COPE-style coping check. All tests are proof-of-concept self-report tools with clear non-clinical disclaimers, pause/resume support, back navigation, saved attempts, delete actions, and PDF downloads.
+
+Result analysis now includes deeper model-assisted formulation sections rather than simple score comments. The configured model is used through the existing provider-agnostic `callModel`/`getModelsForUser` path, with deterministic fallback copy when model generation is unavailable. Older saved attempts regenerate into the newer insight format when opened.
+
+Added a fifth **Combined Profile** option that unlocks only after all four tests have been completed. It collates the latest result from each test into a detailed profile with paragraph-formatted sections, reflection questions, source attempt dates, and PDF export. The combined profile uses a dedicated formulation prompt focused on cross-test themes, tensions, strengths, growth edges, and real-world interpretation rather than scale-name restatement.
+
+The heart-pulse icon now returns users to the wellbeing dashboard every time, even if they were previously inside an individual test or combined profile. The dashboard also includes a **Reset / erase all tests** action that deletes all completed wellbeing/IPIP/CERQ/COPE attempts for the current user and clears paused local drafts on the current device.
+
+**New files:** `server/services/wellbeingPdf.js`, `server/services/ipipNeo120.js`, `server/services/cerqStyle.js`, `server/services/briefCopeStyle.js`, `server/services/wellbeingModelInsights.js`, `server/services/combinedProfilePdf.js`, `client/src/components/wellbeing/IpipNeo120Panel.jsx`, `client/src/components/wellbeing/CerqStylePanel.jsx`, `client/src/components/wellbeing/BriefCopeStylePanel.jsx`, `client/src/components/wellbeing/CombinedProfilePanel.jsx`, `client/src/components/wellbeing/ModelInsightPanel.jsx`, `docs/wellbeing-assessment-app.md`.
+
+**Modified files:** `server/db.js`, `server/routes/wellbeing.js`, `client/src/pages/WellbeingPage.jsx`, `client/src/components/Layout.jsx`, `client/src/components/mobile/MobileNavDropdown.jsx`.
+
+---
+
 ## 2026-06-07
 
 **Feature:** Gmail Intel — incremental DB-backed classification.

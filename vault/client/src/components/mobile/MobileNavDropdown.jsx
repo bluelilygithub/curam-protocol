@@ -46,6 +46,7 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
         shares: 'shares',
         youtube: 'youtube',
         graphics: 'graphics',
+        wellbeing: 'wellbeing',
         gmailIntel: 'gmailIntel',
         usage: 'usage',
         mood: 'mood',
@@ -142,6 +143,7 @@ export default function MobileNavDropdown({ onClose, isAdmin = false }) {
             <Link
               key={item.id}
               to={item.path}
+              state={item.id === 'wellbeing' ? { dashboardNonce: Date.now() } : undefined}
               onClick={onClose}
               className="flex items-center px-4 py-3 text-sm border-b hover:opacity-70 transition-opacity"
               style={{
