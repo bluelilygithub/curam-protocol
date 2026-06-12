@@ -17,6 +17,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   shares: true,
   graphics: true,
   wellbeing: true,
+  gmailIntel: true,
 };
 
 const FEATURE_ACCESS_KEYS = Object.keys(FEATURE_ACCESS_DEFAULTS);
