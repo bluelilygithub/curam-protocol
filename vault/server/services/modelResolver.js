@@ -23,6 +23,23 @@ function parseConfiguredModelIds(rawVaultModels) {
     .filter(Boolean);
 }
 
+function parseConfiguredModelEntries(rawVaultModels) {
+  if (!rawVaultModels) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(rawVaultModels);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((m) => ({
+      id: m && typeof m.id === 'string' ? m.id.trim() : '',
+      provider: m && typeof m.provider === 'string' ? m.provider.trim().toLowerCase() : '',
+    }))
+    .filter((m) => m.id);
+}
+
 function parseVaultModelsCatalog(rawVaultModels) {
   if (!rawVaultModels) return [];
   let parsed;
@@ -35,13 +52,17 @@ function parseVaultModelsCatalog(rawVaultModels) {
   return parsed.filter((m) => m && typeof m.id === 'string' && String(m.id).trim());
 }
 
-function pickTiers(modelIds, configuredDefault) {
-  if (!Array.isArray(modelIds) || modelIds.length === 0) return { ...EMPTY_MODELS };
-  const anthropicModels = modelIds.filter((id) => !id.startsWith('gemini-') && !id.startsWith('deepseek-'));
-  const geminiModels = modelIds.filter((id) => id.startsWith('gemini-'));
-  const deepseekModels = modelIds.filter((id) => id.startsWith('deepseek-'));
-  const firstModel = modelIds[0] || null;
-  const standard = (configuredDefault && modelIds.includes(configuredDefault)) ? configuredDefault : firstModel;
+function pickTiers(modelEntries, configuredDefault) {
+  if (!Array.isArray(modelEntries) || modelEntries.length === 0) return { ...EMPTY_MODELS };
+  const textModels = modelEntries.filter((m) => m.provider !== 'seedance');
+  const textModelIds = textModels.map((m) => m.id);
+  const anthropicModels = textModels
+    .filter((m) => m.provider === 'anthropic' || (!m.provider && !m.id.startsWith('gemini-') && !m.id.startsWith('deepseek-')))
+    .map((m) => m.id);
+  const geminiModels = textModels.filter((m) => m.provider === 'gemini' || m.id.startsWith('gemini-')).map((m) => m.id);
+  const deepseekModels = textModels.filter((m) => m.provider === 'deepseek' || m.id.startsWith('deepseek-')).map((m) => m.id);
+  const firstModel = textModelIds[0] || null;
+  const standard = (configuredDefault && textModelIds.includes(configuredDefault)) ? configuredDefault : firstModel;
   const light = anthropicModels[0] || deepseekModels[0] || geminiModels[0] || standard;
   return {
     light: light || null,
@@ -105,9 +126,9 @@ async function resolveVaultModelSettings(userId) {
 async function getModelsForUser(userId) {
   try {
     const { vault_models, default_model } = await resolveVaultModelSettings(userId);
-    const modelIds = parseConfiguredModelIds(vault_models);
-    if (!modelIds.length) return { ...EMPTY_MODELS };
-    return pickTiers(modelIds, default_model || null);
+    const modelEntries = parseConfiguredModelEntries(vault_models);
+    if (!modelEntries.length) return { ...EMPTY_MODELS };
+    return pickTiers(modelEntries, default_model || null);
   } catch {
     return { ...EMPTY_MODELS };
   }
@@ -121,10 +142,13 @@ async function getVaultModelsConfigForUser(userId) {
   try {
     const { vault_models, default_model, fromAdmin } = await resolveVaultModelSettings(userId);
     const models = parseVaultModelsCatalog(vault_models);
-    const ids = models.map((m) => String(m.id).trim()).filter(Boolean);
-    const defaultModel = (default_model && ids.includes(default_model))
+    const textIds = models
+      .filter((m) => String(m.provider || '').toLowerCase() !== 'seedance')
+      .map((m) => String(m.id).trim())
+      .filter(Boolean);
+    const defaultModel = (default_model && textIds.includes(default_model))
       ? default_model
-      : (ids[0] || '');
+      : (textIds[0] || '');
     return { models, defaultModel, fromAdmin };
   } catch {
     return { models: [], defaultModel: '', fromAdmin: false };

@@ -93,8 +93,6 @@ function SettingsPage() {
   } = useModels();
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
   const [modelForm, setModelForm] = useState({});
-  const [graphicsModelOptions, setGraphicsModelOptions] = useState([]);
-  const [graphicsModelDraft, setGraphicsModelDraft] = useState('');
   const [showReopenWizardConfirm, setShowReopenWizardConfirm] = useState(false);
   const [showResetGoalsConfirm, setShowResetGoalsConfirm] = useState(false);
   const [tab, setTab] = useState(() => localStorage.getItem('settingsTab') || 'Appearance');
@@ -228,22 +226,6 @@ function SettingsPage() {
       }
     }).catch(() => {});
   }, []);
-
-  useEffect(() => {
-    setGraphicsModelDraft(graphicsModel || '');
-  }, [graphicsModel]);
-
-  useEffect(() => {
-    if (!user?.isAdmin) return;
-    api.get('/api/graphics/models').then(r => r.json()).then(data => {
-      if (Array.isArray(data?.availableModels)) {
-        setGraphicsModelOptions(data.availableModels);
-      }
-      if (!graphicsModel && data?.selectedModel) {
-        setGraphicsModelDraft(data.selectedModel);
-      }
-    }).catch(() => {});
-  }, [user?.isAdmin, graphicsModel]);
 
   useEffect(() => {
     if (!user?.isAdmin) return;
@@ -396,6 +378,12 @@ function SettingsPage() {
     ['External cron disabled', runtimeInfo.disableExternalCron],
     ['Web search disabled', runtimeInfo.disableWebSearch],
   ] : [];
+
+  const textModelChoices = models.filter(m => m.provider !== 'seedance');
+  const graphicsModelChoices = models.filter(m => m.provider === 'seedance');
+  const graphicsModelOptions = graphicsModel && !graphicsModelChoices.some(m => m.id === graphicsModel)
+    ? [{ id: graphicsModel, name: graphicsModel, emoji: '🎨', provider: 'seedance' }, ...graphicsModelChoices]
+    : graphicsModelChoices;
 
   return (
     <div className={((tab === 'Members' || tab === 'Environment') && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
@@ -876,7 +864,7 @@ function SettingsPage() {
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
             <option value="">No default selected</option>
-            {models.map(m => (
+            {textModelChoices.map(m => (
               <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
             ))}
           </select>
@@ -897,7 +885,7 @@ function SettingsPage() {
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           >
             <option value="">Use current chat model</option>
-            {models.map(m => (
+            {textModelChoices.map(m => (
               <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
             ))}
           </select>
@@ -909,32 +897,27 @@ function SettingsPage() {
             Graphics model
           </label>
           <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-            Used by the Graphics agent for image generation. In local ComfyUI this should match a checkpoint filename; in production it can be a hosted image model ID.
+            Used by the Graphics agent in production. Local development uses `LOCAL_IMAGE_MODEL` from the environment for ComfyUI.
           </p>
-          <input
-            list="graphics-model-options"
-            value={graphicsModelDraft}
-            onChange={e => setGraphicsModelDraft(e.target.value)}
-            onBlur={() => saveGraphicsModel(graphicsModelDraft.trim())}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                saveGraphicsModel(graphicsModelDraft.trim());
-                e.currentTarget.blur();
-              }
-            }}
-            placeholder="Use server default"
+          <select
+            value={graphicsModel}
+            onChange={e => saveGraphicsModel(e.target.value)}
             className="w-full px-3 py-2 rounded-lg border text-sm outline-none font-mono"
             style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-          />
-          <datalist id="graphics-model-options">
-            {graphicsModelOptions.map(modelId => (
-              <option key={modelId} value={modelId} />
+          >
+            <option value="">No graphics model selected</option>
+            {graphicsModelOptions.map(m => (
+              <option key={m.id} value={m.id}>{m.emoji || '🎨'} {m.name || m.id} — {m.id}</option>
             ))}
-          </datalist>
+          </select>
           <p className="text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
-            Leave blank to use the server fallback. Available local checkpoints are suggested when ComfyUI is running.
+            This dropdown lists models configured below with provider `seedance`. Leave blank to use the server fallback.
           </p>
+          {graphicsModelChoices.length === 0 && (
+            <p className="text-[11px] mt-2" style={{ color: '#b45309' }}>
+              No Seedance models are configured yet. Add one below and choose `Seedance` as the provider.
+            </p>
+          )}
         </div>
 
         {/* Add / Edit form */}
@@ -985,6 +968,7 @@ function SettingsPage() {
                   <option value="anthropic">Anthropic</option>
                   <option value="gemini">Google Gemini</option>
                   <option value="deepseek">DeepSeek</option>
+                  <option value="seedance">Seedance</option>
                 </select>
               </div>
               <div>
@@ -1065,7 +1049,7 @@ function SettingsPage() {
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
                     )}
                     {configured === false && (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={m.provider === 'gemini' ? 'GEMINI_API_KEY not set' : m.provider === 'deepseek' ? 'DEEPSEEK_API_KEY not set' : 'ANTHROPIC_API_KEY not set'} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={m.provider === 'gemini' ? 'GEMINI_API_KEY not set' : m.provider === 'deepseek' ? 'DEEPSEEK_API_KEY not set' : m.provider === 'seedance' ? 'SEEDANCE_API_KEY not set' : 'ANTHROPIC_API_KEY not set'} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
                     )}
                     <button
                       onClick={() => testModel(m.id)}

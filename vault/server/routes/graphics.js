@@ -5,6 +5,7 @@ const router = express.Router();
 const { randomUUID } = require('crypto');
 const { runtimeConfig } = require('../config/runtime');
 const { pool } = require('../db');
+const { getVaultModelsConfigForUser } = require('../services/modelResolver');
 
 const DEFAULT_COMFY_URL = 'http://127.0.0.1:8188';
 const DEFAULT_MODEL = 'DreamShaper_8_pruned.safetensors';
@@ -16,6 +17,10 @@ function comfyBaseUrl() {
 }
 
 async function resolveGraphicsModel(userId) {
+  if (runtimeConfig.isLocal) {
+    return runtimeConfig.localImageModel || DEFAULT_MODEL;
+  }
+
   if (userId) {
     const { rows } = await pool.query(
       'SELECT value FROM settings WHERE "userId"=$1 AND key=$2 LIMIT 1',
@@ -330,8 +335,13 @@ router.get('/models', async (req, res) => {
   try {
     const selectedModel = await resolveGraphicsModel(req.user.id);
     let availableModels = [];
-    if (!runtimeConfig.imageProvider || runtimeConfig.imageProvider === 'local-comfyui') {
+    if (runtimeConfig.isLocal || !runtimeConfig.imageProvider || runtimeConfig.imageProvider === 'local-comfyui') {
       availableModels = await listAvailableComfyModels().catch(() => []);
+    } else {
+      const config = await getVaultModelsConfigForUser(req.user.id);
+      availableModels = config.models
+        .filter((model) => model.provider === 'seedance')
+        .map((model) => model.id);
     }
     res.json({
       selectedModel,

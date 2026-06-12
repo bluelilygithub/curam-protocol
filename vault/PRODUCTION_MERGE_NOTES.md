@@ -191,6 +191,12 @@ IMAGE_PROVIDER=seedance
 SEEDANCE_API_KEY=<Seedance API key>
 ```
 
+Admin `Settings -> AI & Chat` now treats `Seedance` as a first-class provider for configured models. The `Graphics model` dropdown lists configured Seedance models from `vault_models`; it no longer suggests local ComfyUI checkpoints in the production selector. Local ComfyUI still resolves the checkpoint from the environment variable:
+
+```env
+LOCAL_IMAGE_MODEL=DreamShaper_8_pruned.safetensors
+```
+
 ## Local-Only Changes That Should Not Migrate
 
 ### Real `.env`

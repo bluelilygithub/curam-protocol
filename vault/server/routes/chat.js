@@ -9,7 +9,7 @@ const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { buildTypeConfigPrompt } = require('../typePrompts');
 const { calculateCost } = require('../services/costCalculator');
-const { getModelsForUser } = require('../services/modelResolver');
+const { getModelsForUser, getVaultModelsConfigForUser } = require('../services/modelResolver');
 const { embedText } = require('../services/embeddings');
 const { callModel } = require('../services/callModel');
 const { FEATURE_ACCESS_DEFAULTS } = require('../config/featureAccess');
@@ -45,6 +45,16 @@ function invalidateUserProfile(userId) { profileCache.delete(userId); }
 
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
+
+async function getConfiguredModelProvider(userId, modelId) {
+  try {
+    const config = await getVaultModelsConfigForUser(userId);
+    const model = config.models.find((m) => m.id === modelId);
+    return model?.provider || null;
+  } catch {
+    return null;
+  }
+}
 
 async function canMembersSelectModel() {
   const { rows } = await pool.query(
@@ -483,6 +493,7 @@ router.get('/model-status', (req, res) => {
     anthropic: !!process.env.ANTHROPIC_API_KEY,
     gemini: !!process.env.GEMINI_API_KEY,
     deepseek: !!process.env.DEEPSEEK_API_KEY,
+    seedance: !!process.env.SEEDANCE_API_KEY,
   });
 });
 
@@ -491,7 +502,11 @@ router.post('/test-model', async (req, res) => {
   const { modelId } = req.body;
   if (!modelId) return res.status(400).json({ ok: false, error: 'modelId required' });
   try {
-    if (isGemini(modelId)) {
+    const configuredProvider = await getConfiguredModelProvider(req.user?.id, modelId);
+    if (configuredProvider === 'seedance') {
+      if (!process.env.SEEDANCE_API_KEY) return res.json({ ok: false, code: 'auth', error: 'SEEDANCE_API_KEY is not configured.' });
+      res.json({ ok: true, response: 'Seedance API key configured. This model is available for Graphics generation.' });
+    } else if (isGemini(modelId)) {
       const geminiApiKey = process.env.GEMINI_API_KEY;
       if (!geminiApiKey) return res.json({ ok: false, code: 'auth', error: 'GEMINI_API_KEY is not configured.' });
       const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -652,6 +667,10 @@ router.post('/', chatLimiter, async (req, res) => {
       : (studentCards ? standardModel : project?.model || standardModel);
     if (!model) {
       throw new Error('No model configured. Ask an admin to configure models in Settings.');
+    }
+    const configuredProvider = await getConfiguredModelProvider(req.user?.id, model);
+    if (configuredProvider === 'seedance') {
+      throw new Error('Seedance models are image-generation models. Select a text model for chat, or use the Graphics agent.');
     }
     const temperature = typeof reqTemp === 'number' ? Math.max(0, Math.min(1, reqTemp)) : 0.7;
 
