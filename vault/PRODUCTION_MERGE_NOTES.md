@@ -184,14 +184,13 @@ This is prompt-based protection, not a full image moderation classifier. It shou
   - Admins keep access to enabled mobile routes
 - Mobile dashboard/navigation reads the workspace-wide mobile config through `/api/settings/mobile`.
 
-Production note: Railway should not use the local ComfyUI provider. When image generation is needed in production, implement the hosted Seedance provider path behind the same `/api/graphics/generate` interface. The Railway API key variable is:
+Production note: Railway should not use the local ComfyUI provider. Production image generation resolves the provider from the selected admin model record and uses the hosted FAL provider path behind the same `/api/graphics/generate` interface. The required Railway API key variable is:
 
 ```env
-IMAGE_PROVIDER=seedance
-SEEDANCE_API_KEY=<Seedance API key>
+FAL_API_KEY=<FAL API key>
 ```
 
-Admin `Settings -> AI & Chat` now treats `Seedance` as a first-class provider for configured models. The `Graphics model` dropdown lists configured Seedance models from `vault_models`; it no longer suggests local ComfyUI checkpoints in the production selector. Local ComfyUI still resolves the checkpoint from the environment variable:
+Admin `Settings -> AI & Chat` now treats `FAL` as a first-class provider for configured image models. The `Graphics model` dropdown lists configured FAL models from `vault_models`; it no longer suggests local ComfyUI checkpoints in the production selector. `IMAGE_PROVIDER` is optional and should normally be omitted in production unless an explicit global provider override is needed. Local ComfyUI still resolves the checkpoint from the environment variable:
 
 ```env
 LOCAL_IMAGE_MODEL=DreamShaper_8_pruned.safetensors
@@ -245,7 +244,8 @@ Before merging to `version-7` and deploying on Railway:
   - `DISABLE_EXTERNAL_CRON`
   - `DISABLE_WEB_SEARCH`
 - Confirm existing Railway model/API variables remain unchanged.
-- Confirm Railway has `SEEDANCE_API_KEY` if `IMAGE_PROVIDER=seedance` is enabled.
+- Confirm Railway has `FAL_API_KEY` if production image generation is enabled.
+- Confirm Railway does not set `IMAGE_PROVIDER` unless intentionally overriding the admin model provider.
 - Confirm Admin `Settings -> AI & Chat -> Graphics model` is set for production if production image generation is enabled.
 - Confirm Admin `Settings -> Content Restrictions` contains the desired production restrictions before enabling Graphics for members.
 - Confirm Admin `Settings -> Feature Access -> Graphics` is set appropriately for members.

@@ -45,6 +45,7 @@ function invalidateUserProfile(userId) { profileCache.delete(userId); }
 
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
+function isImageModelProvider(provider) { return ['fal', 'seedance'].includes(String(provider || '').trim().toLowerCase()); }
 
 async function getConfiguredModelProvider(userId, modelId) {
   try {
@@ -493,7 +494,7 @@ router.get('/model-status', (req, res) => {
     anthropic: !!process.env.ANTHROPIC_API_KEY,
     gemini: !!process.env.GEMINI_API_KEY,
     deepseek: !!process.env.DEEPSEEK_API_KEY,
-    seedance: !!process.env.SEEDANCE_API_KEY,
+    fal: !!process.env.FAL_API_KEY,
   });
 });
 
@@ -503,9 +504,9 @@ router.post('/test-model', async (req, res) => {
   if (!modelId) return res.status(400).json({ ok: false, error: 'modelId required' });
   try {
     const configuredProvider = await getConfiguredModelProvider(req.user?.id, modelId);
-    if (configuredProvider === 'seedance') {
-      if (!process.env.SEEDANCE_API_KEY) return res.json({ ok: false, code: 'auth', error: 'SEEDANCE_API_KEY is not configured.' });
-      res.json({ ok: true, response: 'Seedance API key configured. This model is available for Graphics generation.' });
+    if (isImageModelProvider(configuredProvider)) {
+      if (!process.env.FAL_API_KEY) return res.json({ ok: false, code: 'auth', error: 'FAL_API_KEY is not configured.' });
+      res.json({ ok: true, response: 'FAL API key configured. This model is available for Graphics generation.' });
     } else if (isGemini(modelId)) {
       const geminiApiKey = process.env.GEMINI_API_KEY;
       if (!geminiApiKey) return res.json({ ok: false, code: 'auth', error: 'GEMINI_API_KEY is not configured.' });
@@ -669,8 +670,8 @@ router.post('/', chatLimiter, async (req, res) => {
       throw new Error('No model configured. Ask an admin to configure models in Settings.');
     }
     const configuredProvider = await getConfiguredModelProvider(req.user?.id, model);
-    if (configuredProvider === 'seedance') {
-      throw new Error('Seedance models are image-generation models. Select a text model for chat, or use the Graphics agent.');
+    if (isImageModelProvider(configuredProvider)) {
+      throw new Error('FAL models are image-generation models. Select a text model for chat, or use the Graphics agent.');
     }
     const temperature = typeof reqTemp === 'number' ? Math.max(0, Math.min(1, reqTemp)) : 0.7;
 

@@ -9,6 +9,10 @@ const EMPTY_MODELS = {
   deepseek: null,
 };
 
+function isImageProvider(provider) {
+  return ['fal', 'seedance'].includes(String(provider || '').trim().toLowerCase());
+}
+
 function parseConfiguredModelIds(rawVaultModels) {
   if (!rawVaultModels) return [];
   let parsed;
@@ -54,7 +58,7 @@ function parseVaultModelsCatalog(rawVaultModels) {
 
 function pickTiers(modelEntries, configuredDefault) {
   if (!Array.isArray(modelEntries) || modelEntries.length === 0) return { ...EMPTY_MODELS };
-  const textModels = modelEntries.filter((m) => m.provider !== 'seedance');
+  const textModels = modelEntries.filter((m) => !isImageProvider(m.provider));
   const textModelIds = textModels.map((m) => m.id);
   const anthropicModels = textModels
     .filter((m) => m.provider === 'anthropic' || (!m.provider && !m.id.startsWith('gemini-') && !m.id.startsWith('deepseek-')))
@@ -143,7 +147,7 @@ async function getVaultModelsConfigForUser(userId) {
     const { vault_models, default_model, fromAdmin } = await resolveVaultModelSettings(userId);
     const models = parseVaultModelsCatalog(vault_models);
     const textIds = models
-      .filter((m) => String(m.provider || '').toLowerCase() !== 'seedance')
+      .filter((m) => !isImageProvider(m.provider))
       .map((m) => String(m.id).trim())
       .filter(Boolean);
     const defaultModel = (default_model && textIds.includes(default_model))

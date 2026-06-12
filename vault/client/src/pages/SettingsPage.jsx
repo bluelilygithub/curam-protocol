@@ -379,10 +379,10 @@ function SettingsPage() {
     ['Web search disabled', runtimeInfo.disableWebSearch],
   ] : [];
 
-  const textModelChoices = models.filter(m => m.provider !== 'seedance');
-  const graphicsModelChoices = models.filter(m => m.provider === 'seedance');
+  const textModelChoices = models.filter(m => !['fal', 'seedance'].includes(m.provider));
+  const graphicsModelChoices = models.filter(m => m.provider === 'fal');
   const graphicsModelOptions = graphicsModel && !graphicsModelChoices.some(m => m.id === graphicsModel)
-    ? [{ id: graphicsModel, name: graphicsModel, emoji: '🎨', provider: 'seedance' }, ...graphicsModelChoices]
+    ? [{ id: graphicsModel, name: graphicsModel, emoji: '🎨', provider: 'fal' }, ...graphicsModelChoices]
     : graphicsModelChoices;
 
   return (
@@ -911,11 +911,11 @@ function SettingsPage() {
             ))}
           </select>
           <p className="text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
-            This dropdown lists models configured below with provider `seedance`. Leave blank to use the server fallback.
+            This dropdown lists models configured below with provider `fal`. Leave blank to use the server fallback.
           </p>
           {graphicsModelChoices.length === 0 && (
             <p className="text-[11px] mt-2" style={{ color: '#b45309' }}>
-              No Seedance models are configured yet. Add one below and choose `Seedance` as the provider.
+              No FAL models are configured yet. Add one below and choose `FAL` as the provider.
             </p>
           )}
         </div>
@@ -968,7 +968,7 @@ function SettingsPage() {
                   <option value="anthropic">Anthropic</option>
                   <option value="gemini">Google Gemini</option>
                   <option value="deepseek">DeepSeek</option>
-                  <option value="seedance">Seedance</option>
+                  <option value="fal">FAL</option>
                 </select>
               </div>
               <div>
@@ -1049,7 +1049,7 @@ function SettingsPage() {
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
                     )}
                     {configured === false && (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={m.provider === 'gemini' ? 'GEMINI_API_KEY not set' : m.provider === 'deepseek' ? 'DEEPSEEK_API_KEY not set' : m.provider === 'seedance' ? 'SEEDANCE_API_KEY not set' : 'ANTHROPIC_API_KEY not set'} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={m.provider === 'gemini' ? 'GEMINI_API_KEY not set' : m.provider === 'deepseek' ? 'DEEPSEEK_API_KEY not set' : m.provider === 'fal' ? 'FAL_API_KEY not set' : 'ANTHROPIC_API_KEY not set'} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
                     )}
                     <button
                       onClick={() => testModel(m.id)}

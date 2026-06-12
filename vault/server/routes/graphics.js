@@ -9,11 +9,18 @@ const { getVaultModelsConfigForUser } = require('../services/modelResolver');
 
 const DEFAULT_COMFY_URL = 'http://127.0.0.1:8188';
 const DEFAULT_MODEL = 'DreamShaper_8_pruned.safetensors';
+const DEFAULT_FAL_MODEL = 'fal-ai/flux/dev';
 const CONTENT_RESTRICTIONS_KEY = 'graphics_content_restrictions';
 const GRAPHICS_MODEL_KEY = 'graphics_model';
 
 function comfyBaseUrl() {
   return String(runtimeConfig.localImageApiUrl || DEFAULT_COMFY_URL).replace(/\/$/, '');
+}
+
+function normalizeGraphicsProvider(provider) {
+  const normalized = String(provider || '').trim().toLowerCase();
+  if (normalized === 'seedance') return 'fal';
+  return normalized;
 }
 
 async function resolveGraphicsModel(userId) {
@@ -47,12 +54,12 @@ async function resolveGraphicsModel(userId) {
 
 async function resolveGraphicsProvider(userId, selectedModel) {
   if (runtimeConfig.isLocal) return 'local-comfyui';
-  if (runtimeConfig.imageProvider) return runtimeConfig.imageProvider;
-  if (!selectedModel) return runtimeConfig.isProduction ? 'seedance' : 'local-comfyui';
+  if (runtimeConfig.imageProvider) return normalizeGraphicsProvider(runtimeConfig.imageProvider);
+  if (!selectedModel) return runtimeConfig.isProduction ? 'fal' : 'local-comfyui';
 
   const config = await getVaultModelsConfigForUser(userId);
   const configuredModel = config.models.find((model) => model.id === selectedModel);
-  return String(configuredModel?.provider || '').trim() || (runtimeConfig.isProduction ? 'seedance' : 'local-comfyui');
+  return normalizeGraphicsProvider(configuredModel?.provider) || (runtimeConfig.isProduction ? 'fal' : 'local-comfyui');
 }
 
 function isTurboModel(modelName) {
@@ -245,9 +252,83 @@ async function fetchJson(url, options) {
   const res = await fetch(url, options);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data?.error?.message || data?.error || `ComfyUI request failed (${res.status})`);
+    throw new Error(data?.error?.message || data?.error || `Graphics provider request failed (${res.status})`);
   }
   return data;
+}
+
+function resolveFalEndpoint(modelName, mode = 'generate') {
+  const raw = String(modelName || '').trim();
+  const key = raw.toLowerCase().replace(/\s+/g, '-');
+  let endpoint = raw || DEFAULT_FAL_MODEL;
+  if (['flux-dev', 'flux.1-dev', 'flux-dev-1', 'fal-ai/flux-dev'].includes(key)) {
+    endpoint = DEFAULT_FAL_MODEL;
+  }
+  if (!endpoint.includes('/') && endpoint.toLowerCase().includes('flux') && endpoint.toLowerCase().includes('dev')) {
+    endpoint = DEFAULT_FAL_MODEL;
+  }
+  endpoint = endpoint.replace(/^https:\/\/fal\.run\//, '').replace(/^\/+/, '');
+  if (mode === 'augment' && !endpoint.endsWith('/image-to-image')) {
+    endpoint = `${endpoint}/image-to-image`;
+  }
+  return endpoint;
+}
+
+function falImageSize(width, height) {
+  if (width === height) return width > 512 ? 'square_hd' : 'square';
+  return width > height ? 'landscape_4_3' : 'portrait_4_3';
+}
+
+async function imageUrlToDataUrl(url, contentType = 'image/jpeg') {
+  const imageUrl = String(url || '');
+  if (imageUrl.startsWith('data:image/')) return imageUrl;
+  if (!imageUrl) throw new Error('FAL did not return an image URL');
+  const res = await fetch(imageUrl);
+  if (!res.ok) throw new Error(`Failed to fetch generated FAL image (${res.status})`);
+  const mime = res.headers.get('content-type') || contentType || 'image/jpeg';
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return `data:${mime};base64,${buffer.toString('base64')}`;
+}
+
+async function generateWithFal({ prompt, width, height, seed, modelName }) {
+  const apiKey = process.env.FAL_API_KEY;
+  if (!apiKey) throw new Error('FAL_API_KEY is not configured');
+
+  const endpoint = resolveFalEndpoint(modelName);
+  const data = await fetchJson(`https://fal.run/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      prompt,
+      image_size: falImageSize(width, height),
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+      sync_mode: true,
+      num_images: 1,
+      enable_safety_checker: true,
+      output_format: 'jpeg',
+      acceleration: 'none',
+      seed,
+    }),
+  });
+
+  const image = Array.isArray(data.images) ? data.images[0] : null;
+  if (!image?.url) throw new Error('FAL did not return a generated image');
+  const imageDataUrl = await imageUrlToDataUrl(image.url, image.content_type);
+
+  return {
+    seed: Number.isFinite(Number(data.seed)) ? Number(data.seed) : seed,
+    image: {
+      provider: 'fal',
+      endpoint,
+      url: image.url,
+      contentType: image.content_type || 'image/jpeg',
+    },
+    imageDataUrl,
+  };
 }
 
 async function refinePromptForImage(rawPrompt, restrictions = []) {
@@ -351,7 +432,7 @@ router.get('/models', async (req, res) => {
     } else {
       const config = await getVaultModelsConfigForUser(req.user.id);
       availableModels = config.models
-        .filter((model) => model.provider === 'seedance')
+        .filter((model) => normalizeGraphicsProvider(model.provider) === 'fal')
         .map((model) => model.id);
     }
     res.json({
@@ -369,7 +450,7 @@ router.get('/status', async (req, res) => {
   const provider = await resolveGraphicsProvider(req.user.id, selectedModel);
 
   if (provider !== 'local-comfyui') {
-    const configured = provider === 'seedance' ? Boolean(process.env.SEEDANCE_API_KEY) : false;
+    const configured = provider === 'fal' ? Boolean(process.env.FAL_API_KEY) : false;
     return res.json({
       ok: Boolean(selectedModel && configured),
       provider,
@@ -449,9 +530,6 @@ router.post('/generate', async (req, res) => {
     const negativePrompt = buildNegativePrompt(String(req.body?.negativePrompt || '').trim(), restrictions);
     const modelName = await resolveGraphicsModel(req.user.id);
     const provider = await resolveGraphicsProvider(req.user.id, modelName);
-    if (provider !== 'local-comfyui') {
-      return res.status(400).json({ error: `Image provider ${provider} is not supported yet` });
-    }
 
     const width = clampDimension(req.body?.width);
     const height = clampDimension(req.body?.height);
@@ -459,6 +537,33 @@ router.post('/generate', async (req, res) => {
       ? Math.floor(Number(req.body.seed))
       : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
     const refinedPrompt = req.body?.skipRefine ? prompt : await refinePromptForImage(prompt, restrictions);
+
+    if (provider === 'fal') {
+      const falResult = await generateWithFal({
+        prompt: refinedPrompt,
+        width,
+        height,
+        seed,
+        modelName,
+      });
+      return res.json({
+        ok: true,
+        prompt,
+        refinedPrompt,
+        seed: falResult.seed,
+        width,
+        height,
+        model: modelName,
+        image: falResult.image,
+        imageDataUrl: falResult.imageDataUrl,
+        restrictions,
+      });
+    }
+
+    if (provider !== 'local-comfyui') {
+      return res.status(400).json({ error: `Image provider ${provider} is not supported yet` });
+    }
+
     const clientId = randomUUID();
     const workflow = buildWorkflow({
       prompt: refinedPrompt,
