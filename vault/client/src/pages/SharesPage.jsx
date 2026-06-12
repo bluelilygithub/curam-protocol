@@ -57,6 +57,162 @@ function formatDecimalInput(value) {
   return Number.isFinite(n) ? n.toFixed(2) : '';
 }
 
+function compactAud(n) {
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  const abs = Math.abs(Number(n));
+  const sign = Number(n) < 0 ? '-' : '';
+  if (abs >= 1000) return `${sign}$${(abs / 1000).toFixed(1)}k`;
+  return `${sign}$${abs.toFixed(0)}`;
+}
+
+function PortfolioPnlBarChart({ positions = [], realized = [] }) {
+  const [activeId, setActiveId] = useState(null);
+  const realizedBySymbol = realized.reduce((acc, trade) => {
+    const key = `${trade.symbol}-${trade.exchange || ''}`;
+    if (!acc[key]) {
+      acc[key] = {
+        id: `closed-${key}`,
+        symbol: trade.symbol,
+        exchange: trade.exchange,
+        type: 'Closed',
+        pnlAud: 0,
+        tradeCount: 0,
+      };
+    }
+    acc[key].pnlAud += Number(trade.pnlAud || 0);
+    acc[key].tradeCount += 1;
+    return acc;
+  }, {});
+
+  const bars = [
+    ...positions
+      .filter((position) => position.pnlAud != null)
+      .map((position) => ({
+        id: `open-${position.symbol}-${position.exchange || ''}`,
+        symbol: position.symbol,
+        exchange: position.exchange,
+        type: 'Open',
+        pnlAud: Number(position.pnlAud || 0),
+        pnlPct: position.pnlPct,
+        quantity: position.quantity,
+        valueAud: position.valueAud,
+        costBasisAud: position.costBasisAud,
+      })),
+    ...Object.values(realizedBySymbol),
+  ];
+
+  if (!bars.length) {
+    return (
+      <p className="text-xs py-8 text-center" style={{ color: 'var(--color-muted)' }}>
+        No open or closed stock P&L to chart yet.
+      </p>
+    );
+  }
+
+  const totalPnl = bars.reduce((sum, bar) => sum + Number(bar.pnlAud || 0), 0);
+  const winners = bars.filter((bar) => bar.pnlAud >= 0).length;
+  const losses = bars.length - winners;
+  const maxAbs = Math.max(...bars.map((bar) => Math.abs(Number(bar.pnlAud || 0))), 1);
+  const width = Math.max(640, bars.length * 92);
+  const height = 330;
+  const pad = { l: 44, r: 28, t: 46, b: 84 };
+  const chartW = width - pad.l - pad.r;
+  const chartH = height - pad.t - pad.b;
+  const baseline = pad.t + chartH / 2;
+  const barSlot = chartW / bars.length;
+  const barW = Math.min(42, Math.max(22, barSlot * 0.52));
+  const active = bars.find((bar) => bar.id === activeId) || bars[0];
+
+  return (
+    <div>
+      <div className="grid sm:grid-cols-4 gap-3 mb-4">
+        {[
+          { label: 'Total P&L', value: fmtAud(totalPnl), tone: totalPnl >= 0 ? '#22c55e' : '#ef4444' },
+          { label: 'Profitable stocks', value: winners },
+          { label: 'Loss stocks', value: losses },
+          { label: 'Stocks charted', value: bars.length },
+        ].map((item) => (
+          <div key={item.label} className="rounded-lg border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{item.label}</p>
+            <p className="text-lg font-semibold mt-1" style={{ color: item.tone || 'var(--color-text)' }}>{item.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto">
+        <svg width="100%" viewBox={`0 0 ${width} ${height}`} className="min-w-[640px]" role="img" aria-label="Stock portfolio P&L bar chart">
+          <line x1={pad.l} y1={baseline} x2={width - pad.r} y2={baseline} stroke="var(--color-border)" strokeWidth="1" />
+          <text x={pad.l - 8} y={baseline - chartH / 2 + 4} textAnchor="end" fontSize="10" fill="var(--color-muted)">{compactAud(maxAbs)}</text>
+          <text x={pad.l - 8} y={baseline + chartH / 2} textAnchor="end" fontSize="10" fill="var(--color-muted)">-{compactAud(maxAbs).replace('-', '')}</text>
+          {bars.map((bar, idx) => {
+            const value = Number(bar.pnlAud || 0);
+            const positive = value >= 0;
+            const barH = Math.max(6, (Math.abs(value) / maxAbs) * (chartH / 2 - 16));
+            const x = pad.l + idx * barSlot + (barSlot - barW) / 2;
+            const y = positive ? baseline - barH : baseline;
+            const labelY = positive ? y - 8 : y + barH + 14;
+            const activeBar = active.id === bar.id;
+            return (
+              <g
+                key={bar.id}
+                tabIndex="0"
+                onMouseEnter={() => setActiveId(bar.id)}
+                onFocus={() => setActiveId(bar.id)}
+                onClick={() => setActiveId(bar.id)}
+                style={{ cursor: 'pointer', outline: 'none' }}
+              >
+                <rect
+                  x={x}
+                  y={y}
+                  width={barW}
+                  height={barH}
+                  rx="5"
+                  fill={positive ? '#22c55e' : '#ef4444'}
+                  opacity={activeBar ? 1 : 0.78}
+                  stroke={activeBar ? 'var(--color-text)' : 'transparent'}
+                  strokeWidth="1.5"
+                />
+                <text x={x + barW / 2} y={labelY} textAnchor="middle" fontSize="10" fontWeight="600" fill={positive ? '#16a34a' : '#dc2626'}>
+                  {compactAud(value)}
+                </text>
+                <text x={x + barW / 2} y={height - 42} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--color-text)">
+                  {bar.symbol}
+                </text>
+                <text x={x + barW / 2} y={height - 26} textAnchor="middle" fontSize="9" fill="var(--color-muted)">
+                  {bar.type}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      {active && (
+        <div className="mt-4 rounded-lg border p-3 text-sm" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="font-semibold" style={{ color: 'var(--color-text)' }}>
+              {active.symbol} · {active.exchange} · {active.type}
+            </p>
+            <p className="font-semibold" style={{ color: active.pnlAud >= 0 ? '#22c55e' : '#ef4444' }}>
+              {fmtAud(active.pnlAud)}
+            </p>
+          </div>
+          {active.type === 'Open' ? (
+            <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+              Unrealised P&L on {formatDecimalInput(active.quantity)} shares. Market value {fmtAud(active.valueAud)} vs cost basis {fmtAud(active.costBasisAud)}
+              {active.pnlPct != null ? ` (${fmtPct(active.pnlPct)})` : ''}.
+            </p>
+          ) : (
+            <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+              Realised P&L aggregated from {active.tradeCount} closed trade{active.tradeCount === 1 ? '' : 's'}.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const EMPTY_TRADE_FORM = {
   symbol: '',
   exchange: 'ASX',
@@ -748,6 +904,13 @@ export default function SharesPage() {
 
             {tab === 'charts' && charts && (
               <>
+                <section className="mb-8 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                  <h2 className="text-sm font-medium mb-1" style={{ color: 'var(--color-text)' }}>Portfolio P&L by stock</h2>
+                  <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+                    Open positions use unrealised P&L; closed positions use realised P&L from sell trades. Bars are based on the current portfolio tables.
+                  </p>
+                  <PortfolioPnlBarChart positions={dashboard?.positions || []} realized={dashboard?.realized || []} />
+                </section>
                 <section className="mb-8 p-4 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                   <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--color-text)' }}>Portfolio value (today)</h2>
                   <SimpleLineChart points={charts.portfolioLine} valueKey="totalValueAud" label="Total AUD" />
