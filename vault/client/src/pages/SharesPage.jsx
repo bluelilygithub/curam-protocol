@@ -29,6 +29,17 @@ const fmtPct = (n) => {
   return `${sign}${n.toFixed(2)}%`;
 };
 
+const holdingsColumns = [
+  { label: 'Symbol', help: 'Share ticker.' },
+  { label: 'Exch', help: 'Exchange used for quote lookup.' },
+  { label: 'Qty', help: 'Open shares still held after buys and sells.' },
+  { label: 'Avg cost / share', help: 'Remaining cost basis divided by open quantity. Buy fees are included in cost basis.' },
+  { label: 'Market price / share', help: 'Latest quoted price converted to AUD.' },
+  { label: 'Market value', help: 'Open quantity multiplied by latest AUD market price.' },
+  { label: 'Unrealised P&L', help: 'Market value minus remaining cost basis, shown before tax.' },
+  { label: 'Day movement', help: 'Today/last quote movement from previous close, shown as AUD impact and percent.' },
+];
+
 function todayInputValue() {
   const d = new Date();
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -388,35 +399,53 @@ export default function SharesPage() {
                     No open positions. Record a buy under Trades.
                   </p>
                 ) : (
-                  <div className="overflow-x-auto border rounded-lg" style={{ borderColor: 'var(--color-border)' }}>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr style={{ background: 'var(--color-surface)' }}>
-                          {['Symbol', 'Exch', 'Qty', 'Avg cost', 'Price', 'Value', 'P&L', 'Day'].map((h) => (
-                            <th key={h} className="text-left px-3 py-2 text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dashboard.positions.map((p) => (
-                          <tr key={`${p.symbol}-${p.exchange}`} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
-                            <td className="px-3 py-2 font-medium" style={{ color: 'var(--color-text)' }}>{p.symbol}</td>
-                            <td className="px-3 py-2" style={{ color: 'var(--color-muted)' }}>{p.exchange}</td>
-                            <td className="px-3 py-2">{p.quantity}</td>
-                            <td className="px-3 py-2">{fmtAud(p.avgCostAud)}</td>
-                            <td className="px-3 py-2">{fmtAud(p.priceAud)}</td>
-                            <td className="px-3 py-2">{fmtAud(p.valueAud)}</td>
-                            <td className="px-3 py-2" style={{ color: (p.pnlAud ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
-                              {fmtPct(p.pnlPct)}
-                            </td>
-                            <td className="px-3 py-2" style={{ color: (p.dayChangePct ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
-                              {p.dayChangePct != null ? fmtPct(p.dayChangePct) : '—'}
-                            </td>
+                  <>
+                    <div className="mb-3 rounded-lg border px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-muted)' }}>
+                      <p>
+                        Open holdings use average-cost accounting. Buy fees are included in cost basis; sell fees reduce realised proceeds.
+                        Unrealised P&L is market value minus remaining cost basis.
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto border rounded-lg" style={{ borderColor: 'var(--color-border)' }}>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr style={{ background: 'var(--color-surface)' }}>
+                            {holdingsColumns.map((h) => (
+                              <th key={h.label} title={h.help} className="text-left px-3 py-2 text-xs font-medium whitespace-nowrap" style={{ color: 'var(--color-muted)' }}>
+                                {h.label}
+                              </th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {dashboard.positions.map((p) => (
+                            <tr key={`${p.symbol}-${p.exchange}`} className="border-t" style={{ borderColor: 'var(--color-border)' }}>
+                              <td className="px-3 py-2 font-medium" style={{ color: 'var(--color-text)' }}>{p.symbol}</td>
+                              <td className="px-3 py-2" style={{ color: 'var(--color-muted)' }}>{p.exchange}</td>
+                              <td className="px-3 py-2">{p.quantity}</td>
+                              <td className="px-3 py-2">
+                                <p>{fmtAud(p.avgCostAud)}</p>
+                                <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>basis {fmtAud(p.costBasisAud)}</p>
+                              </td>
+                              <td className="px-3 py-2">
+                                <p>{fmtAud(p.priceAud)}</p>
+                                <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>prev {fmtAud(p.previousCloseAud)}</p>
+                              </td>
+                              <td className="px-3 py-2">{fmtAud(p.valueAud)}</td>
+                              <td className="px-3 py-2" style={{ color: (p.pnlAud ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                                <p>{fmtAud(p.pnlAud)}</p>
+                                <p className="text-[11px]">{fmtPct(p.pnlPct)}</p>
+                              </td>
+                              <td className="px-3 py-2" style={{ color: (p.dayChangeAud ?? p.dayChangePct ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                                <p>{fmtAud(p.dayChangeAud)}</p>
+                                <p className="text-[11px]">{fmtPct(p.dayChangePct)}</p>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
                 )}
                 {dashboard?.realized?.length > 0 && (
                   <div className="mt-6">

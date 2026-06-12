@@ -15,9 +15,12 @@ function num(v) {
   return Number(v) || 0;
 }
 
-/** Stored trade prices are AUD; legacy USD rows still use fxRateToAud */
-function tradeProceedsAud(t) {
-  const subtotal = num(t.quantity) * num(t.pricePerShare) + num(t.feesAud);
+/** Stored trade prices are AUD; legacy USD rows still use fxRateToAud. */
+function tradeCashImpactAud(t) {
+  const gross = num(t.quantity) * num(t.pricePerShare);
+  const subtotal = t.side === 'sell'
+    ? gross - num(t.feesAud)
+    : gross + num(t.feesAud);
   if (t.currency === 'USD' && num(t.fxRateToAud) > 0) {
     return subtotal * num(t.fxRateToAud);
   }
@@ -99,7 +102,7 @@ function computeCashFromActivity(trades, ledgerRows) {
     cash += row.type === 'deposit' ? amt : -amt;
   }
   for (const t of trades) {
-    const aud = tradeProceedsAud(t);
+    const aud = tradeCashImpactAud(t);
     if (t.side === 'buy') cash -= aud;
     else cash += aud;
   }
@@ -210,10 +213,14 @@ async function buildDashboard(userId, exchangeFilter = null) {
     const cost = num(h.costBasisAud);
     costBasisAud += cost;
     const priceAud = q?.priceAud ?? null;
+    const previousCloseAud = q?.previousCloseAud ?? null;
     const valueAud = priceAud != null ? qty * priceAud : null;
     if (valueAud != null) holdingsValueAud += valueAud;
     const pnlAud = valueAud != null ? valueAud - cost : null;
     const pnlPct = cost > 0 && pnlAud != null ? (pnlAud / cost) * 100 : null;
+    const dayChangeAud = priceAud != null && previousCloseAud != null
+      ? (priceAud - previousCloseAud) * qty
+      : null;
     return {
       symbol: h.symbol,
       exchange: h.exchange,
@@ -221,9 +228,11 @@ async function buildDashboard(userId, exchangeFilter = null) {
       costBasisAud: cost,
       avgCostAud: qty > 0 ? cost / qty : 0,
       priceAud,
+      previousCloseAud,
       valueAud,
       pnlAud,
       pnlPct,
+      dayChangeAud,
       dayChangePct: q?.dayChangePct ?? null,
     };
   });
