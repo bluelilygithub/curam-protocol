@@ -115,8 +115,7 @@ function ProjectDetail() {
   };
 
   const goToSession = (sessionId) => {
-    navigate(`/projects/${id}/chat`);
-    setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: sessionId })), 80);
+    navigate(`/projects/${id}/chat?session=${encodeURIComponent(sessionId)}`);
   };
 
   const handleAddPinnedUrl = async () => {

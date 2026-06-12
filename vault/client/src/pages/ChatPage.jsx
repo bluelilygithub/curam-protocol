@@ -920,8 +920,7 @@ function ChatPage({ general = false }) {
         setActiveArtifacts(null);
         setActive(data.projectId);
         document.dispatchEvent(new CustomEvent('vault:sessions-changed'));
-        navigate(`/projects/${data.projectId}/chat`);
-        setTimeout(() => document.dispatchEvent(new CustomEvent('vault:load-session', { detail: data.sessionId })), 120);
+        navigate(`/projects/${data.projectId}/chat?session=${encodeURIComponent(data.sessionId)}`);
       }
     } catch (err) {
       setBranchResponseError(err.message || 'Failed to branch response');

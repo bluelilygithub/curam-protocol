@@ -1374,7 +1374,20 @@ router.get('/history/:sessionId', async (req, res) => {
       [req.params.sessionId, req.user.id]
     );
     const session = sessionRows[0];
-    if (!session) return res.status(404).json({ error: 'Chat not found' });
+    if (!session) {
+      const { rows: fallbackRows } = await pool.query(
+        `SELECT m.*
+         FROM messages m
+         LEFT JOIN projects p ON p.id = m."projectId"
+         WHERE m."sessionId"=$1
+           AND m."projectId" IS NOT NULL
+           AND p."userId"=$2
+         ORDER BY m."createdAt" ASC`,
+        [req.params.sessionId, req.user.id]
+      );
+      if (!fallbackRows.length) return res.status(404).json({ error: 'Chat not found' });
+      return res.json(fallbackRows);
+    }
     if (session.deletedAt) return res.status(410).json({ error: 'This chat is deleted. Restore it from Chat History before opening.' });
 
     const { rows } = await pool.query(

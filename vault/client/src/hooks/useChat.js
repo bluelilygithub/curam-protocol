@@ -183,6 +183,19 @@ export function useChat({ projectId, studentCards = false }) {
   const loadHistory = useCallback(async (sid) => {
     const res = await api.get(`/api/chat/history/${sid}`);
     const history = await res.json();
+    if (!res.ok) {
+      setMessages([]);
+      setSessionId(null);
+      setStreamError({ code: res.status === 410 ? 'deleted' : 'history', message: history?.error || 'Could not open chat history.', hint: '' });
+      return;
+    }
+    if (!Array.isArray(history)) {
+      setMessages([]);
+      setSessionId(null);
+      setStreamError({ code: 'history', message: 'Chat history response was invalid.', hint: '' });
+      return;
+    }
+    setStreamError(null);
     setMessages(history.map((m) => ({ role: m.role, content: m.content, id: m.id, receivedAt: m.createdAt })));
     setSessionId(sid);
   }, []);
