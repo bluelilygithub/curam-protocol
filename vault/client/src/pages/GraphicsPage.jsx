@@ -28,12 +28,21 @@ export default function GraphicsPage() {
   const [saving, setSaving] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [restrictionWarning, setRestrictionWarning] = useState(null);
+  const isHostedProvider = status?.hosted || (status?.provider && status.provider !== 'local-comfyui');
+  const serviceLabel = isHostedProvider
+    ? `${status?.provider || 'Hosted'} ready: ${status?.model || 'model not selected'}`
+    : `ComfyUI ready: ${status?.model}`;
+  const statusLabel = !status
+    ? 'Checking graphics provider...'
+    : status.ok
+      ? serviceLabel
+      : `${isHostedProvider ? status?.provider || 'Graphics provider' : 'ComfyUI'} not ready`;
 
   useEffect(() => {
     api.get('/api/graphics/status')
       .then(r => r.json())
       .then(setStatus)
-      .catch(() => setStatus({ ok: false, error: 'Unable to check graphics service' }));
+      .catch(() => setStatus({ ok: false, hosted: true, provider: 'Graphics provider', error: 'Unable to check graphics service' }));
     loadGallery();
   }, []);
 
@@ -205,7 +214,7 @@ export default function GraphicsPage() {
             background: status?.ok ? '#ecfdf5' : '#fffbeb',
           }}
         >
-          {status?.ok ? `ComfyUI ready: ${status.model}` : 'ComfyUI not ready'}
+          {statusLabel}
         </div>
       </div>
 
@@ -259,7 +268,7 @@ export default function GraphicsPage() {
 
           {status && !status.ok && (
             <div className="text-xs px-3 py-2 rounded-xl" style={{ color: '#92400e', background: '#fef3c7' }}>
-              {status.error || 'Start ComfyUI locally on http://127.0.0.1:8188 before generating images.'}
+              {status.error || (isHostedProvider ? 'Check the hosted graphics provider configuration before generating images.' : 'Start ComfyUI locally on http://127.0.0.1:8188 before generating images.')}
             </div>
           )}
 

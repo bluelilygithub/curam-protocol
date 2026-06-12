@@ -45,6 +45,16 @@ async function resolveGraphicsModel(userId) {
   return adminModel || runtimeConfig.localImageModel || DEFAULT_MODEL;
 }
 
+async function resolveGraphicsProvider(userId, selectedModel) {
+  if (runtimeConfig.isLocal) return 'local-comfyui';
+  if (runtimeConfig.imageProvider) return runtimeConfig.imageProvider;
+  if (!selectedModel) return runtimeConfig.isProduction ? 'seedance' : 'local-comfyui';
+
+  const config = await getVaultModelsConfigForUser(userId);
+  const configuredModel = config.models.find((model) => model.id === selectedModel);
+  return String(configuredModel?.provider || '').trim() || (runtimeConfig.isProduction ? 'seedance' : 'local-comfyui');
+}
+
 function isTurboModel(modelName) {
   return /turbo|lightning|lcm/i.test(modelName || '');
 }
@@ -334,8 +344,9 @@ async function listAvailableComfyModels() {
 router.get('/models', async (req, res) => {
   try {
     const selectedModel = await resolveGraphicsModel(req.user.id);
+    const provider = await resolveGraphicsProvider(req.user.id, selectedModel);
     let availableModels = [];
-    if (runtimeConfig.isLocal || !runtimeConfig.imageProvider || runtimeConfig.imageProvider === 'local-comfyui') {
+    if (provider === 'local-comfyui') {
       availableModels = await listAvailableComfyModels().catch(() => []);
     } else {
       const config = await getVaultModelsConfigForUser(req.user.id);
@@ -346,7 +357,7 @@ router.get('/models', async (req, res) => {
     res.json({
       selectedModel,
       availableModels,
-      provider: runtimeConfig.imageProvider || 'local-comfyui',
+      provider,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -354,8 +365,25 @@ router.get('/models', async (req, res) => {
 });
 
 router.get('/status', async (req, res) => {
-  const provider = runtimeConfig.imageProvider || 'local-comfyui';
   const selectedModel = await resolveGraphicsModel(req.user.id);
+  const provider = await resolveGraphicsProvider(req.user.id, selectedModel);
+
+  if (provider !== 'local-comfyui') {
+    const configured = provider === 'seedance' ? Boolean(process.env.SEEDANCE_API_KEY) : false;
+    return res.json({
+      ok: Boolean(selectedModel && configured),
+      provider,
+      model: selectedModel,
+      hosted: true,
+      configured,
+      error: !selectedModel
+        ? 'No graphics model selected'
+        : configured
+          ? null
+          : `Missing API key for ${provider}`,
+    });
+  }
+
   try {
     const info = await fetchJson(`${comfyBaseUrl()}/system_stats`);
     res.json({
@@ -415,15 +443,15 @@ router.post('/preflight', async (req, res) => {
 
 router.post('/generate', async (req, res) => {
   try {
-    if (runtimeConfig.imageProvider && runtimeConfig.imageProvider !== 'local-comfyui') {
-      return res.status(400).json({ error: `Image provider ${runtimeConfig.imageProvider} is not supported yet` });
-    }
-
     const prompt = String(req.body?.prompt || '').trim();
     if (!prompt) return res.status(400).json({ error: 'Prompt required' });
     const restrictions = await loadContentRestrictions();
     const negativePrompt = buildNegativePrompt(String(req.body?.negativePrompt || '').trim(), restrictions);
     const modelName = await resolveGraphicsModel(req.user.id);
+    const provider = await resolveGraphicsProvider(req.user.id, modelName);
+    if (provider !== 'local-comfyui') {
+      return res.status(400).json({ error: `Image provider ${provider} is not supported yet` });
+    }
 
     const width = clampDimension(req.body?.width);
     const height = clampDimension(req.body?.height);
@@ -469,16 +497,16 @@ router.post('/generate', async (req, res) => {
 
 router.post('/augment', async (req, res) => {
   try {
-    if (runtimeConfig.imageProvider && runtimeConfig.imageProvider !== 'local-comfyui') {
-      return res.status(400).json({ error: `Image provider ${runtimeConfig.imageProvider} is not supported yet` });
-    }
-
     const prompt = String(req.body?.prompt || '').trim();
     if (!prompt) return res.status(400).json({ error: 'Augmentation prompt required' });
     const sourceImageDataUrl = String(req.body?.imageDataUrl || '');
     const restrictions = await loadContentRestrictions();
     const negativePrompt = buildNegativePrompt(String(req.body?.negativePrompt || '').trim(), restrictions);
     const modelName = await resolveGraphicsModel(req.user.id);
+    const provider = await resolveGraphicsProvider(req.user.id, modelName);
+    if (provider !== 'local-comfyui') {
+      return res.status(400).json({ error: `Image provider ${provider} is not supported yet` });
+    }
     const seed = Number.isFinite(Number(req.body?.seed))
       ? Math.floor(Number(req.body.seed))
       : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
