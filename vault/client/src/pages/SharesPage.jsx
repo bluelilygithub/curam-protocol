@@ -52,6 +52,11 @@ function toDatetimeLocal(iso) {
   return d.toISOString().slice(0, 16);
 }
 
+function formatDecimalInput(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : '';
+}
+
 const EMPTY_TRADE_FORM = {
   symbol: '',
   exchange: 'ASX',
@@ -202,13 +207,20 @@ export default function SharesPage() {
       symbol: t.symbol,
       exchange: t.exchange === 'NYSE' || t.exchange === 'NASDAQ' ? t.exchange : 'ASX',
       side: t.side,
-      quantity: String(t.quantity),
-      pricePerShare: String(t.pricePerShare),
-      feesAud: String(t.feesAud ?? 0),
+      quantity: formatDecimalInput(t.quantity),
+      pricePerShare: formatDecimalInput(t.pricePerShare),
+      feesAud: formatDecimalInput(t.feesAud ?? 0),
       tradedAt: toDatetimeLocal(t.tradedAt),
       notes: t.notes || '',
     });
     setTab('trades');
+  };
+
+  const formatTradeNumberField = (field) => {
+    setTradeForm((f) => ({
+      ...f,
+      [field]: f[field] === '' ? '' : formatDecimalInput(f[field]),
+    }));
   };
 
   const submitTrade = async (e) => {
@@ -304,6 +316,127 @@ export default function SharesPage() {
       addToast(err.message, 'error');
     }
   };
+
+  const renderTradeForm = ({ inline = false } = {}) => (
+    <form
+      onSubmit={submitTrade}
+      className={`${inline ? 'p-4' : 'mb-8 p-4'} rounded-lg border space-y-3`}
+      style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}
+    >
+      <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
+        {editingTradeId ? 'Edit trade' : 'Record trade'}
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+          Symbol
+          <input
+            required
+            value={tradeForm.symbol}
+            onChange={(e) => setTradeForm((f) => ({ ...f, symbol: e.target.value.toUpperCase() }))}
+            placeholder="CBA or AAPL"
+            className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </label>
+        <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+          Exchange
+          <select
+            value={tradeForm.exchange}
+            onChange={(e) => setTradeForm((f) => ({ ...f, exchange: e.target.value }))}
+            className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          >
+            <option value="ASX">ASX</option>
+            <option value="NYSE">NYSE</option>
+            <option value="NASDAQ">NASDAQ</option>
+          </select>
+        </label>
+        <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+          Side
+          <select
+            value={tradeForm.side}
+            onChange={(e) => setTradeForm((f) => ({ ...f, side: e.target.value }))}
+            className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          >
+            <option value="buy">Buy</option>
+            <option value="sell">Sell</option>
+          </select>
+        </label>
+        <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+          Quantity
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            value={tradeForm.quantity}
+            onChange={(e) => setTradeForm((f) => ({ ...f, quantity: e.target.value }))}
+            onBlur={() => formatTradeNumberField('quantity')}
+            className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </label>
+        <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+          Price / share (AUD)
+          <input
+            required
+            type="number"
+            min="0"
+            step="0.01"
+            value={tradeForm.pricePerShare}
+            onChange={(e) => setTradeForm((f) => ({ ...f, pricePerShare: e.target.value }))}
+            onBlur={() => formatTradeNumberField('pricePerShare')}
+            className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </label>
+        <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
+          Fees (AUD)
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={tradeForm.feesAud}
+            onChange={(e) => setTradeForm((f) => ({ ...f, feesAud: e.target.value }))}
+            onBlur={() => formatTradeNumberField('feesAud')}
+            className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </label>
+        <label className="block text-xs col-span-2 sm:col-span-1" style={{ color: 'var(--color-muted)' }}>
+          Date & time
+          <input
+            required
+            type="datetime-local"
+            value={tradeForm.tradedAt}
+            onChange={(e) => setTradeForm((f) => ({ ...f, tradedAt: e.target.value }))}
+            className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
+            style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="submit"
+          className="text-sm px-4 py-2 rounded-md hover:opacity-70 transition-opacity duration-200"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          {editingTradeId ? 'Update trade' : 'Save trade'}
+        </button>
+        {editingTradeId && (
+          <button
+            type="button"
+            onClick={cancelTradeEdit}
+            className="text-sm px-4 py-2 rounded-md border hover:opacity-70 transition-opacity duration-200"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+    </form>
+  );
 
   if (!canUseShares) {
     return <Navigate to="/" replace />;
@@ -487,146 +620,40 @@ export default function SharesPage() {
 
             {tab === 'trades' && (
               <>
-                <form onSubmit={submitTrade} className="mb-8 p-4 rounded-lg border space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
-                    {editingTradeId ? 'Edit trade' : 'Record trade'}
-                  </p>
-                  <>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Symbol
-                        <input
-                          required
-                          value={tradeForm.symbol}
-                          onChange={(e) => setTradeForm((f) => ({ ...f, symbol: e.target.value.toUpperCase() }))}
-                          placeholder="CBA or AAPL"
-                          className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
-                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-                        />
-                      </label>
-                      <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Exchange
-                        <select
-                          value={tradeForm.exchange}
-                          onChange={(e) => setTradeForm((f) => ({ ...f, exchange: e.target.value }))}
-                          className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
-                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-                        >
-                          <option value="ASX">ASX</option>
-                          <option value="NYSE">NYSE</option>
-                          <option value="NASDAQ">NASDAQ</option>
-                        </select>
-                      </label>
-                      <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Side
-                        <select
-                          value={tradeForm.side}
-                          onChange={(e) => setTradeForm((f) => ({ ...f, side: e.target.value }))}
-                          className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
-                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-                        >
-                          <option value="buy">Buy</option>
-                          <option value="sell">Sell</option>
-                        </select>
-                      </label>
-                      <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Quantity
-                        <input
-                          required
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={tradeForm.quantity}
-                          onChange={(e) => setTradeForm((f) => ({ ...f, quantity: e.target.value }))}
-                          className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
-                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-                        />
-                      </label>
-                      <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Price / share (AUD)
-                        <input
-                          required
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={tradeForm.pricePerShare}
-                          onChange={(e) => setTradeForm((f) => ({ ...f, pricePerShare: e.target.value }))}
-                          className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
-                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-                        />
-                      </label>
-                      <label className="block text-xs" style={{ color: 'var(--color-muted)' }}>
-                        Fees (AUD)
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={tradeForm.feesAud}
-                          onChange={(e) => setTradeForm((f) => ({ ...f, feesAud: e.target.value }))}
-                          className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
-                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-                        />
-                      </label>
-                      <label className="block text-xs col-span-2 sm:col-span-1" style={{ color: 'var(--color-muted)' }}>
-                        Date & time
-                        <input
-                          required
-                          type="datetime-local"
-                          value={tradeForm.tradedAt}
-                          onChange={(e) => setTradeForm((f) => ({ ...f, tradedAt: e.target.value }))}
-                          className="mt-1 w-full px-2 py-1.5 rounded border text-sm"
-                          style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)' }}
-                        />
-                      </label>
-                    </div>
-                  </>
-                  <div className="flex flex-wrap gap-2">
-                      <button
-                        type="submit"
-                        className="text-sm px-4 py-2 rounded-md hover:opacity-70 transition-opacity duration-200"
-                        style={{ background: 'var(--color-primary)', color: '#fff' }}
-                      >
-                        {editingTradeId ? 'Update trade' : 'Save trade'}
-                      </button>
-                      {editingTradeId && (
-                        <button
-                          type="button"
-                          onClick={cancelTradeEdit}
-                          className="text-sm px-4 py-2 rounded-md border hover:opacity-70 transition-opacity duration-200"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
-                        >
-                          Cancel
-                        </button>
-                      )}
-                  </div>
-                </form>
+                {!editingTradeId && renderTradeForm()}
 
                 <ul className="space-y-2">
                   {trades.map((t) => (
-                    <li
-                      key={t.id}
-                      className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg border text-sm"
-                      style={{ borderColor: 'var(--color-border)' }}
-                    >
-                      <span style={{ color: 'var(--color-text)' }}>
-                        <span className={t.side === 'buy' ? 'text-green-600' : 'text-red-500'}>{t.side}</span>
-                        {' '}{t.quantity} × {t.symbol} ({t.exchange}) @ {fmtAud(t.pricePerShare)}
-                        <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-                          {new Date(t.tradedAt).toLocaleString()}
+                    <React.Fragment key={t.id}>
+                      <li
+                        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg border text-sm"
+                        style={{ borderColor: editingTradeId === t.id ? 'var(--color-primary)' : 'var(--color-border)' }}
+                      >
+                        <span style={{ color: 'var(--color-text)' }}>
+                          <span className={t.side === 'buy' ? 'text-green-600' : 'text-red-500'}>{t.side}</span>
+                          {' '}{formatDecimalInput(t.quantity)} × {t.symbol} ({t.exchange}) @ {fmtAud(t.pricePerShare)}
+                          <span className="ml-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                            {new Date(t.tradedAt).toLocaleString()}
+                          </span>
                         </span>
-                      </span>
-                      {deleteTradeId === t.id ? (
-                        <span className="flex gap-2 text-xs">
-                          <button type="button" onClick={() => confirmDeleteTrade(t.id)} className="hover:opacity-70" style={{ color: '#ef4444' }}>Yes</button>
-                          <button type="button" onClick={() => setDeleteTradeId(null)} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>No</button>
-                        </span>
-                      ) : (
-                        <span className="flex gap-3 text-xs">
-                          <button type="button" onClick={() => startEditTrade(t)} className="hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Edit</button>
-                          <button type="button" onClick={() => setDeleteTradeId(t.id)} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Delete</button>
-                        </span>
+                        {deleteTradeId === t.id ? (
+                          <span className="flex gap-2 text-xs">
+                            <button type="button" onClick={() => confirmDeleteTrade(t.id)} className="hover:opacity-70" style={{ color: '#ef4444' }}>Yes</button>
+                            <button type="button" onClick={() => setDeleteTradeId(null)} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>No</button>
+                          </span>
+                        ) : (
+                          <span className="flex gap-3 text-xs">
+                            <button type="button" onClick={() => startEditTrade(t)} className="hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Edit</button>
+                            <button type="button" onClick={() => setDeleteTradeId(t.id)} className="hover:opacity-70" style={{ color: 'var(--color-muted)' }}>Delete</button>
+                          </span>
+                        )}
+                      </li>
+                      {editingTradeId === t.id && (
+                        <li>
+                          {renderTradeForm({ inline: true })}
+                        </li>
                       )}
-                    </li>
+                    </React.Fragment>
                   ))}
                   {!trades.length && (
                     <p className="text-xs text-center py-4" style={{ color: 'var(--color-muted)' }}>No trades yet.</p>
