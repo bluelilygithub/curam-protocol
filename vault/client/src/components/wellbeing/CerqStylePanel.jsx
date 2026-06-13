@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../utils/apiClient';
+import useProcessingStore from '../../store/processingStore';
 import ModelInsightPanel from './ModelInsightPanel';
 import { StrategyBarChart } from './WellbeingCharts';
 
@@ -124,6 +125,7 @@ function CerqResultPanel({ attempt, onDownloadPdf, pdfLoading }) {
 }
 
 export default function CerqStylePanel({ onBack, onComplete, onNext, nextLabel = 'Continue' }) {
+  const { startProcessing, stopProcessing } = useProcessingStore();
   const [config, setConfig] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -246,6 +248,10 @@ export default function CerqStylePanel({ onBack, onComplete, onNext, nextLabel =
 
     setSubmitting(true);
     setError('');
+    startProcessing(
+      'Saving your CERQ-style profile...',
+      'We are scoring your cognitive coping strategies and preparing the considered response. This can take a little while, so please stay on this screen until it finishes.'
+    );
     try {
       const res = await api.post('/api/wellbeing/cerq/attempts', { answers: nextAnswers });
       const data = await res.json();
@@ -259,6 +265,7 @@ export default function CerqStylePanel({ onBack, onComplete, onNext, nextLabel =
     } catch (err) {
       setError(err.message || 'Could not save CERQ-style attempt');
     } finally {
+      stopProcessing();
       setSubmitting(false);
     }
   };

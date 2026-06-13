@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../utils/apiClient';
+import useProcessingStore from '../../store/processingStore';
 import ModelInsightPanel from './ModelInsightPanel';
 import { DomainRadarChart } from './WellbeingCharts';
 
@@ -150,6 +151,7 @@ function IpipResultPanel({ attempt, onDownloadPdf, pdfLoading }) {
 }
 
 export default function IpipNeo120Panel({ onBack, onComplete, onNext, nextLabel = 'Continue' }) {
+  const { startProcessing, stopProcessing } = useProcessingStore();
   const [config, setConfig] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -284,6 +286,10 @@ export default function IpipNeo120Panel({ onBack, onComplete, onNext, nextLabel 
 
     setSubmitting(true);
     setError('');
+    startProcessing(
+      'Saving your IPIP-NEO-120 profile...',
+      'We are scoring the personality domains and facets, then preparing the considered response. This can take a little while, so please stay on this screen until it finishes.'
+    );
     try {
       const res = await api.post('/api/wellbeing/ipip/attempts', { answers: nextAnswers });
       const data = await res.json();
@@ -297,6 +303,7 @@ export default function IpipNeo120Panel({ onBack, onComplete, onNext, nextLabel 
     } catch (err) {
       setError(err.message || 'Could not save IPIP-NEO-120 attempt');
     } finally {
+      stopProcessing();
       setSubmitting(false);
     }
   };

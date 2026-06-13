@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import useProcessingStore from '../store/processingStore';
 import IpipNeo120Panel from '../components/wellbeing/IpipNeo120Panel';
 import CerqStylePanel from '../components/wellbeing/CerqStylePanel';
 import BriefCopeStylePanel from '../components/wellbeing/BriefCopeStylePanel';
@@ -298,6 +299,7 @@ function AnalysisPanel({ attempt, onDownloadPdf, pdfLoading }) {
 export default function WellbeingPage() {
   const location = useLocation();
   const getIcon = useIcon();
+  const { startProcessing, stopProcessing } = useProcessingStore();
   const [tool, setTool] = useState('mood');
   const [config, setConfig] = useState(null);
   const [attempts, setAttempts] = useState([]);
@@ -475,6 +477,10 @@ export default function WellbeingPage() {
 
     setSubmitting(true);
     setError('');
+    startProcessing(
+      'Saving your mood check...',
+      'We are scoring your answers and preparing the considered response. This can take a little while, so please stay on this screen until it finishes.'
+    );
     try {
       const res = await api.post('/api/wellbeing/attempts', { answers: nextAnswers });
       const data = await res.json();
@@ -487,6 +493,7 @@ export default function WellbeingPage() {
     } catch (err) {
       setError(err.message || 'Could not save attempt');
     } finally {
+      stopProcessing();
       setSubmitting(false);
     }
   };

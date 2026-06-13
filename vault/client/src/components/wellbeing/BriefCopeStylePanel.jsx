@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../utils/apiClient';
+import useProcessingStore from '../../store/processingStore';
 import ModelInsightPanel from './ModelInsightPanel';
 import { StrategyBarChart } from './WellbeingCharts';
 
@@ -124,6 +125,7 @@ function CopeResultPanel({ attempt, onDownloadPdf, pdfLoading }) {
 }
 
 export default function BriefCopeStylePanel({ onBack, onComplete, onNext, nextLabel = 'Continue' }) {
+  const { startProcessing, stopProcessing } = useProcessingStore();
   const [config, setConfig] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -246,6 +248,10 @@ export default function BriefCopeStylePanel({ onBack, onComplete, onNext, nextLa
 
     setSubmitting(true);
     setError('');
+    startProcessing(
+      'Saving your Brief COPE-style profile...',
+      'We are scoring your coping strategies and preparing the considered response. This can take a little while, so please stay on this screen until it finishes.'
+    );
     try {
       const res = await api.post('/api/wellbeing/cope/attempts', { answers: nextAnswers });
       const data = await res.json();
@@ -259,6 +265,7 @@ export default function BriefCopeStylePanel({ onBack, onComplete, onNext, nextLa
     } catch (err) {
       setError(err.message || 'Could not save Brief COPE-style attempt');
     } finally {
+      stopProcessing();
       setSubmitting(false);
     }
   };
