@@ -104,6 +104,89 @@ function ScorePill({ score, label }) {
   );
 }
 
+function CompletionProgress({ tests }) {
+  const completedCount = tests.filter((test) => test.completed).length;
+  const pct = tests.length ? Math.round((completedCount / tests.length) * 100) : 0;
+
+  return (
+    <section className="rounded-2xl border p-5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Four-test progress</p>
+          <h2 className="text-lg font-semibold mt-1" style={{ color: 'var(--color-text)' }}>{completedCount} of {tests.length} checks complete</h2>
+        </div>
+        <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-primary)' }}>{pct}%</span>
+      </div>
+      <div className="h-3 rounded-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
+        <div className="h-full transition-all" style={{ width: `${pct}%`, background: 'var(--color-primary)' }} />
+      </div>
+      <div className="grid sm:grid-cols-4 gap-2 mt-4">
+        {tests.map((test) => (
+          <div key={test.key} className="rounded-xl border px-3 py-2" style={{ borderColor: test.completed ? '#bbf7d0' : 'var(--color-border)', background: test.completed ? '#f0fdf4' : 'var(--color-bg)' }}>
+            <p className="text-xs font-semibold" style={{ color: test.completed ? '#15803d' : 'var(--color-muted)' }}>
+              {test.completed ? 'Complete' : 'Needed'}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-text)' }}>{test.shortTitle}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TestTile({ test }) {
+  return (
+    <div className="rounded-2xl border p-4 flex flex-col gap-4" style={{ background: 'var(--color-surface)', borderColor: test.completed ? '#bbf7d0' : 'var(--color-border)' }}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Step {test.step}</p>
+          <h3 className="text-base font-semibold mt-1" style={{ color: 'var(--color-text)' }}>{test.title}</h3>
+        </div>
+        <span className="text-xs font-semibold px-2 py-1 rounded-full" style={{ color: test.completed ? '#15803d' : '#92400e', background: test.completed ? '#dcfce7' : '#fef3c7' }}>
+          {test.completed ? 'Complete' : 'To do'}
+        </span>
+      </div>
+      <p className="text-sm flex-1" style={{ color: 'var(--color-muted)' }}>{test.description}</p>
+      {test.completedAt && (
+        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Latest: {formatDate(test.completedAt)}</p>
+      )}
+      <button
+        type="button"
+        onClick={test.onOpen}
+        className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
+        style={{ borderColor: 'var(--color-border)', color: test.primary ? '#fff' : 'var(--color-primary)', background: test.primary ? 'var(--color-primary)' : 'var(--color-bg)' }}
+      >
+        {test.actionLabel}
+      </button>
+    </div>
+  );
+}
+
+function ResultsTile({ available, onCombined, onCharts, onMindMap }) {
+  return (
+    <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: available ? 'var(--color-border)' : '#fde68a' }}>
+      <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Fifth option</p>
+      <h3 className="text-base font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Review the overall results</h3>
+      <p className="text-sm mt-2" style={{ color: 'var(--color-muted)' }}>
+        {available
+          ? 'Unlocked. Review the combined profile, visual charts, or the four-test mind map.'
+          : 'Locked until all four checks have at least one completed result.'}
+      </p>
+      <div className="grid sm:grid-cols-3 gap-2 mt-4">
+        <button type="button" onClick={onCombined} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+          Profile
+        </button>
+        <button type="button" onClick={onCharts} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+          Charts
+        </button>
+        <button type="button" onClick={onMindMap} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+          Mind map
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AnalysisPanel({ attempt, onDownloadPdf, pdfLoading }) {
   const analysis = parseMaybeJson(attempt?.analysis, {});
   const answers = parseMaybeJson(attempt?.answers, []);
@@ -400,7 +483,7 @@ export default function WellbeingPage() {
       setMode('result');
       clearMoodDraft();
       setMoodDraftMeta(null);
-      await refreshAttempts();
+      await Promise.all([refreshAttempts(), refreshProfileStatus()]);
     } catch (err) {
       setError(err.message || 'Could not save attempt');
     } finally {
@@ -483,6 +566,62 @@ export default function WellbeingPage() {
     if (!attempts.length) return null;
     return Math.round(attempts.reduce((sum, attempt) => sum + Number(attempt.totalScore || 0), 0) / attempts.length);
   }, [attempts]);
+  const statusByKey = useMemo(() => Object.fromEntries((profileStatus?.tests || []).map((test) => [test.key, test])), [profileStatus]);
+  const dashboardTests = [
+    {
+      key: 'mood',
+      step: 1,
+      shortTitle: 'Mood',
+      title: 'BDI-Style Mood Check',
+      description: 'A 21-question mood and wellbeing screen with optional reflections and a downloadable report.',
+      completed: !!statusByKey.mood?.completed,
+      completedAt: statusByKey.mood?.completedAt,
+      actionLabel: moodDraftMeta ? 'Resume paused check' : (statusByKey.mood?.completed ? 'Retake mood check' : 'Start mood check'),
+      onOpen: moodDraftMeta ? resumeMoodAttempt : startAttempt,
+      primary: !statusByKey.mood?.completed,
+    },
+    {
+      key: 'ipip',
+      step: 2,
+      shortTitle: 'Personality',
+      title: 'IPIP-NEO-120 Personality Inventory',
+      description: 'A five-domain personality profile covering Neuroticism, Extraversion, Openness, Agreeableness, and Conscientiousness.',
+      completed: !!statusByKey.ipip?.completed,
+      completedAt: statusByKey.ipip?.completedAt,
+      actionLabel: statusByKey.ipip?.completed ? 'Review or retake IPIP' : 'Start IPIP-NEO-120',
+      onOpen: () => setTool('personality'),
+      primary: !statusByKey.ipip?.completed,
+    },
+    {
+      key: 'cerq',
+      step: 3,
+      shortTitle: 'Cognition',
+      title: 'CERQ-Style Cognitive Coping Check',
+      description: 'A cognitive emotion-regulation check showing which thinking strategies are most and least used.',
+      completed: !!statusByKey.cerq?.completed,
+      completedAt: statusByKey.cerq?.completedAt,
+      actionLabel: statusByKey.cerq?.completed ? 'Review or retake CERQ' : 'Start CERQ-style check',
+      onOpen: () => setTool('cognitive'),
+      primary: !statusByKey.cerq?.completed,
+    },
+    {
+      key: 'cope',
+      step: 4,
+      shortTitle: 'Coping',
+      title: 'Brief COPE-Style Coping Check',
+      description: 'A coping response profile across active, support-seeking, avoidant, meaning-focused, and emotion-focused strategies.',
+      completed: !!statusByKey.cope?.completed,
+      completedAt: statusByKey.cope?.completedAt,
+      actionLabel: statusByKey.cope?.completed ? 'Review or retake COPE' : 'Start COPE-style check',
+      onOpen: () => setTool('cope'),
+      primary: !statusByKey.cope?.completed,
+    },
+  ];
+  const dashboardBack = useCallback(() => {
+    setTool('mood');
+    setMode('intro');
+    refreshProfileStatus();
+  }, [refreshProfileStatus]);
 
   if (loading) {
     return <div className="p-6 text-sm" style={{ color: 'var(--color-muted)' }}>Loading wellbeing check...</div>;
@@ -504,7 +643,12 @@ export default function WellbeingPage() {
             Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
           </p>
         </div>
-        <IpipNeo120Panel onBack={() => setTool('mood')} />
+        <IpipNeo120Panel
+          onBack={dashboardBack}
+          onComplete={refreshProfileStatus}
+          onNext={() => setTool('cognitive')}
+          nextLabel="Continue to CERQ-style check"
+        />
       </div>
     );
   }
@@ -521,7 +665,12 @@ export default function WellbeingPage() {
             Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
           </p>
         </div>
-        <CerqStylePanel onBack={() => setTool('mood')} />
+        <CerqStylePanel
+          onBack={dashboardBack}
+          onComplete={refreshProfileStatus}
+          onNext={() => setTool('cope')}
+          nextLabel="Continue to COPE-style check"
+        />
       </div>
     );
   }
@@ -538,7 +687,12 @@ export default function WellbeingPage() {
             Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
           </p>
         </div>
-        <BriefCopeStylePanel onBack={() => setTool('mood')} />
+        <BriefCopeStylePanel
+          onBack={dashboardBack}
+          onComplete={refreshProfileStatus}
+          onNext={() => setTool('combined')}
+          nextLabel="See combined profile"
+        />
       </div>
     );
   }
@@ -555,7 +709,7 @@ export default function WellbeingPage() {
             Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
           </p>
         </div>
-        <CombinedProfilePanel onBack={() => setTool('mood')} />
+        <CombinedProfilePanel onBack={dashboardBack} />
       </div>
     );
   }
@@ -572,7 +726,7 @@ export default function WellbeingPage() {
             Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
           </p>
         </div>
-        <WellbeingVisualSummaryPanel onBack={() => setTool('mood')} initialView={tool === 'mindmap' ? 'mindmap' : 'charts'} />
+        <WellbeingVisualSummaryPanel onBack={dashboardBack} initialView={tool === 'mindmap' ? 'mindmap' : 'charts'} />
       </div>
     );
   }
@@ -589,69 +743,6 @@ export default function WellbeingPage() {
             Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={startAttempt}
-            className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            {moodDraftMeta ? 'Start mood check over' : 'Start mood check'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setTool('personality')}
-            className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
-          >
-            Open IPIP-NEO-120
-          </button>
-          <button
-            type="button"
-            onClick={() => setTool('cognitive')}
-            className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
-          >
-            Open CERQ-style check
-          </button>
-          <button
-            type="button"
-            onClick={() => setTool('cope')}
-            className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
-          >
-            Open COPE-style check
-          </button>
-          <button
-            type="button"
-            onClick={() => profileStatus?.available && setTool('combined')}
-            disabled={!profileStatus?.available}
-            className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
-          >
-            Combined profile
-          </button>
-          {profileStatus?.available && (
-            <>
-              <button
-                type="button"
-                onClick={() => setTool('visuals')}
-                className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
-              >
-                Visual summary
-              </button>
-              <button
-                type="button"
-                onClick={() => setTool('mindmap')}
-                className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
-                style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
-              >
-                Mind map
-              </button>
-            </>
-          )}
-        </div>
       </div>
 
       {error && (
@@ -659,142 +750,81 @@ export default function WellbeingPage() {
       )}
 
       {mode === 'intro' && (
-        <div className="grid lg:grid-cols-[1fr_360px] gap-6">
-          <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div>
-              <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Before you begin</h2>
-              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                This is a non-clinical proof of concept inspired by common wellbeing screening structures. It is not a diagnosis,
-                medical advice, or a substitute for a qualified professional.
-              </p>
-            </div>
-            <div className="rounded-xl border p-4" style={{ borderColor: '#fde68a', background: '#fffbeb', color: '#78350f' }}>
-              <p className="text-sm font-semibold mb-1">Important safety note</p>
-              <p className="text-sm">
-                If you feel at immediate risk of harming yourself or someone else, contact emergency services or local crisis support now.
-              </p>
-            </div>
-            <ul className="text-sm space-y-2" style={{ color: 'var(--color-muted)' }}>
-              <li>Questions are answered in order.</li>
-              <li>You can pause and resume later on this device.</li>
-              <li>You can go back one question at a time to correct a mistaken selection.</li>
-              <li>Incomplete attempts are discarded and not saved.</li>
-              <li>Completed attempts can be reviewed or deleted later.</li>
-            </ul>
+        <div className="space-y-6">
+          <CompletionProgress tests={dashboardTests} />
+
+          <section className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {dashboardTests.map((test) => <TestTile key={test.key} test={test} />)}
           </section>
 
-          <aside className="space-y-3">
-            {moodDraftMeta && (
+          <div className="grid lg:grid-cols-[1fr_360px] gap-6">
+            <div className="space-y-4">
+              <ResultsTile
+                available={!!profileStatus?.available}
+                onCombined={() => profileStatus?.available && setTool('combined')}
+                onCharts={() => profileStatus?.available && setTool('visuals')}
+                onMindMap={() => profileStatus?.available && setTool('mindmap')}
+              />
+              <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <div>
+                  <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>How to use this dashboard</h2>
+                  <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                    Complete the four checks in order or revisit any tile at any time. After each check, you can continue to the next one or come back here to see what remains.
+                  </p>
+                </div>
+                <div className="rounded-xl border p-4" style={{ borderColor: '#fde68a', background: '#fffbeb', color: '#78350f' }}>
+                  <p className="text-sm font-semibold mb-1">Important safety note</p>
+                  <p className="text-sm">
+                    If you feel at immediate risk of harming yourself or someone else, contact emergency services or local crisis support now.
+                  </p>
+                </div>
+              </section>
+            </div>
+
+            <aside className="space-y-3">
+              {moodDraftMeta && (
+                <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                  <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Paused mood check</p>
+                  <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>
+                    {Math.min(moodDraftMeta.answeredCount, questions.length)} of {questions.length} questions started
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Saved {formatDate(moodDraftMeta.updatedAt)}</p>
+                  <button
+                    type="button"
+                    onClick={resumeMoodAttempt}
+                    className="w-full px-3 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity mt-3"
+                    style={{ background: 'var(--color-primary)' }}
+                  >
+                    Resume paused mood check
+                  </button>
+                </div>
+              )}
               <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-                <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Paused mood check</p>
-                <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>
-                  {Math.min(moodDraftMeta.answeredCount, questions.length)} of {questions.length} questions started
+                <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Mood check history</p>
+                <p className="text-3xl font-bold mt-1" style={{ color: 'var(--color-text)' }}>{attempts.length}</p>
+                {latestScore != null && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Latest score: {latestScore}/63</p>
+                )}
+                {averageScore != null && (
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Average score: {averageScore}/63</p>
+                )}
+              </div>
+              <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: '#fecaca' }}>
+                <p className="text-xs uppercase tracking-wider" style={{ color: '#991b1b' }}>Reset tests</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                  Erase all completed test results and clear paused drafts on this device.
                 </p>
-                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Saved {formatDate(moodDraftMeta.updatedAt)}</p>
                 <button
                   type="button"
-                  onClick={resumeMoodAttempt}
-                  className="w-full px-3 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity mt-3"
-                  style={{ background: 'var(--color-primary)' }}
+                  onClick={resetAllTests}
+                  className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity mt-3"
+                  style={{ borderColor: '#fecaca', color: '#991b1b', background: '#fff1f2' }}
                 >
-                  Resume paused mood check
+                  Reset / erase all tests
                 </button>
               </div>
-            )}
-            <button
-              type="button"
-              onClick={() => setTool('personality')}
-              className="w-full rounded-2xl border p-4 text-left hover:opacity-80 transition-opacity"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Second test</p>
-              <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>IPIP-NEO-120 Personality Inventory</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>120 public-domain statements, five broad domains, and 30 facets.</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTool('cognitive')}
-              className="w-full rounded-2xl border p-4 text-left hover:opacity-80 transition-opacity"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Cognitive process</p>
-              <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>CERQ-Style Cognitive Coping Check</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>36 original items across nine cognitive emotion-regulation strategy areas.</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTool('cope')}
-              className="w-full rounded-2xl border p-4 text-left hover:opacity-80 transition-opacity"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Coping style</p>
-              <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Brief COPE-Style Coping Check</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>28 original items across 14 coping strategy areas, with no overall total score.</p>
-            </button>
-            <button
-              type="button"
-              onClick={() => profileStatus?.available && setTool('combined')}
-              disabled={!profileStatus?.available}
-              className="w-full rounded-2xl border p-4 text-left hover:opacity-80 disabled:opacity-50 transition-opacity"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-            >
-              <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Fifth option</p>
-              <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Combined Profile</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                {profileStatus?.available
-                  ? 'Unlocked: collate the latest result from all four tests into one detailed profile.'
-                  : 'Locked until all four tests have been completed at least once.'}
-              </p>
-            </button>
-            {profileStatus?.available && (
-              <div className="grid sm:grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setTool('visuals')}
-                  className="rounded-2xl border p-4 text-left hover:opacity-80 transition-opacity"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-                >
-                  <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Visual option</p>
-                  <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Charts summary</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>See the latest four results as a gauge, radar, and strategy bars.</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTool('mindmap')}
-                  className="rounded-2xl border p-4 text-left hover:opacity-80 transition-opacity"
-                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
-                >
-                  <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Pattern option</p>
-                  <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Mind map</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Connect related signals across mood, traits, thinking, and coping.</p>
-                </button>
-              </div>
-            )}
-            <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-              <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Completed checks</p>
-              <p className="text-3xl font-bold mt-1" style={{ color: 'var(--color-text)' }}>{attempts.length}</p>
-              {latestScore != null && (
-                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Latest score: {latestScore}/63</p>
-              )}
-              {averageScore != null && (
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Average score: {averageScore}/63</p>
-              )}
-            </div>
-            <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: '#fecaca' }}>
-              <p className="text-xs uppercase tracking-wider" style={{ color: '#991b1b' }}>Reset tests</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                Erase all completed test results and clear paused drafts on this device.
-              </p>
-              <button
-                type="button"
-                onClick={resetAllTests}
-                className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity mt-3"
-                style={{ borderColor: '#fecaca', color: '#991b1b', background: '#fff1f2' }}
-              >
-                Reset / erase all tests
-              </button>
-            </div>
-          </aside>
+            </aside>
+          </div>
         </div>
       )}
 
@@ -903,13 +933,18 @@ export default function WellbeingPage() {
 
       {mode === 'result' && result && (
         <section className="max-w-3xl mx-auto space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <button type="button" onClick={() => setMode('intro')} className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
-              Back to overview
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button type="button" onClick={dashboardBack} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}>
+              Back to test dashboard
             </button>
-            <button type="button" onClick={startAttempt} className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
-              Retake
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={startAttempt} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+                Retake
+              </button>
+              <button type="button" onClick={() => setTool('personality')} className="px-3 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity" style={{ background: 'var(--color-primary)' }}>
+                Continue to IPIP-NEO-120
+              </button>
+            </div>
           </div>
           <AnalysisPanel attempt={result} onDownloadPdf={downloadAttemptPdf} pdfLoading={pdfLoadingId === result.id} />
         </section>

@@ -123,7 +123,7 @@ function CerqResultPanel({ attempt, onDownloadPdf, pdfLoading }) {
   );
 }
 
-export default function CerqStylePanel({ onBack }) {
+export default function CerqStylePanel({ onBack, onComplete, onNext, nextLabel = 'Continue' }) {
   const [config, setConfig] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -255,6 +255,7 @@ export default function CerqStylePanel({ onBack }) {
       clearDraft();
       setDraftMeta(null);
       await refreshAttempts();
+      await onComplete?.();
     } catch (err) {
       setError(err.message || 'Could not save CERQ-style attempt');
     } finally {
@@ -443,9 +444,14 @@ export default function CerqStylePanel({ onBack }) {
 
       {mode === 'result' && result && (
         <section className="max-w-4xl mx-auto space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <button type="button" onClick={() => setMode('intro')} className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Back to CERQ overview</button>
-            <button type="button" onClick={startAttempt} className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>Retake</button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button type="button" onClick={onBack} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}>Back to test dashboard</button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={startAttempt} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>Retake</button>
+              {onNext && (
+                <button type="button" onClick={onNext} className="px-3 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity" style={{ background: 'var(--color-primary)' }}>{nextLabel}</button>
+              )}
+            </div>
           </div>
           <CerqResultPanel attempt={result} onDownloadPdf={downloadAttemptPdf} pdfLoading={pdfLoadingId === result.id} />
         </section>
