@@ -7,6 +7,8 @@ import CerqStylePanel from '../components/wellbeing/CerqStylePanel';
 import BriefCopeStylePanel from '../components/wellbeing/BriefCopeStylePanel';
 import ModelInsightPanel from '../components/wellbeing/ModelInsightPanel';
 import CombinedProfilePanel from '../components/wellbeing/CombinedProfilePanel';
+import { BdiSeverityGauge } from '../components/wellbeing/WellbeingCharts';
+import WellbeingVisualSummaryPanel from '../components/wellbeing/WellbeingVisualSummaryPanel';
 
 const MOOD_DRAFT_KEY = 'curam:wellbeing-mood:draft';
 const IPIP_DRAFT_KEY = 'curam:ipip-neo-120:draft';
@@ -111,6 +113,7 @@ function AnalysisPanel({ attempt, onDownloadPdf, pdfLoading }) {
   return (
     <div className="space-y-4">
       <ScorePill score={attempt.totalScore} label={attempt.bandLabel} />
+      <BdiSeverityGauge score={Number(attempt.totalScore || 0)} label={attempt.bandLabel} />
 
       {safetyFlag && (
         <div className="rounded-2xl border p-4 text-sm" style={{ borderColor: '#fecaca', background: '#fff1f2', color: '#991b1b' }}>
@@ -557,6 +560,23 @@ export default function WellbeingPage() {
     );
   }
 
+  if (tool === 'visuals' || tool === 'mindmap') {
+    return (
+      <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+        <div>
+          <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            {getIcon('heart-pulse', { size: 20 })}
+            Wellbeing & Personality Checks
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+            Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
+          </p>
+        </div>
+        <WellbeingVisualSummaryPanel onBack={() => setTool('mood')} initialView={tool === 'mindmap' ? 'mindmap' : 'charts'} />
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -611,6 +631,26 @@ export default function WellbeingPage() {
           >
             Combined profile
           </button>
+          {profileStatus?.available && (
+            <>
+              <button
+                type="button"
+                onClick={() => setTool('visuals')}
+                className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
+              >
+                Visual summary
+              </button>
+              <button
+                type="button"
+                onClick={() => setTool('mindmap')}
+                className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
+              >
+                Mind map
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -706,6 +746,30 @@ export default function WellbeingPage() {
                   : 'Locked until all four tests have been completed at least once.'}
               </p>
             </button>
+            {profileStatus?.available && (
+              <div className="grid sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setTool('visuals')}
+                  className="rounded-2xl border p-4 text-left hover:opacity-80 transition-opacity"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+                >
+                  <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Visual option</p>
+                  <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Charts summary</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>See the latest four results as a gauge, radar, and strategy bars.</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTool('mindmap')}
+                  className="rounded-2xl border p-4 text-left hover:opacity-80 transition-opacity"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+                >
+                  <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Pattern option</p>
+                  <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Mind map</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Connect related signals across mood, traits, thinking, and coping.</p>
+                </button>
+              </div>
+            )}
             <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Completed checks</p>
               <p className="text-3xl font-bold mt-1" style={{ color: 'var(--color-text)' }}>{attempts.length}</p>

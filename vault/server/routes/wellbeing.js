@@ -918,6 +918,37 @@ function profileStatusFromLatest(latest) {
   };
 }
 
+function visualProfileFromLatest(latest) {
+  return {
+    sourceAttempts: {
+      mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
+      ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
+      cerq: { id: latest.cerq.id, createdAt: latest.cerq.createdAt },
+      cope: { id: latest.cope.id, createdAt: latest.cope.createdAt },
+    },
+    mood: {
+      totalScore: latest.mood.totalScore,
+      band: latest.mood.band,
+      bandLabel: latest.mood.bandLabel,
+      safetyFlag: latest.mood.safetyFlag,
+      createdAt: latest.mood.createdAt,
+    },
+    ipip: {
+      domainScores: latest.ipip.domainScores,
+      facetScores: latest.ipip.facetScores,
+      createdAt: latest.ipip.createdAt,
+    },
+    cerq: {
+      scaleScores: latest.cerq.scaleScores,
+      createdAt: latest.cerq.createdAt,
+    },
+    cope: {
+      scaleScores: latest.cope.scaleScores,
+      createdAt: latest.cope.createdAt,
+    },
+  };
+}
+
 router.get('/profile/status', async (req, res) => {
   try {
     const latest = await loadLatestProfileInputs(req.user.id);
@@ -947,6 +978,26 @@ router.post('/profile', async (req, res) => {
         cerq: { id: latest.cerq.id, createdAt: latest.cerq.createdAt },
         cope: { id: latest.cope.id, createdAt: latest.cope.createdAt },
       },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/profile/visuals', async (req, res) => {
+  try {
+    const latest = await loadLatestProfileInputs(req.user.id);
+    const status = profileStatusFromLatest(latest);
+    if (!status.available) {
+      return res.status(400).json({
+        error: 'Visual summary requires all four tests to be completed first.',
+        status,
+      });
+    }
+
+    res.json({
+      status,
+      ...visualProfileFromLatest(latest),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

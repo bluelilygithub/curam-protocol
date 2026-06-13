@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../utils/apiClient';
 import ModelInsightPanel from './ModelInsightPanel';
+import { DomainRadarChart } from './WellbeingCharts';
 
 const IPIP_DRAFT_KEY = 'curam:ipip-neo-120:draft';
 
@@ -92,6 +93,8 @@ function IpipResultPanel({ attempt, onDownloadPdf, pdfLoading }) {
       </section>
 
       <ModelInsightPanel insight={analysis.modelInsight} title="Considered response" />
+
+      <DomainRadarChart domains={domainScores} />
 
       <div className="grid md:grid-cols-2 gap-3">
         {domainScores.map((domain) => (

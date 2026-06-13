@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../utils/apiClient';
 import ModelInsightPanel from './ModelInsightPanel';
+import { StrategyBarChart } from './WellbeingCharts';
 
 const CERQ_DRAFT_KEY = 'curam:cerq-style:draft';
 
@@ -85,6 +86,13 @@ function CerqResultPanel({ attempt, onDownloadPdf, pdfLoading }) {
       </section>
 
       <ModelInsightPanel insight={analysis.modelInsight} title="Considered response" />
+
+      <StrategyBarChart
+        scales={scaleScores}
+        responseMax={5}
+        variant="cerq"
+        title="CERQ-style strategy profile"
+      />
 
       <div className="grid md:grid-cols-2 gap-3">
         {scaleScores.map((scale) => <ScaleCard key={scale.key} scale={scale} />)}

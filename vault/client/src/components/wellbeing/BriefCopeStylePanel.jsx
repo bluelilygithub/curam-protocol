@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../utils/apiClient';
 import ModelInsightPanel from './ModelInsightPanel';
+import { StrategyBarChart } from './WellbeingCharts';
 
 const COPE_DRAFT_KEY = 'curam:brief-cope-style:draft';
 
@@ -85,6 +86,13 @@ function CopeResultPanel({ attempt, onDownloadPdf, pdfLoading }) {
       </section>
 
       <ModelInsightPanel insight={analysis.modelInsight} title="Considered response" />
+
+      <StrategyBarChart
+        scales={scaleScores}
+        responseMax={4}
+        variant="cope"
+        title="Brief COPE-style strategy profile"
+      />
 
       <div className="grid md:grid-cols-2 gap-3">
         {scaleScores.map((scale) => <ScaleCard key={scale.key} scale={scale} />)}
