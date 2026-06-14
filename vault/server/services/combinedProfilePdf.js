@@ -126,6 +126,8 @@ async function buildCombinedProfilePdfBuffer({ profile, sourceAttempts }) {
   addSection('Source Results');
   [
     ['Mood check', sources.mood?.createdAt],
+    ['PANAS-style check', sources.panas?.createdAt],
+    ['ASRS-5-style check', sources.asrs5?.createdAt],
     ['IPIP-NEO-120', sources.ipip?.createdAt],
     ['HEXACO-60-style check', sources.hexaco?.createdAt],
     ['CERQ-style check', sources.cerq?.createdAt],

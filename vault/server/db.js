@@ -277,6 +277,43 @@ async function initSchema() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS panas_attempts (
+        id                       SERIAL PRIMARY KEY,
+        "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "questionnaireVersion"   TEXT NOT NULL,
+        answers                  JSONB NOT NULL,
+        "scaleScores"            JSONB NOT NULL,
+        analysis                 JSONB NOT NULL,
+        "createdAt"              TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_panas_attempts_user_created
+      ON panas_attempts("userId", "createdAt" DESC)
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS asrs5_attempts (
+        id                       SERIAL PRIMARY KEY,
+        "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "questionnaireVersion"   TEXT NOT NULL,
+        answers                  JSONB NOT NULL,
+        "totalScore"             INTEGER NOT NULL,
+        band                     TEXT NOT NULL,
+        "bandLabel"              TEXT NOT NULL,
+        "scaleScores"            JSONB NOT NULL,
+        analysis                 JSONB NOT NULL,
+        "createdAt"              TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_asrs5_attempts_user_created
+      ON asrs5_attempts("userId", "createdAt" DESC)
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS ipip_neo_attempts (
         id                       SERIAL PRIMARY KEY,
         "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -343,6 +380,25 @@ async function initSchema() {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_cope_attempts_user_created
       ON cope_attempts("userId", "createdAt" DESC)
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS wellbeing_combined_reports (
+        id                       SERIAL PRIMARY KEY,
+        "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        variant                  TEXT NOT NULL,
+        "sourceKey"              TEXT NOT NULL,
+        "sourceAttempts"         JSONB NOT NULL,
+        profile                  JSONB NOT NULL,
+        "createdAt"              TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt"              TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE ("userId", variant, "sourceKey")
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_wellbeing_combined_reports_user_variant_updated
+      ON wellbeing_combined_reports("userId", variant, "updatedAt" DESC)
     `);
 
     // ── AI features ───────────────────────────────────────────────────────────

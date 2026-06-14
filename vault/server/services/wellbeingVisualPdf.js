@@ -46,6 +46,19 @@ function strategyAverage(scale, responseMax) {
 
 function strategyColour(scale, variant) {
   const family = String(scale.family || '').toLowerCase();
+  if (variant === 'panas') {
+    if (family === 'positive') return colour('#22c55e');
+    if (family === 'negative') return colour('#ef4444');
+    return colour('#64748b');
+  }
+  if (variant === 'asrs5') {
+    if (family === 'attention') return colour('#3b82f6');
+    if (family === 'activation') return colour('#f97316');
+    if (family === 'impulsivity') return colour('#ef4444');
+    if (family === 'planning') return colour('#a855f7');
+    if (family === 'organisation') return colour('#14b8a6');
+    return colour('#64748b');
+  }
   if (variant === 'cerq') {
     if (family === 'helpful') return colour('#3b82f6');
     if (family === 'less-helpful') return colour('#ef4444');
@@ -71,20 +84,27 @@ function nodeStrength(items = [], fallback = 0) {
 function buildMindMapData(visuals) {
   const moodScore = Number(visuals?.mood?.totalScore || 0);
   const moodStrength = Math.min(1, moodScore / 63);
+  const panas = parseMaybeJson(visuals?.panas?.scaleScores, []);
+  const asrs5 = parseMaybeJson(visuals?.asrs5?.scaleScores, []);
   const domains = parseMaybeJson(visuals?.ipip?.domainScores, []);
   const hexacoDomains = parseMaybeJson(visuals?.hexaco?.domainScores, []);
   const cerq = parseMaybeJson(visuals?.cerq?.scaleScores, []);
   const cope = parseMaybeJson(visuals?.cope?.scaleScores, []);
   const domainByKey = Object.fromEntries(domains.map((domain) => [domain.key, domain]));
   const hexacoByKey = Object.fromEntries(hexacoDomains.map((domain) => [domain.key, domain]));
+  const positiveAffect = panas.find((scale) => scale.key === 'positiveAffect');
+  const negativeAffect = panas.find((scale) => scale.key === 'negativeAffect');
+  const attentionPressure = strongest(asrs5, () => true, 2);
   const lessHelpful = strongest(cerq, (scale) => scale.family === 'less-helpful');
   const helpful = strongest(cerq, (scale) => scale.family === 'helpful');
   const avoidant = strongest(cope, (scale) => scale.family === 'avoidant');
   const active = strongest(cope, (scale) => !['avoidant', 'self-evaluative'].includes(scale.family));
 
   const nodes = [
-    { id: 'centre', label: 'Combined pattern', detail: 'Latest result from all five checks', x: 298, y: 300, color: colour('#6366f1'), strength: 1 },
+    { id: 'centre', label: 'Combined pattern', detail: 'Latest result from all seven checks', x: 298, y: 300, color: colour('#6366f1'), strength: 1 },
     { id: 'mood', label: 'Mood load', detail: `${moodScore}/63 - ${visuals?.mood?.bandLabel || 'Mood score'}`, x: 298, y: 150, color: colour('#ef4444'), strength: moodStrength },
+    { id: 'affect', label: 'Affect tone', detail: positiveAffect || negativeAffect ? `Positive ${positiveAffect?.score || 0}/${positiveAffect?.max || 50}; negative ${negativeAffect?.score || 0}/${negativeAffect?.max || 50}` : 'Positive and negative affect', x: 298, y: 210, color: colour('#a855f7'), strength: Number(negativeAffect?.normalized ?? positiveAffect?.normalized ?? 0.35) },
+    { id: 'attention', label: 'Attention', detail: attentionPressure.length ? attentionPressure.map((scale) => scale.label).join(', ') : 'ASRS-5-style attention signals', x: 455, y: 520, color: colour('#0ea5e9'), strength: nodeStrength(attentionPressure, 0.35) },
     { id: 'sensitivity', label: 'Emotional sensitivity', detail: hexacoByKey.EM ? `${hexacoByKey.EM.label}: ${Math.round(Number(hexacoByKey.EM.normalized || 0) * 100)}%` : domainByKey.N ? `${domainByKey.N.label}: ${Math.round(Number(domainByKey.N.normalized || 0) * 100)}%` : 'Emotionality / Neuroticism domain', x: 455, y: 230, color: colour('#f97316'), strength: Number(hexacoByKey.EM?.normalized ?? domainByKey.N?.normalized ?? 0.35) },
     { id: 'resources', label: 'Cognitive resources', detail: helpful.length ? helpful.map((scale) => scale.label).join(', ') : 'Helpful CERQ strategies', x: 440, y: 390, color: colour('#3b82f6'), strength: nodeStrength(helpful, 0.35) },
     { id: 'loops', label: 'Cognitive loops', detail: lessHelpful.length ? lessHelpful.map((scale) => scale.label).join(', ') : 'Less-helpful CERQ strategies', x: 135, y: 230, color: colour('#dc2626'), strength: nodeStrength(lessHelpful, 0.35) },
@@ -95,9 +115,9 @@ function buildMindMapData(visuals) {
   ];
 
   const links = [
-    ['centre', 'mood'], ['centre', 'sensitivity'], ['centre', 'resources'], ['centre', 'loops'],
+    ['centre', 'mood'], ['centre', 'affect'], ['centre', 'attention'], ['centre', 'sensitivity'], ['centre', 'resources'], ['centre', 'loops'],
     ['centre', 'coping'], ['centre', 'avoidance'], ['centre', 'structure'], ['mood', 'loops'],
-    ['centre', 'humility'], ['mood', 'avoidance'], ['resources', 'coping'], ['structure', 'coping'], ['sensitivity', 'loops'], ['humility', 'resources'],
+    ['centre', 'humility'], ['mood', 'affect'], ['mood', 'avoidance'], ['attention', 'structure'], ['attention', 'avoidance'], ['resources', 'coping'], ['structure', 'coping'], ['sensitivity', 'loops'], ['humility', 'resources'],
   ];
 
   const notes = [
@@ -180,11 +200,13 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
 
   addText(view === 'mindmap' ? 'Wellbeing Mind Map' : 'Wellbeing Visual Summary', { size: 18, bold: true });
   addText(`Generated: ${formatDate(new Date())}`, { size: 9, color: rgb(0.45, 0.45, 0.45) });
-  addText('Uses the latest completed result from each of the five wellbeing checks.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
+  addText('Uses the latest completed result from each of the seven wellbeing checks.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
 
   addHeading('Source Results');
   [
     ['Mood check', visuals?.sourceAttempts?.mood?.createdAt],
+    ['PANAS-style check', visuals?.sourceAttempts?.panas?.createdAt],
+    ['ASRS-5-style check', visuals?.sourceAttempts?.asrs5?.createdAt],
     ['IPIP-NEO-120', visuals?.sourceAttempts?.ipip?.createdAt],
     ['HEXACO-60-style check', visuals?.sourceAttempts?.hexaco?.createdAt],
     ['CERQ-style check', visuals?.sourceAttempts?.cerq?.createdAt],
@@ -241,6 +263,16 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
     page.drawLine({ start: { x: gaugeX + clamp01(moodScore / 63) * gaugeWidth, y: gaugeY - 3 }, end: { x: gaugeX + clamp01(moodScore / 63) * gaugeWidth, y: gaugeY + 22 }, thickness: 1.5, color: rgb(0.05, 0.05, 0.05) });
     y -= 62;
     addText(`Score: ${moodScore}/63 - ${visuals?.mood?.bandLabel || ''}`, { size: 10, bold: true });
+
+    addHeading('PANAS-Style Affect Bars');
+    parseMaybeJson(visuals?.panas?.scaleScores, [])
+      .sort((a, b) => strategyAverage(b, 5) - strategyAverage(a, 5))
+      .forEach((scale) => drawBar({ label: scale.label, value: strategyAverage(scale, 5) - 1, max: 4, barColor: strategyColour(scale, 'panas'), detail: `${strategyAverage(scale, 5).toFixed(1)}/5 - ${scale.family}` }));
+
+    addHeading('ASRS-5-Style Attention Bars');
+    parseMaybeJson(visuals?.asrs5?.scaleScores, [])
+      .sort((a, b) => strategyAverage(b, 4) - strategyAverage(a, 4))
+      .forEach((scale) => drawBar({ label: scale.label, value: strategyAverage(scale, 4), max: 4, barColor: strategyColour(scale, 'asrs5'), detail: `${strategyAverage(scale, 4).toFixed(1)}/4 - ${scale.family}` }));
 
     addHeading('IPIP-NEO Five-Domain Radar');
     const domains = parseMaybeJson(visuals?.ipip?.domainScores, []);

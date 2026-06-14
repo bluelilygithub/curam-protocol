@@ -6,7 +6,7 @@ const PROFILE_VARIANTS = {
   summary: {
     label: 'Summary',
     title: 'Summary profile',
-    description: 'A concise overview of the five tests for quick orientation.',
+    description: 'A concise overview of the seven tests for quick orientation.',
     pdfName: 'combined-wellbeing-summary.pdf',
   },
   detailed: {
@@ -118,8 +118,34 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
     }
   };
 
+  const showSuggestionsWaitModal = autoGenerate
+    && initialVariant === 'suggestions'
+    && !profile
+    && !error
+    && (loading || generating === 'suggestions');
+
   return (
     <div className="space-y-6">
+      {showSuggestionsWaitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
+          <div
+            role="status"
+            aria-live="polite"
+            className="w-full max-w-md rounded-2xl border p-6 text-center shadow-xl"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+          >
+            <div className="mx-auto h-10 w-10 rounded-full border-4 border-t-transparent animate-spin mb-4" style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }} />
+            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Preparing suggestions report</h2>
+            <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+              Checking the seven completed results and generating the personal development suggestions. This can take around 60 seconds, so please wait on this screen.
+            </p>
+            <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
+              The report will appear automatically when it is ready.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <button
@@ -132,7 +158,7 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
           </button>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Combined Profile</h2>
           <p className="text-sm mt-1 max-w-3xl" style={{ color: 'var(--color-muted)' }}>
-            Collates the latest completed mood, IPIP-NEO-120, HEXACO-60-style, CERQ-style, and COPE-style results into one proof-of-concept report.
+            Collates the latest completed mood, PANAS-style, ASRS-5-style, IPIP-NEO-120, HEXACO-60-style, CERQ-style, and COPE-style results into one proof-of-concept report.
           </p>
         </div>
       </div>
@@ -161,7 +187,7 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
 
         {!loading && !status?.available && (
           <p className="text-sm mt-3" style={{ color: 'var(--color-muted)' }}>
-            The combined profile unlocks once all five tests have at least one completed result.
+            The combined profile unlocks once all seven tests have at least one completed result.
           </p>
         )}
       </section>
@@ -169,7 +195,7 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
       <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Choose report style</h3>
         <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>
-          Generate the same five-test synthesis at the level of detail you need.
+          Generate the same seven-test synthesis at the level of detail you need.
         </p>
         <div className="grid md:grid-cols-4 gap-3">
           {Object.entries(PROFILE_VARIANTS).map(([key, config]) => (

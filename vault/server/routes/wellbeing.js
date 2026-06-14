@@ -51,6 +51,22 @@ const {
   generateCombinedProfile,
   latestScoreLinesFromScales,
 } = require('../services/wellbeingModelInsights');
+const {
+  QUESTIONNAIRE_VERSION: PANAS_QUESTIONNAIRE_VERSION,
+  QUESTIONS: PANAS_QUESTIONS,
+  SCALES: PANAS_SCALES,
+  normalizeAnswers: normalizePanasAnswers,
+  scorePanasAnswers,
+  buildPanasPdfBuffer,
+} = require('../services/panasStyle');
+const {
+  QUESTIONNAIRE_VERSION: ASRS5_QUESTIONNAIRE_VERSION,
+  QUESTIONS: ASRS5_QUESTIONS,
+  SCALES: ASRS5_SCALES,
+  normalizeAnswers: normalizeAsrs5Answers,
+  scoreAsrs5Answers,
+  buildAsrs5PdfBuffer,
+} = require('../services/asrs5Style');
 
 const QUESTIONNAIRE_VERSION = 'wellbeing-check-v1';
 const SALT_ROUNDS = 12;
@@ -484,6 +500,28 @@ router.get('/questions', (_req, res) => {
   });
 });
 
+router.get('/panas/questions', (_req, res) => {
+  res.json({
+    version: PANAS_QUESTIONNAIRE_VERSION,
+    title: 'PANAS-Style Affect Check',
+    disclaimer: 'A proof-of-concept affect snapshot using original PANAS-style wording. Not the official PANAS, diagnosis, or professional advice.',
+    questions: PANAS_QUESTIONS,
+    scales: PANAS_SCALES.map(({ key, label, family, description }) => ({ key, label, family, description })),
+    responseOptions: PANAS_QUESTIONS[0]?.options || [],
+  });
+});
+
+router.get('/asrs5/questions', (_req, res) => {
+  res.json({
+    version: ASRS5_QUESTIONNAIRE_VERSION,
+    title: 'ASRS-5-Style Attention Check',
+    disclaimer: 'A proof-of-concept adult attention/self-regulation screener using original ASRS-5-style wording. Not the official ASRS-5, diagnosis, or professional advice.',
+    questions: ASRS5_QUESTIONS,
+    scales: ASRS5_SCALES.map(({ key, label, family, description }) => ({ key, label, family, description })),
+    responseOptions: ASRS5_QUESTIONS[0]?.options || [],
+  });
+});
+
 router.get('/ipip/questions', (_req, res) => {
   res.json({
     version: IPIP_QUESTIONNAIRE_VERSION,
@@ -513,6 +551,231 @@ router.get('/cope/questions', (_req, res) => {
     questions: COPE_QUESTIONS,
     scales: COPE_SCALES.map(({ key, label, family, description }) => ({ key, label, family, description })),
   });
+});
+
+router.get('/panas/attempts', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "questionnaireVersion", "scaleScores", analysis, "createdAt"
+       FROM panas_attempts
+       WHERE "userId"=$1
+       ORDER BY "createdAt" DESC
+       LIMIT 50`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/panas/attempts/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT *
+       FROM panas_attempts
+       WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+    const attempt = rows[0];
+    attempt.analysis = parseMaybeJson(attempt.analysis, {});
+    attempt.answers = parseMaybeJson(attempt.answers, []);
+    attempt.scaleScores = parseMaybeJson(attempt.scaleScores, []);
+    if (!attempt.analysis.modelInsight || attempt.analysis.modelInsight.formatVersion !== 2) {
+      attempt.analysis.modelInsight = await generateModelInsight(req.user.id, {
+        title: 'PANAS-Style Affect Check',
+        purpose: 'Interpret a 20-item proof-of-concept affect snapshot across positive affect and negative affect. Focus on current emotional tone, not diagnosis or stable personality.',
+        scores: { scaleScores: attempt.scaleScores, answers: attempt.answers },
+        existingAnalysis: attempt.analysis,
+        scoreLines: latestScoreLinesFromScales(attempt.scaleScores, 2),
+      });
+      await pool.query('UPDATE panas_attempts SET analysis=$1 WHERE id=$2 AND "userId"=$3', [JSON.stringify(attempt.analysis), req.params.id, req.user.id]);
+    }
+    res.json(attempt);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/panas/attempts/:id/pdf', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT *
+       FROM panas_attempts
+       WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+
+    const buf = await buildPanasPdfBuffer({ attempt: rows[0] });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="panas-style-${req.params.id}.pdf"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[panas pdf]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/panas/attempts', async (req, res) => {
+  try {
+    const answers = normalizePanasAnswers(req.body?.answers);
+    const { scaleScores, analysis } = scorePanasAnswers(answers);
+    analysis.modelInsight = await generateModelInsight(req.user.id, {
+      title: 'PANAS-Style Affect Check',
+      purpose: 'Interpret a 20-item proof-of-concept affect snapshot across positive affect and negative affect. Focus on current emotional tone, not diagnosis or stable personality.',
+      scores: { scaleScores, answers },
+      existingAnalysis: analysis,
+      scoreLines: latestScoreLinesFromScales(scaleScores, 2),
+    });
+
+    const { rows } = await pool.query(
+      `INSERT INTO panas_attempts (
+         "userId", "questionnaireVersion", answers, "scaleScores", analysis
+       )
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING *`,
+      [
+        req.user.id,
+        PANAS_QUESTIONNAIRE_VERSION,
+        JSON.stringify(answers),
+        JSON.stringify(scaleScores),
+        JSON.stringify(analysis),
+      ]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    const status = /required|Expected|Invalid|out of order/i.test(err.message) ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+router.delete('/panas/attempts/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM panas_attempts WHERE id=$1 AND "userId"=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Attempt not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/asrs5/attempts', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "questionnaireVersion", "totalScore", band, "bandLabel", "scaleScores", analysis, "createdAt"
+       FROM asrs5_attempts
+       WHERE "userId"=$1
+       ORDER BY "createdAt" DESC
+       LIMIT 50`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/asrs5/attempts/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT *
+       FROM asrs5_attempts
+       WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+    const attempt = rows[0];
+    attempt.analysis = parseMaybeJson(attempt.analysis, {});
+    attempt.answers = parseMaybeJson(attempt.answers, []);
+    attempt.scaleScores = parseMaybeJson(attempt.scaleScores, []);
+    if (!attempt.analysis.modelInsight || attempt.analysis.modelInsight.formatVersion !== 2) {
+      attempt.analysis.modelInsight = await generateModelInsight(req.user.id, {
+        title: 'ASRS-5-Style Attention Check',
+        purpose: 'Interpret a six-item proof-of-concept adult attention/self-regulation screener. Focus on attention, activation, impulsivity, planning, and external structure patterns; do not diagnose ADHD.',
+        scores: { totalScore: attempt.totalScore, bandLabel: attempt.bandLabel, scaleScores: attempt.scaleScores, answers: attempt.answers },
+        existingAnalysis: attempt.analysis,
+        scoreLines: latestScoreLinesFromScales(attempt.scaleScores, 6),
+      });
+      await pool.query('UPDATE asrs5_attempts SET analysis=$1 WHERE id=$2 AND "userId"=$3', [JSON.stringify(attempt.analysis), req.params.id, req.user.id]);
+    }
+    res.json(attempt);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/asrs5/attempts/:id/pdf', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT *
+       FROM asrs5_attempts
+       WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+
+    const buf = await buildAsrs5PdfBuffer({ attempt: rows[0] });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="asrs-5-style-${req.params.id}.pdf"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[asrs5 pdf]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/asrs5/attempts', async (req, res) => {
+  try {
+    const answers = normalizeAsrs5Answers(req.body?.answers);
+    const { totalScore, band, scaleScores, analysis } = scoreAsrs5Answers(answers);
+    analysis.modelInsight = await generateModelInsight(req.user.id, {
+      title: 'ASRS-5-Style Attention Check',
+      purpose: 'Interpret a six-item proof-of-concept adult attention/self-regulation screener. Focus on attention, activation, impulsivity, planning, and external structure patterns; do not diagnose ADHD.',
+      scores: { totalScore, bandLabel: band.label, scaleScores, answers },
+      existingAnalysis: analysis,
+      scoreLines: latestScoreLinesFromScales(scaleScores, 6),
+    });
+
+    const { rows } = await pool.query(
+      `INSERT INTO asrs5_attempts (
+         "userId", "questionnaireVersion", answers, "totalScore", band, "bandLabel", "scaleScores", analysis
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING *`,
+      [
+        req.user.id,
+        ASRS5_QUESTIONNAIRE_VERSION,
+        JSON.stringify(answers),
+        totalScore,
+        band.key,
+        band.label,
+        JSON.stringify(scaleScores),
+        JSON.stringify(analysis),
+      ]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    const status = /required|Expected|Invalid|out of order/i.test(err.message) ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+router.delete('/asrs5/attempts/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM asrs5_attempts WHERE id=$1 AND "userId"=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Attempt not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get('/cope/attempts', async (req, res) => {
@@ -979,10 +1242,26 @@ router.delete('/hexaco/attempts/:id', async (req, res) => {
 });
 
 async function loadLatestProfileInputs(userId) {
-  const [mood, ipip, hexaco, cerq, cope] = await Promise.all([
+  const [mood, panas, asrs5, ipip, hexaco, cerq, cope] = await Promise.all([
     pool.query(
       `SELECT *
        FROM wellbeing_attempts
+       WHERE "userId"=$1
+       ORDER BY "createdAt" DESC
+       LIMIT 1`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT *
+       FROM panas_attempts
+       WHERE "userId"=$1
+       ORDER BY "createdAt" DESC
+       LIMIT 1`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT *
+       FROM asrs5_attempts
        WHERE "userId"=$1
        ORDER BY "createdAt" DESC
        LIMIT 1`,
@@ -1024,6 +1303,8 @@ async function loadLatestProfileInputs(userId) {
 
   const latest = {
     mood: mood.rows[0] || null,
+    panas: panas.rows[0] || null,
+    asrs5: asrs5.rows[0] || null,
     ipip: ipip.rows[0] || null,
     hexaco: hexaco.rows[0] || null,
     cerq: cerq.rows[0] || null,
@@ -1033,6 +1314,16 @@ async function loadLatestProfileInputs(userId) {
   if (latest.mood) {
     latest.mood.analysis = parseMaybeJson(latest.mood.analysis, {});
     latest.mood.answers = parseMaybeJson(latest.mood.answers, []);
+  }
+  if (latest.panas) {
+    latest.panas.analysis = parseMaybeJson(latest.panas.analysis, {});
+    latest.panas.answers = parseMaybeJson(latest.panas.answers, []);
+    latest.panas.scaleScores = parseMaybeJson(latest.panas.scaleScores, []);
+  }
+  if (latest.asrs5) {
+    latest.asrs5.analysis = parseMaybeJson(latest.asrs5.analysis, {});
+    latest.asrs5.answers = parseMaybeJson(latest.asrs5.answers, []);
+    latest.asrs5.scaleScores = parseMaybeJson(latest.asrs5.scaleScores, []);
   }
   if (latest.ipip) {
     latest.ipip.analysis = parseMaybeJson(latest.ipip.analysis, {});
@@ -1062,6 +1353,8 @@ async function loadLatestProfileInputs(userId) {
 function profileStatusFromLatest(latest) {
   const tests = [
     { key: 'mood', label: 'BDI-Style Mood Check', completed: !!latest.mood, completedAt: latest.mood?.createdAt || null },
+    { key: 'panas', label: 'PANAS-Style Affect Check', completed: !!latest.panas, completedAt: latest.panas?.createdAt || null },
+    { key: 'asrs5', label: 'ASRS-5-Style Attention Check', completed: !!latest.asrs5, completedAt: latest.asrs5?.createdAt || null },
     { key: 'ipip', label: 'IPIP-NEO-120 Personality Inventory', completed: !!latest.ipip, completedAt: latest.ipip?.createdAt || null },
     { key: 'hexaco', label: 'HEXACO-60-Style Personality Check', completed: !!latest.hexaco, completedAt: latest.hexaco?.createdAt || null },
     { key: 'cerq', label: 'CERQ-Style Cognitive Coping Check', completed: !!latest.cerq, completedAt: latest.cerq?.createdAt || null },
@@ -1163,6 +1456,55 @@ async function insertRandomIpipAttempt(client, userId) {
   return rows[0];
 }
 
+async function insertRandomPanasAttempt(client, userId) {
+  const answers = normalizePanasAnswers(randomValueRawAnswers(PANAS_QUESTIONS, 5));
+  const { scaleScores, analysis } = scorePanasAnswers(answers);
+  analysis.generated = true;
+  analysis.modelInsight = demoInsight('PANAS-Style Affect Check');
+
+  const { rows } = await client.query(
+    `INSERT INTO panas_attempts (
+       "userId", "questionnaireVersion", answers, "scaleScores", analysis
+     )
+     VALUES ($1,$2,$3,$4,$5)
+     RETURNING id, "createdAt"`,
+    [
+      userId,
+      PANAS_QUESTIONNAIRE_VERSION,
+      JSON.stringify(answers),
+      JSON.stringify(scaleScores),
+      JSON.stringify(analysis),
+    ]
+  );
+  return rows[0];
+}
+
+async function insertRandomAsrs5Attempt(client, userId) {
+  const answers = normalizeAsrs5Answers(randomValueRawAnswers(ASRS5_QUESTIONS, 4));
+  const { totalScore, band, scaleScores, analysis } = scoreAsrs5Answers(answers);
+  analysis.generated = true;
+  analysis.modelInsight = demoInsight('ASRS-5-Style Attention Check');
+
+  const { rows } = await client.query(
+    `INSERT INTO asrs5_attempts (
+       "userId", "questionnaireVersion", answers, "totalScore", band, "bandLabel", "scaleScores", analysis
+     )
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     RETURNING id, "createdAt"`,
+    [
+      userId,
+      ASRS5_QUESTIONNAIRE_VERSION,
+      JSON.stringify(answers),
+      totalScore,
+      band.key,
+      band.label,
+      JSON.stringify(scaleScores),
+      JSON.stringify(analysis),
+    ]
+  );
+  return rows[0];
+}
+
 async function insertRandomHexacoAttempt(client, userId) {
   const answers = normalizeHexacoAnswers(randomValueRawAnswers(HEXACO_QUESTIONS, 5, 'itemId'));
   const { domainScores, analysis } = scoreHexacoAnswers(answers);
@@ -1246,19 +1588,24 @@ async function loadWellbeingInviteTemplate() {
 
 function visualProfileFromLatest(latest) {
   return {
-    sourceAttempts: {
-      mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
-      ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
-      hexaco: { id: latest.hexaco.id, createdAt: latest.hexaco.createdAt },
-      cerq: { id: latest.cerq.id, createdAt: latest.cerq.createdAt },
-      cope: { id: latest.cope.id, createdAt: latest.cope.createdAt },
-    },
+    sourceAttempts: sourceAttemptsFromLatest(latest),
     mood: {
       totalScore: latest.mood.totalScore,
       band: latest.mood.band,
       bandLabel: latest.mood.bandLabel,
       safetyFlag: latest.mood.safetyFlag,
       createdAt: latest.mood.createdAt,
+    },
+    panas: {
+      scaleScores: latest.panas.scaleScores,
+      createdAt: latest.panas.createdAt,
+    },
+    asrs5: {
+      totalScore: latest.asrs5.totalScore,
+      band: latest.asrs5.band,
+      bandLabel: latest.asrs5.bandLabel,
+      scaleScores: latest.asrs5.scaleScores,
+      createdAt: latest.asrs5.createdAt,
     },
     ipip: {
       domainScores: latest.ipip.domainScores,
@@ -1280,6 +1627,61 @@ function visualProfileFromLatest(latest) {
   };
 }
 
+function sourceAttemptsFromLatest(latest) {
+  return {
+    mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
+    panas: { id: latest.panas.id, createdAt: latest.panas.createdAt },
+    asrs5: { id: latest.asrs5.id, createdAt: latest.asrs5.createdAt },
+    ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
+    hexaco: { id: latest.hexaco.id, createdAt: latest.hexaco.createdAt },
+    cerq: { id: latest.cerq.id, createdAt: latest.cerq.createdAt },
+    cope: { id: latest.cope.id, createdAt: latest.cope.createdAt },
+  };
+}
+
+function sourceKeyFromAttempts(sourceAttempts) {
+  return ['mood', 'panas', 'asrs5', 'ipip', 'hexaco', 'cerq', 'cope']
+    .map((key) => `${key}:${sourceAttempts?.[key]?.id || 'missing'}`)
+    .join('|');
+}
+
+async function loadSavedCombinedReport(userId, variant, sourceKey) {
+  const { rows } = await pool.query(
+    `SELECT profile, "sourceAttempts", "updatedAt"
+     FROM wellbeing_combined_reports
+     WHERE "userId"=$1 AND variant=$2 AND "sourceKey"=$3
+     LIMIT 1`,
+    [userId, variant, sourceKey]
+  );
+  if (!rows[0]) return null;
+  return {
+    profile: parseMaybeJson(rows[0].profile, {}),
+    sourceAttempts: parseMaybeJson(rows[0].sourceAttempts, {}),
+    updatedAt: rows[0].updatedAt,
+  };
+}
+
+async function saveCombinedReport(userId, variant, sourceKey, sourceAttempts, profile) {
+  await pool.query(
+    `INSERT INTO wellbeing_combined_reports (
+       "userId", variant, "sourceKey", "sourceAttempts", profile, "updatedAt"
+     )
+     VALUES ($1,$2,$3,$4,$5,NOW())
+     ON CONFLICT ("userId", variant, "sourceKey")
+     DO UPDATE SET
+       "sourceAttempts"=EXCLUDED."sourceAttempts",
+       profile=EXCLUDED.profile,
+       "updatedAt"=NOW()`,
+    [
+      userId,
+      variant,
+      sourceKey,
+      JSON.stringify(sourceAttempts),
+      JSON.stringify(profile),
+    ]
+  );
+}
+
 router.get('/profile/status', async (req, res) => {
   try {
     const latest = await loadLatestProfileInputs(req.user.id);
@@ -1295,23 +1697,32 @@ router.post('/profile', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Combined profile requires all five tests to be completed first.',
+        error: 'Combined profile requires all seven tests to be completed first.',
         status,
       });
     }
 
     const variant = ['summary', 'analytical', 'suggestions'].includes(req.body?.variant) ? req.body.variant : 'detailed';
+    const sourceAttempts = sourceAttemptsFromLatest(latest);
+    const sourceKey = sourceKeyFromAttempts(sourceAttempts);
+    const saved = await loadSavedCombinedReport(req.user.id, variant, sourceKey);
+    if (saved && !req.body?.force) {
+      return res.json({
+        profile: saved.profile,
+        variant,
+        sourceAttempts: saved.sourceAttempts,
+        cached: true,
+        savedAt: saved.updatedAt,
+      });
+    }
+
     const profile = await generateCombinedProfile(req.user.id, latest, { variant });
+    await saveCombinedReport(req.user.id, variant, sourceKey, sourceAttempts, profile);
     res.json({
       profile,
       variant,
-      sourceAttempts: {
-        mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
-        ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
-        hexaco: { id: latest.hexaco.id, createdAt: latest.hexaco.createdAt },
-        cerq: { id: latest.cerq.id, createdAt: latest.cerq.createdAt },
-        cope: { id: latest.cope.id, createdAt: latest.cope.createdAt },
-      },
+      sourceAttempts,
+      cached: false,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1324,7 +1735,7 @@ router.get('/profile/visuals', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Visual summary requires all five tests to be completed first.',
+        error: 'Visual summary requires all seven tests to be completed first.',
         status,
       });
     }
@@ -1344,7 +1755,7 @@ router.get('/profile/visuals/pdf', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Visual summary PDF requires all five tests to be completed first.',
+        error: 'Visual summary PDF requires all seven tests to be completed first.',
         status,
       });
     }
@@ -1377,6 +1788,8 @@ router.post('/admin/random-attempts', async (req, res) => {
     await client.query('BEGIN');
     const attempts = {
       mood: await insertRandomMoodAttempt(client, req.user.id),
+      panas: await insertRandomPanasAttempt(client, req.user.id),
+      asrs5: await insertRandomAsrs5Attempt(client, req.user.id),
       ipip: await insertRandomIpipAttempt(client, req.user.id),
       hexaco: await insertRandomHexacoAttempt(client, req.user.id),
       cerq: await insertRandomCerqAttempt(client, req.user.id),
@@ -1477,7 +1890,7 @@ router.post('/profile/pdf', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Combined profile PDF requires all five tests to be completed first.',
+        error: 'Combined profile PDF requires all seven tests to be completed first.',
         status,
       });
     }
@@ -1487,13 +1900,7 @@ router.post('/profile/pdf', async (req, res) => {
       return res.status(400).json({ error: 'Generated combined profile is required.' });
     }
 
-    const sourceAttempts = req.body?.sourceAttempts || {
-      mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
-      ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
-      hexaco: { id: latest.hexaco.id, createdAt: latest.hexaco.createdAt },
-      cerq: { id: latest.cerq.id, createdAt: latest.cerq.createdAt },
-      cope: { id: latest.cope.id, createdAt: latest.cope.createdAt },
-    };
+    const sourceAttempts = req.body?.sourceAttempts || sourceAttemptsFromLatest(latest);
 
     const buf = await buildCombinedProfilePdfBuffer({ profile, sourceAttempts });
     res.setHeader('Content-Type', 'application/pdf');
@@ -1507,22 +1914,28 @@ router.post('/profile/pdf', async (req, res) => {
 
 router.delete('/reset', async (req, res) => {
   try {
-    const [mood, ipip, hexaco, cerq, cope] = await Promise.all([
+    const [mood, panas, asrs5, ipip, hexaco, cerq, cope, combinedReports] = await Promise.all([
       pool.query('DELETE FROM wellbeing_attempts WHERE "userId"=$1', [req.user.id]),
+      pool.query('DELETE FROM panas_attempts WHERE "userId"=$1', [req.user.id]),
+      pool.query('DELETE FROM asrs5_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM ipip_neo_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM hexaco_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM cerq_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM cope_attempts WHERE "userId"=$1', [req.user.id]),
+      pool.query('DELETE FROM wellbeing_combined_reports WHERE "userId"=$1', [req.user.id]),
     ]);
 
     res.json({
       ok: true,
       deleted: {
         mood: mood.rowCount,
+        panas: panas.rowCount,
+        asrs5: asrs5.rowCount,
         ipip: ipip.rowCount,
         hexaco: hexaco.rowCount,
         cerq: cerq.rowCount,
         cope: cope.rowCount,
+        combinedReports: combinedReports.rowCount,
       },
     });
   } catch (err) {

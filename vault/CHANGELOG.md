@@ -10,19 +10,25 @@ A log of bugs found and fixed in the Curam Vault application.
 
 Added a fifth wellbeing/personality quiz: **HEXACO-60-style Personality Check**. It uses original proof-of-concept item wording across six HEXACO-style domains, supports pause/resume, back navigation, saved attempts, model-assisted response, radar charting, PDF export, admin demo data, reset, and combined-profile inclusion.
 
-The wellbeing dashboard now presents the five tests as progress tiles, with a subtly highlighted results area for the combined profile, charts, and mind map once all five tests are complete. Completed tiles use a consistent **Review or retake** flow; the BDI-style mood tile now opens a mood-check review area with retake, latest-result review, and past-attempt access instead of jumping straight to the history list.
+Added a sixth wellbeing quiz: **PANAS-style Affect Check**. It captures positive affect, negative affect, and affect balance using original proof-of-concept wording, with pause/resume, review/retake, model-assisted response, PDF export, charting, admin demo data, reset, and combined-profile inclusion.
 
-Added an admin-only action to pre-populate all five wellbeing tests with random demo answers for testing. The existing reset action removes those demo attempts alongside any other completed wellbeing results and clears local drafts.
+Added a seventh wellbeing quiz: **ASRS-5-style Attention Check**. It captures adult attention and self-regulation patterns using original proof-of-concept wording, with pause/resume, review/retake, model-assisted response, PDF export, charting, admin demo data, reset, saved-report cache keys, and combined-profile inclusion.
+
+The wellbeing dashboard now presents the seven tests as progress tiles, with a subtly highlighted results area for the combined profile, charts, and mind map once all seven tests are complete. Completed tiles use a consistent **Review or retake** flow; the BDI-style mood tile now opens a mood-check review area with retake, latest-result review, and past-attempt access instead of jumping straight to the history list.
+
+Added an admin-only action to pre-populate all seven wellbeing tests with random demo answers for testing. The existing reset action removes those demo attempts alongside any other completed wellbeing results and clears local drafts.
 
 Combined profile generation now supports three report levels: **Summary**, **Detailed profile**, and **Analytical profile**. Summary is a concise overview for client or clinician orientation; Detailed profile keeps the existing client-readable formulation; Analytical profile provides a more clinician-oriented formulation with mechanisms, caveats, and clinical questions. Report rendering now preserves explicit line breaks and paragraph breaks across report sections, caveats, and clinician-style notes.
 
-Added a dashboard **Suggestions** button in the overall results area. It generates a five-test personal development suggestions report covering strengths, patterns to notice, coping habits, communication focus, and small reflective experiments while preserving the non-diagnostic proof-of-concept caveat.
+Added a dashboard **Suggestions** button in the overall results area. It generates a seven-test personal development suggestions report covering strengths, patterns to notice, coping habits, attention/self-regulation supports, communication focus, and small reflective experiments while preserving the non-diagnostic proof-of-concept caveat.
 
-Added combined visual summaries: BDI severity gauge, IPIP domain radar chart, HEXACO domain radar chart, CERQ strategy bar chart, Brief COPE strategy bar chart, and a five-test mind map. Both the chart view and mind map view can now be downloaded as PDFs.
+Combined reports are now persisted in `wellbeing_combined_reports` by report variant and the latest seven source attempt IDs, so reopening an already generated report returns the saved version immediately instead of rebuilding it until the underlying quiz results change.
 
-Added collapsible **About this quiz** guidance to each of the five test pages so users can understand the purpose of the test, how to answer, and the proof-of-concept caveat before completing it.
+Added combined visual summaries: BDI severity gauge, PANAS affect bar chart, ASRS-5 attention/self-regulation bar chart, IPIP domain radar chart, HEXACO domain radar chart, CERQ strategy bar chart, Brief COPE strategy bar chart, and a seven-test mind map. Both the chart view and mind map view can now be downloaded as PDFs.
 
-**New files:** `client/src/components/wellbeing/Hexaco60Panel.jsx`, `client/src/components/wellbeing/WellbeingCharts.jsx`, `client/src/components/wellbeing/WellbeingVisualSummaryPanel.jsx`, `client/src/components/wellbeing/QuizPurposePanel.jsx`, `server/services/hexaco60Style.js`, `server/services/wellbeingVisualPdf.js`, `docs/local-database-recovery.md`.
+Added collapsible **About this quiz** guidance to each of the seven test pages so users can understand the purpose of the test, how to answer, and the proof-of-concept caveat before completing it.
+
+**New files:** `client/src/components/wellbeing/Asrs5StylePanel.jsx`, `client/src/components/wellbeing/PanasStylePanel.jsx`, `client/src/components/wellbeing/Hexaco60Panel.jsx`, `client/src/components/wellbeing/WellbeingCharts.jsx`, `client/src/components/wellbeing/WellbeingVisualSummaryPanel.jsx`, `client/src/components/wellbeing/QuizPurposePanel.jsx`, `server/services/asrs5Style.js`, `server/services/panasStyle.js`, `server/services/hexaco60Style.js`, `server/services/wellbeingVisualPdf.js`, `docs/local-database-recovery.md`.
 
 **Modified files:** `server/routes/wellbeing.js`, `server/services/wellbeingModelInsights.js`, `server/services/combinedProfilePdf.js`, `client/src/pages/WellbeingPage.jsx`, `client/src/components/wellbeing/CombinedProfilePanel.jsx`, `client/src/components/wellbeing/ModelInsightPanel.jsx`, `client/src/components/wellbeing/IpipNeo120Panel.jsx`, `client/src/components/wellbeing/CerqStylePanel.jsx`, `client/src/components/wellbeing/BriefCopeStylePanel.jsx`, `server/db.js`, `README.md`, `.env.example`, `PRODUCTION_MERGE_NOTES.md`, `docs/wellbeing-assessment-app.md`.
 

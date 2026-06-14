@@ -357,7 +357,7 @@ Production deployment steps:
 6. Confirm the dashboard reset action is visible but requires confirmation.
 7. Submit one test attempt with a non-production test user.
 8. Confirm the attempt can be reviewed, deleted, and exported to PDF.
-9. Complete all five tests with a non-production test user and confirm the Combined Profile unlocks.
+9. Complete all seven tests with a non-production test user and confirm the Combined Profile unlocks.
 10. Generate and export the Combined Profile PDF.
 
 Do not migrate local wellbeing test results into Railway production unless explicitly intending to copy personal test data.

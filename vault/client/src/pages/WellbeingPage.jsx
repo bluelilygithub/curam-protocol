@@ -6,6 +6,8 @@ import useAuthStore from '../store/authStore';
 import useProcessingStore from '../store/processingStore';
 import IpipNeo120Panel from '../components/wellbeing/IpipNeo120Panel';
 import Hexaco60Panel from '../components/wellbeing/Hexaco60Panel';
+import PanasStylePanel from '../components/wellbeing/PanasStylePanel';
+import Asrs5StylePanel from '../components/wellbeing/Asrs5StylePanel';
 import CerqStylePanel from '../components/wellbeing/CerqStylePanel';
 import BriefCopeStylePanel from '../components/wellbeing/BriefCopeStylePanel';
 import ModelInsightPanel from '../components/wellbeing/ModelInsightPanel';
@@ -16,6 +18,8 @@ import QuizPurposePanel from '../components/wellbeing/QuizPurposePanel';
 import ConfirmModal from '../components/ConfirmModal';
 
 const MOOD_DRAFT_KEY = 'curam:wellbeing-mood:draft';
+const PANAS_DRAFT_KEY = 'curam:panas-style:draft';
+const ASRS5_DRAFT_KEY = 'curam:asrs-5-style:draft';
 const IPIP_DRAFT_KEY = 'curam:ipip-neo-120:draft';
 const HEXACO_DRAFT_KEY = 'curam:hexaco-60-style:draft';
 const CERQ_DRAFT_KEY = 'curam:cerq-style:draft';
@@ -50,7 +54,7 @@ function clearMoodDraft() {
 
 function clearAllWellbeingDrafts() {
   if (typeof window === 'undefined') return;
-  [MOOD_DRAFT_KEY, IPIP_DRAFT_KEY, HEXACO_DRAFT_KEY, CERQ_DRAFT_KEY, COPE_DRAFT_KEY].forEach((key) => {
+  [MOOD_DRAFT_KEY, PANAS_DRAFT_KEY, ASRS5_DRAFT_KEY, IPIP_DRAFT_KEY, HEXACO_DRAFT_KEY, CERQ_DRAFT_KEY, COPE_DRAFT_KEY].forEach((key) => {
     window.localStorage.removeItem(key);
   });
 }
@@ -118,7 +122,7 @@ function CompletionProgress({ tests }) {
     <section className="rounded-2xl border p-5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Five-test progress</p>
+          <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Seven-test progress</p>
           <h2 className="text-lg font-semibold mt-1" style={{ color: 'var(--color-text)' }}>{completedCount} of {tests.length} checks complete</h2>
         </div>
         <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-primary)' }}>{pct}%</span>
@@ -126,7 +130,7 @@ function CompletionProgress({ tests }) {
       <div className="h-3 rounded-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
         <div className="h-full transition-all" style={{ width: `${pct}%`, background: 'var(--color-primary)' }} />
       </div>
-      <div className="grid sm:grid-cols-5 gap-2 mt-4">
+      <div className="grid sm:grid-cols-3 lg:grid-cols-7 gap-2 mt-4">
         {tests.map((test) => (
           <div key={test.key} className="rounded-xl border px-3 py-2" style={{ borderColor: test.completed ? '#bbf7d0' : 'var(--color-border)', background: test.completed ? '#f0fdf4' : 'var(--color-bg)' }}>
             <p className="text-xs font-semibold" style={{ color: test.completed ? '#15803d' : 'var(--color-muted)' }}>
@@ -182,8 +186,8 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions
       <h3 className="text-base font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Review the overall results</h3>
       <p className="text-sm mt-2" style={{ color: 'var(--color-muted)' }}>
         {available
-          ? 'Unlocked. Review the combined profile, visual charts, five-test mind map, or personal development suggestions.'
-          : 'Locked until all five checks have at least one completed result.'}
+          ? 'Unlocked. Review the combined profile, visual charts, seven-test mind map, or personal development suggestions.'
+          : 'Locked until all seven checks have at least one completed result.'}
       </p>
       <div className="grid sm:grid-cols-4 gap-2 mt-4">
         <button type="button" onClick={onCombined} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
@@ -666,8 +670,32 @@ export default function WellbeingPage() {
       primary: !statusByKey.mood?.completed,
     },
     {
-      key: 'ipip',
+      key: 'panas',
       step: 2,
+      shortTitle: 'Affect',
+      title: 'PANAS-Style Affect Check',
+      description: 'A short affect snapshot showing current positive affect, negative affect, and emotional balance.',
+      completed: !!statusByKey.panas?.completed,
+      completedAt: statusByKey.panas?.completedAt,
+      actionLabel: statusByKey.panas?.completed ? 'Review or retake PANAS' : 'Start PANAS-style check',
+      onOpen: () => setTool('panas'),
+      primary: !statusByKey.panas?.completed,
+    },
+    {
+      key: 'asrs5',
+      step: 3,
+      shortTitle: 'Attention',
+      title: 'ASRS-5-Style Attention Check',
+      description: 'A short adult attention and self-regulation screener covering focus, activation, impulsivity, planning, and structure.',
+      completed: !!statusByKey.asrs5?.completed,
+      completedAt: statusByKey.asrs5?.completedAt,
+      actionLabel: statusByKey.asrs5?.completed ? 'Review or retake ASRS-5' : 'Start ASRS-5-style check',
+      onOpen: () => setTool('asrs5'),
+      primary: !statusByKey.asrs5?.completed,
+    },
+    {
+      key: 'ipip',
+      step: 4,
       shortTitle: 'Personality',
       title: 'IPIP-NEO-120 Personality Inventory',
       description: 'A five-domain personality profile covering Neuroticism, Extraversion, Openness, Agreeableness, and Conscientiousness.',
@@ -679,7 +707,7 @@ export default function WellbeingPage() {
     },
     {
       key: 'hexaco',
-      step: 3,
+      step: 5,
       shortTitle: 'HEXACO',
       title: 'HEXACO-60-Style Personality Check',
       description: 'A six-domain personality profile adding Honesty-Humility, Emotionality, and interpersonal style to the combined view.',
@@ -691,7 +719,7 @@ export default function WellbeingPage() {
     },
     {
       key: 'cerq',
-      step: 4,
+      step: 6,
       shortTitle: 'Cognition',
       title: 'CERQ-Style Cognitive Coping Check',
       description: 'A cognitive emotion-regulation check showing which thinking strategies are most and least used.',
@@ -703,7 +731,7 @@ export default function WellbeingPage() {
     },
     {
       key: 'cope',
-      step: 5,
+      step: 7,
       shortTitle: 'Coping',
       title: 'Brief COPE-Style Coping Check',
       description: 'A coping response profile across active, support-seeking, avoidant, meaning-focused, and emotion-focused strategies.',
@@ -726,6 +754,50 @@ export default function WellbeingPage() {
 
   if (error && !config) {
     return <div className="p-6 text-sm" style={{ color: '#ef4444' }}>{error}</div>;
+  }
+
+  if (tool === 'panas') {
+    return (
+      <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+        <div>
+          <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            {getIcon('heart-pulse', { size: 20 })}
+            Wellbeing & Personality Checks
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+            Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
+          </p>
+        </div>
+        <PanasStylePanel
+          onBack={dashboardBack}
+          onComplete={refreshProfileStatus}
+          onNext={() => setTool('asrs5')}
+          nextLabel="Continue to ASRS-5-style check"
+        />
+      </div>
+    );
+  }
+
+  if (tool === 'asrs5') {
+    return (
+      <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+        <div>
+          <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            {getIcon('heart-pulse', { size: 20 })}
+            Wellbeing & Personality Checks
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+            Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
+          </p>
+        </div>
+        <Asrs5StylePanel
+          onBack={dashboardBack}
+          onComplete={refreshProfileStatus}
+          onNext={() => setTool('personality')}
+          nextLabel="Continue to IPIP-NEO-120"
+        />
+      </div>
+    );
   }
 
   if (tool === 'personality') {
@@ -893,7 +965,7 @@ export default function WellbeingPage() {
                 <div>
                   <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>How to use this dashboard</h2>
                   <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                    Complete the five checks in order or revisit any tile at any time. After each check, you can continue to the next one or come back here to see what remains.
+                    Complete the seven checks in order or revisit any tile at any time. After each check, you can continue to the next one or come back here to see what remains.
                   </p>
                 </div>
                 <div className="rounded-xl border p-4" style={{ borderColor: '#fde68a', background: '#fffbeb', color: '#78350f' }}>
@@ -1275,8 +1347,8 @@ export default function WellbeingPage() {
               <button type="button" onClick={startAttempt} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
                 Retake
               </button>
-              <button type="button" onClick={() => setTool('personality')} className="px-3 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity" style={{ background: 'var(--color-primary)' }}>
-                Continue to IPIP-NEO-120
+              <button type="button" onClick={() => setTool('panas')} className="px-3 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity" style={{ background: 'var(--color-primary)' }}>
+                Continue to PANAS-style check
               </button>
             </div>
           </div>
@@ -1349,7 +1421,7 @@ export default function WellbeingPage() {
       {showRandomDataConfirm && (
         <ConfirmModal
           title="Create admin test data?"
-          message="This will create one random completed result for each of the five wellbeing tests. These are demo results only, not real self-report results, and they can be removed later with Reset / erase all tests."
+          message="This will create one random completed result for each of the seven wellbeing tests. These are demo results only, not real self-report results, and they can be removed later with Reset / erase all tests."
           confirmLabel="Create demo results"
           onConfirm={() => {
             setShowRandomDataConfirm(false);
@@ -1453,7 +1525,7 @@ export default function WellbeingPage() {
       {showResetTestsConfirm && (
         <ConfirmModal
           title="Reset wellbeing tests?"
-          message="This will erase all completed wellbeing, IPIP-NEO-120, HEXACO-60-style, CERQ-style, and COPE-style test results for this user. It will also clear paused test drafts on this device."
+          message="This will erase all completed wellbeing, PANAS-style, ASRS-5-style, IPIP-NEO-120, HEXACO-60-style, CERQ-style, and COPE-style test results for this user. It will also clear paused test drafts on this device."
           confirmLabel="Reset / erase tests"
           danger
           onConfirm={() => {

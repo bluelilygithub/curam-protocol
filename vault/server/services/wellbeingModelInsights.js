@@ -201,6 +201,24 @@ function describeMood(latest) {
   return `The mood check is best treated as the emotional weather around the rest of the profile: it scored ${latest.mood.totalScore}/63, in the "${latest.mood.bandLabel}" range.${areaText} If that score is elevated, the other tests may partly reflect how the person answers when tired, discouraged, self-critical, or under strain, rather than only stable long-term style.`;
 }
 
+function describeAffect(scores) {
+  const scales = scores.affectSnapshot?.allScales || [];
+  const positive = scales.find((scale) => scale.key === 'positiveAffect');
+  const negative = scales.find((scale) => scale.key === 'negativeAffect');
+  if (!positive || !negative) return 'The affect snapshot was not strongly available, so mood should be interpreted mainly through the BDI-style score and reflections.';
+  const balance = Number(positive.score || 0) - Number(negative.score || 0);
+  return `The PANAS-style affect snapshot adds a more immediate emotional-tone lens: positive affect was ${positive.score}/${positive.max} (${positive.band}) and negative affect was ${negative.score}/${negative.max} (${negative.band}). The balance score was ${balance}, which helps distinguish low mood from low activation, high distress from high emotional intensity, and mixed states where positive and negative affect are both present.`;
+}
+
+function describeAttention(scores) {
+  const totalScore = scores.attentionSelfRegulation?.totalScore;
+  const bandLabel = scores.attentionSelfRegulation?.bandLabel;
+  const high = scores.attentionSelfRegulation?.highScales || [];
+  const evidence = sentenceList(labels(high).slice(0, 4));
+  if (totalScore == null) return 'The ASRS-5-style attention lens was not strongly available, so attention and self-regulation should be interpreted from other profile data only.';
+  return `The ASRS-5-style attention lens scored ${totalScore}/24 (${bandLabel}). Its strongest signals were ${evidence || 'not strongly differentiated'}, which can help explain whether stress is being complicated by attention drift, restlessness, difficulty settling, impulsive responding, last-minute pressure, or reliance on external structure. This is not an ADHD diagnosis; it is a self-report signal about current attention and self-regulation patterns.`;
+}
+
 function describePersonality(scores) {
   const high = labels(scores.personality.highDomains).slice(0, 3);
   const low = labels(scores.personality.lowDomains).slice(0, 2);
@@ -284,7 +302,9 @@ function describeReinforcingThemes(latest, scores) {
   const behavioural = describeBehaviouralCoping(scores);
   const cognitive = describeCognitiveCoping(scores);
   const hexaco = describeHexacoPersonality(scores);
-  return `The clearest combined themes are found where the same pattern appears in different languages. The mood score sets the current emotional load; the two personality lenses describe the posture the person may bring into stress and relationships; the cognitive profile shows how stress is explained internally; and the behavioural coping profile shows what the person does with that explanation. Read together, the profile asks whether the person moves from distress into constructive contact, planning, meaning, and recovery, or whether the distress first becomes self-criticism, denial, rumination, or delay. ${describeMood(latest)} ${hexaco} ${cognitive} ${behavioural}`;
+  const affect = describeAffect(scores);
+  const attention = describeAttention(scores);
+  return `The clearest combined themes are found where the same pattern appears in different languages. The mood score sets the broader symptom context; the PANAS-style affect snapshot shows current emotional tone; the ASRS-5-style screen describes attention and self-regulation friction; the two personality lenses describe the posture the person may bring into stress and relationships; the cognitive profile shows how stress is explained internally; and the behavioural coping profile shows what the person does with that explanation. Read together, the profile asks whether the person moves from distress into constructive contact, planning, meaning, and recovery, or whether the distress first becomes self-criticism, denial, rumination, attention drift, or delay. ${describeMood(latest)} ${affect} ${attention} ${hexaco} ${cognitive} ${behavioural}`;
 }
 
 function describeTensions(scores) {
@@ -334,6 +354,8 @@ function buildCombinedFallback(latest, scores) {
   const cerqHigh = scores.cognitiveCoping.highScales.map((item) => `${item.label} (${item.band})`);
   const copeHigh = scores.copingStyle.highScales.map((item) => `${item.label} (${item.band})`);
   const mood = describeMood(latest);
+  const affect = describeAffect(scores);
+  const attention = describeAttention(scores);
   const personality = describePersonality(scores);
   const hexacoPersonality = describeHexacoPersonality(scores);
   const cognitive = describeCognitiveCoping(scores);
@@ -342,7 +364,7 @@ function buildCombinedFallback(latest, scores) {
   return {
     summary: [
       `${moodLine} The combined profile is most useful when read as a working formulation: current emotional load, habitual personality posture, the way stress is explained internally, and the actions used to cope.`,
-      `${personality} ${hexacoPersonality} ${cognitive}`,
+      `${affect} ${attention} ${personality} ${hexacoPersonality} ${cognitive}`,
       behavioural,
     ].join('\n\n'),
     sections: [
@@ -350,12 +372,16 @@ function buildCombinedFallback(latest, scores) {
         title: 'Overall formulation',
         body: [
           `This profile should be read as a working hypothesis rather than a set of labels. ${mood}`,
-          'The personality results describe the posture the person may bring into stress, while the CERQ-style and COPE-style results describe what happens after stress arrives: first in thought, then in action. The most useful reading is not "these scales were high"; it is "this is the kind of loop the person may enter, the resources they may reach for, and the points where coping may either help recovery or accidentally keep stress alive."',
+          'The PANAS-style result adds current affect tone, the ASRS-5-style result adds attention and self-regulation friction, the personality results describe the posture the person may bring into stress, and the CERQ-style and COPE-style results describe what happens after stress arrives: first in thought, then in action. The most useful reading is not "these scales were high"; it is "this is the kind of loop the person may enter, the resources they may reach for, and the points where coping may either help recovery or accidentally keep stress alive."',
         ].join('\n\n'),
       },
       {
-        title: 'Mood and energy context',
-        body: mood,
+        title: 'Mood and affect context',
+        body: [mood, affect].join('\n\n'),
+      },
+      {
+        title: 'Attention and self-regulation context',
+        body: attention,
       },
       {
         title: 'Personality pattern',
@@ -397,7 +423,7 @@ function buildCombinedFallback(latest, scores) {
       },
     ],
     questions: [
-      'Which pattern appears in at least two of the five tests?',
+      'Which pattern appears in at least two of the seven tests?',
       'Which result feels more like a current state than a stable trait?',
       'Under stress, do your coping responses move you toward support and action or toward withdrawal and short-term relief?',
       'What is one useful strength shown by the profile that you may underuse?',
@@ -410,6 +436,7 @@ function buildCombinedFallback(latest, scores) {
 
 function buildCombinedSummaryFallback(latest, scores) {
   const mood = `Mood score: ${latest.mood.totalScore}/63 (${latest.mood.bandLabel}).`;
+  const affect = scores.affectSnapshot?.allScales || [];
   const highDomains = scores.personality.highDomains.slice(0, 2).map((item) => `${item.label} (${item.band})`);
   const hexacoDomains = (scores.hexacoPersonality?.highDomains || []).slice(0, 2).map((item) => `${item.label} (${item.band})`);
   const cerqHigh = scores.cognitiveCoping.highScales.slice(0, 3).map((item) => `${item.label} (${item.band})`);
@@ -417,7 +444,7 @@ function buildCombinedSummaryFallback(latest, scores) {
 
   return {
     summary: [
-      `${mood} The five tests together give a broad self-report overview of current mood load, two personality lenses, cognitive coping, and practical coping responses.`,
+      `${mood} The seven tests together give a broad self-report overview of current mood load, current affect tone, attention and self-regulation, two personality lenses, cognitive coping, and practical coping responses.`,
       `The most visible pattern is shaped by IPIP-style signals such as ${sentenceList(highDomains) || 'no strongly dominant personality domain'}, HEXACO-style signals such as ${sentenceList(hexacoDomains) || 'no strongly dominant six-domain signal'}, cognitive strategies such as ${sentenceList(cerqHigh) || 'no clearly dominant CERQ-style strategy'}, and coping responses such as ${sentenceList(copeHigh) || 'no clearly dominant COPE-style response'}.`,
     ].join('\n\n'),
     sections: [
@@ -427,7 +454,7 @@ function buildCombinedSummaryFallback(latest, scores) {
       },
       {
         title: 'Main signals',
-        body: `${mood} IPIP personality signals: ${sentenceList(highDomains) || 'balanced or not strongly differentiated'}. HEXACO personality signals: ${sentenceList(hexacoDomains) || 'balanced or not strongly differentiated'}. Cognitive coping signals: ${sentenceList(cerqHigh) || 'not strongly differentiated'}. Behavioural coping signals: ${sentenceList(copeHigh) || 'not strongly differentiated'}.`,
+        body: `${mood} Affect signals: ${sentenceList(affect.map((item) => `${item.label} (${item.band})`)) || 'not strongly differentiated'}. Attention/self-regulation score: ${scores.attentionSelfRegulation?.totalScore ?? 'not available'}/24. IPIP personality signals: ${sentenceList(highDomains) || 'balanced or not strongly differentiated'}. HEXACO personality signals: ${sentenceList(hexacoDomains) || 'balanced or not strongly differentiated'}. Cognitive coping signals: ${sentenceList(cerqHigh) || 'not strongly differentiated'}. Behavioural coping signals: ${sentenceList(copeHigh) || 'not strongly differentiated'}.`,
       },
       {
         title: 'What to look at next',
@@ -511,6 +538,8 @@ function buildCombinedAnalyticalFallback(latest, scores) {
 
 function buildCombinedSuggestionsFallback(latest, scores) {
   const mood = describeMood(latest);
+  const affect = describeAffect(scores);
+  const attention = describeAttention(scores);
   const personality = describePersonality(scores);
   const hexacoPersonality = describeHexacoPersonality(scores);
   const cognitive = describeCognitiveCoping(scores);
@@ -518,8 +547,8 @@ function buildCombinedSuggestionsFallback(latest, scores) {
 
   return {
     summary: [
-      'These suggestions are drawn from the five self-report checks as reflective development prompts. They are not treatment advice, diagnosis, or instructions; they are areas the client may choose to notice, discuss, or strengthen.',
-      `${mood} ${personality} ${hexacoPersonality}`,
+      'These suggestions are drawn from the seven self-report checks as reflective development prompts. They are not treatment advice, diagnosis, or instructions; they are areas the client may choose to notice, discuss, or strengthen.',
+      `${mood} ${affect} ${attention} ${personality} ${hexacoPersonality}`,
       'The most useful next step is to look for small, observable moments where the pattern shows up in real life, especially under stress, conflict, fatigue, uncertainty, or pressure.',
     ].join('\n\n'),
     sections: [
@@ -530,6 +559,7 @@ function buildCombinedSuggestionsFallback(latest, scores) {
       {
         title: 'Patterns to notice earlier',
         body: [
+          affect,
           cognitive,
           'A useful development focus is to notice the first mental move after stress: whether the client moves toward perspective, planning, blame, rumination, threat-amplification, or avoidance. The aim is awareness of sequence, not self-criticism.',
         ].join('\n\n'),
@@ -539,6 +569,13 @@ function buildCombinedSuggestionsFallback(latest, scores) {
         body: [
           behavioural,
           'The client may benefit from identifying which coping responses help immediately and which still help a few hours or days later. This distinction can separate short-term relief from strategies that actually restore agency, connection, and clarity.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'Attention and self-regulation supports',
+        body: [
+          attention,
+          'A useful development focus is to separate motivation from structure. If attention drift, last-minute pressure, or reliance on reminders is prominent, the client may benefit from experimenting with visible prompts, smaller task starts, external time markers, body doubling, or reducing the number of decisions required before beginning.',
         ].join('\n\n'),
       },
       {
@@ -587,7 +624,7 @@ function buildCombinedFallbackForVariant(latest, scores, variant) {
 function buildCombinedPrompt(scores, variant = 'detailed') {
   if (variant === 'summary') {
     return [
-      'Create a brief integrated overview from five completed proof-of-concept self-report checks.',
+      'Create a brief integrated overview from seven completed proof-of-concept self-report checks.',
       '',
       'Audience: client or clinician who wants a quick readable overview before reading the full profile.',
       'Length: concise. Summary should be 2 short paragraphs. Include 3 short sections only.',
@@ -606,7 +643,7 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
 
   if (variant === 'analytical') {
     return [
-      'Create a clinician-oriented analytical formulation from five completed proof-of-concept self-report checks.',
+      'Create a clinician-oriented analytical formulation from seven completed proof-of-concept self-report checks.',
       '',
       'Audience: primarily a clinician, but still readable by a client if they choose to read it.',
       'Purpose: hypothesis generation, case formulation support, and clinical discussion prompts. Do not diagnose. Do not provide treatment instructions.',
@@ -631,13 +668,13 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
 
   if (variant === 'suggestions') {
     return [
-      'Create a reflective personal-development suggestions report from five completed proof-of-concept self-report checks.',
+      'Create a reflective personal-development suggestions report from seven completed proof-of-concept self-report checks.',
       '',
       'Audience: primarily the client, readable by a clinician. Tone should be practical, warm, specific, and careful.',
       'Purpose: suggest areas the client may notice, strengthen, discuss, or experiment with. Do not diagnose. Do not give treatment instructions. Do not imply certainty.',
       '',
       'Required emphasis:',
-      '- Use all five lenses: mood, IPIP-style personality, HEXACO-style personality, CERQ-style cognitive coping, and Brief COPE-style behavioural coping.',
+      '- Use all seven lenses: mood, PANAS-style affect tone, ASRS-5-style attention/self-regulation, IPIP-style personality, HEXACO-style personality, CERQ-style cognitive coping, and Brief COPE-style behavioural coping.',
       '- Translate findings into reflective improvement suggestions, not labels.',
       '- Include strengths to lean on, patterns to notice earlier, coping habits to strengthen, interpersonal/communication suggestions, small experiments, and when to discuss with a professional.',
       '- Use tentative wording: may, could, might, worth noticing, useful to explore.',
@@ -645,29 +682,31 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
       '- Use paragraph breaks inside JSON string values.',
       '',
       'Required sections:',
-      'Strengths to lean on; Patterns to notice earlier; Coping habits to strengthen; Relationship and communication focus; Personal development experiments; Areas to discuss with a clinician or trusted support.',
+      'Strengths to lean on; Patterns to notice earlier; Coping habits to strengthen; Attention and self-regulation supports; Relationship and communication focus; Personal development experiments; Areas to discuss with a clinician or trusted support.',
       '',
       'Return ONLY valid JSON with this shape:',
-      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Strengths to lean on","body":"..."},{"title":"Patterns to notice earlier","body":"..."},{"title":"Coping habits to strengthen","body":"..."},{"title":"Relationship and communication focus","body":"..."},{"title":"Personal development experiments","body":"..."},{"title":"Areas to discuss with a clinician or trusted support","body":"..."}],"questions":["..."],"caveat":"..."}',
+      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Strengths to lean on","body":"..."},{"title":"Patterns to notice earlier","body":"..."},{"title":"Coping habits to strengthen","body":"..."},{"title":"Attention and self-regulation supports","body":"..."},{"title":"Relationship and communication focus","body":"..."},{"title":"Personal development experiments","body":"..."},{"title":"Areas to discuss with a clinician or trusted support","body":"..."}],"questions":["..."],"caveat":"..."}',
       '',
       `Scored data:\n${JSON.stringify(scores, null, 2).slice(0, 17000)}`,
     ].join('\n');
   }
 
   return [
-    'Create a detailed integrated profile from five completed proof-of-concept self-report checks.',
+    'Create a detailed integrated profile from seven completed proof-of-concept self-report checks.',
     '',
-    'The five lenses are:',
+    'The seven lenses are:',
     '1. Mood check: current mood/symptom context, not diagnosis.',
-    '2. IPIP-NEO-120: broad personality domains and facet tendencies.',
-    '3. HEXACO-60-style: six-domain personality posture, especially honesty-humility, emotionality, and interpersonal style.',
-    '4. CERQ-style: cognitive emotion-regulation strategies after stress.',
-    '5. Brief COPE-style: behavioural/practical coping responses.',
+    '2. PANAS-style: current positive and negative affect tone.',
+    '3. ASRS-5-style: current adult attention, activation, impulsivity, planning, and external-structure friction.',
+    '4. IPIP-NEO-120: broad personality domains and facet tendencies.',
+    '5. HEXACO-60-style: six-domain personality posture, especially honesty-humility, emotionality, and interpersonal style.',
+    '6. CERQ-style: cognitive emotion-regulation strategies after stress.',
+    '7. Brief COPE-style: behavioural/practical coping responses.',
     '',
     'Write a considered synthesis, not a score report. The output should feel like a thoughtful psychologist-style formulation while explicitly avoiding diagnosis, treatment advice, and certainty.',
     '',
     'Required content:',
-    '- Explain how current mood may colour or qualify the other three results.',
+    '- Explain how current mood and affect tone may colour or qualify the other results.',
     '- Identify cross-test themes where two or more tests point in the same direction.',
     '- Identify tensions or contradictions between trait style, cognitive coping, and behavioural coping.',
     '- Describe likely strengths/supports that emerge from the pattern.',
@@ -681,7 +720,7 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
     '- Use paragraph breaks inside JSON string values. The summary must be 2-3 short paragraphs separated by "\\n\\n". Each section body should be 1-2 readable paragraphs separated by "\\n\\n".',
     '',
     'Return ONLY valid JSON with this shape:',
-    '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Overall formulation","body":"paragraph one\\n\\nparagraph two"},{"title":"Mood and energy context","body":"..."},{"title":"Personality pattern","body":"..."},{"title":"Cognitive coping pattern","body":"..."},{"title":"Behavioural coping pattern","body":"..."},{"title":"Reinforcing themes","body":"..."},{"title":"Tensions and qualifications","body":"..."},{"title":"Strengths and supports","body":"..."},{"title":"Growth edges","body":"..."}],"questions":["..."],"caveat":"..."}',
+    '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Overall formulation","body":"paragraph one\\n\\nparagraph two"},{"title":"Mood and affect context","body":"..."},{"title":"Attention and self-regulation context","body":"..."},{"title":"Personality pattern","body":"..."},{"title":"Cognitive coping pattern","body":"..."},{"title":"Behavioural coping pattern","body":"..."},{"title":"Reinforcing themes","body":"..."},{"title":"Tensions and qualifications","body":"..."},{"title":"Strengths and supports","body":"..."},{"title":"Growth edges","body":"..."}],"questions":["..."],"caveat":"..."}',
     '',
     `Scored data:\n${JSON.stringify(scores, null, 2).slice(0, 16000)}`,
   ].join('\n');
@@ -695,6 +734,20 @@ async function generateCombinedProfile(userId, latest, options = {}) {
       bandLabel: latest.mood.bandLabel,
       analysis: latest.mood.analysis,
       topAreas: latest.mood.analysis?.topAreas || latest.mood.analysis?.rationale?.drivers || [],
+    },
+    affectSnapshot: {
+      allScales: allCompactScales(latest.panas.scaleScores),
+      highScales: topByNormalized(latest.panas.scaleScores, 2),
+      lowScales: bottomByNormalized(latest.panas.scaleScores, 2),
+      analysis: latest.panas.analysis,
+    },
+    attentionSelfRegulation: {
+      totalScore: latest.asrs5.totalScore,
+      bandLabel: latest.asrs5.bandLabel,
+      allScales: allCompactScales(latest.asrs5.scaleScores),
+      highScales: topByNormalized(latest.asrs5.scaleScores, 6),
+      lowScales: bottomByNormalized(latest.asrs5.scaleScores, 3),
+      analysis: latest.asrs5.analysis,
     },
     personality: {
       highDomains: topByNormalized(latest.ipip.domainScores, 5),

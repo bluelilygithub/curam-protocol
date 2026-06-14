@@ -130,6 +130,19 @@ export function DomainRadarChart({
 
 function strategyColor(scale, variant) {
   const family = String(scale.family || '').toLowerCase();
+  if (variant === 'panas') {
+    if (family === 'positive') return '#22c55e';
+    if (family === 'negative') return '#ef4444';
+    return '#64748b';
+  }
+  if (variant === 'asrs5') {
+    if (family === 'attention') return '#3b82f6';
+    if (family === 'activation') return '#f97316';
+    if (family === 'impulsivity') return '#ef4444';
+    if (family === 'planning') return '#a855f7';
+    if (family === 'organisation') return '#14b8a6';
+    return '#64748b';
+  }
   if (variant === 'cerq') {
     if (family === 'helpful') return '#3b82f6';
     if (family === 'less-helpful') return '#ef4444';
@@ -145,7 +158,7 @@ function strategyAverage(scale, responseMax) {
   return itemCount > 0 ? Number(scale.score || 0) / itemCount : 0;
 }
 
-export function StrategyBarChart({ scales = [], responseMax = 5, variant = 'cerq', title = 'Strategy scores' }) {
+export function StrategyBarChart({ scales = [], responseMax = 5, minValue = 1, variant = 'cerq', title = 'Strategy scores' }) {
   const sorted = [...scales].sort((a, b) => strategyAverage(b, responseMax) - strategyAverage(a, responseMax));
 
   return (
@@ -155,7 +168,7 @@ export function StrategyBarChart({ scales = [], responseMax = 5, variant = 'cerq
       <div className="space-y-3">
         {sorted.map((scale) => {
           const avg = strategyAverage(scale, responseMax);
-          const pct = clamp01((avg - 1) / (responseMax - 1)) * 100;
+          const pct = clamp01((avg - minValue) / (responseMax - minValue || 1)) * 100;
           const color = strategyColor(scale, variant);
           return (
             <div key={scale.key}>
