@@ -8,16 +8,19 @@ It is not medical advice, a diagnostic assessment, a clinical risk assessment, o
 
 ## Dashboard
 
-The heart-pulse navigation always returns the user to the wellbeing dashboard. The dashboard is the launch point for all tests, paused mood drafts, combined profile access, past mood attempts, and the reset flow.
+The heart-pulse navigation always returns the user to the wellbeing dashboard. The dashboard is the launch point for all tests, paused drafts, combined profile access, visual summaries, past mood attempts, admin demo data, and the reset flow.
 
 The dashboard includes:
 
-- A BDI-style mood check.
-- An IPIP-NEO-120 personality inventory.
-- A CERQ-style cognitive coping check.
-- A Brief COPE-style coping check.
-- A Combined Profile option that unlocks only after all four tests are completed.
-- A reset/erase action for all wellbeing test data.
+- Four progress tiles: BDI-style mood check, IPIP-NEO-120 personality inventory, CERQ-style cognitive coping check, and Brief COPE-style coping check.
+- A progress indicator showing which of the four tests have been completed.
+- Consistent **Review or retake** actions on completed test tiles.
+- A subtly highlighted fifth results area that unlocks the combined profile, charts, and mind map only after all four tests are completed.
+- A clickable mood-check history tile for browsing previous BDI-style attempts.
+- An admin-only **Pre-populate random test results** action for demo/testing data.
+- A reset/erase action for all wellbeing test data and local drafts.
+
+The BDI-style tile now behaves consistently with the other completed test tiles. When completed, it opens a mood-check review area with retake, latest-result review, and past-attempt access instead of jumping directly to the history list.
 
 ## Tests
 
@@ -29,6 +32,7 @@ The result includes:
 
 - Total score out of 63.
 - Symptom band.
+- Severity gauge with standard 0-63 colour bands.
 - Safety flag handling for self-harm related responses.
 - Strongest symptom signals.
 - Deeper model-assisted formulation.
@@ -44,6 +48,7 @@ The result includes:
 
 - Domain scores.
 - Facet scores.
+- Radar chart for the five IPIP-NEO domains.
 - Strongest facet signals.
 - Reverse-scored item handling.
 - Deeper model-assisted formulation.
@@ -56,6 +61,7 @@ The CERQ-style check is inspired by Cognitive Emotion Regulation Questionnaire s
 The result includes:
 
 - Nine cognitive emotion-regulation strategy scores.
+- Horizontal strategy bar chart with adaptive/maladaptive colour context.
 - Most frequent cognitive coping strategies.
 - Helpful, mixed, and less-helpful strategy context.
 - Deeper model-assisted formulation.
@@ -68,6 +74,7 @@ The Brief COPE-style check is inspired by Brief COPE scale areas, with original 
 The result includes:
 
 - Fourteen coping strategy scores.
+- Horizontal strategy bar chart with adaptive/avoidant colour context.
 - Family-level coping patterns.
 - Strongest behavioural coping responses.
 - Deeper model-assisted formulation.
@@ -77,7 +84,13 @@ The result includes:
 
 The Combined Profile is the fifth option. It is locked until the user has completed all four tests at least once.
 
-When generated, it uses the latest completed result from each test and produces a detailed profile covering:
+When generated, it uses the latest completed result from each test. Users can choose one of three report levels:
+
+- **Summary**: a concise overview of the four tests for either client or clinician orientation.
+- **Detailed profile**: the existing client-readable formulation intended for client and clinician discussion.
+- **Analytical profile**: a more clinician-oriented formulation with mechanisms, caveats, and clinical questions. It remains available to clients but is written primarily for clinical interpretation.
+
+The detailed profile covers:
 
 - Overall formulation.
 - Mood and energy context.
@@ -92,7 +105,32 @@ When generated, it uses the latest completed result from each test and produces 
 
 The combined profile is generated through the configured model where available, using the app's provider-agnostic model path. If model generation fails or no model is configured, a deterministic fallback formulation is returned.
 
-The combined profile can be downloaded as a PDF. The PDF uses the profile currently shown on screen so the exported report matches the generated text.
+Report rendering preserves explicit paragraph breaks and line breaks in summaries, section bodies, caveats, and clinical-question sections so longer reports are easier to read.
+
+The combined profile can be downloaded as a PDF. The PDF uses the profile currently shown on screen so the exported report matches the generated text and spacing.
+
+## Combined Visual Summary
+
+The visual summary unlocks after all four tests are completed.
+
+It includes:
+
+- BDI-style single severity gauge.
+- IPIP-NEO five-domain radar chart.
+- CERQ-style horizontal strategy bar chart.
+- Brief COPE-style horizontal strategy bar chart.
+- Mind map connecting related themes across the four tests.
+
+Both the chart view and the mind map view have PDF download buttons.
+
+## Quiz Purpose Guidance
+
+Each test page includes an **About this quiz** panel that explains:
+
+- The purpose of the test.
+- What the result is trying to clarify.
+- How the person should answer.
+- The proof-of-concept caveat and non-clinical limits.
 
 ## Drafts And Navigation
 
@@ -117,7 +155,7 @@ The dashboard includes a reset action that:
 - Deletes all completed Brief COPE-style attempts for the current user.
 - Clears paused local drafts on the current device.
 
-The reset action requires browser confirmation before running.
+The reset action requires browser confirmation before running. It also removes random demo attempts generated by the admin-only pre-populate button.
 
 ## Backend
 
@@ -133,6 +171,7 @@ Service files:
 - `server/services/briefCopeStyle.js`
 - `server/services/wellbeingModelInsights.js`
 - `server/services/combinedProfilePdf.js`
+- `server/services/wellbeingVisualPdf.js`
 
 Database tables:
 
@@ -156,6 +195,9 @@ Components:
 - `client/src/components/wellbeing/BriefCopeStylePanel.jsx`
 - `client/src/components/wellbeing/CombinedProfilePanel.jsx`
 - `client/src/components/wellbeing/ModelInsightPanel.jsx`
+- `client/src/components/wellbeing/WellbeingCharts.jsx`
+- `client/src/components/wellbeing/WellbeingVisualSummaryPanel.jsx`
+- `client/src/components/wellbeing/QuizPurposePanel.jsx`
 
 Navigation updates:
 

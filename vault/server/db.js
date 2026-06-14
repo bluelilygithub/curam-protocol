@@ -159,11 +159,7 @@ async function initSchema() {
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "lastFetchedAt" TIMESTAMPTZ DEFAULT NOW()`);
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "isYoutube" BOOLEAN DEFAULT FALSE`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "archived_at" TIMESTAMPTZ DEFAULT NULL`);
-    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "recurrenceGroupId" TEXT DEFAULT NULL`);
     await client.query(`ALTER TABLE pinned_urls ADD COLUMN IF NOT EXISTS "transcript_summary" TEXT DEFAULT NULL`);
-    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "activityStatus" TEXT NOT NULL DEFAULT 'none' CHECK("activityStatus" IN ('none','started','paused','waiting'))`);
-    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "isMilestone" INTEGER DEFAULT 0`);
-    await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON tasks("userId", "isMilestone") WHERE "isMilestone" = 1`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "startDate" DATE DEFAULT NULL`);
     await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS "targetEndDate" DATE DEFAULT NULL`);
     await client.query(`ALTER TABLE projects ALTER COLUMN model DROP DEFAULT`);
@@ -443,6 +439,10 @@ async function initSchema() {
         "isMilestone"       INTEGER DEFAULT 0
       )
     `);
+
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "recurrenceGroupId" TEXT DEFAULT NULL`);
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "activityStatus" TEXT NOT NULL DEFAULT 'none' CHECK("activityStatus" IN ('none','started','paused','waiting'))`);
+    await client.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "isMilestone" INTEGER DEFAULT 0`);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS task_tags (
@@ -964,6 +964,7 @@ async function initSchema() {
   await pool.query(`ALTER TABLE memory ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE prompts ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON tasks("userId", "isMilestone") WHERE "isMilestone" = 1`);
   await pool.query(`ALTER TABLE task_templates ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE objectives ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE SET NULL`);
@@ -1003,10 +1004,6 @@ async function initSchema() {
   await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW()`);
   await pool.query(`ALTER TABLE fin_accounts ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ DEFAULT NOW()`);
 
-  // Link tx codes to invoice items and expenses
-  await pool.query(`ALTER TABLE fin_invoice_items ADD COLUMN IF NOT EXISTS "txCodeId" INTEGER REFERENCES fin_tx_codes(id) ON DELETE SET NULL`);
-  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "txCodeId" INTEGER REFERENCES fin_tx_codes(id) ON DELETE SET NULL`);
-
   // Payment account on expenses (which account was credited — defaults to Bank if null)
   await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "paidViaId" INTEGER REFERENCES fin_accounts(id) ON DELETE SET NULL`);
   await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "ccSettled" BOOLEAN NOT NULL DEFAULT FALSE`);
@@ -1044,6 +1041,10 @@ async function initSchema() {
       UNIQUE("userId", code)
     )
   `);
+
+  // Link tx codes to invoice items and expenses
+  await pool.query(`ALTER TABLE fin_invoice_items ADD COLUMN IF NOT EXISTS "txCodeId" INTEGER REFERENCES fin_tx_codes(id) ON DELETE SET NULL`);
+  await pool.query(`ALTER TABLE fin_expenses ADD COLUMN IF NOT EXISTS "txCodeId" INTEGER REFERENCES fin_tx_codes(id) ON DELETE SET NULL`);
 
   // Fix journal entries type CHECK to include 'bas'
   await pool.query(`

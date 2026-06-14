@@ -5,6 +5,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { buildWellbeingPdfBuffer } = require('../services/wellbeingPdf');
 const { buildCombinedProfilePdfBuffer } = require('../services/combinedProfilePdf');
+const { buildWellbeingVisualPdfBuffer } = require('../services/wellbeingVisualPdf');
 const {
   QUESTIONNAIRE_VERSION: IPIP_QUESTIONNAIRE_VERSION,
   QUESTIONS: IPIP_QUESTIONS,
@@ -918,6 +919,141 @@ function profileStatusFromLatest(latest) {
   };
 }
 
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function demoInsight(title) {
+  return {
+    formatVersion: 2,
+    summary: `Admin-generated sample data for ${title}.`,
+    sections: [
+      {
+        title: 'Demo data notice',
+        body: 'These responses were generated randomly by an administrator to test the wellbeing dashboard, chart, mind-map, and combined-profile flows. They should not be interpreted as a real self-report result.',
+      },
+    ],
+    reflectionQuestions: [],
+    caveats: ['Generated random demo data only. Not a real wellbeing or personality assessment.'],
+  };
+}
+
+function randomMoodRawAnswers() {
+  return QUESTIONS.map((question) => ({
+    questionId: question.id,
+    score: question.key === 'suicidalThoughts' ? 0 : randomInt(0, 3),
+    reflection: '',
+  }));
+}
+
+function randomValueRawAnswers(questions, responseMax, idKey = 'questionId') {
+  return questions.map((question) => ({
+    [idKey]: question.id,
+    value: randomInt(1, responseMax),
+  }));
+}
+
+async function insertRandomMoodAttempt(client, userId) {
+  const answers = normalizeAnswers(randomMoodRawAnswers());
+  const totalScore = answers.reduce((sum, answer) => sum + answer.score, 0);
+  const band = bandForScore(totalScore);
+  const analysis = buildAnalysis(answers, totalScore, band);
+  const safetyAnswer = answers.find((answer) => answer.key === 'suicidalThoughts');
+  analysis.generated = true;
+  analysis.modelInsight = demoInsight('BDI-Style Mood Check');
+
+  const { rows } = await client.query(
+    `INSERT INTO wellbeing_attempts (
+       "userId", "questionnaireVersion", answers, "totalScore", band, "bandLabel",
+       analysis, "safetyFlag", "suicidalThoughtScore"
+     )
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING id, "createdAt"`,
+    [
+      userId,
+      QUESTIONNAIRE_VERSION,
+      JSON.stringify(answers),
+      totalScore,
+      band.key,
+      band.label,
+      JSON.stringify(analysis),
+      analysis.safetyFlag,
+      Number(safetyAnswer?.score || 0),
+    ]
+  );
+  return { ...rows[0], totalScore, bandLabel: band.label };
+}
+
+async function insertRandomIpipAttempt(client, userId) {
+  const answers = normalizeIpipAnswers(randomValueRawAnswers(IPIP_QUESTIONS, 5, 'itemId'));
+  const { facetScores, domainScores, analysis } = scoreIpipAnswers(answers);
+  analysis.generated = true;
+  analysis.modelInsight = demoInsight('IPIP-NEO-120 Personality Inventory');
+
+  const { rows } = await client.query(
+    `INSERT INTO ipip_neo_attempts (
+       "userId", "questionnaireVersion", answers, "facetScores", "domainScores", analysis
+     )
+     VALUES ($1,$2,$3,$4,$5,$6)
+     RETURNING id, "createdAt"`,
+    [
+      userId,
+      IPIP_QUESTIONNAIRE_VERSION,
+      JSON.stringify(answers),
+      JSON.stringify(facetScores),
+      JSON.stringify(domainScores),
+      JSON.stringify(analysis),
+    ]
+  );
+  return rows[0];
+}
+
+async function insertRandomCerqAttempt(client, userId) {
+  const answers = normalizeCerqAnswers(randomValueRawAnswers(CERQ_QUESTIONS, 5));
+  const { scaleScores, analysis } = scoreCerqAnswers(answers);
+  analysis.generated = true;
+  analysis.modelInsight = demoInsight('CERQ-Style Cognitive Coping Check');
+
+  const { rows } = await client.query(
+    `INSERT INTO cerq_attempts (
+       "userId", "questionnaireVersion", answers, "scaleScores", analysis
+     )
+     VALUES ($1,$2,$3,$4,$5)
+     RETURNING id, "createdAt"`,
+    [
+      userId,
+      CERQ_QUESTIONNAIRE_VERSION,
+      JSON.stringify(answers),
+      JSON.stringify(scaleScores),
+      JSON.stringify(analysis),
+    ]
+  );
+  return rows[0];
+}
+
+async function insertRandomCopeAttempt(client, userId) {
+  const answers = normalizeCopeAnswers(randomValueRawAnswers(COPE_QUESTIONS, 4));
+  const { scaleScores, analysis } = scoreCopeAnswers(answers);
+  analysis.generated = true;
+  analysis.modelInsight = demoInsight('Brief COPE-Style Coping Check');
+
+  const { rows } = await client.query(
+    `INSERT INTO cope_attempts (
+       "userId", "questionnaireVersion", answers, "scaleScores", analysis
+     )
+     VALUES ($1,$2,$3,$4,$5)
+     RETURNING id, "createdAt"`,
+    [
+      userId,
+      COPE_QUESTIONNAIRE_VERSION,
+      JSON.stringify(answers),
+      JSON.stringify(scaleScores),
+      JSON.stringify(analysis),
+    ]
+  );
+  return rows[0];
+}
+
 function visualProfileFromLatest(latest) {
   return {
     sourceAttempts: {
@@ -969,9 +1105,11 @@ router.post('/profile', async (req, res) => {
       });
     }
 
-    const profile = await generateCombinedProfile(req.user.id, latest);
+    const variant = ['summary', 'analytical'].includes(req.body?.variant) ? req.body.variant : 'detailed';
+    const profile = await generateCombinedProfile(req.user.id, latest, { variant });
     res.json({
       profile,
+      variant,
       sourceAttempts: {
         mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
         ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
@@ -1001,6 +1139,64 @@ router.get('/profile/visuals', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/profile/visuals/pdf', async (req, res) => {
+  try {
+    const latest = await loadLatestProfileInputs(req.user.id);
+    const status = profileStatusFromLatest(latest);
+    if (!status.available) {
+      return res.status(400).json({
+        error: 'Visual summary PDF requires all four tests to be completed first.',
+        status,
+      });
+    }
+
+    const view = req.query?.view === 'mindmap' ? 'mindmap' : 'charts';
+    const buf = await buildWellbeingVisualPdfBuffer({
+      visuals: {
+        status,
+        ...visualProfileFromLatest(latest),
+      },
+      view,
+    });
+    const filename = view === 'mindmap' ? 'wellbeing-mind-map.pdf' : 'wellbeing-visual-summary.pdf';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[wellbeing visuals pdf]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/admin/random-attempts', async (req, res) => {
+  if (!req.user?.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const attempts = {
+      mood: await insertRandomMoodAttempt(client, req.user.id),
+      ipip: await insertRandomIpipAttempt(client, req.user.id),
+      cerq: await insertRandomCerqAttempt(client, req.user.id),
+      cope: await insertRandomCopeAttempt(client, req.user.id),
+    };
+    await client.query('COMMIT');
+    res.json({
+      ok: true,
+      generated: true,
+      attempts,
+      note: 'Generated random admin demo data. These are not real self-report results.',
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: err.message });
+  } finally {
+    client.release();
   }
 });
 

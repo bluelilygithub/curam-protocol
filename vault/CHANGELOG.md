@@ -4,6 +4,26 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-14
+
+**Feature + UX:** Wellbeing dashboard, visual summaries, report variants, and cleaner report formatting.
+
+The wellbeing dashboard now presents the four tests as progress tiles, with a subtly highlighted fifth results area for the combined profile, charts, and mind map once all four tests are complete. Completed tiles use a consistent **Review or retake** flow; the BDI-style mood tile now opens a mood-check review area with retake, latest-result review, and past-attempt access instead of jumping straight to the history list.
+
+Added an admin-only action to pre-populate all four wellbeing tests with random demo answers for testing. The existing reset action removes those demo attempts alongside any other completed wellbeing results and clears local drafts.
+
+Combined profile generation now supports three report levels: **Summary**, **Detailed profile**, and **Analytical profile**. Summary is a concise overview for client or clinician orientation; Detailed profile keeps the existing client-readable formulation; Analytical profile provides a more clinician-oriented formulation with mechanisms, caveats, and clinical questions. Report rendering now preserves explicit line breaks and paragraph breaks across report sections, caveats, and clinician-style notes.
+
+Added combined visual summaries: BDI severity gauge, IPIP domain radar chart, CERQ strategy bar chart, Brief COPE strategy bar chart, and a four-test mind map. Both the chart view and mind map view can now be downloaded as PDFs.
+
+Added collapsible **About this quiz** guidance to each of the four test pages so users can understand the purpose of the test, how to answer, and the proof-of-concept caveat before completing it.
+
+**New files:** `client/src/components/wellbeing/WellbeingCharts.jsx`, `client/src/components/wellbeing/WellbeingVisualSummaryPanel.jsx`, `client/src/components/wellbeing/QuizPurposePanel.jsx`, `server/services/wellbeingVisualPdf.js`, `docs/local-database-recovery.md`.
+
+**Modified files:** `server/routes/wellbeing.js`, `server/services/wellbeingModelInsights.js`, `server/services/combinedProfilePdf.js`, `client/src/pages/WellbeingPage.jsx`, `client/src/components/wellbeing/CombinedProfilePanel.jsx`, `client/src/components/wellbeing/ModelInsightPanel.jsx`, `client/src/components/wellbeing/IpipNeo120Panel.jsx`, `client/src/components/wellbeing/CerqStylePanel.jsx`, `client/src/components/wellbeing/BriefCopeStylePanel.jsx`, `server/db.js`, `README.md`, `.env.example`, `PRODUCTION_MERGE_NOTES.md`, `docs/wellbeing-assessment-app.md`.
+
+---
+
 ## 2026-06-12
 
 **Feature:** Wellbeing & Personality Checks — four tests, deeper insights, combined profile, and reset flow.

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
+import useAuthStore from '../store/authStore';
 import useProcessingStore from '../store/processingStore';
 import IpipNeo120Panel from '../components/wellbeing/IpipNeo120Panel';
 import CerqStylePanel from '../components/wellbeing/CerqStylePanel';
@@ -10,6 +11,7 @@ import ModelInsightPanel from '../components/wellbeing/ModelInsightPanel';
 import CombinedProfilePanel from '../components/wellbeing/CombinedProfilePanel';
 import { BdiSeverityGauge } from '../components/wellbeing/WellbeingCharts';
 import WellbeingVisualSummaryPanel from '../components/wellbeing/WellbeingVisualSummaryPanel';
+import QuizPurposePanel from '../components/wellbeing/QuizPurposePanel';
 
 const MOOD_DRAFT_KEY = 'curam:wellbeing-mood:draft';
 const IPIP_DRAFT_KEY = 'curam:ipip-neo-120:draft';
@@ -164,9 +166,14 @@ function TestTile({ test }) {
 }
 
 function ResultsTile({ available, onCombined, onCharts, onMindMap }) {
+  const accentBackground = available
+    ? 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)), var(--color-surface) 72%)'
+    : 'linear-gradient(135deg, #fffbeb, var(--color-surface) 72%)';
+  const accentBorder = available ? 'color-mix(in srgb, var(--color-primary) 45%, var(--color-border))' : '#fde68a';
+
   return (
-    <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: available ? 'var(--color-border)' : '#fde68a' }}>
-      <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Fifth option</p>
+    <div className="rounded-2xl border p-4 shadow-sm" style={{ background: accentBackground, borderColor: accentBorder }}>
+      <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: available ? 'var(--color-primary)' : '#92400e' }}>Fifth option</p>
       <h3 className="text-base font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Review the overall results</h3>
       <p className="text-sm mt-2" style={{ color: 'var(--color-muted)' }}>
         {available
@@ -174,13 +181,13 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap }) {
           : 'Locked until all four checks have at least one completed result.'}
       </p>
       <div className="grid sm:grid-cols-3 gap-2 mt-4">
-        <button type="button" onClick={onCombined} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+        <button type="button" onClick={onCombined} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: available ? 'var(--color-primary)' : 'var(--color-border)', color: available ? '#fff' : 'var(--color-primary)', background: available ? 'var(--color-primary)' : 'transparent' }}>
           Profile
         </button>
-        <button type="button" onClick={onCharts} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+        <button type="button" onClick={onCharts} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: accentBorder, color: 'var(--color-primary)', background: 'var(--color-surface)' }}>
           Charts
         </button>
-        <button type="button" onClick={onMindMap} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
+        <button type="button" onClick={onMindMap} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: accentBorder, color: 'var(--color-primary)', background: 'var(--color-surface)' }}>
           Mind map
         </button>
       </div>
@@ -299,6 +306,8 @@ function AnalysisPanel({ attempt, onDownloadPdf, pdfLoading }) {
 export default function WellbeingPage() {
   const location = useLocation();
   const getIcon = useIcon();
+  const { user } = useAuthStore();
+  const isAdmin = !!user?.isAdmin;
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [tool, setTool] = useState('mood');
   const [config, setConfig] = useState(null);
@@ -316,6 +325,8 @@ export default function WellbeingPage() {
   const [pdfLoadingId, setPdfLoadingId] = useState(null);
   const [moodDraftMeta, setMoodDraftMeta] = useState(null);
   const [profileStatus, setProfileStatus] = useState(null);
+  const [randomising, setRandomising] = useState(false);
+  const [showMoodPurpose, setShowMoodPurpose] = useState(false);
 
   const questions = config?.questions || [];
   const current = questions[index];
@@ -516,7 +527,7 @@ export default function WellbeingPage() {
     await api.delete(`/api/wellbeing/attempts/${id}`).catch(() => {});
     if (detail?.id === id) {
       setDetail(null);
-      setMode('intro');
+      setMode('history');
     }
     await refreshAttempts();
   };
@@ -542,6 +553,35 @@ export default function WellbeingPage() {
       await Promise.all([refreshAttempts(), refreshProfileStatus()]);
     } catch (err) {
       setError(err.message || 'Could not erase test results');
+    }
+  };
+
+  const prepopulateRandomTests = async () => {
+    if (randomising) return;
+    const confirmed = window.confirm(
+      'Create one random admin demo result for each of the four wellbeing tests? These are not real self-report results and can be removed with Reset / erase all tests.'
+    );
+    if (!confirmed) return;
+
+    setRandomising(true);
+    setError('');
+    startProcessing(
+      'Creating random wellbeing test data...',
+      'Generating one completed demo attempt for each test. Please stay on this screen until the dashboard refreshes.'
+    );
+    try {
+      const res = await api.post('/api/wellbeing/admin/random-attempts', {});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not create random test data');
+      clearAllWellbeingDrafts();
+      setMoodDraftMeta(null);
+      await Promise.all([refreshAttempts(), refreshProfileStatus()]);
+      setMode('intro');
+    } catch (err) {
+      setError(err.message || 'Could not create random test data');
+    } finally {
+      stopProcessing();
+      setRandomising(false);
     }
   };
 
@@ -583,8 +623,8 @@ export default function WellbeingPage() {
       description: 'A 21-question mood and wellbeing screen with optional reflections and a downloadable report.',
       completed: !!statusByKey.mood?.completed,
       completedAt: statusByKey.mood?.completedAt,
-      actionLabel: moodDraftMeta ? 'Resume paused check' : (statusByKey.mood?.completed ? 'Retake mood check' : 'Start mood check'),
-      onOpen: moodDraftMeta ? resumeMoodAttempt : startAttempt,
+      actionLabel: moodDraftMeta ? 'Resume paused check' : (statusByKey.mood?.completed ? 'Review or retake mood check' : 'Start mood check'),
+      onOpen: moodDraftMeta ? resumeMoodAttempt : (statusByKey.mood?.completed ? () => setMode('moodReview') : startAttempt),
       primary: !statusByKey.mood?.completed,
     },
     {
@@ -806,7 +846,12 @@ export default function WellbeingPage() {
                   </button>
                 </div>
               )}
-              <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <button
+                type="button"
+                onClick={() => setMode('history')}
+                className="w-full rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg hover:bg-[var(--color-bg)]"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              >
                 <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Mood check history</p>
                 <p className="text-3xl font-bold mt-1" style={{ color: 'var(--color-text)' }}>{attempts.length}</p>
                 {latestScore != null && (
@@ -815,7 +860,27 @@ export default function WellbeingPage() {
                 {averageScore != null && (
                   <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Average score: {averageScore}/63</p>
                 )}
-              </div>
+                <p className="text-xs font-semibold mt-3" style={{ color: 'var(--color-primary)' }}>
+                  {attempts.length ? 'Click to review completed checks' : 'No completed checks yet'}
+                </p>
+              </button>
+              {isAdmin && (
+                <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                  <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Admin test data</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                    Create one random completed result for each test to check the progress, profile, charts, and mind-map flow.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={prepopulateRandomTests}
+                    disabled={randomising}
+                    className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity mt-3"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
+                  >
+                    {randomising ? 'Creating demo results...' : 'Pre-populate random test results'}
+                  </button>
+                </div>
+              )}
               <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: '#fecaca' }}>
                 <p className="text-xs uppercase tracking-wider" style={{ color: '#991b1b' }}>Reset tests</p>
                 <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
@@ -835,8 +900,161 @@ export default function WellbeingPage() {
         </div>
       )}
 
+      {mode === 'moodReview' && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <button
+                type="button"
+                onClick={() => setMode('intro')}
+                className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity mb-3"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
+              >
+                Back to wellbeing tools
+              </button>
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>BDI-Style Mood Check</h2>
+              <p className="text-sm mt-1 max-w-3xl" style={{ color: 'var(--color-muted)' }}>
+                Review your latest mood check, browse previous checks, or retake the 21-question screen.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={startAttempt}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              Retake mood check
+            </button>
+          </div>
+
+          <div className="grid lg:grid-cols-[1fr_360px] gap-6">
+            <div className="space-y-4">
+              <QuizPurposePanel
+                open={showMoodPurpose}
+                onToggle={() => setShowMoodPurpose((value) => !value)}
+                title="BDI-style mood check"
+                summary="This check is a structured reflection on mood-related symptoms over the recent period. It helps turn a broad feeling like 'I have not been myself' into a clearer pattern across sleep, energy, pleasure, self-criticism, concentration, and related areas."
+                points={[
+                  'It estimates overall mood-symptom load from 21 item scores.',
+                  'It highlights the areas contributing most strongly to the current impression.',
+                  'It helps compare repeated checks over time, especially when one area changes before the total score changes.',
+                ]}
+                guidance={[
+                  'Answer according to what has been most true recently, not what is true on your best or worst day.',
+                  'Use the optional reflection box when context would help explain an answer.',
+                  'If a question feels uncomfortable, choose the closest honest option and use the safety/support guidance if needed.',
+                ]}
+                caveat="This is a proof-of-concept self-report tool. It is not the official BDI, not a diagnosis, and not a substitute for professional advice or crisis support."
+              />
+
+              <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <div>
+                  <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Review or retake</h3>
+                  <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                    This view behaves like the other completed test tiles: you can retake the check, review the latest result, or open the history list for earlier attempts.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={startAttempt}
+                    className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                  >
+                    Retake
+                  </button>
+                  {attempts[0] && (
+                    <button
+                      type="button"
+                      onClick={() => openAttempt(attempts[0].id)}
+                      className="px-3 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+                      style={{ background: 'var(--color-primary)' }}
+                    >
+                      Review latest result
+                    </button>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                <div className="px-4 py-3 border-b" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                  <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Past completed mood checks</h3>
+                </div>
+                {attempts.length === 0 ? (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--color-muted)' }}>No completed mood checks yet.</p>
+                ) : (
+                  <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                    {attempts.map((attempt) => (
+                      <div
+                        key={attempt.id}
+                        className="flex items-center justify-between gap-3 px-4 py-3"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)' }}
+                      >
+                        <button type="button" onClick={() => openAttempt(attempt.id)} className="flex-1 text-left hover:opacity-70 transition-opacity">
+                          <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{attempt.totalScore}/63 · {attempt.bandLabel}</p>
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                            {formatDate(attempt.createdAt)}{attempt.safetyFlag ? ' · safety note' : ''}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteAttempt(attempt.id)}
+                          className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+                          style={{ borderColor: '#fecaca', color: '#991b1b' }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <aside className="space-y-3">
+              <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Completed checks</p>
+                <p className="text-3xl font-bold mt-1" style={{ color: 'var(--color-text)' }}>{attempts.length}</p>
+                {latestScore != null && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Latest score: {latestScore}/63</p>
+                )}
+              </div>
+              {attempts[0] && (
+                <button
+                  type="button"
+                  onClick={() => openAttempt(attempts[0].id)}
+                  className="w-full rounded-2xl border p-4 text-left transition-all hover:-translate-y-0.5 hover:shadow-lg hover:bg-[var(--color-bg)]"
+                  style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+                >
+                  <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Latest mood check</p>
+                  <p className="text-sm font-semibold mt-1" style={{ color: 'var(--color-text)' }}>{attempts[0].totalScore}/63 · {attempts[0].bandLabel}</p>
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Open full result</p>
+                </button>
+              )}
+            </aside>
+          </div>
+        </div>
+      )}
+
       {mode === 'taking' && current && (
         <section className="max-w-2xl mx-auto space-y-4">
+          <QuizPurposePanel
+            open={showMoodPurpose}
+            onToggle={() => setShowMoodPurpose((value) => !value)}
+            title="BDI-style mood check"
+            summary="This check is a structured reflection on mood-related symptoms over the recent period. It helps turn a broad feeling like 'I have not been myself' into a clearer pattern across sleep, energy, pleasure, self-criticism, concentration, and related areas."
+            points={[
+              'It estimates overall mood-symptom load from 21 item scores.',
+              'It highlights the areas contributing most strongly to the current impression.',
+              'It helps compare repeated checks over time, especially when one area changes before the total score changes.',
+            ]}
+            guidance={[
+              'Answer according to what has been most true recently, not what is true on your best or worst day.',
+              'Use the optional reflection box when context would help explain an answer.',
+              'If a question feels uncomfortable, choose the closest honest option and use the safety/support guidance if needed.',
+            ]}
+            caveat="This is a proof-of-concept self-report tool. It is not the official BDI, not a diagnosis, and not a substitute for professional advice or crisis support."
+          />
           <div className="sticky top-0 z-10 py-2" style={{ background: 'var(--color-bg)' }}>
             <div className="flex justify-between text-xs mb-1" style={{ color: 'var(--color-muted)' }}>
               <span>Question {index + 1} of {questions.length}</span>
@@ -960,8 +1178,8 @@ export default function WellbeingPage() {
       {mode === 'detail' && detail && (
         <section className="max-w-3xl mx-auto space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <button type="button" onClick={() => setMode('intro')} className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
-              Back to overview
+            <button type="button" onClick={() => setMode('history')} className="text-sm hover:opacity-70" style={{ color: 'var(--color-primary)' }}>
+              Back to history
             </button>
             <button type="button" onClick={() => deleteAttempt(detail.id)} className="text-sm hover:opacity-70" style={{ color: '#dc2626' }}>
               Delete
@@ -972,10 +1190,21 @@ export default function WellbeingPage() {
         </section>
       )}
 
-      {mode === 'intro' && (
+      {mode === 'history' && (
         <section className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
-          <div className="px-4 py-3 border-b" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Past completed checks</h2>
+          <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Mood Check History</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Open any completed check to review its full analysis, chart, responses, and PDF option.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMode('intro')}
+              className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
+            >
+              Back to dashboard
+            </button>
           </div>
           {attempts.length === 0 ? (
             <p className="text-sm text-center py-8" style={{ color: 'var(--color-muted)' }}>No completed checks yet.</p>

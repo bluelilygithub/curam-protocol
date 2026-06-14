@@ -32,6 +32,15 @@ function normaliseProfile(profile) {
   };
 }
 
+function pdfTextBlocks(value) {
+  const text = cleanPdfText(value).trim();
+  if (!text) return [];
+  return text
+    .split(/\n{2,}/)
+    .map((block) => block.split(/\n/).map((line) => line.trim()).filter(Boolean))
+    .filter((lines) => lines.length);
+}
+
 async function buildCombinedProfilePdfBuffer({ profile, sourceAttempts }) {
   const safeProfile = normaliseProfile(profile);
   const sources = sourceAttempts && typeof sourceAttempts === 'object' ? sourceAttempts : {};
@@ -55,36 +64,47 @@ async function buildCombinedProfilePdfBuffer({ profile, sourceAttempts }) {
   };
 
   const addText = (text, options = {}) => {
-    const { size = 10, bold = false, color = rgb(0.1, 0.1, 0.1), lineGap = 4, indent = 0 } = options;
+    const {
+      size = 10,
+      bold = false,
+      color = rgb(0.1, 0.1, 0.1),
+      lineGap = 4,
+      indent = 0,
+      lineBreakGap = 2,
+      paragraphGap = 8,
+    } = options;
     const usedFont = bold ? boldFont : font;
     const maxWidth = contentWidth - indent;
-    const paragraphs = cleanPdfText(text).split(/\n{2,}|\n/);
+    const blocks = pdfTextBlocks(text);
 
-    for (const paragraph of paragraphs) {
-      const words = paragraph.trim().split(/\s+/);
-      let line = '';
-      const lines = [];
+    for (const block of blocks) {
+      block.forEach((sourceLine, lineIdx) => {
+        const words = sourceLine.trim().split(/\s+/);
+        let line = '';
+        const lines = [];
 
-      for (const word of words) {
-        if (!word) continue;
-        const testLine = line ? `${line} ${word}` : word;
-        const lineWidth = usedFont.widthOfTextAtSize(testLine, size);
-        if (lineWidth > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = testLine;
+        for (const word of words) {
+          if (!word) continue;
+          const testLine = line ? `${line} ${word}` : word;
+          const lineWidth = usedFont.widthOfTextAtSize(testLine, size);
+          if (lineWidth > maxWidth && line) {
+            lines.push(line);
+            line = word;
+          } else {
+            line = testLine;
+          }
         }
-      }
-      if (line) lines.push(line);
-      if (!lines.length) lines.push('');
+        if (line) lines.push(line);
+        if (!lines.length) lines.push('');
 
-      for (const l of lines) {
-        ensureSpace();
-        page.drawText(l, { x: margin + indent, y, size, font: usedFont, color });
-        y -= size + lineGap;
-      }
-      y -= 6;
+        for (const l of lines) {
+          ensureSpace();
+          page.drawText(l, { x: margin + indent, y, size, font: usedFont, color });
+          y -= size + lineGap;
+        }
+        if (lineIdx < block.length - 1) y -= lineBreakGap;
+      });
+      y -= paragraphGap;
     }
   };
 

@@ -220,6 +220,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
   const [view, setView] = useState(initialView);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState('');
 
   const loadData = useCallback(async () => {
@@ -245,6 +246,33 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
     loadData();
   }, [loadData]);
 
+  const downloadPdf = async () => {
+    if (pdfLoading) return;
+    setPdfLoading(true);
+    setError('');
+    try {
+      const pdfView = view === 'mindmap' ? 'mindmap' : 'charts';
+      const res = await api.get(`/api/wellbeing/profile/visuals/pdf?view=${pdfView}`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || 'PDF generation failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = pdfView === 'mindmap' ? 'wellbeing-mind-map.pdf' : 'wellbeing-visual-summary.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || 'Could not download PDF');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   const domains = parseMaybeJson(data?.ipip?.domainScores, []);
   const cerqScales = parseMaybeJson(data?.cerq?.scaleScores, []);
   const copeScales = parseMaybeJson(data?.cope?.scaleScores, []);
@@ -268,7 +296,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
             Uses the latest completed result from each of the four wellbeing checks.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setView('charts')}
@@ -292,6 +320,15 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
             }}
           >
             Mind map
+          </button>
+          <button
+            type="button"
+            onClick={downloadPdf}
+            disabled={!data || pdfLoading}
+            className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
+          >
+            {pdfLoading ? 'Preparing PDF...' : `Download ${view === 'mindmap' ? 'mind map' : 'charts'} PDF`}
           </button>
         </div>
       </div>

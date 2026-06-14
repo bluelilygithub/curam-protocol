@@ -125,10 +125,13 @@ ANTHROPIC_API_KEY=sk-ant-...
 SEED_EMAIL=admin@example.com
 SEED_PASSWORD=yourpassword
 NODE_ENV=development
-DATABASE_URL=postgresql://vault:vault@localhost:5432/vault_dev
+APP_ENV=local
+LOCAL_DATABASE_URL=postgresql://vault_local:<local-password>@localhost:5432/vault
 UPLOAD_DIR=./uploads
 APP_URL=http://localhost:5173
 ```
+
+On the Mac Mini, the real local app data is stored in the Docker PostgreSQL container `local-pg` on `localhost:5432`. Start Docker Desktop and run `docker start local-pg` before starting the app. Do not replace it with an empty Homebrew PostgreSQL database. See `vault/docs/local-database-recovery.md` before changing local database settings.
 
 ```bash
 npm run dev

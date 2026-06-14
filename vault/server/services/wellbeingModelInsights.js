@@ -108,7 +108,12 @@ async function generateModelInsight(userId, options) {
   try {
     const { standard, light } = await getModelsForUser(userId);
     const model = standard || light;
-    if (!model) return normaliseInsight(null, fallback);
+    if (!model) {
+      return {
+        ...normaliseInsight(null, fallback),
+        variant,
+      };
+    }
 
     const text = await callModel(model, buildPrompt(options), {
       maxTokens: 1800,
@@ -382,7 +387,162 @@ function buildCombinedFallback(latest, scores) {
   };
 }
 
-function buildCombinedPrompt(scores) {
+function buildCombinedSummaryFallback(latest, scores) {
+  const mood = `Mood score: ${latest.mood.totalScore}/63 (${latest.mood.bandLabel}).`;
+  const highDomains = scores.personality.highDomains.slice(0, 2).map((item) => `${item.label} (${item.band})`);
+  const cerqHigh = scores.cognitiveCoping.highScales.slice(0, 3).map((item) => `${item.label} (${item.band})`);
+  const copeHigh = scores.copingStyle.highScales.slice(0, 3).map((item) => `${item.label} (${item.band})`);
+
+  return {
+    summary: [
+      `${mood} The four tests together give a broad self-report overview of current mood load, personality style, cognitive coping, and practical coping responses.`,
+      `The most visible pattern is shaped by ${sentenceList(highDomains) || 'no strongly dominant personality domain'}, cognitive strategies such as ${sentenceList(cerqHigh) || 'no clearly dominant CERQ-style strategy'}, and coping responses such as ${sentenceList(copeHigh) || 'no clearly dominant COPE-style response'}.`,
+    ].join('\n\n'),
+    sections: [
+      {
+        title: 'Plain-language overview',
+        body: 'This summary is designed to be quickly readable by either the client or a clinician. It should orient the reader to the main pattern before they decide whether to read the full detailed profile.',
+      },
+      {
+        title: 'Main signals',
+        body: `${mood} Personality signals: ${sentenceList(highDomains) || 'balanced or not strongly differentiated'}. Cognitive coping signals: ${sentenceList(cerqHigh) || 'not strongly differentiated'}. Behavioural coping signals: ${sentenceList(copeHigh) || 'not strongly differentiated'}.`,
+      },
+      {
+        title: 'What to look at next',
+        body: 'The detailed profile is the best next step for client-readable formulation. The analytical profile is more suitable when a clinician wants a more technical cross-test formulation and hypotheses to consider.',
+      },
+    ],
+    questions: [
+      'Which one part of this summary feels most recognisable?',
+      'Which result seems most state-dependent rather than enduring?',
+      'Which area would be most useful to explore in more detail?',
+    ],
+    caveat: 'This summary is a proof-of-concept self-report synthesis. It is not a diagnosis, clinical assessment, risk assessment, or substitute for a qualified professional.',
+  };
+}
+
+function buildCombinedAnalyticalFallback(latest, scores) {
+  const detailed = buildCombinedFallback(latest, scores);
+  return {
+    summary: [
+      'This analytical profile is intended as a clinician-oriented formulation aid based on self-report data. It should be read as hypothesis generation, not diagnostic evidence.',
+      detailed.summary,
+    ].join('\n\n'),
+    sections: [
+      {
+        title: 'Clinical formulation hypotheses',
+        body: [
+          describeReinforcingThemes(latest, scores),
+          'The relevant clinical question is whether the observed pattern is stable across contexts or primarily activated under current mood load, stress, relational pressure, or threat appraisal.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'State-trait-context distinction',
+        body: [
+          describeMood(latest),
+          describePersonality(scores),
+          'Mood load may inflate negative appraisal, reduce access to behavioural resources, or make some trait tendencies appear more extreme. The profile should therefore be interpreted as current presentation plus trait-style hypotheses, not as a fixed description.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'Cognitive-affective mechanisms',
+        body: [
+          describeCognitiveCoping(scores),
+          'Clinically, the useful focus is not just which cognitive strategies are frequent, but whether they increase threat, shame, helplessness, interpersonal distance, or problem-solving clarity.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'Behavioural coping sequence',
+        body: [
+          describeBehaviouralCoping(scores),
+          'Assess sequence: immediate response, short-term relief, delayed cost, and whether coping increases agency, support, avoidance, or self-criticism over time.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'Protective factors and treatment-relevant strengths',
+        body: describeStrengths(scores),
+      },
+      {
+        title: 'Risk-sensitive caveats',
+        body: 'This profile is not a risk assessment. Any safety-related mood item, significant functional decline, substance-related coping, or marked hopelessness should be followed up through appropriate clinical assessment rather than inferred from this tool alone.',
+      },
+      {
+        title: 'Suggested clinical questions',
+        body: [
+          'What contexts reliably activate the strongest pattern?',
+          'Does the client recognise the cognitive sequence before the behavioural coping response?',
+          'Which coping responses produce short-term relief but maintain the problem?',
+          'Which protective responses are available but underused under high stress?',
+        ].join('\n'),
+      },
+    ],
+    questions: [
+      'Which findings are state-dependent and should be rechecked when mood load changes?',
+      'Which cross-test theme would be most important to validate clinically?',
+      'Where does the sequence move from understandable coping to maintaining cycle?',
+      'Which protective factor is most available for intervention planning?',
+      'What additional assessment would be needed before making any clinical conclusion?',
+    ],
+    caveat: 'Clinician-oriented profile for hypothesis generation only. It is based on self-report proof-of-concept tools and is not a diagnosis, risk assessment, treatment plan, or substitute for professional judgement.',
+  };
+}
+
+function normaliseCombinedVariant(value) {
+  if (value === 'summary' || value === 'analytical') return value;
+  return 'detailed';
+}
+
+function buildCombinedFallbackForVariant(latest, scores, variant) {
+  if (variant === 'summary') return buildCombinedSummaryFallback(latest, scores);
+  if (variant === 'analytical') return buildCombinedAnalyticalFallback(latest, scores);
+  return buildCombinedFallback(latest, scores);
+}
+
+function buildCombinedPrompt(scores, variant = 'detailed') {
+  if (variant === 'summary') {
+    return [
+      'Create a brief integrated overview from four completed proof-of-concept self-report checks.',
+      '',
+      'Audience: client or clinician who wants a quick readable overview before reading the full profile.',
+      'Length: concise. Summary should be 2 short paragraphs. Include 3 short sections only.',
+      'Tone: plain language, non-clinical, careful, not diagnostic.',
+      '',
+      'Required sections: "Plain-language overview", "Main signals", "What to look at next".',
+      'Avoid long formulation language. Do not list every scale. Mention only the most useful cross-test signals.',
+      'Use paragraph breaks inside JSON string values.',
+      '',
+      'Return ONLY valid JSON with this shape:',
+      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Plain-language overview","body":"..."},{"title":"Main signals","body":"..."},{"title":"What to look at next","body":"..."}],"questions":["..."],"caveat":"..."}',
+      '',
+      `Scored data:\n${JSON.stringify(scores, null, 2).slice(0, 14000)}`,
+    ].join('\n');
+  }
+
+  if (variant === 'analytical') {
+    return [
+      'Create a clinician-oriented analytical formulation from four completed proof-of-concept self-report checks.',
+      '',
+      'Audience: primarily a clinician, but still readable by a client if they choose to read it.',
+      'Purpose: hypothesis generation, case formulation support, and clinical discussion prompts. Do not diagnose. Do not provide treatment instructions.',
+      '',
+      'Required emphasis:',
+      '- Separate state effects, trait tendencies, cognitive mechanisms, behavioural coping sequences, protective factors, and caveats.',
+      '- Use clinical formulation language carefully: hypotheses, maintaining loops, protective factors, vulnerabilities, context dependence, and areas requiring further assessment.',
+      '- Identify cross-test convergence and divergence.',
+      '- Explicitly state what cannot be concluded from these self-report tools.',
+      '- Make it more detailed and analytical than the client-readable detailed profile.',
+      '- Use paragraph breaks inside JSON string values.',
+      '',
+      'Required sections:',
+      'Clinical formulation hypotheses; State-trait-context distinction; Cognitive-affective mechanisms; Behavioural coping sequence; Protective factors and treatment-relevant strengths; Risk-sensitive caveats; Suggested clinical questions.',
+      '',
+      'Return ONLY valid JSON with this shape:',
+      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Clinical formulation hypotheses","body":"..."},{"title":"State-trait-context distinction","body":"..."},{"title":"Cognitive-affective mechanisms","body":"..."},{"title":"Behavioural coping sequence","body":"..."},{"title":"Protective factors and treatment-relevant strengths","body":"..."},{"title":"Risk-sensitive caveats","body":"..."},{"title":"Suggested clinical questions","body":"..."}],"questions":["..."],"caveat":"..."}',
+      '',
+      `Scored data:\n${JSON.stringify(scores, null, 2).slice(0, 18000)}`,
+    ].join('\n');
+  }
+
   return [
     'Create a detailed integrated profile from four completed proof-of-concept self-report checks.',
     '',
@@ -415,7 +575,8 @@ function buildCombinedPrompt(scores) {
   ].join('\n');
 }
 
-async function generateCombinedProfile(userId, latest) {
+async function generateCombinedProfile(userId, latest, options = {}) {
+  const variant = normaliseCombinedVariant(options.variant);
   const scores = {
     mood: {
       totalScore: latest.mood.totalScore,
@@ -443,21 +604,25 @@ async function generateCombinedProfile(userId, latest) {
     },
   };
 
-  const fallback = buildCombinedFallback(latest, scores);
+  const fallback = buildCombinedFallbackForVariant(latest, scores, variant);
   try {
     const { standard, light } = await getModelsForUser(userId);
     const model = standard || light;
     if (!model) return normaliseInsight(null, fallback);
 
-    const text = await callModel(model, buildCombinedPrompt(scores), {
-      maxTokens: 3600,
+    const text = await callModel(model, buildCombinedPrompt(scores, variant), {
+      maxTokens: variant === 'summary' ? 1600 : variant === 'analytical' ? 4600 : 3600,
       system: 'You write careful, integrated self-report profile formulations. You are not a clinician and must avoid diagnosis, treatment advice, or unsupported certainty. Return only valid JSON.',
     });
-    return normaliseInsight(safeJsonParse(text), fallback);
+    return {
+      ...normaliseInsight(safeJsonParse(text), fallback),
+      variant,
+    };
   } catch (err) {
     return {
       ...normaliseInsight(null, fallback),
       modelError: String(err.message || err).slice(0, 300),
+      variant,
     };
   }
 }

@@ -9,7 +9,7 @@ The current branch adds two groups of changes:
 - Local/runtime configuration so the same application code can run safely against a local Mac Mini PostgreSQL copy or Railway production.
 - Finance UI improvements so the business-facing position is easier to understand than the accounting trial balance control totals.
 - Local graphics generation so prompts can produce article/story support images through ComfyUI on the Mac Mini.
-- Wellbeing & Personality Checks: four self-report tests, model-assisted insights, combined profile generation, PDF exports, and a reset/erase flow.
+- Wellbeing & Personality Checks: four self-report tests, model-assisted insights, three-level combined profile generation, visual summaries, mind map, PDF exports, admin demo data, and a reset/erase flow.
 
 These changes should be reviewed and tested locally before merging into `version-7`, because they touch environment configuration, database selection, cron behavior, email behavior, web search behavior, Finance reporting UI, member/mobile access controls, and the new Graphics workflow.
 
@@ -197,6 +197,27 @@ Admin `Settings -> AI & Chat` now treats `FAL` as a first-class provider for con
 LOCAL_IMAGE_MODEL=DreamShaper_8_pruned.safetensors
 ```
 
+### Wellbeing & Personality Checks
+
+- The wellbeing dashboard now uses four progress tiles and a fifth results area.
+- Completed test tiles use a consistent review/retake pattern; the BDI-style tile opens a mood-check review area instead of jumping directly to history.
+- Each test page includes an **About this quiz** guidance panel.
+- The combined profile now supports three report levels:
+  - Summary
+  - Detailed profile
+  - Analytical profile
+- Report rendering preserves paragraph and line breaks in generated sections and PDFs.
+- The visual summary includes a BDI gauge, IPIP radar chart, CERQ bar chart, Brief COPE bar chart, and mind map.
+- The combined profile, chart view, and mind map view all support PDF export.
+- Admins can pre-populate random wellbeing test results for demonstration/testing. The reset action removes these attempts along with real test attempts for the current user.
+
+Production checks:
+
+1. Ensure the wellbeing feature flag is available through member feature access.
+2. Confirm users have an inherited or direct text model configuration for richer generated reports.
+3. Smoke test one completion path, the three combined-profile buttons, chart PDF export, mind-map PDF export, and reset with a non-production test user.
+4. Confirm admin-only random pre-population is not visible to non-admin users.
+
 ## Local-Only Changes That Should Not Migrate
 
 ### Real `.env`
@@ -207,13 +228,33 @@ It should remain ignored by git.
 
 ### Local PostgreSQL Role
 
-A local-only PostgreSQL role was created in the Mac Mini Docker PostgreSQL container:
+The Mac Mini local app data lives in the Docker PostgreSQL container named `local-pg`, not in a Homebrew PostgreSQL cluster.
+
+This container is critical because it holds the local restored application data. Do not delete, recreate, prune, or replace the container/volume without a verified backup.
+
+```text
+Container: local-pg
+Database: vault
+Host port: localhost:5432
+Docker volume: ef237628df50e21541114e4641cfe97c4f497d255d1b8e0ae5816e81e90885a6
+```
+
+A local-only PostgreSQL role exists inside that Docker PostgreSQL container:
 
 ```text
 vault_local
 ```
 
 That user and generated password are only for the local `vault` database copy. They are not part of the repository and should not be migrated to Railway.
+
+If login starts failing with a network error after a Mac restart, first check that Docker Desktop is running and start the database container:
+
+```bash
+docker start local-pg
+pg_isready -h localhost -p 5432
+```
+
+Then restart the app dev server. See `docs/local-database-recovery.md` for the full local recovery checklist.
 
 ### Local ComfyUI Install And Model
 
@@ -229,9 +270,11 @@ These are local machine assets and should not be committed or migrated to Railwa
 
 ### Local Database Data
 
-The local PostgreSQL database is a restored Railway backup. It is for testing only.
+The local PostgreSQL database is a restored Railway backup stored in the Docker `local-pg` volume. It is for testing only.
 
 Do not push or restore this local database back to Railway unless explicitly intending to overwrite production data.
+
+Do not use an empty Homebrew PostgreSQL database as a replacement for `local-pg`; it will make local login and app data appear to be missing.
 
 ## Production Environment Checklist
 
@@ -266,6 +309,9 @@ Before merging to `version-7` and deploying on Railway:
 
 On the Mac Mini local environment:
 
+- Start Docker Desktop and confirm `local-pg` is running:
+  - `docker ps --filter name=local-pg`
+  - `pg_isready -h localhost -p 5432`
 - Run the app locally with `npm run dev`.
 - Confirm `Settings -> Environment` shows:
   - `APP_ENV=local`

@@ -3,6 +3,7 @@ import api from '../../utils/apiClient';
 import useProcessingStore from '../../store/processingStore';
 import ModelInsightPanel from './ModelInsightPanel';
 import { StrategyBarChart } from './WellbeingCharts';
+import QuizPurposePanel from './QuizPurposePanel';
 
 const COPE_DRAFT_KEY = 'curam:brief-cope-style:draft';
 
@@ -139,6 +140,7 @@ export default function BriefCopeStylePanel({ onBack, onComplete, onNext, nextLa
   const [pdfLoadingId, setPdfLoadingId] = useState(null);
   const [error, setError] = useState('');
   const [draftMeta, setDraftMeta] = useState(null);
+  const [showPurpose, setShowPurpose] = useState(false);
 
   const questions = config?.questions || [];
   const current = questions[index];
@@ -350,20 +352,39 @@ export default function BriefCopeStylePanel({ onBack, onComplete, onNext, nextLa
 
       {mode === 'intro' && (
         <div className="grid lg:grid-cols-[1fr_360px] gap-6">
-          <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div>
-              <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Before you begin</h3>
-              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                Think about what you have been doing to cope with stress recently. This check reports strategy patterns only and is not professional advice.
-              </p>
-            </div>
-            <ul className="text-sm space-y-2" style={{ color: 'var(--color-muted)' }}>
-              <li>28 original proof-of-concept items across 14 coping strategy areas.</li>
-              <li>You can pause, resume, and go back to correct answers.</li>
-              <li>There is no overall total score; each coping scale is shown separately.</li>
-              <li>Completed attempts can be reviewed, deleted, or downloaded as PDF.</li>
-            </ul>
-          </section>
+          <div className="space-y-4">
+            <QuizPurposePanel
+              open={showPurpose}
+              onToggle={() => setShowPurpose((value) => !value)}
+              title="Brief COPE-style coping check"
+              summary="This check focuses on what you tend to do when under stress. It reports coping response patterns rather than producing one overall coping score."
+              points={[
+                'It shows which coping responses are most active, such as planning, support-seeking, acceptance, avoidance, humour, or self-blame.',
+                'It helps distinguish practical actions, emotional regulation, meaning-making, support seeking, and avoidant responses.',
+                'It can show whether the main pattern is moving toward the stressor, away from it, or trying to manage emotion around it.',
+              ]}
+              guidance={[
+                'Answer based on what you have actually been doing recently, not what you think you should do.',
+                'There is no single good or bad overall score; the pattern matters more than the total.',
+                'If a strategy is useful in one situation but not another, answer according to how often you use it overall.',
+              ]}
+              caveat="This is a proof-of-concept Brief COPE-style tool using original wording. It is not professional advice or a substitute for a qualified professional."
+            />
+            <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div>
+                <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Before you begin</h3>
+                <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                  Think about what you have been doing to cope with stress recently. This check reports strategy patterns only and is not professional advice.
+                </p>
+              </div>
+              <ul className="text-sm space-y-2" style={{ color: 'var(--color-muted)' }}>
+                <li>28 original proof-of-concept items across 14 coping strategy areas.</li>
+                <li>You can pause, resume, and go back to correct answers.</li>
+                <li>There is no overall total score; each coping scale is shown separately.</li>
+                <li>Completed attempts can be reviewed, deleted, or downloaded as PDF.</li>
+              </ul>
+            </section>
+          </div>
 
           <aside className="space-y-3">
             {draftMeta && (

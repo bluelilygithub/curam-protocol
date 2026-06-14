@@ -3,6 +3,7 @@ import api from '../../utils/apiClient';
 import useProcessingStore from '../../store/processingStore';
 import ModelInsightPanel from './ModelInsightPanel';
 import { DomainRadarChart } from './WellbeingCharts';
+import QuizPurposePanel from './QuizPurposePanel';
 
 const IPIP_DRAFT_KEY = 'curam:ipip-neo-120:draft';
 
@@ -165,6 +166,7 @@ export default function IpipNeo120Panel({ onBack, onComplete, onNext, nextLabel 
   const [pdfLoadingId, setPdfLoadingId] = useState(null);
   const [error, setError] = useState('');
   const [draftMeta, setDraftMeta] = useState(null);
+  const [showPurpose, setShowPurpose] = useState(false);
 
   const questions = config?.questions || [];
   const current = questions[index];
@@ -400,22 +402,41 @@ export default function IpipNeo120Panel({ onBack, onComplete, onNext, nextLabel 
 
       {mode === 'intro' && (
         <div className="grid lg:grid-cols-[1fr_360px] gap-6">
-          <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div>
-              <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Before you begin</h3>
-              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                Answer each statement based on how accurately it describes you in general. Scores are self-report trait estimates, not diagnoses, capability judgements, or clinical conclusions.
-              </p>
-            </div>
-            <ul className="text-sm space-y-2" style={{ color: 'var(--color-muted)' }}>
-              <li>120 statements are answered in order.</li>
-              <li>Responses use a five-point accuracy scale.</li>
-              <li>You can pause the profile and resume it later on this device.</li>
-              <li>You can go back one statement at a time to correct a mistaken selection.</li>
-              <li>Negatively keyed statements are reverse-scored automatically.</li>
-              <li>Completed attempts can be reviewed, deleted, or downloaded as PDF.</li>
-            </ul>
-          </section>
+          <div className="space-y-4">
+            <QuizPurposePanel
+              open={showPurpose}
+              onToggle={() => setShowPurpose((value) => !value)}
+              title="IPIP-NEO-120 personality inventory"
+              summary="This inventory looks at broad personality tendencies rather than temporary mood. It helps describe relative patterns across five domains and 30 more specific facets."
+              points={[
+                'It shows relative endorsement of Neuroticism, Extraversion, Openness, Agreeableness, and Conscientiousness.',
+                'It identifies facet-level signals that may explain why a broad domain is high, middle, or low.',
+                'It is useful for reflection about tendencies, preferences, and recurring patterns rather than clinical conclusions.',
+              ]}
+              guidance={[
+                'Answer based on how you generally are, not just how you feel today.',
+                'Avoid answering as the person you wish you were; choose the closest accurate description.',
+                'Some statements are reverse-scored, so answer the wording directly rather than trying to game the result.',
+              ]}
+              caveat="This is a proof-of-concept implementation using public-domain style content. It is not professional advice, diagnosis, or a capability judgement."
+            />
+            <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div>
+                <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Before you begin</h3>
+                <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                  Answer each statement based on how accurately it describes you in general. Scores are self-report trait estimates, not diagnoses, capability judgements, or clinical conclusions.
+                </p>
+              </div>
+              <ul className="text-sm space-y-2" style={{ color: 'var(--color-muted)' }}>
+                <li>120 statements are answered in order.</li>
+                <li>Responses use a five-point accuracy scale.</li>
+                <li>You can pause the profile and resume it later on this device.</li>
+                <li>You can go back one statement at a time to correct a mistaken selection.</li>
+                <li>Negatively keyed statements are reverse-scored automatically.</li>
+                <li>Completed attempts can be reviewed, deleted, or downloaded as PDF.</li>
+              </ul>
+            </section>
+          </div>
 
           <aside className="space-y-3">
             {draftMeta && (

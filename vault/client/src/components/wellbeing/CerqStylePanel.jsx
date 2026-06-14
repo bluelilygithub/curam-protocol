@@ -3,6 +3,7 @@ import api from '../../utils/apiClient';
 import useProcessingStore from '../../store/processingStore';
 import ModelInsightPanel from './ModelInsightPanel';
 import { StrategyBarChart } from './WellbeingCharts';
+import QuizPurposePanel from './QuizPurposePanel';
 
 const CERQ_DRAFT_KEY = 'curam:cerq-style:draft';
 
@@ -139,6 +140,7 @@ export default function CerqStylePanel({ onBack, onComplete, onNext, nextLabel =
   const [pdfLoadingId, setPdfLoadingId] = useState(null);
   const [error, setError] = useState('');
   const [draftMeta, setDraftMeta] = useState(null);
+  const [showPurpose, setShowPurpose] = useState(false);
 
   const questions = config?.questions || [];
   const current = questions[index];
@@ -350,19 +352,38 @@ export default function CerqStylePanel({ onBack, onComplete, onNext, nextLabel =
 
       {mode === 'intro' && (
         <div className="grid lg:grid-cols-[1fr_360px] gap-6">
-          <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-            <div>
-              <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Before you begin</h3>
-              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                Think about how you usually respond mentally after stressful or negative events. Scores show frequency of strategy use, not whether a response is good or bad in every context.
-              </p>
-            </div>
-            <ul className="text-sm space-y-2" style={{ color: 'var(--color-muted)' }}>
-              <li>36 original proof-of-concept items across nine cognitive strategy areas.</li>
-              <li>You can pause, resume, and go back to correct answers.</li>
-              <li>Completed attempts can be reviewed, deleted, or downloaded as PDF.</li>
-            </ul>
-          </section>
+          <div className="space-y-4">
+            <QuizPurposePanel
+              open={showPurpose}
+              onToggle={() => setShowPurpose((value) => !value)}
+              title="CERQ-style cognitive coping check"
+              summary="This check focuses on what your mind tends to do after stressful or negative events. It looks at thinking strategies, not personality traits or diagnosis."
+              points={[
+                'It shows which cognitive emotion-regulation strategies are used most and least often.',
+                'It separates generally helpful strategies from less-helpful patterns such as rumination, catastrophising, or blame.',
+                'It can help identify thinking habits that may amplify distress or help you recover from it.',
+              ]}
+              guidance={[
+                'Answer based on your usual response after stress, not a single unusual incident.',
+                'Treat each item as frequency of use, not as a moral judgement about whether the strategy is good or bad.',
+                'If two options feel close, choose the one that best reflects your first automatic response.',
+              ]}
+              caveat="This is a proof-of-concept CERQ-style tool using original wording. It is not the official CERQ and is not professional advice."
+            />
+            <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              <div>
+                <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Before you begin</h3>
+                <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+                  Think about how you usually respond mentally after stressful or negative events. Scores show frequency of strategy use, not whether a response is good or bad in every context.
+                </p>
+              </div>
+              <ul className="text-sm space-y-2" style={{ color: 'var(--color-muted)' }}>
+                <li>36 original proof-of-concept items across nine cognitive strategy areas.</li>
+                <li>You can pause, resume, and go back to correct answers.</li>
+                <li>Completed attempts can be reviewed, deleted, or downloaded as PDF.</li>
+              </ul>
+            </section>
+          </div>
 
           <aside className="space-y-3">
             {draftMeta && (

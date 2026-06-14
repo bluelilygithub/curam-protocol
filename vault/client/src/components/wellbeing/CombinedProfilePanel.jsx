@@ -2,6 +2,27 @@ import React, { useCallback, useEffect, useState } from 'react';
 import api from '../../utils/apiClient';
 import ModelInsightPanel from './ModelInsightPanel';
 
+const PROFILE_VARIANTS = {
+  summary: {
+    label: 'Summary',
+    title: 'Summary profile',
+    description: 'A concise overview of the four tests for quick orientation.',
+    pdfName: 'combined-wellbeing-summary.pdf',
+  },
+  detailed: {
+    label: 'Detailed profile',
+    title: 'Detailed combined profile',
+    description: 'The current client-readable formulation with enough detail for client and clinician discussion.',
+    pdfName: 'combined-wellbeing-detailed-profile.pdf',
+  },
+  analytical: {
+    label: 'Analytical profile',
+    title: 'Analytical combined profile',
+    description: 'A more clinician-oriented formulation with mechanisms, caveats, and clinical questions.',
+    pdfName: 'combined-wellbeing-analytical-profile.pdf',
+  },
+};
+
 function formatDate(value) {
   if (!value) return '';
   return new Date(value).toLocaleString(undefined, {
@@ -17,8 +38,9 @@ export default function CombinedProfilePanel({ onBack }) {
   const [status, setStatus] = useState(null);
   const [profile, setProfile] = useState(null);
   const [sourceAttempts, setSourceAttempts] = useState(null);
+  const [profileVariant, setProfileVariant] = useState('detailed');
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
+  const [generating, setGenerating] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -41,20 +63,21 @@ export default function CombinedProfilePanel({ onBack }) {
     loadStatus();
   }, [loadStatus]);
 
-  const generateProfile = async () => {
+  const generateProfile = async (variant = 'detailed') => {
     if (!status?.available || generating) return;
-    setGenerating(true);
+    setGenerating(variant);
     setError('');
     try {
-      const res = await api.post('/api/wellbeing/profile', {});
+      const res = await api.post('/api/wellbeing/profile', { variant });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Could not generate combined profile');
       setProfile(data.profile);
       setSourceAttempts(data.sourceAttempts);
+      setProfileVariant(data.variant || variant);
     } catch (err) {
       setError(err.message || 'Could not generate combined profile');
     } finally {
-      setGenerating(false);
+      setGenerating(null);
     }
   };
 
@@ -72,7 +95,7 @@ export default function CombinedProfilePanel({ onBack }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'combined-wellbeing-profile.pdf';
+      a.download = PROFILE_VARIANTS[profileVariant]?.pdfName || 'combined-wellbeing-profile.pdf';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -101,15 +124,6 @@ export default function CombinedProfilePanel({ onBack }) {
             Collates the latest completed mood, IPIP-NEO-120, CERQ-style, and COPE-style results into one detailed proof-of-concept profile.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={generateProfile}
-          disabled={!status?.available || generating}
-          className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
-          style={{ background: 'var(--color-primary)' }}
-        >
-          {generating ? 'Generating...' : 'Generate combined profile'}
-        </button>
       </div>
 
       {error && <div className="rounded-xl px-3 py-2 text-sm" style={{ color: '#991b1b', background: '#fee2e2' }}>{error}</div>}
@@ -141,6 +155,33 @@ export default function CombinedProfilePanel({ onBack }) {
         )}
       </section>
 
+      <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Choose report style</h3>
+        <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>
+          Generate the same four-test synthesis at the level of detail you need.
+        </p>
+        <div className="grid md:grid-cols-3 gap-3">
+          {Object.entries(PROFILE_VARIANTS).map(([key, config]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => generateProfile(key)}
+              disabled={!status?.available || !!generating}
+              className="rounded-2xl border p-4 text-left hover:opacity-80 disabled:opacity-50 transition-opacity"
+              style={{
+                borderColor: profileVariant === key && profile ? 'var(--color-primary)' : 'var(--color-border)',
+                background: profileVariant === key && profile ? 'var(--color-bg)' : 'var(--color-surface)',
+              }}
+            >
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                {generating === key ? 'Generating...' : config.label}
+              </p>
+              <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{config.description}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+
       {profile && (
         <>
           <div className="flex justify-end">
@@ -154,7 +195,7 @@ export default function CombinedProfilePanel({ onBack }) {
               {pdfLoading ? 'Preparing PDF...' : 'Download PDF'}
             </button>
           </div>
-          <ModelInsightPanel insight={profile} title="Detailed combined profile" />
+          <ModelInsightPanel insight={profile} title={PROFILE_VARIANTS[profileVariant]?.title || 'Combined profile'} />
           {sourceAttempts && (
             <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
               Generated from the latest completed result for each source test.
