@@ -219,6 +219,23 @@ function describePersonality(scores) {
   ].join('');
 }
 
+function describeHexacoPersonality(scores) {
+  const high = labels(scores.hexacoPersonality?.highDomains || []).slice(0, 3);
+  const low = labels(scores.hexacoPersonality?.lowDomains || []).slice(0, 2);
+  if (!high.length && !low.length) {
+    return 'The HEXACO-style personality lens does not show one dominant six-domain pattern, so it should be used mainly as a comparison point against the IPIP-style profile.';
+  }
+  return [
+    high.length
+      ? `The HEXACO-style lens adds six-domain context, with stronger relative endorsement in ${sentenceList(high)}.`
+      : '',
+    low.length
+      ? ` Lower relative HEXACO-style domains such as ${sentenceList(low)} may qualify how the broader personality pattern shows up in relationships, stress, and self-regulation.`
+      : '',
+    ' This is useful because Honesty-Humility and Emotionality can add interpersonal and attachment-related nuance that the IPIP-style five-domain lens may not fully capture.',
+  ].join('');
+}
+
 function describeCognitiveCoping(scores) {
   const high = scores.cognitiveCoping.highScales || [];
   const keys = highKeys(high);
@@ -266,7 +283,8 @@ function describeBehaviouralCoping(scores) {
 function describeReinforcingThemes(latest, scores) {
   const behavioural = describeBehaviouralCoping(scores);
   const cognitive = describeCognitiveCoping(scores);
-  return `The clearest combined themes are found where the same pattern appears in different languages. The mood score sets the current emotional load; the cognitive profile shows how stress is explained internally; and the behavioural coping profile shows what the person does with that explanation. Read together, the profile asks whether the person moves from distress into constructive contact, planning, meaning, and recovery, or whether the distress first becomes self-criticism, denial, rumination, or delay. ${describeMood(latest)} ${cognitive} ${behavioural}`;
+  const hexaco = describeHexacoPersonality(scores);
+  return `The clearest combined themes are found where the same pattern appears in different languages. The mood score sets the current emotional load; the two personality lenses describe the posture the person may bring into stress and relationships; the cognitive profile shows how stress is explained internally; and the behavioural coping profile shows what the person does with that explanation. Read together, the profile asks whether the person moves from distress into constructive contact, planning, meaning, and recovery, or whether the distress first becomes self-criticism, denial, rumination, or delay. ${describeMood(latest)} ${hexaco} ${cognitive} ${behavioural}`;
 }
 
 function describeTensions(scores) {
@@ -312,17 +330,19 @@ function buildCombinedFallback(latest, scores) {
   const moodLine = `The mood check sits at ${latest.mood.totalScore}/63, in the "${latest.mood.bandLabel}" range.`;
   const highDomains = scores.personality.highDomains.map((item) => `${item.label} (${item.band})`);
   const lowDomains = scores.personality.lowDomains.map((item) => `${item.label} (${item.band})`);
+  const hexacoDomains = (scores.hexacoPersonality?.highDomains || []).map((item) => `${item.label} (${item.band})`);
   const cerqHigh = scores.cognitiveCoping.highScales.map((item) => `${item.label} (${item.band})`);
   const copeHigh = scores.copingStyle.highScales.map((item) => `${item.label} (${item.band})`);
   const mood = describeMood(latest);
   const personality = describePersonality(scores);
+  const hexacoPersonality = describeHexacoPersonality(scores);
   const cognitive = describeCognitiveCoping(scores);
   const behavioural = describeBehaviouralCoping(scores);
 
   return {
     summary: [
       `${moodLine} The combined profile is most useful when read as a working formulation: current emotional load, habitual personality posture, the way stress is explained internally, and the actions used to cope.`,
-      `${personality} ${cognitive}`,
+      `${personality} ${hexacoPersonality} ${cognitive}`,
       behavioural,
     ].join('\n\n'),
     sections: [
@@ -330,7 +350,7 @@ function buildCombinedFallback(latest, scores) {
         title: 'Overall formulation',
         body: [
           `This profile should be read as a working hypothesis rather than a set of labels. ${mood}`,
-          'The personality result describes the posture the person may bring into stress, while the CERQ-style and COPE-style results describe what happens after stress arrives: first in thought, then in action. The most useful reading is not "these scales were high"; it is "this is the kind of loop the person may enter, the resources they may reach for, and the points where coping may either help recovery or accidentally keep stress alive."',
+          'The personality results describe the posture the person may bring into stress, while the CERQ-style and COPE-style results describe what happens after stress arrives: first in thought, then in action. The most useful reading is not "these scales were high"; it is "this is the kind of loop the person may enter, the resources they may reach for, and the points where coping may either help recovery or accidentally keep stress alive."',
         ].join('\n\n'),
       },
       {
@@ -341,7 +361,8 @@ function buildCombinedFallback(latest, scores) {
         title: 'Personality pattern',
         body: [
           personality,
-          `The evidence behind this includes higher relative domain signals of ${sentenceList(highDomains) || 'none clearly dominant'} and lower relative signals of ${sentenceList(lowDomains) || 'none clearly low'}, but those names are only evidence for the formulation rather than the formulation itself.`,
+          hexacoPersonality,
+          `The evidence behind this includes IPIP-style higher relative domain signals of ${sentenceList(highDomains) || 'none clearly dominant'} and lower relative signals of ${sentenceList(lowDomains) || 'none clearly low'}. The HEXACO-style lens adds higher relative six-domain signals of ${sentenceList(hexacoDomains) || 'none clearly dominant'}. These names are evidence for the formulation rather than the formulation itself.`,
         ].join('\n\n'),
       },
       {
@@ -376,7 +397,7 @@ function buildCombinedFallback(latest, scores) {
       },
     ],
     questions: [
-      'Which pattern appears in at least two of the four tests?',
+      'Which pattern appears in at least two of the five tests?',
       'Which result feels more like a current state than a stable trait?',
       'Under stress, do your coping responses move you toward support and action or toward withdrawal and short-term relief?',
       'What is one useful strength shown by the profile that you may underuse?',
@@ -390,13 +411,14 @@ function buildCombinedFallback(latest, scores) {
 function buildCombinedSummaryFallback(latest, scores) {
   const mood = `Mood score: ${latest.mood.totalScore}/63 (${latest.mood.bandLabel}).`;
   const highDomains = scores.personality.highDomains.slice(0, 2).map((item) => `${item.label} (${item.band})`);
+  const hexacoDomains = (scores.hexacoPersonality?.highDomains || []).slice(0, 2).map((item) => `${item.label} (${item.band})`);
   const cerqHigh = scores.cognitiveCoping.highScales.slice(0, 3).map((item) => `${item.label} (${item.band})`);
   const copeHigh = scores.copingStyle.highScales.slice(0, 3).map((item) => `${item.label} (${item.band})`);
 
   return {
     summary: [
-      `${mood} The four tests together give a broad self-report overview of current mood load, personality style, cognitive coping, and practical coping responses.`,
-      `The most visible pattern is shaped by ${sentenceList(highDomains) || 'no strongly dominant personality domain'}, cognitive strategies such as ${sentenceList(cerqHigh) || 'no clearly dominant CERQ-style strategy'}, and coping responses such as ${sentenceList(copeHigh) || 'no clearly dominant COPE-style response'}.`,
+      `${mood} The five tests together give a broad self-report overview of current mood load, two personality lenses, cognitive coping, and practical coping responses.`,
+      `The most visible pattern is shaped by IPIP-style signals such as ${sentenceList(highDomains) || 'no strongly dominant personality domain'}, HEXACO-style signals such as ${sentenceList(hexacoDomains) || 'no strongly dominant six-domain signal'}, cognitive strategies such as ${sentenceList(cerqHigh) || 'no clearly dominant CERQ-style strategy'}, and coping responses such as ${sentenceList(copeHigh) || 'no clearly dominant COPE-style response'}.`,
     ].join('\n\n'),
     sections: [
       {
@@ -405,7 +427,7 @@ function buildCombinedSummaryFallback(latest, scores) {
       },
       {
         title: 'Main signals',
-        body: `${mood} Personality signals: ${sentenceList(highDomains) || 'balanced or not strongly differentiated'}. Cognitive coping signals: ${sentenceList(cerqHigh) || 'not strongly differentiated'}. Behavioural coping signals: ${sentenceList(copeHigh) || 'not strongly differentiated'}.`,
+        body: `${mood} IPIP personality signals: ${sentenceList(highDomains) || 'balanced or not strongly differentiated'}. HEXACO personality signals: ${sentenceList(hexacoDomains) || 'balanced or not strongly differentiated'}. Cognitive coping signals: ${sentenceList(cerqHigh) || 'not strongly differentiated'}. Behavioural coping signals: ${sentenceList(copeHigh) || 'not strongly differentiated'}.`,
       },
       {
         title: 'What to look at next',
@@ -487,21 +509,85 @@ function buildCombinedAnalyticalFallback(latest, scores) {
   };
 }
 
+function buildCombinedSuggestionsFallback(latest, scores) {
+  const mood = describeMood(latest);
+  const personality = describePersonality(scores);
+  const hexacoPersonality = describeHexacoPersonality(scores);
+  const cognitive = describeCognitiveCoping(scores);
+  const behavioural = describeBehaviouralCoping(scores);
+
+  return {
+    summary: [
+      'These suggestions are drawn from the five self-report checks as reflective development prompts. They are not treatment advice, diagnosis, or instructions; they are areas the client may choose to notice, discuss, or strengthen.',
+      `${mood} ${personality} ${hexacoPersonality}`,
+      'The most useful next step is to look for small, observable moments where the pattern shows up in real life, especially under stress, conflict, fatigue, uncertainty, or pressure.',
+    ].join('\n\n'),
+    sections: [
+      {
+        title: 'Strengths to lean on',
+        body: describeStrengths(scores),
+      },
+      {
+        title: 'Patterns to notice earlier',
+        body: [
+          cognitive,
+          'A useful development focus is to notice the first mental move after stress: whether the client moves toward perspective, planning, blame, rumination, threat-amplification, or avoidance. The aim is awareness of sequence, not self-criticism.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'Coping habits to strengthen',
+        body: [
+          behavioural,
+          'The client may benefit from identifying which coping responses help immediately and which still help a few hours or days later. This distinction can separate short-term relief from strategies that actually restore agency, connection, and clarity.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'Relationship and communication focus',
+        body: [
+          hexacoPersonality,
+          'The interpersonal development question is how the client communicates needs under pressure: whether they ask clearly, withdraw, become defensive, over-explain, minimise, or try to manage everything privately. A practical area to strengthen is naming the kind of support needed before the situation escalates.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'Personal development experiments',
+        body: [
+          'Choose one small experiment rather than trying to change the whole pattern at once.',
+          'Examples: pause before responding under stress; write down the first interpretation and one alternative; ask for a specific kind of help; turn one worry into a concrete next step; notice when self-blame is becoming global rather than specific; or schedule recovery after demanding social or emotional situations.',
+          'The best experiment is the one the client can try safely, observe honestly, and discuss later without treating the result as success or failure.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'Areas to discuss with a clinician or trusted support',
+        body: 'If any pattern feels intense, persistent, risky, or functionally costly, it should be discussed with a suitably qualified professional. These suggestions can help organise that conversation by pointing to recurring sequences, possible strengths, and places where more assessment or support may be useful.',
+      },
+    ],
+    questions: [
+      'Which suggestion feels most immediately recognisable in daily life?',
+      'Which strength is present in the profile but harder to access under stress?',
+      'What is the first sign that the less-helpful pattern has started?',
+      'Which small experiment could be tried for one week and then reviewed?',
+      'Who could give useful feedback about whether this pattern is visible from the outside?',
+    ],
+    caveat: 'These are reflective personal-development suggestions generated from proof-of-concept self-report tools. They are not diagnosis, treatment advice, a risk assessment, or a substitute for professional judgement.',
+  };
+}
+
 function normaliseCombinedVariant(value) {
-  if (value === 'summary' || value === 'analytical') return value;
+  if (value === 'summary' || value === 'analytical' || value === 'suggestions') return value;
   return 'detailed';
 }
 
 function buildCombinedFallbackForVariant(latest, scores, variant) {
   if (variant === 'summary') return buildCombinedSummaryFallback(latest, scores);
   if (variant === 'analytical') return buildCombinedAnalyticalFallback(latest, scores);
+  if (variant === 'suggestions') return buildCombinedSuggestionsFallback(latest, scores);
   return buildCombinedFallback(latest, scores);
 }
 
 function buildCombinedPrompt(scores, variant = 'detailed') {
   if (variant === 'summary') {
     return [
-      'Create a brief integrated overview from four completed proof-of-concept self-report checks.',
+      'Create a brief integrated overview from five completed proof-of-concept self-report checks.',
       '',
       'Audience: client or clinician who wants a quick readable overview before reading the full profile.',
       'Length: concise. Summary should be 2 short paragraphs. Include 3 short sections only.',
@@ -520,7 +606,7 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
 
   if (variant === 'analytical') {
     return [
-      'Create a clinician-oriented analytical formulation from four completed proof-of-concept self-report checks.',
+      'Create a clinician-oriented analytical formulation from five completed proof-of-concept self-report checks.',
       '',
       'Audience: primarily a clinician, but still readable by a client if they choose to read it.',
       'Purpose: hypothesis generation, case formulation support, and clinical discussion prompts. Do not diagnose. Do not provide treatment instructions.',
@@ -543,14 +629,40 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
     ].join('\n');
   }
 
+  if (variant === 'suggestions') {
+    return [
+      'Create a reflective personal-development suggestions report from five completed proof-of-concept self-report checks.',
+      '',
+      'Audience: primarily the client, readable by a clinician. Tone should be practical, warm, specific, and careful.',
+      'Purpose: suggest areas the client may notice, strengthen, discuss, or experiment with. Do not diagnose. Do not give treatment instructions. Do not imply certainty.',
+      '',
+      'Required emphasis:',
+      '- Use all five lenses: mood, IPIP-style personality, HEXACO-style personality, CERQ-style cognitive coping, and Brief COPE-style behavioural coping.',
+      '- Translate findings into reflective improvement suggestions, not labels.',
+      '- Include strengths to lean on, patterns to notice earlier, coping habits to strengthen, interpersonal/communication suggestions, small experiments, and when to discuss with a professional.',
+      '- Use tentative wording: may, could, might, worth noticing, useful to explore.',
+      '- Avoid prescriptive wording like "you must", "you should", diagnosis, treatment plans, or risk conclusions.',
+      '- Use paragraph breaks inside JSON string values.',
+      '',
+      'Required sections:',
+      'Strengths to lean on; Patterns to notice earlier; Coping habits to strengthen; Relationship and communication focus; Personal development experiments; Areas to discuss with a clinician or trusted support.',
+      '',
+      'Return ONLY valid JSON with this shape:',
+      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Strengths to lean on","body":"..."},{"title":"Patterns to notice earlier","body":"..."},{"title":"Coping habits to strengthen","body":"..."},{"title":"Relationship and communication focus","body":"..."},{"title":"Personal development experiments","body":"..."},{"title":"Areas to discuss with a clinician or trusted support","body":"..."}],"questions":["..."],"caveat":"..."}',
+      '',
+      `Scored data:\n${JSON.stringify(scores, null, 2).slice(0, 17000)}`,
+    ].join('\n');
+  }
+
   return [
-    'Create a detailed integrated profile from four completed proof-of-concept self-report checks.',
+    'Create a detailed integrated profile from five completed proof-of-concept self-report checks.',
     '',
-    'The four lenses are:',
+    'The five lenses are:',
     '1. Mood check: current mood/symptom context, not diagnosis.',
     '2. IPIP-NEO-120: broad personality domains and facet tendencies.',
-    '3. CERQ-style: cognitive emotion-regulation strategies after stress.',
-    '4. Brief COPE-style: behavioural/practical coping responses.',
+    '3. HEXACO-60-style: six-domain personality posture, especially honesty-humility, emotionality, and interpersonal style.',
+    '4. CERQ-style: cognitive emotion-regulation strategies after stress.',
+    '5. Brief COPE-style: behavioural/practical coping responses.',
     '',
     'Write a considered synthesis, not a score report. The output should feel like a thoughtful psychologist-style formulation while explicitly avoiding diagnosis, treatment advice, and certainty.',
     '',
@@ -590,6 +702,12 @@ async function generateCombinedProfile(userId, latest, options = {}) {
       strongestFacets: strongestByDistance(latest.ipip.facetScores, 12),
       analysis: latest.ipip.analysis,
     },
+    hexacoPersonality: {
+      highDomains: topByNormalized(latest.hexaco.domainScores, 6),
+      lowDomains: bottomByNormalized(latest.hexaco.domainScores, 6),
+      allDomains: allCompactScales(latest.hexaco.domainScores),
+      analysis: latest.hexaco.analysis,
+    },
     cognitiveCoping: {
       allScales: allCompactScales(latest.cerq.scaleScores),
       highScales: topByNormalized(latest.cerq.scaleScores, 7),
@@ -611,7 +729,7 @@ async function generateCombinedProfile(userId, latest, options = {}) {
     if (!model) return normaliseInsight(null, fallback);
 
     const text = await callModel(model, buildCombinedPrompt(scores, variant), {
-      maxTokens: variant === 'summary' ? 1600 : variant === 'analytical' ? 4600 : 3600,
+      maxTokens: variant === 'summary' ? 1600 : variant === 'analytical' ? 4600 : variant === 'suggestions' ? 3600 : 3600,
       system: 'You write careful, integrated self-report profile formulations. You are not a clinician and must avoid diagnosis, treatment advice, or unsupported certainty. Return only valid JSON.',
     });
     return {

@@ -23,6 +23,14 @@ const {
   buildIpipNeoPdfBuffer,
 } = require('../services/ipipNeo120');
 const {
+  QUESTIONNAIRE_VERSION: HEXACO_QUESTIONNAIRE_VERSION,
+  QUESTIONS: HEXACO_QUESTIONS,
+  DOMAINS: HEXACO_DOMAINS,
+  normalizeAnswers: normalizeHexacoAnswers,
+  scoreHexacoAnswers,
+  buildHexacoPdfBuffer,
+} = require('../services/hexaco60Style');
+const {
   QUESTIONNAIRE_VERSION: CERQ_QUESTIONNAIRE_VERSION,
   QUESTIONS: CERQ_QUESTIONS,
   SCALES: CERQ_SCALES,
@@ -848,8 +856,130 @@ router.delete('/ipip/attempts/:id', async (req, res) => {
   }
 });
 
+router.get('/hexaco/questions', (_req, res) => {
+  res.json({
+    version: HEXACO_QUESTIONNAIRE_VERSION,
+    name: 'HEXACO-60-Style Personality Check',
+    description: 'A proof-of-concept 60-item personality self-report across six HEXACO-style domains.',
+    responseOptions: HEXACO_QUESTIONS[0]?.options || [],
+    domains: Object.values(HEXACO_DOMAINS),
+    questions: HEXACO_QUESTIONS,
+  });
+});
+
+router.get('/hexaco/attempts', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "questionnaireVersion", "domainScores", analysis, "createdAt"
+       FROM hexaco_attempts
+       WHERE "userId"=$1
+       ORDER BY "createdAt" DESC
+       LIMIT 50`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/hexaco/attempts/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT *
+       FROM hexaco_attempts
+       WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+    const attempt = rows[0];
+    attempt.analysis = parseMaybeJson(attempt.analysis, {});
+    attempt.answers = parseMaybeJson(attempt.answers, []);
+    attempt.domainScores = parseMaybeJson(attempt.domainScores, []);
+    if (!attempt.analysis.modelInsight || attempt.analysis.modelInsight.formatVersion !== 2) {
+      attempt.analysis.modelInsight = await generateModelInsight(req.user.id, {
+        title: 'HEXACO-60-Style Personality Check',
+        purpose: 'Interpret a proof-of-concept personality profile across six HEXACO-style domains. Focus on trait patterns, relational style, and tensions; avoid diagnosis, suitability judgement, or certainty.',
+        scores: { domainScores: attempt.domainScores, answers: attempt.answers.slice(0, 20) },
+        existingAnalysis: attempt.analysis,
+        scoreLines: latestScoreLinesFromScales(attempt.domainScores, 6),
+      });
+      await pool.query('UPDATE hexaco_attempts SET analysis=$1 WHERE id=$2 AND "userId"=$3', [JSON.stringify(attempt.analysis), req.params.id, req.user.id]);
+    }
+    res.json(attempt);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/hexaco/attempts/:id/pdf', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT *
+       FROM hexaco_attempts
+       WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+
+    const buf = await buildHexacoPdfBuffer({ attempt: rows[0] });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="hexaco-60-style-${req.params.id}.pdf"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[hexaco pdf]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/hexaco/attempts', async (req, res) => {
+  try {
+    const answers = normalizeHexacoAnswers(req.body?.answers);
+    const { domainScores, analysis } = scoreHexacoAnswers(answers);
+    analysis.modelInsight = await generateModelInsight(req.user.id, {
+      title: 'HEXACO-60-Style Personality Check',
+      purpose: 'Interpret a proof-of-concept personality profile across six HEXACO-style domains. Focus on trait patterns, relational style, and tensions; avoid diagnosis, suitability judgement, or certainty.',
+      scores: { domainScores, answers: answers.slice(0, 20) },
+      existingAnalysis: analysis,
+      scoreLines: latestScoreLinesFromScales(domainScores, 6),
+    });
+
+    const { rows } = await pool.query(
+      `INSERT INTO hexaco_attempts (
+         "userId", "questionnaireVersion", answers, "domainScores", analysis
+       )
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING *`,
+      [
+        req.user.id,
+        HEXACO_QUESTIONNAIRE_VERSION,
+        JSON.stringify(answers),
+        JSON.stringify(domainScores),
+        JSON.stringify(analysis),
+      ]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    const status = /required|Expected|Invalid|out of order/i.test(err.message) ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+router.delete('/hexaco/attempts/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM hexaco_attempts WHERE id=$1 AND "userId"=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Attempt not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 async function loadLatestProfileInputs(userId) {
-  const [mood, ipip, cerq, cope] = await Promise.all([
+  const [mood, ipip, hexaco, cerq, cope] = await Promise.all([
     pool.query(
       `SELECT *
        FROM wellbeing_attempts
@@ -861,6 +991,14 @@ async function loadLatestProfileInputs(userId) {
     pool.query(
       `SELECT *
        FROM ipip_neo_attempts
+       WHERE "userId"=$1
+       ORDER BY "createdAt" DESC
+       LIMIT 1`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT *
+       FROM hexaco_attempts
        WHERE "userId"=$1
        ORDER BY "createdAt" DESC
        LIMIT 1`,
@@ -887,6 +1025,7 @@ async function loadLatestProfileInputs(userId) {
   const latest = {
     mood: mood.rows[0] || null,
     ipip: ipip.rows[0] || null,
+    hexaco: hexaco.rows[0] || null,
     cerq: cerq.rows[0] || null,
     cope: cope.rows[0] || null,
   };
@@ -900,6 +1039,11 @@ async function loadLatestProfileInputs(userId) {
     latest.ipip.answers = parseMaybeJson(latest.ipip.answers, []);
     latest.ipip.facetScores = parseMaybeJson(latest.ipip.facetScores, []);
     latest.ipip.domainScores = parseMaybeJson(latest.ipip.domainScores, []);
+  }
+  if (latest.hexaco) {
+    latest.hexaco.analysis = parseMaybeJson(latest.hexaco.analysis, {});
+    latest.hexaco.answers = parseMaybeJson(latest.hexaco.answers, []);
+    latest.hexaco.domainScores = parseMaybeJson(latest.hexaco.domainScores, []);
   }
   if (latest.cerq) {
     latest.cerq.analysis = parseMaybeJson(latest.cerq.analysis, {});
@@ -919,6 +1063,7 @@ function profileStatusFromLatest(latest) {
   const tests = [
     { key: 'mood', label: 'BDI-Style Mood Check', completed: !!latest.mood, completedAt: latest.mood?.createdAt || null },
     { key: 'ipip', label: 'IPIP-NEO-120 Personality Inventory', completed: !!latest.ipip, completedAt: latest.ipip?.createdAt || null },
+    { key: 'hexaco', label: 'HEXACO-60-Style Personality Check', completed: !!latest.hexaco, completedAt: latest.hexaco?.createdAt || null },
     { key: 'cerq', label: 'CERQ-Style Cognitive Coping Check', completed: !!latest.cerq, completedAt: latest.cerq?.createdAt || null },
     { key: 'cope', label: 'Brief COPE-Style Coping Check', completed: !!latest.cope, completedAt: latest.cope?.createdAt || null },
   ];
@@ -1018,6 +1163,29 @@ async function insertRandomIpipAttempt(client, userId) {
   return rows[0];
 }
 
+async function insertRandomHexacoAttempt(client, userId) {
+  const answers = normalizeHexacoAnswers(randomValueRawAnswers(HEXACO_QUESTIONS, 5, 'itemId'));
+  const { domainScores, analysis } = scoreHexacoAnswers(answers);
+  analysis.generated = true;
+  analysis.modelInsight = demoInsight('HEXACO-60-Style Personality Check');
+
+  const { rows } = await client.query(
+    `INSERT INTO hexaco_attempts (
+       "userId", "questionnaireVersion", answers, "domainScores", analysis
+     )
+     VALUES ($1,$2,$3,$4,$5)
+     RETURNING id, "createdAt"`,
+    [
+      userId,
+      HEXACO_QUESTIONNAIRE_VERSION,
+      JSON.stringify(answers),
+      JSON.stringify(domainScores),
+      JSON.stringify(analysis),
+    ]
+  );
+  return rows[0];
+}
+
 async function insertRandomCerqAttempt(client, userId) {
   const answers = normalizeCerqAnswers(randomValueRawAnswers(CERQ_QUESTIONS, 5));
   const { scaleScores, analysis } = scoreCerqAnswers(answers);
@@ -1081,6 +1249,7 @@ function visualProfileFromLatest(latest) {
     sourceAttempts: {
       mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
       ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
+      hexaco: { id: latest.hexaco.id, createdAt: latest.hexaco.createdAt },
       cerq: { id: latest.cerq.id, createdAt: latest.cerq.createdAt },
       cope: { id: latest.cope.id, createdAt: latest.cope.createdAt },
     },
@@ -1095,6 +1264,10 @@ function visualProfileFromLatest(latest) {
       domainScores: latest.ipip.domainScores,
       facetScores: latest.ipip.facetScores,
       createdAt: latest.ipip.createdAt,
+    },
+    hexaco: {
+      domainScores: latest.hexaco.domainScores,
+      createdAt: latest.hexaco.createdAt,
     },
     cerq: {
       scaleScores: latest.cerq.scaleScores,
@@ -1122,12 +1295,12 @@ router.post('/profile', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Combined profile requires all four tests to be completed first.',
+        error: 'Combined profile requires all five tests to be completed first.',
         status,
       });
     }
 
-    const variant = ['summary', 'analytical'].includes(req.body?.variant) ? req.body.variant : 'detailed';
+    const variant = ['summary', 'analytical', 'suggestions'].includes(req.body?.variant) ? req.body.variant : 'detailed';
     const profile = await generateCombinedProfile(req.user.id, latest, { variant });
     res.json({
       profile,
@@ -1135,6 +1308,7 @@ router.post('/profile', async (req, res) => {
       sourceAttempts: {
         mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
         ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
+        hexaco: { id: latest.hexaco.id, createdAt: latest.hexaco.createdAt },
         cerq: { id: latest.cerq.id, createdAt: latest.cerq.createdAt },
         cope: { id: latest.cope.id, createdAt: latest.cope.createdAt },
       },
@@ -1150,7 +1324,7 @@ router.get('/profile/visuals', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Visual summary requires all four tests to be completed first.',
+        error: 'Visual summary requires all five tests to be completed first.',
         status,
       });
     }
@@ -1170,7 +1344,7 @@ router.get('/profile/visuals/pdf', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Visual summary PDF requires all four tests to be completed first.',
+        error: 'Visual summary PDF requires all five tests to be completed first.',
         status,
       });
     }
@@ -1204,6 +1378,7 @@ router.post('/admin/random-attempts', async (req, res) => {
     const attempts = {
       mood: await insertRandomMoodAttempt(client, req.user.id),
       ipip: await insertRandomIpipAttempt(client, req.user.id),
+      hexaco: await insertRandomHexacoAttempt(client, req.user.id),
       cerq: await insertRandomCerqAttempt(client, req.user.id),
       cope: await insertRandomCopeAttempt(client, req.user.id),
     };
@@ -1302,7 +1477,7 @@ router.post('/profile/pdf', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Combined profile PDF requires all four tests to be completed first.',
+        error: 'Combined profile PDF requires all five tests to be completed first.',
         status,
       });
     }
@@ -1315,6 +1490,7 @@ router.post('/profile/pdf', async (req, res) => {
     const sourceAttempts = req.body?.sourceAttempts || {
       mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
       ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
+      hexaco: { id: latest.hexaco.id, createdAt: latest.hexaco.createdAt },
       cerq: { id: latest.cerq.id, createdAt: latest.cerq.createdAt },
       cope: { id: latest.cope.id, createdAt: latest.cope.createdAt },
     };
@@ -1331,9 +1507,10 @@ router.post('/profile/pdf', async (req, res) => {
 
 router.delete('/reset', async (req, res) => {
   try {
-    const [mood, ipip, cerq, cope] = await Promise.all([
+    const [mood, ipip, hexaco, cerq, cope] = await Promise.all([
       pool.query('DELETE FROM wellbeing_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM ipip_neo_attempts WHERE "userId"=$1', [req.user.id]),
+      pool.query('DELETE FROM hexaco_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM cerq_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM cope_attempts WHERE "userId"=$1', [req.user.id]),
     ]);
@@ -1343,6 +1520,7 @@ router.delete('/reset', async (req, res) => {
       deleted: {
         mood: mood.rowCount,
         ipip: ipip.rowCount,
+        hexaco: hexaco.rowCount,
         cerq: cerq.rowCount,
         cope: cope.rowCount,
       },

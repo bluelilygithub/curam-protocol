@@ -6,19 +6,20 @@ const DEFAULT_WELLBEING_INVITE_BODY = `Hello,
 
 You are being invited to complete the Curam Wellbeing & Personality Checks as a proof-of-concept self-report exercise.
 
-The quiz area brings together four short self-report tools:
+The quiz area brings together five short self-report tools:
 
 - a BDI-style mood check
 - an IPIP-NEO-120-style personality inventory
+- a HEXACO-60-style personality check
 - a CERQ-style cognitive coping check
 - a Brief COPE-style coping check
 
-When all four are completed, the system can generate an overall profile, charts, and a mind map that bring the results together. The aim is to support reflection and discussion by showing patterns across mood, personality style, thinking responses, and coping behaviour.
+When all five are completed, the system can generate an overall profile, charts, and a mind map that bring the results together. The aim is to support reflection and discussion by showing patterns across mood, personality style, thinking responses, and coping behaviour.
 
 What you are expected to do:
 
 1. Log in using the email address and temporary password below.
-2. Complete the four checks as honestly as you can.
+2. Complete the five checks as honestly as you can.
 3. Use the optional reflection boxes where extra context would make an answer clearer.
 4. Review your results when you are finished.
 

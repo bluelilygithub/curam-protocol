@@ -72,29 +72,32 @@ function buildMindMapData(visuals) {
   const moodScore = Number(visuals?.mood?.totalScore || 0);
   const moodStrength = Math.min(1, moodScore / 63);
   const domains = parseMaybeJson(visuals?.ipip?.domainScores, []);
+  const hexacoDomains = parseMaybeJson(visuals?.hexaco?.domainScores, []);
   const cerq = parseMaybeJson(visuals?.cerq?.scaleScores, []);
   const cope = parseMaybeJson(visuals?.cope?.scaleScores, []);
   const domainByKey = Object.fromEntries(domains.map((domain) => [domain.key, domain]));
+  const hexacoByKey = Object.fromEntries(hexacoDomains.map((domain) => [domain.key, domain]));
   const lessHelpful = strongest(cerq, (scale) => scale.family === 'less-helpful');
   const helpful = strongest(cerq, (scale) => scale.family === 'helpful');
   const avoidant = strongest(cope, (scale) => scale.family === 'avoidant');
   const active = strongest(cope, (scale) => !['avoidant', 'self-evaluative'].includes(scale.family));
 
   const nodes = [
-    { id: 'centre', label: 'Combined pattern', detail: 'Latest result from all four checks', x: 298, y: 300, color: colour('#6366f1'), strength: 1 },
+    { id: 'centre', label: 'Combined pattern', detail: 'Latest result from all five checks', x: 298, y: 300, color: colour('#6366f1'), strength: 1 },
     { id: 'mood', label: 'Mood load', detail: `${moodScore}/63 - ${visuals?.mood?.bandLabel || 'Mood score'}`, x: 298, y: 150, color: colour('#ef4444'), strength: moodStrength },
-    { id: 'sensitivity', label: 'Emotional sensitivity', detail: domainByKey.N ? `${domainByKey.N.label}: ${Math.round(Number(domainByKey.N.normalized || 0) * 100)}%` : 'Neuroticism domain', x: 455, y: 230, color: colour('#f97316'), strength: Number(domainByKey.N?.normalized || 0.35) },
+    { id: 'sensitivity', label: 'Emotional sensitivity', detail: hexacoByKey.EM ? `${hexacoByKey.EM.label}: ${Math.round(Number(hexacoByKey.EM.normalized || 0) * 100)}%` : domainByKey.N ? `${domainByKey.N.label}: ${Math.round(Number(domainByKey.N.normalized || 0) * 100)}%` : 'Emotionality / Neuroticism domain', x: 455, y: 230, color: colour('#f97316'), strength: Number(hexacoByKey.EM?.normalized ?? domainByKey.N?.normalized ?? 0.35) },
     { id: 'resources', label: 'Cognitive resources', detail: helpful.length ? helpful.map((scale) => scale.label).join(', ') : 'Helpful CERQ strategies', x: 440, y: 390, color: colour('#3b82f6'), strength: nodeStrength(helpful, 0.35) },
     { id: 'loops', label: 'Cognitive loops', detail: lessHelpful.length ? lessHelpful.map((scale) => scale.label).join(', ') : 'Less-helpful CERQ strategies', x: 135, y: 230, color: colour('#dc2626'), strength: nodeStrength(lessHelpful, 0.35) },
     { id: 'coping', label: 'Active/support coping', detail: active.length ? active.map((scale) => scale.label).join(', ') : 'Adaptive coping strategies', x: 298, y: 470, color: colour('#22c55e'), strength: nodeStrength(active, 0.35) },
     { id: 'avoidance', label: 'Avoidant pressure', detail: avoidant.length ? avoidant.map((scale) => scale.label).join(', ') : 'Avoidant coping strategies', x: 145, y: 390, color: colour('#ea580c'), strength: nodeStrength(avoidant, 0.35) },
-    { id: 'structure', label: 'Structure', detail: domainByKey.C ? `${domainByKey.C.label}: ${Math.round(Number(domainByKey.C.normalized || 0) * 100)}%` : 'Conscientiousness domain', x: 298, y: 590, color: colour('#14b8a6'), strength: Number(domainByKey.C?.normalized || 0.35) },
+    { id: 'humility', label: 'Fairness/modesty', detail: hexacoByKey.HH ? `${hexacoByKey.HH.label}: ${Math.round(Number(hexacoByKey.HH.normalized || 0) * 100)}%` : 'Honesty-Humility domain', x: 145, y: 520, color: colour('#8b5cf6'), strength: Number(hexacoByKey.HH?.normalized || 0.35) },
+    { id: 'structure', label: 'Structure', detail: hexacoByKey.CO ? `${hexacoByKey.CO.label}: ${Math.round(Number(hexacoByKey.CO.normalized || 0) * 100)}%` : domainByKey.C ? `${domainByKey.C.label}: ${Math.round(Number(domainByKey.C.normalized || 0) * 100)}%` : 'Conscientiousness domain', x: 298, y: 620, color: colour('#14b8a6'), strength: Number(hexacoByKey.CO?.normalized ?? domainByKey.C?.normalized ?? 0.35) },
   ];
 
   const links = [
     ['centre', 'mood'], ['centre', 'sensitivity'], ['centre', 'resources'], ['centre', 'loops'],
     ['centre', 'coping'], ['centre', 'avoidance'], ['centre', 'structure'], ['mood', 'loops'],
-    ['mood', 'avoidance'], ['resources', 'coping'], ['structure', 'coping'], ['sensitivity', 'loops'],
+    ['centre', 'humility'], ['mood', 'avoidance'], ['resources', 'coping'], ['structure', 'coping'], ['sensitivity', 'loops'], ['humility', 'resources'],
   ];
 
   const notes = [
@@ -177,12 +180,13 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
 
   addText(view === 'mindmap' ? 'Wellbeing Mind Map' : 'Wellbeing Visual Summary', { size: 18, bold: true });
   addText(`Generated: ${formatDate(new Date())}`, { size: 9, color: rgb(0.45, 0.45, 0.45) });
-  addText('Uses the latest completed result from each of the four wellbeing checks.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
+  addText('Uses the latest completed result from each of the five wellbeing checks.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
 
   addHeading('Source Results');
   [
     ['Mood check', visuals?.sourceAttempts?.mood?.createdAt],
     ['IPIP-NEO-120', visuals?.sourceAttempts?.ipip?.createdAt],
+    ['HEXACO-60-style check', visuals?.sourceAttempts?.hexaco?.createdAt],
     ['CERQ-style check', visuals?.sourceAttempts?.cerq?.createdAt],
     ['Brief COPE-style check', visuals?.sourceAttempts?.cope?.createdAt],
   ].forEach(([label, createdAt]) => addText(`${label}: ${createdAt ? formatDate(createdAt) : 'latest completed result'}`, { size: 9 }));
@@ -262,6 +266,31 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
     });
     y -= 210;
     domains.sort((a, b) => Number(b.normalized) - Number(a.normalized)).forEach((domain) => addText(`${domain.label}: ${Math.round(clamp01(domain.normalized) * 100)}% (${domain.band})`, { size: 9 }));
+
+    addHeading('HEXACO-Style Six-Domain Radar');
+    const hexacoDomains = parseMaybeJson(visuals?.hexaco?.domainScores, []);
+    const hx = pageWidth / 2;
+    const hy = y - 110;
+    const hRadius = 78;
+    const hexacoPoints = hexacoDomains.map((domain, idx) => {
+      const angle = -Math.PI / 2 + (idx / Math.max(hexacoDomains.length, 1)) * Math.PI * 2;
+      const value = clamp01(domain.normalized);
+      return { domain, angle, x: hx + Math.cos(angle) * hRadius * value, y: hy + Math.sin(angle) * hRadius * value, ax: hx + Math.cos(angle) * hRadius, ay: hy + Math.sin(angle) * hRadius };
+    });
+    [0.25, 0.5, 0.75, 1].forEach((ring) => {
+      const ringPoints = hexacoDomains.map((_, idx) => {
+        const angle = -Math.PI / 2 + (idx / Math.max(hexacoDomains.length, 1)) * Math.PI * 2;
+        return { x: hx + Math.cos(angle) * hRadius * ring, y: hy + Math.sin(angle) * hRadius * ring };
+      });
+      ringPoints.forEach((point, idx) => page.drawLine({ start: point, end: ringPoints[(idx + 1) % ringPoints.length], thickness: 0.5, color: rgb(0.78, 0.78, 0.78) }));
+    });
+    hexacoPoints.forEach((point, idx) => {
+      page.drawLine({ start: { x: hx, y: hy }, end: { x: point.ax, y: point.ay }, thickness: 0.5, color: rgb(0.78, 0.78, 0.78) });
+      page.drawLine({ start: { x: point.x, y: point.y }, end: { x: hexacoPoints[(idx + 1) % hexacoPoints.length].x, y: hexacoPoints[(idx + 1) % hexacoPoints.length].y }, thickness: 1.5, color: colour('#8b5cf6') });
+      page.drawText(cleanPdfText(point.domain.label).slice(0, 16), { x: point.ax - 20, y: point.ay, size: 7, font, color: rgb(0.35, 0.35, 0.35) });
+    });
+    y -= 210;
+    hexacoDomains.sort((a, b) => Number(b.normalized) - Number(a.normalized)).forEach((domain) => addText(`${domain.label}: ${Math.round(clamp01(domain.normalized) * 100)}% (${domain.band})`, { size: 9 }));
 
     addHeading('CERQ-Style Strategy Bars');
     parseMaybeJson(visuals?.cerq?.scaleScores, [])

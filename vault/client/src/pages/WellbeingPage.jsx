@@ -5,6 +5,7 @@ import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
 import useProcessingStore from '../store/processingStore';
 import IpipNeo120Panel from '../components/wellbeing/IpipNeo120Panel';
+import Hexaco60Panel from '../components/wellbeing/Hexaco60Panel';
 import CerqStylePanel from '../components/wellbeing/CerqStylePanel';
 import BriefCopeStylePanel from '../components/wellbeing/BriefCopeStylePanel';
 import ModelInsightPanel from '../components/wellbeing/ModelInsightPanel';
@@ -16,6 +17,7 @@ import ConfirmModal from '../components/ConfirmModal';
 
 const MOOD_DRAFT_KEY = 'curam:wellbeing-mood:draft';
 const IPIP_DRAFT_KEY = 'curam:ipip-neo-120:draft';
+const HEXACO_DRAFT_KEY = 'curam:hexaco-60-style:draft';
 const CERQ_DRAFT_KEY = 'curam:cerq-style:draft';
 const COPE_DRAFT_KEY = 'curam:brief-cope-style:draft';
 
@@ -48,7 +50,7 @@ function clearMoodDraft() {
 
 function clearAllWellbeingDrafts() {
   if (typeof window === 'undefined') return;
-  [MOOD_DRAFT_KEY, IPIP_DRAFT_KEY, CERQ_DRAFT_KEY, COPE_DRAFT_KEY].forEach((key) => {
+  [MOOD_DRAFT_KEY, IPIP_DRAFT_KEY, HEXACO_DRAFT_KEY, CERQ_DRAFT_KEY, COPE_DRAFT_KEY].forEach((key) => {
     window.localStorage.removeItem(key);
   });
 }
@@ -116,7 +118,7 @@ function CompletionProgress({ tests }) {
     <section className="rounded-2xl border p-5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Four-test progress</p>
+          <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Five-test progress</p>
           <h2 className="text-lg font-semibold mt-1" style={{ color: 'var(--color-text)' }}>{completedCount} of {tests.length} checks complete</h2>
         </div>
         <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-primary)' }}>{pct}%</span>
@@ -124,7 +126,7 @@ function CompletionProgress({ tests }) {
       <div className="h-3 rounded-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
         <div className="h-full transition-all" style={{ width: `${pct}%`, background: 'var(--color-primary)' }} />
       </div>
-      <div className="grid sm:grid-cols-4 gap-2 mt-4">
+      <div className="grid sm:grid-cols-5 gap-2 mt-4">
         {tests.map((test) => (
           <div key={test.key} className="rounded-xl border px-3 py-2" style={{ borderColor: test.completed ? '#bbf7d0' : 'var(--color-border)', background: test.completed ? '#f0fdf4' : 'var(--color-bg)' }}>
             <p className="text-xs font-semibold" style={{ color: test.completed ? '#15803d' : 'var(--color-muted)' }}>
@@ -166,7 +168,7 @@ function TestTile({ test }) {
   );
 }
 
-function ResultsTile({ available, onCombined, onCharts, onMindMap }) {
+function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions }) {
   const accentBackground = available
     ? 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)), var(--color-surface) 72%)'
     : 'linear-gradient(135deg, #fffbeb, var(--color-surface) 72%)';
@@ -176,14 +178,14 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap }) {
 
   return (
     <div className="rounded-2xl border p-4 shadow-sm" style={{ background: accentBackground, borderColor: accentBorder }}>
-      <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: available ? 'var(--color-primary)' : '#92400e' }}>Fifth option</p>
+      <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: available ? 'var(--color-primary)' : '#92400e' }}>Overall results</p>
       <h3 className="text-base font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Review the overall results</h3>
       <p className="text-sm mt-2" style={{ color: 'var(--color-muted)' }}>
         {available
-          ? 'Unlocked. Review the combined profile, visual charts, or the four-test mind map.'
-          : 'Locked until all four checks have at least one completed result.'}
+          ? 'Unlocked. Review the combined profile, visual charts, five-test mind map, or personal development suggestions.'
+          : 'Locked until all five checks have at least one completed result.'}
       </p>
-      <div className="grid sm:grid-cols-3 gap-2 mt-4">
+      <div className="grid sm:grid-cols-4 gap-2 mt-4">
         <button type="button" onClick={onCombined} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
           Profile
         </button>
@@ -192,6 +194,9 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap }) {
         </button>
         <button type="button" onClick={onMindMap} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
           Mind map
+        </button>
+        <button type="button" onClick={onSuggestions} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
+          Suggestions
         </button>
       </div>
     </div>
@@ -334,6 +339,7 @@ export default function WellbeingPage() {
   const [showRandomDataConfirm, setShowRandomDataConfirm] = useState(false);
   const [showResetTestsConfirm, setShowResetTestsConfirm] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteMode, setInviteMode] = useState('send');
   const [inviteForm, setInviteForm] = useState({ email: '', password: '' });
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteStatus, setInviteStatus] = useState(null);
@@ -590,6 +596,12 @@ export default function WellbeingPage() {
     navigate('/settings');
   };
 
+  const openInviteModal = (mode = 'send') => {
+    setInviteMode(mode);
+    setInviteStatus(null);
+    setShowInviteModal(true);
+  };
+
   const sendWellbeingInvite = async (e) => {
     e.preventDefault();
     if (inviteSending) return;
@@ -666,8 +678,20 @@ export default function WellbeingPage() {
       primary: !statusByKey.ipip?.completed,
     },
     {
-      key: 'cerq',
+      key: 'hexaco',
       step: 3,
+      shortTitle: 'HEXACO',
+      title: 'HEXACO-60-Style Personality Check',
+      description: 'A six-domain personality profile adding Honesty-Humility, Emotionality, and interpersonal style to the combined view.',
+      completed: !!statusByKey.hexaco?.completed,
+      completedAt: statusByKey.hexaco?.completedAt,
+      actionLabel: statusByKey.hexaco?.completed ? 'Review or retake HEXACO' : 'Start HEXACO-60-style check',
+      onOpen: () => setTool('hexaco'),
+      primary: !statusByKey.hexaco?.completed,
+    },
+    {
+      key: 'cerq',
+      step: 4,
       shortTitle: 'Cognition',
       title: 'CERQ-Style Cognitive Coping Check',
       description: 'A cognitive emotion-regulation check showing which thinking strategies are most and least used.',
@@ -679,7 +703,7 @@ export default function WellbeingPage() {
     },
     {
       key: 'cope',
-      step: 4,
+      step: 5,
       shortTitle: 'Coping',
       title: 'Brief COPE-Style Coping Check',
       description: 'A coping response profile across active, support-seeking, avoidant, meaning-focused, and emotion-focused strategies.',
@@ -717,6 +741,28 @@ export default function WellbeingPage() {
           </p>
         </div>
         <IpipNeo120Panel
+          onBack={dashboardBack}
+          onComplete={refreshProfileStatus}
+          onNext={() => setTool('hexaco')}
+          nextLabel="Continue to HEXACO-60-style check"
+        />
+      </div>
+    );
+  }
+
+  if (tool === 'hexaco') {
+    return (
+      <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+        <div>
+          <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            {getIcon('heart-pulse', { size: 20 })}
+            Wellbeing & Personality Checks
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+            Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
+          </p>
+        </div>
+        <Hexaco60Panel
           onBack={dashboardBack}
           onComplete={refreshProfileStatus}
           onNext={() => setTool('cognitive')}
@@ -770,7 +816,7 @@ export default function WellbeingPage() {
     );
   }
 
-  if (tool === 'combined') {
+  if (tool === 'combined' || tool === 'suggestions') {
     return (
       <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
         <div>
@@ -782,7 +828,11 @@ export default function WellbeingPage() {
             Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
           </p>
         </div>
-        <CombinedProfilePanel onBack={dashboardBack} />
+        <CombinedProfilePanel
+          onBack={dashboardBack}
+          initialVariant={tool === 'suggestions' ? 'suggestions' : 'detailed'}
+          autoGenerate={tool === 'suggestions'}
+        />
       </div>
     );
   }
@@ -837,12 +887,13 @@ export default function WellbeingPage() {
                 onCombined={() => profileStatus?.available && setTool('combined')}
                 onCharts={() => profileStatus?.available && setTool('visuals')}
                 onMindMap={() => profileStatus?.available && setTool('mindmap')}
+                onSuggestions={() => profileStatus?.available && setTool('suggestions')}
               />
               <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
                 <div>
                   <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>How to use this dashboard</h2>
                   <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                    Complete the four checks in order or revisit any tile at any time. After each check, you can continue to the next one or come back here to see what remains.
+                    Complete the five checks in order or revisit any tile at any time. After each check, you can continue to the next one or come back here to see what remains.
                   </p>
                 </div>
                 <div className="rounded-xl border p-4" style={{ borderColor: '#fde68a', background: '#fffbeb', color: '#78350f' }}>
@@ -899,14 +950,19 @@ export default function WellbeingPage() {
                     </p>
                     <button
                       type="button"
-                      onClick={() => {
-                        setInviteStatus(null);
-                        setShowInviteModal(true);
-                      }}
+                      onClick={() => openInviteModal('send')}
                       className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity mt-3"
                       style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
                     >
                       Invite participant
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openInviteModal('resend')}
+                      className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity mt-2"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
+                    >
+                      Resend invite
                     </button>
                     <button
                       type="button"
@@ -1293,7 +1349,7 @@ export default function WellbeingPage() {
       {showRandomDataConfirm && (
         <ConfirmModal
           title="Create admin test data?"
-          message="This will create one random completed result for each of the four wellbeing tests. These are demo results only, not real self-report results, and they can be removed later with Reset / erase all tests."
+          message="This will create one random completed result for each of the five wellbeing tests. These are demo results only, not real self-report results, and they can be removed later with Reset / erase all tests."
           confirmLabel="Create demo results"
           onConfirm={() => {
             setShowRandomDataConfirm(false);
@@ -1312,9 +1368,13 @@ export default function WellbeingPage() {
           <div className="w-full max-w-lg rounded-2xl border p-6 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Invite participant</h2>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {inviteMode === 'resend' ? 'Resend participant invite' : 'Invite participant'}
+                </h2>
                 <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-                  Create a login and send the wellbeing invite email using the current admin template.
+                  {inviteMode === 'resend'
+                    ? 'Send the wellbeing invite email again. Because passwords are not stored in plain text, the password entered here will become the participant password.'
+                    : 'Create a login and send the wellbeing invite email using the current admin template.'}
                 </p>
               </div>
               <button
@@ -1354,7 +1414,11 @@ export default function WellbeingPage() {
                   className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
                   style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
                 />
-                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Minimum 8 characters. This password is included in the invite email.</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                  {inviteMode === 'resend'
+                    ? 'Minimum 8 characters. Resending will update the participant password to this value and include it in the email.'
+                    : 'Minimum 8 characters. This password is included in the invite email.'}
+                </p>
               </label>
 
               {inviteStatus && (
@@ -1378,7 +1442,7 @@ export default function WellbeingPage() {
                   className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
                   style={{ background: 'var(--color-primary)' }}
                 >
-                  {inviteSending ? 'Sending...' : 'Send invite'}
+                  {inviteSending ? 'Sending...' : (inviteMode === 'resend' ? 'Resend invite' : 'Send invite')}
                 </button>
               </div>
             </form>
@@ -1389,7 +1453,7 @@ export default function WellbeingPage() {
       {showResetTestsConfirm && (
         <ConfirmModal
           title="Reset wellbeing tests?"
-          message="This will erase all completed wellbeing, IPIP-NEO-120, CERQ-style, and COPE-style test results for this user. It will also clear paused test drafts on this device."
+          message="This will erase all completed wellbeing, IPIP-NEO-120, HEXACO-60-style, CERQ-style, and COPE-style test results for this user. It will also clear paused test drafts on this device."
           confirmLabel="Reset / erase tests"
           danger
           onConfirm={() => {

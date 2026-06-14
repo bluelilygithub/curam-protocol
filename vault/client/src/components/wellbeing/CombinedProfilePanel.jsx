@@ -6,7 +6,7 @@ const PROFILE_VARIANTS = {
   summary: {
     label: 'Summary',
     title: 'Summary profile',
-    description: 'A concise overview of the four tests for quick orientation.',
+    description: 'A concise overview of the five tests for quick orientation.',
     pdfName: 'combined-wellbeing-summary.pdf',
   },
   detailed: {
@@ -21,6 +21,12 @@ const PROFILE_VARIANTS = {
     description: 'A more clinician-oriented formulation with mechanisms, caveats, and clinical questions.',
     pdfName: 'combined-wellbeing-analytical-profile.pdf',
   },
+  suggestions: {
+    label: 'Suggestions',
+    title: 'Personal development suggestions',
+    description: 'Reflective suggestions for strengths, coping habits, communication, and small development experiments.',
+    pdfName: 'combined-wellbeing-suggestions.pdf',
+  },
 };
 
 function formatDate(value) {
@@ -34,11 +40,11 @@ function formatDate(value) {
   });
 }
 
-export default function CombinedProfilePanel({ onBack }) {
+export default function CombinedProfilePanel({ onBack, initialVariant = 'detailed', autoGenerate = false }) {
   const [status, setStatus] = useState(null);
   const [profile, setProfile] = useState(null);
   const [sourceAttempts, setSourceAttempts] = useState(null);
-  const [profileVariant, setProfileVariant] = useState('detailed');
+  const [profileVariant, setProfileVariant] = useState(PROFILE_VARIANTS[initialVariant] ? initialVariant : 'detailed');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -81,6 +87,11 @@ export default function CombinedProfilePanel({ onBack }) {
     }
   };
 
+  useEffect(() => {
+    if (!autoGenerate || !status?.available || profile || generating) return;
+    generateProfile(PROFILE_VARIANTS[initialVariant] ? initialVariant : 'detailed');
+  }, [autoGenerate, status?.available, profile, generating, initialVariant]);
+
   const downloadProfilePdf = async () => {
     if (!profile || pdfLoading) return;
     setPdfLoading(true);
@@ -121,7 +132,7 @@ export default function CombinedProfilePanel({ onBack }) {
           </button>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Combined Profile</h2>
           <p className="text-sm mt-1 max-w-3xl" style={{ color: 'var(--color-muted)' }}>
-            Collates the latest completed mood, IPIP-NEO-120, CERQ-style, and COPE-style results into one detailed proof-of-concept profile.
+            Collates the latest completed mood, IPIP-NEO-120, HEXACO-60-style, CERQ-style, and COPE-style results into one proof-of-concept report.
           </p>
         </div>
       </div>
@@ -150,7 +161,7 @@ export default function CombinedProfilePanel({ onBack }) {
 
         {!loading && !status?.available && (
           <p className="text-sm mt-3" style={{ color: 'var(--color-muted)' }}>
-            The combined profile unlocks once all four tests have at least one completed result.
+            The combined profile unlocks once all five tests have at least one completed result.
           </p>
         )}
       </section>
@@ -158,9 +169,9 @@ export default function CombinedProfilePanel({ onBack }) {
       <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
         <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Choose report style</h3>
         <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>
-          Generate the same four-test synthesis at the level of detail you need.
+          Generate the same five-test synthesis at the level of detail you need.
         </p>
-        <div className="grid md:grid-cols-3 gap-3">
+        <div className="grid md:grid-cols-4 gap-3">
           {Object.entries(PROFILE_VARIANTS).map(([key, config]) => (
             <button
               key={key}

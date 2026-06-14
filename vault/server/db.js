@@ -295,6 +295,23 @@ async function initSchema() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS hexaco_attempts (
+        id                       SERIAL PRIMARY KEY,
+        "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "questionnaireVersion"   TEXT NOT NULL,
+        answers                  JSONB NOT NULL,
+        "domainScores"           JSONB NOT NULL,
+        analysis                 JSONB NOT NULL,
+        "createdAt"              TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_hexaco_attempts_user_created
+      ON hexaco_attempts("userId", "createdAt" DESC)
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS cerq_attempts (
         id                       SERIAL PRIMARY KEY,
         "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

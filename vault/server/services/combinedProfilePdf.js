@@ -127,6 +127,7 @@ async function buildCombinedProfilePdfBuffer({ profile, sourceAttempts }) {
   [
     ['Mood check', sources.mood?.createdAt],
     ['IPIP-NEO-120', sources.ipip?.createdAt],
+    ['HEXACO-60-style check', sources.hexaco?.createdAt],
     ['CERQ-style check', sources.cerq?.createdAt],
     ['Brief COPE-style check', sources.cope?.createdAt],
   ].forEach(([label, createdAt]) => addText(`${label}: ${createdAt ? formatDate(createdAt) : 'latest completed result'}`));

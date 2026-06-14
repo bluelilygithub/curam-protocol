@@ -65,7 +65,12 @@ export function BdiSeverityGauge({ score = 0, label = '' }) {
   );
 }
 
-export function DomainRadarChart({ domains = [] }) {
+export function DomainRadarChart({
+  domains = [],
+  title = 'Five-domain radar',
+  description = 'Relative IPIP-NEO domain endorsement. Outer ring is higher endorsement.',
+  ariaLabel = 'Domain radar chart',
+}) {
   const size = 300;
   const center = size / 2;
   const radius = 92;
@@ -88,10 +93,10 @@ export function DomainRadarChart({ domains = [] }) {
 
   return (
     <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Five-domain radar</h2>
-      <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>Relative IPIP-NEO domain endorsement. Outer ring is higher endorsement.</p>
+      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{title}</h2>
+      <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>{description}</p>
       <div className="grid md:grid-cols-[320px_1fr] gap-4 items-center">
-        <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[320px] mx-auto" role="img" aria-label="IPIP five-domain radar chart">
+        <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[320px] mx-auto" role="img" aria-label={ariaLabel}>
           {rings.map((ring) => {
             const ringPoints = domains.map((_, idx) => {
               const angle = -Math.PI / 2 + (idx / Math.max(domains.length, 1)) * Math.PI * 2;

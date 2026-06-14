@@ -21,6 +21,14 @@ function parseMaybeJson(value, fallback) {
   return value;
 }
 
+const SOURCE_CHARTS = [
+  { key: 'mood', label: 'Mood', targetId: 'wellbeing-chart-mood' },
+  { key: 'ipip', label: 'IPIP', targetId: 'wellbeing-chart-ipip' },
+  { key: 'hexaco', label: 'HEXACO', targetId: 'wellbeing-chart-hexaco' },
+  { key: 'cerq', label: 'CERQ', targetId: 'wellbeing-chart-cerq' },
+  { key: 'cope', label: 'COPE', targetId: 'wellbeing-chart-cope' },
+];
+
 function strongest(scales = [], predicate = () => true, limit = 3) {
   return scales
     .filter(predicate)
@@ -37,9 +45,11 @@ function buildMindMap(data) {
   const moodScore = Number(data?.mood?.totalScore || 0);
   const moodStrength = Math.min(1, moodScore / 63);
   const domains = parseMaybeJson(data?.ipip?.domainScores, []);
+  const hexacoDomains = parseMaybeJson(data?.hexaco?.domainScores, []);
   const cerq = parseMaybeJson(data?.cerq?.scaleScores, []);
   const cope = parseMaybeJson(data?.cope?.scaleScores, []);
   const domainByKey = Object.fromEntries(domains.map((domain) => [domain.key, domain]));
+  const hexacoByKey = Object.fromEntries(hexacoDomains.map((domain) => [domain.key, domain]));
   const lessHelpful = strongest(cerq, (scale) => scale.family === 'less-helpful');
   const helpful = strongest(cerq, (scale) => scale.family === 'helpful');
   const avoidant = strongest(cope, (scale) => scale.family === 'avoidant');
@@ -49,7 +59,7 @@ function buildMindMap(data) {
     {
       id: 'centre',
       label: 'Combined wellbeing pattern',
-      detail: 'Latest result from all four checks',
+      detail: 'Latest result from all five checks',
       x: 300,
       y: 210,
       color: 'var(--color-primary)',
@@ -67,11 +77,22 @@ function buildMindMap(data) {
     {
       id: 'sensitivity',
       label: 'Emotional sensitivity',
-      detail: domainByKey.N ? `${domainByKey.N.label}: ${Math.round(Number(domainByKey.N.normalized || 0) * 100)}%` : 'Neuroticism domain',
+      detail: hexacoByKey.EM
+        ? `${hexacoByKey.EM.label}: ${Math.round(Number(hexacoByKey.EM.normalized || 0) * 100)}%`
+        : domainByKey.N ? `${domainByKey.N.label}: ${Math.round(Number(domainByKey.N.normalized || 0) * 100)}%` : 'Emotionality / Neuroticism domain',
       x: 505,
       y: 130,
       color: '#f97316',
-      strength: Number(domainByKey.N?.normalized || 0.35),
+      strength: Number(hexacoByKey.EM?.normalized ?? domainByKey.N?.normalized ?? 0.35),
+    },
+    {
+      id: 'humility',
+      label: 'Fairness and modesty',
+      detail: hexacoByKey.HH ? `${hexacoByKey.HH.label}: ${Math.round(Number(hexacoByKey.HH.normalized || 0) * 100)}%` : 'Honesty-Humility domain',
+      x: 95,
+      y: 470,
+      color: '#8b5cf6',
+      strength: Number(hexacoByKey.HH?.normalized || 0.35),
     },
     {
       id: 'resources',
@@ -112,11 +133,13 @@ function buildMindMap(data) {
     {
       id: 'structure',
       label: 'Structure and follow-through',
-      detail: domainByKey.C ? `${domainByKey.C.label}: ${Math.round(Number(domainByKey.C.normalized || 0) * 100)}%` : 'Conscientiousness domain',
+      detail: hexacoByKey.CO
+        ? `${hexacoByKey.CO.label}: ${Math.round(Number(hexacoByKey.CO.normalized || 0) * 100)}%`
+        : domainByKey.C ? `${domainByKey.C.label}: ${Math.round(Number(domainByKey.C.normalized || 0) * 100)}%` : 'Conscientiousness domain',
       x: 300,
       y: 565,
       color: '#14b8a6',
-      strength: Number(domainByKey.C?.normalized || 0.35),
+      strength: Number(hexacoByKey.CO?.normalized ?? domainByKey.C?.normalized ?? 0.35),
     },
   ];
 
@@ -128,11 +151,13 @@ function buildMindMap(data) {
     ['centre', 'coping'],
     ['centre', 'avoidance'],
     ['centre', 'structure'],
+    ['centre', 'humility'],
     ['mood', 'loops'],
     ['mood', 'avoidance'],
     ['resources', 'coping'],
     ['structure', 'coping'],
     ['sensitivity', 'loops'],
+    ['humility', 'resources'],
   ];
 
   const notes = [
@@ -156,12 +181,12 @@ function MindMap({ data }) {
 
   return (
     <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Four-test mind map</h2>
+      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Five-test mind map</h2>
       <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-        A relationship map that groups related signals from mood, personality, cognitive coping, and behavioural coping.
+        A relationship map that groups related signals from mood, two personality lenses, cognitive coping, and behavioural coping.
       </p>
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
-        <svg viewBox="0 0 600 620" className="w-full max-w-[680px] mx-auto" role="img" aria-label="Mind map connecting the four wellbeing test patterns">
+        <svg viewBox="0 0 600 620" className="w-full max-w-[680px] mx-auto" role="img" aria-label="Mind map connecting the five wellbeing test patterns">
           {map.links.map(([fromId, toId]) => {
             const from = nodeById[fromId];
             const to = nodeById[toId];
@@ -186,7 +211,7 @@ function MindMap({ data }) {
                 <text x={node.x} y={node.y - 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--color-text)">
                   {node.label}
                 </text>
-                <text x={node.x} y={node.y + 13} textAnchor="middle" fontSize="10" fill="var(--color-muted)">
+                <text x={node.x} y={node.y + 13} textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--color-text)">
                   {Math.round(node.strength * 100)}%
                 </text>
               </g>
@@ -274,8 +299,16 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
   };
 
   const domains = parseMaybeJson(data?.ipip?.domainScores, []);
+  const hexacoDomains = parseMaybeJson(data?.hexaco?.domainScores, []);
   const cerqScales = parseMaybeJson(data?.cerq?.scaleScores, []);
   const copeScales = parseMaybeJson(data?.cope?.scaleScores, []);
+
+  const scrollToChart = (targetId) => {
+    setView('charts');
+    window.setTimeout(() => {
+      document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
 
   return (
     <div className="space-y-6">
@@ -293,7 +326,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
             {view === 'mindmap' ? 'Wellbeing Mind Map' : 'Wellbeing Visual Summary'}
           </h2>
           <p className="text-sm mt-1 max-w-3xl" style={{ color: 'var(--color-muted)' }}>
-            Uses the latest completed result from each of the four wellbeing checks.
+            Uses the latest completed result from each of the five wellbeing checks.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -341,13 +374,25 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
         <>
           <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <p className="text-xs uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Source results</p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
-              {Object.entries(data.sourceAttempts || {}).map(([key, attempt]) => (
-                <div key={key} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                  <p className="text-sm font-semibold capitalize" style={{ color: 'var(--color-text)' }}>{key}</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{formatDate(attempt.createdAt)}</p>
-                </div>
-              ))}
+            <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              {SOURCE_CHARTS.map((source) => {
+                const attempt = data.sourceAttempts?.[source.key];
+                return (
+                  <button
+                    key={source.key}
+                    type="button"
+                    onClick={() => scrollToChart(source.targetId)}
+                    className="rounded-xl border p-3 text-left transition-colors hover:bg-[var(--color-surface)] hover:border-[var(--color-primary)]"
+                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                  >
+                    <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{source.label}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                      {attempt?.createdAt ? formatDate(attempt.createdAt) : 'Latest completed result'}
+                    </p>
+                    <p className="text-[11px] mt-2 font-semibold" style={{ color: 'var(--color-primary)' }}>Jump to chart</p>
+                  </button>
+                );
+              })}
             </div>
           </section>
 
@@ -355,10 +400,26 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
             <MindMap data={data} />
           ) : (
             <div className="space-y-4">
-              <BdiSeverityGauge score={Number(data.mood?.totalScore || 0)} label={data.mood?.bandLabel} />
-              <DomainRadarChart domains={domains} />
-              <StrategyBarChart scales={cerqScales} responseMax={5} variant="cerq" title="CERQ-style strategy profile" />
-              <StrategyBarChart scales={copeScales} responseMax={4} variant="cope" title="Brief COPE-style strategy profile" />
+              <div id="wellbeing-chart-mood" className="scroll-mt-6">
+                <BdiSeverityGauge score={Number(data.mood?.totalScore || 0)} label={data.mood?.bandLabel} />
+              </div>
+              <div id="wellbeing-chart-ipip" className="scroll-mt-6">
+                <DomainRadarChart domains={domains} />
+              </div>
+              <div id="wellbeing-chart-hexaco" className="scroll-mt-6">
+                <DomainRadarChart
+                  domains={hexacoDomains}
+                  title="HEXACO six-domain radar"
+                  description="Relative HEXACO-style domain endorsement. Outer ring is higher endorsement."
+                  ariaLabel="HEXACO six-domain radar chart"
+                />
+              </div>
+              <div id="wellbeing-chart-cerq" className="scroll-mt-6">
+                <StrategyBarChart scales={cerqScales} responseMax={5} variant="cerq" title="CERQ-style strategy profile" />
+              </div>
+              <div id="wellbeing-chart-cope" className="scroll-mt-6">
+                <StrategyBarChart scales={copeScales} responseMax={4} variant="cope" title="Brief COPE-style strategy profile" />
+              </div>
             </div>
           )}
         </>
