@@ -2,10 +2,17 @@
 
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
+const sendEmail = require('../utils/sendEmail');
 const { buildWellbeingPdfBuffer } = require('../services/wellbeingPdf');
 const { buildCombinedProfilePdfBuffer } = require('../services/combinedProfilePdf');
 const { buildWellbeingVisualPdfBuffer } = require('../services/wellbeingVisualPdf');
+const {
+  DEFAULT_WELLBEING_INVITE_SUBJECT,
+  DEFAULT_WELLBEING_INVITE_BODY,
+  renderWellbeingInviteHtml,
+} = require('../services/wellbeingInviteTemplate');
 const {
   QUESTIONNAIRE_VERSION: IPIP_QUESTIONNAIRE_VERSION,
   QUESTIONS: IPIP_QUESTIONS,
@@ -38,6 +45,9 @@ const {
 } = require('../services/wellbeingModelInsights');
 
 const QUESTIONNAIRE_VERSION = 'wellbeing-check-v1';
+const SALT_ROUNDS = 12;
+const WELLBEING_INVITE_SUBJECT_KEY = 'wellbeing_invite_subject';
+const WELLBEING_INVITE_BODY_KEY = 'wellbeing_invite_body';
 
 function parseMaybeJson(value, fallback) {
   if (value == null) return fallback;
@@ -1054,6 +1064,18 @@ async function insertRandomCopeAttempt(client, userId) {
   return rows[0];
 }
 
+async function loadWellbeingInviteTemplate() {
+  const { rows } = await pool.query(
+    'SELECT key, value FROM workspace_settings WHERE key = ANY($1)',
+    [[WELLBEING_INVITE_SUBJECT_KEY, WELLBEING_INVITE_BODY_KEY]]
+  );
+  const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  return {
+    subject: values[WELLBEING_INVITE_SUBJECT_KEY] || DEFAULT_WELLBEING_INVITE_SUBJECT,
+    body: values[WELLBEING_INVITE_BODY_KEY] || DEFAULT_WELLBEING_INVITE_BODY,
+  };
+}
+
 function visualProfileFromLatest(latest) {
   return {
     sourceAttempts: {
@@ -1197,6 +1219,79 @@ router.post('/admin/random-attempts', async (req, res) => {
     res.status(500).json({ error: err.message });
   } finally {
     client.release();
+  }
+});
+
+router.post('/admin/invite', async (req, res) => {
+  if (!req.user?.isAdmin) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Valid participant email is required.' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+
+  const client = await pool.connect();
+  let created = false;
+  let userId = null;
+  try {
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    await client.query('BEGIN');
+    const { rows: existingRows } = await client.query(
+      'SELECT id, "isAdmin" FROM users WHERE email=$1',
+      [email]
+    );
+    const existing = existingRows[0];
+    if (existing?.isAdmin) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Cannot send a wellbeing participant invite by resetting an admin account password.' });
+    }
+
+    if (existing) {
+      userId = existing.id;
+      await client.query('UPDATE users SET "passwordHash"=$1 WHERE id=$2', [passwordHash, userId]);
+      await client.query('DELETE FROM auth_sessions WHERE "userId"=$1', [userId]);
+    } else {
+      const { rows } = await client.query(
+        'INSERT INTO users (email, "passwordHash", "isAdmin") VALUES ($1, $2, FALSE) RETURNING id',
+        [email, passwordHash]
+      );
+      userId = rows[0].id;
+      created = true;
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    client.release();
+    return res.status(500).json({ error: err.message });
+  }
+  client.release();
+
+  try {
+    const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const link = `${appUrl}/login?next=${encodeURIComponent('/wellbeing')}`;
+    const template = await loadWellbeingInviteTemplate();
+    const html = renderWellbeingInviteHtml({
+      body: template.body,
+      email,
+      password,
+      link,
+    });
+    await sendEmail({ to: email, subject: template.subject, html });
+    res.json({ ok: true, created, userId, email, link });
+  } catch (err) {
+    console.error('[wellbeing invite email]', err);
+    res.status(500).json({
+      error: `Participant account ${created ? 'created' : 'updated'}, but the invite email could not be sent: ${err.message}`,
+      created,
+      userId,
+      email,
+    });
   }
 });
 

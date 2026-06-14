@@ -6,8 +6,14 @@ const { pool } = require('../db');
 const { FEATURE_ACCESS_DEFAULTS, FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
 const { getVaultModelsConfigForUser } = require('../services/modelResolver');
 const { getPublicRuntimeConfig } = require('../config/runtime');
+const {
+  DEFAULT_WELLBEING_INVITE_SUBJECT,
+  DEFAULT_WELLBEING_INVITE_BODY,
+} = require('../services/wellbeingInviteTemplate');
 
 const CONTENT_RESTRICTIONS_KEY = 'graphics_content_restrictions';
+const WELLBEING_INVITE_SUBJECT_KEY = 'wellbeing_invite_subject';
+const WELLBEING_INVITE_BODY_KEY = 'wellbeing_invite_body';
 const MOBILE_SETTING_KEYS = ['mobile_dashboard_tiles', 'mobile_nav_items'];
 
 function normalizeContentRestrictions(value) {
@@ -215,6 +221,48 @@ router.post('/content-restrictions', async (req, res) => {
       [CONTENT_RESTRICTIONS_KEY, JSON.stringify(restrictions)]
     );
     res.json({ ok: true, restrictions });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/wellbeing-invite-template — admin template for wellbeing invites
+router.get('/wellbeing-invite-template', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT key, value FROM workspace_settings WHERE key = ANY($1)',
+      [[WELLBEING_INVITE_SUBJECT_KEY, WELLBEING_INVITE_BODY_KEY]]
+    );
+    const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    res.json({
+      subject: values[WELLBEING_INVITE_SUBJECT_KEY] || DEFAULT_WELLBEING_INVITE_SUBJECT,
+      body: values[WELLBEING_INVITE_BODY_KEY] || DEFAULT_WELLBEING_INVITE_BODY,
+      placeholders: ['{{link}}', '{{email}}', '{{password}}'],
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/settings/wellbeing-invite-template — body: { subject, body }
+router.post('/wellbeing-invite-template', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  const subject = String(req.body?.subject || '').trim().slice(0, 180) || DEFAULT_WELLBEING_INVITE_SUBJECT;
+  const body = String(req.body?.body || '').trim().slice(0, 12000) || DEFAULT_WELLBEING_INVITE_BODY;
+  try {
+    for (const [key, value] of [
+      [WELLBEING_INVITE_SUBJECT_KEY, subject],
+      [WELLBEING_INVITE_BODY_KEY, body],
+    ]) {
+      await pool.query(
+        `INSERT INTO workspace_settings (key, value, "updatedAt")
+         VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, "updatedAt" = NOW()`,
+        [key, value]
+      );
+    }
+    res.json({ ok: true, subject, body });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

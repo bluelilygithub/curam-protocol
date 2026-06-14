@@ -113,6 +113,11 @@ function SettingsPage() {
   const [runtimeInfo, setRuntimeInfo] = useState(null);
   const [contentRestrictions, setContentRestrictions] = useState([]);
   const [contentRestrictionsSaved, setContentRestrictionsSaved] = useState(false);
+  const [wellbeingInviteSubject, setWellbeingInviteSubject] = useState('');
+  const [wellbeingInviteBody, setWellbeingInviteBody] = useState('');
+  const [wellbeingInvitePlaceholders, setWellbeingInvitePlaceholders] = useState(['{{link}}', '{{email}}', '{{password}}']);
+  const [wellbeingInviteSaved, setWellbeingInviteSaved] = useState(false);
+  const [wellbeingInviteError, setWellbeingInviteError] = useState('');
 
   const TABS = user?.isAdmin
     ? [
@@ -126,6 +131,7 @@ function SettingsPage() {
         'Mobile',
         'Members',
         'Feature Access',
+        'Wellbeing Invites',
         'Content Restrictions',
         'Environment',
         'Tours',
@@ -150,6 +156,7 @@ function SettingsPage() {
           'Mobile',
           'Members',
           'Feature Access',
+          'Wellbeing Invites',
           'Content Restrictions',
           'Environment',
           'Tours',
@@ -224,6 +231,12 @@ function SettingsPage() {
       if (Array.isArray(data?.restrictions)) {
         setContentRestrictions(data.restrictions.length ? data.restrictions : ['']);
       }
+    }).catch(() => {});
+
+    api.get('/api/settings/wellbeing-invite-template').then(r => r.json()).then(data => {
+      if (data?.subject) setWellbeingInviteSubject(data.subject);
+      if (data?.body) setWellbeingInviteBody(data.body);
+      if (Array.isArray(data?.placeholders)) setWellbeingInvitePlaceholders(data.placeholders);
     }).catch(() => {});
   }, []);
 
@@ -360,6 +373,24 @@ function SettingsPage() {
     }
   }
 
+  async function saveWellbeingInviteTemplate() {
+    setWellbeingInviteError('');
+    const res = await api.post('/api/settings/wellbeing-invite-template', {
+      subject: wellbeingInviteSubject,
+      body: wellbeingInviteBody,
+    }).catch(() => null);
+    if (!res?.ok) {
+      const data = await res?.json?.().catch(() => ({}));
+      setWellbeingInviteError(data?.error || 'Could not save wellbeing invite template');
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (data.subject) setWellbeingInviteSubject(data.subject);
+    if (data.body) setWellbeingInviteBody(data.body);
+    setWellbeingInviteSaved(true);
+    setTimeout(() => setWellbeingInviteSaved(false), 2000);
+  }
+
   const runtimeRows = runtimeInfo ? [
     ['Application environment', runtimeInfo.appEnv || 'unknown'],
     ['Database source', runtimeInfo.databaseUrlSource || 'not configured'],
@@ -386,7 +417,7 @@ function SettingsPage() {
     : graphicsModelChoices;
 
   return (
-    <div className={((tab === 'Members' || tab === 'Environment') && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
+    <div className={((['Members', 'Environment', 'Wellbeing Invites'].includes(tab)) && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
       <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
         Settings
       </h1>
@@ -2099,6 +2130,69 @@ function SettingsPage() {
           style={{ background: featureAccessSaved ? '#22c55e' : 'var(--color-primary)' }}
         >
           {featureAccessSaved ? 'Saved ✓' : 'Save Feature Access'}
+        </button>
+      </section>
+      )}
+
+      {/* Wellbeing Invites tab */}
+      {tab === 'Wellbeing Invites' && user?.isAdmin && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Wellbeing Invite Email Template
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          This template is used when an admin invites someone to complete the Wellbeing & Personality Checks. The login link takes the participant directly to the wellbeing area after sign-in.
+        </p>
+
+        <div className="rounded-2xl border p-4 mb-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Available placeholders</p>
+          <div className="flex flex-wrap gap-2">
+            {wellbeingInvitePlaceholders.map((placeholder) => (
+              <code key={placeholder} className="text-xs px-2 py-1 rounded-lg border" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
+                {placeholder}
+              </code>
+            ))}
+          </div>
+          <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+            Keep these placeholders in the body if you want the email to include the participant's login link, email address, and temporary password.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          <label className="block">
+            <span className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>Email subject</span>
+            <input
+              type="text"
+              value={wellbeingInviteSubject}
+              onChange={(e) => setWellbeingInviteSubject(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            />
+          </label>
+
+          <label className="block">
+            <span className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>Email body</span>
+            <textarea
+              value={wellbeingInviteBody}
+              onChange={(e) => setWellbeingInviteBody(e.target.value)}
+              rows={22}
+              className="w-full px-3 py-2 rounded-xl border text-sm outline-none resize-y"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}
+            />
+          </label>
+        </div>
+
+        {wellbeingInviteError && (
+          <p className="text-sm mt-3" style={{ color: '#dc2626' }}>{wellbeingInviteError}</p>
+        )}
+
+        <button
+          type="button"
+          onClick={saveWellbeingInviteTemplate}
+          className="mt-4 px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+          style={{ background: wellbeingInviteSaved ? '#22c55e' : 'var(--color-primary)' }}
+        >
+          {wellbeingInviteSaved ? 'Saved ✓' : 'Save Wellbeing Invite Template'}
         </button>
       </section>
       )}

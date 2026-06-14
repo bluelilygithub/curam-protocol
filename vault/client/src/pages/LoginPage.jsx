@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import { useIcon } from '../providers/IconProvider';
+
+function safeNextPath(search) {
+  const next = new URLSearchParams(search || '').get('next');
+  if (!next || !next.startsWith('/') || next.startsWith('//')) return '/';
+  if (next.startsWith('/login') || next.startsWith('/reset-password')) return '/';
+  return next;
+}
 
 function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,7 +18,9 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { setAuth } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const getIcon = useIcon();
+  const nextPath = safeNextPath(location.search);
 
   // Forgot password modal state
   const [showForgot, setShowForgot] = useState(false);
@@ -41,7 +50,7 @@ function LoginPage() {
       const data = await res.json();
       if (!res.ok) { setRegError(data.error || 'Registration failed'); return; }
       setAuth(data.token, data.user);
-      navigate('/', { replace: true });
+      navigate(nextPath, { replace: true });
     } catch {
       setRegError('Network error — please try again');
     } finally {
@@ -62,7 +71,7 @@ function LoginPage() {
       const data = await res.json();
       if (!res.ok) { setError(data.error || 'Login failed'); return; }
       setAuth(data.token, data.user);
-      navigate('/', { replace: true });
+      navigate(nextPath, { replace: true });
     } catch {
       setError('Network error — please try again');
     } finally {

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import useAuthStore from '../store/authStore';
@@ -308,6 +308,7 @@ function AnalysisPanel({ attempt, onDownloadPdf, pdfLoading }) {
 
 export default function WellbeingPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const getIcon = useIcon();
   const { user } = useAuthStore();
   const isAdmin = !!user?.isAdmin;
@@ -332,6 +333,10 @@ export default function WellbeingPage() {
   const [showMoodPurpose, setShowMoodPurpose] = useState(false);
   const [showRandomDataConfirm, setShowRandomDataConfirm] = useState(false);
   const [showResetTestsConfirm, setShowResetTestsConfirm] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: '', password: '' });
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState(null);
 
   const questions = config?.questions || [];
   const current = questions[index];
@@ -577,6 +582,32 @@ export default function WellbeingPage() {
     } finally {
       stopProcessing();
       setRandomising(false);
+    }
+  };
+
+  const openInviteTemplateSettings = () => {
+    localStorage.setItem('settingsTab', 'Wellbeing Invites');
+    navigate('/settings');
+  };
+
+  const sendWellbeingInvite = async (e) => {
+    e.preventDefault();
+    if (inviteSending) return;
+    setInviteSending(true);
+    setInviteStatus(null);
+    try {
+      const res = await api.post('/api/wellbeing/admin/invite', inviteForm);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not send invite');
+      setInviteStatus({
+        ok: true,
+        message: `Invite sent to ${data.email}. ${data.created ? 'A participant account was created.' : 'The existing participant password was updated.'}`,
+      });
+      setInviteForm({ email: '', password: '' });
+    } catch (err) {
+      setInviteStatus({ ok: false, message: err.message || 'Could not send invite' });
+    } finally {
+      setInviteSending(false);
     }
   };
 
@@ -860,21 +891,48 @@ export default function WellbeingPage() {
                 </p>
               </button>
               {isAdmin && (
-                <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-                  <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Admin test data</p>
-                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                    Create one random completed result for each test to check the progress, profile, charts, and mind-map flow.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setShowRandomDataConfirm(true)}
-                    disabled={randomising}
-                    className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity mt-3"
-                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
-                  >
-                    {randomising ? 'Creating demo results...' : 'Pre-populate random test results'}
-                  </button>
-                </div>
+                <>
+                  <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                    <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Invite participant</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                      Create or update a participant login and email them a direct link to the wellbeing checks.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setInviteStatus(null);
+                        setShowInviteModal(true);
+                      }}
+                      className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity mt-3"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
+                    >
+                      Invite participant
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openInviteTemplateSettings}
+                      className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity mt-2"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
+                    >
+                      Edit invite email template
+                    </button>
+                  </div>
+                  <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                    <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Admin test data</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                      Create one random completed result for each test to check the progress, profile, charts, and mind-map flow.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowRandomDataConfirm(true)}
+                      disabled={randomising}
+                      className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity mt-3"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
+                    >
+                      {randomising ? 'Creating demo results...' : 'Pre-populate random test results'}
+                    </button>
+                  </div>
+                </>
               )}
               <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: '#fecaca' }}>
                 <p className="text-xs uppercase tracking-wider" style={{ color: '#991b1b' }}>Reset tests</p>
@@ -1243,6 +1301,89 @@ export default function WellbeingPage() {
           }}
           onCancel={() => setShowRandomDataConfirm(false)}
         />
+      )}
+
+      {showInviteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)' }}
+          onClick={(e) => { if (e.target === e.currentTarget && !inviteSending) setShowInviteModal(false); }}
+        >
+          <div className="w-full max-w-lg rounded-2xl border p-6 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Invite participant</h2>
+                <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+                  Create a login and send the wellbeing invite email using the current admin template.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInviteModal(false)}
+                disabled={inviteSending}
+                className="text-sm hover:opacity-70 disabled:opacity-40"
+                style={{ color: 'var(--color-muted)' }}
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={sendWellbeingInvite} className="space-y-3">
+              <label className="block">
+                <span className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>Participant email</span>
+                <input
+                  type="email"
+                  required
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
+                  placeholder="person@example.com"
+                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+              </label>
+
+              <label className="block">
+                <span className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>Temporary password</span>
+                <input
+                  type="text"
+                  required
+                  minLength={8}
+                  value={inviteForm.password}
+                  onChange={(e) => setInviteForm((prev) => ({ ...prev, password: e.target.value }))}
+                  placeholder="Create a password for this participant"
+                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                />
+                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Minimum 8 characters. This password is included in the invite email.</p>
+              </label>
+
+              {inviteStatus && (
+                <div className="rounded-xl px-3 py-2 text-sm" style={{ color: inviteStatus.ok ? '#166534' : '#991b1b', background: inviteStatus.ok ? '#dcfce7' : '#fee2e2' }}>
+                  {inviteStatus.message}
+                </div>
+              )}
+
+              <div className="flex flex-wrap justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={openInviteTemplateSettings}
+                  className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
+                >
+                  Review template
+                </button>
+                <button
+                  type="submit"
+                  disabled={inviteSending}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  {inviteSending ? 'Sending...' : 'Send invite'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {showResetTestsConfirm && (
