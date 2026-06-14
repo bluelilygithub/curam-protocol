@@ -73,6 +73,98 @@ function emphasisLabel(value) {
   return 'Less visible in this result';
 }
 
+function labelList(items = [], fallback = 'not strongly differentiated') {
+  const labels = items.map((item) => item.label).filter(Boolean);
+  return labels.length ? labels.join(', ') : fallback;
+}
+
+function buildMindMapSynthesis({
+  moduleKey,
+  moodScore,
+  anxietyScore,
+  positiveAffect,
+  negativeAffect,
+  attentionPressure,
+  lessHelpful,
+  helpful,
+  avoidant,
+  active,
+  domainByKey,
+  hexacoByKey,
+  data,
+}) {
+  const moodBand = data?.mood?.bandLabel || 'mood range not available';
+  const anxietyBand = data?.gad7?.bandLabel || 'anxiety range not available';
+  const positiveScore = Number(positiveAffect?.score || 0);
+  const negativeScore = Number(negativeAffect?.score || 0);
+  const affectTone = positiveAffect || negativeAffect
+    ? positiveScore >= negativeScore
+      ? `positive affect is higher than negative affect (${positiveScore}/${positiveAffect?.max || 50} vs ${negativeScore}/${negativeAffect?.max || 50})`
+      : `negative affect is higher than positive affect (${negativeScore}/${negativeAffect?.max || 50} vs ${positiveScore}/${positiveAffect?.max || 50})`
+    : 'affect tone is not available';
+  const moodLow = moodScore <= 13;
+  const anxietyLow = anxietyScore <= 4;
+  const attentionText = labelList(attentionPressure);
+  const lessHelpfulText = labelList(lessHelpful);
+  const helpfulText = labelList(helpful);
+  const avoidantText = labelList(avoidant);
+  const activeText = labelList(active);
+  const traitText = [
+    hexacoByKey.EM?.label || domainByKey.N?.label,
+    hexacoByKey.CO?.label || domainByKey.C?.label,
+    hexacoByKey.HH?.label,
+  ].filter(Boolean).join(', ') || 'no dominant trait anchor';
+
+  if (moduleKey === 'mood-emotional') {
+    const body = moodLow && anxietyLow && positiveScore >= negativeScore
+      ? `Your mood and anxiety scores are both low (${moodScore}/63, ${moodBand}; ${anxietyScore}/21, ${anxietyBand}), and ${affectTone}. Taken together, this suggests the current emotional-state module is not showing an overlapping mood/anxiety burden right now. The useful role of this map is mainly as a baseline: it shows what "relatively settled" looks like for comparison if future results change.`
+      : `This module should be read as the current emotional weather: mood scored ${moodScore}/63 (${moodBand}), anxiety scored ${anxietyScore}/21 (${anxietyBand}), and ${affectTone}. The useful question is whether mood load, worry load, and affect tone are telling the same story or pulling in different directions.`;
+    return {
+      title: 'What this combination means',
+      body,
+      prompts: [
+        moodLow && anxietyLow ? 'Use this as a baseline rather than a problem label: what usually helps you maintain this emotional steadiness?' : 'Which part is most driving the current emotional load: mood, worry, or affect tone?',
+        'Would someone close to you recognise this current emotional-state picture?',
+        'What would be the earliest sign that this pattern was shifting?',
+      ],
+    };
+  }
+
+  if (moduleKey === 'personality-traits') {
+    return {
+      title: 'What this combination means',
+      body: `This module is a style map rather than a current-symptom reading. The map is useful if it helps you ask how trait posture may affect relationships, decisions, stress, and recovery. The strongest anchors visible here are ${traitText}. The "so what" is not that these traits are good or bad; it is whether they make some support strategies, communication styles, or stress responses easier to access than others.`,
+      prompts: [
+        'Which part of this style is usually helpful under low stress?',
+        'Which part becomes harder to use under pressure?',
+        'What kind of environment or communication helps the best part of this style show up?',
+      ],
+    };
+  }
+
+  if (moduleKey === 'regulation-coping') {
+    return {
+      title: 'What this combination means',
+      body: `This module is about sequence: what happens after stress or emotion arrives. Attention/self-regulation signals include ${attentionText}; cognitive loop signals include ${lessHelpfulText}; resource strategies include ${helpfulText}; active/support coping includes ${activeText}; avoidant pressure includes ${avoidantText}. The practical value is spotting whether stress moves toward clarification, support, and action, or toward replay, delay, withdrawal, or short-term relief that leaves the problem alive.`,
+      prompts: [
+        'What is usually the first move after stress arrives: thinking, avoiding, planning, asking, or acting?',
+        'Which response helps immediately but may still have a delayed cost?',
+        'Which resource strategy is available but easy to forget when pressure is high?',
+      ],
+    };
+  }
+
+  return {
+    title: 'What this combination means',
+    body: `Read this as a guided synthesis rather than a graph result. Current mood/anxiety context is ${moodScore}/63 (${moodBand}) and ${anxietyScore}/21 (${anxietyBand}); affect tone says ${affectTone}; attention signals include ${attentionText}; cognitive loops include ${lessHelpfulText}; coping resources include ${helpfulText}; and avoidant pressure includes ${avoidantText}. The useful story is whether these areas converge into one repeated pattern or whether some areas are stable while others are doing most of the work.`,
+    prompts: [
+      'Which pattern appears in more than one area?',
+      'Which result is most likely to be a current state rather than a stable style?',
+      'What is one support or habit that would help the strongest pattern move in a better direction?',
+    ],
+  };
+}
+
 function buildMindMap(data, moduleKey = '') {
   const module = MODULE_VISUALS[moduleKey] || null;
   const moodScore = Number(data?.mood?.totalScore || 0);
@@ -263,8 +355,23 @@ function buildMindMap(data, moduleKey = '') {
       ? 'Helpful cognitive strategies and active/support coping are grouped as potential resources: these are the levers most likely to interrupt the less-helpful parts of the map.'
       : 'Resource nodes stay visible even when scores are lower, because low use of adaptive strategies can be just as informative as high use of difficult patterns.',
   ].filter(Boolean);
+  const synthesis = buildMindMapSynthesis({
+    moduleKey,
+    moodScore,
+    anxietyScore,
+    positiveAffect,
+    negativeAffect,
+    attentionPressure,
+    lessHelpful,
+    helpful,
+    avoidant,
+    active,
+    domainByKey,
+    hexacoByKey,
+    data,
+  });
 
-  if (!module) return { nodes, links, notes };
+  if (!module) return { nodes, links, notes, synthesis };
 
   const allowed = new Set(module.nodeIds);
   const filteredNodes = nodes.filter((node) => allowed.has(node.id));
@@ -273,7 +380,7 @@ function buildMindMap(data, moduleKey = '') {
     `${module.label} focuses this map on ${module.description}`,
     ...notes.slice(0, 3),
   ];
-  return { nodes: filteredNodes, links: filteredLinks, notes: filteredNotes };
+  return { nodes: filteredNodes, links: filteredLinks, notes: filteredNotes, synthesis };
 }
 
 function MindMap({ data, moduleKey = '' }) {
@@ -290,6 +397,20 @@ function MindMap({ data, moduleKey = '' }) {
       <p className="text-xs mb-4 rounded-xl border p-3" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
         This map is a reading guide, not a correlation graph. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.
       </p>
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-3 mb-4">
+        <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>{map.synthesis.title}</p>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted)' }}>{map.synthesis.body}</p>
+        </div>
+        <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>How to use this</p>
+          <ul className="space-y-2 text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            {map.synthesis.prompts.map((prompt) => (
+              <li key={prompt}>- {prompt}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
         <svg viewBox="0 0 600 620" className="w-full max-w-[680px] mx-auto" role="img" aria-label="Mind map connecting the eight wellbeing test patterns">
           {map.links.map((link) => {

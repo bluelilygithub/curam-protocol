@@ -89,6 +89,61 @@ function emphasisLabel(value) {
   return 'less visible in this result';
 }
 
+function labelList(items = [], fallback = 'not strongly differentiated') {
+  const labels = items.map((item) => item.label).filter(Boolean);
+  return labels.length ? labels.join(', ') : fallback;
+}
+
+function buildMindMapSynthesis({
+  moodScore,
+  anxietyScore,
+  positiveAffect,
+  negativeAffect,
+  attentionPressure,
+  lessHelpful,
+  helpful,
+  avoidant,
+  active,
+  domainByKey,
+  hexacoByKey,
+  visuals,
+}) {
+  const moodBand = visuals?.mood?.bandLabel || 'mood range not available';
+  const anxietyBand = visuals?.gad7?.bandLabel || 'anxiety range not available';
+  const positiveScore = Number(positiveAffect?.score || 0);
+  const negativeScore = Number(negativeAffect?.score || 0);
+  const affectTone = positiveAffect || negativeAffect
+    ? positiveScore >= negativeScore
+      ? `positive affect is higher than negative affect (${positiveScore}/${positiveAffect?.max || 50} vs ${negativeScore}/${negativeAffect?.max || 50})`
+      : `negative affect is higher than positive affect (${negativeScore}/${negativeAffect?.max || 50} vs ${positiveScore}/${positiveAffect?.max || 50})`
+    : 'affect tone is not available';
+  const moodLow = moodScore <= 13;
+  const anxietyLow = anxietyScore <= 4;
+  const attentionText = labelList(attentionPressure);
+  const lessHelpfulText = labelList(lessHelpful);
+  const helpfulText = labelList(helpful);
+  const avoidantText = labelList(avoidant);
+  const traitText = [
+    hexacoByKey.EM?.label || domainByKey.N?.label,
+    hexacoByKey.CO?.label || domainByKey.C?.label,
+    hexacoByKey.HH?.label,
+  ].filter(Boolean).join(', ') || 'no dominant trait anchor';
+
+  const body = moodLow && anxietyLow && positiveScore >= negativeScore
+    ? `Your mood and anxiety scores are both low (${moodScore}/63, ${moodBand}; ${anxietyScore}/21, ${anxietyBand}), and ${affectTone}. Across the broader profile, attention signals include ${attentionText}, cognitive loops include ${lessHelpfulText}, coping resources include ${helpfulText}, avoidant pressure includes ${avoidantText}, and trait anchors include ${traitText}. This map is most useful as a baseline and as a prompt to notice what changes if future results shift.`
+    : `Read this as a guided synthesis rather than a graph result. Current mood/anxiety context is ${moodScore}/63 (${moodBand}) and ${anxietyScore}/21 (${anxietyBand}); affect tone says ${affectTone}; attention signals include ${attentionText}; cognitive loops include ${lessHelpfulText}; coping resources include ${helpfulText}; avoidant pressure includes ${avoidantText}; and trait anchors include ${traitText}. The useful story is whether these areas converge into one repeated pattern or whether some areas are stable while others are doing most of the work.`;
+
+  return {
+    title: 'What this combination means',
+    body,
+    prompts: [
+      'Which pattern appears in more than one area?',
+      'Which result is most likely to be a current state rather than a stable style?',
+      'What is one support or habit that would help the strongest pattern move in a better direction?',
+    ],
+  };
+}
+
 function buildMindMapData(visuals) {
   const moodScore = Number(visuals?.mood?.totalScore || 0);
   const moodStrength = Math.min(1, moodScore / 63);
@@ -144,7 +199,22 @@ function buildMindMapData(visuals) {
       : 'Resource nodes stay visible because low use of adaptive strategies can be as informative as high use of difficult patterns.',
   ];
 
-  return { nodes, links, notes };
+  const synthesis = buildMindMapSynthesis({
+    moodScore,
+    anxietyScore,
+    positiveAffect,
+    negativeAffect,
+    attentionPressure,
+    lessHelpful,
+    helpful,
+    avoidant,
+    active,
+    domainByKey,
+    hexacoByKey,
+    visuals,
+  });
+
+  return { nodes, links, notes, synthesis };
 }
 
 async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
@@ -230,6 +300,10 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
     addHeading('Relationship Map');
     addText('This map is a reading guide, not a correlation graph. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
     const map = buildMindMapData(visuals);
+    addHeading(map.synthesis.title);
+    addText(map.synthesis.body, { size: 9 });
+    addHeading('How to use this');
+    map.synthesis.prompts.forEach((prompt) => addText(`- ${prompt}`, { size: 9 }));
     const nodeById = Object.fromEntries(map.nodes.map((node) => [node.id, node]));
     ensureSpace(500);
     const top = y;
