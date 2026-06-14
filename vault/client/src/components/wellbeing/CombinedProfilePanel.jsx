@@ -35,6 +35,8 @@ export default function CombinedProfilePanel({
   initialVariant = 'detailed',
   initialModuleKey = '',
   autoGenerate = false,
+  onModuleCharts,
+  onModuleMindMap,
 }) {
   const reportRef = useRef(null);
   const [status, setStatus] = useState(null);
@@ -263,6 +265,7 @@ export default function CombinedProfilePanel({
         <div className="grid md:grid-cols-3 gap-3">
           {(status?.modules || []).map((module) => {
             const generationKey = `module:${module.key}:detailed`;
+            const suggestionsGenerationKey = `module:${module.key}:suggestions`;
             const isActive = activeModuleKey === module.key && profile;
             const moduleTests = (module.tests || []).map((testKey, index) => ({
               key: testKey,
@@ -303,7 +306,7 @@ export default function CombinedProfilePanel({
                 <p className="text-xs mt-3 font-semibold" style={{ color: module.completed ? '#16a34a' : '#ca8a04' }}>
                   {module.completed ? 'Module ready' : `Needs ${module.missing?.length || 0} more`}
                 </p>
-                <div className="grid grid-cols-2 gap-2 mt-3">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-3">
                   <button
                     type="button"
                     onClick={() => generateProfile('detailed', module.key)}
@@ -312,6 +315,33 @@ export default function CombinedProfilePanel({
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
                   >
                     {generating === generationKey ? 'Generating...' : 'Report'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onModuleCharts?.(module.key)}
+                    disabled={!module.completed}
+                    className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 disabled:opacity-40"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                  >
+                    Charts
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onModuleMindMap?.(module.key)}
+                    disabled={!module.completed}
+                    className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 disabled:opacity-40"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                  >
+                    Mind map
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => generateProfile('suggestions', module.key)}
+                    disabled={!module.completed || !!generating}
+                    className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 disabled:opacity-40"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                  >
+                    {generating === suggestionsGenerationKey ? 'Generating...' : 'Suggestions'}
                   </button>
                   <button
                     type="button"

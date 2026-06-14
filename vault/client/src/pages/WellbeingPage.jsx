@@ -1238,6 +1238,14 @@ export default function WellbeingPage() {
           initialVariant={reportVariant || (tool === 'suggestions' ? 'suggestions' : 'detailed')}
           initialModuleKey={reportModuleKey}
           autoGenerate={tool === 'suggestions' || !!reportModuleKey}
+          onModuleCharts={(moduleKey) => {
+            setVisualModuleKey(moduleKey);
+            setTool('visuals');
+          }}
+          onModuleMindMap={(moduleKey) => {
+            setVisualModuleKey(moduleKey);
+            setTool('mindmap');
+          }}
         />
       </div>
     );
