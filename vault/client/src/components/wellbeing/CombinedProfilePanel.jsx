@@ -29,7 +29,12 @@ const PROFILE_VARIANTS = {
   },
 };
 
-export default function CombinedProfilePanel({ onBack, initialVariant = 'detailed', autoGenerate = false }) {
+export default function CombinedProfilePanel({
+  onBack,
+  initialVariant = 'detailed',
+  initialModuleKey = '',
+  autoGenerate = false,
+}) {
   const reportRef = useRef(null);
   const [status, setStatus] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -85,9 +90,16 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
   };
 
   useEffect(() => {
-    if (!autoGenerate || !status?.available || profile || generating) return;
+    if (!autoGenerate || initialModuleKey || !status?.available || profile || generating) return;
     generateProfile(PROFILE_VARIANTS[initialVariant] ? initialVariant : 'detailed');
-  }, [autoGenerate, status?.available, profile, generating, initialVariant]);
+  }, [autoGenerate, initialModuleKey, status?.available, profile, generating, initialVariant]);
+
+  useEffect(() => {
+    if (!autoGenerate || !initialModuleKey || profile || generating) return;
+    const moduleStatus = status?.modules?.find((module) => module.key === initialModuleKey);
+    if (!moduleStatus?.completed) return;
+    generateProfile(PROFILE_VARIANTS[initialVariant] ? initialVariant : 'detailed', initialModuleKey);
+  }, [autoGenerate, initialModuleKey, status?.modules, profile, generating, initialVariant]);
 
   const downloadProfilePdf = async () => {
     if (!profile || pdfLoading) return;
@@ -126,7 +138,7 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
     && (loading || generating === 'final:suggestions');
 
   const reportTitle = activeModuleKey
-    ? `${profile?.moduleLabel || status?.modules?.find((module) => module.key === activeModuleKey)?.label || 'Module'} Report`
+    ? `${profile?.moduleLabel || status?.modules?.find((module) => module.key === activeModuleKey)?.label || 'Module'} ${profileVariant === 'suggestions' ? 'Suggestions' : 'Report'}`
     : PROFILE_VARIANTS[profileVariant]?.title || 'Combined profile';
   const testStatusByKey = Object.fromEntries((status?.tests || []).map((test) => [test.key, test]));
 
@@ -189,12 +201,9 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
               completed: !!testStatusByKey[testKey]?.completed,
             }));
             return (
-              <button
+              <div
                 key={module.key}
-                type="button"
-                onClick={() => generateProfile('detailed', module.key)}
-                disabled={!module.completed || !!generating}
-                className="rounded-2xl border p-4 text-left hover:opacity-80 disabled:opacity-50 transition-opacity"
+                className="rounded-2xl border p-4 text-left transition-colors"
                 style={{
                   borderColor: isActive ? 'var(--color-primary)' : module.completed ? 'var(--color-border)' : '#f59e0b',
                   background: isActive ? 'var(--color-bg)' : module.completed ? 'var(--color-surface)' : '#fffbeb',
@@ -225,7 +234,7 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
                 <p className="text-xs mt-3 font-semibold" style={{ color: module.completed ? '#16a34a' : '#ca8a04' }}>
                   {module.completed ? 'Module ready' : `Needs ${module.missing?.length || 0} more`}
                 </p>
-              </button>
+              </div>
             );
           })}
         </div>

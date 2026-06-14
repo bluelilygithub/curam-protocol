@@ -904,7 +904,7 @@ function moduleScoresForKey(scores, moduleKey) {
   return scores;
 }
 
-function buildModuleFallback(module, latest, scores) {
+function buildModuleFallback(module, latest, scores, variant = 'detailed') {
   const mood = describeMood(latest);
   const anxiety = describeAnxiety(scores);
   const affect = describeAffect(scores);
@@ -913,6 +913,32 @@ function buildModuleFallback(module, latest, scores) {
   const hexacoPersonality = describeHexacoPersonality(scores);
   const cognitive = describeCognitiveCoping(scores);
   const behavioural = describeBehaviouralCoping(scores);
+  if (variant === 'suggestions') {
+    const moduleBody = module.key === 'mood-emotional'
+      ? `${mood}\n\n${anxiety}\n\n${affect}`
+      : module.key === 'personality-traits'
+        ? `${personality}\n\n${hexacoPersonality}`
+        : `${anxiety}\n\n${attention}\n\n${cognitive}\n\n${behavioural}`;
+    return {
+      summary: [
+        `These suggestions are focused on the ${module.label} module.`,
+        'They are reflective prompts only, intended to help the client notice patterns, strengths, watch points, and small safe experiments related to this module.',
+      ].join('\n\n'),
+      sections: [
+        { title: 'Module pattern', body: moduleBody },
+        { title: 'Strengths to lean on', body: describeStrengths(scores) },
+        { title: 'Watch points', body: 'Notice where a useful pattern becomes automatic or costly. The aim is not to label the person, but to find an earlier moment where they can pause, name the pattern, and choose a response more deliberately.' },
+        { title: 'Small experiments', body: 'Choose one small observation or experiment for the next week. It should be specific, safe, easy to review, and connected to this module rather than trying to change the whole profile at once.' },
+        { title: 'What to discuss with a clinician or trusted support', body: 'If the pattern feels intense, persistent, risky, or functionally costly, use this module report to organise a conversation with a qualified professional or trusted support.' },
+      ],
+      questions: [
+        'Which module suggestion feels most recognisable?',
+        'Which strength is already available but underused?',
+        'What small experiment would be safe to try for one week?',
+      ],
+      caveat: 'Module suggestions are proof-of-concept self-report reflections. They are not diagnosis, treatment advice, or a substitute for professional judgement.',
+    };
+  }
 
   if (module.key === 'mood-emotional') {
     return {
@@ -974,6 +1000,31 @@ function buildModuleFallback(module, latest, scores) {
 }
 
 function buildModulePrompt(module, scores, variant = 'detailed') {
+  if (variant === 'suggestions') {
+    return [
+      `Create a reflective personal-development suggestions report for this module: ${module.label}.`,
+      '',
+      `Module purpose: ${module.description}`,
+      `Included tests: ${module.testLabels.join(', ')}.`,
+      '',
+      'Important constraints:',
+      '- This is proof-of-concept self-report synthesis only.',
+      '- Do not diagnose, treat, predict risk, or give professional advice.',
+      '- Translate the module pattern into practical reflection areas and small experiments.',
+      '- Keep suggestions tied to this module only.',
+      '- Use tentative wording: may, could, might, worth noticing, useful to explore.',
+      '- Use paragraph breaks inside JSON string values.',
+      '',
+      'Required sections:',
+      'Module pattern; Strengths to lean on; Watch points; Small experiments; What to discuss with a clinician or trusted support.',
+      '',
+      'Return ONLY valid JSON with this shape:',
+      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Module pattern","body":"..."},{"title":"Strengths to lean on","body":"..."},{"title":"Watch points","body":"..."},{"title":"Small experiments","body":"..."},{"title":"What to discuss with a clinician or trusted support","body":"..."}],"questions":["..."],"caveat":"..."}',
+      '',
+      `Scored data:\n${JSON.stringify(moduleScoresForKey(scores, module.key), null, 2).slice(0, 12000)}`,
+    ].join('\n');
+  }
+
   return [
     `Create a ${variant === 'summary' ? 'concise' : variant === 'analytical' ? 'clinician-oriented analytical' : 'detailed'} module report for: ${module.label}.`,
     '',
@@ -1009,7 +1060,7 @@ async function generateCombinedProfile(userId, latest, options = {}) {
   }
 
   if (module) {
-    const fallback = buildModuleFallback(module, latest, scores);
+    const fallback = buildModuleFallback(module, latest, scores, variant);
     try {
       const { standard, light } = await getModelsForUser(userId);
       const model = standard || light;

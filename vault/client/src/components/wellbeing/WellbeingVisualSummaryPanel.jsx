@@ -32,6 +32,27 @@ const SOURCE_CHARTS = [
   { key: 'cope', label: 'COPE', targetId: 'wellbeing-chart-cope' },
 ];
 
+const MODULE_VISUALS = {
+  'mood-emotional': {
+    label: 'Mood & Emotional State',
+    chartKeys: ['mood', 'gad7', 'panas'],
+    nodeIds: ['centre', 'mood', 'anxiety', 'affect'],
+    description: 'Mood load, anxiety/worry load, and affect tone.',
+  },
+  'personality-traits': {
+    label: 'Personality & Traits',
+    chartKeys: ['ipip', 'hexaco'],
+    nodeIds: ['centre', 'sensitivity', 'humility', 'structure'],
+    description: 'Stable dispositional patterns and trait posture.',
+  },
+  'regulation-coping': {
+    label: 'Regulation & Coping',
+    chartKeys: ['gad7', 'asrs5', 'cerq', 'cope'],
+    nodeIds: ['centre', 'anxiety', 'attention', 'resources', 'loops', 'coping', 'avoidance', 'structure'],
+    description: 'Stress-response, attention/self-regulation, cognitive regulation, and behavioural coping.',
+  },
+};
+
 function strongest(scales = [], predicate = () => true, limit = 3) {
   return scales
     .filter(predicate)
@@ -44,7 +65,8 @@ function nodeStrength(items = [], fallback = 0) {
   return items.reduce((sum, item) => sum + Number(item.normalized || 0), 0) / items.length;
 }
 
-function buildMindMap(data) {
+function buildMindMap(data, moduleKey = '') {
+  const module = MODULE_VISUALS[moduleKey] || null;
   const moodScore = Number(data?.mood?.totalScore || 0);
   const moodStrength = Math.min(1, moodScore / 63);
   const anxietyScore = Number(data?.gad7?.totalScore || 0);
@@ -69,7 +91,7 @@ function buildMindMap(data) {
     {
       id: 'centre',
       label: 'Combined wellbeing pattern',
-      detail: 'Latest result from all eight checks',
+      detail: module ? module.label : 'Latest result from all eight checks',
       x: 300,
       y: 210,
       color: 'var(--color-primary)',
@@ -219,18 +241,28 @@ function buildMindMap(data) {
       : 'Resource nodes stay visible even when scores are lower, because low use of adaptive strategies can be just as informative as high use of difficult patterns.',
   ].filter(Boolean);
 
-  return { nodes, links, notes };
+  if (!module) return { nodes, links, notes };
+
+  const allowed = new Set(module.nodeIds);
+  const filteredNodes = nodes.filter((node) => allowed.has(node.id));
+  const filteredLinks = links.filter(([fromId, toId]) => allowed.has(fromId) && allowed.has(toId));
+  const filteredNotes = [
+    `${module.label} focuses this map on ${module.description}`,
+    ...notes.slice(0, 2),
+  ];
+  return { nodes: filteredNodes, links: filteredLinks, notes: filteredNotes };
 }
 
-function MindMap({ data }) {
-  const map = useMemo(() => buildMindMap(data), [data]);
+function MindMap({ data, moduleKey = '' }) {
+  const module = MODULE_VISUALS[moduleKey] || null;
+  const map = useMemo(() => buildMindMap(data, moduleKey), [data, moduleKey]);
   const nodeById = Object.fromEntries(map.nodes.map((node) => [node.id, node]));
 
   return (
     <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Eight-test mind map</h2>
+      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{module ? `${module.label} mind map` : 'Eight-test mind map'}</h2>
       <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
-        A relationship map that groups related signals from mood, affect tone, attention/self-regulation, two personality lenses, cognitive coping, and behavioural coping.
+        {module ? `A module-specific relationship map for ${module.description}` : 'A relationship map that groups related signals from mood, affect tone, attention/self-regulation, two personality lenses, cognitive coping, and behavioural coping.'}
       </p>
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
         <svg viewBox="0 0 600 620" className="w-full max-w-[680px] mx-auto" role="img" aria-label="Mind map connecting the eight wellbeing test patterns">
@@ -288,7 +320,8 @@ function MindMap({ data }) {
   );
 }
 
-export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'charts' }) {
+export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'charts', moduleKey = '' }) {
+  const activeModule = MODULE_VISUALS[moduleKey] || null;
   const [view, setView] = useState(initialView);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -299,7 +332,8 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
     setLoading(true);
     setError('');
     try {
-      const res = await api.get('/api/wellbeing/profile/visuals');
+      const suffix = moduleKey ? `?moduleKey=${encodeURIComponent(moduleKey)}` : '';
+      const res = await api.get(`/api/wellbeing/profile/visuals${suffix}`);
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || 'Could not load visual summary');
       setData(payload);
@@ -308,7 +342,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [moduleKey]);
 
   useEffect(() => {
     setView(initialView);
@@ -351,6 +385,10 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
   const hexacoDomains = parseMaybeJson(data?.hexaco?.domainScores, []);
   const cerqScales = parseMaybeJson(data?.cerq?.scaleScores, []);
   const copeScales = parseMaybeJson(data?.cope?.scaleScores, []);
+  const sourceCharts = activeModule
+    ? SOURCE_CHARTS.filter((source) => activeModule.chartKeys.includes(source.key))
+    : SOURCE_CHARTS;
+  const hasChart = (key) => sourceCharts.some((source) => source.key === key);
 
   const scrollToChart = (targetId) => {
     setView('charts');
@@ -372,10 +410,10 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
             Back to wellbeing tools
           </button>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-            {view === 'mindmap' ? 'Wellbeing Mind Map' : 'Wellbeing Visual Summary'}
+            {activeModule ? `${activeModule.label} ${view === 'mindmap' ? 'Mind Map' : 'Visual Summary'}` : (view === 'mindmap' ? 'Wellbeing Mind Map' : 'Wellbeing Visual Summary')}
           </h2>
           <p className="text-sm mt-1 max-w-3xl" style={{ color: 'var(--color-muted)' }}>
-            Uses the latest completed result from each of the eight wellbeing checks.
+            {activeModule ? activeModule.description : 'Uses the latest completed result from each of the eight wellbeing checks.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -423,8 +461,8 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
         <>
           <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <p className="text-xs uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Source results</p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-8 gap-2">
-              {SOURCE_CHARTS.map((source) => {
+            <div className={`grid sm:grid-cols-2 ${sourceCharts.length >= 4 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-2`}>
+              {sourceCharts.map((source) => {
                 const attempt = data.sourceAttempts?.[source.key];
                 return (
                   <button
@@ -446,38 +484,54 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
           </section>
 
           {view === 'mindmap' ? (
-            <MindMap data={data} />
+            <MindMap data={data} moduleKey={moduleKey} />
           ) : (
             <div className="space-y-4">
-              <div id="wellbeing-chart-mood" className="scroll-mt-6">
-                <BdiSeverityGauge score={Number(data.mood?.totalScore || 0)} label={data.mood?.bandLabel} />
-              </div>
-              <div id="wellbeing-chart-gad7" className="scroll-mt-6">
-                <Gad7SeverityGauge score={Number(data.gad7?.totalScore || 0)} label={data.gad7?.bandLabel} />
-              </div>
-              <div id="wellbeing-chart-panas" className="scroll-mt-6">
-                <StrategyBarChart scales={panasScales} responseMax={5} variant="panas" title="PANAS-style affect profile" />
-              </div>
-              <div id="wellbeing-chart-asrs5" className="scroll-mt-6">
-                <StrategyBarChart scales={asrs5Scales} responseMax={4} minValue={0} variant="asrs5" title="ASRS-5-style attention/self-regulation profile" />
-              </div>
-              <div id="wellbeing-chart-ipip" className="scroll-mt-6">
-                <DomainRadarChart domains={domains} />
-              </div>
-              <div id="wellbeing-chart-hexaco" className="scroll-mt-6">
-                <DomainRadarChart
-                  domains={hexacoDomains}
-                  title="HEXACO six-domain radar"
-                  description="Relative HEXACO-style domain endorsement. Outer ring is higher endorsement."
-                  ariaLabel="HEXACO six-domain radar chart"
-                />
-              </div>
-              <div id="wellbeing-chart-cerq" className="scroll-mt-6">
-                <StrategyBarChart scales={cerqScales} responseMax={5} variant="cerq" title="CERQ-style strategy profile" />
-              </div>
-              <div id="wellbeing-chart-cope" className="scroll-mt-6">
-                <StrategyBarChart scales={copeScales} responseMax={4} variant="cope" title="Brief COPE-style strategy profile" />
-              </div>
+              {hasChart('mood') && (
+                <div id="wellbeing-chart-mood" className="scroll-mt-6">
+                  <BdiSeverityGauge score={Number(data.mood?.totalScore || 0)} label={data.mood?.bandLabel} />
+                </div>
+              )}
+              {hasChart('gad7') && (
+                <div id="wellbeing-chart-gad7" className="scroll-mt-6">
+                  <Gad7SeverityGauge score={Number(data.gad7?.totalScore || 0)} label={data.gad7?.bandLabel} />
+                </div>
+              )}
+              {hasChart('panas') && (
+                <div id="wellbeing-chart-panas" className="scroll-mt-6">
+                  <StrategyBarChart scales={panasScales} responseMax={5} variant="panas" title="PANAS-style affect profile" />
+                </div>
+              )}
+              {hasChart('asrs5') && (
+                <div id="wellbeing-chart-asrs5" className="scroll-mt-6">
+                  <StrategyBarChart scales={asrs5Scales} responseMax={4} minValue={0} variant="asrs5" title="ASRS-5-style attention/self-regulation profile" />
+                </div>
+              )}
+              {hasChart('ipip') && (
+                <div id="wellbeing-chart-ipip" className="scroll-mt-6">
+                  <DomainRadarChart domains={domains} />
+                </div>
+              )}
+              {hasChart('hexaco') && (
+                <div id="wellbeing-chart-hexaco" className="scroll-mt-6">
+                  <DomainRadarChart
+                    domains={hexacoDomains}
+                    title="HEXACO six-domain radar"
+                    description="Relative HEXACO-style domain endorsement. Outer ring is higher endorsement."
+                    ariaLabel="HEXACO six-domain radar chart"
+                  />
+                </div>
+              )}
+              {hasChart('cerq') && (
+                <div id="wellbeing-chart-cerq" className="scroll-mt-6">
+                  <StrategyBarChart scales={cerqScales} responseMax={5} variant="cerq" title="CERQ-style strategy profile" />
+                </div>
+              )}
+              {hasChart('cope') && (
+                <div id="wellbeing-chart-cope" className="scroll-mt-6">
+                  <StrategyBarChart scales={copeScales} responseMax={4} variant="cope" title="Brief COPE-style strategy profile" />
+                </div>
+              )}
             </div>
           )}
         </>

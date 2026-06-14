@@ -174,9 +174,11 @@ function TestTile({ test }) {
   );
 }
 
-function ModuleGroup({ module, tests }) {
+function ModuleGroup({ module, tests, onReport, onCharts, onMindMap, onSuggestions }) {
   const completedCount = tests.filter((test) => test.completed).length;
   const borderColor = module.accent;
+  const moduleReady = completedCount === tests.length;
+  const actionButtonClass = 'px-3 py-2 rounded-xl text-xs font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[var(--color-primary)] bg-[var(--color-surface)] border-[var(--module-action-border)] hover:bg-[var(--color-primary)] hover:border-[var(--color-primary)] hover:text-white disabled:hover:bg-[var(--color-surface)] disabled:hover:border-[var(--module-action-border)] disabled:hover:text-[var(--color-primary)]';
   return (
     <section
       className="rounded-3xl border-2 p-4 shadow-sm"
@@ -204,6 +206,20 @@ function ModuleGroup({ module, tests }) {
         {tests.map((test) => (
           <TestTile key={`${module.key}-${test.key}`} test={test} />
         ))}
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4" style={{ '--module-action-border': borderColor }}>
+        <button type="button" onClick={onReport} disabled={!moduleReady} className={actionButtonClass}>
+          Report
+        </button>
+        <button type="button" onClick={onCharts} disabled={!moduleReady} className={actionButtonClass}>
+          Charts
+        </button>
+        <button type="button" onClick={onMindMap} disabled={!moduleReady} className={actionButtonClass}>
+          Mind map
+        </button>
+        <button type="button" onClick={onSuggestions} disabled={!moduleReady} className={actionButtonClass}>
+          Suggestions
+        </button>
       </div>
     </section>
   );
@@ -360,6 +376,9 @@ export default function WellbeingPage() {
   const isAdmin = !!user?.isAdmin;
   const { startProcessing, stopProcessing } = useProcessingStore();
   const [tool, setTool] = useState('mood');
+  const [visualModuleKey, setVisualModuleKey] = useState('');
+  const [reportModuleKey, setReportModuleKey] = useState('');
+  const [reportVariant, setReportVariant] = useState('detailed');
   const [config, setConfig] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -830,6 +849,9 @@ export default function WellbeingPage() {
     },
   ];
   const dashboardBack = useCallback(() => {
+    setVisualModuleKey('');
+    setReportModuleKey('');
+    setReportVariant('detailed');
     setTool('mood');
     setMode('intro');
     refreshProfileStatus();
@@ -1011,8 +1033,9 @@ export default function WellbeingPage() {
         </div>
         <CombinedProfilePanel
           onBack={dashboardBack}
-          initialVariant={tool === 'suggestions' ? 'suggestions' : 'detailed'}
-          autoGenerate={tool === 'suggestions'}
+          initialVariant={reportVariant || (tool === 'suggestions' ? 'suggestions' : 'detailed')}
+          initialModuleKey={reportModuleKey}
+          autoGenerate={tool === 'suggestions' || !!reportModuleKey}
         />
       </div>
     );
@@ -1030,7 +1053,7 @@ export default function WellbeingPage() {
             Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
           </p>
         </div>
-        <WellbeingVisualSummaryPanel onBack={dashboardBack} initialView={tool === 'mindmap' ? 'mindmap' : 'charts'} />
+        <WellbeingVisualSummaryPanel onBack={dashboardBack} initialView={tool === 'mindmap' ? 'mindmap' : 'charts'} moduleKey={visualModuleKey} />
       </div>
     );
   }
@@ -1063,6 +1086,24 @@ export default function WellbeingPage() {
                 key={module.key}
                 module={module}
                 tests={module.testKeys.map((key) => testByKey[key]).filter(Boolean)}
+                onReport={() => {
+                  setReportModuleKey(module.key);
+                  setReportVariant('detailed');
+                  setTool('combined');
+                }}
+                onCharts={() => {
+                  setVisualModuleKey(module.key);
+                  setTool('visuals');
+                }}
+                onMindMap={() => {
+                  setVisualModuleKey(module.key);
+                  setTool('mindmap');
+                }}
+                onSuggestions={() => {
+                  setReportModuleKey(module.key);
+                  setReportVariant('suggestions');
+                  setTool('combined');
+                }}
               />
             ))}
             <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
@@ -1074,10 +1115,28 @@ export default function WellbeingPage() {
             <div className="space-y-4">
               <ResultsTile
                 available={!!profileStatus?.available}
-                onCombined={() => profileStatus?.available && setTool('combined')}
-                onCharts={() => profileStatus?.available && setTool('visuals')}
-                onMindMap={() => profileStatus?.available && setTool('mindmap')}
-                onSuggestions={() => profileStatus?.available && setTool('suggestions')}
+                onCombined={() => {
+                  if (!profileStatus?.available) return;
+                  setReportModuleKey('');
+                  setReportVariant('detailed');
+                  setTool('combined');
+                }}
+                onCharts={() => {
+                  if (!profileStatus?.available) return;
+                  setVisualModuleKey('');
+                  setTool('visuals');
+                }}
+                onMindMap={() => {
+                  if (!profileStatus?.available) return;
+                  setVisualModuleKey('');
+                  setTool('mindmap');
+                }}
+                onSuggestions={() => {
+                  if (!profileStatus?.available) return;
+                  setReportModuleKey('');
+                  setReportVariant('suggestions');
+                  setTool('suggestions');
+                }}
               />
               <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
                 <div>

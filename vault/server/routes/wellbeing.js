@@ -1789,50 +1789,51 @@ async function loadWellbeingInviteTemplate() {
   };
 }
 
-function visualProfileFromLatest(latest) {
+function visualProfileFromLatest(latest, keys = ['mood', 'gad7', 'panas', 'asrs5', 'ipip', 'hexaco', 'cerq', 'cope']) {
+  const include = (key) => keys.includes(key) && latest[key];
   return {
-    sourceAttempts: sourceAttemptsFromLatest(latest),
-    mood: {
+    sourceAttempts: sourceAttemptsForKeys(latest, keys),
+    ...(include('mood') ? { mood: {
       totalScore: latest.mood.totalScore,
       band: latest.mood.band,
       bandLabel: latest.mood.bandLabel,
       safetyFlag: latest.mood.safetyFlag,
       createdAt: latest.mood.createdAt,
-    },
-    gad7: {
+    } } : {}),
+    ...(include('gad7') ? { gad7: {
       totalScore: latest.gad7.totalScore,
       band: latest.gad7.band,
       bandLabel: latest.gad7.bandLabel,
       createdAt: latest.gad7.createdAt,
-    },
-    panas: {
+    } } : {}),
+    ...(include('panas') ? { panas: {
       scaleScores: latest.panas.scaleScores,
       createdAt: latest.panas.createdAt,
-    },
-    asrs5: {
+    } } : {}),
+    ...(include('asrs5') ? { asrs5: {
       totalScore: latest.asrs5.totalScore,
       band: latest.asrs5.band,
       bandLabel: latest.asrs5.bandLabel,
       scaleScores: latest.asrs5.scaleScores,
       createdAt: latest.asrs5.createdAt,
-    },
-    ipip: {
+    } } : {}),
+    ...(include('ipip') ? { ipip: {
       domainScores: latest.ipip.domainScores,
       facetScores: latest.ipip.facetScores,
       createdAt: latest.ipip.createdAt,
-    },
-    hexaco: {
+    } } : {}),
+    ...(include('hexaco') ? { hexaco: {
       domainScores: latest.hexaco.domainScores,
       createdAt: latest.hexaco.createdAt,
-    },
-    cerq: {
+    } } : {}),
+    ...(include('cerq') ? { cerq: {
       scaleScores: latest.cerq.scaleScores,
       createdAt: latest.cerq.createdAt,
-    },
-    cope: {
+    } } : {}),
+    ...(include('cope') ? { cope: {
       scaleScores: latest.cope.scaleScores,
       createdAt: latest.cope.createdAt,
-    },
+    } } : {}),
   };
 }
 
@@ -2033,16 +2034,27 @@ router.get('/profile/visuals', async (req, res) => {
   try {
     const latest = await loadLatestProfileInputs(req.user.id);
     const status = profileStatusFromLatest(latest);
-    if (!status.available) {
+    const modules = moduleStatusFromLatest(latest);
+    const requestedModule = WELLBEING_MODULES.find((module) => module.key === req.query?.moduleKey);
+    const requestedModuleStatus = requestedModule ? modules.find((module) => module.key === requestedModule.key) : null;
+    if (requestedModule && !requestedModuleStatus?.completed) {
+      return res.status(400).json({
+        error: `${requestedModule.label} visuals require its module tests to be completed first.`,
+        status: { ...status, modules },
+      });
+    }
+    if (!requestedModule && !status.available) {
       return res.status(400).json({
         error: 'Visual summary requires all eight tests to be completed first.',
-        status,
+        status: { ...status, modules },
       });
     }
 
     res.json({
-      status,
-      ...visualProfileFromLatest(latest),
+      status: { ...status, modules },
+      moduleKey: requestedModule?.key || '',
+      moduleLabel: requestedModule?.label || '',
+      ...visualProfileFromLatest(latest, requestedModule?.tests),
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
