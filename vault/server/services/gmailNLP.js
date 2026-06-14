@@ -1,6 +1,7 @@
 'use strict';
 
 const { callModel } = require('./callModel');
+const { logUsage } = require('../utils/logUsage');
 
 const GMAIL_LIMITS = {
   count:   500,
@@ -219,7 +220,7 @@ Output: {"gmailQuery":"from:Sarah OR to:Sarah subject:contract","intent":"thread
  * @param {string} [today]      - ISO date YYYY-MM-DD (defaults to current date)
  * @returns {Promise<{ gmailQuery: string, intent: string, maxResults: number, responseMode: string }>}
  */
-async function translateToGmailQuery(userMessage, today, modelId = null) {
+async function translateToGmailQuery(userMessage, today, modelId = null, usageContext = null) {
   const todayStr = today || new Date().toISOString().slice(0, 10);
   const dates = calculateDates(todayStr);
   const systemPrompt = buildSystemPrompt(dates);
@@ -229,7 +230,19 @@ async function translateToGmailQuery(userMessage, today, modelId = null) {
     return { gmailQuery: userMessage, intent: 'list', maxResults: GMAIL_LIMITS.default, responseMode: 'list' };
   }
   try {
-    raw = await callModel(modelId, userMessage, { maxTokens: 200, system: systemPrompt });
+    const result = await callModel(modelId, userMessage, { maxTokens: 200, system: systemPrompt, returnUsage: !!usageContext });
+    if (usageContext) {
+      logUsage({
+        userId: usageContext.userId,
+        model: modelId,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        feature: usageContext.feature || 'gmail',
+      });
+      raw = result.text;
+    } else {
+      raw = result;
+    }
   } catch {
     return { gmailQuery: userMessage, intent: 'list', maxResults: GMAIL_LIMITS.list, responseMode: 'list' };
   }

@@ -6,15 +6,23 @@ const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
 const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 const crypto = require('crypto');
 
 const anthropic = new Anthropic();
 
-async function streamModelSSE(res, { modelId, system, userContent, maxTokens, onError }) {
+async function callModelWithUsage(req, modelId, prompt, options = {}) {
+  const result = await callModel(modelId, prompt, { ...options, returnUsage: true });
+  logUsage({ userId: req.user?.id, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'tasks' });
+  return result.text;
+}
+
+async function streamModelSSE(res, { userId, modelId, system, userContent, maxTokens, onError }) {
   if (!modelId.startsWith('claude-')) {
     try {
-      const text = await callModel(modelId, userContent, { maxTokens, ...(system ? { system } : {}) });
-      res.write(`data: ${JSON.stringify(text || '')}\n\n`);
+      const result = await callModel(modelId, userContent, { maxTokens, ...(system ? { system } : {}), returnUsage: true });
+      logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'tasks' });
+      res.write(`data: ${JSON.stringify(result.text || '')}\n\n`);
     } catch (err) {
       if (onError) onError(err);
     }
@@ -26,7 +34,11 @@ async function streamModelSSE(res, { modelId, system, userContent, maxTokens, on
   if (system) params.system = system;
   const stream = anthropic.messages.stream(params);
   stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
-  stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
+  stream.on('finalMessage', (message) => {
+    logUsage({ userId, model: modelId, inputTokens: message?.usage?.input_tokens, outputTokens: message?.usage?.output_tokens, feature: 'tasks' });
+    res.write('data: [DONE]\n\n');
+    res.end();
+  });
   stream.on('error', (err) => { if (onError) onError(err); res.write('data: [DONE]\n\n'); res.end(); });
 }
 
@@ -240,7 +252,8 @@ router.get('/morning-digest', async (req, res) => {
       ];
       try {
         const { light: lightModel } = await getModelsForUser(req.user?.id);
-        suggestion = await callModel(
+        suggestion = await callModelWithUsage(
+          req,
           lightModel,
           `My tasks:\n${lines.join('\n')}\n\nWhat should I focus on first?`,
           { maxTokens: 150, system: 'You are a productivity assistant. Given the user\'s task list, recommend what to focus on first today and explain briefly why in 2-3 sentences. Be direct and specific.' }
@@ -274,6 +287,7 @@ router.post('/weekly-review-suggestions', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     const { light: lightModel } = await getModelsForUser(req.user?.id);
     await streamModelSSE(res, {
+      userId: req.user?.id,
       modelId: lightModel,
       system: 'You are a productivity coach. Based on the user\'s open tasks, give 3-5 concrete, actionable suggestions for the coming week. Be specific, encouraging, and prioritise by impact. Use bullet points.',
       userContent: `Here are my open tasks:\n${lines}\n\nWhat should I focus on this week?`,
@@ -294,7 +308,8 @@ router.post('/suggest', async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const contextBlock = context ? `\n\nSurrounding context:\n${context.substring(0, 400)}` : '';
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const raw = await callModel(
+    const raw = await callModelWithUsage(
+      req,
       lightModel,
       `Today is ${today}. Based on this task: "${text.substring(0, 200)}"${contextBlock}\n\nSuggest a priority and due date. Reply with only valid JSON, no markdown: {"priority":"high"|"medium"|"low","dueDate":"YYYY-MM-DD"|null}`,
       { maxTokens: 60 }
@@ -409,7 +424,8 @@ router.post('/extract', async (req, res) => {
     const messages = msgRows.reverse();
     const conversation = messages.map(m => `${m.role}: ${m.content}`).join('\n\n');
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const raw = await callModel(
+    const raw = await callModelWithUsage(
+      req,
       lightModel,
       conversation,
       { maxTokens: 2048, system: 'You are a task extraction assistant. Read this conversation and extract all action items, next steps, and tasks mentioned. Return ONLY a valid JSON array of task objects with fields: title, priority (high/medium/low), category, dueDate (ISO string or null), notes. No other text.' }
@@ -449,7 +465,8 @@ router.post('/ai-generate', async (req, res) => {
       ? 'You are a task planning assistant. Generate subtasks for the given task. Return ONLY a valid JSON array of objects with fields: title, notes (optional), estimatedMinutes (number of minutes or null). No other text.'
       : 'You are a task planning assistant. Extract or generate a structured task list from the user input. Return ONLY a valid JSON array of task objects with fields: title, notes (optional), priority (high/medium/low), category (optional), dueDate (ISO date string or null), estimatedMinutes (number of minutes or null). No other text.';
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const raw = await callModel(
+    const raw = await callModelWithUsage(
+      req,
       lightModel,
       prompt,
       { maxTokens: 2048, system: systemPrompt }

@@ -283,6 +283,16 @@ Do not push or restore this local database back to Railway unless explicitly int
 
 Do not use an empty Homebrew PostgreSQL database as a replacement for `local-pg`; it will make local login and app data appear to be missing.
 
+### Local Tool Update Report
+
+Admin `Settings -> Tool Maintenance` can scan local environment update status for Homebrew formulae, selected Python packages, and selected Ollama models. It returns a read-only report with current versions, concrete available versions reported by Homebrew/pip, suggested manual commands, estimated update time, and rollback/model cleanup notes. Ollama installed tags are shown as remote-not-checked unless a selected model is missing.
+
+The report does not run upgrades, delete models, or write restore manifests from the web app, so it avoids giving production/admin UI paths direct system package control.
+
+### Environment Variables
+
+Keep real secret values out of git. Local development uses the ignored `vault/.env` file, while production secrets and runtime config should be managed in Railway Variables. Committed docs and `vault/.env.example` should contain placeholders only; server code should read values through `process.env`.
+
 ## Production Environment Checklist
 
 Before merging to `version-7` and deploying on Railway:

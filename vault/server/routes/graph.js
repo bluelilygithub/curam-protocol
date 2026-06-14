@@ -6,6 +6,7 @@ const { pool }  = require('../db');
 const { embedText } = require('../services/embeddings');
 const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 const SIMILARITY_THRESHOLD = 0.82;
 const MAX_NOTES    = 100;
@@ -524,11 +525,13 @@ router.post('/insights/refresh', async (req, res) => {
     const summary   = buildGraphSummary(graphData.nodes, graphData.edges);
 
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const raw = await callModel(
+    const insightResult = await callModel(
       lightModel,
       `You are analyzing someone's personal knowledge management vault. Based on the graph structure below, generate 4–6 short, specific, actionable insights about connections the user might not have noticed.\n\nRules:\n- Be specific — reference actual names from the data\n- Each insight must reference the relevant node IDs from the data\n- Focus on: cross-project themes, orphaned content that could be linked, clusters of related items, tasks disconnected from goals, recurring topics across sessions\n- Keep each insight under 25 words\n\n${summary}\n\nRespond with JSON only (no markdown):\n{"insights": [{"text": "...", "nodeIds": ["id1", "id2", ...]}]}`,
-      { maxTokens: 1024 }
+      { maxTokens: 1024, returnUsage: true }
     ) ?? '{}';
+    logUsage({ userId: req.user?.id, model: lightModel, inputTokens: insightResult.inputTokens, outputTokens: insightResult.outputTokens, feature: 'graph' });
+    const raw = insightResult.text || '{}';
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     let parsed;
     try {

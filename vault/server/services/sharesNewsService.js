@@ -18,6 +18,7 @@
 const { pool } = require('../db');
 const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
+const { logUsage } = require('../utils/logUsage');
 const sharesPortfolio = require('./sharesPortfolio');
 const { runtimeConfig } = require('../config/runtime');
 
@@ -191,9 +192,11 @@ Only include stocks with something noteworthy. Omit stocks with no significant n
   return lines.join('\n');
 }
 
-async function generateBriefings(holdings, newsMap, marketNews, modelId, today) {
+async function generateBriefings(userId, holdings, newsMap, marketNews, modelId, today) {
   const prompt = buildDailyPrompt(holdings, newsMap, marketNews, today);
-  const raw = await callModel(modelId, prompt, { maxTokens: 1500, system: DAILY_SYSTEM_PROMPT });
+  const result = await callModel(modelId, prompt, { maxTokens: 1500, system: DAILY_SYSTEM_PROMPT, returnUsage: true });
+  logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'shares_news' });
+  const raw = result.text;
 
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   try {
@@ -241,7 +244,7 @@ async function generateDailyBriefing(userId) {
   const modelId = tiers.standard || tiers.light || tiers.gemini;
   if (!modelId) throw new Error('No model configured for user — check vault_models in Settings');
 
-  const briefings = await generateBriefings(holdings, newsMap, marketNews, modelId, today);
+  const briefings = await generateBriefings(userId, holdings, newsMap, marketNews, modelId, today);
 
   // Store per-stock briefings
   const stockBriefings = Array.isArray(briefings.stocks) ? briefings.stocks : [];
@@ -357,7 +360,9 @@ async function generateMonthlySummary(userId) {
   if (!modelId) throw new Error('No model configured for user');
 
   const promptText = buildSummaryPrompt(dailyBriefings, today);
-  const raw = await callModel(modelId, promptText, { maxTokens: 2000, system: SUMMARY_SYSTEM_PROMPT });
+  const result = await callModel(modelId, promptText, { maxTokens: 2000, system: SUMMARY_SYSTEM_PROMPT, returnUsage: true });
+  logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'shares_news' });
+  const raw = result.text;
 
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   let summaryData;

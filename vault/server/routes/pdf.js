@@ -3,6 +3,7 @@ const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -38,6 +39,15 @@ router.post('/chat', async (req, res) => {
         res.write(`data: ${JSON.stringify({ delta: chunk.delta.text })}\n\n`);
       }
     }
+
+    const finalMessage = await stream.finalMessage();
+    logUsage({
+      userId: req.user?.id,
+      model: standardModel,
+      inputTokens: finalMessage?.usage?.input_tokens,
+      outputTokens: finalMessage?.usage?.output_tokens,
+      feature: 'pdf',
+    });
 
     res.write('data: [DONE]\n\n');
     res.end();

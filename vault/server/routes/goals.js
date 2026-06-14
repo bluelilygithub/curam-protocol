@@ -6,14 +6,22 @@ const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
 const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 const anthropic = new Anthropic();
 
-async function streamModelSSE(res, { modelId, system, userContent, maxTokens, onError }) {
+async function callModelWithUsage(req, modelId, prompt, options = {}) {
+  const result = await callModel(modelId, prompt, { ...options, returnUsage: true });
+  logUsage({ userId: req.user?.id, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'goals' });
+  return result.text;
+}
+
+async function streamModelSSE(res, { userId, modelId, system, userContent, maxTokens, onError }) {
   if (!modelId.startsWith('claude-')) {
     try {
-      const text = await callModel(modelId, userContent, { maxTokens, ...(system ? { system } : {}) });
-      res.write(`data: ${JSON.stringify(text || '')}\n\n`);
+      const result = await callModel(modelId, userContent, { maxTokens, ...(system ? { system } : {}), returnUsage: true });
+      logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'goals' });
+      res.write(`data: ${JSON.stringify(result.text || '')}\n\n`);
     } catch (err) {
       if (onError) onError(err);
     }
@@ -25,7 +33,11 @@ async function streamModelSSE(res, { modelId, system, userContent, maxTokens, on
   if (system) params.system = system;
   const stream = anthropic.messages.stream(params);
   stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
-  stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
+  stream.on('finalMessage', (message) => {
+    logUsage({ userId, model: modelId, inputTokens: message?.usage?.input_tokens, outputTokens: message?.usage?.output_tokens, feature: 'goals' });
+    res.write('data: [DONE]\n\n');
+    res.end();
+  });
   stream.on('error', (err) => { if (onError) onError(err); res.write('data: [DONE]\n\n'); res.end(); });
 }
 
@@ -123,6 +135,7 @@ Output ONLY JSON objects, one per line, no explanations, no markdown, no array b
 {"title":"Complete onboarding modules","targetValue":100,"unit":"%"}`;
     const { light: lightModel } = await getModelsForUser(req.user?.id);
     await streamModelSSE(res, {
+      userId: req.user?.id,
       modelId: lightModel,
       system: 'You are a goal-setting coach specialising in OKR frameworks. Output only JSON objects, one per line.',
       userContent: prompt,
@@ -215,6 +228,7 @@ router.post('/mission/generate', async (req, res) => {
     const prompt = `Based on these answers about a person's roles, character traits, lifetime contributions, and guiding principles, write a personal mission statement that is 2–4 sentences, inspiring, personal, and written in the first person. Focus on being and contributing, not just achieving. Return only the mission statement text with no preamble or explanation.\n\nAnswers:\n1. Roles: ${answers[0]}\n2. Character traits: ${answers[1]}\n3. Lifetime contributions: ${answers[2]}\n4. Guiding principles: ${answers[3]}`;
     const { light: lightModel } = await getModelsForUser(req.user?.id);
     await streamModelSSE(res, {
+      userId: req.user?.id,
       modelId: lightModel,
       userContent: prompt,
       maxTokens: 300,
@@ -239,6 +253,7 @@ router.post('/renewal-assessment', async (req, res) => {
     const prompt = `A person's current renewal dimension balance (Habit 7 — Sharpen the Saw):\n${summary}\n\nThe 4 renewal dimensions: Physical (body, health, exercise), Mental (learning, reading, creativity), Social/Emotional (relationships, empathy, giving), Spiritual (mission, values, reflection).\n\nIn 2-3 sentences, give a warm and practical assessment of their balance. If one dimension is significantly lower than others, suggest one specific action they could take this week to strengthen it. Be encouraging and brief.`;
     const { light: lightModel } = await getModelsForUser(req.user?.id);
     await streamModelSSE(res, {
+      userId: req.user?.id,
       modelId: lightModel,
       userContent: prompt,
       maxTokens: 250,
@@ -341,6 +356,7 @@ What they are getting better at: ${betterAt || '(not provided)'}
 Their current life stage / context: ${lifeStage || '(not provided)'}`;
     const { light: lightModel } = await getModelsForUser(req.user?.id);
     await streamModelSSE(res, {
+      userId: req.user?.id,
       modelId: lightModel,
       userContent: prompt,
       maxTokens: 300,
@@ -361,7 +377,7 @@ What matters most: "${mattersMost || '(not provided)'}"
 
 Suggest ONE concrete, achievable objective for the next 90 days that aligns with this mission. Return a JSON object with fields: title (string, max 60 chars), description (string, 1 sentence), timeframe (string, e.g. "Q2 2026"), color (one of: #6366f1, #3b82f6, #22c55e, #f59e0b, #ef4444, #8b5cf6). Output only the JSON object, no explanation.`;
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const text = await callModel(lightModel, prompt, { maxTokens: 200 }) || '{}';
+    const text = await callModelWithUsage(req, lightModel, prompt, { maxTokens: 200 }) || '{}';
     const match = text.match(/\{[\s\S]*\}/);
     const suggestion = match ? JSON.parse(match[0]) : {};
     res.json(suggestion);
@@ -379,7 +395,7 @@ router.post('/wizard/suggest-krs', async (req, res) => {
 
 Suggest exactly 3 SMART Key Results. Output only 3 JSON objects, one per line, with fields: title (string), targetValue (number), unit (string like "%", "tasks", "sessions", "hours", "items"). No markdown, no explanation.`;
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const text = await callModel(lightModel, prompt, { maxTokens: 300 }) || '';
+    const text = await callModelWithUsage(req, lightModel, prompt, { maxTokens: 300 }) || '';
     const lines = text.split('\n').filter(l => l.trim().startsWith('{'));
     const krs = [];
     for (const line of lines) {
@@ -405,6 +421,7 @@ Physical: ${physical ?? 5}/10, Mental: ${mental ?? 5}/10, Social: ${social ?? 5}
 In 2–3 sentences, give a warm personalised observation about their balance. Name the dimension that scored lowest and suggest one small, specific thing they could add to their life this week to strengthen it. Be warm, brief, and encouraging.`;
     const { light: lightModel } = await getModelsForUser(req.user?.id);
     await streamModelSSE(res, {
+      userId: req.user?.id,
       modelId: lightModel,
       userContent: prompt,
       maxTokens: 200,

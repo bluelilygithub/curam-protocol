@@ -31,6 +31,13 @@ function shortModel(id) {
     .replace('-20241022', '');
 }
 
+function featureLabel(feature) {
+  if (!feature) return 'Other';
+  return String(feature)
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function MiniBar({ value, max }) {
   const pct = max > 0 ? Math.max(2, (value / max) * 100) : 2;
   return (
@@ -105,6 +112,7 @@ export default function UsagePage() {
   }, [page, period, customFrom, customTo]); // eslint-disable-line
 
   const maxModelCost = Math.max(...(summary?.byModel || []).map(m => m.cost || 0), 0.000001);
+  const maxFeatureCost = Math.max(...(summary?.byFeature || []).map(f => f.cost || 0), 0.000001);
   const totalPages   = Math.ceil(logTotal / 50);
 
   return (
@@ -213,6 +221,29 @@ export default function UsagePage() {
                       </span>
                     </div>
                     <MiniBar value={m.cost} max={maxModelCost} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Per-feature breakdown */}
+            {summary.byFeature?.length > 0 && (
+              <div
+                className="rounded-xl border p-4 space-y-3"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              >
+                <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>By Feature</h2>
+                {summary.byFeature.map(f => (
+                  <div key={f.feature || 'other'} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium truncate max-w-[55%]" style={{ color: 'var(--color-text)' }}>
+                        {featureLabel(f.feature)}
+                      </span>
+                      <span style={{ color: 'var(--color-muted)' }}>
+                        {fmt(f.total_tokens)} tok · {fmt(f.calls)} calls · {fmtCost(f.cost)}
+                      </span>
+                    </div>
+                    <MiniBar value={f.cost} max={maxFeatureCost} />
                   </div>
                 ))}
               </div>

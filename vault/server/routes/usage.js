@@ -91,6 +91,23 @@ router.get('/summary', async (req, res) => {
       LIMIT 10
     `, allParams);
 
+    // Per-feature breakdown for non-chat feature calls.
+    const { rows: featureRows } = await pool.query(`
+      SELECT
+        feature,
+        SUM(input_tokens)::INT AS input_tokens,
+        SUM(output_tokens)::INT AS output_tokens,
+        SUM(input_tokens + output_tokens)::INT AS total_tokens,
+        SUM(estimated_cost_usd)::FLOAT AS cost,
+        COUNT(*)::INT AS calls
+      FROM usage_logs
+      WHERE user_id = $1 ${clause}
+        AND feature IS NOT NULL
+      GROUP BY feature
+      ORDER BY cost DESC
+      LIMIT 20
+    `, allParams);
+
     // Daily breakdown for the period (for a bar chart)
     // Limit daily rows: for long periods group by week or month
     let dailyTrunc = 'day';
@@ -118,6 +135,7 @@ router.get('/summary', async (req, res) => {
       totalTokens:  summary.total_tokens  || 0,
       calls:        summary.calls         || 0,
       byModel: modelRows,
+      byFeature: featureRows,
       daily:   dailyRows,
     });
   } catch (err) {

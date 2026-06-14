@@ -32,6 +32,7 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, 
       text,
       inputTokens: result.response.usageMetadata?.promptTokenCount || 0,
       outputTokens: result.response.usageMetadata?.candidatesTokenCount || 0,
+      model: modelId,
     };
   }
 
@@ -54,6 +55,7 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, 
       text,
       inputTokens: data.usage?.prompt_tokens || 0,
       outputTokens: data.usage?.completion_tokens || 0,
+      model: modelId,
     };
   }
 
@@ -71,6 +73,7 @@ async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, 
     text,
     inputTokens: response.usage?.input_tokens || 0,
     outputTokens: response.usage?.output_tokens || 0,
+    model: modelId,
   };
 }
 

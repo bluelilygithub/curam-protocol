@@ -7,6 +7,7 @@ const { FEATURE_ACCESS_DEFAULTS } = require('../config/featureAccess');
 const { getModelsForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
 const { parseModelJson } = require('../utils/parseModelJson');
+const { logUsage } = require('../utils/logUsage');
 
 async function canAccessStudentWorkspaceFeature(user) {
   if (user?.isAdmin) return true;
@@ -103,7 +104,9 @@ For multiple_choice, options must be exactly 4 strings; correct_answer must matc
 For multiple_select, use type "multiple_select" OR multiple_choice with allow_multiple true; correct_answers must be an array of 2+ option texts that are all correct (student must select all and only those).
 Return a JSON array only, no other text.`;
 
-  const raw = await callModel(model, prompt, { maxTokens: 16000 });
+  const result = await callModel(model, prompt, { maxTokens: 16000, returnUsage: true });
+  logUsage({ userId, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'student_quiz' });
+  const raw = result.text;
   const parsed = parseModelJson(raw);
   if (!Array.isArray(parsed) || !parsed.length) {
     throw new Error('Could not parse generated questions. Try again.');
@@ -291,7 +294,9 @@ Subtopics missed: ${subtopics.join(', ') || 'none'}
 Write a brief, encouraging performance summary (2–4 sentences) and list 2–4 specific focus areas to study next.
 Return JSON only: { "summary": "...", "focusAreas": ["...", "..."] }`;
 
-    const raw = await callModel(model, prompt, { maxTokens: 800 });
+    const result = await callModel(model, prompt, { maxTokens: 800, returnUsage: true });
+    logUsage({ userId: req.user?.id, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'student_quiz' });
+    const raw = result.text;
     const parsed = parseModelJson(raw);
     if (!parsed || typeof parsed !== 'object') {
       return res.status(502).json({ error: 'Could not parse performance summary' });
@@ -416,7 +421,9 @@ The student answered: ${student_answer}
 Mark this out of 10 and return JSON: { "score" (0-10), "correct" (bool, true if score >= 6), "feedback" (one sentence) }
 Return JSON only.`;
 
-    const raw = await callModel(model, prompt, { maxTokens: 400 });
+    const result = await callModel(model, prompt, { maxTokens: 400, returnUsage: true });
+    logUsage({ userId: req.user?.id, model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'student_quiz' });
+    const raw = result.text;
     const parsed = parseModelJson(raw);
     if (!parsed || typeof parsed !== 'object') {
       return res.status(502).json({ error: 'Could not parse marking response' });

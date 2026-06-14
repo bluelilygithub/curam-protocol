@@ -10,6 +10,9 @@ const {
   DEFAULT_WELLBEING_INVITE_SUBJECT,
   DEFAULT_WELLBEING_INVITE_BODY,
 } = require('../services/wellbeingInviteTemplate');
+const {
+  scanToolMaintenance,
+} = require('../services/toolMaintenance');
 
 const CONTENT_RESTRICTIONS_KEY = 'graphics_content_restrictions';
 const WELLBEING_INVITE_SUBJECT_KEY = 'wellbeing_invite_subject';
@@ -46,6 +49,24 @@ router.get('/effective-models', async (req, res) => {
 router.get('/runtime', (req, res) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
   res.json(getPublicRuntimeConfig());
+});
+
+// GET /api/settings/tool-maintenance/scan — admin-only preview of local tool updates.
+router.get('/tool-maintenance/scan', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  try {
+    res.json(await scanToolMaintenance());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/settings/tool-maintenance/execute — disabled; maintenance is report-only.
+router.post('/tool-maintenance/execute', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  res.status(410).json({
+    error: 'Tool maintenance execution has been disabled. Use the scan report to review updates and run any commands manually.',
+  });
 });
 
 // GET /api/settings

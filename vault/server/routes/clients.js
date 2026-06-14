@@ -543,7 +543,10 @@ router.get('/:id/gmail-search', async (req, res) => {
     if (q && q.trim()) {
       const today = new Date().toISOString().slice(0, 10);
       const { light: lightModel } = await getModelsForUser(req.user?.id);
-      const { gmailQuery: translatedQ } = await translateToGmailQuery(q.trim(), today, lightModel);
+      const { gmailQuery: translatedQ } = await translateToGmailQuery(q.trim(), today, lightModel, {
+        userId: req.user?.id,
+        feature: 'clients',
+      });
       finalQuery = `${contactFilter} ${translatedQ}`;
     }
 

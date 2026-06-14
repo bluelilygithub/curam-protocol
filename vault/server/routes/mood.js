@@ -4,6 +4,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const Anthropic = require('@anthropic-ai/sdk');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 const anthropic = new Anthropic();
 
@@ -656,15 +657,20 @@ Current stage: ${stage || 'inquiry'}`;
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    const { standard: standardModel } = await getModelsForUser(req.user?.id);
     const stream = anthropic.messages.stream({
-      model: (await getModelsForUser(req.user?.id)).standard,
+      model: standardModel,
       max_tokens: 512,
       system: systemWithContext,
       messages,
     });
 
     stream.on('text', (text) => { res.write(`data: ${JSON.stringify(text)}\n\n`); });
-    stream.on('finalMessage', () => { res.write('data: [DONE]\n\n'); res.end(); });
+    stream.on('finalMessage', (message) => {
+      logUsage({ userId, model: standardModel, inputTokens: message?.usage?.input_tokens, outputTokens: message?.usage?.output_tokens, feature: 'mood' });
+      res.write('data: [DONE]\n\n');
+      res.end();
+    });
     stream.on('error', (err) => {
       console.error('[mood] inquiry/message stream error:', err);
       res.write('data: [DONE]\n\n');
@@ -848,8 +854,9 @@ no markdown fences:
 
     let accumulated = '';
 
+    const { standard: standardModel } = await getModelsForUser(req.user?.id);
     const stream = anthropic.messages.stream({
-      model: (await getModelsForUser(req.user?.id)).standard,
+      model: standardModel,
       max_tokens: 1024,
       system: insightsSystemPrompt,
       messages: [{ role: 'user', content: userMessage }],
@@ -860,7 +867,8 @@ no markdown fences:
       res.write(`data: ${JSON.stringify(text)}\n\n`);
     });
 
-    stream.on('finalMessage', async () => {
+    stream.on('finalMessage', async (message) => {
+      logUsage({ userId, model: standardModel, inputTokens: message?.usage?.input_tokens, outputTokens: message?.usage?.output_tokens, feature: 'mood' });
       res.write('data: [DONE]\n\n');
       res.end();
       // Cache result

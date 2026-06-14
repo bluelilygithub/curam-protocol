@@ -10,6 +10,7 @@ const { callModel } = require('../services/callModel');
 const { pool } = require('../db');
 const { sanitiseCodeFile } = require('../utils/sanitiseCodeFile');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -142,11 +143,13 @@ async function extractPdfText(filePath) {
 async function generateAiSummary(text, filename, userId) {
   try {
     const { light: lightModel } = await getModelsForUser(userId);
-    return await callModel(
+    const result = await callModel(
       lightModel,
       `Summarize the following document "${filename}" in 2-3 sentences:\n\n${text.substring(0, 4000)}`,
-      { maxTokens: 500 }
-    ) || '';
+      { maxTokens: 500, returnUsage: true }
+    );
+    logUsage({ userId, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'files' });
+    return result.text || '';
   } catch (err) {
     console.error('AI summary error:', err);
     return '';

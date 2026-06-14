@@ -8,6 +8,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { callModel: callModelService } = require('../services/callModel');
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -72,7 +73,12 @@ async function callModel(modelId, userText, sharedContextFiles = []) {
     const model = genAI.getGenerativeModel({ model: modelId, systemInstruction: sysInstruction });
     const parts = buildGeminiParts(userText, sharedContextFiles);
     const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
-    return result.response.text();
+    return {
+      text: result.response.text(),
+      inputTokens: result.response.usageMetadata?.promptTokenCount || 0,
+      outputTokens: result.response.usageMetadata?.candidatesTokenCount || 0,
+      model: modelId,
+    };
   }
 
   if (modelId.startsWith('deepseek-')) {
@@ -90,7 +96,12 @@ async function callModel(modelId, userText, sharedContextFiles = []) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `DeepSeek error ${res.status}`);
-    return data.choices?.[0]?.message?.content || '';
+    return {
+      text: data.choices?.[0]?.message?.content || '',
+      inputTokens: data.usage?.prompt_tokens || 0,
+      outputTokens: data.usage?.completion_tokens || 0,
+      model: modelId,
+    };
   }
 
   // Anthropic
@@ -102,7 +113,12 @@ async function callModel(modelId, userText, sharedContextFiles = []) {
     system: systemPrompt,
     messages: [{ role: 'user', content }],
   });
-  return response.content[0]?.text || '';
+  return {
+    text: response.content[0]?.text || '',
+    inputTokens: response.usage?.input_tokens || 0,
+    outputTokens: response.usage?.output_tokens || 0,
+    model: modelId,
+  };
 }
 
 // POST /api/debate/extract
@@ -153,8 +169,15 @@ router.post('/start', async (req, res) => {
       callModel(modelB, prompt, ctx),
     ]);
 
-    const responseA = resultA.status === 'fulfilled' ? resultA.value : `[Error: ${resultA.reason?.message || 'Model A failed'}]`;
-    const responseB = resultB.status === 'fulfilled' ? resultB.value : `[Error: ${resultB.reason?.message || 'Model B failed'}]`;
+    if (resultA.status === 'fulfilled') {
+      logUsage({ userId: req.user?.id, model: modelA, inputTokens: resultA.value.inputTokens, outputTokens: resultA.value.outputTokens, feature: 'debate' });
+    }
+    if (resultB.status === 'fulfilled') {
+      logUsage({ userId: req.user?.id, model: modelB, inputTokens: resultB.value.inputTokens, outputTokens: resultB.value.outputTokens, feature: 'debate' });
+    }
+
+    const responseA = resultA.status === 'fulfilled' ? resultA.value.text : `[Error: ${resultA.reason?.message || 'Model A failed'}]`;
+    const responseB = resultB.status === 'fulfilled' ? resultB.value.text : `[Error: ${resultB.reason?.message || 'Model B failed'}]`;
 
     let debateId = null;
     if (save) {
@@ -190,8 +213,15 @@ router.post('/round', async (req, res) => {
       callModel(modelB, buildPrompt(prevB, prevA), ctx),
     ]);
 
-    const textA = resultA.status === 'fulfilled' ? resultA.value.trim() : `[Error: ${resultA.reason?.message || 'Model A failed'}]`;
-    const textB = resultB.status === 'fulfilled' ? resultB.value.trim() : `[Error: ${resultB.reason?.message || 'Model B failed'}]`;
+    if (resultA.status === 'fulfilled') {
+      logUsage({ userId: req.user?.id, model: modelA, inputTokens: resultA.value.inputTokens, outputTokens: resultA.value.outputTokens, feature: 'debate' });
+    }
+    if (resultB.status === 'fulfilled') {
+      logUsage({ userId: req.user?.id, model: modelB, inputTokens: resultB.value.inputTokens, outputTokens: resultB.value.outputTokens, feature: 'debate' });
+    }
+
+    const textA = resultA.status === 'fulfilled' ? resultA.value.text.trim() : `[Error: ${resultA.reason?.message || 'Model A failed'}]`;
+    const textB = resultB.status === 'fulfilled' ? resultB.value.text.trim() : `[Error: ${resultB.reason?.message || 'Model B failed'}]`;
 
     const noChangeA = textA === 'NO_CHANGE';
     const noChangeB = textB === 'NO_CHANGE';
@@ -224,11 +254,13 @@ router.post('/summary', async (req, res) => {
 
   try {
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const summary = await callModelService(
+    const summaryResult = await callModelService(
       lightModel,
       `Two AI models debated the topic: "${topic}"\n\n${modelA}'s final position:\n${finalResponseA}\n\n${modelB}'s final position:\n${finalResponseB}\n\nSynthesise these into a structured summary covering:\n1. What both models agreed on\n2. Where they still differ\n3. A recommended conclusion or synthesis\n\nBe concise and clear.`,
-      { maxTokens: 1024 }
+      { maxTokens: 1024, returnUsage: true }
     );
+    logUsage({ userId: req.user?.id, model: lightModel, inputTokens: summaryResult.inputTokens, outputTokens: summaryResult.outputTokens, feature: 'debate' });
+    const summary = summaryResult.text;
     res.json({ summary: summary || '' });
   } catch (err) {
     res.status(500).json({ error: err.message });

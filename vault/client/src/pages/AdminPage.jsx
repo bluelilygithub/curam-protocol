@@ -746,6 +746,10 @@ function AdminPage() {
 
   const lastBackup     = formatBackupDate(backupStatus?.lastBackupAt);
   const backupComplete = backupProgress?.stage === 'complete';
+  const openToolMaintenance = () => {
+    localStorage.setItem('settingsTab', 'Tool Maintenance');
+    navigate('/settings');
+  };
 
   if (!user?.isAdmin) {
     return (
@@ -837,6 +841,24 @@ function AdminPage() {
 
       {/* ── Users ─────────────────────────────────────────────────────────── */}
       <UsersAdminPanel title="Users" />
+
+      {/* ── Tool Maintenance ──────────────────────────────────────────────── */}
+      <div className="rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <div>
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Tool Update Report</h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+            Review Homebrew, Python package, and Ollama model updates without running system commands.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={openToolMaintenance}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-80"
+          style={{ background: 'var(--color-primary)' }}
+        >
+          Open update report
+        </button>
+      </div>
 
       {/* ── Backups ────────────────────────────────────────────────────────── */}
       <div className="space-y-6">

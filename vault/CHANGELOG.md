@@ -8,6 +8,12 @@ A log of bugs found and fixed in the Curam Vault application.
 
 **Feature + UX:** Wellbeing dashboard, visual summaries, report variants, and cleaner report formatting.
 
+Expanded AI usage tracking beyond chat and Gmail. Added a shared `logUsage` helper and wired token/cost logging into feature routes and services including wellbeing insights/modules/combined reports, compare, debate, goals, tasks, news digest, mood, prompt chains, student quizzes, clients Gmail lookup, shares news, calendar NLP, graph insights, PDF chat, YouTube parsing, pinned URL transcript summaries, and file summaries. `/api/usage/summary` now returns `byFeature`, and the Usage page displays a new **By Feature** breakdown so feature-level AI spend is visible.
+
+Added an admin-only **Tool Update Report** in `Settings -> Tool Maintenance`. Admins can scan local Homebrew formulae, selected Python packages, and selected Ollama models, then review current versions, concrete available versions reported by Homebrew/pip, suggested manual commands, estimated update time, and notes about rollback or model cleanup. Ollama installed tags are shown as "remote tag not checked" because the report does not pull models just to detect tag movement. The report is read-only and does not run upgrades, delete models, or write restore manifests from the web app.
+
+Documented the environment-variable strategy for secrets and runtime config: local secrets stay in ignored `.env`, production secrets stay in Railway Variables, committed examples use placeholders, and server code reads values through `process.env`. Added safe placeholders for YouTube, Fal, Finnhub, gold cache timing, and optional S3-compatible storage variables; `GOLD_CACHE_MS` is now environment-configurable with a 24-hour fallback.
+
 Added a fifth wellbeing/personality quiz: **HEXACO-60-style Personality Check**. It uses original proof-of-concept item wording across six HEXACO-style domains, supports pause/resume, back navigation, saved attempts, model-assisted response, radar charting, PDF export, admin demo data, reset, and combined-profile inclusion.
 
 Added a sixth wellbeing quiz: **PANAS-style Affect Check**. It captures positive affect, negative affect, and affect balance using original proof-of-concept wording, with pause/resume, review/retake, model-assisted response, PDF export, charting, admin demo data, reset, and combined-profile inclusion.

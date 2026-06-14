@@ -152,7 +152,7 @@ npm run dev
 | **Debate** | Multi-model debate (Anthropic + Gemini); round history; synthesis summary |
 | **Files** | Per-project uploads — PDFs, images, text, spreadsheets (xlsx, xls, ods), Word documents (docx, doc), and code files (js, jsx, ts, tsx, php, py, css, html, sql, sh, .env.example); text extracted and AI-summarised for all formats; spreadsheets converted to per-sheet CSV; Word docs extracted via mammoth; code files stored as plain text, 500 KB limit, prompt-injection sanitised; pin files for permanent context in every project chat; add files to the current session only via the session files feature |
 | **Prompts / Personas / Memory** | Reusable prompt library, AI personas, global memory snippets |
-| **Admin Dashboard** | Usage stats — messages, sessions, searches, debates, comparisons, tokens; period selector |
+| **Admin Dashboard** | Usage stats — messages, sessions, searches, debates, comparisons, tokens; period selector; Settings includes admin-only runtime visibility and a read-only Tool Update Report for local Homebrew, Python package, and Ollama model updates |
 | **Web Search** | `@search` in chat; Brave Search / Serper / SerpAPI auto-detected from key format |
 | **Gmail** | `@gmail` in chat; connect personal Gmail via OAuth 2.0; natural language search with Claude Haiku query translation; attach email threads as context; ask questions about threads via SSE streaming |
 | **Notes** | Quick-capture thought pad — title, date, free text; link to projects; one-click "Take to Chat" to open note as chat context |
@@ -392,6 +392,14 @@ If you see refusal language despite the ownership framing, check the server log 
 | `GEMINI_API_KEY` | Optional | — | Google Gemini API key. Enables Gemini 2.0 Flash and Gemini 2.5 Pro in chat, compare, and debate. Can also be set via Settings UI. | `AIza...` |
 | `SEARCH_API_KEY` | Optional | — | Web search API key. Auto-detected by format: `BSA…` → Brave Search; 40-char hex → Serper.dev; anything else → SerpAPI. Can also be set via Settings UI. | `BSA-abc123...` |
 | `SEARCH_PROVIDER` | Optional | Auto-detect | Override search provider detection. Values: `brave`, `serper`, `serpapi`. | `brave` |
+| `YOUTUBE_API_KEY` | Optional | — | YouTube Data API key. Enables YouTube search. | `AIza...` |
+| `FAL_API_KEY` | Optional | — | Fal API key for hosted image generation when the selected graphics provider is Fal. | `fal-key...` |
+| `FINNHUB_API_KEY` | Optional | — | Finnhub API key for US share quotes and company news. | `cabc123...` |
+| `GOLD_CACHE_MS` | Optional | `86400000` | Gold spot cache duration in milliseconds. `86400000` is 24 hours. | `86400000` |
+| `AWS_ACCESS_KEY_ID` | Optional | — | AWS/S3 access key placeholder for S3-compatible storage configuration. | `AKIA...` |
+| `AWS_SECRET_ACCESS_KEY` | Optional | — | AWS/S3 secret access key placeholder. Keep only in `.env` or Railway variables. | `...` |
+| `AWS_S3_BUCKET` | Optional | — | S3 bucket name placeholder for object storage configuration. | `curam-vault-uploads` |
+| `AWS_S3_REGION` | Optional | — | AWS/S3 region placeholder for object storage configuration. | `ap-southeast-2` |
 | `GOOGLE_CLIENT_ID` | Optional | — | Google OAuth 2.0 Client ID. Required for Gmail integration (`@gmail` in chat). | `123456.apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET` | Optional | — | Google OAuth 2.0 Client Secret. Required for Gmail integration. | `GOCSPX-...` |
 | `GOOGLE_REDIRECT_URI` | Optional | — | OAuth redirect URI — must match Google Cloud Console exactly. | `https://curam-vault.up.railway.app/api/gmail/callback` |
@@ -406,6 +414,8 @@ If you see refusal language despite the ownership framing, check the server log 
 ¹ `SMTP_HOST`, `SMTP_USER`, and `SMTP_PASS` are required together when `MAIL_CHANNEL_API_KEY` is not set and you need email features.
 
 ² Strongly recommended in production. Without it, Gmail OAuth tokens are stored unencrypted in the database.
+
+Keep real Vault secret values out of git. Local development should use the ignored `vault/.env` file, production should use Railway Variables, and committed code should read runtime configuration through `process.env` with safe placeholders documented in `vault/.env.example`.
 
 ### Flask Site — root `.env`
 

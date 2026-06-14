@@ -2,6 +2,7 @@
 
 const { getModelsForUser } = require('./modelResolver');
 const { callModel } = require('./callModel');
+const { logUsage } = require('../utils/logUsage');
 
 function safeJsonParse(text) {
   if (!text) return null;
@@ -13,6 +14,26 @@ function safeJsonParse(text) {
     if (!match) return null;
     try { return JSON.parse(match[0]); } catch { return null; }
   }
+}
+
+function attachUsage(result, usage) {
+  if (!result || !usage) return result;
+  Object.defineProperty(result, '_usage', {
+    value: usage,
+    enumerable: false,
+    configurable: true,
+  });
+  return result;
+}
+
+function logWellbeingUsage(userId, model, usage, feature) {
+  logUsage({
+    userId,
+    model,
+    inputTokens: usage?.inputTokens,
+    outputTokens: usage?.outputTokens,
+    feature,
+  });
 }
 
 function normaliseInsight(raw, fallback) {
@@ -115,11 +136,18 @@ async function generateModelInsight(userId, options) {
       };
     }
 
-    const text = await callModel(model, buildPrompt(options), {
+    const result = await callModel(model, buildPrompt(options), {
       maxTokens: 1800,
       system: 'You write careful, nuanced self-report assessment interpretations. You are not a clinician and must avoid diagnosis or treatment advice. Return only valid JSON.',
+      returnUsage: true,
     });
-    return normaliseInsight(safeJsonParse(text), fallback);
+    logWellbeingUsage(userId, model, result, 'wellbeing_insight');
+    return attachUsage(normaliseInsight(safeJsonParse(result.text), fallback), {
+      model,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      feature: 'wellbeing_insight',
+    });
   } catch (err) {
     return {
       ...normaliseInsight(null, fallback),
@@ -1074,17 +1102,24 @@ async function generateCombinedProfile(userId, latest, options = {}) {
         };
       }
 
-      const text = await callModel(model, buildModulePrompt(module, scores, variant), {
+      const result = await callModel(model, buildModulePrompt(module, scores, variant), {
         maxTokens: variant === 'summary' ? 1800 : variant === 'analytical' ? 3600 : 3000,
         system: 'You write careful module-level self-report formulations. You are not a clinician and must avoid diagnosis, treatment advice, or unsupported certainty. Return only valid JSON.',
+        returnUsage: true,
       });
-      return {
-        ...normaliseInsight(safeJsonParse(text), fallback),
+      logWellbeingUsage(userId, model, result, 'wellbeing_module');
+      return attachUsage({
+        ...normaliseInsight(safeJsonParse(result.text), fallback),
         variant,
         moduleKey: module.key,
         moduleLabel: module.label,
         moduleTests: module.tests,
-      };
+      }, {
+        model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        feature: 'wellbeing_module',
+      });
     } catch (err) {
       return {
         ...normaliseInsight(null, fallback),
@@ -1103,14 +1138,21 @@ async function generateCombinedProfile(userId, latest, options = {}) {
     const model = standard || light;
     if (!model) return normaliseInsight(null, fallback);
 
-    const text = await callModel(model, buildCombinedPrompt(scores, variant), {
+    const result = await callModel(model, buildCombinedPrompt(scores, variant), {
       maxTokens: variant === 'summary' ? 1600 : variant === 'analytical' ? 4600 : variant === 'suggestions' ? 3600 : 3600,
       system: 'You write careful, integrated self-report profile formulations. You are not a clinician and must avoid diagnosis, treatment advice, or unsupported certainty. Return only valid JSON.',
+      returnUsage: true,
     });
-    return {
-      ...normaliseInsight(safeJsonParse(text), fallback),
+    logWellbeingUsage(userId, model, result, 'wellbeing_combined');
+    return attachUsage({
+      ...normaliseInsight(safeJsonParse(result.text), fallback),
       variant,
-    };
+    }, {
+      model,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
+      feature: 'wellbeing_combined',
+    });
   } catch (err) {
     return {
       ...normaliseInsight(null, fallback),

@@ -8,6 +8,7 @@ const { URL } = require('url');
 const { isYoutubeUrl, fetchYoutubeTranscript } = require('../services/youtubeTranscript');
 const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 // Returns the transcript as-is if under 5,000 chars; otherwise summarises to ~20%
 // using the user's configured light model. Gracefully returns the raw text on any error.
@@ -15,11 +16,13 @@ async function summariseTranscript(rawTranscript, userId) {
   if (!rawTranscript || rawTranscript.length < 5000) return rawTranscript;
   try {
     const { light: lightModel } = await getModelsForUser(userId);
-    return await callModel(
+    const result = await callModel(
       lightModel,
       rawTranscript,
-      { maxTokens: 4096, system: 'Summarise the following video transcript to approximately 20% of its original length. Preserve key points, specific details, names, numbers, and conclusions. Write in flowing prose, not bullet points.' }
-    ) || rawTranscript;
+      { maxTokens: 4096, system: 'Summarise the following video transcript to approximately 20% of its original length. Preserve key points, specific details, names, numbers, and conclusions. Write in flowing prose, not bullet points.', returnUsage: true }
+    );
+    logUsage({ userId, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'pinned_urls' });
+    return result.text || rawTranscript;
   } catch (err) {
     console.warn('[pinnedUrls] summariseTranscript failed:', err.message);
     return rawTranscript;

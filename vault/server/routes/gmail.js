@@ -439,7 +439,10 @@ router.get('/search', gmailSearchLimiter, async (req, res) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const { gmailQuery, intent, maxResults: nlpMax, responseMode } = await translateToGmailQuery(q.trim(), today, lightModel);
+    const { gmailQuery, intent, maxResults: nlpMax, responseMode } = await translateToGmailQuery(q.trim(), today, lightModel, {
+      userId: req.user?.id,
+      feature: 'gmail',
+    });
 
     const resolvedMax = Math.min(parseInt(max) || nlpMax, GMAIL_LIMITS.count);
 

@@ -6,6 +6,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -142,6 +143,14 @@ router.post('/:id/run', async (req, res) => {
             send('step_chunk', { stepIndex: i, chunk: text });
           }
         }
+        const finalResponse = await result.response;
+        logUsage({
+          userId: req.user?.id,
+          model,
+          inputTokens: finalResponse?.usageMetadata?.promptTokenCount,
+          outputTokens: finalResponse?.usageMetadata?.candidatesTokenCount,
+          feature: 'chains',
+        });
       } else {
         const stream = anthropic.messages.stream({
           model,
@@ -154,6 +163,14 @@ router.post('/:id/run', async (req, res) => {
             send('step_chunk', { stepIndex: i, chunk: event.delta.text });
           }
         }
+        const finalMessage = await stream.finalMessage();
+        logUsage({
+          userId: req.user?.id,
+          model,
+          inputTokens: finalMessage?.usage?.input_tokens,
+          outputTokens: finalMessage?.usage?.output_tokens,
+          feature: 'chains',
+        });
       }
 
       outputs.push(fullOutput);

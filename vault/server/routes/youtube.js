@@ -20,6 +20,7 @@ const { pool } = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { getModelsForUser } = require('../services/modelResolver');
 const { callModel } = require('../services/callModel');
+const { logUsage } = require('../utils/logUsage');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -83,10 +84,13 @@ router.post('/parse-query', async (req, res) => {
 
   try {
     const { light: lightModel } = await getModelsForUser(req.user?.id);
-    const raw = await callModel(lightModel, input.trim(), {
+    const result = await callModel(lightModel, input.trim(), {
       maxTokens: 200,
       system: PARSE_SYSTEM,
+      returnUsage: true,
     });
+    logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'youtube' });
+    const raw = result.text;
 
     const jsonStr = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
     const parsed = JSON.parse(jsonStr);

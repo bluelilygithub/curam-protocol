@@ -7,6 +7,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { generateDigestForUser } = require('../cron/newsDigestCron');
 const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 const { DEFAULT_SOURCES } = require('../services/newsAggregationService');
 
@@ -309,13 +310,22 @@ router.post('/topics/:topicId/chat', async (req, res) => {
         const model = gemini.getGenerativeModel({ model: geminiModelId });
         const result = await model.generateContent(`${systemPrompt}\n\nUser: ${message.trim()}`);
         aiText = result.response.text();
+        logUsage({
+          userId: req.user?.id,
+          model: geminiModelId,
+          inputTokens: result.response.usageMetadata?.promptTokenCount,
+          outputTokens: result.response.usageMetadata?.candidatesTokenCount,
+          feature: 'news_digest',
+        });
       } catch (err) {
         console.warn('[news-chat] Gemini failed, falling back to Claude:', err.message);
       }
     }
 
     if (!aiText) {
-      aiText = await callModel(lightModel, message.trim(), { maxTokens: 1024, system: systemPrompt })
+      const result = await callModel(lightModel, message.trim(), { maxTokens: 1024, system: systemPrompt, returnUsage: true });
+      logUsage({ userId: req.user?.id, model: lightModel, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'news_digest' });
+      aiText = result.text
         || 'Sorry, I could not generate a response.';
     }
 

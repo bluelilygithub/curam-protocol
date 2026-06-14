@@ -118,6 +118,9 @@ function SettingsPage() {
   const [wellbeingInvitePlaceholders, setWellbeingInvitePlaceholders] = useState(['{{link}}', '{{email}}', '{{password}}']);
   const [wellbeingInviteSaved, setWellbeingInviteSaved] = useState(false);
   const [wellbeingInviteError, setWellbeingInviteError] = useState('');
+  const [toolMaintenancePlan, setToolMaintenancePlan] = useState(null);
+  const [toolMaintenanceLoading, setToolMaintenanceLoading] = useState(false);
+  const [toolMaintenanceError, setToolMaintenanceError] = useState('');
 
   const TABS = user?.isAdmin
     ? [
@@ -133,6 +136,7 @@ function SettingsPage() {
         'Feature Access',
         'Wellbeing Invites',
         'Content Restrictions',
+        'Tool Maintenance',
         'Environment',
         'Tours',
       ]
@@ -158,6 +162,7 @@ function SettingsPage() {
           'Feature Access',
           'Wellbeing Invites',
           'Content Restrictions',
+          'Tool Maintenance',
           'Environment',
           'Tours',
         ]
@@ -391,6 +396,40 @@ function SettingsPage() {
     setTimeout(() => setWellbeingInviteSaved(false), 2000);
   }
 
+  async function readToolMaintenanceJson(res, fallbackMessage) {
+    const text = await res.text();
+    if (!text.trim()) {
+      throw new Error(`${fallbackMessage}. The server returned an empty response; restart the dev server if this was after a recent code change.`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`${fallbackMessage}. The server returned a non-JSON response.`);
+    }
+  }
+
+  async function scanToolMaintenance() {
+    setToolMaintenanceLoading(true);
+    setToolMaintenanceError('');
+    try {
+      const res = await api.get('/api/settings/tool-maintenance/scan');
+      const data = await readToolMaintenanceJson(res, 'Could not scan local tools');
+      if (!res.ok) throw new Error(data.error || 'Could not scan local tools');
+      setToolMaintenancePlan(data);
+    } catch (err) {
+      setToolMaintenanceError(err.message || 'Could not scan local tools');
+    } finally {
+      setToolMaintenanceLoading(false);
+    }
+  }
+
+  function toolMaintenanceItemDetail(item) {
+    if (item?.willUpdate) {
+      return item.latest ? `Available: ${item.latest}` : (item.status || 'Update available');
+    }
+    return item?.status || 'No update reported';
+  }
+
   const runtimeRows = runtimeInfo ? [
     ['Application environment', runtimeInfo.appEnv || 'unknown'],
     ['Database source', runtimeInfo.databaseUrlSource || 'not configured'],
@@ -417,7 +456,7 @@ function SettingsPage() {
     : graphicsModelChoices;
 
   return (
-    <div className={((['Members', 'Environment', 'Wellbeing Invites'].includes(tab)) && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
+    <div className={((['Members', 'Environment', 'Wellbeing Invites', 'Tool Maintenance'].includes(tab)) && user?.isAdmin ? 'max-w-4xl' : 'max-w-2xl') + ' mx-auto p-6'}>
       <h1 className="text-2xl font-semibold" style={{ color: 'var(--color-text)' }}>
         Settings
       </h1>
@@ -2255,6 +2294,107 @@ function SettingsPage() {
       </section>
       )}
 
+      {/* Tool Maintenance tab */}
+      {tab === 'Tool Maintenance' && user?.isAdmin && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Tool Update Report
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Review local developer tools that may need attention. This page only scans and lists updates; it does not run system commands.
+        </p>
+
+        <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Review local tool updates</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                Scans Homebrew, Python packages, and selected Ollama models, then lists suggested manual commands.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={scanToolMaintenance}
+              disabled={toolMaintenanceLoading}
+              className="px-4 py-2 rounded-xl text-sm font-semibold border disabled:opacity-50 hover:opacity-80"
+              style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
+            >
+              {toolMaintenanceLoading ? 'Scanning...' : 'Scan tools'}
+            </button>
+          </div>
+
+          {toolMaintenanceError && (
+            <div className="rounded-xl border p-3 text-sm" style={{ borderColor: '#fecaca', background: '#fff1f2', color: '#991b1b' }}>
+              {toolMaintenanceError}
+            </div>
+          )}
+
+          {toolMaintenancePlan && (
+            <div className="space-y-4">
+              <div className="rounded-xl border p-3" style={{ borderColor: toolMaintenancePlan.enabled ? '#bbf7d0' : '#f59e0b', background: toolMaintenancePlan.enabled ? '#f0fdf4' : '#fffbeb' }}>
+                <p className="text-sm font-semibold" style={{ color: toolMaintenancePlan.enabled ? '#15803d' : '#92400e' }}>
+                  Estimated manual update time: {toolMaintenancePlan.estimatedTotal}
+                </p>
+                <p className="text-xs mt-1" style={{ color: toolMaintenancePlan.enabled ? '#166534' : '#92400e' }}>
+                  {toolMaintenancePlan.warning}
+                </p>
+              </div>
+
+              {toolMaintenancePlan.groups?.map(group => (
+                <div key={group.key} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)' }}>
+                  <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{group.label}</p>
+                      <span className="text-xs font-semibold" style={{ color: group.available ? '#15803d' : '#b45309' }}>
+                        {group.available
+                          ? `${(group.items || []).filter(item => item.willUpdate).length} update${(group.items || []).filter(item => item.willUpdate).length === 1 ? '' : 's'} found`
+                          : 'Unavailable'}
+                      </span>
+                    </div>
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Estimated manual update time: {group.estimatedMinutes} minutes</p>
+                  </div>
+                  {group.items?.length ? (
+                    <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+                      {group.items.slice(0, 18).map(item => (
+                        <div key={`${group.key}-${item.name}`} className="grid md:grid-cols-[1.2fr_1fr_1fr] gap-2 px-4 py-3 text-xs" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+                          <span style={{ color: 'var(--color-text)' }}>{item.name}</span>
+                          <span style={{ color: 'var(--color-muted)' }}>Current: {item.current || 'unknown'}</span>
+                          <span style={{ color: item.willUpdate ? 'var(--color-primary)' : 'var(--color-muted)' }}>{toolMaintenanceItemDetail(item)}</span>
+                        </div>
+                      ))}
+                      {group.items.length > 18 && (
+                        <p className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>+ {group.items.length - 18} more items in this group.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="px-4 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>{group.error || 'No updates reported for this group.'}</p>
+                  )}
+                  <p className="px-4 py-3 text-xs border-t" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                    Notes: {group.restoreNotes}
+                  </p>
+                  {group.key === 'ollama' && group.cleanupCandidates?.length > 0 && (
+                    <div className="px-4 py-3 text-xs border-t space-y-1" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                      <p className="font-semibold" style={{ color: 'var(--color-text)' }}>Older same-family model tags you could remove manually after confirming newer pulls work:</p>
+                      <p>{group.cleanupCandidates.map(model => model.name).join(', ')}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: 'var(--color-muted)' }}>Suggested manual commands</p>
+                <div className="rounded-xl border p-3 space-y-1" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  {toolMaintenancePlan.commands?.map(command => (
+                    <code key={command} className="block text-xs break-all" style={{ color: 'var(--color-text)' }}>{command}</code>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+      )}
+
       {/* Environment tab */}
       {tab === 'Environment' && user?.isAdmin && (
       <section>
@@ -2366,6 +2506,7 @@ function SettingsPage() {
           onCancel={() => setShowResetGoalsConfirm(false)}
         />
       )}
+
     </div>
   );
 }

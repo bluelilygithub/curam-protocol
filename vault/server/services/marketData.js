@@ -10,6 +10,11 @@
 
 const FETCH_TIMEOUT_MS = 20000;
 
+function envInt(name, fallback) {
+  const value = Number.parseInt(process.env[name], 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function normalizeExchange(exchange) {
@@ -84,7 +89,7 @@ async function getAlphaVantageQuote(symbol) {
 // 12-hour cache = max ~62 calls/month. METAL_PRICE_API_KEY env var required.
 
 let goldSpotCache = { data: null, at: 0 };
-const GOLD_CACHE_MS = 24 * 60 * 60 * 1000; // 24 hours — free tier is EOD prices
+const GOLD_CACHE_MS = envInt('GOLD_CACHE_MS', 24 * 60 * 60 * 1000); // default 24 hours
 
 async function getGoldSpotAud({ force = false } = {}) {
   if (!force && goldSpotCache.data && Date.now() - goldSpotCache.at < GOLD_CACHE_MS) {

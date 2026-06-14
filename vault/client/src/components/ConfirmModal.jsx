@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-function ConfirmModal({ title, message, confirmLabel = 'Confirm', danger = false, confirmText, onConfirm, onCancel }) {
+function ConfirmModal({ title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, confirmText, onConfirm, onCancel }) {
   const [typed, setTyped] = useState('');
   const canConfirm = confirmText ? typed === confirmText : true;
 
@@ -38,7 +38,7 @@ function ConfirmModal({ title, message, confirmLabel = 'Confirm', danger = false
             className="px-4 py-2 rounded-lg text-sm border"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             onClick={canConfirm ? onConfirm : undefined}

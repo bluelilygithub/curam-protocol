@@ -4,6 +4,7 @@ const cron = require('node-cron');
 const { pool } = require('../db');
 const { fetchArticlesForTopic } = require('../services/newsAggregationService');
 const { analyseTopicArticles } = require('../services/newsAnalysisService');
+const { logUsage } = require('../utils/logUsage');
 
 let cronTask = null;
 
@@ -147,6 +148,13 @@ async function generateDigestForUser(userId, dateStr, force = false) {
       totalInputTokens  += usage.inputTokens  || 0;
       totalOutputTokens += usage.outputTokens || 0;
       if (usage.model) lastModel = usage.model;
+      logUsage({
+        userId,
+        model: usage.model,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        feature: 'news_digest',
+      });
 
       await pool.query(
         `INSERT INTO news_digest_topics ("digestId", "topicId", articles, analysis)

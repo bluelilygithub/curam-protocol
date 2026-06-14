@@ -151,9 +151,13 @@ async function analyseTopicArticles(topicTitle, articles, context, userId) {
   }
 
   if (!raw) {
-    const text = await callModel(standardModelId, prompt, { maxTokens: 3000 });
-    raw = parseJSON(text || '{}');
-    usage = { inputTokens: 0, outputTokens: 0, model: standardModelId };
+    const result = await callModel(standardModelId, prompt, { maxTokens: 3000, returnUsage: true });
+    raw = parseJSON(result.text || '{}');
+    usage = {
+      inputTokens: result.inputTokens || 0,
+      outputTokens: result.outputTokens || 0,
+      model: standardModelId,
+    };
   }
 
   // Resolve 1-based indices → real article objects (no hallucinated URLs)

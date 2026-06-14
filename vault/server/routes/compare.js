@@ -6,6 +6,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { pool } = require('../db');
 const { getModelsForUser } = require('../services/modelResolver');
+const { logUsage } = require('../utils/logUsage');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -124,6 +125,14 @@ router.post(
           const text = chunk.text();
           if (text) res.write(`data: ${JSON.stringify({ delta: text })}\n\n`);
         }
+        const finalResponse = await streamResult.response;
+        logUsage({
+          userId: req.user?.id,
+          model,
+          inputTokens: finalResponse?.usageMetadata?.promptTokenCount,
+          outputTokens: finalResponse?.usageMetadata?.candidatesTokenCount,
+          feature: 'compare',
+        });
       } else if (isDeepSeek(model)) {
         const dsKey = process.env.DEEPSEEK_API_KEY;
         if (!dsKey) throw new Error('DEEPSEEK_API_KEY is not configured');
@@ -134,7 +143,7 @@ router.post(
         const dsResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${dsKey}` },
-          body: JSON.stringify({ model, messages: dsMessages, stream: true, max_tokens: 8096 }),
+          body: JSON.stringify({ model, messages: dsMessages, stream: true, stream_options: { include_usage: true }, max_tokens: 8096 }),
         });
         if (!dsResponse.ok) {
           const errText = await dsResponse.text();
@@ -143,6 +152,7 @@ router.post(
         const reader = dsResponse.body.getReader();
         const decoder = new TextDecoder();
         let dsBuf = '';
+        let dsUsage = null;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -155,11 +165,19 @@ router.post(
             if (raw === '[DONE]') continue;
             try {
               const parsed = JSON.parse(raw);
+              if (parsed.usage) dsUsage = parsed.usage;
               const text = parsed.choices?.[0]?.delta?.content;
               if (text) res.write(`data: ${JSON.stringify({ delta: text })}\n\n`);
             } catch {}
           }
         }
+        logUsage({
+          userId: req.user?.id,
+          model,
+          inputTokens: dsUsage?.prompt_tokens,
+          outputTokens: dsUsage?.completion_tokens,
+          feature: 'compare',
+        });
       } else {
         const stream = anthropic.messages.stream({
           model,
@@ -172,6 +190,14 @@ router.post(
             res.write(`data: ${JSON.stringify({ delta: chunk.delta.text })}\n\n`);
           }
         }
+        const finalMessage = await stream.finalMessage();
+        logUsage({
+          userId: req.user?.id,
+          model,
+          inputTokens: finalMessage?.usage?.input_tokens,
+          outputTokens: finalMessage?.usage?.output_tokens,
+          feature: 'compare',
+        });
       }
 
       res.write(`data: [DONE]\n\n`);

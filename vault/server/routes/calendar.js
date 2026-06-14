@@ -10,6 +10,7 @@ const { requireAuth } = require('../middleware/auth');
 const { translateToCalendarQuery } = require('../services/calendarNLP');
 const { getModelsForUser } = require('../services/modelResolver');
 const { encrypt, decrypt } = require('../utils/encryption');
+const { logUsage } = require('../utils/logUsage');
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -151,7 +152,10 @@ router.get('/search', calendarSearchLimiter, async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     const { light: lightModel } = await getModelsForUser(req.user?.id);
     const { timeMin, timeMax, searchQuery, maxResults, calendarId, intent } =
-      await translateToCalendarQuery(q.trim(), today, lightModel);
+      await translateToCalendarQuery(q.trim(), today, lightModel, {
+        userId: req.user?.id,
+        feature: 'calendar_nlp',
+      });
 
     const calendar = await getCalendarClient(req.user.id);
 
@@ -230,8 +234,9 @@ router.post('/ask', calendarAskLimiter, async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    const { light: lightModel } = await getModelsForUser(req.user?.id);
     const stream = anthropic.messages.stream({
-      model:      (await getModelsForUser(req.user?.id)).light,
+      model:      lightModel,
       max_tokens: 1024,
       system: `You are a personal calendar assistant integrated into the user's own productivity workspace. The user has connected their personal Google Calendar via OAuth — every event you see belongs to their own calendar. Help them with any questions about their events. Be concise and direct.`,
       messages: [{
@@ -245,6 +250,15 @@ router.post('/ask', calendarAskLimiter, async (req, res) => {
         res.write(`data: ${JSON.stringify({ delta: chunk.delta.text })}\n\n`);
       }
     }
+
+    const finalMessage = await stream.finalMessage();
+    logUsage({
+      userId: req.user?.id,
+      model: lightModel,
+      inputTokens: finalMessage?.usage?.input_tokens,
+      outputTokens: finalMessage?.usage?.output_tokens,
+      feature: 'calendar_nlp',
+    });
 
     res.write('data: [DONE]\n\n');
     res.end();
