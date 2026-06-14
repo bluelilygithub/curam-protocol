@@ -1273,7 +1273,8 @@ router.post('/admin/invite', async (req, res) => {
   client.release();
 
   try {
-    const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const requestBaseUrl = req.get('host') ? `${req.protocol}://${req.get('host')}` : '';
+    const appUrl = (process.env.APP_URL || requestBaseUrl || 'http://localhost:5173').replace(/\/$/, '');
     const link = `${appUrl}/login?next=${encodeURIComponent('/wellbeing')}`;
     const template = await loadWellbeingInviteTemplate();
     const html = renderWellbeingInviteHtml({

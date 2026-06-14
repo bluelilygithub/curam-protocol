@@ -116,7 +116,8 @@ router.post('/reset-password-request', async (req, res) => {
       [token, email.toLowerCase(), expiresAt]
     );
 
-    const appUrl = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+    const requestBaseUrl = req.get('host') ? `${req.protocol}://${req.get('host')}` : '';
+    const appUrl = (process.env.APP_URL || requestBaseUrl || 'http://localhost:5173').replace(/\/$/, '');
     const resetLink = `${appUrl}/reset-password?token=${token}`;
     const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f0;padding:20px;">
 <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">

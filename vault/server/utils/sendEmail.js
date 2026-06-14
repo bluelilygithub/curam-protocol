@@ -11,6 +11,10 @@ async function getMailChannelKey() {
   return process.env.MAIL_CHANNEL_API_KEY || null;
 }
 
+function defaultFromAddress(from) {
+  return from || process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@curam-ai.com.au';
+}
+
 /**
  * Send an email via MailChannels (if key configured) or SMTP nodemailer.
  * @param {{ to: string, subject: string, html: string, from?: string }} opts
@@ -26,7 +30,7 @@ async function sendEmail({ to, subject, html, from }) {
   if (mailChannelKey) {
     const payload = JSON.stringify({
       personalizations: [{ to: [{ email: to }] }],
-      from: { email: from || process.env.SMTP_USER || 'noreply@example.com' },
+      from: { email: defaultFromAddress(from) },
       subject,
       content: [{ type: 'text/html', value: html }],
     });
@@ -66,7 +70,7 @@ async function sendEmail({ to, subject, html, from }) {
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
   });
 
-  await transporter.sendMail({ from: from || process.env.SMTP_USER, to, subject, html });
+  await transporter.sendMail({ from: defaultFromAddress(from), to, subject, html });
 }
 
 module.exports = sendEmail;
