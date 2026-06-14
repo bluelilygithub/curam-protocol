@@ -208,8 +208,10 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
                   {moduleTests.map((test) => (
                     <span
                       key={test.key}
+                      data-preserve-hover-color="true"
                       className="text-[11px] px-2 py-1 rounded-full border"
                       style={{
+                        '--hover-preserve-color': test.completed ? '#15803d' : '#92400e',
                         borderColor: test.completed ? '#bbf7d0' : '#f59e0b',
                         color: test.completed ? '#15803d' : '#92400e',
                         background: test.completed ? '#f0fdf4' : '#fef3c7',

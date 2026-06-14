@@ -85,9 +85,22 @@ textarea:focus { overflow-y: auto; }
   opacity: 1 !important;
 }
 
+.wellbeing-page button:not(:disabled):hover :where(span, p, h1, h2, h3, h4, h5, h6, div, svg) {
+  color: #fff !important;
+}
+
+.wellbeing-page button:not(:disabled):hover [data-preserve-hover-color="true"] {
+  color: var(--hover-preserve-color, inherit) !important;
+}
+
 .wellbeing-page button[style*="#991b1b"]:not(:disabled):hover,
 .wellbeing-page button[style*="#dc2626"]:not(:disabled):hover {
   background-color: #dc2626 !important;
   border-color: #dc2626 !important;
+  color: #fff !important;
+}
+
+.wellbeing-page button[style*="#991b1b"]:not(:disabled):hover :where(span, p, h1, h2, h3, h4, h5, h6, div, svg),
+.wellbeing-page button[style*="#dc2626"]:not(:disabled):hover :where(span, p, h1, h2, h3, h4, h5, h6, div, svg) {
   color: #fff !important;
 }
