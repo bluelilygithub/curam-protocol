@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import ModelInsightPanel from './ModelInsightPanel';
 
@@ -6,7 +6,7 @@ const PROFILE_VARIANTS = {
   summary: {
     label: 'Summary',
     title: 'Summary profile',
-    description: 'A concise overview of the seven tests for quick orientation.',
+    description: 'A concise overview of the eight tests for quick orientation.',
     pdfName: 'combined-wellbeing-summary.pdf',
   },
   detailed: {
@@ -29,22 +29,13 @@ const PROFILE_VARIANTS = {
   },
 };
 
-function formatDate(value) {
-  if (!value) return '';
-  return new Date(value).toLocaleString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
 export default function CombinedProfilePanel({ onBack, initialVariant = 'detailed', autoGenerate = false }) {
+  const reportRef = useRef(null);
   const [status, setStatus] = useState(null);
   const [profile, setProfile] = useState(null);
   const [sourceAttempts, setSourceAttempts] = useState(null);
   const [profileVariant, setProfileVariant] = useState(PROFILE_VARIANTS[initialVariant] ? initialVariant : 'detailed');
+  const [activeModuleKey, setActiveModuleKey] = useState('');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -69,19 +60,25 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
     loadStatus();
   }, [loadStatus]);
 
-  const generateProfile = async (variant = 'detailed') => {
-    if (!status?.available || generating) return;
-    setGenerating(variant);
+  const generateProfile = async (variant = 'detailed', moduleKey = '') => {
+    const moduleStatus = moduleKey ? status?.modules?.find((module) => module.key === moduleKey) : null;
+    if (generating || (moduleKey ? !moduleStatus?.completed : !status?.available)) return;
+    const generationKey = moduleKey ? `module:${moduleKey}:${variant}` : `final:${variant}`;
+    setGenerating(generationKey);
     setError('');
     try {
-      const res = await api.post('/api/wellbeing/profile', { variant });
+      const res = await api.post('/api/wellbeing/profile', moduleKey ? { variant, moduleKey } : { variant });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not generate combined profile');
+      if (!res.ok) throw new Error(data.error || 'Could not generate wellbeing report');
       setProfile(data.profile);
       setSourceAttempts(data.sourceAttempts);
       setProfileVariant(data.variant || variant);
+      setActiveModuleKey(data.moduleKey || '');
+      window.setTimeout(() => {
+        reportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 80);
     } catch (err) {
-      setError(err.message || 'Could not generate combined profile');
+      setError(err.message || 'Could not generate wellbeing report');
     } finally {
       setGenerating(null);
     }
@@ -106,7 +103,11 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = PROFILE_VARIANTS[profileVariant]?.pdfName || 'combined-wellbeing-profile.pdf';
+      const activeModule = status?.modules?.find((module) => module.key === activeModuleKey);
+      const moduleSlug = activeModule?.key || profile?.moduleKey;
+      a.download = moduleSlug
+        ? `wellbeing-module-${moduleSlug}.pdf`
+        : PROFILE_VARIANTS[profileVariant]?.pdfName || 'combined-wellbeing-profile.pdf';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -122,7 +123,12 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
     && initialVariant === 'suggestions'
     && !profile
     && !error
-    && (loading || generating === 'suggestions');
+    && (loading || generating === 'final:suggestions');
+
+  const reportTitle = activeModuleKey
+    ? `${profile?.moduleLabel || status?.modules?.find((module) => module.key === activeModuleKey)?.label || 'Module'} Report`
+    : PROFILE_VARIANTS[profileVariant]?.title || 'Combined profile';
+  const testStatusByKey = Object.fromEntries((status?.tests || []).map((test) => [test.key, test]));
 
   return (
     <div className="space-y-6">
@@ -137,7 +143,7 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
             <div className="mx-auto h-10 w-10 rounded-full border-4 border-t-transparent animate-spin mb-4" style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }} />
             <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Preparing suggestions report</h2>
             <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-              Checking the seven completed results and generating the personal development suggestions. This can take around 60 seconds, so please wait on this screen.
+              Checking the eight completed results, preparing module outcomes if needed, and generating the personal development suggestions. This can take around 60 seconds, so please wait on this screen.
             </p>
             <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
               The report will appear automatically when it is ready.
@@ -158,7 +164,7 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
           </button>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>Combined Profile</h2>
           <p className="text-sm mt-1 max-w-3xl" style={{ color: 'var(--color-muted)' }}>
-            Collates the latest completed mood, PANAS-style, ASRS-5-style, IPIP-NEO-120, HEXACO-60-style, CERQ-style, and COPE-style results into one proof-of-concept report.
+            Builds three module reports first, then uses those module outcomes to create the final overall profile.
           </p>
         </div>
       </div>
@@ -166,36 +172,67 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
       {error && <div className="rounded-xl px-3 py-2 text-sm" style={{ color: '#991b1b', background: '#fee2e2' }}>{error}</div>}
 
       <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h3 className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Completion requirements</h3>
-        {loading ? (
-          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Checking completed tests...</p>
-        ) : (
-          <div className="space-y-2">
-            {status?.tests?.map((test) => (
-              <div key={test.key} className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-                <div>
-                  <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{test.label}</p>
-                  {test.completedAt && <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Latest: {formatDate(test.completedAt)}</p>}
+        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Module reports</h3>
+        <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>
+          Generate a focused report for each module. The final profile uses these three module outcomes as its starting point.
+        </p>
+        {loading && (
+          <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>Checking which modules are ready...</p>
+        )}
+        <div className="grid md:grid-cols-3 gap-3">
+          {(status?.modules || []).map((module) => {
+            const generationKey = `module:${module.key}:detailed`;
+            const isActive = activeModuleKey === module.key && profile;
+            const moduleTests = (module.tests || []).map((testKey, index) => ({
+              key: testKey,
+              label: module.testLabels?.[index] || testStatusByKey[testKey]?.label || testKey,
+              completed: !!testStatusByKey[testKey]?.completed,
+            }));
+            return (
+              <button
+                key={module.key}
+                type="button"
+                onClick={() => generateProfile('detailed', module.key)}
+                disabled={!module.completed || !!generating}
+                className="rounded-2xl border p-4 text-left hover:opacity-80 disabled:opacity-50 transition-opacity"
+                style={{
+                  borderColor: isActive ? 'var(--color-primary)' : module.completed ? 'var(--color-border)' : '#f59e0b',
+                  background: isActive ? 'var(--color-bg)' : module.completed ? 'var(--color-surface)' : '#fffbeb',
+                }}
+              >
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+                  {generating === generationKey ? 'Generating...' : module.label}
+                </p>
+                <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{module.description}</p>
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {moduleTests.map((test) => (
+                    <span
+                      key={test.key}
+                      className="text-[11px] px-2 py-1 rounded-full border"
+                      style={{
+                        borderColor: test.completed ? '#bbf7d0' : '#f59e0b',
+                        color: test.completed ? '#15803d' : '#92400e',
+                        background: test.completed ? '#f0fdf4' : '#fef3c7',
+                      }}
+                    >
+                      {test.label}
+                      {!test.completed ? ' needed' : ''}
+                    </span>
+                  ))}
                 </div>
-                <span className="text-xs font-semibold" style={{ color: test.completed ? '#16a34a' : '#ca8a04' }}>
-                  {test.completed ? 'Complete' : 'Needed'}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && !status?.available && (
-          <p className="text-sm mt-3" style={{ color: 'var(--color-muted)' }}>
-            The combined profile unlocks once all seven tests have at least one completed result.
-          </p>
-        )}
+                <p className="text-xs mt-3 font-semibold" style={{ color: module.completed ? '#16a34a' : '#ca8a04' }}>
+                  {module.completed ? 'Module ready' : `Needs ${module.missing?.length || 0} more`}
+                </p>
+              </button>
+            );
+          })}
+        </div>
       </section>
 
       <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Choose report style</h3>
+        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Final overall report</h3>
         <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>
-          Generate the same seven-test synthesis at the level of detail you need.
+          Generate the final synthesis at the level of detail you need. If module reports are not already saved, they are generated and cached first.
         </p>
         <div className="grid md:grid-cols-4 gap-3">
           {Object.entries(PROFILE_VARIANTS).map(([key, config]) => (
@@ -206,12 +243,12 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
               disabled={!status?.available || !!generating}
               className="rounded-2xl border p-4 text-left hover:opacity-80 disabled:opacity-50 transition-opacity"
               style={{
-                borderColor: profileVariant === key && profile ? 'var(--color-primary)' : 'var(--color-border)',
-                background: profileVariant === key && profile ? 'var(--color-bg)' : 'var(--color-surface)',
+                borderColor: !activeModuleKey && profileVariant === key && profile ? 'var(--color-primary)' : 'var(--color-border)',
+                background: !activeModuleKey && profileVariant === key && profile ? 'var(--color-bg)' : 'var(--color-surface)',
               }}
             >
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-                {generating === key ? 'Generating...' : config.label}
+                {generating === `final:${key}` ? 'Generating...' : config.label}
               </p>
               <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{config.description}</p>
             </button>
@@ -220,7 +257,7 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
       </section>
 
       {profile && (
-        <>
+        <section ref={reportRef} className="scroll-mt-6 space-y-4">
           <div className="flex justify-end">
             <button
               type="button"
@@ -232,13 +269,15 @@ export default function CombinedProfilePanel({ onBack, initialVariant = 'detaile
               {pdfLoading ? 'Preparing PDF...' : 'Download PDF'}
             </button>
           </div>
-          <ModelInsightPanel insight={profile} title={PROFILE_VARIANTS[profileVariant]?.title || 'Combined profile'} />
+          <ModelInsightPanel insight={profile} title={reportTitle} />
           {sourceAttempts && (
             <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
-              Generated from the latest completed result for each source test.
+              {activeModuleKey
+                ? 'Generated from the latest completed results in this module.'
+                : 'Generated from the latest completed module outcomes and source tests.'}
             </p>
           )}
-        </>
+        </section>
       )}
     </div>
   );

@@ -84,6 +84,8 @@ function nodeStrength(items = [], fallback = 0) {
 function buildMindMapData(visuals) {
   const moodScore = Number(visuals?.mood?.totalScore || 0);
   const moodStrength = Math.min(1, moodScore / 63);
+  const anxietyScore = Number(visuals?.gad7?.totalScore || 0);
+  const anxietyStrength = Math.min(1, anxietyScore / 21);
   const panas = parseMaybeJson(visuals?.panas?.scaleScores, []);
   const asrs5 = parseMaybeJson(visuals?.asrs5?.scaleScores, []);
   const domains = parseMaybeJson(visuals?.ipip?.domainScores, []);
@@ -101,8 +103,9 @@ function buildMindMapData(visuals) {
   const active = strongest(cope, (scale) => !['avoidant', 'self-evaluative'].includes(scale.family));
 
   const nodes = [
-    { id: 'centre', label: 'Combined pattern', detail: 'Latest result from all seven checks', x: 298, y: 300, color: colour('#6366f1'), strength: 1 },
+    { id: 'centre', label: 'Combined pattern', detail: 'Latest result from all eight checks', x: 298, y: 300, color: colour('#6366f1'), strength: 1 },
     { id: 'mood', label: 'Mood load', detail: `${moodScore}/63 - ${visuals?.mood?.bandLabel || 'Mood score'}`, x: 298, y: 150, color: colour('#ef4444'), strength: moodStrength },
+    { id: 'anxiety', label: 'Anxiety load', detail: `${anxietyScore}/21 - ${visuals?.gad7?.bandLabel || 'Anxiety score'}`, x: 145, y: 150, color: colour('#f59e0b'), strength: anxietyStrength },
     { id: 'affect', label: 'Affect tone', detail: positiveAffect || negativeAffect ? `Positive ${positiveAffect?.score || 0}/${positiveAffect?.max || 50}; negative ${negativeAffect?.score || 0}/${negativeAffect?.max || 50}` : 'Positive and negative affect', x: 298, y: 210, color: colour('#a855f7'), strength: Number(negativeAffect?.normalized ?? positiveAffect?.normalized ?? 0.35) },
     { id: 'attention', label: 'Attention', detail: attentionPressure.length ? attentionPressure.map((scale) => scale.label).join(', ') : 'ASRS-5-style attention signals', x: 455, y: 520, color: colour('#0ea5e9'), strength: nodeStrength(attentionPressure, 0.35) },
     { id: 'sensitivity', label: 'Emotional sensitivity', detail: hexacoByKey.EM ? `${hexacoByKey.EM.label}: ${Math.round(Number(hexacoByKey.EM.normalized || 0) * 100)}%` : domainByKey.N ? `${domainByKey.N.label}: ${Math.round(Number(domainByKey.N.normalized || 0) * 100)}%` : 'Emotionality / Neuroticism domain', x: 455, y: 230, color: colour('#f97316'), strength: Number(hexacoByKey.EM?.normalized ?? domainByKey.N?.normalized ?? 0.35) },
@@ -115,9 +118,9 @@ function buildMindMapData(visuals) {
   ];
 
   const links = [
-    ['centre', 'mood'], ['centre', 'affect'], ['centre', 'attention'], ['centre', 'sensitivity'], ['centre', 'resources'], ['centre', 'loops'],
+    ['centre', 'mood'], ['centre', 'anxiety'], ['centre', 'affect'], ['centre', 'attention'], ['centre', 'sensitivity'], ['centre', 'resources'], ['centre', 'loops'],
     ['centre', 'coping'], ['centre', 'avoidance'], ['centre', 'structure'], ['mood', 'loops'],
-    ['centre', 'humility'], ['mood', 'affect'], ['mood', 'avoidance'], ['attention', 'structure'], ['attention', 'avoidance'], ['resources', 'coping'], ['structure', 'coping'], ['sensitivity', 'loops'], ['humility', 'resources'],
+    ['centre', 'humility'], ['mood', 'affect'], ['mood', 'avoidance'], ['anxiety', 'affect'], ['anxiety', 'loops'], ['attention', 'structure'], ['attention', 'avoidance'], ['resources', 'coping'], ['structure', 'coping'], ['sensitivity', 'loops'], ['humility', 'resources'],
   ];
 
   const notes = [
@@ -200,11 +203,12 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
 
   addText(view === 'mindmap' ? 'Wellbeing Mind Map' : 'Wellbeing Visual Summary', { size: 18, bold: true });
   addText(`Generated: ${formatDate(new Date())}`, { size: 9, color: rgb(0.45, 0.45, 0.45) });
-  addText('Uses the latest completed result from each of the seven wellbeing checks.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
+  addText('Uses the latest completed result from each of the eight wellbeing checks.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
 
   addHeading('Source Results');
   [
     ['Mood check', visuals?.sourceAttempts?.mood?.createdAt],
+    ['GAD-7-style check', visuals?.sourceAttempts?.gad7?.createdAt],
     ['PANAS-style check', visuals?.sourceAttempts?.panas?.createdAt],
     ['ASRS-5-style check', visuals?.sourceAttempts?.asrs5?.createdAt],
     ['IPIP-NEO-120', visuals?.sourceAttempts?.ipip?.createdAt],
@@ -263,6 +267,25 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
     page.drawLine({ start: { x: gaugeX + clamp01(moodScore / 63) * gaugeWidth, y: gaugeY - 3 }, end: { x: gaugeX + clamp01(moodScore / 63) * gaugeWidth, y: gaugeY + 22 }, thickness: 1.5, color: rgb(0.05, 0.05, 0.05) });
     y -= 62;
     addText(`Score: ${moodScore}/63 - ${visuals?.mood?.bandLabel || ''}`, { size: 10, bold: true });
+
+    addHeading('GAD-7-Style Anxiety Gauge');
+    const anxietyScore = Number(visuals?.gad7?.totalScore || 0);
+    const anxietyBands = [
+      ['Minimal', 0, 4, '#22c55e'],
+      ['Mild', 5, 9, '#eab308'],
+      ['Moderate', 10, 14, '#f97316'],
+      ['Severe', 15, 21, '#ef4444'],
+    ];
+    const anxietyGaugeY = y - 18;
+    anxietyBands.forEach(([label, from, to, hex]) => {
+      const x = gaugeX + (from / 21) * gaugeWidth;
+      const width = ((to - from + 1) / 22) * gaugeWidth;
+      page.drawRectangle({ x, y: anxietyGaugeY, width, height: 14, color: colour(hex) });
+      page.drawText(`${label} ${from}-${to}`, { x, y: anxietyGaugeY - 12, size: 7, font, color: rgb(0.35, 0.35, 0.35) });
+    });
+    page.drawLine({ start: { x: gaugeX + clamp01(anxietyScore / 21) * gaugeWidth, y: anxietyGaugeY - 3 }, end: { x: gaugeX + clamp01(anxietyScore / 21) * gaugeWidth, y: anxietyGaugeY + 22 }, thickness: 1.5, color: rgb(0.05, 0.05, 0.05) });
+    y -= 62;
+    addText(`Score: ${anxietyScore}/21 - ${visuals?.gad7?.bandLabel || ''}`, { size: 10, bold: true });
 
     addHeading('PANAS-Style Affect Bars');
     parseMaybeJson(visuals?.panas?.scaleScores, [])

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../utils/apiClient';
-import { BdiSeverityGauge, DomainRadarChart, StrategyBarChart } from './WellbeingCharts';
+import { BdiSeverityGauge, Gad7SeverityGauge, DomainRadarChart, StrategyBarChart } from './WellbeingCharts';
 
 function formatDate(value) {
   if (!value) return '';
@@ -23,6 +23,7 @@ function parseMaybeJson(value, fallback) {
 
 const SOURCE_CHARTS = [
   { key: 'mood', label: 'Mood', targetId: 'wellbeing-chart-mood' },
+  { key: 'gad7', label: 'GAD-7', targetId: 'wellbeing-chart-gad7' },
   { key: 'panas', label: 'PANAS', targetId: 'wellbeing-chart-panas' },
   { key: 'asrs5', label: 'ASRS-5', targetId: 'wellbeing-chart-asrs5' },
   { key: 'ipip', label: 'IPIP', targetId: 'wellbeing-chart-ipip' },
@@ -46,6 +47,8 @@ function nodeStrength(items = [], fallback = 0) {
 function buildMindMap(data) {
   const moodScore = Number(data?.mood?.totalScore || 0);
   const moodStrength = Math.min(1, moodScore / 63);
+  const anxietyScore = Number(data?.gad7?.totalScore || 0);
+  const anxietyStrength = Math.min(1, anxietyScore / 21);
   const panas = parseMaybeJson(data?.panas?.scaleScores, []);
   const asrs5 = parseMaybeJson(data?.asrs5?.scaleScores, []);
   const domains = parseMaybeJson(data?.ipip?.domainScores, []);
@@ -66,11 +69,20 @@ function buildMindMap(data) {
     {
       id: 'centre',
       label: 'Combined wellbeing pattern',
-      detail: 'Latest result from all seven checks',
+      detail: 'Latest result from all eight checks',
       x: 300,
       y: 210,
       color: 'var(--color-primary)',
       strength: 1,
+    },
+    {
+      id: 'anxiety',
+      label: 'Anxiety load',
+      detail: `${anxietyScore}/21 · ${data?.gad7?.bandLabel || 'Anxiety score'}`,
+      x: 95,
+      y: 45,
+      color: '#f59e0b',
+      strength: anxietyStrength,
     },
     {
       id: 'affect',
@@ -172,6 +184,7 @@ function buildMindMap(data) {
 
   const links = [
     ['centre', 'mood'],
+    ['centre', 'anxiety'],
     ['centre', 'affect'],
     ['centre', 'attention'],
     ['centre', 'sensitivity'],
@@ -183,6 +196,8 @@ function buildMindMap(data) {
     ['centre', 'humility'],
     ['mood', 'loops'],
     ['mood', 'affect'],
+    ['anxiety', 'loops'],
+    ['anxiety', 'affect'],
     ['attention', 'structure'],
     ['attention', 'avoidance'],
     ['mood', 'avoidance'],
@@ -213,12 +228,12 @@ function MindMap({ data }) {
 
   return (
     <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Seven-test mind map</h2>
+      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>Eight-test mind map</h2>
       <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
         A relationship map that groups related signals from mood, affect tone, attention/self-regulation, two personality lenses, cognitive coping, and behavioural coping.
       </p>
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
-        <svg viewBox="0 0 600 620" className="w-full max-w-[680px] mx-auto" role="img" aria-label="Mind map connecting the seven wellbeing test patterns">
+        <svg viewBox="0 0 600 620" className="w-full max-w-[680px] mx-auto" role="img" aria-label="Mind map connecting the eight wellbeing test patterns">
           {map.links.map(([fromId, toId]) => {
             const from = nodeById[fromId];
             const to = nodeById[toId];
@@ -360,7 +375,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
             {view === 'mindmap' ? 'Wellbeing Mind Map' : 'Wellbeing Visual Summary'}
           </h2>
           <p className="text-sm mt-1 max-w-3xl" style={{ color: 'var(--color-muted)' }}>
-            Uses the latest completed result from each of the seven wellbeing checks.
+            Uses the latest completed result from each of the eight wellbeing checks.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -408,7 +423,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
         <>
           <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
             <p className="text-xs uppercase tracking-wider mb-2" style={{ color: 'var(--color-muted)' }}>Source results</p>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-7 gap-2">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-8 gap-2">
               {SOURCE_CHARTS.map((source) => {
                 const attempt = data.sourceAttempts?.[source.key];
                 return (
@@ -436,6 +451,9 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
             <div className="space-y-4">
               <div id="wellbeing-chart-mood" className="scroll-mt-6">
                 <BdiSeverityGauge score={Number(data.mood?.totalScore || 0)} label={data.mood?.bandLabel} />
+              </div>
+              <div id="wellbeing-chart-gad7" className="scroll-mt-6">
+                <Gad7SeverityGauge score={Number(data.gad7?.totalScore || 0)} label={data.gad7?.bandLabel} />
               </div>
               <div id="wellbeing-chart-panas" className="scroll-mt-6">
                 <StrategyBarChart scales={panasScales} responseMax={5} variant="panas" title="PANAS-style affect profile" />

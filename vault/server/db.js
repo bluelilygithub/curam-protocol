@@ -277,6 +277,25 @@ async function initSchema() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS gad7_attempts (
+        id                       SERIAL PRIMARY KEY,
+        "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        "questionnaireVersion"   TEXT NOT NULL,
+        answers                  JSONB NOT NULL,
+        "totalScore"             INTEGER NOT NULL,
+        band                     TEXT NOT NULL,
+        "bandLabel"              TEXT NOT NULL,
+        analysis                 JSONB NOT NULL,
+        "createdAt"              TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_gad7_attempts_user_created
+      ON gad7_attempts("userId", "createdAt" DESC)
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS panas_attempts (
         id                       SERIAL PRIMARY KEY,
         "userId"                 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

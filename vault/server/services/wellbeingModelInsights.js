@@ -135,6 +135,37 @@ function latestScoreLinesFromScales(scales, count = 6) {
     .map((scale) => `${scale.label || scale.key}: ${scale.score}/${scale.max} (${scale.band})`);
 }
 
+const WELLBEING_MODULES = [
+  {
+    key: 'mood-emotional',
+    label: 'Mood & Emotional State',
+    shortLabel: 'Mood/emotional',
+    tests: ['mood', 'gad7', 'panas'],
+    testLabels: ['BDI-style mood check', 'GAD-7-style anxiety check', 'PANAS-style affect check'],
+    description: 'How the person appears to be feeling now and recently, including mood load, anxiety load, and affect tone.',
+  },
+  {
+    key: 'personality-traits',
+    label: 'Personality & Traits',
+    shortLabel: 'Personality/traits',
+    tests: ['ipip', 'hexaco'],
+    testLabels: ['IPIP-NEO-120 personality inventory', 'HEXACO-60-style personality check'],
+    description: 'More stable dispositional patterns, trait posture, and interpersonal/personality style.',
+  },
+  {
+    key: 'regulation-coping',
+    label: 'Regulation & Coping',
+    shortLabel: 'Regulation/coping',
+    tests: ['gad7', 'asrs5', 'cerq', 'cope'],
+    testLabels: ['GAD-7-style anxiety check', 'ASRS-5-style attention check', 'CERQ-style cognitive coping check', 'Brief COPE-style coping check'],
+    description: 'How the person responds to stress and emotion, including worry/tension load, attention/self-regulation, cognitive regulation, and behavioural coping.',
+  },
+];
+
+function getWellbeingModule(moduleKey) {
+  return WELLBEING_MODULES.find((module) => module.key === moduleKey) || null;
+}
+
 function compactScale(scale) {
   if (!scale) return null;
   return {
@@ -199,6 +230,13 @@ function describeMood(latest) {
   const areas = topAreas.slice(0, 4).map((area) => area.topic).filter(Boolean);
   const areaText = areas.length ? ` The main signals behind that score appear to be ${sentenceList(areas)}.` : '';
   return `The mood check is best treated as the emotional weather around the rest of the profile: it scored ${latest.mood.totalScore}/63, in the "${latest.mood.bandLabel}" range.${areaText} If that score is elevated, the other tests may partly reflect how the person answers when tired, discouraged, self-critical, or under strain, rather than only stable long-term style.`;
+}
+
+function describeAnxiety(scores) {
+  const totalScore = scores.anxietyLoad?.totalScore;
+  const bandLabel = scores.anxietyLoad?.bandLabel;
+  if (totalScore == null) return 'The GAD-7-style anxiety lens was not strongly available, so worry and tension should be interpreted from the other profile data only.';
+  return `The GAD-7-style anxiety lens scored ${totalScore}/21 (${bandLabel}). This helps distinguish general mood load from worry, threat anticipation, restlessness, irritability, and physical tension. It should be read as a current anxiety-domain signal, not a diagnosis.`;
 }
 
 function describeAffect(scores) {
@@ -304,7 +342,8 @@ function describeReinforcingThemes(latest, scores) {
   const hexaco = describeHexacoPersonality(scores);
   const affect = describeAffect(scores);
   const attention = describeAttention(scores);
-  return `The clearest combined themes are found where the same pattern appears in different languages. The mood score sets the broader symptom context; the PANAS-style affect snapshot shows current emotional tone; the ASRS-5-style screen describes attention and self-regulation friction; the two personality lenses describe the posture the person may bring into stress and relationships; the cognitive profile shows how stress is explained internally; and the behavioural coping profile shows what the person does with that explanation. Read together, the profile asks whether the person moves from distress into constructive contact, planning, meaning, and recovery, or whether the distress first becomes self-criticism, denial, rumination, attention drift, or delay. ${describeMood(latest)} ${affect} ${attention} ${hexaco} ${cognitive} ${behavioural}`;
+  const anxiety = describeAnxiety(scores);
+  return `The clearest combined themes are found where the same pattern appears in different languages. The mood score sets the broader symptom context; the GAD-7-style anxiety lens adds worry and threat-load context; the PANAS-style affect snapshot shows current emotional tone; the ASRS-5-style screen describes attention and self-regulation friction; the two personality lenses describe the posture the person may bring into stress and relationships; the cognitive profile shows how stress is explained internally; and the behavioural coping profile shows what the person does with that explanation. Read together, the profile asks whether the person moves from distress into constructive contact, planning, meaning, and recovery, or whether the distress first becomes self-criticism, denial, rumination, attention drift, or delay. ${describeMood(latest)} ${anxiety} ${affect} ${attention} ${hexaco} ${cognitive} ${behavioural}`;
 }
 
 function describeTensions(scores) {
@@ -354,30 +393,43 @@ function buildCombinedFallback(latest, scores) {
   const cerqHigh = scores.cognitiveCoping.highScales.map((item) => `${item.label} (${item.band})`);
   const copeHigh = scores.copingStyle.highScales.map((item) => `${item.label} (${item.band})`);
   const mood = describeMood(latest);
+  const anxiety = describeAnxiety(scores);
   const affect = describeAffect(scores);
   const attention = describeAttention(scores);
   const personality = describePersonality(scores);
   const hexacoPersonality = describeHexacoPersonality(scores);
   const cognitive = describeCognitiveCoping(scores);
   const behavioural = describeBehaviouralCoping(scores);
+  const moduleOutcomes = Array.isArray(scores.moduleOutcomes) ? scores.moduleOutcomes : [];
+  const moduleOutcomeText = moduleOutcomes.length
+    ? moduleOutcomes.map((module) => `${module.label}: ${module.summary || 'No summary available.'}`).join('\n\n')
+    : '';
 
   return {
     summary: [
       `${moodLine} The combined profile is most useful when read as a working formulation: current emotional load, habitual personality posture, the way stress is explained internally, and the actions used to cope.`,
-      `${affect} ${attention} ${personality} ${hexacoPersonality} ${cognitive}`,
+      moduleOutcomeText ? `The final profile is based on three module outcomes:\n\n${moduleOutcomeText}` : '',
+      `${anxiety} ${affect} ${attention} ${personality} ${hexacoPersonality} ${cognitive}`,
       behavioural,
-    ].join('\n\n'),
+    ].filter(Boolean).join('\n\n'),
     sections: [
+      ...(moduleOutcomeText ? [{
+        title: 'Module outcomes',
+        body: [
+          'The final profile starts from the three module reports rather than treating eight individual tests as unrelated evidence.',
+          moduleOutcomeText,
+        ].join('\n\n'),
+      }] : []),
       {
         title: 'Overall formulation',
         body: [
           `This profile should be read as a working hypothesis rather than a set of labels. ${mood}`,
-          'The PANAS-style result adds current affect tone, the ASRS-5-style result adds attention and self-regulation friction, the personality results describe the posture the person may bring into stress, and the CERQ-style and COPE-style results describe what happens after stress arrives: first in thought, then in action. The most useful reading is not "these scales were high"; it is "this is the kind of loop the person may enter, the resources they may reach for, and the points where coping may either help recovery or accidentally keep stress alive."',
+          'The GAD-7-style result adds anxiety and threat-load context, the PANAS-style result adds current affect tone, the ASRS-5-style result adds attention and self-regulation friction, the personality results describe the posture the person may bring into stress, and the CERQ-style and COPE-style results describe what happens after stress arrives: first in thought, then in action. The most useful reading is not "these scales were high"; it is "this is the kind of loop the person may enter, the resources they may reach for, and the points where coping may either help recovery or accidentally keep stress alive."',
         ].join('\n\n'),
       },
       {
         title: 'Mood and affect context',
-        body: [mood, affect].join('\n\n'),
+        body: [mood, anxiety, affect].join('\n\n'),
       },
       {
         title: 'Attention and self-regulation context',
@@ -423,7 +475,7 @@ function buildCombinedFallback(latest, scores) {
       },
     ],
     questions: [
-      'Which pattern appears in at least two of the seven tests?',
+      'Which pattern appears in at least two of the eight tests?',
       'Which result feels more like a current state than a stable trait?',
       'Under stress, do your coping responses move you toward support and action or toward withdrawal and short-term relief?',
       'What is one useful strength shown by the profile that you may underuse?',
@@ -436,6 +488,8 @@ function buildCombinedFallback(latest, scores) {
 
 function buildCombinedSummaryFallback(latest, scores) {
   const mood = `Mood score: ${latest.mood.totalScore}/63 (${latest.mood.bandLabel}).`;
+  const anxiety = `GAD-7-style anxiety score: ${scores.anxietyLoad?.totalScore ?? 'not available'}/21 (${scores.anxietyLoad?.bandLabel || 'not available'}).`;
+  const moduleOutcomes = Array.isArray(scores.moduleOutcomes) ? scores.moduleOutcomes : [];
   const affect = scores.affectSnapshot?.allScales || [];
   const highDomains = scores.personality.highDomains.slice(0, 2).map((item) => `${item.label} (${item.band})`);
   const hexacoDomains = (scores.hexacoPersonality?.highDomains || []).slice(0, 2).map((item) => `${item.label} (${item.band})`);
@@ -444,9 +498,10 @@ function buildCombinedSummaryFallback(latest, scores) {
 
   return {
     summary: [
-      `${mood} The seven tests together give a broad self-report overview of current mood load, current affect tone, attention and self-regulation, two personality lenses, cognitive coping, and practical coping responses.`,
+      `${mood} The eight tests together give a broad self-report overview of current mood load, anxiety load, current affect tone, attention and self-regulation, two personality lenses, cognitive coping, and practical coping responses.`,
+      moduleOutcomes.length ? `The final summary is organised around the three module outcomes: ${moduleOutcomes.map((module) => module.label).join(', ')}.` : '',
       `The most visible pattern is shaped by IPIP-style signals such as ${sentenceList(highDomains) || 'no strongly dominant personality domain'}, HEXACO-style signals such as ${sentenceList(hexacoDomains) || 'no strongly dominant six-domain signal'}, cognitive strategies such as ${sentenceList(cerqHigh) || 'no clearly dominant CERQ-style strategy'}, and coping responses such as ${sentenceList(copeHigh) || 'no clearly dominant COPE-style response'}.`,
-    ].join('\n\n'),
+    ].filter(Boolean).join('\n\n'),
     sections: [
       {
         title: 'Plain-language overview',
@@ -454,7 +509,7 @@ function buildCombinedSummaryFallback(latest, scores) {
       },
       {
         title: 'Main signals',
-        body: `${mood} Affect signals: ${sentenceList(affect.map((item) => `${item.label} (${item.band})`)) || 'not strongly differentiated'}. Attention/self-regulation score: ${scores.attentionSelfRegulation?.totalScore ?? 'not available'}/24. IPIP personality signals: ${sentenceList(highDomains) || 'balanced or not strongly differentiated'}. HEXACO personality signals: ${sentenceList(hexacoDomains) || 'balanced or not strongly differentiated'}. Cognitive coping signals: ${sentenceList(cerqHigh) || 'not strongly differentiated'}. Behavioural coping signals: ${sentenceList(copeHigh) || 'not strongly differentiated'}.`,
+        body: `${mood} ${anxiety} Affect signals: ${sentenceList(affect.map((item) => `${item.label} (${item.band})`)) || 'not strongly differentiated'}. Attention/self-regulation score: ${scores.attentionSelfRegulation?.totalScore ?? 'not available'}/24. IPIP personality signals: ${sentenceList(highDomains) || 'balanced or not strongly differentiated'}. HEXACO personality signals: ${sentenceList(hexacoDomains) || 'balanced or not strongly differentiated'}. Cognitive coping signals: ${sentenceList(cerqHigh) || 'not strongly differentiated'}. Behavioural coping signals: ${sentenceList(copeHigh) || 'not strongly differentiated'}.`,
       },
       {
         title: 'What to look at next',
@@ -489,8 +544,9 @@ function buildCombinedAnalyticalFallback(latest, scores) {
         title: 'State-trait-context distinction',
         body: [
           describeMood(latest),
+          describeAnxiety(scores),
           describePersonality(scores),
-          'Mood load may inflate negative appraisal, reduce access to behavioural resources, or make some trait tendencies appear more extreme. The profile should therefore be interpreted as current presentation plus trait-style hypotheses, not as a fixed description.',
+          'Mood and anxiety load may inflate negative appraisal, threat scanning, avoidance, reduce access to behavioural resources, or make some trait tendencies appear more extreme. The profile should therefore be interpreted as current presentation plus trait-style hypotheses, not as a fixed description.',
         ].join('\n\n'),
       },
       {
@@ -544,13 +600,15 @@ function buildCombinedSuggestionsFallback(latest, scores) {
   const hexacoPersonality = describeHexacoPersonality(scores);
   const cognitive = describeCognitiveCoping(scores);
   const behavioural = describeBehaviouralCoping(scores);
+  const moduleOutcomes = Array.isArray(scores.moduleOutcomes) ? scores.moduleOutcomes : [];
 
   return {
     summary: [
-      'These suggestions are drawn from the seven self-report checks as reflective development prompts. They are not treatment advice, diagnosis, or instructions; they are areas the client may choose to notice, discuss, or strengthen.',
-      `${mood} ${affect} ${attention} ${personality} ${hexacoPersonality}`,
+      'These suggestions are drawn from the eight self-report checks as reflective development prompts. They are not treatment advice, diagnosis, or instructions; they are areas the client may choose to notice, discuss, or strengthen.',
+      moduleOutcomes.length ? `They are organised around the three module outcomes: ${moduleOutcomes.map((module) => module.label).join(', ')}.` : '',
+      `${mood} ${describeAnxiety(scores)} ${affect} ${attention} ${personality} ${hexacoPersonality}`,
       'The most useful next step is to look for small, observable moments where the pattern shows up in real life, especially under stress, conflict, fatigue, uncertainty, or pressure.',
-    ].join('\n\n'),
+    ].filter(Boolean).join('\n\n'),
     sections: [
       {
         title: 'Strengths to lean on',
@@ -559,6 +617,7 @@ function buildCombinedSuggestionsFallback(latest, scores) {
       {
         title: 'Patterns to notice earlier',
         body: [
+          describeAnxiety(scores),
           affect,
           cognitive,
           'A useful development focus is to notice the first mental move after stress: whether the client moves toward perspective, planning, blame, rumination, threat-amplification, or avoidance. The aim is awareness of sequence, not self-criticism.',
@@ -569,6 +628,13 @@ function buildCombinedSuggestionsFallback(latest, scores) {
         body: [
           behavioural,
           'The client may benefit from identifying which coping responses help immediately and which still help a few hours or days later. This distinction can separate short-term relief from strategies that actually restore agency, connection, and clarity.',
+        ].join('\n\n'),
+      },
+      {
+        title: 'Anxiety and worry supports',
+        body: [
+          describeAnxiety(scores),
+          'If worry, restlessness, tension, or threat anticipation are prominent, the useful development question is what helps the person move from mental rehearsal into grounded action. Small supports might include naming the feared outcome, separating solvable from unsolvable worries, pairing a body-calming action with one concrete next step, and checking whether reassurance-seeking or avoidance is briefly soothing but keeping the loop active.',
         ].join('\n\n'),
       },
       {
@@ -622,9 +688,20 @@ function buildCombinedFallbackForVariant(latest, scores, variant) {
 }
 
 function buildCombinedPrompt(scores, variant = 'detailed') {
+  const moduleOutcomeInstruction = Array.isArray(scores.moduleOutcomes) && scores.moduleOutcomes.length
+    ? [
+      '',
+      'Module outcome requirement:',
+      '- The three module outcomes are included in the scored data.',
+      '- Build the final profile from those module outcomes first, then use individual test scores only as supporting evidence.',
+      '- Make clear how Mood & Emotional State, Personality & Traits, and Regulation & Coping interact.',
+      '- Do not repeat each module report wholesale; synthesize the relationship between the modules.',
+    ].join('\n')
+    : '';
+
   if (variant === 'summary') {
     return [
-      'Create a brief integrated overview from seven completed proof-of-concept self-report checks.',
+      'Create a brief integrated overview from eight completed proof-of-concept self-report checks.',
       '',
       'Audience: client or clinician who wants a quick readable overview before reading the full profile.',
       'Length: concise. Summary should be 2 short paragraphs. Include 3 short sections only.',
@@ -633,6 +710,7 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
       'Required sections: "Plain-language overview", "Main signals", "What to look at next".',
       'Avoid long formulation language. Do not list every scale. Mention only the most useful cross-test signals.',
       'Use paragraph breaks inside JSON string values.',
+      moduleOutcomeInstruction,
       '',
       'Return ONLY valid JSON with this shape:',
       '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Plain-language overview","body":"..."},{"title":"Main signals","body":"..."},{"title":"What to look at next","body":"..."}],"questions":["..."],"caveat":"..."}',
@@ -643,7 +721,7 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
 
   if (variant === 'analytical') {
     return [
-      'Create a clinician-oriented analytical formulation from seven completed proof-of-concept self-report checks.',
+      'Create a clinician-oriented analytical formulation from eight completed proof-of-concept self-report checks.',
       '',
       'Audience: primarily a clinician, but still readable by a client if they choose to read it.',
       'Purpose: hypothesis generation, case formulation support, and clinical discussion prompts. Do not diagnose. Do not provide treatment instructions.',
@@ -655,6 +733,7 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
       '- Explicitly state what cannot be concluded from these self-report tools.',
       '- Make it more detailed and analytical than the client-readable detailed profile.',
       '- Use paragraph breaks inside JSON string values.',
+      moduleOutcomeInstruction,
       '',
       'Required sections:',
       'Clinical formulation hypotheses; State-trait-context distinction; Cognitive-affective mechanisms; Behavioural coping sequence; Protective factors and treatment-relevant strengths; Risk-sensitive caveats; Suggested clinical questions.',
@@ -668,18 +747,19 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
 
   if (variant === 'suggestions') {
     return [
-      'Create a reflective personal-development suggestions report from seven completed proof-of-concept self-report checks.',
+      'Create a reflective personal-development suggestions report from eight completed proof-of-concept self-report checks.',
       '',
       'Audience: primarily the client, readable by a clinician. Tone should be practical, warm, specific, and careful.',
       'Purpose: suggest areas the client may notice, strengthen, discuss, or experiment with. Do not diagnose. Do not give treatment instructions. Do not imply certainty.',
       '',
       'Required emphasis:',
-      '- Use all seven lenses: mood, PANAS-style affect tone, ASRS-5-style attention/self-regulation, IPIP-style personality, HEXACO-style personality, CERQ-style cognitive coping, and Brief COPE-style behavioural coping.',
+      '- Use all eight lenses: mood, GAD-7-style anxiety load, PANAS-style affect tone, ASRS-5-style attention/self-regulation, IPIP-style personality, HEXACO-style personality, CERQ-style cognitive coping, and Brief COPE-style behavioural coping.',
       '- Translate findings into reflective improvement suggestions, not labels.',
       '- Include strengths to lean on, patterns to notice earlier, coping habits to strengthen, interpersonal/communication suggestions, small experiments, and when to discuss with a professional.',
       '- Use tentative wording: may, could, might, worth noticing, useful to explore.',
       '- Avoid prescriptive wording like "you must", "you should", diagnosis, treatment plans, or risk conclusions.',
       '- Use paragraph breaks inside JSON string values.',
+      moduleOutcomeInstruction,
       '',
       'Required sections:',
       'Strengths to lean on; Patterns to notice earlier; Coping habits to strengthen; Attention and self-regulation supports; Relationship and communication focus; Personal development experiments; Areas to discuss with a clinician or trusted support.',
@@ -692,16 +772,17 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
   }
 
   return [
-    'Create a detailed integrated profile from seven completed proof-of-concept self-report checks.',
+    'Create a detailed integrated profile from eight completed proof-of-concept self-report checks.',
     '',
-    'The seven lenses are:',
+    'The eight lenses are:',
     '1. Mood check: current mood/symptom context, not diagnosis.',
-    '2. PANAS-style: current positive and negative affect tone.',
-    '3. ASRS-5-style: current adult attention, activation, impulsivity, planning, and external-structure friction.',
-    '4. IPIP-NEO-120: broad personality domains and facet tendencies.',
-    '5. HEXACO-60-style: six-domain personality posture, especially honesty-humility, emotionality, and interpersonal style.',
-    '6. CERQ-style: cognitive emotion-regulation strategies after stress.',
-    '7. Brief COPE-style: behavioural/practical coping responses.',
+    '2. GAD-7-style: current anxiety, worry, threat anticipation, restlessness, and tension load.',
+    '3. PANAS-style: current positive and negative affect tone.',
+    '4. ASRS-5-style: current adult attention, activation, impulsivity, planning, and external-structure friction.',
+    '5. IPIP-NEO-120: broad personality domains and facet tendencies.',
+    '6. HEXACO-60-style: six-domain personality posture, especially honesty-humility, emotionality, and interpersonal style.',
+    '7. CERQ-style: cognitive emotion-regulation strategies after stress.',
+    '8. Brief COPE-style: behavioural/practical coping responses.',
     '',
     'Write a considered synthesis, not a score report. The output should feel like a thoughtful psychologist-style formulation while explicitly avoiding diagnosis, treatment advice, and certainty.',
     '',
@@ -718,6 +799,7 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
     '- Where the pattern is mixed, say so. For example, support-seeking plus denial/self-blame should be described as a sequence or tension, not as unrelated traits.',
     '- Avoid generic sentences like "these show what the person tends to do"; replace them with a concrete formulation of how the pattern may play out.',
     '- Use paragraph breaks inside JSON string values. The summary must be 2-3 short paragraphs separated by "\\n\\n". Each section body should be 1-2 readable paragraphs separated by "\\n\\n".',
+    moduleOutcomeInstruction,
     '',
     'Return ONLY valid JSON with this shape:',
     '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Overall formulation","body":"paragraph one\\n\\nparagraph two"},{"title":"Mood and affect context","body":"..."},{"title":"Attention and self-regulation context","body":"..."},{"title":"Personality pattern","body":"..."},{"title":"Cognitive coping pattern","body":"..."},{"title":"Behavioural coping pattern","body":"..."},{"title":"Reinforcing themes","body":"..."},{"title":"Tensions and qualifications","body":"..."},{"title":"Strengths and supports","body":"..."},{"title":"Growth edges","body":"..."}],"questions":["..."],"caveat":"..."}',
@@ -726,14 +808,20 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
   ].join('\n');
 }
 
-async function generateCombinedProfile(userId, latest, options = {}) {
-  const variant = normaliseCombinedVariant(options.variant);
-  const scores = {
+function buildCombinedScores(latest) {
+  return {
     mood: {
       totalScore: latest.mood.totalScore,
       bandLabel: latest.mood.bandLabel,
       analysis: latest.mood.analysis,
       topAreas: latest.mood.analysis?.topAreas || latest.mood.analysis?.rationale?.drivers || [],
+    },
+    anxietyLoad: {
+      totalScore: latest.gad7.totalScore,
+      bandLabel: latest.gad7.bandLabel,
+      answers: latest.gad7.answers,
+      topAreas: latest.gad7.analysis?.topAreas || latest.gad7.analysis?.rationale?.topAreas || [],
+      analysis: latest.gad7.analysis,
     },
     affectSnapshot: {
       allScales: allCompactScales(latest.panas.scaleScores),
@@ -774,6 +862,189 @@ async function generateCombinedProfile(userId, latest, options = {}) {
       analysis: latest.cope.analysis,
     },
   };
+}
+
+function compactProfile(profile, fallbackLabel) {
+  if (!profile || typeof profile !== 'object') return null;
+  return {
+    label: profile.moduleLabel || fallbackLabel || profile.title || 'Module report',
+    summary: profile.summary,
+    sections: Array.isArray(profile.sections)
+      ? profile.sections.slice(0, 6).map((section) => ({
+        title: section.title,
+        body: section.body,
+      }))
+      : [],
+    caveat: profile.caveat,
+  };
+}
+
+function moduleScoresForKey(scores, moduleKey) {
+  if (moduleKey === 'mood-emotional') {
+    return {
+      mood: scores.mood,
+      anxietyLoad: scores.anxietyLoad,
+      affectSnapshot: scores.affectSnapshot,
+    };
+  }
+  if (moduleKey === 'personality-traits') {
+    return {
+      personality: scores.personality,
+      hexacoPersonality: scores.hexacoPersonality,
+    };
+  }
+  if (moduleKey === 'regulation-coping') {
+    return {
+      anxietyLoad: scores.anxietyLoad,
+      attentionSelfRegulation: scores.attentionSelfRegulation,
+      cognitiveCoping: scores.cognitiveCoping,
+      copingStyle: scores.copingStyle,
+    };
+  }
+  return scores;
+}
+
+function buildModuleFallback(module, latest, scores) {
+  const mood = describeMood(latest);
+  const anxiety = describeAnxiety(scores);
+  const affect = describeAffect(scores);
+  const attention = describeAttention(scores);
+  const personality = describePersonality(scores);
+  const hexacoPersonality = describeHexacoPersonality(scores);
+  const cognitive = describeCognitiveCoping(scores);
+  const behavioural = describeBehaviouralCoping(scores);
+
+  if (module.key === 'mood-emotional') {
+    return {
+      summary: [
+        'This module describes current and recent emotional state. It brings together mood severity, anxiety/worry load, and positive/negative affect tone so the reader can understand the emotional context before interpreting traits or coping.',
+        `${mood} ${anxiety} ${affect}`,
+      ].join('\n\n'),
+      sections: [
+        { title: 'Module formulation', body: `${mood}\n\n${anxiety}\n\n${affect}` },
+        { title: 'How it may show up', body: 'This module may show whether the person is mainly low in mood, high in anxiety/tension, emotionally mixed, depleted, or still able to access positive affect despite distress. The key interpretation is state context: how current emotional load may colour answers elsewhere.' },
+        { title: 'What to carry into the final profile', body: 'The final profile should treat this module as the current emotional weather. Elevated mood or anxiety load may make stable traits look sharper, coping look less flexible, or attention/self-regulation feel more difficult.' },
+      ],
+      questions: [
+        'Which part of the current emotional state feels most recognisable?',
+        'Does this feel like a temporary state, a recurring pattern, or both?',
+        'How might this emotional state affect the way the other tests were answered?',
+      ],
+      caveat: 'This module is a proof-of-concept self-report synthesis. It is not a diagnosis, risk assessment, or substitute for professional assessment.',
+    };
+  }
+
+  if (module.key === 'personality-traits') {
+    return {
+      summary: [
+        'This module describes more stable dispositional style. It brings together the IPIP-NEO-120 and HEXACO-60-style lenses to identify broad trait posture, interpersonal style, and possible strengths or vulnerabilities that may persist across situations.',
+        `${personality} ${hexacoPersonality}`,
+      ].join('\n\n'),
+      sections: [
+        { title: 'Module formulation', body: `${personality}\n\n${hexacoPersonality}` },
+        { title: 'How it may show up', body: 'This module may show the person’s starting posture in relationships, decisions, conflict, stress, recovery, and self-management. The useful focus is not a fixed label, but the style they may naturally bring into repeated situations.' },
+        { title: 'What to carry into the final profile', body: 'The final profile should treat this module as the trait backdrop. It can help separate what looks like a stable preference or interpersonal style from what may be driven by current mood, anxiety, or stress.' },
+      ],
+      questions: [
+        'Which trait pattern feels consistent across settings?',
+        'Which part may be more context-dependent than stable?',
+        'Which trait strength could support coping or recovery?',
+      ],
+      caveat: 'This module is a proof-of-concept self-report synthesis. It describes trait-style hypotheses, not fixed conclusions or clinical diagnoses.',
+    };
+  }
+
+  return {
+    summary: [
+      'This module describes regulation and coping. It brings together anxiety/worry load, attention and self-regulation, cognitive emotion-regulation strategies, and practical coping responses to show what may happen after stress or emotion arrives.',
+      `${anxiety} ${attention} ${cognitive} ${behavioural}`,
+    ].join('\n\n'),
+    sections: [
+      { title: 'Module formulation', body: `${anxiety}\n\n${attention}\n\n${cognitive}\n\n${behavioural}` },
+      { title: 'How it may show up', body: 'This module may show the sequence from stress trigger to attention pressure, inner explanation, and outward coping response. It is especially useful for spotting loops where worry, rumination, avoidance, self-blame, denial, or self-regulation friction provide short-term relief but keep the stress active.' },
+      { title: 'What to carry into the final profile', body: 'The final profile should treat this module as the response pattern. It explains how emotional load and trait posture may be translated into thoughts, actions, support-seeking, avoidance, planning, or recovery.' },
+    ],
+    questions: [
+      'What tends to happen first after stress arrives?',
+      'Which coping response helps immediately but may have a delayed cost?',
+      'Which regulation or coping strength could interrupt the less-helpful loop?',
+    ],
+    caveat: 'This module is a proof-of-concept self-report synthesis. It is not treatment advice, a risk assessment, or a substitute for professional judgement.',
+  };
+}
+
+function buildModulePrompt(module, scores, variant = 'detailed') {
+  return [
+    `Create a ${variant === 'summary' ? 'concise' : variant === 'analytical' ? 'clinician-oriented analytical' : 'detailed'} module report for: ${module.label}.`,
+    '',
+    `Module purpose: ${module.description}`,
+    `Included tests: ${module.testLabels.join(', ')}.`,
+    '',
+    'Important constraints:',
+    '- This is proof-of-concept self-report synthesis only.',
+    '- Do not diagnose, treat, predict risk, or give professional advice.',
+    '- Write as a module report similar in depth and tone to the current final combined report.',
+    '- Explain how the tests in this module relate to each other rather than listing scores.',
+    '- Include what this module contributes to the final overall profile.',
+    '- Use paragraph breaks inside JSON string values.',
+    '',
+    'Required sections:',
+    'Module formulation; How it may show up; Strengths and resources; Watch points; What this module contributes to the final profile.',
+    '',
+    'Return ONLY valid JSON with this shape:',
+    '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Module formulation","body":"..."},{"title":"How it may show up","body":"..."},{"title":"Strengths and resources","body":"..."},{"title":"Watch points","body":"..."},{"title":"What this module contributes to the final profile","body":"..."}],"questions":["..."],"caveat":"..."}',
+    '',
+    `Scored data:\n${JSON.stringify(moduleScoresForKey(scores, module.key), null, 2).slice(0, 12000)}`,
+  ].join('\n');
+}
+
+async function generateCombinedProfile(userId, latest, options = {}) {
+  const variant = normaliseCombinedVariant(options.variant);
+  const module = getWellbeingModule(options.moduleKey);
+  const scores = buildCombinedScores(latest);
+  if (!module && Array.isArray(options.moduleReports) && options.moduleReports.length) {
+    scores.moduleOutcomes = options.moduleReports
+      .map((profile, idx) => compactProfile(profile, WELLBEING_MODULES[idx]?.label))
+      .filter(Boolean);
+  }
+
+  if (module) {
+    const fallback = buildModuleFallback(module, latest, scores);
+    try {
+      const { standard, light } = await getModelsForUser(userId);
+      const model = standard || light;
+      if (!model) {
+        return {
+          ...normaliseInsight(null, fallback),
+          variant,
+          moduleKey: module.key,
+          moduleLabel: module.label,
+          moduleTests: module.tests,
+        };
+      }
+
+      const text = await callModel(model, buildModulePrompt(module, scores, variant), {
+        maxTokens: variant === 'summary' ? 1800 : variant === 'analytical' ? 3600 : 3000,
+        system: 'You write careful module-level self-report formulations. You are not a clinician and must avoid diagnosis, treatment advice, or unsupported certainty. Return only valid JSON.',
+      });
+      return {
+        ...normaliseInsight(safeJsonParse(text), fallback),
+        variant,
+        moduleKey: module.key,
+        moduleLabel: module.label,
+        moduleTests: module.tests,
+      };
+    } catch (err) {
+      return {
+        ...normaliseInsight(null, fallback),
+        modelError: String(err.message || err).slice(0, 300),
+        variant,
+        moduleKey: module.key,
+        moduleLabel: module.label,
+        moduleTests: module.tests,
+      };
+    }
+  }
 
   const fallback = buildCombinedFallbackForVariant(latest, scores, variant);
   try {
@@ -802,4 +1073,5 @@ module.exports = {
   generateModelInsight,
   generateCombinedProfile,
   latestScoreLinesFromScales,
+  WELLBEING_MODULES,
 };

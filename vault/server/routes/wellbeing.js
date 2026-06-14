@@ -50,6 +50,7 @@ const {
   generateModelInsight,
   generateCombinedProfile,
   latestScoreLinesFromScales,
+  WELLBEING_MODULES,
 } = require('../services/wellbeingModelInsights');
 const {
   QUESTIONNAIRE_VERSION: PANAS_QUESTIONNAIRE_VERSION,
@@ -67,6 +68,13 @@ const {
   scoreAsrs5Answers,
   buildAsrs5PdfBuffer,
 } = require('../services/asrs5Style');
+const {
+  QUESTIONNAIRE_VERSION: GAD7_QUESTIONNAIRE_VERSION,
+  QUESTIONS: GAD7_QUESTIONS,
+  normalizeAnswers: normalizeGad7Answers,
+  scoreGad7Answers,
+  buildGad7PdfBuffer,
+} = require('../services/gad7Style');
 
 const QUESTIONNAIRE_VERSION = 'wellbeing-check-v1';
 const SALT_ROUNDS = 12;
@@ -522,6 +530,22 @@ router.get('/asrs5/questions', (_req, res) => {
   });
 });
 
+router.get('/gad7/questions', (_req, res) => {
+  res.json({
+    version: GAD7_QUESTIONNAIRE_VERSION,
+    title: 'GAD-7-Style Anxiety Check',
+    disclaimer: 'A proof-of-concept anxiety screener using original GAD-7-style wording. Not the official GAD-7, diagnosis, or professional advice.',
+    questions: GAD7_QUESTIONS,
+    responseOptions: GAD7_QUESTIONS[0]?.options || [],
+    bands: [
+      { range: '0-4', label: 'Minimal anxiety range' },
+      { range: '5-9', label: 'Mild anxiety range' },
+      { range: '10-14', label: 'Moderate anxiety range' },
+      { range: '15-21', label: 'Severe anxiety range' },
+    ],
+  });
+});
+
 router.get('/ipip/questions', (_req, res) => {
   res.json({
     version: IPIP_QUESTIONNAIRE_VERSION,
@@ -769,6 +793,118 @@ router.delete('/asrs5/attempts/:id', async (req, res) => {
   try {
     const { rowCount } = await pool.query(
       'DELETE FROM asrs5_attempts WHERE id=$1 AND "userId"=$2',
+      [req.params.id, req.user.id]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Attempt not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/gad7/attempts', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, "questionnaireVersion", "totalScore", band, "bandLabel", analysis, "createdAt"
+       FROM gad7_attempts
+       WHERE "userId"=$1
+       ORDER BY "createdAt" DESC
+       LIMIT 50`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/gad7/attempts/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT *
+       FROM gad7_attempts
+       WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+    const attempt = rows[0];
+    attempt.analysis = parseMaybeJson(attempt.analysis, {});
+    attempt.answers = parseMaybeJson(attempt.answers, []);
+    if (!attempt.analysis.modelInsight || attempt.analysis.modelInsight.formatVersion !== 2) {
+      attempt.analysis.modelInsight = await generateModelInsight(req.user.id, {
+        title: 'GAD-7-Style Anxiety Check',
+        purpose: 'Interpret a seven-item proof-of-concept anxiety screener. Focus on anxiety-domain patterns and current worry/tension load; do not diagnose.',
+        scores: { totalScore: attempt.totalScore, bandLabel: attempt.bandLabel, answers: attempt.answers },
+        existingAnalysis: attempt.analysis,
+        scoreLines: attempt.answers.map((answer) => `${answer.topic}: ${answer.score}/3 (${answer.optionText})`),
+      });
+      await pool.query('UPDATE gad7_attempts SET analysis=$1 WHERE id=$2 AND "userId"=$3', [JSON.stringify(attempt.analysis), req.params.id, req.user.id]);
+    }
+    res.json(attempt);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/gad7/attempts/:id/pdf', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT *
+       FROM gad7_attempts
+       WHERE id=$1 AND "userId"=$2`,
+      [req.params.id, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Attempt not found' });
+
+    const buf = await buildGad7PdfBuffer({ attempt: rows[0] });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="gad-7-style-${req.params.id}.pdf"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[gad7 pdf]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/gad7/attempts', async (req, res) => {
+  try {
+    const answers = normalizeGad7Answers(req.body?.answers);
+    const { totalScore, band, analysis } = scoreGad7Answers(answers);
+    analysis.modelInsight = await generateModelInsight(req.user.id, {
+      title: 'GAD-7-Style Anxiety Check',
+      purpose: 'Interpret a seven-item proof-of-concept anxiety screener. Focus on anxiety-domain patterns and current worry/tension load; do not diagnose.',
+      scores: { totalScore, bandLabel: band.label, answers },
+      existingAnalysis: analysis,
+      scoreLines: answers.map((answer) => `${answer.topic}: ${answer.score}/3 (${answer.optionText})`),
+    });
+
+    const { rows } = await pool.query(
+      `INSERT INTO gad7_attempts (
+         "userId", "questionnaireVersion", answers, "totalScore", band, "bandLabel", analysis
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       RETURNING *`,
+      [
+        req.user.id,
+        GAD7_QUESTIONNAIRE_VERSION,
+        JSON.stringify(answers),
+        totalScore,
+        band.key,
+        band.label,
+        JSON.stringify(analysis),
+      ]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    const status = /required|Expected|Invalid|out of order/i.test(err.message) ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+router.delete('/gad7/attempts/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'DELETE FROM gad7_attempts WHERE id=$1 AND "userId"=$2',
       [req.params.id, req.user.id]
     );
     if (!rowCount) return res.status(404).json({ error: 'Attempt not found' });
@@ -1242,10 +1378,18 @@ router.delete('/hexaco/attempts/:id', async (req, res) => {
 });
 
 async function loadLatestProfileInputs(userId) {
-  const [mood, panas, asrs5, ipip, hexaco, cerq, cope] = await Promise.all([
+  const [mood, gad7, panas, asrs5, ipip, hexaco, cerq, cope] = await Promise.all([
     pool.query(
       `SELECT *
        FROM wellbeing_attempts
+       WHERE "userId"=$1
+       ORDER BY "createdAt" DESC
+       LIMIT 1`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT *
+       FROM gad7_attempts
        WHERE "userId"=$1
        ORDER BY "createdAt" DESC
        LIMIT 1`,
@@ -1303,6 +1447,7 @@ async function loadLatestProfileInputs(userId) {
 
   const latest = {
     mood: mood.rows[0] || null,
+    gad7: gad7.rows[0] || null,
     panas: panas.rows[0] || null,
     asrs5: asrs5.rows[0] || null,
     ipip: ipip.rows[0] || null,
@@ -1314,6 +1459,10 @@ async function loadLatestProfileInputs(userId) {
   if (latest.mood) {
     latest.mood.analysis = parseMaybeJson(latest.mood.analysis, {});
     latest.mood.answers = parseMaybeJson(latest.mood.answers, []);
+  }
+  if (latest.gad7) {
+    latest.gad7.analysis = parseMaybeJson(latest.gad7.analysis, {});
+    latest.gad7.answers = parseMaybeJson(latest.gad7.answers, []);
   }
   if (latest.panas) {
     latest.panas.analysis = parseMaybeJson(latest.panas.analysis, {});
@@ -1353,6 +1502,7 @@ async function loadLatestProfileInputs(userId) {
 function profileStatusFromLatest(latest) {
   const tests = [
     { key: 'mood', label: 'BDI-Style Mood Check', completed: !!latest.mood, completedAt: latest.mood?.createdAt || null },
+    { key: 'gad7', label: 'GAD-7-Style Anxiety Check', completed: !!latest.gad7, completedAt: latest.gad7?.createdAt || null },
     { key: 'panas', label: 'PANAS-Style Affect Check', completed: !!latest.panas, completedAt: latest.panas?.createdAt || null },
     { key: 'asrs5', label: 'ASRS-5-Style Attention Check', completed: !!latest.asrs5, completedAt: latest.asrs5?.createdAt || null },
     { key: 'ipip', label: 'IPIP-NEO-120 Personality Inventory', completed: !!latest.ipip, completedAt: latest.ipip?.createdAt || null },
@@ -1365,6 +1515,31 @@ function profileStatusFromLatest(latest) {
     tests,
     missing: tests.filter((test) => !test.completed).map((test) => test.key),
   };
+}
+
+function moduleStatusFromLatest(latest) {
+  return WELLBEING_MODULES.map((module) => {
+    const tests = module.tests.map((key) => ({
+      key,
+      completed: !!latest[key],
+      completedAt: latest[key]?.createdAt || null,
+    }));
+    return {
+      key: module.key,
+      label: module.label,
+      shortLabel: module.shortLabel,
+      description: module.description,
+      tests: module.tests,
+      testLabels: module.testLabels,
+      completed: tests.every((test) => test.completed),
+      completedAt: tests
+        .map((test) => test.completedAt)
+        .filter(Boolean)
+        .sort()
+        .at(-1) || null,
+      missing: tests.filter((test) => !test.completed).map((test) => test.key),
+    };
+  });
 }
 
 function randomInt(min, max) {
@@ -1430,6 +1605,34 @@ async function insertRandomMoodAttempt(client, userId) {
     ]
   );
   return { ...rows[0], totalScore, bandLabel: band.label };
+}
+
+async function insertRandomGad7Attempt(client, userId) {
+  const answers = normalizeGad7Answers(GAD7_QUESTIONS.map((question) => ({
+    questionId: question.id,
+    score: randomInt(0, 3),
+  })));
+  const { totalScore, band, analysis } = scoreGad7Answers(answers);
+  analysis.generated = true;
+  analysis.modelInsight = demoInsight('GAD-7-Style Anxiety Check');
+
+  const { rows } = await client.query(
+    `INSERT INTO gad7_attempts (
+       "userId", "questionnaireVersion", answers, "totalScore", band, "bandLabel", analysis
+     )
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id, "createdAt"`,
+    [
+      userId,
+      GAD7_QUESTIONNAIRE_VERSION,
+      JSON.stringify(answers),
+      totalScore,
+      band.key,
+      band.label,
+      JSON.stringify(analysis),
+    ]
+  );
+  return rows[0];
 }
 
 async function insertRandomIpipAttempt(client, userId) {
@@ -1596,6 +1799,12 @@ function visualProfileFromLatest(latest) {
       safetyFlag: latest.mood.safetyFlag,
       createdAt: latest.mood.createdAt,
     },
+    gad7: {
+      totalScore: latest.gad7.totalScore,
+      band: latest.gad7.band,
+      bandLabel: latest.gad7.bandLabel,
+      createdAt: latest.gad7.createdAt,
+    },
     panas: {
       scaleScores: latest.panas.scaleScores,
       createdAt: latest.panas.createdAt,
@@ -1630,6 +1839,7 @@ function visualProfileFromLatest(latest) {
 function sourceAttemptsFromLatest(latest) {
   return {
     mood: { id: latest.mood.id, createdAt: latest.mood.createdAt },
+    gad7: { id: latest.gad7.id, createdAt: latest.gad7.createdAt },
     panas: { id: latest.panas.id, createdAt: latest.panas.createdAt },
     asrs5: { id: latest.asrs5.id, createdAt: latest.asrs5.createdAt },
     ipip: { id: latest.ipip.id, createdAt: latest.ipip.createdAt },
@@ -1639,8 +1849,15 @@ function sourceAttemptsFromLatest(latest) {
   };
 }
 
-function sourceKeyFromAttempts(sourceAttempts) {
-  return ['mood', 'panas', 'asrs5', 'ipip', 'hexaco', 'cerq', 'cope']
+function sourceAttemptsForKeys(latest, keys) {
+  return Object.fromEntries(keys.map((key) => [
+    key,
+    latest[key] ? { id: latest[key].id, createdAt: latest[key].createdAt } : null,
+  ]));
+}
+
+function sourceKeyFromAttempts(sourceAttempts, keys = ['mood', 'gad7', 'panas', 'asrs5', 'ipip', 'hexaco', 'cerq', 'cope']) {
+  return keys
     .map((key) => `${key}:${sourceAttempts?.[key]?.id || 'missing'}`)
     .join('|');
 }
@@ -1682,10 +1899,61 @@ async function saveCombinedReport(userId, variant, sourceKey, sourceAttempts, pr
   );
 }
 
+function moduleVariantKey(moduleKey, variant = 'detailed') {
+  return `module:${moduleKey}:${variant}`;
+}
+
+async function loadOrGenerateModuleReport(userId, latest, module, variant = 'detailed', force = false) {
+  const sourceAttempts = sourceAttemptsForKeys(latest, module.tests);
+  const sourceKey = sourceKeyFromAttempts(sourceAttempts, module.tests);
+  const cacheVariant = moduleVariantKey(module.key, variant);
+  const saved = await loadSavedCombinedReport(userId, cacheVariant, sourceKey);
+  if (saved && !force) {
+    return {
+      profile: saved.profile,
+      sourceAttempts: saved.sourceAttempts,
+      cached: true,
+      savedAt: saved.updatedAt,
+      cacheVariant,
+    };
+  }
+
+  const profile = await generateCombinedProfile(userId, latest, {
+    variant,
+    moduleKey: module.key,
+  });
+  await saveCombinedReport(userId, cacheVariant, sourceKey, sourceAttempts, profile);
+  return {
+    profile,
+    sourceAttempts,
+    cached: false,
+    cacheVariant,
+  };
+}
+
+async function loadOrGenerateAllModuleReports(userId, latest, force = false) {
+  const reports = [];
+  for (const module of WELLBEING_MODULES) {
+    const result = await loadOrGenerateModuleReport(userId, latest, module, 'detailed', force);
+    reports.push({
+      ...result.profile,
+      moduleKey: module.key,
+      moduleLabel: module.label,
+      sourceAttempts: result.sourceAttempts,
+      cached: result.cached,
+      savedAt: result.savedAt,
+    });
+  }
+  return reports;
+}
+
 router.get('/profile/status', async (req, res) => {
   try {
     const latest = await loadLatestProfileInputs(req.user.id);
-    res.json(profileStatusFromLatest(latest));
+    res.json({
+      ...profileStatusFromLatest(latest),
+      modules: moduleStatusFromLatest(latest),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1695,17 +1963,47 @@ router.post('/profile', async (req, res) => {
   try {
     const latest = await loadLatestProfileInputs(req.user.id);
     const status = profileStatusFromLatest(latest);
-    if (!status.available) {
+    const modules = moduleStatusFromLatest(latest);
+    const requestedModuleKey = typeof req.body?.moduleKey === 'string' ? req.body.moduleKey : '';
+    const requestedModule = WELLBEING_MODULES.find((module) => module.key === requestedModuleKey);
+    const requestedModuleStatus = modules.find((module) => module.key === requestedModuleKey);
+    if (requestedModule && !requestedModuleStatus?.completed) {
       return res.status(400).json({
-        error: 'Combined profile requires all seven tests to be completed first.',
-        status,
+        error: `${requestedModule.label} report requires its module tests to be completed first.`,
+        status: { ...status, modules },
+      });
+    }
+    if (!requestedModule && !status.available) {
+      return res.status(400).json({
+        error: 'Combined profile requires all eight tests to be completed first.',
+        status: { ...status, modules },
       });
     }
 
     const variant = ['summary', 'analytical', 'suggestions'].includes(req.body?.variant) ? req.body.variant : 'detailed';
+    if (requestedModule) {
+      const result = await loadOrGenerateModuleReport(
+        req.user.id,
+        latest,
+        requestedModule,
+        variant,
+        !!req.body?.force
+      );
+      return res.json({
+        profile: result.profile,
+        variant,
+        moduleKey: requestedModule.key,
+        moduleLabel: requestedModule.label,
+        sourceAttempts: result.sourceAttempts,
+        cached: result.cached,
+        savedAt: result.savedAt,
+      });
+    }
+
     const sourceAttempts = sourceAttemptsFromLatest(latest);
     const sourceKey = sourceKeyFromAttempts(sourceAttempts);
-    const saved = await loadSavedCombinedReport(req.user.id, variant, sourceKey);
+    const cacheVariant = `final:${variant}:modules`;
+    const saved = await loadSavedCombinedReport(req.user.id, cacheVariant, sourceKey);
     if (saved && !req.body?.force) {
       return res.json({
         profile: saved.profile,
@@ -1716,12 +2014,14 @@ router.post('/profile', async (req, res) => {
       });
     }
 
-    const profile = await generateCombinedProfile(req.user.id, latest, { variant });
-    await saveCombinedReport(req.user.id, variant, sourceKey, sourceAttempts, profile);
+    const moduleReports = await loadOrGenerateAllModuleReports(req.user.id, latest);
+    const profile = await generateCombinedProfile(req.user.id, latest, { variant, moduleReports });
+    await saveCombinedReport(req.user.id, cacheVariant, sourceKey, sourceAttempts, profile);
     res.json({
       profile,
       variant,
       sourceAttempts,
+      moduleReports,
       cached: false,
     });
   } catch (err) {
@@ -1735,7 +2035,7 @@ router.get('/profile/visuals', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Visual summary requires all seven tests to be completed first.',
+        error: 'Visual summary requires all eight tests to be completed first.',
         status,
       });
     }
@@ -1755,7 +2055,7 @@ router.get('/profile/visuals/pdf', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Visual summary PDF requires all seven tests to be completed first.',
+        error: 'Visual summary PDF requires all eight tests to be completed first.',
         status,
       });
     }
@@ -1788,6 +2088,7 @@ router.post('/admin/random-attempts', async (req, res) => {
     await client.query('BEGIN');
     const attempts = {
       mood: await insertRandomMoodAttempt(client, req.user.id),
+      gad7: await insertRandomGad7Attempt(client, req.user.id),
       panas: await insertRandomPanasAttempt(client, req.user.id),
       asrs5: await insertRandomAsrs5Attempt(client, req.user.id),
       ipip: await insertRandomIpipAttempt(client, req.user.id),
@@ -1890,7 +2191,7 @@ router.post('/profile/pdf', async (req, res) => {
     const status = profileStatusFromLatest(latest);
     if (!status.available) {
       return res.status(400).json({
-        error: 'Combined profile PDF requires all seven tests to be completed first.',
+        error: 'Combined profile PDF requires all eight tests to be completed first.',
         status,
       });
     }
@@ -1914,8 +2215,9 @@ router.post('/profile/pdf', async (req, res) => {
 
 router.delete('/reset', async (req, res) => {
   try {
-    const [mood, panas, asrs5, ipip, hexaco, cerq, cope, combinedReports] = await Promise.all([
+    const [mood, gad7, panas, asrs5, ipip, hexaco, cerq, cope, combinedReports] = await Promise.all([
       pool.query('DELETE FROM wellbeing_attempts WHERE "userId"=$1', [req.user.id]),
+      pool.query('DELETE FROM gad7_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM panas_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM asrs5_attempts WHERE "userId"=$1', [req.user.id]),
       pool.query('DELETE FROM ipip_neo_attempts WHERE "userId"=$1', [req.user.id]),
@@ -1929,6 +2231,7 @@ router.delete('/reset', async (req, res) => {
       ok: true,
       deleted: {
         mood: mood.rowCount,
+        gad7: gad7.rowCount,
         panas: panas.rowCount,
         asrs5: asrs5.rowCount,
         ipip: ipip.rowCount,

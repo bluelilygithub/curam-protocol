@@ -157,6 +157,7 @@ npm run dev
 | **Gmail** | `@gmail` in chat; connect personal Gmail via OAuth 2.0; natural language search with Claude Haiku query translation; attach email threads as context; ask questions about threads via SSE streaming |
 | **Notes** | Quick-capture thought pad — title, date, free text; link to projects; one-click "Take to Chat" to open note as chat context |
 | **Clients** | CRM module at `/clients` — company and individual client records; contacts (name, role, email, phone); touchpoint log (call, email, meeting, note); linked to projects, invoices, tasks, and the morning digest; company/individual toggle in new/edit modal (individual auto-creates a primary contact from the client name); client chip in project detail header + client name on project cards; sidebar quick-log for touchpoints; Finance invoices linkable to CRM clients via `clientRef` |
+| **Wellbeing & Personality Checks** | Proof-of-concept self-report area behind the heart-pulse nav. Eight checks are grouped into bordered modules: Mood & Emotional State (BDI, GAD-7, PANAS), Personality & Traits (IPIP-NEO-120, HEXACO-60), and Regulation & Coping (GAD-7, ASRS-5, CERQ, Brief COPE). Each module can generate a cached report; final Summary, Detailed, Analytical, and Suggestions reports are generated from the module outcomes. Charts, mind map, PDFs, admin invite/resend, demo data, reset, pause/resume, and review/retake flows are supported. |
 | **Prompt Chains** | Build reusable multi-step prompt sequences; run sequentially with output passed as context between steps |
 | **Knowledge Graph** | Full-screen D3 force-simulation canvas at `/graph` (🕸 share icon in top nav, desktop; navigate directly on mobile). Maps all vault content as interactive nodes: Projects (indigo circle, large), Files (blue rect), Notes (amber rounded rect), Chat Sessions (green circle), Tasks (orange diamond), Goals (purple hexagon), Pinned URLs (teal circle). Explicit structural edges: `contains`, `subtask`, `branch`, `created`, `tracks`, `key_result`, `blocks`. AI-computed semantic edges (dashed pink lines) via pgvector + Gemini embeddings — `contains` links orbit wide (180 px), collision radius prevents overlap. Interactions: zoom/pan, drag nodes, click a node to open a detail panel with type badge and "Go to" button for direct navigation, hover to highlight adjacency. Toolbar: search bar (amber glow on match), type-filter panel (per-colour checkboxes), "Find connections" / "Re-compute" semantic button, live node and edge count. Labels hidden when zoomed out, shown on zoom-in or hover. Proactive Insights panel (Claude Haiku) surfaces cross-project patterns, orphaned content, and semantic clusters — each insight has a "Show me" button that highlights and zooms to the relevant nodes. |
 
@@ -207,6 +208,15 @@ PostgreSQL. Schema and connection pool in `vault/server/db.js`. On Railway, conn
 | `client_touchpoints` | Communication log entries per client — type, date, note |
 | `chains` | Prompt chain definitions (name, steps JSON) |
 | `search_index` | Full-text search index (tsvector + GIN index) across projects, files, and messages |
+| `wellbeing_attempts` | BDI-style mood check attempts with score, band, analysis, and PDF-ready answers |
+| `gad7_attempts` | GAD-7-style anxiety check attempts used in mood/emotional and regulation/coping modules |
+| `panas_attempts` | PANAS-style affect check attempts with positive/negative affect scales |
+| `asrs5_attempts` | ASRS-5-style attention/self-regulation attempts |
+| `ipip_neo_attempts` | IPIP-NEO-120 personality attempts with domain and facet scores |
+| `hexaco_attempts` | HEXACO-60-style personality attempts with six-domain scores |
+| `cerq_attempts` | CERQ-style cognitive coping attempts |
+| `cope_attempts` | Brief COPE-style behavioural coping attempts |
+| `wellbeing_combined_reports` | Cached module and final wellbeing reports keyed by report variant and latest source attempts |
 
 ---
 

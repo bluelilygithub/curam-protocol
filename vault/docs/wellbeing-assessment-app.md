@@ -12,10 +12,10 @@ The heart-pulse navigation always returns the user to the wellbeing dashboard. T
 
 The dashboard includes:
 
-- Seven progress tiles: BDI-style mood check, PANAS-style affect check, ASRS-5-style attention check, IPIP-NEO-120 personality inventory, HEXACO-60-style personality check, CERQ-style cognitive coping check, and Brief COPE-style coping check.
-- A progress indicator showing which of the seven tests have been completed.
+- Eight progress tiles: BDI-style mood check, GAD-7-style anxiety check, PANAS-style affect check, ASRS-5-style attention check, IPIP-NEO-120 personality inventory, HEXACO-60-style personality check, CERQ-style cognitive coping check, and Brief COPE-style coping check.
+- A progress indicator showing which of the eight tests have been completed.
 - Consistent **Review or retake** actions on completed test tiles.
-- A subtly highlighted results area that unlocks the combined profile, charts, mind map, and personal development suggestions only after all seven tests are completed.
+- A subtly highlighted results area that unlocks the combined profile, charts, mind map, and personal development suggestions only after all eight tests are completed.
 - A clickable mood-check history tile for browsing previous BDI-style attempts.
 - An admin-only **Pre-populate random test results** action for demo/testing data.
 - A reset/erase action for all wellbeing test data and local drafts.
@@ -50,6 +50,19 @@ The result includes:
 - Negative affect score.
 - Affect balance interpretation.
 - Horizontal affect bar chart.
+- Deeper model-assisted formulation.
+- PDF export.
+
+### GAD-7-Style Anxiety Check
+
+The GAD-7-style check is a proof-of-concept anxiety-domain screener using original wording. It is not the official GAD-7 and does not diagnose anxiety.
+
+The result includes:
+
+- Total score out of 21.
+- Anxiety-domain severity band.
+- Gauge with 0-21 colour bands.
+- Seven item responses covering nervousness, worry control, excessive worry, restlessness, tension, irritability, and fear.
 - Deeper model-assisted formulation.
 - PDF export.
 
@@ -120,19 +133,27 @@ The result includes:
 
 ## Combined Profile
 
-The Combined Profile is locked until the user has completed all seven tests at least once.
+The Combined Profile area is organised around three modules:
 
-When generated, it uses the latest completed result from each test. Users can choose one of three report levels:
+- **Mood & Emotional State**: BDI-style mood check, GAD-7-style anxiety check, and PANAS-style affect check. This module describes how the person appears to be feeling now and recently.
+- **Personality & Traits**: IPIP-NEO-120 and HEXACO-60-style personality check. This module describes more stable dispositional patterns and trait posture.
+- **Regulation & Coping**: GAD-7-style anxiety check, ASRS-5-style attention check, CERQ-style cognitive coping check, and Brief COPE-style coping check. This module describes how the person responds to stress and emotion, including attention/self-regulation pressure.
 
-- **Summary**: a concise overview of the seven tests for either client or clinician orientation.
+Each module can generate a focused detailed report once the tests in that module are complete. Module reports use the same saved-report cache as combined profiles, with source keys based only on the tests in that module.
+
+The final Combined Profile is locked until the user has completed all eight tests at least once.
+
+When generated, it first loads or creates the three module reports, then uses those module outcomes as the basis for the final synthesis. Users can choose one of four final report levels:
+
+- **Summary**: a concise overview of the eight tests for either client or clinician orientation.
 - **Detailed profile**: the existing client-readable formulation intended for client and clinician discussion.
 - **Analytical profile**: a more clinician-oriented formulation with mechanisms, caveats, and clinical questions. It remains available to clients but is written primarily for clinical interpretation.
-- **Suggestions**: a client-readable personal development report that turns the seven-test pattern into reflective strengths, coping, communication, attention/self-regulation supports, and small-experiment suggestions without presenting them as diagnosis or treatment advice.
+- **Suggestions**: a client-readable personal development report that turns the eight-test pattern into reflective strengths, coping, anxiety/worry supports, communication, attention/self-regulation supports, and small-experiment suggestions without presenting them as diagnosis or treatment advice.
 
 The detailed profile covers:
 
 - Overall formulation.
-- Mood and affect context.
+- Mood, anxiety, and affect context.
 - Attention and self-regulation context.
 - Personality pattern.
 - Cognitive coping pattern.
@@ -145,7 +166,7 @@ The detailed profile covers:
 
 The combined profile is generated through the configured model where available, using the app's provider-agnostic model path. If model generation fails or no model is configured, a deterministic fallback formulation is returned.
 
-Generated combined reports are saved in PostgreSQL by report type and source-attempt set. If the same latest seven quiz attempts are still current, reopening Summary, Detailed profile, Analytical profile, or Suggestions returns the saved report instead of rebuilding it. A new report is generated when one of the underlying quiz attempts changes.
+Generated module and final reports are saved in PostgreSQL by report type and source-attempt set. If the same latest source attempts are still current, reopening a module report, Summary, Detailed profile, Analytical profile, or Suggestions returns the saved report instead of rebuilding it. A new report is generated when one of the underlying quiz attempts changes.
 
 Report rendering preserves explicit paragraph breaks and line breaks in summaries, section bodies, caveats, and clinical-question sections so longer reports are easier to read.
 
@@ -153,18 +174,19 @@ The combined profile can be downloaded as a PDF. The PDF uses the profile curren
 
 ## Combined Visual Summary
 
-The visual summary unlocks after all seven tests are completed.
+The visual summary unlocks after all eight tests are completed.
 
 It includes:
 
 - BDI-style single severity gauge.
+- GAD-7-style anxiety gauge.
 - PANAS-style affect bar chart.
 - ASRS-5-style attention/self-regulation bar chart.
 - IPIP-NEO five-domain radar chart.
 - HEXACO six-domain radar chart.
 - CERQ-style horizontal strategy bar chart.
 - Brief COPE-style horizontal strategy bar chart.
-- Mind map connecting related themes across the seven tests.
+- Mind map connecting related themes across the eight tests.
 
 Both the chart view and the mind map view have PDF download buttons.
 
@@ -179,11 +201,12 @@ Each test page includes an **About this quiz** panel that explains:
 
 ## Drafts And Navigation
 
-All seven tests support pause/resume and back navigation.
+All eight tests support pause/resume and back navigation.
 
 Paused drafts are stored in browser `localStorage` on the current device:
 
 - `curam:wellbeing-mood:draft`
+- `curam:gad-7-style:draft`
 - `curam:panas-style:draft`
 - `curam:asrs-5-style:draft`
 - `curam:ipip-neo-120:draft`
@@ -198,6 +221,7 @@ Completed attempts are stored in PostgreSQL.
 The dashboard includes a reset action that:
 
 - Deletes all completed mood attempts for the current user.
+- Deletes all completed GAD-7-style attempts for the current user.
 - Deletes all completed PANAS-style attempts for the current user.
 - Deletes all completed ASRS-5-style attempts for the current user.
 - Deletes all completed IPIP-NEO-120 attempts for the current user.
@@ -217,6 +241,7 @@ Main route file:
 Service files:
 
 - `server/services/wellbeingPdf.js`
+- `server/services/gad7Style.js`
 - `server/services/panasStyle.js`
 - `server/services/asrs5Style.js`
 - `server/services/ipipNeo120.js`
@@ -230,6 +255,7 @@ Service files:
 Database tables:
 
 - `wellbeing_attempts`
+- `gad7_attempts`
 - `panas_attempts`
 - `asrs5_attempts`
 - `ipip_neo_attempts`
@@ -249,6 +275,7 @@ Main page:
 Components:
 
 - `client/src/components/wellbeing/IpipNeo120Panel.jsx`
+- `client/src/components/wellbeing/Gad7StylePanel.jsx`
 - `client/src/components/wellbeing/PanasStylePanel.jsx`
 - `client/src/components/wellbeing/Asrs5StylePanel.jsx`
 - `client/src/components/wellbeing/Hexaco60Panel.jsx`

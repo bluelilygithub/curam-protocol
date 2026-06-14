@@ -199,15 +199,22 @@ LOCAL_IMAGE_MODEL=DreamShaper_8_pruned.safetensors
 
 ### Wellbeing & Personality Checks
 
-- The wellbeing dashboard now uses four progress tiles and a fifth results area.
+- The wellbeing dashboard now uses eight progress tiles and an overall results area.
 - Completed test tiles use a consistent review/retake pattern; the BDI-style tile opens a mood-check review area instead of jumping directly to history.
 - Each test page includes an **About this quiz** guidance panel.
-- The combined profile now supports three report levels:
+- The overall reports are organised into three modules:
+  - Mood & Emotional State: BDI, GAD-7, PANAS
+  - Personality & Traits: IPIP-NEO-120, HEXACO-60
+  - Regulation & Coping: GAD-7, ASRS-5, CERQ, Brief COPE
+- The dashboard visually groups test tiles inside bordered module panels so the relationship between checks is visible before users open reports.
+- Each module can generate a cached detailed module report.
+- The final overall profile is generated from the three module outcomes and supports four report levels:
   - Summary
   - Detailed profile
   - Analytical profile
+  - Suggestions
 - Report rendering preserves paragraph and line breaks in generated sections and PDFs.
-- The visual summary includes a BDI gauge, IPIP radar chart, CERQ bar chart, Brief COPE bar chart, and mind map.
+- The visual summary includes BDI and GAD-7 gauges, PANAS/ASRS-5/CERQ/Brief COPE bar charts, IPIP and HEXACO radar charts, and a mind map.
 - The combined profile, chart view, and mind map view all support PDF export.
 - Admins can pre-populate random wellbeing test results for demonstration/testing. The reset action removes these attempts along with real test attempts for the current user.
 
@@ -215,7 +222,7 @@ Production checks:
 
 1. Ensure the wellbeing feature flag is available through member feature access.
 2. Confirm users have an inherited or direct text model configuration for richer generated reports.
-3. Smoke test one completion path, the three combined-profile buttons, chart PDF export, mind-map PDF export, and reset with a non-production test user.
+3. Smoke test one completion path, the three module report buttons, the final report buttons, chart PDF export, mind-map PDF export, and reset with a non-production test user.
 4. Confirm admin-only random pre-population is not visible to non-admin users.
 
 ## Local-Only Changes That Should Not Migrate
@@ -343,9 +350,14 @@ The Wellbeing & Personality Checks feature uses idempotent table creation in `se
 On first production boot after deployment, the app creates these tables if they do not already exist:
 
 - `wellbeing_attempts`
+- `gad7_attempts`
+- `panas_attempts`
+- `asrs5_attempts`
 - `ipip_neo_attempts`
+- `hexaco_attempts`
 - `cerq_attempts`
 - `cope_attempts`
+- `wellbeing_combined_reports`
 
 Production deployment steps:
 
@@ -357,7 +369,7 @@ Production deployment steps:
 6. Confirm the dashboard reset action is visible but requires confirmation.
 7. Submit one test attempt with a non-production test user.
 8. Confirm the attempt can be reviewed, deleted, and exported to PDF.
-9. Complete all seven tests with a non-production test user and confirm the Combined Profile unlocks.
+9. Complete all eight tests with a non-production test user and confirm the Combined Profile unlocks.
 10. Generate and export the Combined Profile PDF.
 
 Do not migrate local wellbeing test results into Railway production unless explicitly intending to copy personal test data.

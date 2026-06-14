@@ -65,6 +65,58 @@ export function BdiSeverityGauge({ score = 0, label = '' }) {
   );
 }
 
+export function Gad7SeverityGauge({ score = 0, label = '' }) {
+  const bands = [
+    { label: 'Minimal', from: 0, to: 4, color: '#22c55e' },
+    { label: 'Mild', from: 5, to: 9, color: '#eab308' },
+    { label: 'Moderate', from: 10, to: 14, color: '#f97316' },
+    { label: 'Severe', from: 15, to: 21, color: '#ef4444' },
+  ];
+  const max = 21;
+  const pct = clamp01(Number(score) / max);
+
+  return (
+    <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>GAD-7-style anxiety gauge</h2>
+          <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Score position across 0-21 anxiety colour bands.</p>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-bold tabular-nums" style={{ color: bandColor(label) }}>{score}/21</p>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{label}</p>
+        </div>
+      </div>
+      <div className="relative pt-5">
+        <div className="flex h-4 overflow-hidden rounded-full">
+          {bands.map((band) => (
+            <div
+              key={band.label}
+              title={`${band.label}: ${band.from}-${band.to}`}
+              style={{
+                width: `${((band.to - band.from + 1) / (max + 1)) * 100}%`,
+                background: band.color,
+              }}
+            />
+          ))}
+        </div>
+        <div
+          className="absolute top-0 h-9 w-0.5 rounded-full"
+          style={{ left: `${pct * 100}%`, background: 'var(--color-text)', transform: 'translateX(-1px)' }}
+        />
+      </div>
+      <div className="grid grid-cols-4 gap-2 mt-3">
+        {bands.map((band) => (
+          <div key={band.label} className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+            <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ background: band.color }} />
+            {band.label} {band.from}-{band.to}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function DomainRadarChart({
   domains = [],
   title = 'Five-domain radar',

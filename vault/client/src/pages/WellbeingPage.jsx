@@ -6,6 +6,7 @@ import useAuthStore from '../store/authStore';
 import useProcessingStore from '../store/processingStore';
 import IpipNeo120Panel from '../components/wellbeing/IpipNeo120Panel';
 import Hexaco60Panel from '../components/wellbeing/Hexaco60Panel';
+import Gad7StylePanel from '../components/wellbeing/Gad7StylePanel';
 import PanasStylePanel from '../components/wellbeing/PanasStylePanel';
 import Asrs5StylePanel from '../components/wellbeing/Asrs5StylePanel';
 import CerqStylePanel from '../components/wellbeing/CerqStylePanel';
@@ -18,6 +19,7 @@ import QuizPurposePanel from '../components/wellbeing/QuizPurposePanel';
 import ConfirmModal from '../components/ConfirmModal';
 
 const MOOD_DRAFT_KEY = 'curam:wellbeing-mood:draft';
+const GAD7_DRAFT_KEY = 'curam:gad-7-style:draft';
 const PANAS_DRAFT_KEY = 'curam:panas-style:draft';
 const ASRS5_DRAFT_KEY = 'curam:asrs-5-style:draft';
 const IPIP_DRAFT_KEY = 'curam:ipip-neo-120:draft';
@@ -54,7 +56,7 @@ function clearMoodDraft() {
 
 function clearAllWellbeingDrafts() {
   if (typeof window === 'undefined') return;
-  [MOOD_DRAFT_KEY, PANAS_DRAFT_KEY, ASRS5_DRAFT_KEY, IPIP_DRAFT_KEY, HEXACO_DRAFT_KEY, CERQ_DRAFT_KEY, COPE_DRAFT_KEY].forEach((key) => {
+  [MOOD_DRAFT_KEY, GAD7_DRAFT_KEY, PANAS_DRAFT_KEY, ASRS5_DRAFT_KEY, IPIP_DRAFT_KEY, HEXACO_DRAFT_KEY, CERQ_DRAFT_KEY, COPE_DRAFT_KEY].forEach((key) => {
     window.localStorage.removeItem(key);
   });
 }
@@ -122,15 +124,15 @@ function CompletionProgress({ tests }) {
     <section className="rounded-2xl border p-5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Seven-test progress</p>
-          <h2 className="text-lg font-semibold mt-1" style={{ color: 'var(--color-text)' }}>{completedCount} of {tests.length} checks complete</h2>
+          <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Checklist progress</p>
+          <h2 className="text-lg font-semibold mt-1" style={{ color: 'var(--color-text)' }}>{completedCount} of {tests.length} items complete</h2>
         </div>
         <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-primary)' }}>{pct}%</span>
       </div>
       <div className="h-3 rounded-full overflow-hidden" style={{ background: 'var(--color-bg)' }}>
         <div className="h-full transition-all" style={{ width: `${pct}%`, background: 'var(--color-primary)' }} />
       </div>
-      <div className="grid sm:grid-cols-3 lg:grid-cols-7 gap-2 mt-4">
+      <div className="grid sm:grid-cols-3 lg:grid-cols-9 gap-2 mt-4">
         {tests.map((test) => (
           <div key={test.key} className="rounded-xl border px-3 py-2" style={{ borderColor: test.completed ? '#bbf7d0' : 'var(--color-border)', background: test.completed ? '#f0fdf4' : 'var(--color-bg)' }}>
             <p className="text-xs font-semibold" style={{ color: test.completed ? '#15803d' : 'var(--color-muted)' }}>
@@ -172,6 +174,41 @@ function TestTile({ test }) {
   );
 }
 
+function ModuleGroup({ module, tests }) {
+  const completedCount = tests.filter((test) => test.completed).length;
+  const borderColor = module.accent;
+  return (
+    <section
+      className="rounded-3xl border-2 p-4 shadow-sm"
+      style={{
+        background: module.background,
+        borderColor,
+      }}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+          <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: module.accent }}>
+            {module.label}
+          </p>
+          <h3 className="text-base font-semibold mt-1" style={{ color: 'var(--color-text)' }}>{module.title}</h3>
+          <p className="text-sm mt-1 max-w-2xl" style={{ color: 'var(--color-muted)' }}>{module.description}</p>
+        </div>
+        <span
+          className="text-xs font-semibold px-3 py-1 rounded-full border"
+          style={{ color: module.accent, borderColor, background: 'var(--color-surface)' }}
+        >
+          {completedCount}/{tests.length} complete
+        </span>
+      </div>
+      <div className={`grid gap-4 ${tests.length === 2 ? 'md:grid-cols-2' : tests.length === 4 ? 'md:grid-cols-2 xl:grid-cols-4' : 'md:grid-cols-3'}`}>
+        {tests.map((test) => (
+          <TestTile key={`${module.key}-${test.key}`} test={test} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions }) {
   const accentBackground = available
     ? 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)), var(--color-surface) 72%)'
@@ -186,12 +223,12 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions
       <h3 className="text-base font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Review the overall results</h3>
       <p className="text-sm mt-2" style={{ color: 'var(--color-muted)' }}>
         {available
-          ? 'Unlocked. Review the combined profile, visual charts, seven-test mind map, or personal development suggestions.'
-          : 'Locked until all seven checks have at least one completed result.'}
+          ? 'Unlocked. Review module reports, the final profile, visual charts, eight-test mind map, or personal development suggestions.'
+          : 'Locked until all eight checks have at least one completed result.'}
       </p>
       <div className="grid sm:grid-cols-4 gap-2 mt-4">
         <button type="button" onClick={onCombined} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
-          Profile
+          Reports
         </button>
         <button type="button" onClick={onCharts} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
           Charts
@@ -670,8 +707,20 @@ export default function WellbeingPage() {
       primary: !statusByKey.mood?.completed,
     },
     {
-      key: 'panas',
+      key: 'gad7',
       step: 2,
+      shortTitle: 'Anxiety',
+      title: 'GAD-7-Style Anxiety Check',
+      description: 'A seven-item anxiety-domain screener covering worry, tension, restlessness, irritability, and threat anticipation.',
+      completed: !!statusByKey.gad7?.completed,
+      completedAt: statusByKey.gad7?.completedAt,
+      actionLabel: statusByKey.gad7?.completed ? 'Review or retake GAD-7' : 'Start GAD-7-style check',
+      onOpen: () => setTool('gad7'),
+      primary: !statusByKey.gad7?.completed,
+    },
+    {
+      key: 'panas',
+      step: 3,
       shortTitle: 'Affect',
       title: 'PANAS-Style Affect Check',
       description: 'A short affect snapshot showing current positive affect, negative affect, and emotional balance.',
@@ -683,7 +732,7 @@ export default function WellbeingPage() {
     },
     {
       key: 'asrs5',
-      step: 3,
+      step: 4,
       shortTitle: 'Attention',
       title: 'ASRS-5-Style Attention Check',
       description: 'A short adult attention and self-regulation screener covering focus, activation, impulsivity, planning, and structure.',
@@ -695,7 +744,7 @@ export default function WellbeingPage() {
     },
     {
       key: 'ipip',
-      step: 4,
+      step: 5,
       shortTitle: 'Personality',
       title: 'IPIP-NEO-120 Personality Inventory',
       description: 'A five-domain personality profile covering Neuroticism, Extraversion, Openness, Agreeableness, and Conscientiousness.',
@@ -707,7 +756,7 @@ export default function WellbeingPage() {
     },
     {
       key: 'hexaco',
-      step: 5,
+      step: 6,
       shortTitle: 'HEXACO',
       title: 'HEXACO-60-Style Personality Check',
       description: 'A six-domain personality profile adding Honesty-Humility, Emotionality, and interpersonal style to the combined view.',
@@ -719,7 +768,7 @@ export default function WellbeingPage() {
     },
     {
       key: 'cerq',
-      step: 6,
+      step: 7,
       shortTitle: 'Cognition',
       title: 'CERQ-Style Cognitive Coping Check',
       description: 'A cognitive emotion-regulation check showing which thinking strategies are most and least used.',
@@ -731,7 +780,7 @@ export default function WellbeingPage() {
     },
     {
       key: 'cope',
-      step: 7,
+      step: 8,
       shortTitle: 'Coping',
       title: 'Brief COPE-Style Coping Check',
       description: 'A coping response profile across active, support-seeking, avoidant, meaning-focused, and emotion-focused strategies.',
@@ -740,6 +789,44 @@ export default function WellbeingPage() {
       actionLabel: statusByKey.cope?.completed ? 'Review or retake COPE' : 'Start COPE-style check',
       onOpen: () => setTool('cope'),
       primary: !statusByKey.cope?.completed,
+    },
+  ];
+  const testByKey = useMemo(() => Object.fromEntries(dashboardTests.map((test) => [test.key, test])), [dashboardTests]);
+  const progressItems = [
+    ...dashboardTests,
+    {
+      key: 'report',
+      shortTitle: 'Report',
+      completed: !!profileStatus?.available,
+    },
+  ];
+  const dashboardModules = [
+    {
+      key: 'mood-emotional',
+      label: 'Module 1',
+      title: 'Mood & Emotional State',
+      description: "How you're feeling now and recently: mood load, anxiety/worry load, and affect tone.",
+      testKeys: ['mood', 'gad7', 'panas'],
+      accent: '#7c3aed',
+      background: 'linear-gradient(135deg, rgba(124,58,237,0.10), var(--color-surface) 58%)',
+    },
+    {
+      key: 'personality-traits',
+      label: 'Module 2',
+      title: 'Personality & Traits',
+      description: 'Stable dispositional patterns and trait posture across personality lenses.',
+      testKeys: ['ipip', 'hexaco'],
+      accent: '#2563eb',
+      background: 'linear-gradient(135deg, rgba(37,99,235,0.10), var(--color-surface) 58%)',
+    },
+    {
+      key: 'regulation-coping',
+      label: 'Module 3',
+      title: 'Regulation & Coping',
+      description: 'How you respond to stress and emotion: anxiety pressure, attention/self-regulation, cognitive regulation, and behavioural coping.',
+      testKeys: ['gad7', 'asrs5', 'cerq', 'cope'],
+      accent: '#059669',
+      background: 'linear-gradient(135deg, rgba(5,150,105,0.10), var(--color-surface) 58%)',
     },
   ];
   const dashboardBack = useCallback(() => {
@@ -754,6 +841,28 @@ export default function WellbeingPage() {
 
   if (error && !config) {
     return <div className="p-6 text-sm" style={{ color: '#ef4444' }}>{error}</div>;
+  }
+
+  if (tool === 'gad7') {
+    return (
+      <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+        <div>
+          <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            {getIcon('heart-pulse', { size: 20 })}
+            Wellbeing & Personality Checks
+          </h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+            Proof-of-concept self-report tools only. Not professional advice or a substitute for a qualified professional.
+          </p>
+        </div>
+        <Gad7StylePanel
+          onBack={dashboardBack}
+          onComplete={refreshProfileStatus}
+          onNext={() => setTool('panas')}
+          nextLabel="Continue to PANAS-style check"
+        />
+      </div>
+    );
   }
 
   if (tool === 'panas') {
@@ -946,10 +1055,19 @@ export default function WellbeingPage() {
 
       {mode === 'intro' && (
         <div className="space-y-6">
-          <CompletionProgress tests={dashboardTests} />
+          <CompletionProgress tests={progressItems} />
 
-          <section className="grid md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {dashboardTests.map((test) => <TestTile key={test.key} test={test} />)}
+          <section className="space-y-5">
+            {dashboardModules.map((module) => (
+              <ModuleGroup
+                key={module.key}
+                module={module}
+                tests={module.testKeys.map((key) => testByKey[key]).filter(Boolean)}
+              />
+            ))}
+            <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
+              GAD-7 appears in two modules because anxiety load informs both current emotional state and stress-response patterns.
+            </p>
           </section>
 
           <div className="grid lg:grid-cols-[1fr_360px] gap-6">
@@ -965,7 +1083,7 @@ export default function WellbeingPage() {
                 <div>
                   <h2 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>How to use this dashboard</h2>
                   <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-                    Complete the seven checks in order or revisit any tile at any time. After each check, you can continue to the next one or come back here to see what remains.
+                    Complete the eight checks in order or revisit any tile at any time. After each check, you can continue to the next one or come back here to see what remains.
                   </p>
                 </div>
                 <div className="rounded-xl border p-4" style={{ borderColor: '#fde68a', background: '#fffbeb', color: '#78350f' }}>
@@ -1347,8 +1465,8 @@ export default function WellbeingPage() {
               <button type="button" onClick={startAttempt} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>
                 Retake
               </button>
-              <button type="button" onClick={() => setTool('panas')} className="px-3 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity" style={{ background: 'var(--color-primary)' }}>
-                Continue to PANAS-style check
+              <button type="button" onClick={() => setTool('gad7')} className="px-3 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity" style={{ background: 'var(--color-primary)' }}>
+                Continue to GAD-7-style check
               </button>
             </div>
           </div>
@@ -1421,7 +1539,7 @@ export default function WellbeingPage() {
       {showRandomDataConfirm && (
         <ConfirmModal
           title="Create admin test data?"
-          message="This will create one random completed result for each of the seven wellbeing tests. These are demo results only, not real self-report results, and they can be removed later with Reset / erase all tests."
+          message="This will create one random completed result for each of the eight wellbeing tests. These are demo results only, not real self-report results, and they can be removed later with Reset / erase all tests."
           confirmLabel="Create demo results"
           onConfirm={() => {
             setShowRandomDataConfirm(false);
