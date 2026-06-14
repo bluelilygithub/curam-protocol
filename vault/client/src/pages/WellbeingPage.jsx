@@ -171,6 +171,8 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap }) {
     ? 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)), var(--color-surface) 72%)'
     : 'linear-gradient(135deg, #fffbeb, var(--color-surface) 72%)';
   const accentBorder = available ? 'color-mix(in srgb, var(--color-primary) 45%, var(--color-border))' : '#fde68a';
+  const actionButtonClass = 'px-3 py-2 rounded-xl text-sm font-semibold border transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-[var(--color-primary)] bg-[var(--color-surface)] border-[var(--results-action-border)] hover:bg-[var(--color-primary)] hover:border-[var(--color-primary)] hover:text-white disabled:hover:bg-[var(--color-surface)] disabled:hover:border-[var(--results-action-border)] disabled:hover:text-[var(--color-primary)]';
+  const actionButtonStyle = { '--results-action-border': accentBorder };
 
   return (
     <div className="rounded-2xl border p-4 shadow-sm" style={{ background: accentBackground, borderColor: accentBorder }}>
@@ -182,13 +184,13 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap }) {
           : 'Locked until all four checks have at least one completed result.'}
       </p>
       <div className="grid sm:grid-cols-3 gap-2 mt-4">
-        <button type="button" onClick={onCombined} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: available ? 'var(--color-primary)' : 'var(--color-border)', color: available ? '#fff' : 'var(--color-primary)', background: available ? 'var(--color-primary)' : 'transparent' }}>
+        <button type="button" onClick={onCombined} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
           Profile
         </button>
-        <button type="button" onClick={onCharts} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: accentBorder, color: 'var(--color-primary)', background: 'var(--color-surface)' }}>
+        <button type="button" onClick={onCharts} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
           Charts
         </button>
-        <button type="button" onClick={onMindMap} disabled={!available} className="px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity" style={{ borderColor: accentBorder, color: 'var(--color-primary)', background: 'var(--color-surface)' }}>
+        <button type="button" onClick={onMindMap} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
           Mind map
         </button>
       </div>
@@ -673,7 +675,7 @@ export default function WellbeingPage() {
 
   if (tool === 'personality') {
     return (
-      <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+      <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
             {getIcon('heart-pulse', { size: 20 })}
@@ -695,7 +697,7 @@ export default function WellbeingPage() {
 
   if (tool === 'cognitive') {
     return (
-      <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+      <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
             {getIcon('heart-pulse', { size: 20 })}
@@ -717,7 +719,7 @@ export default function WellbeingPage() {
 
   if (tool === 'cope') {
     return (
-      <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+      <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
             {getIcon('heart-pulse', { size: 20 })}
@@ -739,7 +741,7 @@ export default function WellbeingPage() {
 
   if (tool === 'combined') {
     return (
-      <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+      <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
             {getIcon('heart-pulse', { size: 20 })}
@@ -756,7 +758,7 @@ export default function WellbeingPage() {
 
   if (tool === 'visuals' || tool === 'mindmap') {
     return (
-      <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+      <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
             {getIcon('heart-pulse', { size: 20 })}
@@ -772,7 +774,7 @@ export default function WellbeingPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
+    <div className="wellbeing-page p-4 sm:p-6 max-w-5xl mx-auto space-y-6 pb-16">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>

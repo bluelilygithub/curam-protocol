@@ -70,3 +70,24 @@ textarea:focus { overflow-y: auto; }
 .animate-bounce {
   animation: bounce 1s ease-in-out infinite;
 }
+
+/* Wellbeing buttons should visibly change colour on rollover, not just fade. */
+.wellbeing-page button {
+  transition-property: background-color, border-color, color, opacity, box-shadow, transform;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+
+.wellbeing-page button:not(:disabled):hover {
+  background-color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  color: #fff !important;
+  opacity: 1 !important;
+}
+
+.wellbeing-page button[style*="#991b1b"]:not(:disabled):hover,
+.wellbeing-page button[style*="#dc2626"]:not(:disabled):hover {
+  background-color: #dc2626 !important;
+  border-color: #dc2626 !important;
+  color: #fff !important;
+}
