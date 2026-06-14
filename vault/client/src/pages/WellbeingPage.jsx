@@ -12,6 +12,7 @@ import CombinedProfilePanel from '../components/wellbeing/CombinedProfilePanel';
 import { BdiSeverityGauge } from '../components/wellbeing/WellbeingCharts';
 import WellbeingVisualSummaryPanel from '../components/wellbeing/WellbeingVisualSummaryPanel';
 import QuizPurposePanel from '../components/wellbeing/QuizPurposePanel';
+import ConfirmModal from '../components/ConfirmModal';
 
 const MOOD_DRAFT_KEY = 'curam:wellbeing-mood:draft';
 const IPIP_DRAFT_KEY = 'curam:ipip-neo-120:draft';
@@ -327,6 +328,8 @@ export default function WellbeingPage() {
   const [profileStatus, setProfileStatus] = useState(null);
   const [randomising, setRandomising] = useState(false);
   const [showMoodPurpose, setShowMoodPurpose] = useState(false);
+  const [showRandomDataConfirm, setShowRandomDataConfirm] = useState(false);
+  const [showResetTestsConfirm, setShowResetTestsConfirm] = useState(false);
 
   const questions = config?.questions || [];
   const current = questions[index];
@@ -533,11 +536,6 @@ export default function WellbeingPage() {
   };
 
   const resetAllTests = async () => {
-    const confirmed = window.confirm(
-      'Erase all completed wellbeing, IPIP-NEO-120, CERQ-style, and COPE-style test results? This will also clear paused test drafts on this device.'
-    );
-    if (!confirmed) return;
-
     setError('');
     try {
       const res = await api.delete('/api/wellbeing/reset');
@@ -558,11 +556,6 @@ export default function WellbeingPage() {
 
   const prepopulateRandomTests = async () => {
     if (randomising) return;
-    const confirmed = window.confirm(
-      'Create one random admin demo result for each of the four wellbeing tests? These are not real self-report results and can be removed with Reset / erase all tests.'
-    );
-    if (!confirmed) return;
-
     setRandomising(true);
     setError('');
     startProcessing(
@@ -872,7 +865,7 @@ export default function WellbeingPage() {
                   </p>
                   <button
                     type="button"
-                    onClick={prepopulateRandomTests}
+                    onClick={() => setShowRandomDataConfirm(true)}
                     disabled={randomising}
                     className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity mt-3"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
@@ -888,7 +881,7 @@ export default function WellbeingPage() {
                 </p>
                 <button
                   type="button"
-                  onClick={resetAllTests}
+                  onClick={() => setShowResetTestsConfirm(true)}
                   className="w-full px-3 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 transition-opacity mt-3"
                   style={{ borderColor: '#fecaca', color: '#991b1b', background: '#fff1f2' }}
                 >
@@ -1235,6 +1228,33 @@ export default function WellbeingPage() {
             </div>
           )}
         </section>
+      )}
+
+      {showRandomDataConfirm && (
+        <ConfirmModal
+          title="Create admin test data?"
+          message="This will create one random completed result for each of the four wellbeing tests. These are demo results only, not real self-report results, and they can be removed later with Reset / erase all tests."
+          confirmLabel="Create demo results"
+          onConfirm={() => {
+            setShowRandomDataConfirm(false);
+            prepopulateRandomTests();
+          }}
+          onCancel={() => setShowRandomDataConfirm(false)}
+        />
+      )}
+
+      {showResetTestsConfirm && (
+        <ConfirmModal
+          title="Reset wellbeing tests?"
+          message="This will erase all completed wellbeing, IPIP-NEO-120, CERQ-style, and COPE-style test results for this user. It will also clear paused test drafts on this device."
+          confirmLabel="Reset / erase tests"
+          danger
+          onConfirm={() => {
+            setShowResetTestsConfirm(false);
+            resetAllTests();
+          }}
+          onCancel={() => setShowResetTestsConfirm(false)}
+        />
       )}
     </div>
   );
