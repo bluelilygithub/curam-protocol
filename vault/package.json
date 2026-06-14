@@ -28,6 +28,7 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^3.11.174",
     "pg": "^8.20.0",
+    "pptxgenjs": "^4.0.1",
     "react-force-graph-2d": "^1.29.1",
     "remove-markdown": "^0.6.3",
     "rss-parser": "^3.13.0",

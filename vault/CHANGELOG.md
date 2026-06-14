@@ -14,6 +14,8 @@ Added an admin-only **Tool Update Report** in `Settings -> Tool Maintenance`. Ad
 
 Documented the environment-variable strategy for secrets and runtime config: local secrets stay in ignored `.env`, production secrets stay in Railway Variables, committed examples use placeholders, and server code reads values through `process.env`. Added safe placeholders for YouTube, Fal, Finnhub, gold cache timing, and optional S3-compatible storage variables; `GOLD_CACHE_MS` is now environment-configurable with a 24-hour fallback.
 
+Added a completed-wellbeing takeaway slideshow export. Once all eight wellbeing checks are complete, users can download a PowerPoint deck with concise takeaway points for each wellbeing module and the final overall report. The Vault server builds the deck with Node-native `pptxgenjs`, so the feature works online in the deployed app without a local Python dependency.
+
 Added a fifth wellbeing/personality quiz: **HEXACO-60-style Personality Check**. It uses original proof-of-concept item wording across six HEXACO-style domains, supports pause/resume, back navigation, saved attempts, model-assisted response, radar charting, PDF export, admin demo data, reset, and combined-profile inclusion.
 
 Added a sixth wellbeing quiz: **PANAS-style Affect Check**. It captures positive affect, negative affect, and affect balance using original proof-of-concept wording, with pause/resume, review/retake, model-assisted response, PDF export, charting, admin demo data, reset, and combined-profile inclusion.

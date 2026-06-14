@@ -272,7 +272,7 @@ function ModuleCompletionModal({ moduleTitle, nextLabel, onReport, onContinue, o
   );
 }
 
-function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions }) {
+function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions, onSlideshow, slideshowLoading }) {
   const accentBackground = available
     ? 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)), var(--color-surface) 72%)'
     : 'linear-gradient(135deg, #fffbeb, var(--color-surface) 72%)';
@@ -289,7 +289,7 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions
           ? 'Unlocked. Review module reports, the final profile, visual charts, eight-test mind map, or personal development suggestions.'
           : 'Locked until all eight checks have at least one completed result.'}
       </p>
-      <div className="grid sm:grid-cols-4 gap-2 mt-4">
+      <div className="grid sm:grid-cols-5 gap-2 mt-4">
         <button type="button" onClick={onCombined} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
           Reports
         </button>
@@ -301,6 +301,9 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions
         </button>
         <button type="button" onClick={onSuggestions} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
           Suggestions
+        </button>
+        <button type="button" onClick={onSlideshow} disabled={!available || slideshowLoading} className={actionButtonClass} style={actionButtonStyle}>
+          {slideshowLoading ? 'Preparing...' : 'Slideshow'}
         </button>
       </div>
     </div>
@@ -440,6 +443,7 @@ export default function WellbeingPage() {
   const [result, setResult] = useState(null);
   const [detail, setDetail] = useState(null);
   const [pdfLoadingId, setPdfLoadingId] = useState(null);
+  const [slideshowLoading, setSlideshowLoading] = useState(false);
   const [moodDraftMeta, setMoodDraftMeta] = useState(null);
   const [profileStatus, setProfileStatus] = useState(null);
   const [randomising, setRandomising] = useState(false);
@@ -756,6 +760,32 @@ export default function WellbeingPage() {
       setError(err.message || 'Could not download PDF');
     } finally {
       setPdfLoadingId(null);
+    }
+  };
+
+  const downloadTakeawaySlideshow = async () => {
+    if (slideshowLoading || !profileStatus?.available) return;
+    setSlideshowLoading(true);
+    setError('');
+    try {
+      const res = await api.get('/api/wellbeing/profile/slideshow');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Slideshow generation failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'wellbeing-takeaways.pptx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || 'Could not download takeaway slideshow');
+    } finally {
+      setSlideshowLoading(false);
     }
   };
 
@@ -1251,6 +1281,8 @@ export default function WellbeingPage() {
                   setReportVariant('suggestions');
                   setTool('suggestions');
                 }}
+                onSlideshow={downloadTakeawaySlideshow}
+                slideshowLoading={slideshowLoading}
               />
               <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
                 <div>

@@ -44,6 +44,7 @@ export default function CombinedProfilePanel({
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [slideshowLoading, setSlideshowLoading] = useState(false);
   const [error, setError] = useState('');
 
   const loadStatus = useCallback(async () => {
@@ -128,6 +129,32 @@ export default function CombinedProfilePanel({
       setError(err.message || 'Could not download combined profile PDF');
     } finally {
       setPdfLoading(false);
+    }
+  };
+
+  const downloadTakeawaySlideshow = async () => {
+    if (!status?.available || slideshowLoading) return;
+    setSlideshowLoading(true);
+    setError('');
+    try {
+      const res = await api.get('/api/wellbeing/profile/slideshow');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Slideshow generation failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'wellbeing-takeaways.pptx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || 'Could not download takeaway slideshow');
+    } finally {
+      setSlideshowLoading(false);
     }
   };
 
@@ -241,7 +268,18 @@ export default function CombinedProfilePanel({
       </section>
 
       <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-        <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Final overall report</h3>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+          <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Final overall report</h3>
+          <button
+            type="button"
+            onClick={downloadTakeawaySlideshow}
+            disabled={!status?.available || slideshowLoading}
+            className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 disabled:opacity-40"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+          >
+            {slideshowLoading ? 'Preparing slideshow...' : 'Download takeaway slideshow'}
+          </button>
+        </div>
         <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>
           Generate the final synthesis at the level of detail you need. If module reports are not already saved, they are generated and cached first.
         </p>

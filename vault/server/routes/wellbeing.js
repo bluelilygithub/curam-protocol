@@ -8,6 +8,7 @@ const sendEmail = require('../utils/sendEmail');
 const { buildWellbeingPdfBuffer } = require('../services/wellbeingPdf');
 const { buildCombinedProfilePdfBuffer } = require('../services/combinedProfilePdf');
 const { buildWellbeingVisualPdfBuffer } = require('../services/wellbeingVisualPdf');
+const { buildWellbeingSlideshowBuffer } = require('../services/wellbeingSlideshow');
 const {
   DEFAULT_WELLBEING_INVITE_SUBJECT,
   DEFAULT_WELLBEING_INVITE_BODY,
@@ -1932,10 +1933,10 @@ async function loadOrGenerateModuleReport(userId, latest, module, variant = 'det
   };
 }
 
-async function loadOrGenerateAllModuleReports(userId, latest, force = false) {
+async function loadOrGenerateAllModuleReports(userId, latest, force = false, variant = 'detailed') {
   const reports = [];
   for (const module of WELLBEING_MODULES) {
-    const result = await loadOrGenerateModuleReport(userId, latest, module, 'detailed', force);
+    const result = await loadOrGenerateModuleReport(userId, latest, module, variant, force);
     reports.push({
       ...result.profile,
       moduleKey: module.key,
@@ -2221,6 +2222,38 @@ router.post('/profile/pdf', async (req, res) => {
     res.send(buf);
   } catch (err) {
     console.error('[combined profile pdf]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/profile/slideshow', async (req, res) => {
+  try {
+    const latest = await loadLatestProfileInputs(req.user.id);
+    const status = profileStatusFromLatest(latest);
+    if (!status.available) {
+      return res.status(400).json({
+        error: 'Wellbeing takeaway slideshow requires all eight tests to be completed first.',
+        status,
+      });
+    }
+
+    const moduleReports = await loadOrGenerateAllModuleReports(req.user.id, latest, false, 'summary');
+    const sourceAttempts = sourceAttemptsFromLatest(latest);
+    const sourceKey = sourceKeyFromAttempts(sourceAttempts);
+    const cacheVariant = 'final:summary:modules';
+    const saved = await loadSavedCombinedReport(req.user.id, cacheVariant, sourceKey);
+    let finalProfile = saved?.profile;
+    if (!finalProfile) {
+      finalProfile = await generateCombinedProfile(req.user.id, latest, { variant: 'summary', moduleReports });
+      await saveCombinedReport(req.user.id, cacheVariant, sourceKey, sourceAttempts, finalProfile);
+    }
+
+    const buf = await buildWellbeingSlideshowBuffer({ moduleReports, finalProfile });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', 'attachment; filename="wellbeing-takeaways.pptx"');
+    res.send(buf);
+  } catch (err) {
+    console.error('[wellbeing slideshow]', err);
     res.status(500).json({ error: err.message });
   }
 });
