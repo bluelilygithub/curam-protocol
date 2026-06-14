@@ -83,10 +83,10 @@ function nodeStrength(items = [], fallback = 0) {
 
 function emphasisLabel(value) {
   const score = Number(value || 0);
-  if (score >= 0.75) return 'very visible in this result';
-  if (score >= 0.55) return 'more visible in this result';
-  if (score >= 0.35) return 'moderately visible in this result';
-  return 'less visible in this result';
+  if (score >= 0.75) return 'high prominence in this result';
+  if (score >= 0.55) return 'moderate-high prominence';
+  if (score >= 0.35) return 'moderate prominence';
+  return 'not prominent in this result';
 }
 
 function labelList(items = [], fallback = 'not strongly differentiated') {
@@ -166,7 +166,7 @@ function buildMindMapData(visuals) {
   const active = strongest(cope, (scale) => !['avoidant', 'self-evaluative'].includes(scale.family));
 
   const nodes = [
-    { id: 'centre', label: 'Overall pattern', detail: 'Conceptual synthesis of the latest completed checks. Not a score.', x: 298, y: 300, color: colour('#6366f1'), strength: 1, emphasis: 'synthesis node' },
+    { id: 'centre', label: 'Overall pattern', detail: 'Visual index of the latest completed checks. Not a score.', x: 298, y: 300, color: colour('#6366f1'), strength: 1, emphasis: 'synthesis node' },
     { id: 'mood', label: 'Mood load', detail: `${moodScore}/63 - ${visuals?.mood?.bandLabel || 'Mood score'}`, x: 298, y: 150, color: colour('#ef4444'), strength: moodStrength, emphasis: emphasisLabel(moodStrength) },
     { id: 'anxiety', label: 'Anxiety load', detail: `${anxietyScore}/21 - ${visuals?.gad7?.bandLabel || 'Anxiety score'}`, x: 145, y: 150, color: colour('#f59e0b'), strength: anxietyStrength, emphasis: emphasisLabel(anxietyStrength) },
     { id: 'affect', label: 'Affect tone', detail: positiveAffect || negativeAffect ? `Positive ${positiveAffect?.score || 0}/${positiveAffect?.max || 50}; negative ${negativeAffect?.score || 0}/${negativeAffect?.max || 50}` : 'Positive and negative affect', x: 298, y: 210, color: colour('#a855f7'), strength: Number(negativeAffect?.normalized ?? positiveAffect?.normalized ?? 0.35), emphasis: 'current affect snapshot' },
@@ -298,7 +298,7 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
 
   if (view === 'mindmap') {
     addHeading('Relationship Map');
-    addText('This map is a reading guide, not a correlation graph. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
+    addText('This diagram is a visual index for the text below, not the insight by itself. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
     const map = buildMindMapData(visuals);
     addHeading(map.synthesis.title);
     addText(map.synthesis.body, { size: 9 });

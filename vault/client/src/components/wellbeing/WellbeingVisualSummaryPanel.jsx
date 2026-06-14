@@ -67,10 +67,10 @@ function nodeStrength(items = [], fallback = 0) {
 
 function emphasisLabel(value) {
   const score = Number(value || 0);
-  if (score >= 0.75) return 'Very visible in this result';
-  if (score >= 0.55) return 'More visible in this result';
-  if (score >= 0.35) return 'Moderately visible in this result';
-  return 'Less visible in this result';
+  if (score >= 0.75) return 'High prominence in this result';
+  if (score >= 0.55) return 'Moderate-high prominence';
+  if (score >= 0.35) return 'Moderate prominence';
+  return 'Not prominent in this result';
 }
 
 function labelList(items = [], fallback = 'not strongly differentiated') {
@@ -192,8 +192,8 @@ function buildMindMap(data, moduleKey = '') {
       id: 'centre',
       label: module ? `${module.label} pattern` : 'Overall wellbeing pattern',
       detail: module
-        ? 'Conceptual synthesis of this module. Not a score.'
-        : 'Conceptual synthesis of the latest completed checks. Not a score.',
+        ? 'Visual index of this module. Not a score.'
+        : 'Visual index of the latest completed checks. Not a score.',
       x: 300,
       y: 210,
       color: 'var(--color-primary)',
@@ -395,7 +395,7 @@ function MindMap({ data, moduleKey = '' }) {
         {module ? `A module-specific relationship map for ${module.description}` : 'A relationship map that groups related signals from mood, affect tone, attention/self-regulation, two personality lenses, cognitive coping, and behavioural coping.'}
       </p>
       <p className="text-xs mb-4 rounded-xl border p-3" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-        This map is a reading guide, not a correlation graph. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.
+        This diagram is a visual index for the text below, not the insight by itself. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.
       </p>
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-3 mb-4">
         <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
