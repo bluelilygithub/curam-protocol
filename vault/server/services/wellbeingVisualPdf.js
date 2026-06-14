@@ -81,6 +81,14 @@ function nodeStrength(items = [], fallback = 0) {
   return items.reduce((sum, item) => sum + Number(item.normalized || 0), 0) / items.length;
 }
 
+function emphasisLabel(value) {
+  const score = Number(value || 0);
+  if (score >= 0.75) return 'very visible in this result';
+  if (score >= 0.55) return 'more visible in this result';
+  if (score >= 0.35) return 'moderately visible in this result';
+  return 'less visible in this result';
+}
+
 function buildMindMapData(visuals) {
   const moodScore = Number(visuals?.mood?.totalScore || 0);
   const moodStrength = Math.min(1, moodScore / 63);
@@ -103,32 +111,33 @@ function buildMindMapData(visuals) {
   const active = strongest(cope, (scale) => !['avoidant', 'self-evaluative'].includes(scale.family));
 
   const nodes = [
-    { id: 'centre', label: 'Combined pattern', detail: 'Latest result from all eight checks', x: 298, y: 300, color: colour('#6366f1'), strength: 1 },
-    { id: 'mood', label: 'Mood load', detail: `${moodScore}/63 - ${visuals?.mood?.bandLabel || 'Mood score'}`, x: 298, y: 150, color: colour('#ef4444'), strength: moodStrength },
-    { id: 'anxiety', label: 'Anxiety load', detail: `${anxietyScore}/21 - ${visuals?.gad7?.bandLabel || 'Anxiety score'}`, x: 145, y: 150, color: colour('#f59e0b'), strength: anxietyStrength },
-    { id: 'affect', label: 'Affect tone', detail: positiveAffect || negativeAffect ? `Positive ${positiveAffect?.score || 0}/${positiveAffect?.max || 50}; negative ${negativeAffect?.score || 0}/${negativeAffect?.max || 50}` : 'Positive and negative affect', x: 298, y: 210, color: colour('#a855f7'), strength: Number(negativeAffect?.normalized ?? positiveAffect?.normalized ?? 0.35) },
-    { id: 'attention', label: 'Attention', detail: attentionPressure.length ? attentionPressure.map((scale) => scale.label).join(', ') : 'ASRS-5-style attention signals', x: 455, y: 520, color: colour('#0ea5e9'), strength: nodeStrength(attentionPressure, 0.35) },
-    { id: 'sensitivity', label: 'Emotional sensitivity', detail: hexacoByKey.EM ? `${hexacoByKey.EM.label}: ${Math.round(Number(hexacoByKey.EM.normalized || 0) * 100)}%` : domainByKey.N ? `${domainByKey.N.label}: ${Math.round(Number(domainByKey.N.normalized || 0) * 100)}%` : 'Emotionality / Neuroticism domain', x: 455, y: 230, color: colour('#f97316'), strength: Number(hexacoByKey.EM?.normalized ?? domainByKey.N?.normalized ?? 0.35) },
-    { id: 'resources', label: 'Cognitive resources', detail: helpful.length ? helpful.map((scale) => scale.label).join(', ') : 'Helpful CERQ strategies', x: 440, y: 390, color: colour('#3b82f6'), strength: nodeStrength(helpful, 0.35) },
-    { id: 'loops', label: 'Cognitive loops', detail: lessHelpful.length ? lessHelpful.map((scale) => scale.label).join(', ') : 'Less-helpful CERQ strategies', x: 135, y: 230, color: colour('#dc2626'), strength: nodeStrength(lessHelpful, 0.35) },
-    { id: 'coping', label: 'Active/support coping', detail: active.length ? active.map((scale) => scale.label).join(', ') : 'Adaptive coping strategies', x: 298, y: 470, color: colour('#22c55e'), strength: nodeStrength(active, 0.35) },
-    { id: 'avoidance', label: 'Avoidant pressure', detail: avoidant.length ? avoidant.map((scale) => scale.label).join(', ') : 'Avoidant coping strategies', x: 145, y: 390, color: colour('#ea580c'), strength: nodeStrength(avoidant, 0.35) },
-    { id: 'humility', label: 'Fairness/modesty', detail: hexacoByKey.HH ? `${hexacoByKey.HH.label}: ${Math.round(Number(hexacoByKey.HH.normalized || 0) * 100)}%` : 'Honesty-Humility domain', x: 145, y: 520, color: colour('#8b5cf6'), strength: Number(hexacoByKey.HH?.normalized || 0.35) },
-    { id: 'structure', label: 'Structure', detail: hexacoByKey.CO ? `${hexacoByKey.CO.label}: ${Math.round(Number(hexacoByKey.CO.normalized || 0) * 100)}%` : domainByKey.C ? `${domainByKey.C.label}: ${Math.round(Number(domainByKey.C.normalized || 0) * 100)}%` : 'Conscientiousness domain', x: 298, y: 620, color: colour('#14b8a6'), strength: Number(hexacoByKey.CO?.normalized ?? domainByKey.C?.normalized ?? 0.35) },
+    { id: 'centre', label: 'Overall pattern', detail: 'Conceptual synthesis of the latest completed checks. Not a score.', x: 298, y: 300, color: colour('#6366f1'), strength: 1, emphasis: 'synthesis node' },
+    { id: 'mood', label: 'Mood load', detail: `${moodScore}/63 - ${visuals?.mood?.bandLabel || 'Mood score'}`, x: 298, y: 150, color: colour('#ef4444'), strength: moodStrength, emphasis: emphasisLabel(moodStrength) },
+    { id: 'anxiety', label: 'Anxiety load', detail: `${anxietyScore}/21 - ${visuals?.gad7?.bandLabel || 'Anxiety score'}`, x: 145, y: 150, color: colour('#f59e0b'), strength: anxietyStrength, emphasis: emphasisLabel(anxietyStrength) },
+    { id: 'affect', label: 'Affect tone', detail: positiveAffect || negativeAffect ? `Positive ${positiveAffect?.score || 0}/${positiveAffect?.max || 50}; negative ${negativeAffect?.score || 0}/${negativeAffect?.max || 50}` : 'Positive and negative affect', x: 298, y: 210, color: colour('#a855f7'), strength: Number(negativeAffect?.normalized ?? positiveAffect?.normalized ?? 0.35), emphasis: 'current affect snapshot' },
+    { id: 'attention', label: 'Attention', detail: attentionPressure.length ? attentionPressure.map((scale) => scale.label).join(', ') : 'ASRS-5-style attention signals', x: 455, y: 520, color: colour('#0ea5e9'), strength: nodeStrength(attentionPressure, 0.35), emphasis: emphasisLabel(nodeStrength(attentionPressure, 0.35)) },
+    { id: 'sensitivity', label: 'Emotional sensitivity', detail: hexacoByKey.EM ? `${hexacoByKey.EM.label} (${hexacoByKey.EM.band || 'domain score'})` : domainByKey.N ? `${domainByKey.N.label} (${domainByKey.N.band || 'domain score'})` : 'Emotionality / Neuroticism domain', x: 455, y: 230, color: colour('#f97316'), strength: Number(hexacoByKey.EM?.normalized ?? domainByKey.N?.normalized ?? 0.35), emphasis: emphasisLabel(Number(hexacoByKey.EM?.normalized ?? domainByKey.N?.normalized ?? 0.35)) },
+    { id: 'resources', label: 'Cognitive resources', detail: helpful.length ? helpful.map((scale) => scale.label).join(', ') : 'Helpful CERQ strategies', x: 440, y: 390, color: colour('#3b82f6'), strength: nodeStrength(helpful, 0.35), emphasis: emphasisLabel(nodeStrength(helpful, 0.35)) },
+    { id: 'loops', label: 'Cognitive loops', detail: lessHelpful.length ? lessHelpful.map((scale) => scale.label).join(', ') : 'Less-helpful CERQ strategies', x: 135, y: 230, color: colour('#dc2626'), strength: nodeStrength(lessHelpful, 0.35), emphasis: emphasisLabel(nodeStrength(lessHelpful, 0.35)) },
+    { id: 'coping', label: 'Active/support coping', detail: active.length ? active.map((scale) => scale.label).join(', ') : 'Adaptive coping strategies', x: 298, y: 470, color: colour('#22c55e'), strength: nodeStrength(active, 0.35), emphasis: emphasisLabel(nodeStrength(active, 0.35)) },
+    { id: 'avoidance', label: 'Avoidant pressure', detail: avoidant.length ? avoidant.map((scale) => scale.label).join(', ') : 'Avoidant coping strategies', x: 145, y: 390, color: colour('#ea580c'), strength: nodeStrength(avoidant, 0.35), emphasis: emphasisLabel(nodeStrength(avoidant, 0.35)) },
+    { id: 'humility', label: 'Fairness/modesty', detail: hexacoByKey.HH ? `${hexacoByKey.HH.label} (${hexacoByKey.HH.band || 'domain score'})` : 'Honesty-Humility domain', x: 145, y: 520, color: colour('#8b5cf6'), strength: Number(hexacoByKey.HH?.normalized || 0.35), emphasis: emphasisLabel(Number(hexacoByKey.HH?.normalized || 0.35)) },
+    { id: 'structure', label: 'Structure', detail: hexacoByKey.CO ? `${hexacoByKey.CO.label} (${hexacoByKey.CO.band || 'domain score'})` : domainByKey.C ? `${domainByKey.C.label} (${domainByKey.C.band || 'domain score'})` : 'Conscientiousness domain', x: 298, y: 620, color: colour('#14b8a6'), strength: Number(hexacoByKey.CO?.normalized ?? domainByKey.C?.normalized ?? 0.35), emphasis: emphasisLabel(Number(hexacoByKey.CO?.normalized ?? domainByKey.C?.normalized ?? 0.35)) },
   ];
 
   const links = [
-    ['centre', 'mood'], ['centre', 'anxiety'], ['centre', 'affect'], ['centre', 'attention'], ['centre', 'sensitivity'], ['centre', 'resources'], ['centre', 'loops'],
-    ['centre', 'coping'], ['centre', 'avoidance'], ['centre', 'structure'], ['mood', 'loops'],
-    ['centre', 'humility'], ['mood', 'affect'], ['mood', 'avoidance'], ['anxiety', 'affect'], ['anxiety', 'loops'], ['attention', 'structure'], ['attention', 'avoidance'], ['resources', 'coping'], ['structure', 'coping'], ['sensitivity', 'loops'], ['humility', 'resources'],
+    { from: 'centre', to: 'mood', label: 'included in synthesis' }, { from: 'centre', to: 'anxiety', label: 'included in synthesis' }, { from: 'centre', to: 'affect', label: 'included in synthesis' }, { from: 'centre', to: 'attention', label: 'included in synthesis' }, { from: 'centre', to: 'sensitivity', label: 'included in synthesis' }, { from: 'centre', to: 'resources', label: 'included in synthesis' }, { from: 'centre', to: 'loops', label: 'included in synthesis' },
+    { from: 'centre', to: 'coping', label: 'included in synthesis' }, { from: 'centre', to: 'avoidance', label: 'included in synthesis' }, { from: 'centre', to: 'structure', label: 'included in synthesis' }, { from: 'mood', to: 'loops', label: 'interpret together' },
+    { from: 'centre', to: 'humility', label: 'included in synthesis' }, { from: 'mood', to: 'affect', label: 'shared emotional context' }, { from: 'mood', to: 'avoidance', label: 'possible stress-response sequence' }, { from: 'anxiety', to: 'affect', label: 'shared emotional context' }, { from: 'anxiety', to: 'loops', label: 'interpret together' }, { from: 'attention', to: 'structure', label: 'self-regulation context' }, { from: 'attention', to: 'avoidance', label: 'possible stress-response sequence' }, { from: 'resources', to: 'coping', label: 'potential support route' }, { from: 'structure', to: 'coping', label: 'potential support route' }, { from: 'sensitivity', to: 'loops', label: 'interpret together' }, { from: 'humility', to: 'resources', label: 'interpersonal context' },
   ];
 
   const notes = [
+    'This is a conceptual orientation map, not a statistical network. Node positions, circle sizes, and connections do not prove correlation, causation, or clinical significance.',
     moodStrength >= 0.32 && lessHelpful.length
-      ? 'Mood load and less-helpful cognitive strategies are both prominent, suggesting a possible reinforcing loop between mood pressure and repeated interpretations of stress.'
-      : 'Mood load is shown alongside thinking patterns so you can see whether mood severity is isolated or connected to repeated cognitive strategies.',
+      ? 'Mood load and less-helpful cognitive strategies are both visible, so the map invites you to read mood pressure alongside repeated interpretations of stress.'
+      : 'Mood load is shown alongside thinking patterns so you can consider whether mood severity is isolated or part of a broader interpretation pattern.',
     avoidant.length && nodeStrength(avoidant) >= 0.5
-      ? 'Avoidant coping is linked to mood load because avoidance can reduce distress briefly while leaving the original stressor unresolved.'
+      ? 'Avoidant coping is shown separately because it may provide short-term relief while leaving the original stressor unresolved.'
       : 'Avoidant coping is included separately so it does not get hidden inside the broader coping profile.',
     helpful.length || active.length
       ? 'Helpful cognitive strategies and active/support coping are grouped as potential resources that may interrupt less-helpful patterns.'
@@ -219,6 +228,7 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
 
   if (view === 'mindmap') {
     addHeading('Relationship Map');
+    addText('This map is a reading guide, not a correlation graph. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
     const map = buildMindMapData(visuals);
     const nodeById = Object.fromEntries(map.nodes.map((node) => [node.id, node]));
     ensureSpace(500);
@@ -229,21 +239,23 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
     const px = (n) => offsetX + n * scale;
     const py = (n) => offsetY - n * scale;
 
-    map.links.forEach(([fromId, toId]) => {
-      const from = nodeById[fromId];
-      const to = nodeById[toId];
+    map.links.forEach((link) => {
+      const from = nodeById[link.from];
+      const to = nodeById[link.to];
       page.drawLine({ start: { x: px(from.x), y: py(from.y) }, end: { x: px(to.x), y: py(to.y) }, thickness: 1, color: rgb(0.72, 0.72, 0.72) });
     });
     map.nodes.forEach((node) => {
-      const radius = (node.id === 'centre' ? 42 : 26 + node.strength * 10) * scale;
+      const radius = (node.id === 'centre' ? 40 : 30) * scale;
       page.drawCircle({ x: px(node.x), y: py(node.y), size: radius, borderColor: node.color, borderWidth: 1.5, color: rgb(0.98, 0.98, 0.98) });
       page.drawText(cleanPdfText(node.label).slice(0, 24), { x: px(node.x) - radius + 4, y: py(node.y) + 2, size: 7, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
-      page.drawText(`${Math.round(node.strength * 100)}%`, { x: px(node.x) - 8, y: py(node.y) - 9, size: 7, font, color: rgb(0.35, 0.35, 0.35) });
+      page.drawText(node.id === 'centre' ? 'synthesis' : 'result area', { x: px(node.x) - 18, y: py(node.y) - 9, size: 6, font, color: rgb(0.35, 0.35, 0.35) });
     });
     y = top - 500;
 
     addHeading('Node Details');
-    map.nodes.filter((node) => node.id !== 'centre').forEach((node) => addText(`${node.label}: ${node.detail} (${Math.round(node.strength * 100)}%)`, { size: 9 }));
+    map.nodes.filter((node) => node.id !== 'centre').forEach((node) => addText(`${node.label}: ${node.detail}. ${node.emphasis}.`, { size: 9 }));
+    addHeading('Connection Guide');
+    [...new Set(map.links.map((link) => link.label))].forEach((label) => addText(`${label}: conceptual reading link, not a measured statistical relationship.`, { size: 9 }));
     addHeading('Interpretive Notes');
     map.notes.forEach((note) => addText(`- ${note}`, { size: 9 }));
   } else {

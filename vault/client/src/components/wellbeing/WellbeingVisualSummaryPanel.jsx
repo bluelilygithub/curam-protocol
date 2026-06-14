@@ -65,6 +65,14 @@ function nodeStrength(items = [], fallback = 0) {
   return items.reduce((sum, item) => sum + Number(item.normalized || 0), 0) / items.length;
 }
 
+function emphasisLabel(value) {
+  const score = Number(value || 0);
+  if (score >= 0.75) return 'Very visible in this result';
+  if (score >= 0.55) return 'More visible in this result';
+  if (score >= 0.35) return 'Moderately visible in this result';
+  return 'Less visible in this result';
+}
+
 function buildMindMap(data, moduleKey = '') {
   const module = MODULE_VISUALS[moduleKey] || null;
   const moodScore = Number(data?.mood?.totalScore || 0);
@@ -90,12 +98,15 @@ function buildMindMap(data, moduleKey = '') {
   const nodes = [
     {
       id: 'centre',
-      label: 'Combined wellbeing pattern',
-      detail: module ? module.label : 'Latest result from all eight checks',
+      label: module ? `${module.label} pattern` : 'Overall wellbeing pattern',
+      detail: module
+        ? 'Conceptual synthesis of this module. Not a score.'
+        : 'Conceptual synthesis of the latest completed checks. Not a score.',
       x: 300,
       y: 210,
       color: 'var(--color-primary)',
       strength: 1,
+      emphasis: 'Synthesis node',
     },
     {
       id: 'anxiety',
@@ -105,6 +116,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 45,
       color: '#f59e0b',
       strength: anxietyStrength,
+      emphasis: emphasisLabel(anxietyStrength),
     },
     {
       id: 'affect',
@@ -116,6 +128,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 125,
       color: '#a855f7',
       strength: Number(negativeAffect?.normalized ?? positiveAffect?.normalized ?? 0.35),
+      emphasis: 'Current affect snapshot',
     },
     {
       id: 'mood',
@@ -125,6 +138,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 45,
       color: '#ef4444',
       strength: moodStrength,
+      emphasis: emphasisLabel(moodStrength),
     },
     {
       id: 'attention',
@@ -134,6 +148,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 470,
       color: '#0ea5e9',
       strength: nodeStrength(attentionPressure, 0.35),
+      emphasis: emphasisLabel(nodeStrength(attentionPressure, 0.35)),
     },
     {
       id: 'sensitivity',
@@ -145,6 +160,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 130,
       color: '#f97316',
       strength: Number(hexacoByKey.EM?.normalized ?? domainByKey.N?.normalized ?? 0.35),
+      emphasis: emphasisLabel(Number(hexacoByKey.EM?.normalized ?? domainByKey.N?.normalized ?? 0.35)),
     },
     {
       id: 'humility',
@@ -154,6 +170,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 470,
       color: '#8b5cf6',
       strength: Number(hexacoByKey.HH?.normalized || 0.35),
+      emphasis: emphasisLabel(Number(hexacoByKey.HH?.normalized || 0.35)),
     },
     {
       id: 'resources',
@@ -163,6 +180,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 310,
       color: '#3b82f6',
       strength: nodeStrength(helpful, 0.35),
+      emphasis: emphasisLabel(nodeStrength(helpful, 0.35)),
     },
     {
       id: 'loops',
@@ -172,6 +190,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 130,
       color: '#dc2626',
       strength: nodeStrength(lessHelpful, 0.35),
+      emphasis: emphasisLabel(nodeStrength(lessHelpful, 0.35)),
     },
     {
       id: 'coping',
@@ -181,6 +200,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 390,
       color: '#22c55e',
       strength: nodeStrength(active, 0.35),
+      emphasis: emphasisLabel(nodeStrength(active, 0.35)),
     },
     {
       id: 'avoidance',
@@ -190,6 +210,7 @@ function buildMindMap(data, moduleKey = '') {
       y: 310,
       color: '#ea580c',
       strength: nodeStrength(avoidant, 0.35),
+      emphasis: emphasisLabel(nodeStrength(avoidant, 0.35)),
     },
     {
       id: 'structure',
@@ -201,40 +222,42 @@ function buildMindMap(data, moduleKey = '') {
       y: 565,
       color: '#14b8a6',
       strength: Number(hexacoByKey.CO?.normalized ?? domainByKey.C?.normalized ?? 0.35),
+      emphasis: emphasisLabel(Number(hexacoByKey.CO?.normalized ?? domainByKey.C?.normalized ?? 0.35)),
     },
   ];
 
   const links = [
-    ['centre', 'mood'],
-    ['centre', 'anxiety'],
-    ['centre', 'affect'],
-    ['centre', 'attention'],
-    ['centre', 'sensitivity'],
-    ['centre', 'resources'],
-    ['centre', 'loops'],
-    ['centre', 'coping'],
-    ['centre', 'avoidance'],
-    ['centre', 'structure'],
-    ['centre', 'humility'],
-    ['mood', 'loops'],
-    ['mood', 'affect'],
-    ['anxiety', 'loops'],
-    ['anxiety', 'affect'],
-    ['attention', 'structure'],
-    ['attention', 'avoidance'],
-    ['mood', 'avoidance'],
-    ['resources', 'coping'],
-    ['structure', 'coping'],
-    ['sensitivity', 'loops'],
-    ['humility', 'resources'],
+    { from: 'centre', to: 'mood', label: 'included in synthesis' },
+    { from: 'centre', to: 'anxiety', label: 'included in synthesis' },
+    { from: 'centre', to: 'affect', label: 'included in synthesis' },
+    { from: 'centre', to: 'attention', label: 'included in synthesis' },
+    { from: 'centre', to: 'sensitivity', label: 'included in synthesis' },
+    { from: 'centre', to: 'resources', label: 'included in synthesis' },
+    { from: 'centre', to: 'loops', label: 'included in synthesis' },
+    { from: 'centre', to: 'coping', label: 'included in synthesis' },
+    { from: 'centre', to: 'avoidance', label: 'included in synthesis' },
+    { from: 'centre', to: 'structure', label: 'included in synthesis' },
+    { from: 'centre', to: 'humility', label: 'included in synthesis' },
+    { from: 'mood', to: 'loops', label: 'interpret together' },
+    { from: 'mood', to: 'affect', label: 'shared emotional context' },
+    { from: 'anxiety', to: 'loops', label: 'interpret together' },
+    { from: 'anxiety', to: 'affect', label: 'shared emotional context' },
+    { from: 'attention', to: 'structure', label: 'self-regulation context' },
+    { from: 'attention', to: 'avoidance', label: 'possible stress-response sequence' },
+    { from: 'mood', to: 'avoidance', label: 'possible stress-response sequence' },
+    { from: 'resources', to: 'coping', label: 'potential support route' },
+    { from: 'structure', to: 'coping', label: 'potential support route' },
+    { from: 'sensitivity', to: 'loops', label: 'interpret together' },
+    { from: 'humility', to: 'resources', label: 'interpersonal context' },
   ];
 
   const notes = [
+    'This is a conceptual orientation map, not a statistical network. Node positions, circle sizes, and connections do not prove correlation, causation, or clinical significance.',
     moodStrength >= 0.32 && lessHelpful.length
-      ? 'Mood load and less-helpful cognitive strategies are both prominent, so the map highlights a possible reinforcing loop between mood pressure and repeated interpretations of stress.'
-      : 'Mood load is shown alongside thinking patterns so you can see whether mood severity is isolated or connected to repeated cognitive strategies.',
+      ? 'Mood load and less-helpful cognitive strategies are both visible, so the map invites you to read mood pressure alongside repeated interpretations of stress.'
+      : 'Mood load is shown alongside thinking patterns so you can consider whether mood severity is isolated or part of a broader interpretation pattern.',
     avoidant.length && nodeStrength(avoidant) >= 0.5
-      ? 'Avoidant coping is visually linked to mood load because avoidance can reduce distress briefly while leaving the original stressor unresolved.'
+      ? 'Avoidant coping is shown separately because it may provide short-term relief while leaving the original stressor unresolved.'
       : 'Avoidant coping is included as a separate node so it does not get hidden inside the broader coping profile.',
     helpful.length || active.length
       ? 'Helpful cognitive strategies and active/support coping are grouped as potential resources: these are the levers most likely to interrupt the less-helpful parts of the map.'
@@ -245,10 +268,10 @@ function buildMindMap(data, moduleKey = '') {
 
   const allowed = new Set(module.nodeIds);
   const filteredNodes = nodes.filter((node) => allowed.has(node.id));
-  const filteredLinks = links.filter(([fromId, toId]) => allowed.has(fromId) && allowed.has(toId));
+  const filteredLinks = links.filter((link) => allowed.has(link.from) && allowed.has(link.to));
   const filteredNotes = [
     `${module.label} focuses this map on ${module.description}`,
-    ...notes.slice(0, 2),
+    ...notes.slice(0, 3),
   ];
   return { nodes: filteredNodes, links: filteredLinks, notes: filteredNotes };
 }
@@ -261,29 +284,32 @@ function MindMap({ data, moduleKey = '' }) {
   return (
     <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
       <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{module ? `${module.label} mind map` : 'Eight-test mind map'}</h2>
-      <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+      <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
         {module ? `A module-specific relationship map for ${module.description}` : 'A relationship map that groups related signals from mood, affect tone, attention/self-regulation, two personality lenses, cognitive coping, and behavioural coping.'}
+      </p>
+      <p className="text-xs mb-4 rounded-xl border p-3" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+        This map is a reading guide, not a correlation graph. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.
       </p>
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
         <svg viewBox="0 0 600 620" className="w-full max-w-[680px] mx-auto" role="img" aria-label="Mind map connecting the eight wellbeing test patterns">
-          {map.links.map(([fromId, toId]) => {
-            const from = nodeById[fromId];
-            const to = nodeById[toId];
-            const weight = Math.max(from?.strength || 0.25, to?.strength || 0.25);
+          {map.links.map((link) => {
+            const from = nodeById[link.from];
+            const to = nodeById[link.to];
             return (
               <line
-                key={`${fromId}-${toId}`}
+                key={`${link.from}-${link.to}`}
                 x1={from.x}
                 y1={from.y}
                 x2={to.x}
                 y2={to.y}
                 stroke="var(--color-border)"
-                strokeWidth={1 + weight * 2}
+                strokeWidth="1.5"
+                strokeDasharray={link.from === 'centre' || link.to === 'centre' ? '0' : '5 5'}
               />
             );
           })}
           {map.nodes.map((node) => {
-            const radius = node.id === 'centre' ? 62 : 38 + node.strength * 16;
+            const radius = node.id === 'centre' ? 58 : 42;
             return (
               <g key={node.id}>
                 <circle cx={node.x} cy={node.y} r={radius} fill={node.color} opacity={node.id === 'centre' ? 0.18 : 0.14} stroke={node.color} strokeWidth="2" />
@@ -291,7 +317,7 @@ function MindMap({ data, moduleKey = '' }) {
                   {node.label}
                 </text>
                 <text x={node.x} y={node.y + 13} textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--color-text)">
-                  {Math.round(node.strength * 100)}%
+                  {node.id === 'centre' ? 'synthesis' : 'result area'}
                 </text>
               </g>
             );
@@ -302,11 +328,21 @@ function MindMap({ data, moduleKey = '' }) {
             <div key={node.id} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{node.label}</p>
-                <span className="text-xs font-semibold tabular-nums" style={{ color: node.color }}>{Math.round(node.strength * 100)}%</span>
+                <span className="text-xs font-semibold" style={{ color: node.color }}>{node.emphasis}</span>
               </div>
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{node.detail}</p>
             </div>
           ))}
+          <div className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+            <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Connection guide</p>
+            <div className="space-y-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+              {[...new Set(map.links.map((link) => link.label))].map((label) => (
+                <p key={label}>
+                  <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{label}:</span> conceptual reading link, not a measured statistical relationship.
+                </p>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
       <div className="grid md:grid-cols-3 gap-3 mt-4">
