@@ -225,6 +225,53 @@ function ModuleGroup({ module, tests, onReport, onCharts, onMindMap, onSuggestio
   );
 }
 
+function ModuleCompletionModal({ moduleTitle, nextLabel, onReport, onContinue, onDashboard }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-md rounded-2xl border p-6 shadow-xl space-y-4"
+        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      >
+        <div>
+          <p className="text-xs uppercase tracking-wider font-semibold" style={{ color: 'var(--color-primary)' }}>Module complete</p>
+          <h2 className="text-lg font-semibold mt-1" style={{ color: 'var(--color-text)' }}>{moduleTitle}</h2>
+          <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            You have completed the checks for this module. Would you like to generate the module report now, continue, or return to the wellbeing dashboard?
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <button
+            type="button"
+            onClick={onReport}
+            className="w-full px-4 py-2 rounded-xl text-sm font-semibold text-white"
+            style={{ background: 'var(--color-primary)' }}
+          >
+            Get this module report
+          </button>
+          <button
+            type="button"
+            onClick={onContinue}
+            className="w-full px-4 py-2 rounded-xl text-sm font-semibold border"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-bg)' }}
+          >
+            {nextLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onDashboard}
+            className="w-full px-4 py-2 rounded-xl text-sm font-semibold border"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
+          >
+            Back to dashboard
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions }) {
   const accentBackground = available
     ? 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)), var(--color-surface) 72%)'
@@ -379,6 +426,7 @@ export default function WellbeingPage() {
   const [visualModuleKey, setVisualModuleKey] = useState('');
   const [reportModuleKey, setReportModuleKey] = useState('');
   const [reportVariant, setReportVariant] = useState('detailed');
+  const [moduleCompletionPrompt, setModuleCompletionPrompt] = useState(null);
   const [config, setConfig] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -430,13 +478,18 @@ export default function WellbeingPage() {
     try {
       const res = await api.get('/api/wellbeing/profile/status');
       const data = await res.json();
-      if (res.ok) setProfileStatus(data);
+      if (res.ok) {
+        setProfileStatus(data);
+        return data;
+      }
     } catch {
       setProfileStatus(null);
     }
+    return null;
   }, []);
 
   const resetToDashboard = useCallback(() => {
+    setModuleCompletionPrompt(null);
     setTool('mood');
     setMode('intro');
     setIndex(0);
@@ -849,6 +902,7 @@ export default function WellbeingPage() {
     },
   ];
   const dashboardBack = useCallback(() => {
+    setModuleCompletionPrompt(null);
     setVisualModuleKey('');
     setReportModuleKey('');
     setReportVariant('detailed');
@@ -856,6 +910,36 @@ export default function WellbeingPage() {
     setMode('intro');
     refreshProfileStatus();
   }, [refreshProfileStatus]);
+
+  const openModuleCompletionPrompt = useCallback((prompt) => {
+    setModuleCompletionPrompt(prompt);
+  }, []);
+
+  const openCompletedModuleReport = useCallback(() => {
+    if (!moduleCompletionPrompt) return;
+    setReportModuleKey(moduleCompletionPrompt.moduleKey);
+    setReportVariant('detailed');
+    setModuleCompletionPrompt(null);
+    setTool('combined');
+  }, [moduleCompletionPrompt]);
+
+  const continueAfterModule = useCallback(() => {
+    if (!moduleCompletionPrompt) return;
+    setModuleCompletionPrompt(null);
+    setTool(moduleCompletionPrompt.nextTool);
+  }, [moduleCompletionPrompt]);
+
+  const renderModuleCompletionModal = () => (
+    moduleCompletionPrompt ? (
+      <ModuleCompletionModal
+        moduleTitle={moduleCompletionPrompt.title}
+        nextLabel={moduleCompletionPrompt.nextLabel}
+        onReport={openCompletedModuleReport}
+        onContinue={continueAfterModule}
+        onDashboard={dashboardBack}
+      />
+    ) : null
+  );
 
   if (loading) {
     return <div className="p-6 text-sm" style={{ color: 'var(--color-muted)' }}>Loading wellbeing check...</div>;
@@ -901,10 +985,20 @@ export default function WellbeingPage() {
         </div>
         <PanasStylePanel
           onBack={dashboardBack}
-          onComplete={refreshProfileStatus}
+          onComplete={async () => {
+            const status = await refreshProfileStatus();
+            if (!status?.modules?.find((module) => module.key === 'mood-emotional')?.completed) return;
+            openModuleCompletionPrompt({
+              moduleKey: 'mood-emotional',
+              title: 'Mood & Emotional State',
+              nextTool: 'asrs5',
+              nextLabel: 'Continue to ASRS-5-style check',
+            });
+          }}
           onNext={() => setTool('asrs5')}
           nextLabel="Continue to ASRS-5-style check"
         />
+        {renderModuleCompletionModal()}
       </div>
     );
   }
@@ -967,10 +1061,20 @@ export default function WellbeingPage() {
         </div>
         <Hexaco60Panel
           onBack={dashboardBack}
-          onComplete={refreshProfileStatus}
+          onComplete={async () => {
+            const status = await refreshProfileStatus();
+            if (!status?.modules?.find((module) => module.key === 'personality-traits')?.completed) return;
+            openModuleCompletionPrompt({
+              moduleKey: 'personality-traits',
+              title: 'Personality & Traits',
+              nextTool: 'cognitive',
+              nextLabel: 'Continue to CERQ-style check',
+            });
+          }}
           onNext={() => setTool('cognitive')}
           nextLabel="Continue to CERQ-style check"
         />
+        {renderModuleCompletionModal()}
       </div>
     );
   }
@@ -1011,10 +1115,20 @@ export default function WellbeingPage() {
         </div>
         <BriefCopeStylePanel
           onBack={dashboardBack}
-          onComplete={refreshProfileStatus}
+          onComplete={async () => {
+            const status = await refreshProfileStatus();
+            if (!status?.modules?.find((module) => module.key === 'regulation-coping')?.completed) return;
+            openModuleCompletionPrompt({
+              moduleKey: 'regulation-coping',
+              title: 'Regulation & Coping',
+              nextTool: 'combined',
+              nextLabel: 'See final overall reports',
+            });
+          }}
           onNext={() => setTool('combined')}
           nextLabel="See combined profile"
         />
+        {renderModuleCompletionModal()}
       </div>
     );
   }
