@@ -280,7 +280,7 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
     y -= 16;
   };
 
-  addText(view === 'mindmap' ? 'Wellbeing Mind Map' : 'Wellbeing Visual Summary', { size: 18, bold: true });
+  addText(view === 'mindmap' ? 'Wellbeing Visual Index' : 'Wellbeing Visual Summary', { size: 18, bold: true });
   addText(`Generated: ${formatDate(new Date())}`, { size: 9, color: rgb(0.45, 0.45, 0.45) });
   addText('Uses the latest completed result from each of the eight wellbeing checks.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
 
@@ -297,39 +297,20 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
   ].forEach(([label, createdAt]) => addText(`${label}: ${createdAt ? formatDate(createdAt) : 'latest completed result'}`, { size: 9 }));
 
   if (view === 'mindmap') {
-    addHeading('Relationship Map');
-    addText('This diagram is a visual index for the text below, not the insight by itself. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
+    addHeading('Visual Index');
+    addText('This section is an input-to-synthesis guide. The source areas below feed the combined reading; the interpretation lives in the synthesis text, not in a network diagram.', { size: 9, color: rgb(0.45, 0.45, 0.45) });
     const map = buildMindMapData(visuals);
     addHeading(map.synthesis.title);
     addText(map.synthesis.body, { size: 9 });
     addHeading('How to use this');
     map.synthesis.prompts.forEach((prompt) => addText(`- ${prompt}`, { size: 9 }));
-    const nodeById = Object.fromEntries(map.nodes.map((node) => [node.id, node]));
-    ensureSpace(500);
-    const top = y;
-    const scale = 0.76;
-    const offsetX = margin + 25;
-    const offsetY = top - 35;
-    const px = (n) => offsetX + n * scale;
-    const py = (n) => offsetY - n * scale;
-
-    map.links.forEach((link) => {
-      const from = nodeById[link.from];
-      const to = nodeById[link.to];
-      page.drawLine({ start: { x: px(from.x), y: py(from.y) }, end: { x: px(to.x), y: py(to.y) }, thickness: 1, color: rgb(0.72, 0.72, 0.72) });
-    });
-    map.nodes.forEach((node) => {
-      const radius = (node.id === 'centre' ? 40 : 30) * scale;
-      page.drawCircle({ x: px(node.x), y: py(node.y), size: radius, borderColor: node.color, borderWidth: 1.5, color: rgb(0.98, 0.98, 0.98) });
-      page.drawText(cleanPdfText(node.label).slice(0, 24), { x: px(node.x) - radius + 4, y: py(node.y) + 2, size: 7, font: boldFont, color: rgb(0.1, 0.1, 0.1) });
-      page.drawText(node.id === 'centre' ? 'synthesis' : 'result area', { x: px(node.x) - 18, y: py(node.y) - 9, size: 6, font, color: rgb(0.35, 0.35, 0.35) });
-    });
-    y = top - 500;
-
-    addHeading('Node Details');
-    map.nodes.filter((node) => node.id !== 'centre').forEach((node) => addText(`${node.label}: ${node.detail}. ${node.emphasis}.`, { size: 9 }));
-    addHeading('Connection Guide');
-    [...new Set(map.links.map((link) => link.label))].forEach((label) => addText(`${label}: conceptual reading link, not a measured statistical relationship.`, { size: 9 }));
+    addHeading('Inputs');
+    map.nodes
+      .filter((node) => node.id !== 'centre')
+      .forEach((node) => addText(`${node.label}: ${node.detail}. ${node.emphasis}.`, { size: 9 }));
+    const synthesisNode = map.nodes.find((node) => node.id === 'centre');
+    addHeading('Synthesis');
+    addText(`${synthesisNode?.label || 'Combined pattern'}: ${synthesisNode?.detail || 'Combined reading from the listed inputs.'}`, { size: 9 });
     addHeading('Interpretive Notes');
     map.notes.forEach((note) => addText(`- ${note}`, { size: 9 }));
   } else {

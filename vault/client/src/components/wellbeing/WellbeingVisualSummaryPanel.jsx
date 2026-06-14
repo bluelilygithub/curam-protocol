@@ -344,9 +344,9 @@ function buildMindMap(data, moduleKey = '') {
   ];
 
   const notes = [
-    'This is a conceptual orientation map, not a statistical network. Node positions, circle sizes, and connections do not prove correlation, causation, or clinical significance.',
+    'Use the visual index to see which result areas are feeding the synthesis, then use the text above for the actual interpretation.',
     moodStrength >= 0.32 && lessHelpful.length
-      ? 'Mood load and less-helpful cognitive strategies are both visible, so the map invites you to read mood pressure alongside repeated interpretations of stress.'
+      ? 'Mood load and less-helpful cognitive strategies are both prominent enough to read mood pressure alongside repeated interpretations of stress.'
       : 'Mood load is shown alongside thinking patterns so you can consider whether mood severity is isolated or part of a broader interpretation pattern.',
     avoidant.length && nodeStrength(avoidant) >= 0.5
       ? 'Avoidant coping is shown separately because it may provide short-term relief while leaving the original stressor unresolved.'
@@ -386,16 +386,17 @@ function buildMindMap(data, moduleKey = '') {
 function MindMap({ data, moduleKey = '' }) {
   const module = MODULE_VISUALS[moduleKey] || null;
   const map = useMemo(() => buildMindMap(data, moduleKey), [data, moduleKey]);
-  const nodeById = Object.fromEntries(map.nodes.map((node) => [node.id, node]));
+  const synthesisNode = map.nodes.find((node) => node.id === 'centre');
+  const contributors = map.nodes.filter((node) => node.id !== 'centre');
 
   return (
     <section className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{module ? `${module.label} mind map` : 'Eight-test mind map'}</h2>
+      <h2 className="text-sm font-semibold mb-1" style={{ color: 'var(--color-text)' }}>{module ? `${module.label} visual index` : 'Eight-test visual index'}</h2>
       <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
-        {module ? `A module-specific relationship map for ${module.description}` : 'A relationship map that groups related signals from mood, affect tone, attention/self-regulation, two personality lenses, cognitive coping, and behavioural coping.'}
+        {module ? `A module-specific index showing which inputs feed the ${module.label} synthesis.` : 'An index showing which result areas feed the overall wellbeing synthesis.'}
       </p>
       <p className="text-xs mb-4 rounded-xl border p-3" style={{ color: 'var(--color-muted)', borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-        This diagram is a visual index for the text below, not the insight by itself. Lines mean "interpret these results together"; they do not prove one result caused another. Circle placement is for readability only.
+        This diagram is not a relationship network. It is a simple input-to-synthesis guide: the cards on the left are the source areas, and the card on the right is the combined reading.
       </p>
       <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-3 mb-4">
         <div className="rounded-xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -411,59 +412,32 @@ function MindMap({ data, moduleKey = '' }) {
           </ul>
         </div>
       </div>
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
-        <svg viewBox="0 0 600 620" className="w-full max-w-[680px] mx-auto" role="img" aria-label="Mind map connecting the eight wellbeing test patterns">
-          {map.links.map((link) => {
-            const from = nodeById[link.from];
-            const to = nodeById[link.to];
-            return (
-              <line
-                key={`${link.from}-${link.to}`}
-                x1={from.x}
-                y1={from.y}
-                x2={to.x}
-                y2={to.y}
-                stroke="var(--color-border)"
-                strokeWidth="1.5"
-                strokeDasharray={link.from === 'centre' || link.to === 'centre' ? '0' : '5 5'}
-              />
-            );
-          })}
-          {map.nodes.map((node) => {
-            const radius = node.id === 'centre' ? 58 : 42;
-            return (
-              <g key={node.id}>
-                <circle cx={node.x} cy={node.y} r={radius} fill={node.color} opacity={node.id === 'centre' ? 0.18 : 0.14} stroke={node.color} strokeWidth="2" />
-                <text x={node.x} y={node.y - 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--color-text)">
-                  {node.label}
-                </text>
-                <text x={node.x} y={node.y + 13} textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--color-text)">
-                  {node.id === 'centre' ? 'synthesis' : 'result area'}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-        <div className="space-y-3">
-          {map.nodes.filter((node) => node.id !== 'centre').map((node) => (
-            <div key={node.id} className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{node.label}</p>
-                <span className="text-xs font-semibold" style={{ color: node.color }}>{node.emphasis}</span>
+      <div className="grid lg:grid-cols-[minmax(0,1fr)_96px_320px] gap-4 items-center">
+        <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+          <p className="text-xs uppercase tracking-wider font-semibold mb-3" style={{ color: 'var(--color-muted)' }}>Inputs</p>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {contributors.map((node) => (
+              <div key={node.id} className="rounded-xl border p-3" style={{ borderColor: node.color, background: 'var(--color-surface)' }}>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{node.label}</p>
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: node.color }} />
+                </div>
+                <p className="text-xs mt-1" style={{ color: node.color }}>{node.emphasis}</p>
+                <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{node.detail}</p>
               </div>
-              <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{node.detail}</p>
-            </div>
-          ))}
-          <div className="rounded-xl border p-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
-            <p className="text-sm font-semibold mb-2" style={{ color: 'var(--color-text)' }}>Connection guide</p>
-            <div className="space-y-2 text-xs" style={{ color: 'var(--color-muted)' }}>
-              {[...new Set(map.links.map((link) => link.label))].map((label) => (
-                <p key={label}>
-                  <span className="font-semibold" style={{ color: 'var(--color-text)' }}>{label}:</span> conceptual reading link, not a measured statistical relationship.
-                </p>
-              ))}
-            </div>
+            ))}
           </div>
+        </div>
+        <div className="hidden lg:flex items-center justify-center text-3xl font-semibold" style={{ color: 'var(--color-primary)' }} aria-hidden="true">
+          →
+        </div>
+        <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}>
+          <p className="text-xs uppercase tracking-wider font-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Synthesis</p>
+          <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{synthesisNode?.label || 'Combined pattern'}</p>
+          <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{synthesisNode?.detail || 'Combined reading from the listed inputs.'}</p>
+          <p className="text-xs mt-3 font-semibold" style={{ color: 'var(--color-primary)' }}>
+            Read the synthesis text above for the meaning.
+          </p>
         </div>
       </div>
       <div className="grid md:grid-cols-3 gap-3 mt-4">
@@ -524,7 +498,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = pdfView === 'mindmap' ? 'wellbeing-mind-map.pdf' : 'wellbeing-visual-summary.pdf';
+      a.download = pdfView === 'mindmap' ? 'wellbeing-visual-index.pdf' : 'wellbeing-visual-summary.pdf';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -567,7 +541,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
             Back to wellbeing tools
           </button>
           <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-            {activeModule ? `${activeModule.label} ${view === 'mindmap' ? 'Mind Map' : 'Visual Summary'}` : (view === 'mindmap' ? 'Wellbeing Mind Map' : 'Wellbeing Visual Summary')}
+            {activeModule ? `${activeModule.label} ${view === 'mindmap' ? 'Visual Index' : 'Visual Summary'}` : (view === 'mindmap' ? 'Wellbeing Visual Index' : 'Wellbeing Visual Summary')}
           </h2>
           <p className="text-sm mt-1 max-w-3xl" style={{ color: 'var(--color-muted)' }}>
             {activeModule ? activeModule.description : 'Uses the latest completed result from each of the eight wellbeing checks.'}
@@ -596,7 +570,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
               background: 'var(--color-surface)',
             }}
           >
-            Mind map
+            Visual index
           </button>
           <button
             type="button"
@@ -605,7 +579,7 @@ export default function WellbeingVisualSummaryPanel({ onBack, initialView = 'cha
             className="px-4 py-2 rounded-xl text-sm font-semibold border hover:opacity-80 disabled:opacity-50 transition-opacity"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'var(--color-surface)' }}
           >
-            {pdfLoading ? 'Preparing PDF...' : `Download ${view === 'mindmap' ? 'mind map' : 'charts'} PDF`}
+            {pdfLoading ? 'Preparing PDF...' : `Download ${view === 'mindmap' ? 'visual index' : 'charts'} PDF`}
           </button>
         </div>
       </div>

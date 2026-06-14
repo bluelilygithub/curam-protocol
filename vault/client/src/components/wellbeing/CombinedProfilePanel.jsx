@@ -332,7 +332,7 @@ export default function CombinedProfilePanel({
                     className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 disabled:opacity-40"
                     style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
                   >
-                    Mind map
+                    Visual index
                   </button>
                   <button
                     type="button"

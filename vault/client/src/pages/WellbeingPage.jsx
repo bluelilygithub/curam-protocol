@@ -216,7 +216,7 @@ function ModuleGroup({ module, tests, onReport, onCharts, onMindMap, onSuggestio
           Charts
         </button>
         <button type="button" onClick={onMindMap} disabled={!moduleReady} className={actionButtonClass}>
-          Mind map
+          Visual index
         </button>
         <button type="button" onClick={onSuggestions} disabled={!moduleReady} className={actionButtonClass}>
           Suggestions
@@ -290,7 +290,7 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions
       <h3 className="text-base font-semibold mt-1" style={{ color: 'var(--color-text)' }}>Review the overall results</h3>
       <p className="text-sm mt-2" style={{ color: 'var(--color-muted)' }}>
         {available
-          ? 'Unlocked. Review module reports, the final profile, visual charts, eight-test mind map, or personal development suggestions.'
+          ? 'Unlocked. Review module reports, the final profile, visual charts, eight-test visual index, or personal development suggestions.'
           : 'Locked until all eight checks have at least one completed result.'}
       </p>
       <div className="grid sm:grid-cols-5 gap-2 mt-4">
@@ -301,7 +301,7 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions
           Charts
         </button>
         <button type="button" onClick={onMindMap} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
-          Mind map
+          Visual index
         </button>
         <button type="button" onClick={onSuggestions} disabled={!available} className={actionButtonClass} style={actionButtonStyle}>
           Suggestions
@@ -1440,7 +1440,7 @@ export default function WellbeingPage() {
                   <div className="rounded-2xl border p-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
                     <p className="text-xs uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Admin test data</p>
                     <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                      Create one random completed result for each test to check the progress, profile, charts, and mind-map flow.
+                      Create one random completed result for each test to check the progress, profile, charts, and visual-index flow.
                     </p>
                     <button
                       type="button"
