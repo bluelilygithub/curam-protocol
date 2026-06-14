@@ -254,6 +254,9 @@ function highKeys(items) {
 }
 
 function describeMood(latest) {
+  if (!latest.mood) {
+    return 'The mood check was not included in this module, so current mood load should be interpreted from the available module data only.';
+  }
   const topAreas = latest.mood.analysis?.topAreas || latest.mood.analysis?.rationale?.drivers || [];
   const areas = topAreas.slice(0, 4).map((area) => area.topic).filter(Boolean);
   const areaText = areas.length ? ` The main signals behind that score appear to be ${sentenceList(areas)}.` : '';
@@ -413,6 +416,52 @@ function describeGrowthEdges(scores) {
   return `The growth edge is ${sentenceList(edges)}. A useful profile should not leave the reader with a label; it should help them spot an earlier decision point. The practical question is: "What is the first move I make under stress, and does it still help after the first few minutes or hours?"`;
 }
 
+function describeSuggestedNextSteps(scores, scope = 'overall') {
+  const moodScore = Number(scores.mood?.totalScore ?? 0);
+  const anxietyScore = Number(scores.anxietyLoad?.totalScore ?? 0);
+  const attentionScore = Number(scores.attentionSelfRegulation?.totalScore ?? 0);
+  const cognitiveHigh = scores.cognitiveCoping?.highScales || [];
+  const behaviourHigh = scores.copingStyle?.highScales || [];
+  const steps = [];
+
+  if (scope === 'mood-emotional' || scope === 'overall') {
+    steps.push(moodScore >= 20 || anxietyScore >= 8
+      ? 'Start with stabilising basics before trying to solve everything: regular sleep and meals where possible, gentle movement, reducing overload, and one supportive contact or grounding routine. Treat mood and anxiety scores as current load that may make every other task feel heavier.'
+      : 'Keep the emotional baseline visible: maintain small routines that protect sleep, food, movement, connection, and recovery time, because these make the rest of the profile easier to use.');
+  }
+
+  if (scope === 'regulation-coping' || scope === 'overall') {
+    if (attentionScore >= 12) {
+      steps.push('For attention and self-regulation friction, experiment with external structure rather than relying on willpower: visible reminders, smaller task starts, timed work blocks, body doubling, fewer open decisions, and recovery breaks after demanding tasks.');
+    }
+
+    const stickyThinking = hasAny(cognitiveHigh, ['rumination', 'catastrophizing', 'selfBlame', 'otherBlame']);
+    if (stickyThinking) {
+      steps.push('For sticky thinking patterns, practise catching the first replay loop earlier: name the thought, separate what is known from what is feared, write one alternative explanation, and choose one small next action or support contact.');
+    } else {
+      steps.push('Use the stronger cognitive coping strategies deliberately: turn reflection into one concrete next step, perspective check, or problem boundary so that thinking stays clarifying rather than endless.');
+    }
+
+    const support = hasAny(behaviourHigh, ['instrumentalSupport', 'emotionalSupport']);
+    const problem = hasAny(behaviourHigh, ['activeCoping', 'planning']);
+    const avoidant = hasAny(behaviourHigh, ['denial', 'behavioralDisengagement', 'selfDistraction', 'substanceUse']);
+    if (support || problem) {
+      steps.push('Lean on coping strengths already present in the profile: ask for a specific kind of help, turn one stressor into a small plan, and review whether the strategy still helps later rather than only in the first few minutes.');
+    }
+    if (avoidant) {
+      steps.push('If avoidance or disengagement shows up, use it as a signal rather than a failure: pause briefly, reduce the task size, and choose one low-friction re-entry step before the problem becomes larger or more isolating.');
+    }
+  }
+
+  if (scope === 'personality-traits' || scope === 'overall') {
+    steps.push('Use the personality results as a style map: notice which strengths are easiest under low stress, which become harder under pressure, and what kind of environment or communication makes the best parts of the style more available.');
+  }
+
+  steps.push('If any pattern feels intense, persistent, risky, or costly in daily life, use these results to organise a conversation with a qualified professional or trusted support rather than treating the report as a self-contained answer.');
+
+  return steps.join('\n\n');
+}
+
 function buildCombinedFallback(latest, scores) {
   const moodLine = `The mood check sits at ${latest.mood.totalScore}/63, in the "${latest.mood.bandLabel}" range.`;
   const highDomains = scores.personality.highDomains.map((item) => `${item.label} (${item.band})`);
@@ -501,6 +550,10 @@ function buildCombinedFallback(latest, scores) {
         title: 'Growth edges',
         body: describeGrowthEdges(scores),
       },
+      {
+        title: 'Suggested next steps',
+        body: describeSuggestedNextSteps(scores),
+      },
     ],
     questions: [
       'Which pattern appears in at least two of the eight tests?',
@@ -542,6 +595,10 @@ function buildCombinedSummaryFallback(latest, scores) {
       {
         title: 'What to look at next',
         body: 'The detailed profile is the best next step for client-readable formulation. The analytical profile is more suitable when a clinician wants a more technical cross-test formulation and hypotheses to consider.',
+      },
+      {
+        title: 'Suggested next steps',
+        body: describeSuggestedNextSteps(scores),
       },
     ],
     questions: [
@@ -607,6 +664,10 @@ function buildCombinedAnalyticalFallback(latest, scores) {
           'Which coping responses produce short-term relief but maintain the problem?',
           'Which protective responses are available but underused under high stress?',
         ].join('\n'),
+      },
+      {
+        title: 'Supportive next steps',
+        body: describeSuggestedNextSteps(scores),
       },
     ],
     questions: [
@@ -732,16 +793,16 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
       'Create a brief integrated overview from eight completed proof-of-concept self-report checks.',
       '',
       'Audience: client or clinician who wants a quick readable overview before reading the full profile.',
-      'Length: concise. Summary should be 2 short paragraphs. Include 3 short sections only.',
+      'Length: concise. Summary should be 2 short paragraphs. Include 4 short sections only.',
       'Tone: plain language, non-clinical, careful, not diagnostic.',
       '',
-      'Required sections: "Plain-language overview", "Main signals", "What to look at next".',
+      'Required sections: "Plain-language overview", "Main signals", "What to look at next", "Suggested next steps".',
       'Avoid long formulation language. Do not list every scale. Mention only the most useful cross-test signals.',
       'Use paragraph breaks inside JSON string values.',
       moduleOutcomeInstruction,
       '',
       'Return ONLY valid JSON with this shape:',
-      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Plain-language overview","body":"..."},{"title":"Main signals","body":"..."},{"title":"What to look at next","body":"..."}],"questions":["..."],"caveat":"..."}',
+      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Plain-language overview","body":"..."},{"title":"Main signals","body":"..."},{"title":"What to look at next","body":"..."},{"title":"Suggested next steps","body":"..."}],"questions":["..."],"caveat":"..."}',
       '',
       `Scored data:\n${JSON.stringify(scores, null, 2).slice(0, 14000)}`,
     ].join('\n');
@@ -764,10 +825,10 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
       moduleOutcomeInstruction,
       '',
       'Required sections:',
-      'Clinical formulation hypotheses; State-trait-context distinction; Cognitive-affective mechanisms; Behavioural coping sequence; Protective factors and treatment-relevant strengths; Risk-sensitive caveats; Suggested clinical questions.',
+      'Clinical formulation hypotheses; State-trait-context distinction; Cognitive-affective mechanisms; Behavioural coping sequence; Protective factors and treatment-relevant strengths; Supportive next steps; Risk-sensitive caveats; Suggested clinical questions.',
       '',
       'Return ONLY valid JSON with this shape:',
-      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Clinical formulation hypotheses","body":"..."},{"title":"State-trait-context distinction","body":"..."},{"title":"Cognitive-affective mechanisms","body":"..."},{"title":"Behavioural coping sequence","body":"..."},{"title":"Protective factors and treatment-relevant strengths","body":"..."},{"title":"Risk-sensitive caveats","body":"..."},{"title":"Suggested clinical questions","body":"..."}],"questions":["..."],"caveat":"..."}',
+      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Clinical formulation hypotheses","body":"..."},{"title":"State-trait-context distinction","body":"..."},{"title":"Cognitive-affective mechanisms","body":"..."},{"title":"Behavioural coping sequence","body":"..."},{"title":"Protective factors and treatment-relevant strengths","body":"..."},{"title":"Supportive next steps","body":"..."},{"title":"Risk-sensitive caveats","body":"..."},{"title":"Suggested clinical questions","body":"..."}],"questions":["..."],"caveat":"..."}',
       '',
       `Scored data:\n${JSON.stringify(scores, null, 2).slice(0, 18000)}`,
     ].join('\n');
@@ -820,6 +881,7 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
     '- Identify tensions or contradictions between trait style, cognitive coping, and behavioural coping.',
     '- Describe likely strengths/supports that emerge from the pattern.',
     '- Describe growth edges or situations where the pattern could become costly.',
+    '- Include a "Suggested next steps" section with supportive habits, reflection steps, and when to discuss with a qualified professional. Keep it non-clinical and non-prescriptive.',
     '- Include practical reflection prompts, but do not prescribe treatment.',
     '- Use concrete references to the provided scores and scale names.',
     '- Do not make any section a list of elevated scales. Scale names should be evidence for an interpretation, not the interpretation itself.',
@@ -830,7 +892,7 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
     moduleOutcomeInstruction,
     '',
     'Return ONLY valid JSON with this shape:',
-    '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Overall formulation","body":"paragraph one\\n\\nparagraph two"},{"title":"Mood and affect context","body":"..."},{"title":"Attention and self-regulation context","body":"..."},{"title":"Personality pattern","body":"..."},{"title":"Cognitive coping pattern","body":"..."},{"title":"Behavioural coping pattern","body":"..."},{"title":"Reinforcing themes","body":"..."},{"title":"Tensions and qualifications","body":"..."},{"title":"Strengths and supports","body":"..."},{"title":"Growth edges","body":"..."}],"questions":["..."],"caveat":"..."}',
+    '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Overall formulation","body":"paragraph one\\n\\nparagraph two"},{"title":"Mood and affect context","body":"..."},{"title":"Attention and self-regulation context","body":"..."},{"title":"Personality pattern","body":"..."},{"title":"Cognitive coping pattern","body":"..."},{"title":"Behavioural coping pattern","body":"..."},{"title":"Reinforcing themes","body":"..."},{"title":"Tensions and qualifications","body":"..."},{"title":"Strengths and supports","body":"..."},{"title":"Growth edges","body":"..."},{"title":"Suggested next steps","body":"..."}],"questions":["..."],"caveat":"..."}',
     '',
     `Scored data:\n${JSON.stringify(scores, null, 2).slice(0, 16000)}`,
   ].join('\n');
@@ -839,55 +901,55 @@ function buildCombinedPrompt(scores, variant = 'detailed') {
 function buildCombinedScores(latest) {
   return {
     mood: {
-      totalScore: latest.mood.totalScore,
-      bandLabel: latest.mood.bandLabel,
-      analysis: latest.mood.analysis,
-      topAreas: latest.mood.analysis?.topAreas || latest.mood.analysis?.rationale?.drivers || [],
+      totalScore: latest.mood?.totalScore,
+      bandLabel: latest.mood?.bandLabel,
+      analysis: latest.mood?.analysis || {},
+      topAreas: latest.mood?.analysis?.topAreas || latest.mood?.analysis?.rationale?.drivers || [],
     },
     anxietyLoad: {
-      totalScore: latest.gad7.totalScore,
-      bandLabel: latest.gad7.bandLabel,
-      answers: latest.gad7.answers,
-      topAreas: latest.gad7.analysis?.topAreas || latest.gad7.analysis?.rationale?.topAreas || [],
-      analysis: latest.gad7.analysis,
+      totalScore: latest.gad7?.totalScore,
+      bandLabel: latest.gad7?.bandLabel,
+      answers: latest.gad7?.answers || [],
+      topAreas: latest.gad7?.analysis?.topAreas || latest.gad7?.analysis?.rationale?.topAreas || [],
+      analysis: latest.gad7?.analysis || {},
     },
     affectSnapshot: {
-      allScales: allCompactScales(latest.panas.scaleScores),
-      highScales: topByNormalized(latest.panas.scaleScores, 2),
-      lowScales: bottomByNormalized(latest.panas.scaleScores, 2),
-      analysis: latest.panas.analysis,
+      allScales: allCompactScales(latest.panas?.scaleScores || []),
+      highScales: topByNormalized(latest.panas?.scaleScores || [], 2),
+      lowScales: bottomByNormalized(latest.panas?.scaleScores || [], 2),
+      analysis: latest.panas?.analysis || {},
     },
     attentionSelfRegulation: {
-      totalScore: latest.asrs5.totalScore,
-      bandLabel: latest.asrs5.bandLabel,
-      allScales: allCompactScales(latest.asrs5.scaleScores),
-      highScales: topByNormalized(latest.asrs5.scaleScores, 6),
-      lowScales: bottomByNormalized(latest.asrs5.scaleScores, 3),
-      analysis: latest.asrs5.analysis,
+      totalScore: latest.asrs5?.totalScore,
+      bandLabel: latest.asrs5?.bandLabel,
+      allScales: allCompactScales(latest.asrs5?.scaleScores || []),
+      highScales: topByNormalized(latest.asrs5?.scaleScores || [], 6),
+      lowScales: bottomByNormalized(latest.asrs5?.scaleScores || [], 3),
+      analysis: latest.asrs5?.analysis || {},
     },
     personality: {
-      highDomains: topByNormalized(latest.ipip.domainScores, 5),
-      lowDomains: bottomByNormalized(latest.ipip.domainScores, 5),
-      strongestFacets: strongestByDistance(latest.ipip.facetScores, 12),
-      analysis: latest.ipip.analysis,
+      highDomains: topByNormalized(latest.ipip?.domainScores || [], 5),
+      lowDomains: bottomByNormalized(latest.ipip?.domainScores || [], 5),
+      strongestFacets: strongestByDistance(latest.ipip?.facetScores || [], 12),
+      analysis: latest.ipip?.analysis || {},
     },
     hexacoPersonality: {
-      highDomains: topByNormalized(latest.hexaco.domainScores, 6),
-      lowDomains: bottomByNormalized(latest.hexaco.domainScores, 6),
-      allDomains: allCompactScales(latest.hexaco.domainScores),
-      analysis: latest.hexaco.analysis,
+      highDomains: topByNormalized(latest.hexaco?.domainScores || [], 6),
+      lowDomains: bottomByNormalized(latest.hexaco?.domainScores || [], 6),
+      allDomains: allCompactScales(latest.hexaco?.domainScores || []),
+      analysis: latest.hexaco?.analysis || {},
     },
     cognitiveCoping: {
-      allScales: allCompactScales(latest.cerq.scaleScores),
-      highScales: topByNormalized(latest.cerq.scaleScores, 7),
-      lowScales: bottomByNormalized(latest.cerq.scaleScores, 4),
-      analysis: latest.cerq.analysis,
+      allScales: allCompactScales(latest.cerq?.scaleScores || []),
+      highScales: topByNormalized(latest.cerq?.scaleScores || [], 7),
+      lowScales: bottomByNormalized(latest.cerq?.scaleScores || [], 4),
+      analysis: latest.cerq?.analysis || {},
     },
     copingStyle: {
-      allScales: allCompactScales(latest.cope.scaleScores),
-      highScales: topByNormalized(latest.cope.scaleScores, 8),
-      lowScales: bottomByNormalized(latest.cope.scaleScores, 5),
-      analysis: latest.cope.analysis,
+      allScales: allCompactScales(latest.cope?.scaleScores || []),
+      highScales: topByNormalized(latest.cope?.scaleScores || [], 8),
+      lowScales: bottomByNormalized(latest.cope?.scaleScores || [], 5),
+      analysis: latest.cope?.analysis || {},
     },
   };
 }
@@ -957,6 +1019,7 @@ function buildModuleFallback(module, latest, scores, variant = 'detailed') {
         { title: 'Strengths to lean on', body: describeStrengths(scores) },
         { title: 'Watch points', body: 'Notice where a useful pattern becomes automatic or costly. The aim is not to label the person, but to find an earlier moment where they can pause, name the pattern, and choose a response more deliberately.' },
         { title: 'Small experiments', body: 'Choose one small observation or experiment for the next week. It should be specific, safe, easy to review, and connected to this module rather than trying to change the whole profile at once.' },
+        { title: 'Suggested next steps', body: describeSuggestedNextSteps(scores, module.key) },
         { title: 'What to discuss with a clinician or trusted support', body: 'If the pattern feels intense, persistent, risky, or functionally costly, use this module report to organise a conversation with a qualified professional or trusted support.' },
       ],
       questions: [
@@ -978,6 +1041,7 @@ function buildModuleFallback(module, latest, scores, variant = 'detailed') {
         { title: 'Module formulation', body: `${mood}\n\n${anxiety}\n\n${affect}` },
         { title: 'How it may show up', body: 'This module may show whether the person is mainly low in mood, high in anxiety/tension, emotionally mixed, depleted, or still able to access positive affect despite distress. The key interpretation is state context: how current emotional load may colour answers elsewhere.' },
         { title: 'What to carry into the final profile', body: 'The final profile should treat this module as the current emotional weather. Elevated mood or anxiety load may make stable traits look sharper, coping look less flexible, or attention/self-regulation feel more difficult.' },
+        { title: 'Suggested next steps', body: describeSuggestedNextSteps(scores, module.key) },
       ],
       questions: [
         'Which part of the current emotional state feels most recognisable?',
@@ -998,6 +1062,7 @@ function buildModuleFallback(module, latest, scores, variant = 'detailed') {
         { title: 'Module formulation', body: `${personality}\n\n${hexacoPersonality}` },
         { title: 'How it may show up', body: 'This module may show the person’s starting posture in relationships, decisions, conflict, stress, recovery, and self-management. The useful focus is not a fixed label, but the style they may naturally bring into repeated situations.' },
         { title: 'What to carry into the final profile', body: 'The final profile should treat this module as the trait backdrop. It can help separate what looks like a stable preference or interpersonal style from what may be driven by current mood, anxiety, or stress.' },
+        { title: 'Suggested next steps', body: describeSuggestedNextSteps(scores, module.key) },
       ],
       questions: [
         'Which trait pattern feels consistent across settings?',
@@ -1017,6 +1082,7 @@ function buildModuleFallback(module, latest, scores, variant = 'detailed') {
       { title: 'Module formulation', body: `${anxiety}\n\n${attention}\n\n${cognitive}\n\n${behavioural}` },
       { title: 'How it may show up', body: 'This module may show the sequence from stress trigger to attention pressure, inner explanation, and outward coping response. It is especially useful for spotting loops where worry, rumination, avoidance, self-blame, denial, or self-regulation friction provide short-term relief but keep the stress active.' },
       { title: 'What to carry into the final profile', body: 'The final profile should treat this module as the response pattern. It explains how emotional load and trait posture may be translated into thoughts, actions, support-seeking, avoidance, planning, or recovery.' },
+      { title: 'Suggested next steps', body: describeSuggestedNextSteps(scores, module.key) },
     ],
     questions: [
       'What tends to happen first after stress arrives?',
@@ -1044,10 +1110,10 @@ function buildModulePrompt(module, scores, variant = 'detailed') {
       '- Use paragraph breaks inside JSON string values.',
       '',
       'Required sections:',
-      'Module pattern; Strengths to lean on; Watch points; Small experiments; What to discuss with a clinician or trusted support.',
+      'Module pattern; Strengths to lean on; Watch points; Small experiments; Suggested next steps; What to discuss with a clinician or trusted support.',
       '',
       'Return ONLY valid JSON with this shape:',
-      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Module pattern","body":"..."},{"title":"Strengths to lean on","body":"..."},{"title":"Watch points","body":"..."},{"title":"Small experiments","body":"..."},{"title":"What to discuss with a clinician or trusted support","body":"..."}],"questions":["..."],"caveat":"..."}',
+      '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Module pattern","body":"..."},{"title":"Strengths to lean on","body":"..."},{"title":"Watch points","body":"..."},{"title":"Small experiments","body":"..."},{"title":"Suggested next steps","body":"..."},{"title":"What to discuss with a clinician or trusted support","body":"..."}],"questions":["..."],"caveat":"..."}',
       '',
       `Scored data:\n${JSON.stringify(moduleScoresForKey(scores, module.key), null, 2).slice(0, 12000)}`,
     ].join('\n');
@@ -1068,10 +1134,10 @@ function buildModulePrompt(module, scores, variant = 'detailed') {
     '- Use paragraph breaks inside JSON string values.',
     '',
     'Required sections:',
-    'Module formulation; How it may show up; Strengths and resources; Watch points; What this module contributes to the final profile.',
+    'Module formulation; How it may show up; Strengths and resources; Watch points; What this module contributes to the final profile; Suggested next steps.',
     '',
     'Return ONLY valid JSON with this shape:',
-    '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Module formulation","body":"..."},{"title":"How it may show up","body":"..."},{"title":"Strengths and resources","body":"..."},{"title":"Watch points","body":"..."},{"title":"What this module contributes to the final profile","body":"..."}],"questions":["..."],"caveat":"..."}',
+    '{"summary":"paragraph one\\n\\nparagraph two","sections":[{"title":"Module formulation","body":"..."},{"title":"How it may show up","body":"..."},{"title":"Strengths and resources","body":"..."},{"title":"Watch points","body":"..."},{"title":"What this module contributes to the final profile","body":"..."},{"title":"Suggested next steps","body":"..."}],"questions":["..."],"caveat":"..."}',
     '',
     `Scored data:\n${JSON.stringify(moduleScoresForKey(scores, module.key), null, 2).slice(0, 12000)}`,
   ].join('\n');
@@ -1167,4 +1233,8 @@ module.exports = {
   generateCombinedProfile,
   latestScoreLinesFromScales,
   WELLBEING_MODULES,
+  buildCombinedScores,
+  buildCombinedFallback,
+  buildModuleFallback,
+  describeSuggestedNextSteps,
 };

@@ -16,6 +16,7 @@ import CombinedProfilePanel from '../components/wellbeing/CombinedProfilePanel';
 import { BdiSeverityGauge } from '../components/wellbeing/WellbeingCharts';
 import WellbeingVisualSummaryPanel from '../components/wellbeing/WellbeingVisualSummaryPanel';
 import QuizPurposePanel from '../components/wellbeing/QuizPurposePanel';
+import SlideshowPreviewModal from '../components/wellbeing/SlideshowPreviewModal';
 import ConfirmModal from '../components/ConfirmModal';
 
 const MOOD_DRAFT_KEY = 'curam:wellbeing-mood:draft';
@@ -174,7 +175,7 @@ function TestTile({ test }) {
   );
 }
 
-function ModuleGroup({ module, tests, onReport, onCharts, onMindMap, onSuggestions }) {
+function ModuleGroup({ module, tests, onReport, onCharts, onMindMap, onSuggestions, onSlideshow, slideshowLoading }) {
   const completedCount = tests.filter((test) => test.completed).length;
   const borderColor = module.accent;
   const moduleReady = completedCount === tests.length;
@@ -207,7 +208,7 @@ function ModuleGroup({ module, tests, onReport, onCharts, onMindMap, onSuggestio
           <TestTile key={`${module.key}-${test.key}`} test={test} />
         ))}
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4" style={{ '--module-action-border': borderColor }}>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4" style={{ '--module-action-border': borderColor }}>
         <button type="button" onClick={onReport} disabled={!moduleReady} className={actionButtonClass}>
           Report
         </button>
@@ -219,6 +220,9 @@ function ModuleGroup({ module, tests, onReport, onCharts, onMindMap, onSuggestio
         </button>
         <button type="button" onClick={onSuggestions} disabled={!moduleReady} className={actionButtonClass}>
           Suggestions
+        </button>
+        <button type="button" onClick={onSlideshow} disabled={!moduleReady || slideshowLoading} className={actionButtonClass}>
+          {slideshowLoading ? 'Preparing...' : 'Slideshow'}
         </button>
       </div>
     </section>
@@ -272,7 +276,7 @@ function ModuleCompletionModal({ moduleTitle, nextLabel, onReport, onContinue, o
   );
 }
 
-function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions, onSlideshow, slideshowLoading }) {
+function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions, onSlideshow, slideshowLoading, slideshowStatus }) {
   const accentBackground = available
     ? 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 10%, var(--color-surface)), var(--color-surface) 72%)'
     : 'linear-gradient(135deg, #fffbeb, var(--color-surface) 72%)';
@@ -306,6 +310,11 @@ function ResultsTile({ available, onCombined, onCharts, onMindMap, onSuggestions
           {slideshowLoading ? 'Preparing...' : 'Slideshow'}
         </button>
       </div>
+      {slideshowStatus && (
+        <p className="text-xs mt-3" style={{ color: slideshowStatus.ok ? '#15803d' : '#991b1b' }}>
+          {slideshowStatus.message}
+        </p>
+      )}
     </div>
   );
 }
@@ -444,6 +453,11 @@ export default function WellbeingPage() {
   const [detail, setDetail] = useState(null);
   const [pdfLoadingId, setPdfLoadingId] = useState(null);
   const [slideshowLoading, setSlideshowLoading] = useState(false);
+  const [slideshowDownloading, setSlideshowDownloading] = useState(false);
+  const [slideshowStatus, setSlideshowStatus] = useState(null);
+  const [slideshowPreview, setSlideshowPreview] = useState(null);
+  const [showSlideshowModal, setShowSlideshowModal] = useState(false);
+  const [slideshowModuleKey, setSlideshowModuleKey] = useState('');
   const [moodDraftMeta, setMoodDraftMeta] = useState(null);
   const [profileStatus, setProfileStatus] = useState(null);
   const [randomising, setRandomising] = useState(false);
@@ -763,29 +777,73 @@ export default function WellbeingPage() {
     }
   };
 
-  const downloadTakeawaySlideshow = async () => {
-    if (slideshowLoading || !profileStatus?.available) return;
+  const openTakeawaySlideshow = async (moduleKey = '') => {
+    if (slideshowLoading) return;
+    const safeModuleKey = typeof moduleKey === 'string' ? moduleKey : '';
+    setSlideshowModuleKey(safeModuleKey);
+    setShowSlideshowModal(true);
     setSlideshowLoading(true);
+    setSlideshowStatus({ ok: true, message: 'Preparing slideshow preview.' });
     setError('');
     try {
-      const res = await api.get('/api/wellbeing/profile/slideshow');
+      const freshStatus = await refreshProfileStatus();
+      const moduleStatus = safeModuleKey ? freshStatus?.modules?.find((module) => module.key === safeModuleKey) : null;
+      if (safeModuleKey ? !moduleStatus?.completed : !freshStatus?.available) {
+        throw new Error(safeModuleKey
+          ? 'Module slideshow is available after the checks in that module are complete.'
+          : 'Slideshow is available after all eight checks are complete.');
+      }
+      const query = safeModuleKey ? `?moduleKey=${encodeURIComponent(safeModuleKey)}` : '';
+      const res = await api.get(`/api/wellbeing/profile/slideshow/preview${query}`);
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Slideshow generation failed');
+        const data = await res.clone().json().catch(async () => {
+          const text = await res.text().catch(() => '');
+          return { error: text };
+        });
+        throw new Error(data.error || 'Slideshow preview failed');
+      }
+      const data = await res.json();
+      setSlideshowPreview(data.slideshow);
+      setSlideshowStatus({ ok: true, message: 'Slideshow preview ready.' });
+    } catch (err) {
+      setSlideshowStatus({ ok: false, message: err.message || 'Could not open takeaway slideshow' });
+      setError(err.message || 'Could not open takeaway slideshow');
+    } finally {
+      setSlideshowLoading(false);
+    }
+  };
+
+  const downloadTakeawaySlideshow = async () => {
+    if (slideshowDownloading) return;
+    const safeModuleKey = slideshowModuleKey || '';
+    setSlideshowDownloading(true);
+    setSlideshowStatus({ ok: true, message: 'Preparing PPTX download.' });
+    setError('');
+    try {
+      const query = safeModuleKey ? `?moduleKey=${encodeURIComponent(safeModuleKey)}` : '';
+      const res = await api.get(`/api/wellbeing/profile/slideshow${query}`);
+      if (!res.ok) {
+        const data = await res.clone().json().catch(async () => {
+          const text = await res.text().catch(() => '');
+          return { error: text };
+        });
+        throw new Error(data.error || 'Slideshow download failed');
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'wellbeing-takeaways.pptx';
+      a.download = safeModuleKey ? `wellbeing-${safeModuleKey}-slideshow.pptx` : 'wellbeing-final-recap-slideshow.pptx';
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      setSlideshowStatus({ ok: true, message: 'Slideshow downloaded.' });
     } catch (err) {
+      setSlideshowStatus({ ok: false, message: err.message || 'Could not download takeaway slideshow' });
       setError(err.message || 'Could not download takeaway slideshow');
     } finally {
-      setSlideshowLoading(false);
+      setSlideshowDownloading(false);
     }
   };
 
@@ -1248,6 +1306,8 @@ export default function WellbeingPage() {
                   setReportVariant('suggestions');
                   setTool('combined');
                 }}
+                onSlideshow={() => openTakeawaySlideshow(module.key)}
+                slideshowLoading={slideshowLoading && slideshowModuleKey === module.key}
               />
             ))}
             <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
@@ -1281,8 +1341,9 @@ export default function WellbeingPage() {
                   setReportVariant('suggestions');
                   setTool('suggestions');
                 }}
-                onSlideshow={downloadTakeawaySlideshow}
-                slideshowLoading={slideshowLoading}
+                onSlideshow={openTakeawaySlideshow}
+                slideshowLoading={slideshowLoading && !slideshowModuleKey}
+                slideshowStatus={slideshowStatus}
               />
               <section className="rounded-2xl border p-5 space-y-4" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
                 <div>
@@ -1740,6 +1801,16 @@ export default function WellbeingPage() {
           )}
         </section>
       )}
+
+      <SlideshowPreviewModal
+        open={showSlideshowModal}
+        slideshow={slideshowPreview}
+        loading={slideshowLoading}
+        error={slideshowStatus?.ok === false ? slideshowStatus.message : ''}
+        downloading={slideshowDownloading}
+        onDownload={downloadTakeawaySlideshow}
+        onClose={() => setShowSlideshowModal(false)}
+      />
 
       {showRandomDataConfirm && (
         <ConfirmModal

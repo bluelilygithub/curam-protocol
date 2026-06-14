@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../utils/apiClient';
 import ModelInsightPanel from './ModelInsightPanel';
+import SlideshowPreviewModal from './SlideshowPreviewModal';
 
 const PROFILE_VARIANTS = {
   summary: {
@@ -45,6 +46,11 @@ export default function CombinedProfilePanel({
   const [generating, setGenerating] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [slideshowLoading, setSlideshowLoading] = useState(false);
+  const [slideshowDownloading, setSlideshowDownloading] = useState(false);
+  const [slideshowPreview, setSlideshowPreview] = useState(null);
+  const [showSlideshowModal, setShowSlideshowModal] = useState(false);
+  const [slideshowError, setSlideshowError] = useState('');
+  const [slideshowModuleKey, setSlideshowModuleKey] = useState('');
   const [error, setError] = useState('');
 
   const loadStatus = useCallback(async () => {
@@ -132,29 +138,65 @@ export default function CombinedProfilePanel({
     }
   };
 
-  const downloadTakeawaySlideshow = async () => {
-    if (!status?.available || slideshowLoading) return;
+  const openTakeawaySlideshow = async (moduleKey = '') => {
+    const safeModuleKey = typeof moduleKey === 'string' ? moduleKey : '';
+    const moduleStatus = safeModuleKey ? status?.modules?.find((module) => module.key === safeModuleKey) : null;
+    if ((safeModuleKey ? !moduleStatus?.completed : !status?.available) || slideshowLoading) return;
+    setSlideshowModuleKey(safeModuleKey);
+    setShowSlideshowModal(true);
     setSlideshowLoading(true);
+    setSlideshowError('');
     setError('');
     try {
-      const res = await api.get('/api/wellbeing/profile/slideshow');
+      const query = safeModuleKey ? `?moduleKey=${encodeURIComponent(safeModuleKey)}` : '';
+      const res = await api.get(`/api/wellbeing/profile/slideshow/preview${query}`);
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Slideshow generation failed');
+        const data = await res.clone().json().catch(async () => {
+          const text = await res.text().catch(() => '');
+          return { error: text };
+        });
+        throw new Error(data.error || 'Slideshow preview failed');
+      }
+      const data = await res.json();
+      setSlideshowPreview(data.slideshow);
+    } catch (err) {
+      setSlideshowError(err.message || 'Could not open takeaway slideshow');
+      setError(err.message || 'Could not open takeaway slideshow');
+    } finally {
+      setSlideshowLoading(false);
+    }
+  };
+
+  const downloadTakeawaySlideshow = async () => {
+    if (slideshowDownloading) return;
+    setSlideshowDownloading(true);
+    setSlideshowError('');
+    setError('');
+    try {
+      const safeModuleKey = slideshowModuleKey || '';
+      const query = safeModuleKey ? `?moduleKey=${encodeURIComponent(safeModuleKey)}` : '';
+      const res = await api.get(`/api/wellbeing/profile/slideshow${query}`);
+      if (!res.ok) {
+        const data = await res.clone().json().catch(async () => {
+          const text = await res.text().catch(() => '');
+          return { error: text };
+        });
+        throw new Error(data.error || 'Slideshow download failed');
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'wellbeing-takeaways.pptx';
+      a.download = safeModuleKey ? `wellbeing-${safeModuleKey}-slideshow.pptx` : 'wellbeing-final-recap-slideshow.pptx';
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
+      setSlideshowError(err.message || 'Could not download takeaway slideshow');
       setError(err.message || 'Could not download takeaway slideshow');
     } finally {
-      setSlideshowLoading(false);
+      setSlideshowDownloading(false);
     }
   };
 
@@ -261,6 +303,26 @@ export default function CombinedProfilePanel({
                 <p className="text-xs mt-3 font-semibold" style={{ color: module.completed ? '#16a34a' : '#ca8a04' }}>
                   {module.completed ? 'Module ready' : `Needs ${module.missing?.length || 0} more`}
                 </p>
+                <div className="grid grid-cols-2 gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => generateProfile('detailed', module.key)}
+                    disabled={!module.completed || !!generating}
+                    className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 disabled:opacity-40"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                  >
+                    {generating === generationKey ? 'Generating...' : 'Report'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openTakeawaySlideshow(module.key)}
+                    disabled={!module.completed || slideshowLoading}
+                    className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 disabled:opacity-40"
+                    style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
+                  >
+                    {slideshowLoading && slideshowModuleKey === module.key ? 'Preparing...' : 'Slideshow'}
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -272,12 +334,12 @@ export default function CombinedProfilePanel({
           <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Final overall report</h3>
           <button
             type="button"
-            onClick={downloadTakeawaySlideshow}
+            onClick={openTakeawaySlideshow}
             disabled={!status?.available || slideshowLoading}
             className="text-xs px-3 py-1.5 rounded-lg border hover:opacity-70 disabled:opacity-40"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}
           >
-            {slideshowLoading ? 'Preparing slideshow...' : 'Download takeaway slideshow'}
+            {slideshowLoading && !slideshowModuleKey ? 'Preparing preview...' : 'Preview takeaway slideshow'}
           </button>
         </div>
         <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>
@@ -328,6 +390,16 @@ export default function CombinedProfilePanel({
           )}
         </section>
       )}
+
+      <SlideshowPreviewModal
+        open={showSlideshowModal}
+        slideshow={slideshowPreview}
+        loading={slideshowLoading}
+        error={slideshowError}
+        downloading={slideshowDownloading}
+        onDownload={downloadTakeawaySlideshow}
+        onClose={() => setShowSlideshowModal(false)}
+      />
     </div>
   );
 }

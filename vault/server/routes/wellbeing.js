@@ -8,7 +8,10 @@ const sendEmail = require('../utils/sendEmail');
 const { buildWellbeingPdfBuffer } = require('../services/wellbeingPdf');
 const { buildCombinedProfilePdfBuffer } = require('../services/combinedProfilePdf');
 const { buildWellbeingVisualPdfBuffer } = require('../services/wellbeingVisualPdf');
-const { buildWellbeingSlideshowBuffer } = require('../services/wellbeingSlideshow');
+const {
+  buildWellbeingSlideshowData,
+  buildWellbeingSlideshowBuffer,
+} = require('../services/wellbeingSlideshow');
 const {
   DEFAULT_WELLBEING_INVITE_SUBJECT,
   DEFAULT_WELLBEING_INVITE_BODY,
@@ -52,6 +55,10 @@ const {
   generateCombinedProfile,
   latestScoreLinesFromScales,
   WELLBEING_MODULES,
+  buildCombinedScores,
+  buildCombinedFallback,
+  buildModuleFallback,
+  describeSuggestedNextSteps,
 } = require('../services/wellbeingModelInsights');
 const {
   QUESTIONNAIRE_VERSION: PANAS_QUESTIONNAIRE_VERSION,
@@ -1949,6 +1956,262 @@ async function loadOrGenerateAllModuleReports(userId, latest, force = false, var
   return reports;
 }
 
+function fallbackModuleReportFromLatest(latest, module) {
+  const scores = buildCombinedScores(latest);
+  return {
+    ...buildModuleFallback(module, latest, scores, 'summary'),
+    moduleKey: module.key,
+    moduleLabel: module.label,
+  };
+}
+
+async function loadSavedOrFallbackModuleReports(userId, latest, variant = 'summary') {
+  const reports = [];
+  for (const module of WELLBEING_MODULES) {
+    const sourceAttempts = sourceAttemptsForKeys(latest, module.tests);
+    const sourceKey = sourceKeyFromAttempts(sourceAttempts, module.tests);
+    const saved = await loadSavedCombinedReport(userId, moduleVariantKey(module.key, variant), sourceKey)
+      || (variant === 'summary'
+        ? await loadSavedCombinedReport(userId, moduleVariantKey(module.key, 'detailed'), sourceKey)
+        : null);
+    reports.push({
+      ...(saved?.profile || fallbackModuleReportFromLatest(latest, module)),
+      moduleKey: module.key,
+      moduleLabel: module.label,
+      sourceAttempts,
+      cached: !!saved,
+      savedAt: saved?.updatedAt,
+    });
+  }
+  return reports;
+}
+
+function fallbackFinalReportFromLatest(latest, moduleReports) {
+  const scores = buildCombinedScores(latest);
+  scores.moduleOutcomes = moduleReports.map((module) => ({
+    key: module.moduleKey,
+    label: module.moduleLabel,
+    summary: module.summary,
+  }));
+  return buildCombinedFallback(latest, scores);
+}
+
+function cleanSlideshowText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function formatScaleScore(scale) {
+  if (!scale || typeof scale !== 'object') return '';
+  const label = scale.label || scale.name || scale.key || scale.code;
+  const score = scale.score != null && scale.max != null ? `${scale.score}/${scale.max}` : scale.score;
+  const band = scale.band?.label || scale.band;
+  return cleanSlideshowText([
+    label,
+    score != null ? `(${score}${band ? `, ${band}` : ''})` : band ? `(${band})` : '',
+  ].filter(Boolean).join(' '));
+}
+
+function strongestScales(scales, count = 4) {
+  return [...(Array.isArray(scales) ? scales : [])]
+    .sort((a, b) => Number(b.normalized || 0) - Number(a.normalized || 0))
+    .slice(0, count);
+}
+
+function lowestScales(scales, count = 3) {
+  return [...(Array.isArray(scales) ? scales : [])]
+    .sort((a, b) => Number(a.normalized || 0) - Number(b.normalized || 0))
+    .slice(0, count);
+}
+
+function topAnswerSignals(attempt, count = 4) {
+  const analysis = attempt?.analysis || {};
+  const fromAnalysis = analysis.topAreas
+    || analysis.rationale?.drivers
+    || analysis.rationale?.topAreas
+    || analysis.rationale?.highest
+    || [];
+  const candidates = Array.isArray(fromAnalysis) && fromAnalysis.length
+    ? fromAnalysis
+    : [...(Array.isArray(attempt?.answers) ? attempt.answers : [])]
+      .sort((a, b) => Number(b.score ?? b.value ?? b.scoredValue ?? 0) - Number(a.score ?? a.value ?? a.scoredValue ?? 0))
+      .slice(0, count);
+  return candidates.slice(0, count).map((item) => {
+    const label = item.topic || item.label || item.statement || item.prompt || item.scaleLabel || item.scale || item.key;
+    const score = item.score ?? item.value ?? item.scoredValue;
+    const max = item.max ?? (score != null && Number(score) <= 3 ? 3 : null);
+    return cleanSlideshowText(`${label || 'Signal'}${score != null ? ` (${score}${max ? `/${max}` : ''})` : ''}`);
+  }).filter(Boolean);
+}
+
+function analysisSentences(attempt, count = 2) {
+  const analysis = attempt?.analysis || {};
+  return [analysis.summary, analysis.interpretation, analysis.rationale?.pattern]
+    .flatMap((value) => cleanSlideshowText(value).split(/(?<=[.!?])\s+/))
+    .filter((sentence) => sentence && !/not a diagnosis|not professional advice|not a substitute/i.test(sentence))
+    .slice(0, count);
+}
+
+function createTestReport(key, label, attempt) {
+  if (!attempt) return null;
+  const bullets = [];
+  const bandLabel = attempt.bandLabel || attempt.band?.label || attempt.band;
+  if (attempt.totalScore != null) {
+    const max = key === 'mood' ? 63 : key === 'gad7' ? 21 : key === 'asrs5' ? 24 : null;
+    bullets.push(`${label} scored ${attempt.totalScore}${max ? `/${max}` : ''}${bandLabel ? `, in the "${bandLabel}" range` : ''}.`);
+  }
+
+  const scaleSource = attempt.scaleScores || attempt.domainScores || attempt.facetScores || [];
+  const high = strongestScales(scaleSource, key === 'ipip' ? 5 : 4).map(formatScaleScore).filter(Boolean);
+  const low = lowestScales(scaleSource, key === 'ipip' ? 3 : 2).map(formatScaleScore).filter(Boolean);
+  const answerSignals = topAnswerSignals(attempt, 4);
+
+  if (high.length) bullets.push(`Strongest score signals: ${high.join('; ')}.`);
+  if (answerSignals.length && !high.length) bullets.push(`Most endorsed signals: ${answerSignals.join('; ')}.`);
+  if (answerSignals.length && ['mood', 'gad7'].includes(key)) bullets.push(`The item-level drivers were ${answerSignals.join('; ')}.`);
+  if (low.length && ['ipip', 'hexaco'].includes(key)) bullets.push(`Lower relative domains: ${low.join('; ')}.`);
+
+  analysisSentences(attempt, 3).forEach((sentence) => {
+    if (!bullets.some((item) => item.includes(sentence))) bullets.push(sentence);
+  });
+
+  if (key === 'panas' && high.length) {
+    bullets.push('Read this as emotional tone at the time of testing: it helps separate low energy, active distress, and mixed affect.');
+  }
+  if (key === 'asrs5' && high.length) {
+    bullets.push('Read this as attention and self-regulation friction that may amplify stress, delay, or recovery loops.');
+  }
+  if (key === 'cerq' && high.length) {
+    bullets.push('Read this as the thinking pattern after stress arrives: which explanations keep distress active or help it settle.');
+  }
+  if (key === 'cope' && high.length) {
+    bullets.push('Read this as the behavioural coping route: what the person tends to do with stress once it is noticed.');
+  }
+
+  return {
+    key,
+    title: label,
+    subtitle: 'Individual test finding',
+    takeaways: bullets.filter(Boolean).slice(0, 6),
+  };
+}
+
+function buildTestReportsFromLatest(latest) {
+  return [
+    createTestReport('mood', 'BDI-Style Mood Check', latest.mood),
+    createTestReport('gad7', 'GAD-7-Style Anxiety Check', latest.gad7),
+    createTestReport('panas', 'PANAS-Style Affect Check', latest.panas),
+    createTestReport('asrs5', 'ASRS-5-Style Attention Check', latest.asrs5),
+    createTestReport('ipip', 'IPIP-NEO-120 Personality Inventory', latest.ipip),
+    createTestReport('hexaco', 'HEXACO-60-Style Personality Check', latest.hexaco),
+    createTestReport('cerq', 'CERQ-Style Cognitive Coping Check', latest.cerq),
+    createTestReport('cope', 'Brief COPE-Style Coping Check', latest.cope),
+  ].filter(Boolean);
+}
+
+function chartItem(label, normalized, valueLabel, group = '') {
+  const value = Math.max(0, Math.min(1, Number(normalized) || 0));
+  return {
+    label: cleanSlideshowText(label),
+    value,
+    valueLabel: cleanSlideshowText(valueLabel || `${Math.round(value * 100)}%`),
+    group,
+  };
+}
+
+function chartItemsForAttempt(key, attempt) {
+  if (!attempt) return [];
+  if (key === 'mood') {
+    return [chartItem('Mood load', Number(attempt.totalScore || 0) / 63, `${attempt.totalScore}/63`, 'Mood')];
+  }
+  if (key === 'gad7') {
+    return [chartItem('Anxiety load', Number(attempt.totalScore || 0) / 21, `${attempt.totalScore}/21`, 'Mood')];
+  }
+  if (key === 'asrs5') {
+    return [chartItem('Attention/self-regulation friction', Number(attempt.totalScore || 0) / 24, `${attempt.totalScore}/24`, 'Regulation')];
+  }
+  const scales = attempt.scaleScores || attempt.domainScores || [];
+  return strongestScales(scales, ['ipip', 'hexaco'].includes(key) ? 6 : 5).map((scale) => chartItem(
+    scale.label || scale.key || key,
+    scale.normalized,
+    scale.score != null && scale.max != null ? `${scale.score}/${scale.max}` : scale.band,
+    ['ipip', 'hexaco'].includes(key) ? 'Traits' : key === 'panas' ? 'Affect' : 'Coping'
+  ));
+}
+
+function buildSummaryChart(latest, keys = ['mood', 'gad7', 'panas', 'asrs5', 'ipip', 'hexaco', 'cerq', 'cope']) {
+  const items = keys.flatMap((key) => chartItemsForAttempt(key, latest[key]));
+  return {
+    title: keys.length === 8 ? 'Summary chart' : 'Module summary chart',
+    subtitle: 'Relative score/load map from the completed self-report checks',
+    items: items.slice(0, keys.length === 8 ? 12 : 10),
+  };
+}
+
+function nextStepBullets(latest, moduleKey = '') {
+  const scores = buildCombinedScores(latest);
+  return describeSuggestedNextSteps(scores, moduleKey || 'overall')
+    .split(/\n{2,}/)
+    .map(cleanSlideshowText)
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function moduleSafeFilename(value) {
+  return String(value || 'wellbeing')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
+async function buildWellbeingSlideshowContent(userId, latest, moduleKey = '') {
+  const requestedModule = moduleKey ? WELLBEING_MODULES.find((module) => module.key === moduleKey) : null;
+  const allTestReports = buildTestReportsFromLatest(latest);
+  if (requestedModule) {
+    const moduleReports = (await loadSavedOrFallbackModuleReports(userId, latest, 'summary'))
+      .filter((report) => report.moduleKey === requestedModule.key);
+    return {
+      moduleReports,
+      finalProfile: null,
+      testReports: allTestReports.filter((report) => requestedModule.tests.includes(report.key)),
+      chart: buildSummaryChart(latest, requestedModule.tests),
+      nextSteps: {
+        title: `${requestedModule.label} next steps`,
+        subtitle: 'Supportive steps from this module',
+        bullets: nextStepBullets(latest, requestedModule.key),
+      },
+      scopeLabel: requestedModule.label,
+      filename: `wellbeing-${moduleSafeFilename(requestedModule.key)}-slideshow.pptx`,
+      sourceAttempts: sourceAttemptsForKeys(latest, requestedModule.tests),
+      cachedFinal: false,
+    };
+  }
+
+  const moduleReports = await loadSavedOrFallbackModuleReports(userId, latest, 'summary');
+  const sourceAttempts = sourceAttemptsFromLatest(latest);
+  const sourceKey = sourceKeyFromAttempts(sourceAttempts);
+  const cacheVariant = 'final:summary:modules';
+  const saved = await loadSavedCombinedReport(userId, cacheVariant, sourceKey)
+    || await loadSavedCombinedReport(userId, 'final:detailed:modules', sourceKey);
+  const finalProfile = saved?.profile || fallbackFinalReportFromLatest(latest, moduleReports);
+  const testReports = allTestReports;
+  return {
+    moduleReports,
+    finalProfile,
+    testReports,
+    chart: buildSummaryChart(latest),
+    nextSteps: {
+      title: 'Suggested next steps',
+      subtitle: 'Supportive habits and reflection steps',
+      bullets: nextStepBullets(latest),
+    },
+    scopeLabel: 'Final overall recap',
+    filename: 'wellbeing-final-recap-slideshow.pptx',
+    sourceAttempts,
+    cachedFinal: !!saved,
+  };
+}
+
 router.get('/profile/status', async (req, res) => {
   try {
     const latest = await loadLatestProfileInputs(req.user.id);
@@ -2230,30 +2493,95 @@ router.get('/profile/slideshow', async (req, res) => {
   try {
     const latest = await loadLatestProfileInputs(req.user.id);
     const status = profileStatusFromLatest(latest);
-    if (!status.available) {
+    const modules = moduleStatusFromLatest(latest);
+    const requestedModule = WELLBEING_MODULES.find((module) => module.key === req.query?.moduleKey);
+    const requestedModuleStatus = requestedModule ? modules.find((module) => module.key === requestedModule.key) : null;
+    if (requestedModule && !requestedModuleStatus?.completed) {
+      return res.status(400).json({
+        error: `${requestedModule.label} slideshow requires its module tests to be completed first.`,
+        status: { ...status, modules },
+      });
+    }
+    if (!requestedModule && !status.available) {
       return res.status(400).json({
         error: 'Wellbeing takeaway slideshow requires all eight tests to be completed first.',
-        status,
+        status: { ...status, modules },
       });
     }
 
-    const moduleReports = await loadOrGenerateAllModuleReports(req.user.id, latest, false, 'summary');
-    const sourceAttempts = sourceAttemptsFromLatest(latest);
-    const sourceKey = sourceKeyFromAttempts(sourceAttempts);
-    const cacheVariant = 'final:summary:modules';
-    const saved = await loadSavedCombinedReport(req.user.id, cacheVariant, sourceKey);
-    let finalProfile = saved?.profile;
-    if (!finalProfile) {
-      finalProfile = await generateCombinedProfile(req.user.id, latest, { variant: 'summary', moduleReports });
-      await saveCombinedReport(req.user.id, cacheVariant, sourceKey, sourceAttempts, finalProfile);
-    }
-
-    const buf = await buildWellbeingSlideshowBuffer({ moduleReports, finalProfile });
+    const {
+      moduleReports,
+      finalProfile,
+      testReports,
+      chart,
+      nextSteps,
+      scopeLabel,
+      filename,
+    } = await buildWellbeingSlideshowContent(req.user.id, latest, requestedModule?.key || '');
+    const buf = await buildWellbeingSlideshowBuffer({
+      moduleReports,
+      finalProfile,
+      testReports,
+      chart,
+      nextSteps,
+      scopeLabel,
+    });
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-    res.setHeader('Content-Disposition', 'attachment; filename="wellbeing-takeaways.pptx"');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buf);
   } catch (err) {
     console.error('[wellbeing slideshow]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/profile/slideshow/preview', async (req, res) => {
+  try {
+    const latest = await loadLatestProfileInputs(req.user.id);
+    const status = profileStatusFromLatest(latest);
+    const modules = moduleStatusFromLatest(latest);
+    const requestedModule = WELLBEING_MODULES.find((module) => module.key === req.query?.moduleKey);
+    const requestedModuleStatus = requestedModule ? modules.find((module) => module.key === requestedModule.key) : null;
+    if (requestedModule && !requestedModuleStatus?.completed) {
+      return res.status(400).json({
+        error: `${requestedModule.label} slideshow requires its module tests to be completed first.`,
+        status: { ...status, modules },
+      });
+    }
+    if (!requestedModule && !status.available) {
+      return res.status(400).json({
+        error: 'Wellbeing takeaway slideshow requires all eight tests to be completed first.',
+        status: { ...status, modules },
+      });
+    }
+
+    const {
+      moduleReports,
+      finalProfile,
+      testReports,
+      chart,
+      nextSteps,
+      scopeLabel,
+      sourceAttempts,
+      cachedFinal,
+    } = await buildWellbeingSlideshowContent(req.user.id, latest, requestedModule?.key || '');
+    res.json({
+      status: { ...status, modules },
+      moduleKey: requestedModule?.key || '',
+      moduleLabel: requestedModule?.label || '',
+      sourceAttempts,
+      cachedFinal,
+      slideshow: buildWellbeingSlideshowData({
+        moduleReports,
+        finalProfile,
+        testReports,
+        chart,
+        nextSteps,
+        scopeLabel,
+      }),
+    });
+  } catch (err) {
+    console.error('[wellbeing slideshow preview]', err);
     res.status(500).json({ error: err.message });
   }
 });

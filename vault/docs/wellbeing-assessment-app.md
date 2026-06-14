@@ -15,7 +15,8 @@ The dashboard includes:
 - Eight progress tiles: BDI-style mood check, GAD-7-style anxiety check, PANAS-style affect check, ASRS-5-style attention check, IPIP-NEO-120 personality inventory, HEXACO-60-style personality check, CERQ-style cognitive coping check, and Brief COPE-style coping check.
 - A progress indicator showing which of the eight tests have been completed.
 - Consistent **Review or retake** actions on completed test tiles.
-- A subtly highlighted results area that unlocks the combined profile, charts, mind map, and personal development suggestions only after all eight tests are completed.
+- Module action buttons for report, charts, mind map, suggestions, and slideshow once each module's tests are complete.
+- A subtly highlighted results area that unlocks the final combined profile, charts, mind map, personal development suggestions, and final recap slideshow only after all eight tests are completed.
 - A clickable mood-check history tile for browsing previous BDI-style attempts.
 - An admin-only **Pre-populate random test results** action for demo/testing data.
 - A reset/erase action for all wellbeing test data and local drafts.
@@ -139,7 +140,7 @@ The Combined Profile area is organised around three modules:
 - **Personality & Traits**: IPIP-NEO-120 and HEXACO-60-style personality check. This module describes more stable dispositional patterns and trait posture.
 - **Regulation & Coping**: GAD-7-style anxiety check, ASRS-5-style attention check, CERQ-style cognitive coping check, and Brief COPE-style coping check. This module describes how the person responds to stress and emotion, including attention/self-regulation pressure.
 
-Each module can generate a focused detailed report once the tests in that module are complete. Module reports use the same saved-report cache as combined profiles, with source keys based only on the tests in that module.
+Each module can generate a focused detailed report and a module-specific slideshow once the tests in that module are complete. Module reports use the same saved-report cache as combined profiles, with source keys based only on the tests in that module.
 
 The final Combined Profile is locked until the user has completed all eight tests at least once.
 
@@ -162,6 +163,7 @@ The detailed profile covers:
 - Tensions and qualifications.
 - Strengths and supports.
 - Growth edges.
+- Suggested next steps.
 - Reflection questions.
 
 The combined profile is generated through the configured model where available, using the app's provider-agnostic model path. If model generation fails or no model is configured, a deterministic fallback formulation is returned.
@@ -171,6 +173,39 @@ Generated module and final reports are saved in PostgreSQL by report type and so
 Report rendering preserves explicit paragraph breaks and line breaks in summaries, section bodies, caveats, and clinical-question sections so longer reports are easier to read.
 
 The combined profile can be downloaded as a PDF. The PDF uses the profile currently shown on screen so the exported report matches the generated text and spacing.
+
+## Suggested Next Steps
+
+Reports include a **Suggested next steps** section. These are deliberately framed as supportive habits, reflection prompts, and small experiments rather than diagnosis, treatment advice, or clinical instructions.
+
+Suggested next steps can include:
+
+- Stabilising basics such as sleep, food, gentle movement, reducing overload, recovery time, and support contact when mood or anxiety load is elevated.
+- Attention and self-regulation supports such as visible reminders, smaller task starts, timed work blocks, body doubling, fewer open decisions, and recovery breaks.
+- Coping-pattern prompts such as noticing rumination, catastrophising, avoidance, self-blame, or disengagement earlier and choosing one small re-entry step.
+- Strength-based prompts such as leaning on planning, support-seeking, perspective-taking, meaning-making, or communication patterns already visible in the profile.
+- A reminder to discuss intense, persistent, risky, or functionally costly patterns with a qualified professional or trusted support.
+
+## Slideshow Exports
+
+The slideshow feature supports preview and PowerPoint download.
+
+Module slideshows unlock when the module's tests are complete. A module deck includes:
+
+- A module summary chart slide.
+- Module synthesis.
+- Individual test-finding slides for the tests in that module.
+- Suggested next steps for that module.
+
+The final recap slideshow unlocks after all eight checks are complete. The final deck includes:
+
+- A summary chart slide across the completed wellbeing checks.
+- The three module synthesis slides.
+- Individual test-finding slides.
+- Final synthesis/detail slides where a final profile is available.
+- Suggested next steps for overall wellbeing.
+
+Slideshows are generated server-side with Node-native `pptxgenjs`, so no local Python or desktop PowerPoint automation is required.
 
 ## Combined Visual Summary
 

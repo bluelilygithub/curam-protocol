@@ -9,7 +9,7 @@ The current branch adds two groups of changes:
 - Local/runtime configuration so the same application code can run safely against a local Mac Mini PostgreSQL copy or Railway production.
 - Finance UI improvements so the business-facing position is easier to understand than the accounting trial balance control totals.
 - Local graphics generation so prompts can produce article/story support images through ComfyUI on the Mac Mini.
-- Wellbeing & Personality Checks: four self-report tests, model-assisted insights, three-level combined profile generation, visual summaries, mind map, PDF exports, admin demo data, and a reset/erase flow.
+- Wellbeing & Personality Checks: eight self-report tests, module and final reports, suggested next steps, visual summaries, mind map, PDF exports, module/final PowerPoint slideshows, admin demo data, and a reset/erase flow.
 
 These changes should be reviewed and tested locally before merging into `version-7`, because they touch environment configuration, database selection, cron behavior, email behavior, web search behavior, Finance reporting UI, member/mobile access controls, and the new Graphics workflow.
 
@@ -207,22 +207,23 @@ LOCAL_IMAGE_MODEL=DreamShaper_8_pruned.safetensors
   - Personality & Traits: IPIP-NEO-120, HEXACO-60
   - Regulation & Coping: GAD-7, ASRS-5, CERQ, Brief COPE
 - The dashboard visually groups test tiles inside bordered module panels so the relationship between checks is visible before users open reports.
-- Each module can generate a cached detailed module report.
+- Each module can generate a cached detailed module report and its own slideshow once the module's source tests are complete.
 - The final overall profile is generated from the three module outcomes and supports four report levels:
   - Summary
   - Detailed profile
   - Analytical profile
   - Suggestions
+- Reports now include careful **Suggested next steps** sections framed as supportive habits and reflection prompts, not treatment advice.
 - Report rendering preserves paragraph and line breaks in generated sections and PDFs.
 - The visual summary includes BDI and GAD-7 gauges, PANAS/ASRS-5/CERQ/Brief COPE bar charts, IPIP and HEXACO radar charts, and a mind map.
-- The combined profile, chart view, and mind map view all support PDF export.
+- The combined profile, chart view, and mind map view all support PDF export. Module and final recap slideshows support preview plus PPTX download, including a summary chart slide, individual test finding slides, synthesis slides, and suggested next steps.
 - Admins can pre-populate random wellbeing test results for demonstration/testing. The reset action removes these attempts along with real test attempts for the current user.
 
 Production checks:
 
 1. Ensure the wellbeing feature flag is available through member feature access.
 2. Confirm users have an inherited or direct text model configuration for richer generated reports.
-3. Smoke test one completion path, the three module report buttons, the final report buttons, chart PDF export, mind-map PDF export, and reset with a non-production test user.
+3. Smoke test one completion path, the three module report buttons, module slideshow preview/download, the final report buttons, final recap slideshow preview/download, chart PDF export, mind-map PDF export, and reset with a non-production test user.
 4. Confirm admin-only random pre-population is not visible to non-admin users.
 
 ## Local-Only Changes That Should Not Migrate

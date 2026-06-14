@@ -28,46 +28,187 @@ function firstSentence(value, maxLength = 190) {
   return sentence.length > maxLength ? `${sentence.slice(0, maxLength - 1).trim()}...` : sentence;
 }
 
+function sentenceFragments(value) {
+  return cleanText(value)
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function isConcreteTakeaway(value) {
+  const text = cleanText(value).toLowerCase();
+  return /\b(score|scored|range|band|highest|strongest|signals?|evidence|pattern|suggests?|appears|high|low|elevated|lower|higher|balance|endorsed|behaviourally|behaviorally|stress)\b/.test(text)
+    && !/\bproof-of-concept|not a diagnosis|not clinical advice|not a substitute\b/.test(text);
+}
+
+function truncateTakeaway(value, maxLength = 220) {
+  const text = cleanText(value);
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1).trim()}...` : text;
+}
+
 function takeawaysFromProfile(profile, limit = 5) {
   const safeProfile = profile && typeof profile === 'object' ? profile : {};
-  const takeaways = [];
+  const concrete = [];
+  const fallback = [];
+  const seen = new Set();
+
+  const addCandidate = (value, forceFallback = false) => {
+    const text = truncateTakeaway(value);
+    const key = text.toLowerCase().replace(/^[^:]{1,48}:\s*/, '');
+    if (!text || seen.has(key)) return;
+    seen.add(key);
+    if (!forceFallback && isConcreteTakeaway(text)) concrete.push(text);
+    else fallback.push(text);
+  };
 
   const summaryBlocks = String(safeProfile.summary || '')
     .split(/\n{2,}/)
-    .map((block) => firstSentence(block, 210))
+    .flatMap(sentenceFragments)
+    .map((sentence) => truncateTakeaway(sentence, 220))
     .filter(Boolean);
-  takeaways.push(...summaryBlocks.slice(0, 2));
 
   const sections = Array.isArray(safeProfile.sections) ? safeProfile.sections : [];
   for (const section of sections) {
-    if (takeaways.length >= limit) break;
     const title = cleanText(section?.title);
-    const body = firstSentence(section?.body, 190);
-    if (!title && !body) continue;
-    takeaways.push(title && body ? `${title}: ${body}` : title || body);
+    const concreteSentences = sentenceFragments(section?.body).filter(isConcreteTakeaway).slice(0, 6);
+    if (concreteSentences.length) {
+      concreteSentences.forEach((sentence, idx) => {
+        addCandidate(title && idx === 0 ? `${title}: ${sentence}` : sentence);
+      });
+    } else {
+      const body = firstSentence(section?.body, 190);
+      if (title && body) addCandidate(`${title}: ${body}`);
+      else addCandidate(title || body);
+    }
   }
+
+  summaryBlocks.forEach((sentence) => addCandidate(sentence));
 
   const questions = Array.isArray(safeProfile.questions) ? safeProfile.questions : [];
-  if (takeaways.length < limit && questions[0]) {
-    takeaways.push(`Reflection question: ${firstSentence(questions[0], 180)}`);
-  }
+  if (questions[0]) addCandidate(`Reflection question: ${firstSentence(questions[0], 180)}`, true);
 
-  return takeaways.slice(0, limit);
+  return [...concrete, ...fallback].slice(0, limit);
 }
 
-function buildDeckPayload({ moduleReports, finalProfile }) {
-  return {
-    title: 'Wellbeing Takeaway Slideshow',
-    subtitle: 'Module-level and final-report takeaway points from the completed wellbeing checks.',
-    modules: (moduleReports || []).map((report) => ({
-      title: cleanText(report.moduleLabel || report.title || 'Wellbeing module'),
-      takeaways: takeawaysFromProfile(report, 5),
+function sectionTakeaways(section, limit = 6) {
+  if (!section || typeof section !== 'object') return [];
+  return sentenceFragments(section.body)
+    .filter((sentence) => !/not a diagnosis|not clinical advice|not a substitute|proof-of-concept/i.test(sentence))
+    .map((sentence) => truncateTakeaway(sentence, 230))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function buildFinalSlides(finalProfile) {
+  if (!finalProfile) return [];
+  const slides = [{
+    type: 'final',
+    title: 'Final overall report',
+    subtitle: 'Cross-module synthesis',
+    bullets: takeawaysFromProfile(finalProfile, 6),
+  }];
+
+  const sections = Array.isArray(finalProfile?.sections) ? finalProfile.sections : [];
+  sections
+    .filter((section) => section?.title && section?.body)
+    .slice(0, 4)
+    .forEach((section) => {
+      const bullets = sectionTakeaways(section, 6);
+      if (!bullets.length) return;
+      slides.push({
+        type: 'final-section',
+        title: cleanText(section.title),
+        subtitle: 'Final profile detail',
+        bullets,
+      });
+    });
+
+  return slides;
+}
+
+function buildDeckPayload({ moduleReports, finalProfile, testReports, chart, nextSteps, scopeLabel }) {
+  const modules = (moduleReports || []).map((report) => ({
+    title: cleanText(report.moduleLabel || report.title || 'Wellbeing module'),
+    takeaways: takeawaysFromProfile(report, 6),
+  }));
+  const tests = (testReports || []).map((report) => ({
+    title: cleanText(report.title || 'Individual test finding'),
+    subtitle: cleanText(report.subtitle || 'Individual test finding'),
+    takeaways: Array.isArray(report.takeaways)
+      ? report.takeaways.map((item) => truncateTakeaway(item, 230)).filter(Boolean).slice(0, 6)
+      : [],
+  }));
+  const finalSlides = buildFinalSlides(finalProfile);
+  const hasFinalProfile = !!finalProfile;
+  const chartSlide = chart?.items?.length ? [{
+    type: 'chart',
+    title: cleanText(chart.title || 'Summary chart'),
+    subtitle: cleanText(chart.subtitle || 'Relative score/load map'),
+    chartItems: chart.items
+      .map((item) => ({
+        label: cleanText(item.label),
+        value: Math.max(0, Math.min(1, Number(item.value) || 0)),
+        valueLabel: cleanText(item.valueLabel || `${Math.round((Number(item.value) || 0) * 100)}%`),
+        group: cleanText(item.group),
+      }))
+      .filter((item) => item.label)
+      .slice(0, 12),
+  }] : [];
+  const nextStepSlides = nextSteps?.bullets?.length ? [{
+    type: 'next-steps',
+    title: cleanText(nextSteps.title || 'Suggested next steps'),
+    subtitle: cleanText(nextSteps.subtitle || 'Supportive habits and reflection steps'),
+    bullets: nextSteps.bullets.map((item) => truncateTakeaway(item, 230)).filter(Boolean).slice(0, 6),
+  }] : [];
+  const slides = [
+    {
+      type: 'title',
+      title: scopeLabel ? `${scopeLabel} Slideshow` : 'Wellbeing Results Walkthrough',
+      subtitle: hasFinalProfile
+        ? 'Module synthesis, individual test findings, and final cross-module interpretation.'
+        : 'Module synthesis, summary chart, individual test findings, and suggested next steps.',
+      bullets: [
+        ...(chartSlide.length ? ['Summary chart slide'] : []),
+        `${modules.length} module synthesis slides`,
+        `${tests.length} individual test finding slides`,
+        ...(finalSlides.length ? [`${finalSlides.length} final synthesis/detail slides`] : []),
+        ...(nextStepSlides.length ? ['Suggested next steps slide'] : []),
+      ],
+    },
+    ...chartSlide,
+    ...modules.map((module) => ({
+      type: 'module',
+      title: module.title,
+      subtitle: 'Module synthesis',
+      bullets: module.takeaways,
     })),
+    ...tests.map((test) => ({
+      type: 'test',
+      title: test.title,
+      subtitle: test.subtitle,
+      bullets: test.takeaways,
+    })),
+    ...finalSlides,
+    ...nextStepSlides,
+  ];
+
+  return {
+    title: scopeLabel ? `${scopeLabel} Slideshow` : 'Wellbeing Takeaway Slideshow',
+    subtitle: hasFinalProfile
+      ? 'Module synthesis, individual test findings, and final-report takeaway points from the completed wellbeing checks.'
+      : 'Module synthesis, individual test findings, and suggested next steps from the completed module checks.',
+    slides,
+    modules,
+    tests,
     final: {
       title: 'Final overall report',
-      takeaways: takeawaysFromProfile(finalProfile, 5),
+      takeaways: takeawaysFromProfile(finalProfile, 6),
     },
   };
+}
+
+function buildWellbeingSlideshowData({ moduleReports, finalProfile, testReports, chart, nextSteps, scopeLabel }) {
+  return buildDeckPayload({ moduleReports, finalProfile, testReports, chart, nextSteps, scopeLabel });
 }
 
 function addText(slide, text, opts = {}) {
@@ -114,7 +255,7 @@ function addTitleSlide(pptx, data, total) {
     x: 0.9, y: 3.2, w: 4.9, h: 0.45, fontSize: 16, bold: true,
   });
 
-  const sectionNames = [
+  const sectionNames = data.bullets || [
     ...(data.modules || []).map((module) => module.title || 'Module'),
     'Final overall report',
   ];
@@ -136,28 +277,61 @@ function addBulletSlide(pptx, { title, subtitle, bullets, index, total }) {
     x: 0.7, y: 0.84, w: 11.6, h: 0.65, fontSize: 28, bold: true, color: COLORS.accent,
   });
 
-  let top = 1.82;
-  (bullets || []).slice(0, 5).forEach((bullet) => {
+  let top = 1.72;
+  (bullets || []).slice(0, 6).forEach((bullet) => {
     slide.addShape(pptx.ShapeType.rect, {
       x: 0.78,
       y: top,
       w: 11.75,
-      h: 0.78,
+      h: 0.72,
       fill: { color: COLORS.card },
       line: { color: COLORS.border, transparency: 0 },
       radius: 0.12,
     });
     addText(slide, bullet, {
-      x: 1.05, y: top + 0.15, w: 11.1, h: 0.45, fontSize: 15,
+      x: 1.05, y: top + 0.12, w: 11.1, h: 0.48, fontSize: 13,
     });
-    top += 0.92;
+    top += 0.82;
   });
 
   addFooter(slide, index, total);
 }
 
-async function buildWellbeingSlideshowBuffer({ moduleReports, finalProfile }) {
-  const data = buildDeckPayload({ moduleReports, finalProfile });
+function addChartSlide(pptx, { title, subtitle, chartItems, index, total }) {
+  const slide = pptx.addSlide();
+  addBackground(slide);
+  addText(slide, subtitle, {
+    x: 0.7, y: 0.45, w: 11.5, h: 0.45, fontSize: 11, color: COLORS.muted,
+  });
+  addText(slide, title, {
+    x: 0.7, y: 0.84, w: 11.6, h: 0.65, fontSize: 28, bold: true, color: COLORS.accent,
+  });
+
+  const items = (chartItems || []).slice(0, 12);
+  const maxWidth = 7.5;
+  let top = 1.7;
+  items.forEach((item) => {
+    const value = Math.max(0, Math.min(1, Number(item.value) || 0));
+    addText(slide, item.label, {
+      x: 0.88, y: top + 0.04, w: 2.55, h: 0.25, fontSize: 10, color: COLORS.ink,
+    });
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 3.6, y: top, w: maxWidth, h: 0.24, fill: { color: 'E8DED3' }, line: { color: 'E8DED3' },
+    });
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 3.6, y: top, w: Math.max(0.05, maxWidth * value), h: 0.24, fill: { color: COLORS.accent }, line: { color: COLORS.accent },
+    });
+    addText(slide, item.valueLabel || `${Math.round(value * 100)}%`, {
+      x: 11.25, y: top - 0.01, w: 0.9, h: 0.26, fontSize: 10, color: COLORS.muted, align: 'right',
+    });
+    top += 0.42;
+  });
+
+  addFooter(slide, index, total);
+}
+
+async function buildWellbeingSlideshowBuffer({ moduleReports, finalProfile, testReports, chart, nextSteps, scopeLabel }) {
+  const data = buildWellbeingSlideshowData({ moduleReports, finalProfile, testReports, chart, nextSteps, scopeLabel });
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_WIDE';
   pptx.author = 'Curam Vault';
@@ -171,27 +345,30 @@ async function buildWellbeingSlideshowBuffer({ moduleReports, finalProfile }) {
     lang: 'en-AU',
   };
 
-  const total = 2 + (data.modules || []).length;
-  addTitleSlide(pptx, data, total);
-
-  let index = 2;
-  (data.modules || []).forEach((module) => {
+  const slides = Array.isArray(data.slides) ? data.slides : [];
+  const total = slides.length;
+  slides.forEach((slide, idx) => {
+    if (slide.type === 'title') {
+      addTitleSlide(pptx, slide, total);
+      return;
+    }
+    if (slide.type === 'chart') {
+      addChartSlide(pptx, {
+        title: slide.title || 'Summary chart',
+        subtitle: slide.subtitle || 'Relative score/load map',
+        chartItems: slide.chartItems,
+        index: idx + 1,
+        total,
+      });
+      return;
+    }
     addBulletSlide(pptx, {
-      title: module.title || 'Module takeaways',
-      subtitle: 'Module takeaway points',
-      bullets: module.takeaways,
-      index,
+      title: slide.title || 'Wellbeing takeaways',
+      subtitle: slide.subtitle || 'Takeaway points',
+      bullets: slide.bullets,
+      index: idx + 1,
       total,
     });
-    index += 1;
-  });
-
-  addBulletSlide(pptx, {
-    title: data.final?.title || 'Final overall report',
-    subtitle: 'Final report takeaway points',
-    bullets: data.final?.takeaways || [],
-    index,
-    total,
   });
 
   const output = await pptx.write({ outputType: 'nodebuffer' });
@@ -200,5 +377,6 @@ async function buildWellbeingSlideshowBuffer({ moduleReports, finalProfile }) {
 }
 
 module.exports = {
+  buildWellbeingSlideshowData,
   buildWellbeingSlideshowBuffer,
 };
