@@ -117,7 +117,7 @@ function buildMindMapSynthesis({
 
   if (moduleKey === 'mood-emotional') {
     const body = moodLow && anxietyLow && positiveScore >= negativeScore
-      ? `Your mood and anxiety scores are both low (${moodScore}/63, ${moodBand}; ${anxietyScore}/21, ${anxietyBand}), and ${affectTone}. Taken together, this suggests the current emotional-state module is not showing an overlapping mood/anxiety burden right now. The useful role of this map is mainly as a baseline: it shows what "relatively settled" looks like for comparison if future results change.`
+      ? `Your mood and anxiety scores are both low (${moodScore}/63, ${moodBand}; ${anxietyScore}/21, ${anxietyBand}), and ${affectTone}. Taken together, this suggests the current emotional-state module is not showing an overlapping mood/anxiety burden right now. The useful role of this visual index is mainly as a baseline: it shows what "relatively settled" looks like for comparison if future results change.`
       : `This module should be read as the current emotional weather: mood scored ${moodScore}/63 (${moodBand}), anxiety scored ${anxietyScore}/21 (${anxietyBand}), and ${affectTone}. The useful question is whether mood load, worry load, and affect tone are telling the same story or pulling in different directions.`;
     return {
       title: 'What this combination means',
@@ -133,7 +133,7 @@ function buildMindMapSynthesis({
   if (moduleKey === 'personality-traits') {
     return {
       title: 'What this combination means',
-      body: `This module is a style map rather than a current-symptom reading. The map is useful if it helps you ask how trait posture may affect relationships, decisions, stress, and recovery. The strongest anchors visible here are ${traitText}. The "so what" is not that these traits are good or bad; it is whether they make some support strategies, communication styles, or stress responses easier to access than others.`,
+      body: `This module is a style profile rather than a current-symptom reading. The visual index is useful if it helps you ask how trait posture may affect relationships, decisions, stress, and recovery. The strongest anchors visible here are ${traitText}. The "so what" is not that these traits are good or bad; it is whether they make some support strategies, communication styles, or stress responses easier to access than others.`,
       prompts: [
         'Which part of this style is usually helpful under low stress?',
         'Which part becomes harder to use under pressure?',
@@ -156,7 +156,7 @@ function buildMindMapSynthesis({
 
   return {
     title: 'What this combination means',
-    body: `Read this as a guided synthesis rather than a graph result. Current mood/anxiety context is ${moodScore}/63 (${moodBand}) and ${anxietyScore}/21 (${anxietyBand}); affect tone says ${affectTone}; attention signals include ${attentionText}; cognitive loops include ${lessHelpfulText}; coping resources include ${helpfulText}; and avoidant pressure includes ${avoidantText}. The useful story is whether these areas converge into one repeated pattern or whether some areas are stable while others are doing most of the work.`,
+    body: `Read this as a guided synthesis rather than a diagram result. Current mood/anxiety context is ${moodScore}/63 (${moodBand}) and ${anxietyScore}/21 (${anxietyBand}); affect tone says ${affectTone}; attention signals include ${attentionText}; cognitive loops include ${lessHelpfulText}; coping resources include ${helpfulText}; and avoidant pressure includes ${avoidantText}. The useful story is whether these areas converge into one repeated pattern or whether some areas are stable while others are doing most of the work.`,
     prompts: [
       'Which pattern appears in more than one area?',
       'Which result is most likely to be a current state rather than a stable style?',
@@ -192,8 +192,8 @@ function buildMindMap(data, moduleKey = '') {
       id: 'centre',
       label: module ? `${module.label} pattern` : 'Overall wellbeing pattern',
       detail: module
-        ? 'Visual index of this module. Not a score.'
-        : 'Visual index of the latest completed checks. Not a score.',
+        ? 'Combined reading from this module.'
+        : 'Combined reading from the latest completed checks.',
       x: 300,
       y: 210,
       color: 'var(--color-primary)',
@@ -343,18 +343,13 @@ function buildMindMap(data, moduleKey = '') {
     { from: 'humility', to: 'resources', label: 'interpersonal context' },
   ];
 
-  const notes = [
-    'Use the visual index to see which result areas are feeding the synthesis, then use the text above for the actual interpretation.',
-    moodStrength >= 0.32 && lessHelpful.length
-      ? 'Mood load and less-helpful cognitive strategies are both prominent enough to read mood pressure alongside repeated interpretations of stress.'
-      : 'Mood load is shown alongside thinking patterns so you can consider whether mood severity is isolated or part of a broader interpretation pattern.',
-    avoidant.length && nodeStrength(avoidant) >= 0.5
-      ? 'Avoidant coping is shown separately because it may provide short-term relief while leaving the original stressor unresolved.'
-      : 'Avoidant coping is included as a separate node so it does not get hidden inside the broader coping profile.',
-    helpful.length || active.length
-      ? 'Helpful cognitive strategies and active/support coping are grouped as potential resources: these are the levers most likely to interrupt the less-helpful parts of the map.'
-      : 'Resource nodes stay visible even when scores are lower, because low use of adaptive strategies can be just as informative as high use of difficult patterns.',
-  ].filter(Boolean);
+  const patternNote = moodStrength >= 0.32 && lessHelpful.length
+    ? 'Mood load and less-helpful cognitive strategies are both prominent enough to read mood pressure alongside repeated interpretations of stress.'
+    : 'Mood load is shown alongside thinking patterns so you can consider whether mood severity is isolated or part of a broader interpretation pattern.';
+  const resourceNote = helpful.length || active.length
+    ? 'Helpful cognitive strategies and active/support coping are shown as practical resources, while avoidant coping stays visible because it may offer short-term relief while leaving the original stressor unresolved.'
+    : 'Resource and coping areas stay visible because low use of adaptive strategies can be as informative as high use of difficult patterns.';
+  const notes = [patternNote, resourceNote].filter(Boolean);
   const synthesis = buildMindMapSynthesis({
     moduleKey,
     moodScore,
@@ -376,10 +371,7 @@ function buildMindMap(data, moduleKey = '') {
   const allowed = new Set(module.nodeIds);
   const filteredNodes = nodes.filter((node) => allowed.has(node.id));
   const filteredLinks = links.filter((link) => allowed.has(link.from) && allowed.has(link.to));
-  const filteredNotes = [
-    `${module.label} focuses this map on ${module.description}`,
-    ...notes.slice(0, 3),
-  ];
+  const filteredNotes = [`${module.label} focuses this visual index on ${module.description}`, ...notes.slice(0, 1)];
   return { nodes: filteredNodes, links: filteredLinks, notes: filteredNotes, synthesis };
 }
 
@@ -423,7 +415,6 @@ function MindMap({ data, moduleKey = '' }) {
                   <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: node.color }} />
                 </div>
                 <p className="text-xs mt-1" style={{ color: node.color }}>{node.emphasis}</p>
-                <p className="text-xs mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{node.detail}</p>
               </div>
             ))}
           </div>
@@ -434,7 +425,6 @@ function MindMap({ data, moduleKey = '' }) {
         <div className="rounded-2xl border p-4" style={{ borderColor: 'var(--color-primary)', background: 'var(--color-surface)' }}>
           <p className="text-xs uppercase tracking-wider font-semibold mb-3" style={{ color: 'var(--color-primary)' }}>Synthesis</p>
           <p className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{synthesisNode?.label || 'Combined pattern'}</p>
-          <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--color-muted)' }}>{synthesisNode?.detail || 'Combined reading from the listed inputs.'}</p>
           <p className="text-xs mt-3 font-semibold" style={{ color: 'var(--color-primary)' }}>
             Read the synthesis text above for the meaning.
           </p>

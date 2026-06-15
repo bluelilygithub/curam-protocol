@@ -130,8 +130,8 @@ function buildMindMapSynthesis({
   ].filter(Boolean).join(', ') || 'no dominant trait anchor';
 
   const body = moodLow && anxietyLow && positiveScore >= negativeScore
-    ? `Your mood and anxiety scores are both low (${moodScore}/63, ${moodBand}; ${anxietyScore}/21, ${anxietyBand}), and ${affectTone}. Across the broader profile, attention signals include ${attentionText}, cognitive loops include ${lessHelpfulText}, coping resources include ${helpfulText}, avoidant pressure includes ${avoidantText}, and trait anchors include ${traitText}. This map is most useful as a baseline and as a prompt to notice what changes if future results shift.`
-    : `Read this as a guided synthesis rather than a graph result. Current mood/anxiety context is ${moodScore}/63 (${moodBand}) and ${anxietyScore}/21 (${anxietyBand}); affect tone says ${affectTone}; attention signals include ${attentionText}; cognitive loops include ${lessHelpfulText}; coping resources include ${helpfulText}; avoidant pressure includes ${avoidantText}; and trait anchors include ${traitText}. The useful story is whether these areas converge into one repeated pattern or whether some areas are stable while others are doing most of the work.`;
+    ? `Your mood and anxiety scores are both low (${moodScore}/63, ${moodBand}; ${anxietyScore}/21, ${anxietyBand}), and ${affectTone}. Across the broader profile, attention signals include ${attentionText}, cognitive loops include ${lessHelpfulText}, coping resources include ${helpfulText}, avoidant pressure includes ${avoidantText}, and trait anchors include ${traitText}. This visual index is most useful as a baseline and as a prompt to notice what changes if future results shift.`
+    : `Read this as a guided synthesis rather than a diagram result. Current mood/anxiety context is ${moodScore}/63 (${moodBand}) and ${anxietyScore}/21 (${anxietyBand}); affect tone says ${affectTone}; attention signals include ${attentionText}; cognitive loops include ${lessHelpfulText}; coping resources include ${helpfulText}; avoidant pressure includes ${avoidantText}; and trait anchors include ${traitText}. The useful story is whether these areas converge into one repeated pattern or whether some areas are stable while others are doing most of the work.`;
 
   return {
     title: 'What this combination means',
@@ -166,7 +166,7 @@ function buildMindMapData(visuals) {
   const active = strongest(cope, (scale) => !['avoidant', 'self-evaluative'].includes(scale.family));
 
   const nodes = [
-    { id: 'centre', label: 'Overall pattern', detail: 'Visual index of the latest completed checks. Not a score.', x: 298, y: 300, color: colour('#6366f1'), strength: 1, emphasis: 'synthesis node' },
+    { id: 'centre', label: 'Overall pattern', detail: 'Combined reading from the latest completed checks.', x: 298, y: 300, color: colour('#6366f1'), strength: 1, emphasis: 'synthesis node' },
     { id: 'mood', label: 'Mood load', detail: `${moodScore}/63 - ${visuals?.mood?.bandLabel || 'Mood score'}`, x: 298, y: 150, color: colour('#ef4444'), strength: moodStrength, emphasis: emphasisLabel(moodStrength) },
     { id: 'anxiety', label: 'Anxiety load', detail: `${anxietyScore}/21 - ${visuals?.gad7?.bandLabel || 'Anxiety score'}`, x: 145, y: 150, color: colour('#f59e0b'), strength: anxietyStrength, emphasis: emphasisLabel(anxietyStrength) },
     { id: 'affect', label: 'Affect tone', detail: positiveAffect || negativeAffect ? `Positive ${positiveAffect?.score || 0}/${positiveAffect?.max || 50}; negative ${negativeAffect?.score || 0}/${negativeAffect?.max || 50}` : 'Positive and negative affect', x: 298, y: 210, color: colour('#a855f7'), strength: Number(negativeAffect?.normalized ?? positiveAffect?.normalized ?? 0.35), emphasis: 'current affect snapshot' },
@@ -186,18 +186,13 @@ function buildMindMapData(visuals) {
     { from: 'centre', to: 'humility', label: 'included in synthesis' }, { from: 'mood', to: 'affect', label: 'shared emotional context' }, { from: 'mood', to: 'avoidance', label: 'possible stress-response sequence' }, { from: 'anxiety', to: 'affect', label: 'shared emotional context' }, { from: 'anxiety', to: 'loops', label: 'interpret together' }, { from: 'attention', to: 'structure', label: 'self-regulation context' }, { from: 'attention', to: 'avoidance', label: 'possible stress-response sequence' }, { from: 'resources', to: 'coping', label: 'potential support route' }, { from: 'structure', to: 'coping', label: 'potential support route' }, { from: 'sensitivity', to: 'loops', label: 'interpret together' }, { from: 'humility', to: 'resources', label: 'interpersonal context' },
   ];
 
-  const notes = [
-    'This is a conceptual orientation map, not a statistical network. Node positions, circle sizes, and connections do not prove correlation, causation, or clinical significance.',
-    moodStrength >= 0.32 && lessHelpful.length
-      ? 'Mood load and less-helpful cognitive strategies are both visible, so the map invites you to read mood pressure alongside repeated interpretations of stress.'
-      : 'Mood load is shown alongside thinking patterns so you can consider whether mood severity is isolated or part of a broader interpretation pattern.',
-    avoidant.length && nodeStrength(avoidant) >= 0.5
-      ? 'Avoidant coping is shown separately because it may provide short-term relief while leaving the original stressor unresolved.'
-      : 'Avoidant coping is included separately so it does not get hidden inside the broader coping profile.',
-    helpful.length || active.length
-      ? 'Helpful cognitive strategies and active/support coping are grouped as potential resources that may interrupt less-helpful patterns.'
-      : 'Resource nodes stay visible because low use of adaptive strategies can be as informative as high use of difficult patterns.',
-  ];
+  const patternNote = moodStrength >= 0.32 && lessHelpful.length
+    ? 'Mood load and less-helpful cognitive strategies are both prominent enough to read mood pressure alongside repeated interpretations of stress.'
+    : 'Mood load is shown alongside thinking patterns so you can consider whether mood severity is isolated or part of a broader interpretation pattern.';
+  const resourceNote = helpful.length || active.length
+    ? 'Helpful cognitive strategies and active/support coping are shown as practical resources, while avoidant coping stays visible because it may offer short-term relief while leaving the original stressor unresolved.'
+    : 'Resource and coping areas stay visible because low use of adaptive strategies can be as informative as high use of difficult patterns.';
+  const notes = [patternNote, resourceNote];
 
   const synthesis = buildMindMapSynthesis({
     moodScore,
@@ -310,7 +305,7 @@ async function buildWellbeingVisualPdfBuffer({ visuals, view = 'charts' }) {
       .forEach((node) => addText(`${node.label}: ${node.detail}. ${node.emphasis}.`, { size: 9 }));
     const synthesisNode = map.nodes.find((node) => node.id === 'centre');
     addHeading('Synthesis');
-    addText(`${synthesisNode?.label || 'Combined pattern'}: ${synthesisNode?.detail || 'Combined reading from the listed inputs.'}`, { size: 9 });
+    addText(`${synthesisNode?.label || 'Combined pattern'}: read the synthesis text above for the meaning.`, { size: 9 });
     addHeading('Interpretive Notes');
     map.notes.forEach((note) => addText(`- ${note}`, { size: 9 }));
   } else {
