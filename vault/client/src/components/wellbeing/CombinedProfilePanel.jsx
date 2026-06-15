@@ -306,7 +306,7 @@ export default function CombinedProfilePanel({
                 <p className="text-xs mt-3 font-semibold" style={{ color: module.completed ? '#16a34a' : '#ca8a04' }}>
                   {module.completed ? 'Module ready' : `Needs ${module.missing?.length || 0} more`}
                 </p>
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
                   <button
                     type="button"
                     onClick={() => generateProfile('detailed', module.key)}
