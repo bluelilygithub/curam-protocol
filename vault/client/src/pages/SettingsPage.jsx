@@ -2467,7 +2467,7 @@ function SettingsPage() {
             <div>
               <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Review local tool updates</p>
               <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                Scans Homebrew, Python packages, and selected Ollama models, then lists suggested manual commands.
+                Scans Homebrew utilities, Python/pipx packages, local speech model files, and selected Ollama models, then lists suggested manual commands.
               </p>
             </div>
             <button
