@@ -1038,6 +1038,7 @@ function SettingsPage() {
                   <option value="anthropic">Anthropic</option>
                   <option value="gemini">Google Gemini</option>
                   <option value="deepseek">DeepSeek</option>
+                  <option value="ollama">Ollama local</option>
                   <option value="fal">FAL</option>
                 </select>
               </div>
@@ -1119,7 +1120,7 @@ function SettingsPage() {
                       <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#16a34a' }}>✓ Key set</span>
                     )}
                     {configured === false && (
-                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={m.provider === 'gemini' ? 'GEMINI_API_KEY not set' : m.provider === 'deepseek' ? 'DEEPSEEK_API_KEY not set' : m.provider === 'fal' ? 'FAL_API_KEY not set' : 'ANTHROPIC_API_KEY not set'} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full" title={m.provider === 'gemini' ? 'GEMINI_API_KEY not set' : m.provider === 'deepseek' ? 'DEEPSEEK_API_KEY not set' : m.provider === 'ollama' ? 'Ollama local server unavailable' : m.provider === 'fal' ? 'FAL_API_KEY not set' : 'ANTHROPIC_API_KEY not set'} style={{ background: '#fef3c7', color: '#b45309' }}>⚠️ Key missing</span>
                     )}
                     <button
                       onClick={() => testModel(m.id)}

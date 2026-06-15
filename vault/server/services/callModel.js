@@ -2,7 +2,7 @@
 
 /**
  * Provider-agnostic non-streaming model call.
- * Routes to Anthropic, DeepSeek, or Gemini based on model ID prefix.
+ * Routes to Anthropic, DeepSeek, Gemini, or local Ollama based on model ID prefix.
  *
  * @param {string} modelId
  * @param {string} userPrompt
@@ -14,6 +14,23 @@
  */
 async function callModel(modelId, userPrompt, { maxTokens = 500, system = null, returnUsage = false } = {}) {
   if (!modelId) throw new Error('callModel: modelId required');
+
+  if (modelId.startsWith('ollama:')) {
+    const { callOllamaModel } = require('./ollamaClient');
+    const messages = [];
+    if (system) messages.push({ role: 'system', content: system });
+    messages.push({ role: 'user', content: userPrompt });
+    const res = await callOllamaModel(modelId, messages, { maxTokens, stream: false });
+    const data = await res.json();
+    const text = data.message?.content?.trim() || '';
+    if (!returnUsage) return text;
+    return {
+      text,
+      inputTokens: data.prompt_eval_count || 0,
+      outputTokens: data.eval_count || 0,
+      model: modelId,
+    };
+  }
 
   if (modelId.startsWith('gemini-')) {
     const { GoogleGenerativeAI } = require('@google/generative-ai');

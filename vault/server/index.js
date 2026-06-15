@@ -90,6 +90,7 @@ app.use('/api/compare', requireFeature('compare'), require('./routes/compare'));
 app.use('/api/debate', requireFeature('debate'), require('./routes/debate'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/admin', requireAdmin, require('./routes/admin'));
+app.use('/api/local-audio', require('./routes/localAudio'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/task-templates', require('./routes/taskTemplates'));
 app.use('/api/goals', requireFeature('goals'), require('./routes/goals'));

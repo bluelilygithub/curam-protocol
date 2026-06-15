@@ -12,6 +12,8 @@ const { calculateCost } = require('../services/costCalculator');
 const { getModelsForUser, getVaultModelsConfigForUser } = require('../services/modelResolver');
 const { embedText } = require('../services/embeddings');
 const { callModel } = require('../services/callModel');
+const { callOllamaModel, isOllamaAvailable, isOllamaModel, normalizeOllamaModel } = require('../services/ollamaClient');
+const { runtimeConfig } = require('../config/runtime');
 const { FEATURE_ACCESS_DEFAULTS } = require('../config/featureAccess');
 const { getStudentCardsRoutine } = require('../prompts/studentCardsRoutine');
 
@@ -46,6 +48,13 @@ function invalidateUserProfile(userId) { profileCache.delete(userId); }
 function isGemini(modelId) { return typeof modelId === 'string' && modelId.startsWith('gemini-'); }
 function isDeepSeek(modelId) { return typeof modelId === 'string' && modelId.startsWith('deepseek-'); }
 function isImageModelProvider(provider) { return ['fal', 'seedance'].includes(String(provider || '').trim().toLowerCase()); }
+function preferLocalDefaultModel(standardModel) {
+  return runtimeConfig.isLocal && isOllamaModel(standardModel);
+}
+function localSafeRequestedModel(requestedModel, standardModel) {
+  if (!preferLocalDefaultModel(standardModel)) return requestedModel;
+  return isOllamaModel(requestedModel) ? requestedModel : null;
+}
 
 async function getConfiguredModelProvider(userId, modelId) {
   try {
@@ -467,6 +476,9 @@ function classifyStreamError(err) {
   if (/gemini_api_key is not configured/i.test(msg)) {
     return { code: 'auth', message: 'Gemini API key is not configured.', hint: 'Add GEMINI_API_KEY to your Railway environment variables.' };
   }
+  if (/local ollama models are only available|ollama api error|ollama model/i.test(msg)) {
+    return { code: 'auth', message: 'Local Ollama model is unavailable.', hint: 'Start Ollama locally and confirm the selected model is installed.' };
+  }
   if (status === 402 || /credit.balance.is.too.low|insufficient.credit/i.test(msg)) {
     return { code: 'billing', message: 'Anthropic credit balance is too low.', hint: 'Top up your account at console.anthropic.com/settings/billing.' };
   }
@@ -488,12 +500,13 @@ function classifyStreamError(err) {
   return { code: 'unknown', message: 'An error occurred while generating the response.', hint: msg || 'Try again. If the problem persists, check the server logs.' };
 }
 
-// GET /api/chat/model-status — returns which provider API keys are configured
-router.get('/model-status', (req, res) => {
+// GET /api/chat/model-status — returns which providers are configured/available
+router.get('/model-status', async (req, res) => {
   res.json({
     anthropic: !!process.env.ANTHROPIC_API_KEY,
     gemini: !!process.env.GEMINI_API_KEY,
     deepseek: !!process.env.DEEPSEEK_API_KEY,
+    ollama: await isOllamaAvailable(),
     fal: !!process.env.FAL_API_KEY,
   });
 });
@@ -507,6 +520,10 @@ router.post('/test-model', async (req, res) => {
     if (isImageModelProvider(configuredProvider)) {
       if (!process.env.FAL_API_KEY) return res.json({ ok: false, code: 'auth', error: 'FAL_API_KEY is not configured.' });
       res.json({ ok: true, response: 'FAL API key configured. This model is available for Graphics generation.' });
+    } else if (isOllamaModel(modelId, configuredProvider)) {
+      if (!await isOllamaAvailable()) return res.json({ ok: false, code: 'auth', error: 'Ollama is not available locally.' });
+      const text = await callModel(modelId.startsWith('ollama:') ? modelId : `ollama:${modelId}`, 'Reply with only the word "ok".', { maxTokens: 10 });
+      res.json({ ok: true, response: text });
     } else if (isGemini(modelId)) {
       const geminiApiKey = process.env.GEMINI_API_KEY;
       if (!geminiApiKey) return res.json({ ok: false, code: 'auth', error: 'GEMINI_API_KEY is not configured.' });
@@ -663,9 +680,11 @@ router.post('/', chatLimiter, async (req, res) => {
 
   try {
     const canSelectChatModel = req.user?.isAdmin || await canMembersSelectModel();
+    const safeReqModel = localSafeRequestedModel(reqModel, standardModel);
+    const projectModel = preferLocalDefaultModel(standardModel) ? null : project?.model;
     const model = canSelectChatModel
-      ? (reqModel || (studentCards ? standardModel : project?.model) || standardModel)
-      : (studentCards ? standardModel : project?.model || standardModel);
+      ? (safeReqModel || (studentCards ? standardModel : projectModel) || standardModel)
+      : (studentCards ? standardModel : projectModel || standardModel);
     if (!model) {
       throw new Error('No model configured. Ask an admin to configure models in Settings.');
     }
@@ -673,11 +692,48 @@ router.post('/', chatLimiter, async (req, res) => {
     if (isImageModelProvider(configuredProvider)) {
       throw new Error('FAL models are image-generation models. Select a text model for chat, or use the Graphics agent.');
     }
+    const useOllama = isOllamaModel(model, configuredProvider);
     const temperature = typeof reqTemp === 'number' ? Math.max(0, Math.min(1, reqTemp)) : 0.7;
 
     let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, cacheCreationTokens = 0;
 
-    if (isGemini(model)) {
+    if (useOllama) {
+      // ── Local Ollama path ────────────────────────────────────────────────────
+      if (!await isOllamaAvailable()) throw new Error('Ollama API error: local Ollama server is not available');
+      const ollamaMessages = toDeepSeekMessages(systemBlocks, apiMessages);
+      const ollamaResponse = await callOllamaModel(model, ollamaMessages, {
+        stream: true,
+        maxTokens: 8096,
+        temperature,
+      });
+
+      const reader = ollamaResponse.body.getReader();
+      const decoder = new TextDecoder();
+      let ollamaBuf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        ollamaBuf += decoder.decode(value, { stream: true });
+        const lines = ollamaBuf.split('\n');
+        ollamaBuf = lines.pop();
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line);
+            const text = parsed.message?.content || '';
+            if (text) {
+              fullContent += text;
+              res.write(`data: ${JSON.stringify({ delta: text, sessionId: sid })}\n\n`);
+            }
+            if (parsed.done) {
+              inputTokens = parsed.prompt_eval_count || inputTokens;
+              outputTokens = parsed.eval_count || outputTokens;
+            }
+          } catch {}
+        }
+      }
+
+    } else if (isGemini(model)) {
       // ── Gemini path ──────────────────────────────────────────────────────────
       const geminiApiKey = process.env.GEMINI_API_KEY;
       if (!geminiApiKey) throw new Error('GEMINI_API_KEY is not configured');
@@ -1701,7 +1757,18 @@ router.post('/analyse-prompt', async (req, res) => {
       }
     } catch { /* use fallback */ }
 
-    const { light: lightModel } = await getModelsForUser(req.user?.id);
+    const { light: lightModel, standard: standardModel } = await getModelsForUser(req.user?.id);
+    if (preferLocalDefaultModel(standardModel) && currentModelId && !isOllamaModel(currentModelId)) {
+      const localModel = enabledModels.find((m) => m.id === standardModel) || { id: standardModel, name: normalizeOllamaModel(standardModel), emoji: '🖥️' };
+      return res.json({
+        complexity: null,
+        needsImage: false,
+        reason: 'Local mode is configured to use Ollama.',
+        suggestedTier: null,
+        mismatch: true,
+        suggestedModels: [{ id: localModel.id, name: localModel.name, emoji: localModel.emoji || '🖥️' }],
+      });
+    }
     // Use active chat model's provider when light defaults to Anthropic but user is on another provider
     const classifyModel = (lightModel.startsWith('claude-') && currentModelId && !currentModelId.startsWith('claude-'))
       ? currentModelId
@@ -1737,6 +1804,10 @@ router.post('/analyse-prompt', async (req, res) => {
         mismatch: true,
         suggestedModels: [],
       });
+    }
+
+    if (runtimeConfig.isLocal && isOllamaModel(currentModelId)) {
+      return res.json({ mismatch: false });
     }
 
     // Check whether the current model already satisfies the suggested tier

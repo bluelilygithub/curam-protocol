@@ -41,6 +41,34 @@ const TEMPERATURES = [
   { label: 'Creative', value: 1.0, desc: 'Varied, imaginative' },
 ];
 
+function providerForModel(modelId, models = []) {
+  const configured = models.find((model) => model.id === modelId)?.provider;
+  if (configured) return configured;
+  if (modelId?.startsWith('ollama:')) return 'ollama';
+  if (modelId?.startsWith('gemini-')) return 'gemini';
+  if (modelId?.startsWith('deepseek-')) return 'deepseek';
+  return 'anthropic';
+}
+
+function providerKeyName(provider) {
+  if (provider === 'gemini') return 'GEMINI_API_KEY';
+  if (provider === 'deepseek') return 'DEEPSEEK_API_KEY';
+  if (provider === 'ollama') return 'Local Ollama';
+  return 'ANTHROPIC_API_KEY';
+}
+
+function providerLabel(provider) {
+  if (provider === 'gemini') return 'Gemini';
+  if (provider === 'deepseek') return 'DeepSeek';
+  if (provider === 'ollama') return 'Ollama';
+  return 'Anthropic';
+}
+
+function providerMissingHint(provider) {
+  if (provider === 'ollama') return 'Start Ollama locally and confirm the selected model is installed.';
+  return `Add ${providerKeyName(provider)} to your Railway environment variables.`;
+}
+
 // Memoised message list — only re-renders when messages, streaming state, or actions change,
 // not when the user types in the input field.
 const MemoMessageList = React.memo(function MemoMessageList({
@@ -106,7 +134,7 @@ function ChatPage({ general = false }) {
 
   const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
   const { models: MODELS, defaultModel } = useModels();
-  const { isSTTAvailable, isTTSAvailable, isListening, transcript, interimText, isSpeaking, isPaused, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
+  const { isSTTAvailable, isLocalSTTAvailable, isTTSAvailable, isListening, transcript, interimText, voiceError, isTranscribing, isSpeaking, isPaused, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
   const { urlAttachments, addUrl, addManual: addManualAttachment, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
   const getIcon = useIcon();
@@ -219,7 +247,7 @@ function ChatPage({ general = false }) {
   const [webSearch, setWebSearch] = useState(true);
 
   // Model availability (null = unknown, true = configured, false = missing key)
-  const [modelStatus, setModelStatus] = useState({ anthropic: null, gemini: null });
+  const [modelStatus, setModelStatus] = useState({ anthropic: null, gemini: null, deepseek: null, ollama: null });
   const [preflightError, setPreflightError] = useState(null);
 
   // Persona picker
@@ -439,7 +467,10 @@ function ChatPage({ general = false }) {
       .catch(() => {});
   }, [projectId]);
 
-  const effectiveModel = (canSelectModel ? chatModel : null) || project?.model || defaultModel || MODELS[0]?.id || '';
+  const defaultProvider = providerForModel(defaultModel, MODELS);
+  const projectModel = defaultProvider === 'ollama' ? null : project?.model;
+  const effectiveModel = (canSelectModel ? chatModel : null) || projectModel || defaultModel || MODELS[0]?.id || '';
+  const effectiveProvider = providerForModel(effectiveModel, MODELS);
   // Clear preflight error when model changes
   const prevEffectiveModelRef = useRef(effectiveModel);
   if (prevEffectiveModelRef.current !== effectiveModel) { prevEffectiveModelRef.current = effectiveModel; setPreflightError(null); }
@@ -473,13 +504,13 @@ function ChatPage({ general = false }) {
     if (urlAttachments.some(u => u.status === 'fetching')) return;
     // Model id is optional here — server resolves via getModelsForUser (admin default for members).
     if (effectiveModel) {
-      const modelIsGemini = effectiveModel.startsWith('gemini-');
-      const provider = modelIsGemini ? 'gemini' : 'anthropic';
-      if (modelStatus[provider] === false) {
-        const hint = modelIsGemini
-          ? 'Add GEMINI_API_KEY to your Railway environment variables.'
-          : 'Add ANTHROPIC_API_KEY to your Railway environment variables.';
-        setPreflightError({ code: 'auth', message: `${modelIsGemini ? 'Gemini' : 'Anthropic'} API key is not configured.`, hint });
+      if (modelStatus[effectiveProvider] === false) {
+        const label = providerLabel(effectiveProvider);
+        setPreflightError({
+          code: 'auth',
+          message: effectiveProvider === 'ollama' ? 'Local Ollama is unavailable.' : `${label} API key is not configured.`,
+          hint: providerMissingHint(effectiveProvider),
+        });
         return;
       }
     }
@@ -1126,14 +1157,14 @@ function ChatPage({ general = false }) {
               onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); }}
               className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
               style={{
-                borderColor: modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? '#f59e0b' : 'var(--color-border)',
+                borderColor: modelStatus[effectiveProvider] === false ? '#f59e0b' : 'var(--color-border)',
                 color: 'var(--color-muted)',
                 background: 'var(--color-surface)',
               }}
-              title={modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false ? 'API key not configured — click to switch model' : 'Switch AI model'}
+              title={modelStatus[effectiveProvider] === false ? `${providerKeyName(effectiveProvider)} not configured — click to switch model` : 'Switch AI model'}
             >
               {(() => { const m = MODELS.find(x => x.id === effectiveModel); return m ? `${m.emoji} ${m.name}` : effectiveModel; })()}
-              {modelStatus[effectiveModel.startsWith('gemini-') ? 'gemini' : 'anthropic'] === false && <span style={{ color: '#f59e0b' }}>⚠️</span>}
+              {modelStatus[effectiveProvider] === false && <span style={{ color: '#f59e0b' }}>⚠️</span>}
             </button>
             {showModelPicker && (
               <div
@@ -1147,7 +1178,7 @@ function ChatPage({ general = false }) {
                       key={m.id}
                       onClick={() => { setChatModel(m.id); setShowModelPicker(false); }}
                       className="w-full text-left px-3 py-2 flex items-start gap-2.5 hover:opacity-70 transition-opacity"
-                      title={unavailable ? `${m.provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'} not configured` : undefined}
+                      title={unavailable ? `${providerKeyName(m.provider)} not configured` : undefined}
                     >
                       <span className="text-base flex-shrink-0 mt-0.5">{m.emoji}</span>
                       <div className="flex-1 min-w-0">
@@ -1989,22 +2020,22 @@ function ChatPage({ general = false }) {
                         {getIcon('book', { size: 14 })}
                       </button>
 
-                      {isSTTAvailable && (
+                      {(isSTTAvailable || isLocalSTTAvailable) && (
                         <>
                           {/* Mic — starts recording; pulsing red dot while active */}
                           <button
                             onClick={startListening}
-                            disabled={isListening}
+                            disabled={isListening || isTranscribing}
                             className="w-7 h-7 flex items-center justify-center rounded-lg transition-all relative"
                             style={{
-                              color: isListening ? '#ef4444' : 'var(--color-muted)',
+                              color: isListening || isTranscribing ? '#ef4444' : 'var(--color-muted)',
                               background: 'transparent',
-                              opacity: isListening ? 1 : undefined,
+                              opacity: isListening || isTranscribing ? 1 : undefined,
                             }}
-                            title="Voice input"
+                            title={isLocalSTTAvailable && !isSTTAvailable ? 'Local voice input' : 'Voice input'}
                           >
                             {getIcon('mic', { size: 14 })}
-                            {isListening && (
+                            {(isListening || isTranscribing) && (
                               <span
                                 className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full animate-pulse"
                                 style={{ background: '#ef4444' }}
@@ -2013,29 +2044,36 @@ function ChatPage({ general = false }) {
                           </button>
 
                           {/* Live transcript preview + Stop button */}
-                          {isListening && (
+                          {(isListening || isTranscribing) && (
                             <>
                               <span
-                                className="text-xs max-w-[120px] truncate"
+                                className="text-xs max-w-[180px] truncate"
                                 style={{ color: '#ef4444' }}
                               >
-                                {interimText || 'Listening…'}
+                                {interimText || (isTranscribing ? 'Transcribing locally...' : 'Listening...')}
                               </span>
-                              <button
-                                onClick={stopListening}
-                                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all"
-                                style={{
-                                  background: '#ef4444',
-                                  color: '#fff',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                }}
-                                title="Stop recording"
-                              >
-                                {getIcon('square', { size: 10 })}
-                                Stop
-                              </button>
+                              {isListening && (
+                                <button
+                                  onClick={stopListening}
+                                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all"
+                                  style={{
+                                    background: '#ef4444',
+                                    color: '#fff',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                  }}
+                                  title="Stop recording"
+                                >
+                                  {getIcon('square', { size: 10 })}
+                                  Stop
+                                </button>
+                              )}
                             </>
+                          )}
+                          {!isListening && voiceError && (
+                            <span className="text-xs max-w-[240px] truncate" style={{ color: '#ef4444' }} title={voiceError}>
+                              {voiceError}
+                            </span>
                           )}
                         </>
                       )}

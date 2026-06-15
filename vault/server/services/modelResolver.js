@@ -1,12 +1,14 @@
 'use strict';
 
 const { pool } = require('../db');
+const { runtimeConfig } = require('../config/runtime');
 
 const EMPTY_MODELS = {
   light: null,
   standard: null,
   gemini: null,
   deepseek: null,
+  ollama: null,
 };
 
 function isImageProvider(provider) {
@@ -65,14 +67,18 @@ function pickTiers(modelEntries, configuredDefault) {
     .map((m) => m.id);
   const geminiModels = textModels.filter((m) => m.provider === 'gemini' || m.id.startsWith('gemini-')).map((m) => m.id);
   const deepseekModels = textModels.filter((m) => m.provider === 'deepseek' || m.id.startsWith('deepseek-')).map((m) => m.id);
+  const ollamaModels = textModels.filter((m) => m.provider === 'ollama' || m.id.startsWith('ollama:')).map((m) => m.id);
   const firstModel = textModelIds[0] || null;
   const standard = (configuredDefault && textModelIds.includes(configuredDefault)) ? configuredDefault : firstModel;
-  const light = anthropicModels[0] || deepseekModels[0] || geminiModels[0] || standard;
+  const light = runtimeConfig.isLocal
+    ? (ollamaModels[0] || deepseekModels[0] || geminiModels[0] || anthropicModels[0] || standard)
+    : (anthropicModels[0] || deepseekModels[0] || geminiModels[0] || ollamaModels[0] || standard);
   return {
     light: light || null,
     standard: standard || null,
     gemini: geminiModels[0] || null,
     deepseek: deepseekModels[0] || null,
+    ollama: ollamaModels[0] || null,
   };
 }
 
