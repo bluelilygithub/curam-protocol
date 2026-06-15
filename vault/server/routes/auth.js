@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
+const { getAppUrl } = require('../utils/appUrl');
 
 const SALT_ROUNDS = 12;
 const SESSION_HOURS = 24;
@@ -73,6 +74,12 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     const match = await bcrypt.compare(password, user.passwordHash);
     if (!match) return res.status(401).json({ error: 'Invalid email or password' });
+    if (user.mustChangePassword) {
+      return res.status(403).json({
+        error: 'Password setup required. Use the invitation link or request a password reset before signing in.',
+        code: 'password_setup_required',
+      });
+    }
 
     const token = makeToken();
     await pool.query(
@@ -116,8 +123,7 @@ router.post('/reset-password-request', async (req, res) => {
       [token, email.toLowerCase(), expiresAt]
     );
 
-    const requestBaseUrl = req.get('host') ? `${req.protocol}://${req.get('host')}` : '';
-    const appUrl = (process.env.APP_URL || requestBaseUrl || 'http://localhost:5173').replace(/\/$/, '');
+    const appUrl = getAppUrl(req);
     const resetLink = `${appUrl}/reset-password?token=${token}`;
     const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;background:#f5f5f0;padding:20px;">
 <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;">
@@ -156,7 +162,7 @@ router.post('/reset-password-confirm', async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, SALT_ROUNDS);
-    await pool.query('UPDATE users SET "passwordHash"=$1 WHERE email=$2', [hash, reset.email]);
+    await pool.query('UPDATE users SET "passwordHash"=$1, "mustChangePassword"=FALSE WHERE email=$2', [hash, reset.email]);
     await pool.query('DELETE FROM password_resets WHERE token=$1', [token]);
     const { rows: users } = await pool.query('SELECT id FROM users WHERE email=$1', [reset.email]);
     if (users[0]) await pool.query('DELETE FROM auth_sessions WHERE "userId"=$1', [users[0].id]);
@@ -183,7 +189,7 @@ router.get('/me', async (req, res) => {
     }
 
     const { rows: users } = await pool.query(
-      'SELECT id, email, "createdAt", "isAdmin" FROM users WHERE id=$1', [session.userId]
+      'SELECT id, email, "createdAt", "isAdmin", "mustChangePassword" FROM users WHERE id=$1', [session.userId]
     );
     const user = users[0];
     if (!user) return res.status(401).json({ error: 'User not found' });

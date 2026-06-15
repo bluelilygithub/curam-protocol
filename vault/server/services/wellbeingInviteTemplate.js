@@ -21,7 +21,7 @@ When all eight are completed, the system can generate an overall profile, charts
 
 What you are expected to do:
 
-1. Log in using the email address and temporary password below.
+1. Open the secure setup link below and choose your own password.
 2. Complete the eight checks as honestly as you can.
 3. Use the optional reflection boxes where extra context would make an answer clearer.
 4. Review your results when you are finished.
@@ -30,16 +30,13 @@ The full set of checks may take around 30 to 45 minutes, depending on how much r
 
 This is not medical advice, a diagnosis, a clinical risk assessment, or a substitute for a qualified professional. If any question raises concern about immediate safety or distress, please seek appropriate professional, crisis, or emergency support.
 
-When you are finished, you can use the reset option in the Wellbeing dashboard to erase all completed wellbeing test results for your account and clear paused drafts from that device.
+After testing or using the checks, you can reset and erase your wellbeing data if you wish. Use the reset option in the Wellbeing dashboard to delete completed wellbeing test results for your account and clear paused drafts from that device.
 
-Login link:
+Secure setup link:
 {{link}}
 
 Email:
 {{email}}
-
-Temporary password:
-{{password}}
 
 Regards,
 Curam`;
@@ -53,11 +50,25 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function sanitizeWellbeingInviteBody(body) {
+  const cleaned = String(body || DEFAULT_WELLBEING_INVITE_BODY)
+    .replace(/^\s*Temporary password:\s*\n\s*\{\{\s*password\s*\}\}\s*\n?/gim, '')
+    .replace(/\{\{\s*password\s*\}\}/gi, '')
+    .replace(/temporary password below/gi, 'secure setup link below')
+    .replace(/temporary password/gi, 'setup link')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (/(erase|delete|reset).{0,80}(wellbeing|test|data|results)|wellbeing.{0,80}(erase|delete|reset)/i.test(cleaned)) {
+    return cleaned;
+  }
+  const notice = 'After testing or using the checks, you can reset and erase your wellbeing data if you wish. Use the reset option in the Wellbeing dashboard to delete completed wellbeing test results for your account and clear paused drafts from that device.';
+  return cleaned.replace(/\n+(Secure setup link:\s*\n\{\{\s*link\s*\}\})/i, `\n\n${notice}\n\n$1`);
+}
+
 function fillTemplate(template, values) {
-  return String(template || '')
+  return sanitizeWellbeingInviteBody(template)
     .replace(/\{\{\s*link\s*\}\}/gi, values.link)
-    .replace(/\{\{\s*email\s*\}\}/gi, values.email)
-    .replace(/\{\{\s*password\s*\}\}/gi, values.password);
+    .replace(/\{\{\s*email\s*\}\}/gi, values.email);
 }
 
 function textToHtml(text) {
@@ -76,8 +87,8 @@ function textToHtml(text) {
     .join('\n');
 }
 
-function renderWellbeingInviteHtml({ body, email, password, link }) {
-  const filled = fillTemplate(body || DEFAULT_WELLBEING_INVITE_BODY, { email, password, link });
+function renderWellbeingInviteHtml({ body, email, link }) {
+  const filled = fillTemplate(body || DEFAULT_WELLBEING_INVITE_BODY, { email, link });
   return `<!DOCTYPE html>
 <html>
   <body style="font-family: Arial, sans-serif; background: #f5f5f0; padding: 24px; color: #1a1a1a;">
@@ -87,7 +98,7 @@ function renderWellbeingInviteHtml({ body, email, password, link }) {
       </div>
       <p style="margin-top: 24px;">
         <a href="${escapeHtml(link)}" style="display: inline-block; background: #CC785C; color: #ffffff; padding: 12px 20px; border-radius: 10px; text-decoration: none; font-weight: 700;">
-          Open Wellbeing Checks
+          Set Password & Open Wellbeing Checks
         </a>
       </p>
     </div>
@@ -98,5 +109,6 @@ function renderWellbeingInviteHtml({ body, email, password, link }) {
 module.exports = {
   DEFAULT_WELLBEING_INVITE_SUBJECT,
   DEFAULT_WELLBEING_INVITE_BODY,
+  sanitizeWellbeingInviteBody,
   renderWellbeingInviteHtml,
 };

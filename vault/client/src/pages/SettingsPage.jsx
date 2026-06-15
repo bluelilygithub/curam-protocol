@@ -122,7 +122,7 @@ function SettingsPage() {
   const [contentRestrictionsSaved, setContentRestrictionsSaved] = useState(false);
   const [wellbeingInviteSubject, setWellbeingInviteSubject] = useState('');
   const [wellbeingInviteBody, setWellbeingInviteBody] = useState('');
-  const [wellbeingInvitePlaceholders, setWellbeingInvitePlaceholders] = useState(['{{link}}', '{{email}}', '{{password}}']);
+  const [wellbeingInvitePlaceholders, setWellbeingInvitePlaceholders] = useState(['{{link}}', '{{email}}']);
   const [wellbeingInviteSaved, setWellbeingInviteSaved] = useState(false);
   const [wellbeingInviteError, setWellbeingInviteError] = useState('');
   const [toolMaintenancePlan, setToolMaintenancePlan] = useState(null);
@@ -2351,7 +2351,7 @@ function SettingsPage() {
             ))}
           </div>
           <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
-            Keep these placeholders in the body if you want the email to include the participant's login link, email address, and temporary password.
+            Keep these placeholders in the body if you want the email to include the participant's secure setup link and email address.
           </p>
         </div>
 

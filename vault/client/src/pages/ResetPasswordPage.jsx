@@ -5,6 +5,10 @@ import { useIcon } from '../providers/IconProvider';
 function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
+  const next = searchParams.get('next') || '';
+  const safeNext = next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/login') && !next.startsWith('/reset-password')
+    ? next
+    : '';
   const navigate = useNavigate();
   const getIcon = useIcon();
 
@@ -27,8 +31,8 @@ function ResetPasswordPage() {
       });
       const data = await res.json();
       if (!res.ok) return setStatus({ ok: false, msg: data.error || 'Failed to reset password' });
-      setStatus({ ok: true, msg: 'Password reset! Redirecting to sign in…' });
-      setTimeout(() => navigate('/login', { replace: true }), 2000);
+      setStatus({ ok: true, msg: 'Password set. Redirecting to sign in…' });
+      setTimeout(() => navigate(`/login${safeNext ? `?next=${encodeURIComponent(safeNext)}` : ''}`, { replace: true }), 2000);
     } catch {
       setStatus({ ok: false, msg: 'Network error' });
     } finally {
@@ -57,8 +61,8 @@ function ResetPasswordPage() {
           >
             ✦
           </div>
-          <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Set new password</h1>
-          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Enter your new password below</p>
+          <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>Set your password</h1>
+          <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Choose a password for your account below</p>
         </div>
 
         <form
@@ -108,7 +112,7 @@ function ResetPasswordPage() {
             className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-opacity hover:opacity-80 disabled:opacity-50"
             style={{ background: 'var(--color-primary)' }}
           >
-            {loading ? 'Resetting…' : 'Reset Password'}
+            {loading ? 'Saving…' : 'Set Password'}
           </button>
 
           <div className="text-center">

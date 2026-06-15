@@ -9,6 +9,7 @@ const { getPublicRuntimeConfig } = require('../config/runtime');
 const {
   DEFAULT_WELLBEING_INVITE_SUBJECT,
   DEFAULT_WELLBEING_INVITE_BODY,
+  sanitizeWellbeingInviteBody,
 } = require('../services/wellbeingInviteTemplate');
 const {
   scanToolMaintenance,
@@ -258,8 +259,8 @@ router.get('/wellbeing-invite-template', async (req, res) => {
     const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
     res.json({
       subject: values[WELLBEING_INVITE_SUBJECT_KEY] || DEFAULT_WELLBEING_INVITE_SUBJECT,
-      body: values[WELLBEING_INVITE_BODY_KEY] || DEFAULT_WELLBEING_INVITE_BODY,
-      placeholders: ['{{link}}', '{{email}}', '{{password}}'],
+      body: sanitizeWellbeingInviteBody(values[WELLBEING_INVITE_BODY_KEY] || DEFAULT_WELLBEING_INVITE_BODY),
+      placeholders: ['{{link}}', '{{email}}'],
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -270,7 +271,7 @@ router.get('/wellbeing-invite-template', async (req, res) => {
 router.post('/wellbeing-invite-template', async (req, res) => {
   if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
   const subject = String(req.body?.subject || '').trim().slice(0, 180) || DEFAULT_WELLBEING_INVITE_SUBJECT;
-  const body = String(req.body?.body || '').trim().slice(0, 12000) || DEFAULT_WELLBEING_INVITE_BODY;
+  const body = sanitizeWellbeingInviteBody(String(req.body?.body || '').trim().slice(0, 12000) || DEFAULT_WELLBEING_INVITE_BODY);
   try {
     for (const [key, value] of [
       [WELLBEING_INVITE_SUBJECT_KEY, subject],

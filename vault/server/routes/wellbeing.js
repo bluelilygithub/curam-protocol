@@ -3,8 +3,10 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { pool } = require('../db');
 const sendEmail = require('../utils/sendEmail');
+const { getAppUrl } = require('../utils/appUrl');
 const { buildWellbeingPdfBuffer } = require('../services/wellbeingPdf');
 const { buildCombinedProfilePdfBuffer } = require('../services/combinedProfilePdf');
 const { buildWellbeingVisualPdfBuffer } = require('../services/wellbeingVisualPdf');
@@ -2393,19 +2395,16 @@ router.post('/admin/invite', async (req, res) => {
   }
 
   const email = String(req.body?.email || '').trim().toLowerCase();
-  const password = String(req.body?.password || '');
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: 'Valid participant email is required.' });
-  }
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   }
 
   const client = await pool.connect();
   let created = false;
   let userId = null;
+  const setupToken = crypto.randomBytes(32).toString('hex');
+  const setupExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   try {
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
     await client.query('BEGIN');
     const { rows: existingRows } = await client.query(
       'SELECT id, "isAdmin" FROM users WHERE email=$1',
@@ -2419,16 +2418,22 @@ router.post('/admin/invite', async (req, res) => {
 
     if (existing) {
       userId = existing.id;
-      await client.query('UPDATE users SET "passwordHash"=$1 WHERE id=$2', [passwordHash, userId]);
+      await client.query('UPDATE users SET "mustChangePassword"=TRUE WHERE id=$1', [userId]);
       await client.query('DELETE FROM auth_sessions WHERE "userId"=$1', [userId]);
     } else {
+      const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), SALT_ROUNDS);
       const { rows } = await client.query(
-        'INSERT INTO users (email, "passwordHash", "isAdmin") VALUES ($1, $2, FALSE) RETURNING id',
+        'INSERT INTO users (email, "passwordHash", "isAdmin", "mustChangePassword") VALUES ($1, $2, FALSE, TRUE) RETURNING id',
         [email, passwordHash]
       );
       userId = rows[0].id;
       created = true;
     }
+    await client.query('DELETE FROM password_resets WHERE email=$1', [email]);
+    await client.query(
+      'INSERT INTO password_resets (token, email, "expiresAt") VALUES ($1, $2, $3)',
+      [setupToken, email, setupExpiresAt]
+    );
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -2438,18 +2443,26 @@ router.post('/admin/invite', async (req, res) => {
   client.release();
 
   try {
-    const requestBaseUrl = req.get('host') ? `${req.protocol}://${req.get('host')}` : '';
-    const appUrl = (process.env.APP_URL || requestBaseUrl || 'http://localhost:5173').replace(/\/$/, '');
-    const link = `${appUrl}/login?next=${encodeURIComponent('/wellbeing')}`;
+    const appUrl = getAppUrl(req);
+    const link = `${appUrl}/reset-password?token=${setupToken}&next=${encodeURIComponent('/wellbeing')}`;
     const template = await loadWellbeingInviteTemplate();
     const html = renderWellbeingInviteHtml({
       body: template.body,
       email,
-      password,
       link,
     });
-    await sendEmail({ to: email, subject: template.subject, html });
-    res.json({ ok: true, created, userId, email, link });
+    const emailResult = await sendEmail({ to: email, subject: template.subject, html });
+    if (emailResult?.skipped) {
+      return res.status(503).json({
+        error: `Participant account ${created ? 'created' : 'updated'}, but the invite email was not sent: ${emailResult.reason}`,
+        created,
+        userId,
+        email,
+        link,
+        emailSkipped: true,
+      });
+    }
+    res.json({ ok: true, created, userId, email, link, setupRequired: true });
   } catch (err) {
     console.error('[wellbeing invite email]', err);
     res.status(500).json({

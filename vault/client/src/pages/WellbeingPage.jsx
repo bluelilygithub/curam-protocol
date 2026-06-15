@@ -466,7 +466,7 @@ export default function WellbeingPage() {
   const [showResetTestsConfirm, setShowResetTestsConfirm] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteMode, setInviteMode] = useState('send');
-  const [inviteForm, setInviteForm] = useState({ email: '', password: '' });
+  const [inviteForm, setInviteForm] = useState({ email: '' });
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteStatus, setInviteStatus] = useState(null);
 
@@ -741,12 +741,21 @@ export default function WellbeingPage() {
     try {
       const res = await api.post('/api/wellbeing/admin/invite', inviteForm);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not send invite');
+      if (!res.ok) {
+        if (data.link) {
+          setInviteStatus({
+            ok: false,
+            message: `${data.error || 'Could not send invite'} Setup link: ${data.link}`,
+          });
+          return;
+        }
+        throw new Error(data.error || 'Could not send invite');
+      }
       setInviteStatus({
         ok: true,
-        message: `Invite sent to ${data.email}. ${data.created ? 'A participant account was created.' : 'The existing participant password was updated.'}`,
+        message: `Invite sent to ${data.email}. ${data.created ? 'A participant account was created.' : 'The participant must set a password from the secure invite link.'}`,
       });
-      setInviteForm({ email: '', password: '' });
+      setInviteForm({ email: '' });
     } catch (err) {
       setInviteStatus({ ok: false, message: err.message || 'Could not send invite' });
     } finally {
@@ -1847,8 +1856,8 @@ export default function WellbeingPage() {
                 </h2>
                 <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
                   {inviteMode === 'resend'
-                    ? 'Send the wellbeing invite email again. Because passwords are not stored in plain text, the password entered here will become the participant password.'
-                    : 'Create a login and send the wellbeing invite email using the current admin template.'}
+                    ? 'Send the wellbeing invite email again with a fresh secure password setup link.'
+                    : 'Create a login and send a secure password setup link using the current admin template.'}
                 </p>
               </div>
               <button
@@ -1876,24 +1885,9 @@ export default function WellbeingPage() {
                 />
               </label>
 
-              <label className="block">
-                <span className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>Temporary password</span>
-                <input
-                  type="text"
-                  required
-                  minLength={8}
-                  value={inviteForm.password}
-                  onChange={(e) => setInviteForm((prev) => ({ ...prev, password: e.target.value }))}
-                  placeholder="Create a password for this participant"
-                  className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
-                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                />
-                <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-                  {inviteMode === 'resend'
-                    ? 'Minimum 8 characters. Resending will update the participant password to this value and include it in the email.'
-                    : 'Minimum 8 characters. This password is included in the invite email.'}
-                </p>
-              </label>
+              <p className="rounded-xl border px-3 py-2 text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                No password will be sent by email. The participant will choose their own password from a one-time setup link.
+              </p>
 
               {inviteStatus && (
                 <div className="rounded-xl px-3 py-2 text-sm" style={{ color: inviteStatus.ok ? '#166534' : '#991b1b', background: inviteStatus.ok ? '#dcfce7' : '#fee2e2' }}>
