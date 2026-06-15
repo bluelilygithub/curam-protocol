@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSettingsStore from '../store/settingsStore';
 import useAuthStore from '../store/authStore';
@@ -80,6 +80,8 @@ function SettingsPage() {
   const [profileTimezone, setProfileTimezone] = useState('');
   const [audioVoices, setAudioVoices] = useState([]);
   const [audioVoiceURI, setAudioVoiceURI] = useState('');
+  const [previewingVoiceURI, setPreviewingVoiceURI] = useState('');
+  const voicePreviewRef = useRef(null);
 
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwStatus, setPwStatus] = useState(null);
@@ -193,6 +195,39 @@ function SettingsPage() {
       }
     };
   }, []);
+
+  useEffect(() => () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  }, []);
+
+  function previewAudioVoice(voice = null) {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const previewId = voice?.voiceURI || '__default__';
+    if (previewingVoiceURI === previewId) {
+      window.speechSynthesis.cancel();
+      setPreviewingVoiceURI('');
+      voicePreviewRef.current = null;
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance('This is a preview of this chat audio voice.');
+    if (voice) utterance.voice = voice;
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    voicePreviewRef.current = utterance;
+    setPreviewingVoiceURI(previewId);
+    utterance.onend = () => {
+      if (voicePreviewRef.current === utterance) {
+        setPreviewingVoiceURI('');
+        voicePreviewRef.current = null;
+      }
+    };
+    utterance.onerror = utterance.onend;
+    window.speechSynthesis.speak(utterance);
+  }
 
   function saveAudioVoice(voiceURI) {
     const next = voiceURI || '';
@@ -652,19 +687,88 @@ function SettingsPage() {
           </div>
           <div>
             <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Audio voice</label>
-            <select
-              value={audioVoiceURI}
-              onChange={e => saveAudioVoice(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            <div
+              className="rounded-lg border overflow-hidden"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             >
-              <option value="">System default voice</option>
-              {audioVoices.map((voice) => (
-                <option key={voice.voiceURI} value={voice.voiceURI}>
-                  {voice.name} ({voice.lang}){voice.localService ? ' - local/offline capable' : ''}
-                </option>
-              ))}
-            </select>
+              <div className="flex items-center gap-3 px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                <button
+                  type="button"
+                  onClick={() => previewAudioVoice(null)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg border transition-opacity hover:opacity-75"
+                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}
+                  title={previewingVoiceURI === '__default__' ? 'Stop preview' : 'Preview system default voice'}
+                >
+                  {getIcon(previewingVoiceURI === '__default__' ? 'square' : 'play', { size: 13 })}
+                </button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium" style={{ color: !audioVoiceURI ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                    System default voice
+                  </p>
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Use the browser/device default voice</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => saveAudioVoice('')}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold border transition-opacity hover:opacity-75"
+                  style={{
+                    borderColor: !audioVoiceURI ? 'var(--color-primary)' : 'var(--color-border)',
+                    color: !audioVoiceURI ? 'var(--color-primary)' : 'var(--color-muted)',
+                    background: !audioVoiceURI ? 'var(--color-primary)10' : 'var(--color-bg)',
+                  }}
+                >
+                  {!audioVoiceURI ? 'Selected' : 'Use'}
+                </button>
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {audioVoices.map((voice) => {
+                  const selected = audioVoiceURI === voice.voiceURI;
+                  const previewing = previewingVoiceURI === voice.voiceURI;
+                  return (
+                    <div
+                      key={voice.voiceURI}
+                      className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0"
+                      style={{ borderColor: 'var(--color-border)' }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => previewAudioVoice(voice)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg border transition-opacity hover:opacity-75"
+                        style={{ borderColor: 'var(--color-border)', color: previewing ? 'var(--color-primary)' : 'var(--color-muted)', background: 'var(--color-bg)' }}
+                        title={previewing ? 'Stop preview' : `Preview ${voice.name}`}
+                      >
+                        {getIcon(previewing ? 'square' : 'play', { size: 13 })}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate" style={{ color: selected ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                          {voice.name}
+                        </p>
+                        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                          {voice.lang}{voice.localService ? ' - local/offline capable' : ' - browser/network voice'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => saveAudioVoice(voice.voiceURI)}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold border transition-opacity hover:opacity-75"
+                        style={{
+                          borderColor: selected ? 'var(--color-primary)' : 'var(--color-border)',
+                          color: selected ? 'var(--color-primary)' : 'var(--color-muted)',
+                          background: selected ? 'var(--color-primary)10' : 'var(--color-bg)',
+                        }}
+                      >
+                        {selected ? 'Selected' : 'Use'}
+                      </button>
+                    </div>
+                  );
+                })}
+                {audioVoices.length === 0 && (
+                  <p className="px-3 py-3 text-xs" style={{ color: 'var(--color-muted)' }}>
+                    No browser voices reported yet. Try refreshing after the page loads.
+                  </p>
+                )}
+              </div>
+            </div>
             <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
               Used by Chat read-aloud. Voice availability comes from the current browser/device, so production users see their own installed voices.
             </p>
