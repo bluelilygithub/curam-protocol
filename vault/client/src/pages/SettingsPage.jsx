@@ -27,6 +27,9 @@ import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mo
 import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
 import UsersAdminPanel from '../components/UsersAdminPanel';
 
+const AUDIO_VOICE_SETTING_KEY = 'audio_voice_uri';
+const AUDIO_VOICE_STORAGE_KEY = 'vault:chat:selected-voice-uri';
+
 function SettingsPage() {
   const navigate = useNavigate();
   const {
@@ -75,6 +78,8 @@ function SettingsPage() {
   const [profileState,    setProfileState]    = useState('');
   const [profileCountry,  setProfileCountry]  = useState('');
   const [profileTimezone, setProfileTimezone] = useState('');
+  const [audioVoices, setAudioVoices] = useState([]);
+  const [audioVoiceURI, setAudioVoiceURI] = useState('');
 
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwStatus, setPwStatus] = useState(null);
@@ -174,6 +179,34 @@ function SettingsPage() {
   }, [tab, user?.isAdmin]);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return undefined;
+
+    const loadVoices = () => {
+      setAudioVoices(window.speechSynthesis.getVoices());
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    return () => {
+      if (window.speechSynthesis.onvoiceschanged === loadVoices) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  function saveAudioVoice(voiceURI) {
+    const next = voiceURI || '';
+    setAudioVoiceURI(next);
+    try {
+      if (next) window.localStorage.setItem(AUDIO_VOICE_STORAGE_KEY, next);
+      else window.localStorage.removeItem(AUDIO_VOICE_STORAGE_KEY);
+    } catch {
+      /* browser storage may be unavailable */
+    }
+    api.post('/api/settings', { key: AUDIO_VOICE_SETTING_KEY, value: next }).catch(() => {});
+  }
+
+  useEffect(() => {
     api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
     // Load allowedFileTypes from DB. If no DB value exists yet, seed it with the
     // current comprehensive default (also fixes stale localStorage values from older builds).
@@ -199,6 +232,7 @@ function SettingsPage() {
       if (data.user_state)    setProfileState(data.user_state);
       if (data.user_country)  setProfileCountry(data.user_country);
       if (data.user_timezone) setProfileTimezone(data.user_timezone);
+      if (data[AUDIO_VOICE_SETTING_KEY]) setAudioVoiceURI(data[AUDIO_VOICE_SETTING_KEY]);
       if (data.inquiry_reminder_frequency) setInquiryFrequency(data.inquiry_reminder_frequency);
       if (data.inquiry_reminder_time)      setInquiryTime(data.inquiry_reminder_time);
       if (data.inquiry_reminder_days)      { try { setInquiryDays(JSON.parse(data.inquiry_reminder_days)); } catch {} }
@@ -614,6 +648,25 @@ function SettingsPage() {
             </select>
             <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
               Used by automated schedules (news, shares). Admin's timezone is the system default.
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Audio voice</label>
+            <select
+              value={audioVoiceURI}
+              onChange={e => saveAudioVoice(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">System default voice</option>
+              {audioVoices.map((voice) => (
+                <option key={voice.voiceURI} value={voice.voiceURI}>
+                  {voice.name} ({voice.lang}){voice.localService ? ' - local/offline capable' : ''}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+              Used by Chat read-aloud. Voice availability comes from the current browser/device, so production users see their own installed voices.
             </p>
           </div>
         </div>

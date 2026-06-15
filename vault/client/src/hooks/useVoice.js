@@ -31,6 +31,9 @@ const isLocalSTTAvailable = typeof window !== 'undefined' &&
   'MediaRecorder' in window &&
   !!navigator.mediaDevices?.getUserMedia;
 
+const VOICE_STORAGE_KEY = 'vault:chat:selected-voice-uri';
+const VOICE_SETTING_KEY = 'audio_voice_uri';
+
 function speechErrorMessage(error) {
   switch (error) {
     case 'not-allowed':
@@ -57,12 +60,53 @@ export function useVoice() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isPaused,   setIsPaused]   = useState(false);
+  const [speakingId, setSpeakingId] = useState(null);
+  const [voices, setVoices] = useState([]);
+  const [selectedVoiceURI, setSelectedVoiceURIState] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      return window.localStorage.getItem(VOICE_STORAGE_KEY) || '';
+    } catch (_) {
+      return '';
+    }
+  });
   const recognitionRef = useRef(null);
   const accumulatedRef = useRef(''); // finals gathered across continuous utterances
   const mediaRecorderRef = useRef(null);
   const mediaChunksRef = useRef([]);
   const mediaStreamRef = useRef(null);
   const voiceModeRef = useRef('browser');
+  const utteranceRef = useRef(null);
+
+  const setSelectedVoiceURI = useCallback((voiceURI) => {
+    const next = voiceURI || '';
+    setSelectedVoiceURIState(next);
+    try {
+      if (next) window.localStorage.setItem(VOICE_STORAGE_KEY, next);
+      else window.localStorage.removeItem(VOICE_STORAGE_KEY);
+    } catch (_) {
+      /* browser storage may be unavailable */
+    }
+    api.post('/api/settings', { key: VOICE_SETTING_KEY, value: next }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/api/settings')
+      .then((res) => res.ok ? res.json() : null)
+      .then((settings) => {
+        if (cancelled || !settings?.[VOICE_SETTING_KEY]) return;
+        const next = settings[VOICE_SETTING_KEY];
+        setSelectedVoiceURIState(next);
+        try {
+          window.localStorage.setItem(VOICE_STORAGE_KEY, next);
+        } catch (_) {
+          /* browser storage may be unavailable */
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const transcribeLocalAudio = useCallback(async (blob) => {
     const formData = new FormData();
@@ -248,17 +292,50 @@ export function useVoice() {
     setVoiceError('');
   }, []);
 
-  const speak = useCallback((text) => {
+  useEffect(() => {
+    if (!isTTSAvailable) return undefined;
+
+    const loadVoices = () => {
+      setVoices(window.speechSynthesis.getVoices());
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    return () => {
+      if (window.speechSynthesis.onvoiceschanged === loadVoices) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, []);
+
+  const speak = useCallback((text, speechId = null) => {
     if (!isTTSAvailable) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(stripForSpeech(text));
+    const selectedVoice = voices.find((voice) => voice.voiceURI === selectedVoiceURI);
+    if (selectedVoice) utterance.voice = selectedVoice;
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
-    utterance.onstart = () => { setIsSpeaking(true); setIsPaused(false); };
-    utterance.onend   = () => { setIsSpeaking(false); setIsPaused(false); };
-    utterance.onerror = () => { setIsSpeaking(false); setIsPaused(false); };
+    utteranceRef.current = utterance;
+    utterance.onstart = () => {
+      setSpeakingId(speechId);
+      setIsSpeaking(true);
+      setIsPaused(false);
+    };
+    utterance.onend = () => {
+      if (utteranceRef.current === utterance) utteranceRef.current = null;
+      setSpeakingId(null);
+      setIsSpeaking(false);
+      setIsPaused(false);
+    };
+    utterance.onerror = () => {
+      if (utteranceRef.current === utterance) utteranceRef.current = null;
+      setSpeakingId(null);
+      setIsSpeaking(false);
+      setIsPaused(false);
+    };
     window.speechSynthesis.speak(utterance);
-  }, []);
+  }, [selectedVoiceURI, voices]);
 
   const pauseSpeaking = useCallback(() => {
     if (!isTTSAvailable) return;
@@ -275,6 +352,8 @@ export function useVoice() {
   const stopSpeaking = useCallback(() => {
     if (!isTTSAvailable) return;
     window.speechSynthesis.cancel();
+    utteranceRef.current = null;
+    setSpeakingId(null);
     setIsSpeaking(false);
     setIsPaused(false);
   }, []);
@@ -290,6 +369,10 @@ export function useVoice() {
     isTranscribing,
     isSpeaking,
     isPaused,
+    speakingId,
+    voices,
+    selectedVoiceURI,
+    setSelectedVoiceURI,
     startListening,
     stopListening,
     speak,

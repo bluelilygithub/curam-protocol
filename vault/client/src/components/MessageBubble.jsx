@@ -332,7 +332,7 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, onBranchRe
               {getIcon('file-down', { size: 11 })}
             </button>
 
-            {/* Read aloud controls — only on latest assistant message */}
+            {/* Read aloud controls */}
             {onSpeak && (
               isSpeaking ? (
                 <>

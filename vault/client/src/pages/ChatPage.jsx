@@ -75,7 +75,7 @@ const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
   suggestions, onDelete, onBranch, onBranchResponse, onOpenArtifact, onSuggestionSelect, onBranchFollowup, canBranch, isBranching,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
-  isTTSAvailable, isSpeaking, isPaused, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
+  isTTSAvailable, isSpeaking, isPaused, speakingId, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
   wideChat,
 }) {
   const getIcon = useIcon();
@@ -84,6 +84,8 @@ const MemoMessageList = React.memo(function MemoMessageList({
     <div className={`${widthClass} px-4 py-6`}>
       {messages.map((msg, i) => {
         const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
+        const speechId = msg.id || `${sessionId || 'chat'}:${i}`;
+        const isThisSpeaking = isTTSAvailable && speakingId === speechId && isSpeaking;
         return (
           <div key={i}>
             <MessageBubble
@@ -97,12 +99,12 @@ const MemoMessageList = React.memo(function MemoMessageList({
               bookmarked={msg.id ? !!bookmarkedMap[msg.id] : false}
               onToggleBookmark={onToggleBookmark}
               isLatest={isLastAssistant}
-              isSpeaking={isLastAssistant && isTTSAvailable ? isSpeaking : false}
-              isPaused={isLastAssistant && isTTSAvailable ? isPaused : false}
-              onSpeak={isLastAssistant && isTTSAvailable && msg.role === 'assistant' ? () => speak(msg.content) : undefined}
-              onPause={isLastAssistant && isTTSAvailable ? pauseSpeaking : undefined}
-              onResume={isLastAssistant && isTTSAvailable ? resumeSpeaking : undefined}
-              onStop={isLastAssistant && isTTSAvailable ? stopSpeaking : undefined}
+              isSpeaking={isThisSpeaking}
+              isPaused={isThisSpeaking ? isPaused : false}
+              onSpeak={isTTSAvailable && msg.role === 'assistant' ? () => speak(msg.content, speechId) : undefined}
+              onPause={isThisSpeaking ? pauseSpeaking : undefined}
+              onResume={isThisSpeaking ? resumeSpeaking : undefined}
+              onStop={isThisSpeaking ? stopSpeaking : undefined}
             />
             {isLastAssistant && !isStreaming && (
               <FollowUpChips
@@ -134,7 +136,7 @@ function ChatPage({ general = false }) {
 
   const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
   const { models: MODELS, defaultModel } = useModels();
-  const { isSTTAvailable, isLocalSTTAvailable, isTTSAvailable, isListening, transcript, interimText, voiceError, isTranscribing, isSpeaking, isPaused, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
+  const { isSTTAvailable, isLocalSTTAvailable, isTTSAvailable, isListening, transcript, interimText, voiceError, isTranscribing, isSpeaking, isPaused, speakingId, voices, selectedVoiceURI, setSelectedVoiceURI, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
   const { urlAttachments, addUrl, addManual: addManualAttachment, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
   const getIcon = useIcon();
@@ -188,6 +190,7 @@ function ChatPage({ general = false }) {
   const [showModelPicker, setShowModelPicker] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
   const [showTempPicker, setShowTempPicker] = useState(false);
+  const [showVoicePicker, setShowVoicePicker] = useState(false);
 
   // Files panel
   const [showFilesPanel, setShowFilesPanel] = useState(false);
@@ -985,6 +988,10 @@ function ChatPage({ general = false }) {
   const dismissBudgetAlert = () => { setAlertDismissed(true); setAlertDismissedMsgCount(messages.length); };
 
   const currentTempLabel = TEMPERATURES.find(t => t.value === temperature)?.label || 'Balanced';
+  const selectedVoice = voices.find(v => v.voiceURI === selectedVoiceURI);
+  const voiceLabel = selectedVoice
+    ? selectedVoice.name.replace(/\s*\([^)]*\)\s*/g, '').slice(0, 18)
+    : 'System voice';
   const costDisplay = sessionUsage.inputTokens > 0
     ? `${formatTokens(sessionUsage.inputTokens + sessionUsage.outputTokens)} tokens · ${formatCost(calcCost(sessionUsage.model || effectiveModel, sessionUsage.inputTokens, sessionUsage.outputTokens))}`
     : null;
@@ -1120,7 +1127,7 @@ function ChatPage({ general = false }) {
         {/* Temperature picker */}
         <div className="relative hidden sm:block">
           <button
-            onClick={() => { setShowTempPicker(v => !v); setShowModelPicker(false); }}
+            onClick={() => { setShowTempPicker(v => !v); setShowModelPicker(false); setShowVoicePicker(false); }}
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
             style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-surface)' }}
             title="Response temperature"
@@ -1150,11 +1157,62 @@ function ChatPage({ general = false }) {
           )}
         </div>
 
+        {/* Voice picker */}
+        {isTTSAvailable && (
+          <div className="relative hidden sm:block">
+            <button
+              onClick={() => { setShowVoicePicker(v => !v); setShowTempPicker(false); setShowModelPicker(false); }}
+              className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
+              style={{ borderColor: selectedVoiceURI ? 'var(--color-primary)' : 'var(--color-border)', color: selectedVoiceURI ? 'var(--color-primary)' : 'var(--color-muted)', background: 'var(--color-surface)' }}
+              title="Choose read-aloud voice"
+            >
+              {getIcon('speaker', { size: 12 })}
+              {voiceLabel}
+            </button>
+            {showVoicePicker && (
+              <div
+                className="absolute right-0 top-full mt-1 w-72 max-h-80 overflow-y-auto rounded-xl border shadow-lg py-1.5 z-40"
+                style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              >
+                <button
+                  onClick={() => { setSelectedVoiceURI(''); setShowVoicePicker(false); }}
+                  className="w-full text-left px-3 py-2 hover:opacity-70 transition-opacity"
+                >
+                  <div className="text-xs font-medium" style={{ color: !selectedVoiceURI ? 'var(--color-primary)' : 'var(--color-text)' }}>System default</div>
+                  <div className="text-xs" style={{ color: 'var(--color-muted)' }}>Use the browser/device default voice</div>
+                </button>
+                {voices.map((voice) => (
+                  <button
+                    key={voice.voiceURI}
+                    onClick={() => { setSelectedVoiceURI(voice.voiceURI); setShowVoicePicker(false); }}
+                    className="w-full text-left px-3 py-2 flex items-start gap-2 hover:opacity-70 transition-opacity"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate" style={{ color: selectedVoiceURI === voice.voiceURI ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                        {voice.name}
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {voice.lang}{voice.localService ? ' · local/offline capable' : ' · browser/network voice'}
+                      </div>
+                    </div>
+                    {selectedVoiceURI === voice.voiceURI && <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>✓</span>}
+                  </button>
+                ))}
+                {voices.length === 0 && (
+                  <p className="px-3 py-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                    No browser voices reported yet. Try refreshing after the page loads.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Model picker (admin or member-enabled) */}
         {canSelectModel && (
           <div className="relative">
             <button
-              onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); }}
+              onClick={() => { setShowModelPicker(v => !v); setShowTempPicker(false); setShowVoicePicker(false); }}
               className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
               style={{
                 borderColor: modelStatus[effectiveProvider] === false ? '#f59e0b' : 'var(--color-border)',
@@ -1232,7 +1290,7 @@ function ChatPage({ general = false }) {
         {/* Persona picker — hidden on mobile */}
         <div className="relative hidden sm:block">
           <button
-            onClick={() => { setShowPersonaPicker(v => !v); if (!showPersonaPicker) loadPersonas(); setShowModelPicker(false); setShowTempPicker(false); }}
+            onClick={() => { setShowPersonaPicker(v => !v); if (!showPersonaPicker) loadPersonas(); setShowModelPicker(false); setShowTempPicker(false); setShowVoicePicker(false); }}
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors hover:opacity-70"
             style={{
               borderColor: selectedPersonaId ? 'var(--color-primary)' : 'var(--color-border)',
@@ -1556,6 +1614,7 @@ function ChatPage({ general = false }) {
                 isTTSAvailable={isTTSAvailable}
                 isSpeaking={isSpeaking}
                 isPaused={isPaused}
+                speakingId={speakingId}
                 speak={speak}
                 pauseSpeaking={pauseSpeaking}
                 resumeSpeaking={resumeSpeaking}
