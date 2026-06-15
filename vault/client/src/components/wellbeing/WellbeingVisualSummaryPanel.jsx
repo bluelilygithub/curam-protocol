@@ -412,7 +412,6 @@ function MindMap({ data, moduleKey = '' }) {
               <div key={node.id} className="rounded-xl border p-3" style={{ borderColor: node.color, background: 'var(--color-surface)' }}>
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{node.label}</p>
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: node.color }} />
                 </div>
                 <p className="text-xs mt-1" style={{ color: node.color }}>{node.emphasis}</p>
               </div>
