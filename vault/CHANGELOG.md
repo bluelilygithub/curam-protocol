@@ -4,6 +4,20 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-18 (4)
+
+**Feature:** SuggestionService — automatic emission from crons and services.
+
+All findings now funnel through `server/services/SuggestionService.js` with fingerprint dedup (refresh open items instead of flooding the inbox).
+
+**Wired emitters:** server startup (pgvector, embeddings), `newsDigestCron` (empty topics, failures, high cost), `sharesCron` (missing API key, poll/briefing errors), `MemoryService.stats` (embedding health).
+
+**Mandatory pattern:** every new service/cron/agent must call `capture()` / `captureIf()` when anomalies are found — documented in `CLAUDE.md` and `docs/suggestions-inbox.md`.
+
+**Schema:** `agent_suggestions.source`, `agent_suggestions.fingerprint`.
+
+---
+
 ## 2026-06-18 (3)
 
 **Feature:** Agent suggestions inbox — triage queue for agent and routine findings.
@@ -18,7 +32,7 @@ New `agent_suggestions` table and `/api/suggestions` API. After substantial work
 
 **Agent docs:** `CLAUDE.md` — when to suggest, `POST /api/suggestions` payload shape. See `docs/suggestions-inbox.md`.
 
-**New files:** `server/routes/suggestions.js`, `server/constants/suggestionInbox.js`, `client/src/pages/SuggestionsPage.jsx`, `docs/suggestions-inbox.md`, `docs/semantic-memory.md`, `client/DESIGN.md`, `.cursor/rules/vault-ui.mdc`.
+**New files:** `server/routes/suggestions.js`, `server/constants/suggestionInbox.js`, `server/services/SuggestionService.js`, `client/src/pages/SuggestionsPage.jsx`, `docs/suggestions-inbox.md`, `docs/semantic-memory.md`, `client/DESIGN.md`, `.cursor/rules/vault-ui.mdc`, `.cursor/rules/vault-suggestions.mdc`.
 
 ---
 

@@ -9,6 +9,7 @@ const {
   isValidCategory,
   isValidStatus,
 } = require('../constants/suggestionInbox');
+const SuggestionService = require('../services/SuggestionService');
 
 // GET /api/suggestions/meta — categories, statuses, counts by status/category
 router.get('/meta', async (req, res) => {
@@ -72,7 +73,7 @@ router.get('/', async (req, res) => {
   const { category, status, q } = req.query;
 
   let sql = `
-    SELECT id, category, status, title, body, context, "createdAt", "updatedAt"
+    SELECT id, category, status, title, body, context, source, "createdAt", "updatedAt"
     FROM agent_suggestions
     WHERE "userId" = $1
   `;
@@ -114,7 +115,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, category, status, title, body, context, "createdAt", "updatedAt"
+      `SELECT id, category, status, title, body, context, source, "createdAt", "updatedAt"
        FROM agent_suggestions
        WHERE id = $1 AND "userId" = $2`,
       [req.params.id, req.user.id],
@@ -139,13 +140,18 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    const { rows } = await pool.query(
-      `INSERT INTO agent_suggestions ("userId", category, status, title, body, context)
-       VALUES ($1, $2, 'new', $3, $4, $5)
-       RETURNING id, category, status, title, body, context, "createdAt", "updatedAt"`,
-      [userId, category, String(title).trim(), String(body), context ? String(context) : null],
-    );
-    res.status(201).json(rows[0]);
+    const result = await SuggestionService.capture({
+      userId,
+      category,
+      title,
+      body,
+      context,
+      source: req.body?.source ?? 'manual',
+    });
+    if (result.error) return res.status(400).json({ error: result.error });
+    if (result.skipped) return res.status(200).json({ skipped: true, reason: result.reason });
+    const row = result.suggestion;
+    res.status(result.created ? 201 : 200).json(row);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

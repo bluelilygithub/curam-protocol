@@ -5,6 +5,7 @@ const { pool } = require('../db');
 const portfolio = require('../services/sharesPortfolio');
 const marketData = require('../services/marketData');
 const { generateDailyBriefing, generateMonthlySummary } = require('../services/sharesNewsService');
+const { reportSharesCron } = require('../services/SuggestionService');
 
 let asxCronTask = null;
 let usCronTask = null;
@@ -38,6 +39,9 @@ async function runSharesPoll(exchanges) {
   const label = exchanges.join('+');
   if (!exchanges.some((ex) => marketData.canFetchExchange(ex))) {
     console.log(`[shares-cron] Skipping ${label} poll — no API key configured`);
+    if (exchanges.includes('ASX')) {
+      await reportSharesCron('asx:no-api-key', {});
+    }
     return;
   }
 
@@ -50,6 +54,12 @@ async function runSharesPoll(exchanges) {
       await portfolio.recordSnapshots(userId, exchanges);
     } catch (err) {
       console.error(`[shares-cron] ${label} user ${userId}:`, err.message);
+      await reportSharesCron('poll-failed', {
+        userId,
+        exchanges: label,
+        error: err.message,
+        context: `sharesCron ${label}`,
+      });
     }
   }
 }
@@ -86,6 +96,7 @@ async function startSharesCron() {
           await generateDailyBriefing(userId);
         } catch (err) {
           console.error(`[shares-cron] news briefing user ${userId}:`, err.message);
+          await reportSharesCron('briefing-failed', { userId, error: err.message });
         }
       }
     },
@@ -102,6 +113,11 @@ async function startSharesCron() {
           await generateMonthlySummary(userId);
         } catch (err) {
           console.error(`[shares-cron] monthly summary user ${userId}:`, err.message);
+          await reportSharesCron('briefing-failed', {
+            userId,
+            error: err.message,
+            context: 'sharesCron monthly summary',
+          });
         }
       }
     },

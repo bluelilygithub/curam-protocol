@@ -18,6 +18,7 @@
 | `server/routes/prompts.js` | ✅ Done | ✅ Verified | Dynamic query; RETURNING id |
 | `server/routes/memory.js` | ✅ Done | ✅ Verified | RETURNING id; updatedAt quoted; semantic search + stats |
 | `server/routes/suggestions.js` | ✅ Done | — | Agent suggestions inbox CRUD |
+| `server/services/SuggestionService.js` | ✅ Done | — | Shared emitter for crons/services/agents |
 | `server/routes/notes.js` | ✅ Done | ✅ Verified | Dynamic $N params; ILIKE; rowCount |
 | `server/routes/files.js` | ✅ Done | ✅ Verified | extractedText/aiSummary/uploadedAt quoted; search_index writes |
 | `server/routes/projects.js` | ✅ Done | ✅ Verified | db.transaction → client BEGIN/COMMIT; chatCount alias quoted |

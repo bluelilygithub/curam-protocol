@@ -224,7 +224,7 @@ function UserGuidePage() {
           <FeatureCard emoji="📎" title="Files & URLs" desc="Attach PDFs, images, documents, and live web pages directly into the conversation." />
           <FeatureCard emoji="🔍" title="Web Search" desc="Type @search in chat to fetch live web results and attach them as context before sending." />
           <FeatureCard emoji="🧠" title="Memory" desc="Semantic personal notes — relevant facts recalled per message, not the full list every turn." />
-          <FeatureCard emoji="📥" title="Suggestions" desc="Agent and routine findings inbox — triage rules, skills, automations, and alerts." />
+          <FeatureCard emoji="📥" title="Suggestions" desc="Automatic findings from crons and services — triage rules, skills, automations, and alerts." />
           <FeatureCard emoji="📖" title="Prompt Library" desc="Save your best prompts, tag them, and insert them into any chat in one click." />
           <FeatureCard emoji="⬡" title="Artifacts" desc="Code and HTML from Claude renders in a live side panel — preview, copy, or iterate." />
           <FeatureCard emoji="🎭" title="Personas" desc="Give Claude a custom personality per project — Tech Lead, Copywriter, Devil's Advocate — with a reusable system prompt." />
@@ -671,6 +671,7 @@ function UserGuidePage() {
         <P>
           The page shows how many memories are stored, how many are searchable (embedded), and when the latest was added.
           If embeddings are unavailable locally, a warning explains what to configure (Ollama + pgvector).
+          Vault may also add an item to <strong>Suggestions</strong> automatically.
         </P>
 
         <SubHeading>Removing a memory</SubHeading>
@@ -719,6 +720,23 @@ function UserGuidePage() {
           <LI><strong>Ignore</strong> — dismiss</LI>
         </UL>
 
+        <SubHeading>How items arrive</SubHeading>
+        <P>
+          Suggestions are created automatically when Vault detects something worth your attention — you do not
+          need to watch logs or chat for these. Emitters include:
+        </P>
+        <UL>
+          <LI><strong>Server startup</strong> — missing pgvector, embeddings unavailable</LI>
+          <LI><strong>News Digest cron</strong> — topics with no articles, analysis failures, high token cost</LI>
+          <LI><strong>Shares cron</strong> — missing API keys, quote poll or briefing errors</LI>
+          <LI><strong>Memory</strong> — embedding or searchability problems (when you open the Memory page)</LI>
+          <LI><strong>Cursor agents</strong> — after substantial code work, via the shared suggestion service</LI>
+        </UL>
+        <P>
+          Each card shows <strong>via source-name</strong> (e.g. <code>newsDigestCron</code>) so you know where it came from.
+          Repeat findings refresh the same open item instead of flooding the inbox.
+        </P>
+
         <SubHeading>Filtering</SubHeading>
         <P>
           Use the category and status filter chips to narrow the list. Search matches title, body, and context
@@ -726,8 +744,8 @@ function UserGuidePage() {
         </P>
 
         <Callout type="tip">
-          Agents add suggestions after substantial vault work when they spot something worth your attention —
-          so useful findings don't get lost in chat history.
+          As Vault matures, you should see fewer suggestions — that means fewer anomalies, not a broken inbox.
+          Use <strong>Ignore</strong> for items you do not care about; ignored fingerprints can be suggested again later if the issue returns.
         </Callout>
 
         <Divider />

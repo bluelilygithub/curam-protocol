@@ -187,10 +187,15 @@ async function stats({ userId }) {
     [uid]
   );
 
-  return {
+  const result = {
     ...(rows[0] ?? { total: 0, embedded: 0, oldest: null, newest: null }),
     embedding,
   };
+
+  const { reportMemoryHealth } = require('./SuggestionService');
+  reportMemoryHealth(uid, result).catch(() => {});
+
+  return result;
 }
 
 async function remove({ userId, id }) {

@@ -125,6 +125,11 @@ function SuggestionCard({ item, onStatusChange, onDelete, updating }) {
           {item.context}
         </p>
       )}
+      {item.source && (
+        <p className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>
+          via {item.source}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 justify-between pt-1">
         <p className="text-xs" style={{ color: 'var(--color-muted)' }}>

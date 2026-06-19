@@ -29,7 +29,8 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `client/src/providers/IconProvider.jsx` — `getIcon(name, props)` semantic map; add icons here before using
 - `client/src/providers/ThemeProvider.jsx` — writes `--color-*` CSS vars to `<head>` on mount/change
 - `client/DESIGN.md` — **read before any UI/client work** (tokens, layout, components, do/don’t)
-- `server/routes/suggestions.js` — agent suggestion inbox (`POST /api/suggestions`)
+- `server/services/SuggestionService.js` — **all services/crons/agents call this** to emit inbox findings
+- `server/routes/suggestions.js` — agent suggestion inbox API
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
 - `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
 - `server/services/sharesNewsService.js` — daily briefings + monthly summaries: Finnhub/web search → AI → `share_news_briefings`
@@ -202,7 +203,25 @@ try {
 
 ## Agent suggestions inbox
 
-After **substantial** vault work (new feature, refactor, routine, migration, repeated pattern), if you notice something the user should triage — anomaly, missing rule/skill/automation, config gap, design drift — **add a suggestion** instead of only mentioning it in chat.
+**Mandatory:** Every server service, cron job, and background routine that detects an anomaly, gap, or improvement opportunity **must** call `SuggestionService.capture()` or `captureIf()` — do not only log to console.
+
+```javascript
+const { capture, captureIf, makeFingerprint } = require('../services/SuggestionService');
+
+await captureIf(articles.length === 0, {
+  userId,
+  source: 'myServiceName',
+  category: 'alert',
+  fingerprint: makeFingerprint('myServiceName', `topic:${id}:empty`),
+  title: 'Short summary',
+  body: 'What happened and suggested fix',
+  context: 'optional path or job id',
+});
+```
+
+Specialised helpers: `reportNewsDigestRun`, `reportMemoryHealth`, `reportSharesCron`, `runStartupChecks`.
+
+After **substantial** vault work (new feature, refactor, routine, migration, repeated pattern), if you notice something the user should triage — anomaly, missing rule/skill/automation, config gap, design drift — **add a suggestion** via `SuggestionService` or `POST /api/suggestions`.
 
 **UI:** `/suggestions` · **API:** `POST /api/suggestions` · **Docs:** `docs/suggestions-inbox.md`
 
@@ -228,6 +247,7 @@ If the dev server is running locally, agents may POST via curl with the user's s
 ## Key Patterns & Rules
 
 - All named routes before `/:id` in every route file — critical ordering.
+- **Suggestions:** services and crons must call `SuggestionService.capture()` / `captureIf()` when anomalies are found — see `docs/suggestions-inbox.md`.
 - `/api/shared` and `gmail.js` registered before `requireAuth` in `server/index.js`.
 - `SharedTaskPage` at `/shared/task/:token` must be **outside** `AuthGuard` in `App.jsx`.
 - Settings API: `GET /api/settings` returns all keys; `POST /api/settings { key, value }` upserts (empty value = delete).

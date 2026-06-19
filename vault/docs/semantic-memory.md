@@ -47,7 +47,12 @@ Replaces the old behaviour of injecting the last 30 memory rows on every turn.
 - Semantic search field
 - Expandable memory rows with delete
 
+## Suggestions integration
+
+When you load Memory stats, `MemoryService` checks embedding health and may emit a suggestion (via `SuggestionService`) if semantic search is unavailable or no memories are embedded. See `docs/suggestions-inbox.md`.
+
 ## Related
 
 - Embedding router (all RAG): `CHANGELOG.md` 2026-06-18 (2)
+- Suggestions inbox: `docs/suggestions-inbox.md`
 - User guide: `/guide` → Memory section

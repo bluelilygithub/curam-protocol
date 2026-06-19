@@ -669,6 +669,8 @@ async function initSchema() {
         title       TEXT NOT NULL,
         body        TEXT NOT NULL DEFAULT '',
         context     TEXT,
+        source      TEXT,
+        fingerprint TEXT,
         "createdAt" TIMESTAMPTZ DEFAULT NOW(),
         "updatedAt" TIMESTAMPTZ DEFAULT NOW()
       )
@@ -990,6 +992,13 @@ async function initSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_user_id    ON notes(user_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_suggestions_user_status ON agent_suggestions("userId", status, "createdAt" DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_suggestions_user_category ON agent_suggestions("userId", category, "createdAt" DESC)`);
+  await pool.query(`ALTER TABLE agent_suggestions ADD COLUMN IF NOT EXISTS source TEXT`);
+  await pool.query(`ALTER TABLE agent_suggestions ADD COLUMN IF NOT EXISTS fingerprint TEXT`);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_agent_suggestions_fingerprint
+      ON agent_suggestions("userId", fingerprint)
+      WHERE fingerprint IS NOT NULL
+  `);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_project_id  ON notes(project_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_session  ON messages("sessionId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_study_decks_user  ON study_decks("userId", "updatedAt" DESC)`);

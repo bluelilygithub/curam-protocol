@@ -147,6 +147,9 @@ async function start() {
   }
 
   await seedInitialUser().catch(err => console.error('Seed error:', err));
+  const { runStartupChecks } = require('./services/SuggestionService');
+  runStartupChecks().catch(err => console.warn('[startup] suggestion checks:', err.message));
+
   if (runtimeConfig.disableExternalCron) {
     console.log('[runtime] External cron jobs disabled by DISABLE_EXTERNAL_CRON');
   } else {

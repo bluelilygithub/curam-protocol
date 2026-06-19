@@ -5,6 +5,7 @@ const { pool } = require('../db');
 const { fetchArticlesForTopic } = require('../services/newsAggregationService');
 const { analyseTopicArticles } = require('../services/newsAnalysisService');
 const { logUsage } = require('../utils/logUsage');
+const { reportNewsDigestRun } = require('../services/SuggestionService');
 
 let cronTask = null;
 
@@ -123,6 +124,7 @@ async function generateDigestForUser(userId, dateStr, force = false) {
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let lastModel = null;
+  const runMeta = { emptyTopics: [], failedTopics: [], topicsTotal: topics.length };
 
   for (const topic of topics) {
     // Skip if already done — unless force-regenerating
@@ -142,6 +144,9 @@ async function generateDigestForUser(userId, dateStr, force = false) {
 
     try {
       const articles = await fetchArticlesForTopic(topic.title, topic.keywords);
+      if (!articles.length) {
+        runMeta.emptyTopics.push({ id: topic.id, title: topic.title });
+      }
       const context  = await fetchTopicContext(userId, topic.id, dateStr);
       const { analysis, usage } = await analyseTopicArticles(topic.title, articles, context, userId);
 
@@ -163,6 +168,7 @@ async function generateDigestForUser(userId, dateStr, force = false) {
       );
     } catch (err) {
       console.error(`[news-cron] Failed topic "${topic.title}":`, err.message);
+      runMeta.failedTopics.push({ id: topic.id, title: topic.title, error: err.message });
     }
   }
 
@@ -172,6 +178,9 @@ async function generateDigestForUser(userId, dateStr, force = false) {
     `UPDATE news_digests SET "totalTokens"=$1, "approxCostUsd"=$2 WHERE id=$3`,
     [totalInputTokens + totalOutputTokens, approxCostUsd, digestId]
   );
+
+  runMeta.approxCostUsd = approxCostUsd;
+  await reportNewsDigestRun(userId, dateStr, runMeta);
 
   console.log(`[news-cron] Digest complete for user ${userId} on ${dateStr} — ${totalInputTokens + totalOutputTokens} tokens, ~$${approxCostUsd.toFixed(4)}`);
 }
@@ -193,6 +202,18 @@ async function runDailyDigest() {
     }
   } catch (err) {
     console.error('[news-cron] Daily digest run failed:', err.message);
+    const { capture, getPrimaryAdminUserId } = require('../services/SuggestionService');
+    const adminId = await getPrimaryAdminUserId();
+    if (adminId) {
+      await capture({
+        userId: adminId,
+        source: 'newsDigestCron',
+        category: 'alert',
+        title: 'News Digest cron run failed',
+        body: err.message,
+        context: `date=${today}`,
+      });
+    }
   }
 }
 

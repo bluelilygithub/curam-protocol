@@ -2,14 +2,30 @@
 
 A triage queue for findings from Cursor agents, cron jobs, and other routines — anomalies, missing rules/skills, automation ideas, and alerts worth reviewing later.
 
+## Architecture
+
+All emitters funnel through **`server/services/SuggestionService.js`**. Do not insert into `agent_suggestions` directly.
+
+```
+┌─────────────────┐     ┌──────────────────────┐     ┌──────────────────┐
+│ Crons           │────▶│ SuggestionService    │────▶│ agent_suggestions│
+│ Services        │     │ capture / captureIf  │     │ (per user)       │
+│ Startup checks  │     │ report* helpers      │     └────────┬─────────┘
+│ Cursor agents   │────▶│ POST /api/suggestions│              │
+└─────────────────┘     └──────────────────────┘              ▼
+                                                      /suggestions UI
+```
+
+**Mandatory:** Any service, cron, or agent that finds something worth flagging must call `SuggestionService` — not only `console.warn`.
+
 ## Overview
 
-- **Table:** `agent_suggestions`
+- **Table:** `agent_suggestions` (`source`, `fingerprint` for dedup)
 - **Routes:** `server/routes/suggestions.js`
 - **Constants:** `server/constants/suggestionInbox.js`
 - **UI:** `/suggestions` (inbox icon in top nav, after Memory)
 
-Suggestions are **per user** (`userId`). Each account sees only their own inbox.
+Suggestions are **per user** (`userId`). Workspace-wide issues (missing pgvector, API keys) go to the **primary admin** inbox.
 
 ## Categories
 
@@ -30,9 +46,42 @@ Suggestions are **per user** (`userId`). Each account sees only their own inbox.
 | `opened` | Seen, not yet decided |
 | `apply` | Will act on this |
 | `learn` | Revisit later |
-| `ignore` | Dismissed |
+| `ignore` | Dismissed (same fingerprint can be suggested again later) |
 
-User owns triage — agents should **create** suggestions only, not change status.
+User owns triage — automated emitters create only; they do not change status.
+
+## Emitting (server code)
+
+```javascript
+const { capture, captureIf, makeFingerprint } = require('../services/SuggestionService');
+
+await captureIf(condition, {
+  userId,
+  source: 'newsDigestCron',       // emitter name
+  category: 'alert',
+  fingerprint: makeFingerprint('newsDigestCron', 'stable-key'),
+  title: 'Short summary',
+  body: 'Details and suggested fix',
+  context: 'file path, job id, date',
+});
+```
+
+### Built-in emitters (wired today)
+
+| Emitter | When it suggests |
+|---------|------------------|
+| `startup` | pgvector missing, embeddings unavailable |
+| `newsDigestCron` | No articles, topic failures, all-empty run, high cost |
+| `sharesCron` | Missing ASX API key, poll/briefing failures |
+| `MemoryService` | Embeddings down, memories not searchable |
+| `manual` | User adds via UI |
+
+### Adding a new emitter
+
+1. Import `SuggestionService` in your service/cron.
+2. At end of run (or on error path), call `captureIf` / `capture`.
+3. Use a stable `fingerprint` so repeated runs refresh the same open item instead of flooding the inbox.
+4. Document the `source` name in this file.
 
 ## API
 
@@ -41,21 +90,9 @@ User owns triage — agents should **create** suggestions only, not change statu
 | `GET` | `/api/suggestions` | List — `?category=`, `?status=`, `?q=` search |
 | `GET` | `/api/suggestions/meta` | Category/status counts |
 | `GET` | `/api/suggestions/count?status=new` | Badge count |
-| `GET` | `/api/suggestions/:id` | Single item |
-| `POST` | `/api/suggestions` | Create |
+| `POST` | `/api/suggestions` | Create (uses SuggestionService) |
 | `PATCH` | `/api/suggestions/:id` | Update fields or status |
 | `DELETE` | `/api/suggestions/:id` | Remove |
-
-### Create payload
-
-```json
-{
-  "category": "rule",
-  "title": "Short actionable summary",
-  "body": "What was found and why it matters",
-  "context": "optional: file path, job name, commit"
-}
-```
 
 ## UI
 
@@ -65,12 +102,10 @@ User owns triage — agents should **create** suggestions only, not change statu
 - Manual **Add suggestion** form
 - Nav badge when `new` count > 0
 
-## Agent instructions
+## Cursor agents
 
-Documented in `CLAUDE.md` → **Agent suggestions inbox**.
-
-After **substantial** vault work, if something is worth flagging, POST to `/api/suggestions` (when dev server is running) instead of relying on chat alone.
+Documented in `CLAUDE.md` → **Agent suggestions inbox**. After substantial work, call `SuggestionService.capture()` or `POST /api/suggestions`.
 
 ## Future
 
-If this workflow proves useful in Vault, the same pattern can migrate to **mcptools** (Settings or dedicated tab) for org-wide agent findings.
+Migrate the same pattern to **mcptools** for org-wide agent findings.

@@ -1,0 +1,26 @@
+---
+description: Vault server — emit suggestions for anomalies
+globs:
+  - curam-protocol/vault/server/**/*.js
+alwaysApply: false
+---
+
+# Vault server — suggestions
+
+When a service, cron, or route detects an anomaly, gap, or improvement opportunity, call **`SuggestionService`** — do not only log.
+
+```javascript
+const { capture, captureIf, makeFingerprint } = require('../services/SuggestionService');
+
+await captureIf(condition, {
+  userId,
+  source: 'serviceName',
+  category: 'alert',
+  fingerprint: makeFingerprint('serviceName', 'stable-key'),
+  title: '…',
+  body: '…',
+  context: '…',
+});
+```
+
+See `docs/suggestions-inbox.md` and `server/services/SuggestionService.js`.
