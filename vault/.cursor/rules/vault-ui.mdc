@@ -1,0 +1,22 @@
+---
+description: Vault client UI — tokens, layout, shared components
+globs:
+  - client/**/*.{jsx,tsx,css}
+alwaysApply: false
+---
+
+# Vault UI
+
+Before editing files under `client/`, read **`client/DESIGN.md`**.
+
+Quick rules:
+
+- Colours: inline `var(--color-bg|surface|border|primary|text|muted)` — no Tailwind palette or `dark:` classes
+- Status only: amber `#b45309` / red `#ef4444` / green `#166534` (see DESIGN.md)
+- Hover: `hover:opacity-60|70` only — no colour-shift hover
+- Icons: `getIcon()` from `IconProvider` — never direct Lucide imports
+- No shared `<Button>` — inline buttons like `PageToolbar` / `ConfirmModal`
+- Long ops (>2s): `useProcessingStore` + `ProcessingModal`; instant CRUD: toasts
+- Reuse `PageToolbar`, `ConfirmModal`, `OverflowMenu` before custom chrome
+
+Reference: `MemoryPage.jsx`, `SettingsPage.jsx`, `ConfirmModal.jsx`.

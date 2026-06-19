@@ -16,7 +16,8 @@
 | `server/routes/settings.js` | ✅ Done | ✅ Verified | ON CONFLICT upsert → PostgreSQL syntax |
 | `server/routes/personas.js` | ✅ Done | ✅ Verified | RETURNING id; datetime('now') → NOW() |
 | `server/routes/prompts.js` | ✅ Done | ✅ Verified | Dynamic query; RETURNING id |
-| `server/routes/memory.js` | ✅ Done | ✅ Verified | RETURNING id; updatedAt quoted |
+| `server/routes/memory.js` | ✅ Done | ✅ Verified | RETURNING id; updatedAt quoted; semantic search + stats |
+| `server/routes/suggestions.js` | ✅ Done | — | Agent suggestions inbox CRUD |
 | `server/routes/notes.js` | ✅ Done | ✅ Verified | Dynamic $N params; ILIKE; rowCount |
 | `server/routes/files.js` | ✅ Done | ✅ Verified | extractedText/aiSummary/uploadedAt quoted; search_index writes |
 | `server/routes/projects.js` | ✅ Done | ✅ Verified | db.transaction → client BEGIN/COMMIT; chatCount alias quoted |

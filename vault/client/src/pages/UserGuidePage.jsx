@@ -14,6 +14,7 @@ const SECTIONS = [
   { id: 'web-pages',       label: 'Web Pages' },
   { id: 'artifacts',       label: 'Artifacts' },
   { id: 'memory',          label: 'Memory' },
+  { id: 'suggestions',     label: 'Suggestions' },
   { id: 'prompts',         label: 'Prompt Library' },
   { id: 'search',          label: 'Search' },
   { id: 'export',          label: 'Export & Share' },
@@ -222,7 +223,8 @@ function UserGuidePage() {
           <FeatureCard emoji="🕐" title="Chat History" desc="Browse every session across all projects and General Chat, filtered by date range or searched by content." />
           <FeatureCard emoji="📎" title="Files & URLs" desc="Attach PDFs, images, documents, and live web pages directly into the conversation." />
           <FeatureCard emoji="🔍" title="Web Search" desc="Type @search in chat to fetch live web results and attach them as context before sending." />
-          <FeatureCard emoji="🧠" title="Memory" desc="Teach Claude persistent facts about you — preferences, timezone, conventions — that carry across every project." />
+          <FeatureCard emoji="🧠" title="Memory" desc="Semantic personal notes — relevant facts recalled per message, not the full list every turn." />
+          <FeatureCard emoji="📥" title="Suggestions" desc="Agent and routine findings inbox — triage rules, skills, automations, and alerts." />
           <FeatureCard emoji="📖" title="Prompt Library" desc="Save your best prompts, tag them, and insert them into any chat in one click." />
           <FeatureCard emoji="⬡" title="Artifacts" desc="Code and HTML from Claude renders in a live side panel — preview, copy, or iterate." />
           <FeatureCard emoji="🎭" title="Personas" desc="Give Claude a custom personality per project — Tech Lead, Copywriter, Devil's Advocate — with a reusable system prompt." />
@@ -654,18 +656,78 @@ function UserGuidePage() {
 
         <SubHeading>How it works</SubHeading>
         <P>
-          Memories are injected into the system prompt of every chat as a
-          <em> "Persistent user memory"</em> section. Claude can reference them at any time
-          without being reminded. They do not count against your per-session context — they are
-          prepended once at the start of every conversation.
+          Memories use semantic embeddings. On your Mac (<code>APP_ENV=local</code>), Vault uses Ollama
+          (<code>nomic-embed-text</code> by default). On Railway, it uses the Gemini embedding model
+          in Settings → AI Models → Embedding model. In each chat, Vault selects relevant notes for your
+          current message instead of injecting your entire list.
+        </P>
+
+        <SubHeading>Semantic search</SubHeading>
+        <P>
+          Use the search field to find memories by meaning, not just exact words. Results update as you type.
+        </P>
+
+        <SubHeading>Stats</SubHeading>
+        <P>
+          The page shows how many memories are stored, how many are searchable (embedded), and when the latest was added.
+          If embeddings are unavailable locally, a warning explains what to configure (Ollama + pgvector).
         </P>
 
         <SubHeading>Removing a memory</SubHeading>
-        <P>Hover over any memory entry and click the trash icon that appears on the right.</P>
+        <P>Click the trash icon on any memory row to delete it.</P>
 
         <Callout type="warning">
           Keep memories concise and factual. Vague or contradictory entries may confuse Claude.
           Review your memory list occasionally and remove anything that is outdated.
+        </Callout>
+
+        <Divider />
+
+        {/* ── Suggestions ── */}
+        <SectionHeading id="suggestions">Suggestions</SectionHeading>
+        <P>
+          The suggestions inbox collects findings from AI agents and automated routines — things you might
+          want to act on later: missing Cursor rules, skill ideas, automation opportunities, code anomalies,
+          or config alerts.
+        </P>
+
+        <SubHeading>Accessing Suggestions</SubHeading>
+        <P>
+          Click the <strong>📥 inbox icon</strong> in the top navigation bar, next to Memory
+          (or navigate to <code>/suggestions</code>). A badge shows how many items are still <strong>new</strong>.
+        </P>
+
+        <SubHeading>Categories</SubHeading>
+        <UL>
+          <LI><strong>Rule</strong> — design doc or Cursor rule gaps</LI>
+          <LI><strong>Skill</strong> — repetitive patterns worth codifying</LI>
+          <LI><strong>Automation</strong> — cron, hook, or script opportunities</LI>
+          <LI><strong>Source</strong> — specific file or config findings</LI>
+          <LI><strong>Alert</strong> — warnings and misconfigurations</LI>
+          <LI><strong>Other</strong> — anything else</LI>
+        </UL>
+
+        <SubHeading>Status workflow</SubHeading>
+        <P>
+          Each suggestion has a status you set while triaging:
+        </P>
+        <UL>
+          <LI><strong>New</strong> — just added (default)</LI>
+          <LI><strong>Opened</strong> — you've seen it</LI>
+          <LI><strong>Apply</strong> — you plan to act on it</LI>
+          <LI><strong>Learn</strong> — revisit later</LI>
+          <LI><strong>Ignore</strong> — dismiss</LI>
+        </UL>
+
+        <SubHeading>Filtering</SubHeading>
+        <P>
+          Use the category and status filter chips to narrow the list. Search matches title, body, and context
+          (e.g. a file path). You can also add suggestions manually with <strong>Add manually</strong>.
+        </P>
+
+        <Callout type="tip">
+          Agents add suggestions after substantial vault work when they spot something worth your attention —
+          so useful findings don't get lost in chat history.
         </Callout>
 
         <Divider />

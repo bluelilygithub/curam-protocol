@@ -6,14 +6,17 @@ export function useModels() {
   const [defaultModel, setDefaultModel] = useState('');
   const [branchEvalModel, setBranchEvalModel] = useState('');
   const [graphicsModel, setGraphicsModel] = useState('');
+  const [embeddingModel, setEmbeddingModel] = useState('');
+  const [embeddingConfig, setEmbeddingConfig] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [effectiveRes, settingsRes] = await Promise.all([
+      const [effectiveRes, settingsRes, embeddingRes] = await Promise.all([
         api.get('/api/settings/effective-models'),
         api.get('/api/settings'),
+        api.get('/api/settings/embedding-config'),
       ]);
       if (effectiveRes.ok) {
         const data = await effectiveRes.json();
@@ -26,11 +29,19 @@ export function useModels() {
           setDefaultModel(data.models[0].id);
         }
       }
+      let resolvedEmbeddingModel = '';
       if (settingsRes.ok) {
         const settings = await settingsRes.json();
         if (settings.branch_eval_model) setBranchEvalModel(settings.branch_eval_model);
         if (settings.graphics_model) setGraphicsModel(settings.graphics_model);
+        if (settings.embedding_model) resolvedEmbeddingModel = settings.embedding_model;
       }
+      if (embeddingRes.ok) {
+        const emb = await embeddingRes.json();
+        setEmbeddingConfig(emb);
+        if (!resolvedEmbeddingModel && emb.model) resolvedEmbeddingModel = emb.model;
+      }
+      if (resolvedEmbeddingModel) setEmbeddingModel(resolvedEmbeddingModel);
     } catch {
       /* keep empty — chat preflight will surface missing config */
     }
@@ -59,6 +70,13 @@ export function useModels() {
     await api.post('/api/settings', { key: 'graphics_model', value: modelId });
   }, []);
 
+  const saveEmbeddingModel = useCallback(async (modelId) => {
+    setEmbeddingModel(modelId);
+    await api.post('/api/settings', { key: 'embedding_model', value: modelId });
+    const embRes = await api.get('/api/settings/embedding-config');
+    if (embRes.ok) setEmbeddingConfig(await embRes.json());
+  }, []);
+
   return {
     models,
     saveModels,
@@ -68,6 +86,9 @@ export function useModels() {
     saveBranchEvalModel,
     graphicsModel,
     saveGraphicsModel,
+    embeddingModel,
+    saveEmbeddingModel,
+    embeddingConfig,
     loading,
     reload: load,
   };

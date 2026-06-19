@@ -102,7 +102,7 @@ If the app is not running and you need to restore from a backup manually:
    railway connect postgres
    ```
 4. Clear and re-insert tables in the correct order. The tables inside `data.json` are:
-   `folders`, `personas`, `projects`, `memory`, `task_templates`, `objectives`, `key_results`, `sessions`, `messages`, `tasks`, `task_tags`, `task_comments`, `task_dependencies`, `template_subtasks`, `prompts`, `notes`, `pinned_urls`, `files`, `session_files`, `bookmarks`, `prompt_chains`, `debates`, `comparisons`, `search_index`
+   `folders`, `personas`, `projects`, `memory`, `agent_suggestions`, `task_templates`, `objectives`, `key_results`, `sessions`, `messages`, `tasks`, `task_tags`, `task_comments`, `task_dependencies`, `template_subtasks`, `prompts`, `notes`, `pinned_urls`, `files`, `session_files`, `bookmarks`, `prompt_chains`, `debates`, `comparisons`, `search_index`
 5. For each table, truncate it and then insert the rows from the JSON
 6. Reset serial sequences after insert: `SELECT setval(pg_get_serial_sequence('"tablename"', 'id'), MAX(id)) FROM "tablename";`
 

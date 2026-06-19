@@ -1,7 +1,7 @@
 ﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useChat } from '../hooks/useChat';
-import { useVoice } from '../hooks/useVoice';
+import { useVoice, LOCAL_CLONE_VOICE_URI, LOCAL_CLONE_VOICE_LABEL } from '../hooks/useVoice';
 import { useFileAttachment } from '../hooks/useFileAttachment';
 import { useUrlAttachment } from '../hooks/useUrlAttachment';
 import useProjectStore from '../store/projectStore';
@@ -75,7 +75,7 @@ const MemoMessageList = React.memo(function MemoMessageList({
   messages, isStreaming, isAiSearching, sessionId,
   suggestions, onDelete, onBranch, onBranchResponse, onOpenArtifact, onSuggestionSelect, onBranchFollowup, canBranch, isBranching,
   messagesEndRef, bookmarkedMap, onToggleBookmark,
-  isTTSAvailable, isSpeaking, isPaused, speakingId, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
+  isTTSAvailable, isSpeaking, isGeneratingSpeech, isPaused, speakingId, speak, pauseSpeaking, resumeSpeaking, stopSpeaking,
   wideChat,
 }) {
   const getIcon = useIcon();
@@ -85,7 +85,7 @@ const MemoMessageList = React.memo(function MemoMessageList({
       {messages.map((msg, i) => {
         const isLastAssistant = msg.role === 'assistant' && i === messages.length - 1;
         const speechId = msg.id || `${sessionId || 'chat'}:${i}`;
-        const isThisSpeaking = isTTSAvailable && speakingId === speechId && isSpeaking;
+        const isThisSpeaking = isTTSAvailable && speakingId === speechId && (isSpeaking || isGeneratingSpeech);
         return (
           <div key={i}>
             <MessageBubble
@@ -99,11 +99,12 @@ const MemoMessageList = React.memo(function MemoMessageList({
               bookmarked={msg.id ? !!bookmarkedMap[msg.id] : false}
               onToggleBookmark={onToggleBookmark}
               isLatest={isLastAssistant}
-              isSpeaking={isThisSpeaking}
+              isSpeaking={isThisSpeaking && isSpeaking}
+              isGeneratingSpeech={isThisSpeaking && isGeneratingSpeech}
               isPaused={isThisSpeaking ? isPaused : false}
               onSpeak={isTTSAvailable && msg.role === 'assistant' ? () => speak(msg.content, speechId) : undefined}
-              onPause={isThisSpeaking ? pauseSpeaking : undefined}
-              onResume={isThisSpeaking ? resumeSpeaking : undefined}
+              onPause={isThisSpeaking && isSpeaking ? pauseSpeaking : undefined}
+              onResume={isThisSpeaking && isSpeaking ? resumeSpeaking : undefined}
               onStop={isThisSpeaking ? stopSpeaking : undefined}
             />
             {isLastAssistant && !isStreaming && (
@@ -136,7 +137,7 @@ function ChatPage({ general = false }) {
 
   const { messages, isStreaming, isSearching: isAiSearching, sessionId, sessionUsage, sendMessage, stopStreaming, loadHistory, clearMessages, deleteMessagePair, streamError, clearStreamError, ragFallbackActive } = useChat({ projectId });
   const { models: MODELS, defaultModel } = useModels();
-  const { isSTTAvailable, isLocalSTTAvailable, isTTSAvailable, isListening, transcript, interimText, voiceError, isTranscribing, isSpeaking, isPaused, speakingId, voices, selectedVoiceURI, setSelectedVoiceURI, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking } = useVoice();
+  const { isSTTAvailable, isLocalSTTAvailable, isTTSAvailable, isLocalCloneConfigured, isLocalVoiceAvailable, isGeneratingSpeech, isListening, transcript, interimText, voiceError, speechStatus, isTranscribing, isSpeaking, isPaused, speakingId, voices, selectedVoiceURI, setSelectedVoiceURI, startListening, stopListening, speak, pauseSpeaking, resumeSpeaking, stopSpeaking, clearVoiceError } = useVoice();
   const { attachments, uploading, error: attachError, uploadAndAttach, attachExisting, remove: removeAttachment, clear: clearAttachments } = useFileAttachment(projectId);
   const { urlAttachments, addUrl, addManual: addManualAttachment, remove: removeUrl, clear: clearUrls } = useUrlAttachment();
   const getIcon = useIcon();
@@ -989,7 +990,9 @@ function ChatPage({ general = false }) {
 
   const currentTempLabel = TEMPERATURES.find(t => t.value === temperature)?.label || 'Balanced';
   const selectedVoice = voices.find(v => v.voiceURI === selectedVoiceURI);
-  const voiceLabel = selectedVoice
+  const voiceLabel = selectedVoiceURI === LOCAL_CLONE_VOICE_URI
+    ? LOCAL_CLONE_VOICE_LABEL
+    : selectedVoice
     ? selectedVoice.name.replace(/\s*\([^)]*\)\s*/g, '').slice(0, 18)
     : 'System voice';
   const costDisplay = sessionUsage.inputTokens > 0
@@ -1181,6 +1184,25 @@ function ChatPage({ general = false }) {
                   <div className="text-xs font-medium" style={{ color: !selectedVoiceURI ? 'var(--color-primary)' : 'var(--color-text)' }}>System default</div>
                   <div className="text-xs" style={{ color: 'var(--color-muted)' }}>Use the browser/device default voice</div>
                 </button>
+                {isLocalVoiceAvailable && (
+                  <button
+                    onClick={() => { setSelectedVoiceURI(LOCAL_CLONE_VOICE_URI); setShowVoicePicker(false); }}
+                    className="w-full text-left px-3 py-2 flex items-start gap-2 hover:opacity-70 transition-opacity border-b"
+                    style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium truncate" style={{ color: selectedVoiceURI === LOCAL_CLONE_VOICE_URI ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                        {LOCAL_CLONE_VOICE_LABEL}
+                      </div>
+                      <div className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                        {isLocalCloneConfigured
+                          ? `F5-TTS clone · offline${isGeneratingSpeech ? ' · generating…' : ''}`
+                          : 'Set up in Settings → Profile first'}
+                      </div>
+                    </div>
+                    {selectedVoiceURI === LOCAL_CLONE_VOICE_URI && <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-primary)' }}>✓</span>}
+                  </button>
+                )}
                 {voices.map((voice) => (
                   <button
                     key={voice.voiceURI}
@@ -1613,6 +1635,7 @@ function ChatPage({ general = false }) {
                 wideChat={wideChat}
                 isTTSAvailable={isTTSAvailable}
                 isSpeaking={isSpeaking}
+                isGeneratingSpeech={isGeneratingSpeech}
                 isPaused={isPaused}
                 speakingId={speakingId}
                 speak={speak}
@@ -1622,6 +1645,24 @@ function ChatPage({ general = false }) {
               />
             )}
           </div>
+
+          {/* Voice read-aloud status */}
+          {(voiceError || speechStatus) && (
+            <div className="flex-shrink-0 mx-4 mb-2 px-4 py-2.5 rounded-xl flex items-center gap-2.5 text-xs" style={{ background: voiceError ? '#fef2f2' : '#eff6ff', border: `1px solid ${voiceError ? '#fecaca' : '#bfdbfe'}`, color: voiceError ? '#991b1b' : '#1d4ed8' }}>
+              {getIcon(voiceError ? 'alert-triangle' : 'loader', { size: 13, className: voiceError ? '' : 'animate-spin' })}
+              <span className="flex-1">{voiceError || speechStatus}</span>
+              {voiceError && (
+                <button
+                  type="button"
+                  onClick={clearVoiceError}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border flex-shrink-0"
+                  style={{ borderColor: '#fecaca', color: '#991b1b', background: '#fff' }}
+                >
+                  Dismiss
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Context warning */}
           {contextWarning && (

@@ -661,6 +661,20 @@ async function initSchema() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_suggestions (
+        id          SERIAL PRIMARY KEY,
+        "userId"    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        category    TEXT NOT NULL DEFAULT 'other',
+        status      TEXT NOT NULL DEFAULT 'new',
+        title       TEXT NOT NULL,
+        body        TEXT NOT NULL DEFAULT '',
+        context     TEXT,
+        "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+        "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS study_decks (
         id              SERIAL PRIMARY KEY,
         "userId"        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -974,6 +988,8 @@ async function initSchema() {
   `);
 
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_user_id    ON notes(user_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_suggestions_user_status ON agent_suggestions("userId", status, "createdAt" DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_agent_suggestions_user_category ON agent_suggestions("userId", category, "createdAt" DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_notes_project_id  ON notes(project_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_session  ON messages("sessionId")`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_study_decks_user  ON study_decks("userId", "updatedAt" DESC)`);
@@ -1034,6 +1050,7 @@ async function initSchema() {
 
   try {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_file_chunks_file_id ON file_chunks(file_id)`);
+    await pool.query(`ALTER TABLE file_chunks ADD COLUMN IF NOT EXISTS embedding_source TEXT`);
   } catch (idxErr) {
     console.warn('[db] Could not create idx_file_chunks_file_id:', idxErr.message);
   }
@@ -1056,6 +1073,19 @@ async function initSchema() {
   await pool.query(`ALTER TABLE folders ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE personas ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE memory ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE memory ADD COLUMN IF NOT EXISTS content_fingerprint TEXT`);
+  await pool.query(`ALTER TABLE memory ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb`);
+  await pool.query(`ALTER TABLE memory ADD COLUMN IF NOT EXISTS embedding_source TEXT`);
+  try {
+    await pool.query(`ALTER TABLE memory ADD COLUMN IF NOT EXISTS embedding vector(768)`);
+  } catch (memVecErr) {
+    console.warn('[db] memory.embedding column skipped (pgvector may be missing):', memVecErr.message);
+  }
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_user_fingerprint
+      ON memory ("userId", content_fingerprint)
+      WHERE content_fingerprint IS NOT NULL
+  `);
   await pool.query(`ALTER TABLE prompts ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "userId" INTEGER REFERENCES users(id) ON DELETE CASCADE`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_milestone ON tasks("userId", "isMilestone") WHERE "isMilestone" = 1`);

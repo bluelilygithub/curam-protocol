@@ -10,7 +10,9 @@ const { pool } = require('../db');
 const { buildTypeConfigPrompt } = require('../typePrompts');
 const { calculateCost } = require('../services/costCalculator');
 const { getModelsForUser, getVaultModelsConfigForUser } = require('../services/modelResolver');
-const { embedText } = require('../services/embeddings');
+const { embedTextVector } = require('../services/embeddings');
+const { resolveEmbeddingConfig } = require('../services/embeddingResolver');
+const MemoryService = require('../services/MemoryService');
 const { callModel } = require('../services/callModel');
 const { callOllamaModel, isOllamaAvailable, isOllamaModel, normalizeOllamaModel } = require('../services/ollamaClient');
 const { runtimeConfig } = require('../config/runtime');
@@ -152,7 +154,7 @@ async function generateAndStoreSessionSummary(sid, userId, modelHint = null) {
     );
     if (!summary) return;
 
-    const embedding = await embedText(summary);
+    const embedding = await embedTextVector(summary, { userId });
     const vectorLiteral = embedding ? `[${embedding.join(',')}]` : null;
 
     try {
@@ -226,13 +228,13 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
     pushBlock(parts.join('\n'), true);
   }
 
-  // ── Block 3: Memory / global notes (cache_control) ───────────────────────────
+  // ── Block 3: Memory — semantic recall when possible (cache_control) ─────────
   {
-    const { rows: memories } = userId
-      ? await pool.query('SELECT content FROM memory WHERE "userId"=$1 ORDER BY "createdAt" DESC LIMIT 30', [userId])
-      : await pool.query('SELECT content FROM memory ORDER BY "createdAt" DESC LIMIT 30');
-    if (memories.length > 0) {
-      pushBlock(`Memory:\n${memories.map(m => `• ${m.content}`).join('\n')}`, true);
+    const memoryLines = userId
+      ? await MemoryService.getForPrompt({ userId, userMessage, limit: 8 })
+      : [];
+    if (memoryLines.length > 0) {
+      pushBlock(`Memory:\n${memoryLines.map((c) => `• ${c}`).join('\n')}`, true);
     }
   }
 
@@ -300,26 +302,29 @@ async function buildSystemPrompt(project, personaId, sid = null, webSearch = fal
   // ── Block 4.5: Related project conversations (RAG, no cache_control) ────────
   // Embeds the user message → cosine similarity against summarised sessions in
   // the same project → injects top-5 most semantically relevant summaries.
-  // Falls back to most-recent if GEMINI_API_KEY absent or embedding fails.
+  // Falls back to most-recent if embeddings unavailable.
   if (project && sid) {
     try {
       let relatedSessions = [];
 
-      if (userMessage && process.env.GEMINI_API_KEY) {
+      if (userMessage && userId) {
         try {
-          const queryEmb = await embedText(userMessage.substring(0, 500));
-          if (queryEmb) {
-            const vec = `[${queryEmb.join(',')}]`;
-            const { rows } = await pool.query(
-              `SELECT title, summary FROM sessions
-               WHERE "projectId"=$1 AND "sessionId"!=$2
-                 AND "deletedAt" IS NULL
-                 AND summary IS NOT NULL AND "summaryEmbedding" IS NOT NULL
-               ORDER BY "summaryEmbedding" <=> $3::vector
-               LIMIT 5`,
-              [project.id, sid, vec]
-            );
-            relatedSessions = rows;
+          const embConfig = await resolveEmbeddingConfig(userId);
+          if (embConfig.available) {
+            const queryEmb = await embedTextVector(userMessage.substring(0, 500), { userId });
+            if (queryEmb) {
+              const vec = `[${queryEmb.join(',')}]`;
+              const { rows } = await pool.query(
+                `SELECT title, summary FROM sessions
+                 WHERE "projectId"=$1 AND "sessionId"!=$2
+                   AND "deletedAt" IS NULL
+                   AND summary IS NOT NULL AND "summaryEmbedding" IS NOT NULL
+                 ORDER BY "summaryEmbedding" <=> $3::vector
+                 LIMIT 5`,
+                [project.id, sid, vec]
+              );
+              relatedSessions = rows;
+            }
           }
         } catch { /* pgvector unavailable — fall through to recency fallback */ }
       }
@@ -1117,7 +1122,7 @@ router.post('/sessions/branch-from-followup', async (req, res) => {
     // Background: embed the generated content so this session appears in project RAG
     // Use title + opening content as the summary — no extra LLM call needed.
     const summaryText = `${title}\n\n${content.substring(0, 600)}`;
-    embedText(summaryText).then(embedding => {
+    embedTextVector(summaryText, { userId: req.user.id }).then((embedding) => {
       if (!embedding) return;
       const vec = `[${embedding.join(',')}]`;
       pool.query(
@@ -1295,7 +1300,7 @@ router.post('/sessions/:sessionId/branch-response', async (req, res) => {
 
     res.json({ sessionId: newSessionId, projectId: targetProjectId });
 
-    embedText(summary).then(embedding => {
+    embedTextVector(summary, { userId: req.user.id }).then((embedding) => {
       if (!embedding) return;
       const vec = `[${embedding.join(',')}]`;
       pool.query(

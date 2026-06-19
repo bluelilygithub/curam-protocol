@@ -21,7 +21,7 @@ const COLLAPSE_CHAR_THRESHOLD = 2500;
 const COLLAPSED_HEIGHT = 220; // px
 const BRANCH_SUMMARY_PREFIX = '[[VAULT_BRANCH_SUMMARY]]\n';
 
-function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, onBranchResponse, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isPaused, onSpeak, onPause, onResume, onStop, markdownVariant = 'default' }) {
+function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, onBranchResponse, messageIndex, searching, bookmarked, onToggleBookmark, isLatest, isSpeaking, isGeneratingSpeech, isPaused, onSpeak, onPause, onResume, onStop, markdownVariant = 'default' }) {
   const isUser = message.role === 'user';
   const [showThinking, setShowThinking] = useState(false);
   const getIcon = useIcon();
@@ -334,23 +334,25 @@ function MessageBubble({ message, onDelete, onOpenArtifact, onBranch, onBranchRe
 
             {/* Read aloud controls */}
             {onSpeak && (
-              isSpeaking ? (
+              isSpeaking || isGeneratingSpeech ? (
                 <>
-                  <button
-                    onClick={isPaused ? onResume : onPause}
-                    className="w-6 h-6 flex items-center justify-center rounded-md"
-                    style={{ background: 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))', border: '1px solid var(--color-primary)', color: 'var(--color-primary)' }}
-                    title={isPaused ? 'Resume' : 'Pause'}
-                  >
-                    {isPaused ? getIcon('play', { size: 11 }) : getIcon('pause', { size: 11 })}
-                  </button>
+                  {!isGeneratingSpeech && (
+                    <button
+                      onClick={isPaused ? onResume : onPause}
+                      className="w-6 h-6 flex items-center justify-center rounded-md"
+                      style={{ background: 'color-mix(in srgb, var(--color-primary) 12%, var(--color-surface))', border: '1px solid var(--color-primary)', color: 'var(--color-primary)' }}
+                      title={isPaused ? 'Resume' : 'Pause'}
+                    >
+                      {isPaused ? getIcon('play', { size: 11 }) : getIcon('pause', { size: 11 })}
+                    </button>
+                  )}
                   <button
                     onClick={onStop}
                     className="w-6 h-6 flex items-center justify-center rounded-md"
-                    style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-muted)' }}
-                    title="Stop reading"
+                    style={{ background: 'var(--color-surface)', border: isGeneratingSpeech ? '1px solid var(--color-primary)' : '1px solid var(--color-border)', color: isGeneratingSpeech ? 'var(--color-primary)' : 'var(--color-muted)' }}
+                    title={isGeneratingSpeech ? 'Generating cloned voice on this Mac (can take 30–90 seconds)…' : 'Stop reading'}
                   >
-                    {getIcon('x', { size: 11 })}
+                    {isGeneratingSpeech ? getIcon('loader', { size: 11, className: 'animate-spin' }) : getIcon('x', { size: 11 })}
                   </button>
                 </>
               ) : (

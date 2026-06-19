@@ -15,6 +15,7 @@ function normalizeOllamaModel(modelId) {
 }
 
 async function isOllamaAvailable() {
+  if (!runtimeConfig.isLocal) return false;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);

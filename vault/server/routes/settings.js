@@ -5,6 +5,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { FEATURE_ACCESS_DEFAULTS, FEATURE_ACCESS_KEYS } = require('../config/featureAccess');
 const { getVaultModelsConfigForUser } = require('../services/modelResolver');
+const { resolveEmbeddingConfig, getGeminiEmbeddingOptions } = require('../services/embeddingResolver');
 const { getPublicRuntimeConfig } = require('../config/runtime');
 const {
   DEFAULT_WELLBEING_INVITE_SUBJECT,
@@ -35,6 +36,19 @@ function normalizeContentRestrictions(value) {
     })
     .slice(0, 50);
 }
+
+// GET /api/settings/embedding-config — current embedding provider for memory/RAG
+router.get('/embedding-config', async (req, res) => {
+  try {
+    const config = await resolveEmbeddingConfig(req.user.id);
+    res.json({
+      ...config,
+      options: getGeminiEmbeddingOptions(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // GET /api/settings/effective-models — vault_models + default_model (user or admin fallback)
 router.get('/effective-models', async (req, res) => {

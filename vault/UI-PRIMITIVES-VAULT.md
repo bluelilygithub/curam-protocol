@@ -76,7 +76,7 @@ Width: 240px, fixed. Background: `--color-surface`. Right border: `1px solid var
 
 ### Header bar
 
-Height: `h-11` (44px). Background: `--color-surface`. Bottom border: `--color-border`. Contains (left to right): sidebar toggle button, "Project Vault" branding link, flex spacer, search button (hidden on mobile), guide link (hidden on mobile), then a run of 7×7 icon buttons for primary navigation tools (Personas, Memory, Prompts, Notes, Clients, Tasks, Goals, History, Chains, Graph, Debate, Compare, Finance, Usage, Mood, News Digest, Admin, Settings, Logout). Most icon links are hidden on mobile via `hidden sm:flex`. [DELIBERATE] — the header is a persistent global navigation layer separate from the sidebar, oriented toward tool-switching rather than project navigation.
+Height: `h-11` (44px). Background: `--color-surface`. Bottom border: `--color-border`. Contains (left to right): sidebar toggle button, "Project Vault" branding link, flex spacer, search button (hidden on mobile), guide link (hidden on mobile), then a run of 7×7 icon buttons for primary navigation tools (Personas, Memory, **Suggestions**, Prompts, Notes, Clients, Tasks, Goals, History, Chains, Graph, Debate, Compare, Finance, Usage, Mood, News Digest, Admin, Settings, Logout). Most icon links are hidden on mobile via `hidden sm:flex`. [DELIBERATE] — the header is a persistent global navigation layer separate from the sidebar, oriented toward tool-switching rather than project navigation.
 
 Icon buttons in the header follow a consistent size and hover pattern: `w-7 h-7 flex items-center justify-center rounded-md hover:opacity-60 transition-opacity`. Active state uses `var(--color-primary)` for icon colour, inactive uses `var(--color-muted)`.
 

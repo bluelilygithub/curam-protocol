@@ -8,6 +8,7 @@ import ProjectDetail from './pages/ProjectDetail';
 import ChatPage from './pages/ChatPage';
 import SettingsPage from './pages/SettingsPage';
 import MemoryPage from './pages/MemoryPage';
+import SuggestionsPage from './pages/SuggestionsPage';
 import PromptsPage from './pages/PromptsPage';
 import UserGuidePage from './pages/UserGuidePage';
 import PersonasPage from './pages/PersonasPage';
@@ -113,6 +114,7 @@ function App() {
               <Route path="/student/saved-decks" element={<StudentSavedDecksPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/memory" element={<MemoryPage />} />
+              <Route path="/suggestions" element={<SuggestionsPage />} />
               <Route path="/prompts" element={<PromptsPage />} />
               <Route path="/guide" element={<UserGuidePage />} />
               <Route path="/personas" element={<PersonasPage />} />

@@ -3,7 +3,8 @@
 const express   = require('express');
 const router    = express.Router();
 const { pool }  = require('../db');
-const { embedText } = require('../services/embeddings');
+const { embedTextVector } = require('../services/embeddings');
+const { resolveEmbeddingConfig } = require('../services/embeddingResolver');
 const { callModel } = require('../services/callModel');
 const { getModelsForUser } = require('../services/modelResolver');
 const { logUsage } = require('../utils/logUsage');
@@ -218,10 +219,11 @@ router.post('/compute-semantic', async (req, res) => {
       sse(res, { stage: 'files', message: 'File comparison skipped (embeddings unavailable)', percent: 18 });
     }
 
-    // ── Stages 2–6 require GEMINI_API_KEY ─────────────────────────────────
-    if (!process.env.GEMINI_API_KEY) {
-      sse(res, { stage: 'skipped', message: 'Note/session comparisons skipped — GEMINI_API_KEY not set', percent: 88 });
+    const embConfig = await resolveEmbeddingConfig(req.user?.id);
+    if (!embConfig.available) {
+      sse(res, { stage: 'skipped', message: `Note/session comparisons skipped — ${embConfig.hint}`, percent: 88 });
     } else {
+      const userId = req.user?.id;
       // ── Stage 2: Embed notes ─────────────────────────────────────────────
       const { rows: noteRows } = await pool.query(
         'SELECT id, title, body FROM notes ORDER BY created_at DESC LIMIT $1', [MAX_NOTES]
@@ -232,7 +234,7 @@ router.post('/compute-semantic', async (req, res) => {
       for (let i = 0; i < noteRows.length; i++) {
         const n = noteRows[i];
         const text = [n.title, n.body].filter(Boolean).join('\n').slice(0, 3000);
-        const emb = await embedText(text);
+        const emb = await embedTextVector(text, { userId });
         if (emb) noteEmbeddings.push({ id: n.id, embedding: emb });
         const pct = 20 + Math.round(((i + 1) / Math.max(noteRows.length, 1)) * 22);
         sse(res, { stage: 'notes', message: `Embedding notes… ${i + 1}/${noteRows.length}`, percent: pct });
@@ -267,7 +269,7 @@ router.post('/compute-semantic', async (req, res) => {
         const s = sessionRows[i];
         const text = [s.title, s.first_content, s.last_content].filter(Boolean).join('\n').slice(0, 3000);
         if (!text.trim()) continue;
-        const emb = await embedText(text);
+        const emb = await embedTextVector(text, { userId });
         if (emb) sessionEmbeddings.push({ id: s.sessionId, embedding: emb });
         const pct = 44 + Math.round(((i + 1) / Math.max(sessionRows.length, 1)) * 16);
         sse(res, { stage: 'sessions', message: `Embedding sessions… ${i + 1}/${sessionRows.length}`, percent: pct });

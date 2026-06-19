@@ -25,7 +25,7 @@ import { startGraphTour, TOUR_KEY as GRAPH_TOUR_KEY } from '../utils/tours/graph
 import ConfirmModal from '../components/ConfirmModal';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
 import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
-import UsersAdminPanel from '../components/UsersAdminPanel';
+import { LOCAL_CLONE_VOICE_URI } from '../hooks/useVoice';
 
 const AUDIO_VOICE_SETTING_KEY = 'audio_voice_uri';
 const AUDIO_VOICE_STORAGE_KEY = 'vault:chat:selected-voice-uri';
@@ -82,6 +82,12 @@ function SettingsPage() {
   const [audioVoiceURI, setAudioVoiceURI] = useState('');
   const [previewingVoiceURI, setPreviewingVoiceURI] = useState('');
   const voicePreviewRef = useRef(null);
+  const [localVoiceStatus, setLocalVoiceStatus] = useState(null);
+  const [localVoiceAvailable, setLocalVoiceAvailable] = useState(false);
+  const [localVoiceRefText, setLocalVoiceRefText] = useState('');
+  const [localVoiceFile, setLocalVoiceFile] = useState(null);
+  const [localVoiceSaving, setLocalVoiceSaving] = useState(false);
+  const [localVoiceMessage, setLocalVoiceMessage] = useState('');
 
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwStatus, setPwStatus] = useState(null);
@@ -97,6 +103,9 @@ function SettingsPage() {
     saveBranchEvalModel,
     graphicsModel,
     saveGraphicsModel,
+    embeddingModel,
+    saveEmbeddingModel,
+    embeddingConfig,
   } = useModels();
   const [editingModel, setEditingModel] = useState(null); // model object being edited, or 'new'
   const [modelForm, setModelForm] = useState({});
@@ -241,6 +250,27 @@ function SettingsPage() {
     api.post('/api/settings', { key: AUDIO_VOICE_SETTING_KEY, value: next }).catch(() => {});
   }
 
+  async function saveLocalVoiceProfile() {
+    setLocalVoiceSaving(true);
+    setLocalVoiceMessage('');
+    try {
+      const formData = new FormData();
+      if (localVoiceFile) formData.append('audio', localVoiceFile);
+      if (localVoiceRefText.trim()) formData.append('refText', localVoiceRefText.trim());
+      const res = await api.postForm('/api/local-audio/tts/profile', formData);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not save local voice profile');
+      setLocalVoiceStatus(data);
+      setLocalVoiceFile(null);
+      setLocalVoiceMessage('Local voice profile saved. Select "My voice (local clone)" in Chat.');
+      saveAudioVoice(LOCAL_CLONE_VOICE_URI);
+    } catch (err) {
+      setLocalVoiceMessage(err.message || 'Could not save local voice profile');
+    } finally {
+      setLocalVoiceSaving(false);
+    }
+  }
+
   useEffect(() => {
     api.get('/api/chat/model-status').then(r => r.json()).then(setModelStatus).catch(() => {});
     // Load allowedFileTypes from DB. If no DB value exists yet, seed it with the
@@ -321,6 +351,25 @@ function SettingsPage() {
       .then(setRuntimeInfo)
       .catch(() => {});
   }, [user?.isAdmin]);
+
+  useEffect(() => {
+    api.get('/api/local-audio/tts/status')
+      .then(async (r) => {
+        if (!r.ok) {
+          setLocalVoiceAvailable(false);
+          return null;
+        }
+        return r.json();
+      })
+      .then((data) => {
+        if (!data) return;
+        setLocalVoiceAvailable(true);
+        setLocalVoiceStatus(data);
+        if (data?.refText) setLocalVoiceRefText(data.refText);
+        else if (data?.refTextPreview) setLocalVoiceRefText(data.refTextPreview);
+      })
+      .catch(() => setLocalVoiceAvailable(false));
+  }, []);
 
   const EMPTY_MODEL = { emoji: '🤖', name: '', label: '', id: '', provider: 'anthropic', tagline: '', desc: '' };
 
@@ -685,8 +734,57 @@ function SettingsPage() {
               Used by automated schedules (news, shares). Admin's timezone is the system default.
             </p>
           </div>
+          {localVoiceAvailable && (
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>My cloned voice (F5-TTS)</label>
+              <div className="rounded-lg border p-4 space-y-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                  This is separate from the Mac/browser voice list below. Upload a 20–30 second recording of your voice here first, then choose <strong>My voice (local clone)</strong> in Chat.
+                </p>
+                <p className="text-xs" style={{ color: localVoiceStatus?.configured ? '#166534' : '#b45309' }}>
+                  {localVoiceStatus?.configured
+                    ? 'Voice profile ready.'
+                    : 'Not set up yet — upload a recording below.'}
+                </p>
+                <label className="block">
+                  <span className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>Reference recording</span>
+                  <input
+                    type="file"
+                    accept="audio/*,.m4a,.wav,.mp3,.webm"
+                    onChange={(e) => setLocalVoiceFile(e.target.files?.[0] || null)}
+                    className="block w-full text-xs"
+                  />
+                </label>
+                <label className="block">
+                  <span className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: 'var(--color-muted)' }}>What you said in the recording</span>
+                  <textarea
+                    value={localVoiceRefText}
+                    onChange={(e) => setLocalVoiceRefText(e.target.value)}
+                    rows={4}
+                    placeholder="Paste the exact words spoken, or leave blank when uploading new audio to auto-transcribe."
+                    className="w-full px-3 py-2 rounded-xl border text-sm outline-none resize-y"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  />
+                </label>
+                {localVoiceMessage && (
+                  <p className="text-xs" style={{ color: localVoiceMessage.includes('saved') ? '#166534' : '#dc2626' }}>
+                    {localVoiceMessage}
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={saveLocalVoiceProfile}
+                  disabled={localVoiceSaving || (!localVoiceFile && !localVoiceStatus?.refAudioExists)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  {localVoiceSaving ? 'Saving…' : 'Save my cloned voice'}
+                </button>
+              </div>
+            </div>
+          )}
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Audio voice</label>
+            <label className="block text-xs mb-1" style={{ color: 'var(--color-muted)' }}>Mac / browser voices (fallback)</label>
             <div
               className="rounded-lg border overflow-hidden"
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
@@ -720,6 +818,32 @@ function SettingsPage() {
                   {!audioVoiceURI ? 'Selected' : 'Use'}
                 </button>
               </div>
+              {localVoiceAvailable && (
+                <div className="flex items-center gap-3 px-3 py-2 border-b" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  <div className="w-8 h-8 flex items-center justify-center rounded-lg border text-xs" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>★</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium" style={{ color: audioVoiceURI === LOCAL_CLONE_VOICE_URI ? 'var(--color-primary)' : 'var(--color-text)' }}>
+                      My voice (local clone)
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      {localVoiceStatus?.configured ? 'F5-TTS · configured above' : 'Set up in the section above first'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => saveAudioVoice(LOCAL_CLONE_VOICE_URI)}
+                    disabled={!localVoiceStatus?.configured}
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold border transition-opacity hover:opacity-75 disabled:opacity-40"
+                    style={{
+                      borderColor: audioVoiceURI === LOCAL_CLONE_VOICE_URI ? 'var(--color-primary)' : 'var(--color-border)',
+                      color: audioVoiceURI === LOCAL_CLONE_VOICE_URI ? 'var(--color-primary)' : 'var(--color-muted)',
+                      background: audioVoiceURI === LOCAL_CLONE_VOICE_URI ? 'var(--color-primary)10' : 'var(--color-surface)',
+                    }}
+                  >
+                    {audioVoiceURI === LOCAL_CLONE_VOICE_URI ? 'Selected' : 'Use'}
+                  </button>
+                </div>
+              )}
               <div className="max-h-72 overflow-y-auto">
                 {audioVoices.map((voice) => {
                   const selected = audioVoiceURI === voice.voiceURI;
@@ -770,7 +894,7 @@ function SettingsPage() {
               </div>
             </div>
             <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-              Used by Chat read-aloud. Voice availability comes from the current browser/device, so production users see their own installed voices.
+              Only used when you pick a Mac/browser voice. For your own cloned voice, use the F5-TTS section above.
             </p>
           </div>
         </div>
@@ -1116,6 +1240,45 @@ function SettingsPage() {
               <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
             ))}
           </select>
+        </div>
+
+        {/* Embedding model — memory + file RAG */}
+        <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+            Embedding model
+          </label>
+          <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+            Powers semantic memory, file RAG, and related-chat recall. Local Mac testing uses Ollama automatically; production uses Gemini from this setting.
+          </p>
+          {embeddingConfig?.provider === 'ollama' ? (
+            <div className="text-sm space-y-1" style={{ color: 'var(--color-text)' }}>
+              <p>
+                <strong>Local:</strong> Ollama <code>{embeddingConfig.model}</code>
+                {embeddingConfig.available ? ' — connected' : ' — not running'}
+              </p>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                Run <code>ollama pull {embeddingConfig.model}</code> if needed. Requires pgvector on Postgres for storage.
+              </p>
+            </div>
+          ) : (
+            <>
+              <select
+                value={embeddingModel || embeddingConfig?.model || 'embedding-001'}
+                onChange={(e) => saveEmbeddingModel(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                {(embeddingConfig?.options || [{ id: 'embedding-001', label: 'Gemini embedding-001' }]).map((opt) => (
+                  <option key={opt.id} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
+              <p className="text-xs mt-2" style={{ color: embeddingConfig?.available ? 'var(--color-muted)' : '#b45309' }}>
+                {embeddingConfig?.available
+                  ? `Production: ${embeddingConfig.hint}`
+                  : (embeddingConfig?.hint || 'GEMINI_API_KEY required on Railway')}
+              </p>
+            </>
+          )}
         </div>
 
         {/* Graphics model selector */}

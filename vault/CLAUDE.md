@@ -28,6 +28,8 @@ Invite-based multi-user AI workspace. Node.js/Express backend + React/Vite front
 - `client/src/components/ProcessingModal.jsx` — **global blocking overlay** for slow operations; rendered once in `App.jsx`
 - `client/src/providers/IconProvider.jsx` — `getIcon(name, props)` semantic map; add icons here before using
 - `client/src/providers/ThemeProvider.jsx` — writes `--color-*` CSS vars to `<head>` on mount/change
+- `client/DESIGN.md` — **read before any UI/client work** (tokens, layout, components, do/don’t)
+- `server/routes/suggestions.js` — agent suggestion inbox (`POST /api/suggestions`)
 - `server/services/marketData.js` — Shares quote fetching: Finnhub (NYSE/NASDAQ) + Alpha Vantage (ASX) + Frankfurter FX
 - `server/services/sharesPortfolio.js` — `computeHoldingsAndRealized()`, `buildDashboard()`, quote cache, exchange-filtered snapshots
 - `server/services/sharesNewsService.js` — daily briefings + monthly summaries: Finnhub/web search → AI → `share_news_briefings`
@@ -156,6 +158,8 @@ Three tiers, each injected into the system prompt in order:
 
 ## UI System
 
+Full reference: **`client/DESIGN.md`**. Cursor rule `.cursor/rules/vault-ui.mdc` applies when editing `client/**`.
+
 **Theming:** Six CSS custom properties (`--color-bg`, `--color-surface`, `--color-border`, `--color-primary`, `--color-text`, `--color-muted`). ThemeProvider writes them to `<head>`. Use `var(--color-xxx)` inline, not Tailwind `dark:` classes. Warnings: hardcoded amber (`#f59e0b`). Errors: hardcoded red (`#ef4444`). Status colours are intentionally outside the theme system.
 
 **Default palette (warm-sand):** bg `#F5F5F0` · surface `#EEEEE8` · border `#D8D8D0` · primary `#CC785C` · text `#1A1A1A` · muted `#888888`
@@ -196,6 +200,31 @@ try {
 
 ---
 
+## Agent suggestions inbox
+
+After **substantial** vault work (new feature, refactor, routine, migration, repeated pattern), if you notice something the user should triage — anomaly, missing rule/skill/automation, config gap, design drift — **add a suggestion** instead of only mentioning it in chat.
+
+**UI:** `/suggestions` · **API:** `POST /api/suggestions` · **Docs:** `docs/suggestions-inbox.md`
+
+```json
+{
+  "category": "rule | skill | automation | source | alert | other",
+  "title": "Short actionable summary",
+  "body": "What you found, why it matters, suggested fix",
+  "context": "optional: file path, cron job, commit, session"
+}
+```
+
+**When to suggest:** repetitive manual steps → `automation` or `skill`; missing Cursor rule → `rule`; code smell / misconfig → `source` or `alert`; doc/design gap → `rule` or `other`.
+
+**When not to:** trivial typos you already fixed; normal chat Q&A; every minor observation.
+
+User triages with status: `new` → `opened` → `apply` | `learn` | `ignore`. Do not change status via API — user owns triage.
+
+If the dev server is running locally, agents may POST via curl with the user's session token. Otherwise note the suggestion in chat and offer to add it when the server is up.
+
+---
+
 ## Key Patterns & Rules
 
 - All named routes before `/:id` in every route file — critical ordering.
@@ -227,7 +256,7 @@ try {
 
 ## Features
 
-Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker)
+Projects · Folders · Chat (project + general) · Files (RAG) · Personas · Prompts · Memory · **Suggestions inbox** · Pinned URLs · Document Compare · Multi-Model Debate · Tasks (list/board/calendar/matrix) · Goals (OKR-lite) · Chat History · Web Search (`@search`, Brave/Serper/SerpAPI) · Gmail integration · Google Calendar · Google Drive backup · News Digest · Finance · Admin dashboard + user management · Password reset · Shared task public links · **Student** (Quiz + Cards + Saved decks) · **Shares** (portfolio tracker)
 
 **Student → Quiz** (`/student/quiz/*`): Dashboard, Quiz Library (AI-generated pools via `POST /api/student-quizzes`), Take Quiz, Results. Uses **`getModelsForUser` `standard`** for generation/marking — not hardcoded model ids. Tables: `student_quizzes`, `student_quiz_attempts`. Routes: `server/routes/studentQuizzes.js`.
 

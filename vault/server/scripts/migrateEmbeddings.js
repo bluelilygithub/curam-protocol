@@ -17,13 +17,16 @@ require('dotenv').config();
 
 const { pool } = require('../db');
 const { chunkText } = require('../services/chunker');
-const { embedText } = require('../services/embeddings');
+const { embedText, embedTextVector } = require('../services/embeddings');
+const { resolveEmbeddingConfig } = require('../services/embeddingResolver');
 
 async function run() {
-  if (!process.env.GEMINI_API_KEY) {
-    console.error('[migrate] GEMINI_API_KEY is not set — cannot embed files. Aborting.');
+  const config = await resolveEmbeddingConfig(1);
+  if (!config.available) {
+    console.error(`[migrate] Embeddings unavailable (${config.hint}). Aborting.`);
     process.exit(1);
   }
+  console.log(`[migrate] Using ${config.sourceKey}`);
 
   // Wait for the pool to be ready (db.js runs initSchema on first query)
   await pool.query('SELECT 1');
@@ -63,12 +66,12 @@ async function run() {
 
       let chunkCount = 0;
       for (let ci = 0; ci < chunks.length; ci++) {
-        const embedding = await embedText(chunks[ci]);
-        if (embedding) {
+        const { vector, sourceKey } = await embedText(chunks[ci], { userId: 1 });
+        if (vector) {
           await pool.query(
-            `INSERT INTO file_chunks (file_id, project_id, chunk_index, chunk_text, embedding)
-             VALUES ($1, $2, $3, $4, $5::vector)`,
-            [file.id, file.projectId, ci, chunks[ci], `[${embedding.join(',')}]`]
+            `INSERT INTO file_chunks (file_id, project_id, chunk_index, chunk_text, embedding, embedding_source)
+             VALUES ($1, $2, $3, $4, $5::vector, $6)`,
+            [file.id, file.projectId, ci, chunks[ci], `[${vector.join(',')}]`, sourceKey]
           );
           chunkCount++;
         }

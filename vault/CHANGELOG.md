@@ -4,6 +4,50 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-18 (3)
+
+**Feature:** Agent suggestions inbox — triage queue for agent and routine findings.
+
+New `agent_suggestions` table and `/api/suggestions` API. After substantial work, agents can POST findings (anomalies, missing rules/skills/automations, config gaps) for user review instead of losing them in chat.
+
+**Categories:** `rule`, `skill`, `automation`, `source`, `alert`, `other`.
+
+**Status workflow:** `new` → `opened` → `apply` | `learn` | `ignore`.
+
+**UI:** `/suggestions` — filter by category and status, search, expandable cards, one-click status buttons, manual add form. **Inbox icon** in top nav (desktop, after Memory) with badge count for `new` items. Mobile: Suggestions in nav menu.
+
+**Agent docs:** `CLAUDE.md` — when to suggest, `POST /api/suggestions` payload shape. See `docs/suggestions-inbox.md`.
+
+**New files:** `server/routes/suggestions.js`, `server/constants/suggestionInbox.js`, `client/src/pages/SuggestionsPage.jsx`, `docs/suggestions-inbox.md`, `docs/semantic-memory.md`, `client/DESIGN.md`, `.cursor/rules/vault-ui.mdc`.
+
+---
+
+## 2026-06-18 (2)
+
+**Feature:** Embedding router — Ollama locally, Gemini via Settings on Railway.
+
+Memory, file RAG, session summaries, and graph semantic compute now resolve embeddings through `embeddingResolver.js`: `APP_ENV=local` → Ollama (`OLLAMA_EMBEDDING_MODEL`, default `nomic-embed-text`); production → Gemini model from Settings (`embedding_model`, default `embedding-001`, admin fallback). Rows tagged with `embedding_source` so local and production vectors are not mixed.
+
+**New:** `GET /api/settings/embedding-config`. Settings → AI Models → **Embedding model** selector (production only; local shows Ollama status).
+
+**Requires:** `ollama pull nomic-embed-text` locally; `GEMINI_API_KEY` on Railway; pgvector on Postgres for vector storage.
+
+---
+
+## 2026-06-18
+
+**Feature:** Semantic personal memory (replaces plain-text memory list).
+
+Upgraded the `memory` table with `content_fingerprint`, `metadata`, and `embedding vector(768)` (Gemini `text-embedding-004`, same as file RAG). Added `server/services/MemoryService.js` for capture (deduped by content hash), semantic search, list, stats, delete, and legacy backfill.
+
+**Chat:** System prompt memory block now uses semantic recall against the current user message (top 8), with fallback to recent memories when embeddings are unavailable — replaces injecting the last 30 rows on every turn.
+
+**API:** `GET /api/memory/search?q=`, `GET /api/memory/stats`; POST capture upserts duplicates. List triggers best-effort embedding backfill when `GEMINI_API_KEY` is set.
+
+**UI:** `/memory` page — how-it-works copy, semantic search, stats line, expandable rows. User guide updated. See `docs/semantic-memory.md`.
+
+---
+
 ## 2026-06-14
 
 **Feature + UX:** Wellbeing dashboard, visual summaries, report variants, and cleaner report formatting.

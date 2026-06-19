@@ -1,22 +1,20 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import removeMd from 'remove-markdown';
 import api from '../utils/apiClient';
+import useAuthStore from '../store/authStore';
+
+export const LOCAL_CLONE_VOICE_URI = 'vault:local-clone-voice';
+export const LOCAL_CLONE_VOICE_LABEL = 'My voice (local clone)';
 
 function stripForSpeech(text) {
   if (!text) return '';
-  // 1. Fenced code blocks — replace with a brief spoken marker
   let out = text.replace(/```[\s\S]*?```/g, ' code block. ');
-  // 2. Inline code — strip backticks, keep the inner text
   out = out.replace(/`([^`]*)`/g, '$1');
-  // 3. URLs (http/https/ftp, bare www., or markdown link hrefs) — remove entirely
   out = out.replace(/https?:\/\/\S+/gi, '');
   out = out.replace(/ftp:\/\/\S+/gi, '');
   out = out.replace(/www\.\S+/gi, '');
-  // 4. HTML tags — strip completely
   out = out.replace(/<[^>]+>/g, '');
-  // 5. remove-markdown handles headings, bold, italic, blockquotes, lists, etc.
   out = removeMd(out);
-  // 6. Collapse excess whitespace left by removals
   out = out.replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
   return out;
 }
@@ -24,7 +22,7 @@ function stripForSpeech(text) {
 const isSTTAvailable = typeof window !== 'undefined' &&
   ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
 
-const isTTSAvailable = typeof window !== 'undefined' &&
+const isBrowserTTSAvailable = typeof window !== 'undefined' &&
   'speechSynthesis' in window;
 
 const isLocalSTTAvailable = typeof window !== 'undefined' &&
@@ -59,9 +57,13 @@ export function useVoice() {
   const [voiceError, setVoiceError] = useState('');
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isPaused,   setIsPaused]   = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isGeneratingSpeech, setIsGeneratingSpeech] = useState(false);
+  const [speechStatus, setSpeechStatus] = useState('');
   const [speakingId, setSpeakingId] = useState(null);
   const [voices, setVoices] = useState([]);
+  const [localCloneConfigured, setLocalCloneConfigured] = useState(false);
+  const [localVoiceAvailable, setLocalVoiceAvailable] = useState(false);
   const [selectedVoiceURI, setSelectedVoiceURIState] = useState(() => {
     if (typeof window === 'undefined') return '';
     try {
@@ -71,12 +73,26 @@ export function useVoice() {
     }
   });
   const recognitionRef = useRef(null);
-  const accumulatedRef = useRef(''); // finals gathered across continuous utterances
+  const accumulatedRef = useRef('');
   const mediaRecorderRef = useRef(null);
   const mediaChunksRef = useRef([]);
   const mediaStreamRef = useRef(null);
   const voiceModeRef = useRef('browser');
   const utteranceRef = useRef(null);
+  const audioRef = useRef(null);
+  const audioUrlRef = useRef('');
+  const speakAbortRef = useRef(null);
+  const audioUnlockRef = useRef(null);
+
+  const unlockAudioPlayback = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (!audioUnlockRef.current) {
+      const audio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
+      audio.volume = 0.001;
+      audioUnlockRef.current = audio;
+    }
+    audioUnlockRef.current.play().catch(() => {});
+  }, []);
 
   const setSelectedVoiceURI = useCallback((voiceURI) => {
     const next = voiceURI || '';
@@ -90,21 +106,66 @@ export function useVoice() {
     api.post('/api/settings', { key: VOICE_SETTING_KEY, value: next }).catch(() => {});
   }, []);
 
+  const clearGeneratedAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = '';
+    }
+  }, []);
+
+  const stopSpeaking = useCallback(() => {
+    speakAbortRef.current?.abort();
+    speakAbortRef.current = null;
+    if (isBrowserTTSAvailable) window.speechSynthesis.cancel();
+    utteranceRef.current = null;
+    clearGeneratedAudio();
+    setSpeakingId(null);
+    setIsSpeaking(false);
+    setIsPaused(false);
+    setIsGeneratingSpeech(false);
+    setSpeechStatus('');
+  }, [clearGeneratedAudio]);
+
   useEffect(() => {
     let cancelled = false;
-    api.get('/api/settings')
-      .then((res) => res.ok ? res.json() : null)
-      .then((settings) => {
-        if (cancelled || !settings?.[VOICE_SETTING_KEY]) return;
-        const next = settings[VOICE_SETTING_KEY];
-        setSelectedVoiceURIState(next);
+
+    Promise.all([
+      api.get('/api/settings').then((res) => (res.ok ? res.json() : null)).catch(() => null),
+      api.get('/api/local-audio/tts/status').then((res) => (res.ok ? res.json() : null)).catch(() => null),
+    ]).then(([settings, localVoice]) => {
+      if (cancelled) return;
+
+      const savedVoice = settings?.[VOICE_SETTING_KEY] || '';
+      const configured = !!localVoice?.configured;
+      const localAvailable = !!localVoice && !localVoice.error;
+      setLocalCloneConfigured(configured);
+      setLocalVoiceAvailable(localAvailable);
+
+      if (savedVoice) {
+        setSelectedVoiceURIState(savedVoice);
         try {
-          window.localStorage.setItem(VOICE_STORAGE_KEY, next);
+          window.localStorage.setItem(VOICE_STORAGE_KEY, savedVoice);
         } catch (_) {
           /* browser storage may be unavailable */
         }
-      })
-      .catch(() => {});
+        return;
+      }
+
+      if (configured) {
+        setSelectedVoiceURIState(LOCAL_CLONE_VOICE_URI);
+        try {
+          window.localStorage.setItem(VOICE_STORAGE_KEY, LOCAL_CLONE_VOICE_URI);
+        } catch (_) {
+          /* browser storage may be unavailable */
+        }
+        api.post('/api/settings', { key: VOICE_SETTING_KEY, value: LOCAL_CLONE_VOICE_URI }).catch(() => {});
+      }
+    });
+
     return () => { cancelled = true; };
   }, []);
 
@@ -209,7 +270,6 @@ export function useVoice() {
 
     recognition.onresult = (e) => {
       let interim = '';
-      // Only process new results from resultIndex onwards
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
         if (result.isFinal) {
@@ -218,13 +278,11 @@ export function useVoice() {
           interim += result[0].transcript;
         }
       }
-      // Show accumulated finals + current in-progress utterance
-      setInterimText((accumulatedRef.current + (interim ? ' ' + interim : '')).trim());
+      setInterimText((accumulatedRef.current + (interim ? ` ${interim}` : '')).trim());
     };
 
     recognition.onend = () => {
       if (voiceModeRef.current === 'local') return;
-      // Commit whatever was accumulated when the session ends
       if (accumulatedRef.current) {
         setTranscript(accumulatedRef.current);
         accumulatedRef.current = '';
@@ -274,14 +332,10 @@ export function useVoice() {
   const stopListening = useCallback(() => {
     if (voiceModeRef.current === 'local') {
       const recorder = mediaRecorderRef.current;
-      if (recorder?.state === 'recording') {
-        recorder.stop();
-      }
+      if (recorder?.state === 'recording') recorder.stop();
       return;
     }
     if (!isSTTAvailable || !recognitionRef.current) return;
-    // Commit accumulated text before stopping — onend will also fire but
-    // accumulatedRef will be empty by then so it won't double-append
     if (accumulatedRef.current) {
       setTranscript(accumulatedRef.current);
       accumulatedRef.current = '';
@@ -293,7 +347,7 @@ export function useVoice() {
   }, []);
 
   useEffect(() => {
-    if (!isTTSAvailable) return undefined;
+    if (!isBrowserTTSAvailable) return undefined;
 
     const loadVoices = () => {
       setVoices(window.speechSynthesis.getVoices());
@@ -308,8 +362,8 @@ export function useVoice() {
     };
   }, []);
 
-  const speak = useCallback((text, speechId = null) => {
-    if (!isTTSAvailable) return;
+  const speakWithBrowser = useCallback((text, speechId = null) => {
+    if (!isBrowserTTSAvailable) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(stripForSpeech(text));
     const selectedVoice = voices.find((voice) => voice.voiceURI === selectedVoiceURI);
@@ -321,6 +375,7 @@ export function useVoice() {
       setSpeakingId(speechId);
       setIsSpeaking(true);
       setIsPaused(false);
+      setIsGeneratingSpeech(false);
     };
     utterance.onend = () => {
       if (utteranceRef.current === utterance) utteranceRef.current = null;
@@ -328,44 +383,193 @@ export function useVoice() {
       setIsSpeaking(false);
       setIsPaused(false);
     };
-    utterance.onerror = () => {
+    utterance.onerror = (event) => {
       if (utteranceRef.current === utterance) utteranceRef.current = null;
       setSpeakingId(null);
       setIsSpeaking(false);
       setIsPaused(false);
+      const reason = event?.error || 'speech-synthesis-failed';
+      if (reason !== 'interrupted' && reason !== 'canceled') {
+        setVoiceError('Read aloud failed in the browser voice. Try another voice in the speaker menu.');
+      }
     };
     window.speechSynthesis.speak(utterance);
   }, [selectedVoiceURI, voices]);
 
+  const speakWithLocalClone = useCallback(async (text, speechId = null) => {
+    const spokenText = stripForSpeech(text);
+    if (!spokenText) return;
+
+    stopSpeaking();
+    setIsGeneratingSpeech(true);
+    setSpeakingId(speechId);
+    setSpeechStatus('Preparing cloned voice (first run may download models, then ~30–90s per chunk on this Mac)…');
+
+    const controller = new AbortController();
+    speakAbortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), 8 * 60 * 1000);
+
+    try {
+      const token = useAuthStore.getState().token;
+      setSpeechStatus('Generating cloned voice on this Mac…');
+      const res = await fetch('/api/local-audio/tts/speak', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ text: spokenText }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 429) {
+          throw new Error(data.error || 'Cloned voice is already generating. Wait for the spinner to finish.');
+        }
+        throw new Error(data.error || 'Local cloned voice failed.');
+      }
+
+      setSpeechStatus('Playing cloned voice…');
+
+      const blob = await res.blob();
+      if (!blob.size) {
+        throw new Error('Cloned voice returned empty audio. Try again.');
+      }
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioUrlRef.current = url;
+      audioRef.current = audio;
+
+      audio.onplay = () => {
+        setIsGeneratingSpeech(false);
+        setIsSpeaking(true);
+        setIsPaused(false);
+        setSpeechStatus('');
+      };
+      audio.onpause = () => {
+        if (audio.ended) return;
+        setIsPaused(true);
+      };
+      audio.onended = () => {
+        clearGeneratedAudio();
+        setSpeakingId(null);
+        setIsSpeaking(false);
+        setIsPaused(false);
+        setIsGeneratingSpeech(false);
+        setSpeechStatus('');
+      };
+      audio.onerror = () => {
+        clearGeneratedAudio();
+        setSpeakingId(null);
+        setIsSpeaking(false);
+        setIsPaused(false);
+        setIsGeneratingSpeech(false);
+        setSpeechStatus('');
+        setVoiceError('Could not play the cloned voice audio.');
+      };
+
+      try {
+        await audio.play();
+      } catch (playErr) {
+        if (playErr?.name === 'NotAllowedError') {
+          throw new Error('Browser blocked audio playback. Click the speaker button again after generation finishes.');
+        }
+        throw playErr;
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setVoiceError('Cloned voice generation timed out after 8 minutes. Try a shorter reply or use a Mac voice.');
+      } else if (err.name !== 'AbortError') {
+        const message = err.message || 'Local cloned voice failed.';
+        setVoiceError(message.includes('cloned voice') ? message : `Local cloned voice failed: ${message}`);
+      }
+      setSpeakingId(null);
+      setIsSpeaking(false);
+      setIsPaused(false);
+      setIsGeneratingSpeech(false);
+      setSpeechStatus('');
+      clearGeneratedAudio();
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (speakAbortRef.current === controller) speakAbortRef.current = null;
+    }
+  }, [clearGeneratedAudio, stopSpeaking]);
+
+  const speak = useCallback((text, speechId = null) => {
+    if (isGeneratingSpeech) {
+      setVoiceError('Cloned voice is still generating. Wait for the spinner to finish or click stop.');
+      return;
+    }
+
+    unlockAudioPlayback();
+    const spokenText = stripForSpeech(text);
+    if (!spokenText) {
+      setVoiceError('Nothing to read aloud in this message.');
+      return;
+    }
+
+    setVoiceError('');
+
+    if (selectedVoiceURI === LOCAL_CLONE_VOICE_URI) {
+      if (!localCloneConfigured) {
+        setVoiceError('Set up your cloned voice in Settings → Profile first (My cloned voice section).');
+        return;
+      }
+      speakWithLocalClone(text, speechId);
+      return;
+    }
+    if (!isBrowserTTSAvailable) {
+      setVoiceError('Read aloud is not available in this browser.');
+      return;
+    }
+    speakWithBrowser(text, speechId);
+  }, [isGeneratingSpeech, localCloneConfigured, selectedVoiceURI, speakWithBrowser, speakWithLocalClone, unlockAudioPlayback]);
+
   const pauseSpeaking = useCallback(() => {
-    if (!isTTSAvailable) return;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      setIsPaused(true);
+      return;
+    }
+    if (!isBrowserTTSAvailable) return;
     window.speechSynthesis.pause();
     setIsPaused(true);
   }, []);
 
   const resumeSpeaking = useCallback(() => {
-    if (!isTTSAvailable) return;
+    if (audioRef.current) {
+      audioRef.current.play().catch(() => {});
+      setIsPaused(false);
+      return;
+    }
+    if (!isBrowserTTSAvailable) return;
     window.speechSynthesis.resume();
     setIsPaused(false);
   }, []);
 
-  const stopSpeaking = useCallback(() => {
-    if (!isTTSAvailable) return;
-    window.speechSynthesis.cancel();
-    utteranceRef.current = null;
-    setSpeakingId(null);
-    setIsSpeaking(false);
-    setIsPaused(false);
+  useEffect(() => () => {
+    stopSpeaking();
+  }, [stopSpeaking]);
+
+  const clearVoiceError = useCallback(() => {
+    setVoiceError('');
   }, []);
+
+  const isTTSAvailable = isBrowserTTSAvailable || localCloneConfigured;
 
   return {
     isSTTAvailable,
     isLocalSTTAvailable,
     isTTSAvailable,
+    isLocalCloneConfigured: localCloneConfigured,
+    isLocalVoiceAvailable: localVoiceAvailable,
+    isGeneratingSpeech,
     isListening,
     transcript,
     interimText,
     voiceError,
+    speechStatus,
     isTranscribing,
     isSpeaking,
     isPaused,
@@ -379,5 +583,6 @@ export function useVoice() {
     pauseSpeaking,
     resumeSpeaking,
     stopSpeaking,
+    clearVoiceError,
   };
 }

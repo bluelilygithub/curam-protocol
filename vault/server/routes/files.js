@@ -250,29 +250,31 @@ router.post('/upload/:projectId', requireNumericProjectId, upload.single('file')
 
     // ── RAG: chunk and embed the extracted text ────────────────────────────────
     if (extractedText) {
-      if (!process.env.GEMINI_API_KEY) {
-        console.warn('[files] GEMINI_API_KEY not set — skipping RAG chunking for:', req.file.originalname);
-      } else {
-        try {
-          const { chunkText } = require('../services/chunker');
-          const { embedText } = require('../services/embeddings');
+      try {
+        const { chunkText } = require('../services/chunker');
+        const { embedText } = require('../services/embeddings');
+        const { resolveEmbeddingConfig } = require('../services/embeddingResolver');
+        const embConfig = await resolveEmbeddingConfig(req.user.id);
+        if (!embConfig.available) {
+          console.warn('[files] Embeddings unavailable — skipping RAG chunking for:', req.file.originalname, embConfig.hint);
+        } else {
           const chunks = chunkText(extractedText);
           let embeddedCount = 0;
           for (let i = 0; i < chunks.length; i++) {
-            const embedding = await embedText(chunks[i]);
-            if (embedding) {
+            const { vector, sourceKey } = await embedText(chunks[i], { userId: req.user.id });
+            if (vector) {
               await pool.query(
-                `INSERT INTO file_chunks (file_id, project_id, chunk_index, chunk_text, embedding)
-                 VALUES ($1, $2, $3, $4, $5::vector)`,
-                [fileId, projectId, i, chunks[i], `[${embedding.join(',')}]`]
+                `INSERT INTO file_chunks (file_id, project_id, chunk_index, chunk_text, embedding, embedding_source)
+                 VALUES ($1, $2, $3, $4, $5::vector, $6)`,
+                [fileId, projectId, i, chunks[i], `[${vector.join(',')}]`, sourceKey]
               );
               embeddedCount++;
             }
           }
           console.log(`[files] RAG: ${embeddedCount}/${chunks.length} chunks embedded for "${req.file.originalname}"`);
-        } catch (ragErr) {
-          console.error('[files] RAG chunking/embedding error (upload continues):', ragErr.message);
         }
+      } catch (ragErr) {
+        console.error('[files] RAG chunking/embedding error (upload continues):', ragErr.message);
       }
     }
 

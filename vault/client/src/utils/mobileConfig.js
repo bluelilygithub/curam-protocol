@@ -35,6 +35,7 @@ export const DEFAULT_NAV_ITEMS = [
   { id: 'studentSection', label: 'Student',    path: '/student/quiz', enabled: true },
   { id: 'clients',   label: 'Clients',         path: '/clients',     enabled: true },
   { id: 'memory',    label: 'Memory',          path: '/memory',      enabled: true },
+  { id: 'suggestions', label: 'Suggestions',   path: '/suggestions', enabled: true },
   { id: 'prompts',   label: 'Prompts',         path: '/prompts',     enabled: true },
   { id: 'personas',  label: 'Personas',        path: '/personas',    enabled: true },
   { id: 'compare',   label: 'Doc Compare',     path: '/compare',     enabled: true },

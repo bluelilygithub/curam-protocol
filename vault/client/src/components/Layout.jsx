@@ -84,6 +84,7 @@ function Layout() {
   const [dueTodayCount,       setDueTodayCount]       = useState(0);
   const [showDueBanner,       setShowDueBanner]       = useState(false);
   const [bookmarkCount,       setBookmarkCount]       = useState(0);
+  const [newSuggestionCount,  setNewSuggestionCount]  = useState(0);
   const [showInquiryReminder, setShowInquiryReminder] = useState(false);
   const [showInquirySession,  setShowInquirySession]  = useState(false);
   const [inquiryReminderSettings, setInquiryReminderSettings] = useState(null);
@@ -114,10 +115,19 @@ function Layout() {
     api.get('/api/bookmarks/count').then(r => r.json()).then(d => setBookmarkCount(d.count || 0)).catch(() => {});
   };
 
+  const fetchSuggestionCount = () => {
+    api.get('/api/suggestions/count?status=new').then(r => r.json()).then(d => setNewSuggestionCount(d.count || 0)).catch(() => {});
+  };
+
   useEffect(() => {
     fetchBookmarkCount();
+    fetchSuggestionCount();
     window.addEventListener('vault:bookmark-changed', fetchBookmarkCount);
-    return () => window.removeEventListener('vault:bookmark-changed', fetchBookmarkCount);
+    window.addEventListener('vault:suggestions-changed', fetchSuggestionCount);
+    return () => {
+      window.removeEventListener('vault:bookmark-changed', fetchBookmarkCount);
+      window.removeEventListener('vault:suggestions-changed', fetchSuggestionCount);
+    };
   }, []);
 
   useEffect(() => {
@@ -428,6 +438,23 @@ function Layout() {
             title="Memory"
           >
             {getIcon('brain', { size: 16 })}
+          </Link>
+
+          <Link
+            to="/suggestions"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity relative"
+            style={{ color: location.pathname === '/suggestions' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+            title="Suggestions"
+          >
+            {getIcon('inbox', { size: 16 })}
+            {newSuggestionCount > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full text-[9px] font-bold flex items-center justify-center"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}
+              >
+                {newSuggestionCount > 9 ? '9+' : newSuggestionCount}
+              </span>
+            )}
           </Link>
 
           <Link
