@@ -23,6 +23,7 @@ import { startNewsDigestTour, TOUR_KEY as NEWS_DIGEST_TOUR_KEY } from '../utils/
 import { startCalendarTour, TOUR_KEY as CALENDAR_TOUR_KEY } from '../utils/tours/calendarTour';
 import { startGraphTour, TOUR_KEY as GRAPH_TOUR_KEY } from '../utils/tours/graphTour';
 import ConfirmModal from '../components/ConfirmModal';
+import UsersAdminPanel from '../components/UsersAdminPanel';
 import { DEFAULT_TILES, DEFAULT_NAV_ITEMS, mergeWithDefaults } from '../utils/mobileConfig';
 import { DEFAULT_FEATURE_ACCESS, FEATURE_ACCESS_OPTIONS } from '../utils/featureAccess';
 import { LOCAL_CLONE_VOICE_URI } from '../hooks/useVoice';
