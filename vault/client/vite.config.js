@@ -15,6 +15,12 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
+      '/tb': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        timeout: 600000,
+        proxyTimeout: 600000,
+      },
     },
   },
   build: {

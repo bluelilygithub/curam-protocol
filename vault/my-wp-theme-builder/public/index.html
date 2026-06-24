@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WP Theme Builder</title>
+  <link rel="stylesheet" href="main.css?v=39">
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-header__inner">
+      <div>
+        <h1>WP Theme Builder</h1>
+        <p class="tagline">Stage 1 design → Stage 2 WordPress theme</p>
+      </div>
+      <button type="button" class="btn-secondary btn-start-over" id="btn-start-over" hidden>Start over</button>
+    </div>
+    <ol class="global-progress" id="global-progress" aria-label="Overall progress"></ol>
+  </header>
+
+  <div class="loading-overlay" id="loading-overlay" aria-hidden="true">
+    <div class="loading-overlay__card loading-overlay__card--generation">
+      <h2 class="loading-overlay__title" id="loading-title">Working…</h2>
+      <p class="loading-overlay__generating-emphasis" id="loading-generating-emphasis" hidden>
+        Generating content — please wait while the model updates your design.
+      </p>
+      <p class="loading-overlay__duration-hint" id="loading-duration-hint" hidden>This step usually takes about 4 minutes — please keep this tab open.</p>
+      <p class="loading-overlay__warning" id="loading-warning" hidden>Please wait — don't close this tab or click Start over until generation finishes.</p>
+      <ol class="loading-overlay__steps" id="loading-steps" hidden></ol>
+      <p class="loading-overlay__status" id="loading-status" hidden></p>
+      <ul class="loading-overlay__building" id="loading-building-items" hidden aria-label="Elements being created"></ul>
+      <div class="loading-spinner" aria-hidden="true"></div>
+      <p class="loading-overlay__message" id="loading-message">Working…</p>
+      <div class="loading-overlay__footer">
+        <button type="button" class="btn-secondary loading-overlay__cancel" id="loading-cancel" hidden>Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="app-main">
+    <div class="resume-banner" id="resume-banner" hidden role="region" aria-label="Resume project">
+      <p id="resume-banner-text"></p>
+      <div class="resume-banner__actions">
+        <button type="button" class="btn-primary btn-small" id="resume-continue">Continue</button>
+        <button type="button" class="btn-secondary btn-small" id="resume-start-over">Start over</button>
+      </div>
+    </div>
+    <div class="form-error global-error" id="global-error" role="alert" hidden></div>
+
+    <section class="panel projects-panel" id="projects-panel">
+      <div class="projects-panel__head">
+        <div>
+          <h2>Projects</h2>
+          <p class="field-hint">Group multiple websites under one project — wireframe, design, and export each site separately.</p>
+        </div>
+        <button type="button" class="btn-primary" id="btn-new-project">New project</button>
+      </div>
+
+      <div class="projects-tabs" role="tablist" aria-label="Project status">
+        <button type="button" class="projects-tab is-active" data-tab="active" role="tab" aria-selected="true">Active</button>
+        <button type="button" class="projects-tab" data-tab="completed" role="tab" aria-selected="false">Completed</button>
+      </div>
+
+      <div class="projects-toolbar">
+        <input type="search" id="projects-search" class="projects-search" placeholder="Search projects and websites…" aria-label="Search projects">
+      </div>
+
+      <div class="projects-list-card" id="projects-list-card" aria-live="polite"></div>
+      <p class="projects-count" id="projects-count" hidden></p>
+    </section>
+
+    <section class="panel intake-wizard" id="intake-wizard" hidden>
+      <div class="intake-wizard__head">
+        <h2>Project brief</h2>
+        <ol class="step-progress" id="step-progress" aria-label="Form progress"></ol>
+      </div>
+
+      <form id="intake-form" novalidate>
+        <!-- Step 1: Purpose -->
+        <fieldset class="intake-step" data-step="1">
+          <legend>Purpose</legend>
+          <label>
+            What is the site for?
+            <select name="siteFor" required>
+              <option value="">Select…</option>
+              <option value="Business">Business</option>
+              <option value="Portfolio">Portfolio</option>
+              <option value="Blog">Blog</option>
+              <option value="eCommerce">eCommerce</option>
+            </select>
+          </label>
+          <label>
+            Who is the target audience?
+            <input type="text" name="targetAudience" required placeholder="e.g. Small business owners in Wellington">
+          </label>
+          <label>
+            What is the one thing a visitor should do?
+            <input type="text" name="primaryAction" required placeholder="e.g. Book a consultation">
+          </label>
+        </fieldset>
+
+        <!-- Step 2: Inspiration -->
+        <fieldset class="intake-step is-step-hidden" data-step="2">
+          <legend>Inspiration</legend>
+          <p class="field-hint">Paste up to 3 inspiration site URLs (optional).</p>
+          <label>Inspiration URL 1 <input type="url" name="inspirationUrl1" placeholder="https://"></label>
+          <label>Inspiration URL 2 <input type="url" name="inspirationUrl2" placeholder="https://"></label>
+          <label>Inspiration URL 3 <input type="url" name="inspirationUrl3" placeholder="https://"></label>
+          <label>
+            What do you like about them?
+            <textarea name="inspirationLikes" rows="4" placeholder="Layout, typography, tone…"></textarea>
+          </label>
+          <label>
+            What do you NOT want?
+            <textarea name="inspirationDislikes" rows="4" placeholder="Dark themes, stock photos, clutter…"></textarea>
+          </label>
+          <label>
+            Describe the feel in 3 words
+            <input type="text" name="feelWords" placeholder="e.g. Calm, premium, approachable">
+          </label>
+        </fieldset>
+
+        <!-- Step 3: Brand -->
+        <fieldset class="intake-step is-step-hidden" data-step="3">
+          <legend>Brand</legend>
+          <div class="toggle-field">
+            <span>Do you have a logo?</span>
+            <div class="toggle" role="group" aria-label="Do you have a logo?">
+              <button type="button" class="toggle__btn" data-toggle="hasLogo" data-value="yes">Yes</button>
+              <button type="button" class="toggle__btn is-active" data-toggle="hasLogo" data-value="no">No</button>
+            </div>
+          </div>
+          <label>
+            Primary color <span class="optional">(optional)</span>
+            <input type="color" name="primaryColor" value="#193c4b">
+          </label>
+          <div class="font-pickers" id="font-pickers">
+            <label>
+              Heading font <span class="optional">(Google Fonts)</span>
+              <select name="headingFont" id="heading-font-select" class="font-select">
+                <option value="">Select a Google Font…</option>
+              </select>
+            </label>
+            <label>
+              Body font <span class="optional">(Google Fonts)</span>
+              <select name="bodyFont" id="body-font-select" class="font-select">
+                <option value="">Select a Google Font…</option>
+              </select>
+            </label>
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" name="aiChooseFonts" id="ai-choose-fonts">
+            Let AI choose fonts instead
+          </label>
+        </fieldset>
+
+        <!-- Step 4: Functionality -->
+        <fieldset class="intake-step is-step-hidden" data-step="4">
+          <legend>Functionality</legend>
+          <p class="field-hint">Select any features you need.</p>
+          <div class="checkbox-grid" id="functionality-select">
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Contact form"> Contact form</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Newsletter signup"> Newsletter signup</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Blog"> Blog</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Portfolio/Gallery"> Portfolio/Gallery</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="eCommerce"> eCommerce</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Booking"> Booking</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Social feeds"> Social feeds</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Search"> Search</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Google Map"> Google Map</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Google Reviews"> Google Reviews</label>
+            <label class="checkbox-label"><input type="checkbox" name="functionality" value="Multilingual"> Multilingual</label>
+          </div>
+        </fieldset>
+
+        <!-- Summary -->
+        <fieldset class="intake-step is-step-hidden" data-step="summary">
+          <legend>Review your brief</legend>
+          <p class="field-hint">Check everything looks right before we generate your wireframe.</p>
+          <dl class="intake-summary" id="intake-summary"></dl>
+        </fieldset>
+
+        <div class="form-error" id="form-error" role="alert" hidden></div>
+
+        <div class="intake-nav">
+          <button type="button" class="btn-secondary" id="btn-back" hidden>Back</button>
+          <button type="button" class="btn-primary" id="btn-next">Next</button>
+          <button type="submit" class="btn-primary" id="btn-submit" hidden>Generate wireframe</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel design-panel" id="design-panel" hidden>
+      <div class="design-panel__head">
+        <h2>Stage 1 — Design preview <span class="design-phase-badge design-phase-badge--wireframe" id="design-phase-badge" hidden></span></h2>
+        <p class="session-id" id="session-id"></p>
+      </div>
+
+      <div class="design-panel__actions design-panel__actions--toolbar">
+        <div class="preview-viewport-toggle" role="group" aria-label="Preview viewport">
+          <button type="button" class="btn-secondary btn-toolbar preview-viewport-btn is-active" data-viewport="desktop" aria-pressed="true">Desktop</button>
+          <button type="button" class="btn-secondary btn-toolbar preview-viewport-btn" data-viewport="mobile" aria-pressed="false">Mobile</button>
+        </div>
+        <button type="button" class="btn-secondary btn-toolbar" id="btn-open-tab" hidden>Preview in new tab</button>
+        <button type="button" class="btn-secondary btn-toolbar" id="btn-iterate">Iterate</button>
+          <button type="button" class="btn-primary btn-toolbar" id="btn-design-home" hidden title="Polishes your approved wireframe structure with brand styling — same layout, not a new design">Approve wireframe &amp; build homepage</button>
+        <button type="button" class="btn-primary btn-toolbar" id="btn-approve" hidden>Approve design</button>
+        <button type="button" class="btn-secondary btn-toolbar" id="btn-all-projects">Back To Projects</button>
+      </div>
+
+      <div class="site-pages-panel" id="site-pages-panel" hidden>
+        <h3 class="site-pages-panel__title">Site pages</h3>
+        <p class="field-hint">Homepage and shared CSS must be established before designing inner pages.</p>
+        <ul class="site-pages-list" id="site-pages-list"></ul>
+      </div>
+
+      <div class="downloads-panel" id="downloads-panel" hidden>
+        <h3 class="downloads-panel__title">Downloads</h3>
+        <p class="field-hint">Export locked snapshots — files are not modified after you approve the design.</p>
+        <div class="downloads-panel__actions">
+          <a class="btn-secondary btn-small" id="dl-source" href="#">Source files (HTML/CSS)</a>
+          <a class="btn-secondary btn-small" id="dl-static" href="#">Static hosting ZIP</a>
+          <a class="btn-secondary btn-small" id="dl-wordpress" href="#" hidden>WordPress theme (TBA)</a>
+        </div>
+      </div>
+
+      <div class="iterate-panel" id="iterate-panel" hidden>
+        <div class="iterate-panel__target-row iterate-target-row" id="iterate-target-row" hidden>
+          <button type="button" class="btn-secondary btn-small" id="btn-pick-element" aria-pressed="false">Pick element</button>
+          <button type="button" class="btn-secondary btn-small" id="btn-cancel-pick" hidden>Cancel picking</button>
+          <p class="iterate-pick-banner" id="iterate-pick-banner" hidden>Click an element in the preview to select it — press <kbd>Esc</kbd> to cancel.</p>
+          <span class="iterate-target" id="iterate-target" hidden>
+            <label class="iterate-target__copy-wrap">
+              <span class="iterate-target__copy-label">Reference</span>
+              <input type="text" class="iterate-target-ref" id="iterate-target-ref" readonly aria-label="Element reference to copy">
+              <button type="button" class="btn-secondary btn-small" id="btn-copy-target-ref">Copy</button>
+            </label>
+            <span class="iterate-target__picked">
+              Target: <strong id="iterate-target-label"></strong>
+              <button type="button" class="btn-icon iterate-target__clear" id="btn-clear-target" aria-label="Clear target">×</button>
+            </span>
+          </span>
+        </div>
+        <label class="iterate-panel__label" for="iterate-input">Describe the change you want</label>
+        <div class="iterate-panel__row">
+          <textarea id="iterate-input" rows="3" placeholder="e.g. #tb-search — put the Go button beside the input, not below"></textarea>
+          <button type="button" class="btn-primary" id="btn-iterate-send">Send</button>
+        </div>
+        <p class="field-hint iterate-panel__hint">Use <strong>Pick element</strong> to click the exact element you want to change. Wait for <strong>Selected: #…</strong> before iterating — that confirms the id is saved. Press <kbd>Esc</kbd> to cancel picking.</p>
+        <p class="iterate-copy-toast" id="iterate-copy-toast" role="status" aria-live="polite" hidden>Copied</p>
+        <p class="form-error" id="iterate-error" role="alert" hidden></p>
+      </div>
+
+      <iframe id="preview" title="Design preview" sandbox="allow-scripts allow-same-origin"></iframe>
+    </section>
+
+    <section class="panel wp-wizard" id="wp-wizard" hidden>
+      <div class="wp-wizard__head">
+        <h2>WordPress theme brief</h2>
+        <ol class="step-progress" id="wp-step-progress" aria-label="WordPress form progress"></ol>
+      </div>
+
+      <form id="wp-form" novalidate>
+        <fieldset class="wp-step" data-step="1">
+          <legend>Content editing</legend>
+          <label>
+            Who will edit this site?
+            <select name="editor" required>
+              <option value="">Select…</option>
+              <option value="Developer">Developer</option>
+              <option value="Non-technical client">Non-technical client</option>
+              <option value="Both">Both</option>
+            </select>
+          </label>
+          <label>
+            Should clients change layouts or just content?
+            <select name="clientCanChange" required>
+              <option value="">Select…</option>
+              <option value="Layouts">Layouts</option>
+              <option value="Content only">Content only</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset class="wp-step" data-step="2" hidden>
+          <legend>Custom post types</legend>
+          <p class="field-hint">Select repeating content types you need.</p>
+          <div class="checkbox-grid" id="cpt-select">
+            <label class="checkbox-label"><input type="checkbox" name="cpt" value="Team Members"> Team Members</label>
+            <label class="checkbox-label"><input type="checkbox" name="cpt" value="Testimonials"> Testimonials</label>
+            <label class="checkbox-label"><input type="checkbox" name="cpt" value="Case Studies"> Case Studies</label>
+            <label class="checkbox-label"><input type="checkbox" name="cpt" value="Services"> Services</label>
+            <label class="checkbox-label"><input type="checkbox" name="cpt" value="FAQs"> FAQs</label>
+            <label class="checkbox-label"><input type="checkbox" name="cpt" value="Portfolio"> Portfolio</label>
+            <label class="checkbox-label"><input type="checkbox" name="cpt" value="Events"> Events</label>
+            <label class="checkbox-label"><input type="checkbox" name="cpt" value="Custom" id="cpt-custom-check"> Custom</label>
+          </div>
+          <label id="cpt-custom-wrap" hidden>
+            Custom post type name
+            <input type="text" name="customCptName" placeholder="e.g. Projects">
+          </label>
+          <div id="cpt-fields" class="cpt-fields" aria-live="polite"></div>
+        </fieldset>
+
+        <fieldset class="wp-step" data-step="3" hidden>
+          <legend>ACF fields</legend>
+          <p class="field-hint" id="acf-loading" hidden>Loading field suggestions from your approved design…</p>
+          <p class="field-hint">Editable fields per page — add, remove, or rename as needed.</p>
+          <div id="acf-pages" class="acf-pages"></div>
+          <button type="button" class="btn-secondary btn-small" id="btn-add-page-fields">Add page</button>
+        </fieldset>
+
+        <fieldset class="wp-step" data-step="4" hidden>
+          <legend>Global options</legend>
+          <div class="toggle-field">
+            <span>Do you need a global options page?</span>
+            <div class="toggle" role="group" aria-label="Global options page">
+              <button type="button" class="toggle__btn" data-wp-toggle="globalOptions" data-value="yes">Yes</button>
+              <button type="button" class="toggle__btn is-active" data-wp-toggle="globalOptions" data-value="no">No</button>
+            </div>
+          </div>
+          <div id="global-fields-wrap" hidden>
+            <p class="field-hint">Select global fields.</p>
+            <div class="checkbox-grid">
+              <label class="checkbox-label"><input type="checkbox" name="globalFields" value="Phone"> Phone</label>
+              <label class="checkbox-label"><input type="checkbox" name="globalFields" value="Email"> Email</label>
+              <label class="checkbox-label"><input type="checkbox" name="globalFields" value="Address"> Address</label>
+              <label class="checkbox-label"><input type="checkbox" name="globalFields" value="Social Links"> Social Links</label>
+              <label class="checkbox-label"><input type="checkbox" name="globalFields" value="Footer Text"> Footer Text</label>
+              <label class="checkbox-label"><input type="checkbox" name="globalFields" value="Header CTA"> Header CTA</label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="wp-step" data-step="5" hidden>
+          <legend>Theme type</legend>
+          <label>
+            Classic PHP theme or Full Site Editing (FSE)?
+            <select name="themeStyle" required>
+              <option value="">Select…</option>
+              <option value="Classic PHP">Classic PHP theme</option>
+              <option value="FSE">Full Site Editing (FSE)</option>
+            </select>
+          </label>
+          <div class="toggle-field">
+            <span>Should Gutenberg be used for page content areas?</span>
+            <div class="toggle" role="group" aria-label="Use Gutenberg">
+              <button type="button" class="toggle__btn" data-wp-toggle="useGutenberg" data-value="yes">Yes</button>
+              <button type="button" class="toggle__btn is-active" data-wp-toggle="useGutenberg" data-value="no">No</button>
+            </div>
+          </div>
+          <label id="block-sections-wrap" hidden>
+            Which sections should be ACF blocks vs static?
+            <textarea name="blockSections" rows="4" placeholder="e.g. Home hero: ACF block; Home footer: static; About team: ACF block"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset class="wp-step" data-step="6" hidden>
+          <legend>WordPress setup</legend>
+          <label>
+            Theme name
+            <input type="text" name="themeName" required placeholder="e.g. Bluelily Studio">
+          </label>
+          <label>
+            Theme version
+            <input type="text" name="themeVersion" value="1.0.0" required>
+          </label>
+          <label>
+            Author name
+            <input type="text" name="authorName" required placeholder="e.g. Bluelily">
+          </label>
+          <div class="toggle-field">
+            <span>Should README be included?</span>
+            <div class="toggle" role="group" aria-label="Include README">
+              <button type="button" class="toggle__btn is-active" data-wp-toggle="includeReadme" data-value="yes">Yes</button>
+              <button type="button" class="toggle__btn" data-wp-toggle="includeReadme" data-value="no">No</button>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="wp-step" data-step="summary" hidden>
+          <legend>Review WordPress brief</legend>
+          <p class="field-hint">Confirm your theme requirements before conversion.</p>
+          <dl class="intake-summary" id="wp-summary"></dl>
+        </fieldset>
+
+        <div class="form-error" id="wp-form-error" role="alert" hidden></div>
+
+        <div class="intake-nav">
+          <button type="button" class="btn-secondary" id="wp-btn-back" hidden>Back</button>
+          <button type="button" class="btn-primary" id="wp-btn-next">Next</button>
+          <button type="submit" class="btn-primary" id="wp-btn-submit" hidden>Generate theme</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel convert-panel" id="convert-panel" hidden>
+      <h2>Your WordPress theme is ready</h2>
+      <p class="field-hint" id="convert-status"></p>
+
+      <div class="convert-layout">
+        <div class="convert-files">
+          <h3 class="convert-subhead">Theme files</h3>
+          <ul class="file-tree" id="file-tree" aria-label="Theme file tree"></ul>
+        </div>
+
+        <div class="convert-next">
+          <h3 class="convert-subhead">Download</h3>
+          <div class="downloads-panel__actions downloads-panel__actions--convert">
+            <a id="btn-download" class="btn-primary btn-download" href="#" download hidden>WordPress theme ZIP</a>
+            <a class="btn-secondary btn-small" id="dl-source-complete" href="#" hidden>Source files</a>
+            <a class="btn-secondary btn-small" id="dl-static-complete" href="#" hidden>Static hosting ZIP</a>
+          </div>
+
+          <h3 class="convert-subhead">After downloading</h3>
+          <ol class="post-download-checklist">
+            <li>Upload ZIP to WordPress</li>
+            <li>Activate theme</li>
+            <li>Install ACF Pro</li>
+            <li>Sync ACF fields</li>
+            <li>Set up menus</li>
+            <li>Fill in content fields</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <div class="inspector-panel">
+      <h3 class="inspector-panel__title">Inspector</h3>
+
+      <div class="iteration-trace-wrap" id="iteration-trace-wrap">
+        <div class="iteration-trace-wrap__head">
+          <div>
+            <h4 class="iteration-trace__title">Iteration log</h4>
+            <p class="iteration-trace__hint">Session history — newest first. Failed attempts stay listed until you clear.</p>
+          </div>
+          <div class="iteration-trace-wrap__actions">
+            <button type="button" class="btn-secondary btn-small" id="btn-undo" hidden title="Revert the last design change">Undo last change</button>
+            <button type="button" class="btn-secondary btn-small" id="btn-clear-iteration-log">Clear log</button>
+          </div>
+        </div>
+        <ol class="iteration-trace" id="iteration-trace" aria-live="polite">
+          <li class="iteration-log__empty">No iterations yet — open Iterate, describe a change, and click Send.</li>
+        </ol>
+      </div>
+
+      <div class="lessons-learned-wrap" id="lessons-learned-wrap" hidden>
+        <h4 class="lessons-learned__title">Lessons learnt</h4>
+        <p class="lessons-learned__hint">Fed to Vault Memory when configured — helps future sessions.</p>
+        <ul class="lessons-learned" id="lessons-learned" aria-live="polite"></ul>
+      </div>
+
+      <h4 class="inspector-activity__title">Activity log</h4>
+      <pre class="log" id="log" aria-live="polite">Waiting for events…</pre>
+      <div class="inspector-prompt-wrap" id="inspector-prompt-wrap" hidden>
+        <h4 class="inspector-prompt__title">LLM prompt (sent to model)</h4>
+        <p class="inspector-prompt__meta" id="inspector-prompt-meta"></p>
+        <pre class="inspector-prompt" id="inspector-prompt" aria-label="LLM prompt"></pre>
+      </div>
+    </div>
+  </main>
+
+  <script src="tb-config.js?v=38"></script>
+  <script src="vault-theme.js?v=38"></script>
+  <script src="tb-modal.js?v=38"></script>
+  <script src="projects.js?v=38"></script>
+  <script src="inspector.js?v=39"></script>
+  <script src="google-fonts.js"></script>
+  <script src="generation-ui.js?v=39"></script>
+  <script src="ui.js?v=38"></script>
+  <script src="intake.js?v=38"></script>
+  <script src="wp-data.js?v=38"></script>
+  <script src="main.js?v=44"></script>
+</body>
+</html>

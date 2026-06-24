@@ -15,6 +15,7 @@ export const DEFAULT_FEATURE_ACCESS = {
   shares: true,
   youtube: true,
   graphics: true,
+  themeBuilder: true,
   wellbeing: true,
   gmailIntel: true,
 };
@@ -36,6 +37,7 @@ export const FEATURE_ACCESS_OPTIONS = [
   { key: 'shares', label: 'Shares' },
   { key: 'youtube', label: 'YouTube' },
   { key: 'graphics', label: 'Graphics' },
+  { key: 'themeBuilder', label: 'WP Theme Builder' },
   { key: 'wellbeing', label: 'Wellbeing Check' },
   { key: 'gmailIntel', label: 'Inbox Intel' },
 ];

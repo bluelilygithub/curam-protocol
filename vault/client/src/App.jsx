@@ -32,6 +32,7 @@ import NewsDigestPage from './pages/NewsDigestPage';
 import SharesPage from './pages/SharesPage';
 import YoutubePage from './pages/YoutubePage';
 import GraphicsPage from './pages/GraphicsPage';
+import ThemeBuilderPage from './pages/ThemeBuilderPage';
 import WellbeingPage from './pages/WellbeingPage';
 import GmailIntelPage from './pages/GmailIntelPage';
 import StudentCardsChatPage from './pages/StudentCardsChatPage';
@@ -136,6 +137,7 @@ function App() {
               <Route path="/shares" element={<SharesPage />} />
               <Route path="/youtube" element={<YoutubePage />} />
               <Route path="/graphics" element={<GraphicsPage />} />
+              <Route path="/theme-builder" element={<ThemeBuilderPage />} />
               <Route path="/wellbeing" element={<WellbeingPage />} />
               <Route path="/gmail-intel" element={<GmailIntelPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

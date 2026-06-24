@@ -1,0 +1,19 @@
+{
+  "watch": [
+    "server",
+    "my-wp-theme-builder/createApp.js",
+    "my-wp-theme-builder/routes",
+    "my-wp-theme-builder/utils",
+    "my-wp-theme-builder/server.js"
+  ],
+  "ext": "js",
+  "ignore": [
+    "client/**",
+    "dist/**",
+    "uploads/**",
+    "data/**",
+    "my-wp-theme-builder/output/**",
+    "my-wp-theme-builder/public/**",
+    "node_modules/**"
+  ]
+}

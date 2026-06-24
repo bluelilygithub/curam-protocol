@@ -623,6 +623,17 @@ function Layout() {
             </Link>
           )}
 
+          {canUseFeature('themeBuilder') && (
+            <Link
+              to="/theme-builder"
+              className="hidden sm:flex w-7 h-7 items-center justify-center rounded-md hover:opacity-60 transition-opacity"
+              style={{ color: location.pathname === '/theme-builder' ? 'var(--color-primary)' : 'var(--color-muted)' }}
+              title="WP Theme Builder"
+            >
+              {getIcon('blocks', { size: 16 })}
+            </Link>
+          )}
+
           {canUseFeature('wellbeing') && (
             <Link
               to="/wellbeing"

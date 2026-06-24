@@ -36,6 +36,13 @@ app.use(helmet({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// WP Theme Builder — mounted before Vault /api auth
+if (!process.env.THEME_BUILDER_MOUNT_PATH) {
+  process.env.THEME_BUILDER_MOUNT_PATH = '/tb';
+}
+const { createThemeBuilderApp, initThemeBuilder } = require('../my-wp-theme-builder/createApp');
+app.use('/tb', createThemeBuilderApp());
+
 const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -147,6 +154,7 @@ async function start() {
   }
 
   await seedInitialUser().catch(err => console.error('Seed error:', err));
+  await initThemeBuilder().catch(err => console.warn('[theme-builder] init:', err.message));
   const { runStartupChecks } = require('./services/SuggestionService');
   runStartupChecks().catch(err => console.warn('[startup] suggestion checks:', err.message));
 

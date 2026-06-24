@@ -94,6 +94,7 @@ const semanticMap = {
   'clipboard-list': { lucide: 'ClipboardList' },
   'heart-pulse': { lucide: 'HeartPulse' },
   'layers': { lucide: 'Layers' },
+  blocks: { lucide: 'Blocks' },
   square: { lucide: 'Square' },
   library: { lucide: 'Library' },
   inbox: { lucide: 'InboxIcon' },

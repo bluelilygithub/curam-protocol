@@ -16,6 +16,7 @@ const FEATURE_ACCESS_DEFAULTS = {
   student: true,
   shares: true,
   graphics: true,
+  themeBuilder: true,
   wellbeing: true,
   gmailIntel: true,
 };

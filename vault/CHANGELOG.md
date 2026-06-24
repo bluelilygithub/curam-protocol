@@ -4,6 +4,24 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-24
+
+**Feature:** WP Theme Builder — Vault integration, local dev workflow, and model policy.
+
+New `my-wp-theme-builder/` app mounted at **`/tb`**: intake brief → wireframe → homepage design → WordPress theme export. Embedded in Vault via `ThemeBuilderPage.jsx` (`/tools/theme-builder`). Local dev: `npm run dev` (Vite proxies `/tb` to port 3001).
+
+**Model resolution:** Vault **`default_model`** and **`vault_models`** tiers apply unless Theme Builder app overrides are set (`THEME_BUILDER_DESIGN_MODEL`, `THEME_BUILDER_DEV_DESIGN_MODEL` on local, or Settings → AI & Chat → **Theme builder design model**). Local dev expects Ollama (`THEME_BUILDER_DEV_DESIGN_MODEL=ollama:qwen2.5-coder:14b`); production uses configured cloud models and API keys. Documented in **`docs/theme-builder.md`** and **`CLAUDE.md`** (WP Theme Builder subsection).
+
+**Stage 1 UX:** element picker with `tb-pick-*` stamp flow; direct colour patches for wireframe iterate; consolidate pick/inline styles into `style.css` on wireframe approve; generation modal (no sticky status bar); preview toolbar **Back To Projects**; wireframe iterate text vs background intent.
+
+**Settings API:** `GET/POST /api/settings/theme-builder-design-model` — admin workspace key `theme_builder_design_model`.
+
+**Env:** `vault/.env.example` — `THEME_BUILDER_DEV_DESIGN_MODEL` and related keys.
+
+**Docs:** `docs/theme-builder.md`, `my-wp-theme-builder/README.md`.
+
+---
+
 ## 2026-06-18 (4)
 
 **Feature:** SuggestionService — automatic emission from crons and services.

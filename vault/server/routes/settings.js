@@ -8,6 +8,11 @@ const { getVaultModelsConfigForUser } = require('../services/modelResolver');
 const { resolveEmbeddingConfig, getGeminiEmbeddingOptions } = require('../services/embeddingResolver');
 const { getPublicRuntimeConfig } = require('../config/runtime');
 const {
+  describeThemeBuilderDesignModel,
+  loadWorkspaceDesignModel,
+  saveWorkspaceDesignModel,
+} = require('../../my-wp-theme-builder/utils/themeBuilderModel');
+const {
   DEFAULT_WELLBEING_INVITE_SUBJECT,
   DEFAULT_WELLBEING_INVITE_BODY,
   sanitizeWellbeingInviteBody,
@@ -57,6 +62,45 @@ router.get('/effective-models', async (req, res) => {
     res.json(config);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/settings/theme-builder-design-model — admin theme builder Stage 1 model
+router.get('/theme-builder-design-model', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  try {
+    const workspaceModel = await loadWorkspaceDesignModel();
+    const resolved = await describeThemeBuilderDesignModel({ userId: req.user.id });
+    res.json({
+      model: workspaceModel || '',
+      effectiveModel: resolved.model,
+      source: resolved.source,
+      isLocal: getPublicRuntimeConfig().isLocal,
+      envOverride: process.env.THEME_BUILDER_DESIGN_MODEL
+        || process.env.THEME_BUILDER_STAGE1_MODEL
+        || '',
+      devEnvOverride: process.env.THEME_BUILDER_DEV_DESIGN_MODEL || '',
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// POST /api/settings/theme-builder-design-model — body: { model: string | '' }
+router.post('/theme-builder-design-model', async (req, res) => {
+  if (!req.user?.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+  try {
+    const model = req.body?.model == null ? '' : String(req.body.model).trim();
+    const saved = await saveWorkspaceDesignModel(model);
+    const resolved = await describeThemeBuilderDesignModel({ userId: req.user.id });
+    res.json({
+      ok: true,
+      model: saved || '',
+      effectiveModel: resolved.model,
+      source: resolved.source,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 

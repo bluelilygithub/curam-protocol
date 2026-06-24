@@ -138,6 +138,9 @@ function SettingsPage() {
   const [toolMaintenancePlan, setToolMaintenancePlan] = useState(null);
   const [toolMaintenanceLoading, setToolMaintenanceLoading] = useState(false);
   const [toolMaintenanceError, setToolMaintenanceError] = useState('');
+  const [themeBuilderDesignModel, setThemeBuilderDesignModel] = useState('');
+  const [themeBuilderDesignMeta, setThemeBuilderDesignMeta] = useState(null);
+  const [themeBuilderDesignSaved, setThemeBuilderDesignSaved] = useState(false);
 
   const TABS = user?.isAdmin
     ? [
@@ -351,6 +354,13 @@ function SettingsPage() {
       .then(r => r.json())
       .then(setRuntimeInfo)
       .catch(() => {});
+    api.get('/api/settings/theme-builder-design-model')
+      .then(r => r.json())
+      .then((data) => {
+        setThemeBuilderDesignModel(data.model || '');
+        setThemeBuilderDesignMeta(data);
+      })
+      .catch(() => {});
   }, [user?.isAdmin]);
 
   useEffect(() => {
@@ -525,6 +535,22 @@ function SettingsPage() {
     } catch {
       throw new Error(`${fallbackMessage}. The server returned a non-JSON response.`);
     }
+  }
+
+  async function saveThemeBuilderDesignModel(model) {
+    setThemeBuilderDesignSaved(false);
+    const res = await api.post('/api/settings/theme-builder-design-model', { model }).catch(() => null);
+    if (!res?.ok) return;
+    const data = await res.json();
+    setThemeBuilderDesignModel(data.model || '');
+    setThemeBuilderDesignMeta((prev) => ({
+      ...(prev || {}),
+      model: data.model || '',
+      effectiveModel: data.effectiveModel,
+      source: data.source,
+    }));
+    setThemeBuilderDesignSaved(true);
+    setTimeout(() => setThemeBuilderDesignSaved(false), 2000);
   }
 
   async function scanToolMaintenance() {
@@ -1242,6 +1268,40 @@ function SettingsPage() {
             ))}
           </select>
         </div>
+
+        {/* Theme builder design model */}
+        {user?.isAdmin && (
+          <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--color-muted)' }}>
+              Theme builder design model
+            </label>
+            <p className="text-xs mb-2" style={{ color: 'var(--color-muted)' }}>
+              Used for wireframes, homepage design, and structural iterations in WP Theme Builder. CSS-only style tweaks still use your local Qwen model. Leave blank in production to use the default model above; in local dev, set <code>THEME_BUILDER_DEV_DESIGN_MODEL</code> in <code>.env</code> (e.g. <code>ollama:qwen2.5-coder:14b</code>).
+            </p>
+            <select
+              value={themeBuilderDesignModel}
+              onChange={(e) => saveThemeBuilderDesignModel(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            >
+              <option value="">Use default model / local dev env</option>
+              {textModelChoices.map(m => (
+                <option key={m.id} value={m.id}>{m.emoji} {m.name} — {m.id}</option>
+              ))}
+            </select>
+            {themeBuilderDesignMeta?.effectiveModel && (
+              <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+                Currently resolves to <code>{themeBuilderDesignMeta.effectiveModel}</code>
+                {themeBuilderDesignMeta.source ? ` (${themeBuilderDesignMeta.source.replace(/-/g, ' ')})` : ''}
+                {themeBuilderDesignMeta.devEnvOverride ? `. Dev env override: ${themeBuilderDesignMeta.devEnvOverride}` : ''}
+                {themeBuilderDesignMeta.envOverride ? `. Env override: ${themeBuilderDesignMeta.envOverride}` : ''}
+              </p>
+            )}
+            {themeBuilderDesignSaved && (
+              <p className="text-xs mt-2" style={{ color: '#16a34a' }}>Saved</p>
+            )}
+          </div>
+        )}
 
         {/* Embedding model — memory + file RAG */}
         <div className="mb-4 p-4 rounded-xl border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>

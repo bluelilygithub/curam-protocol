@@ -133,6 +133,16 @@ If the user has no **`vault_models`** row (or empty list), resolver uses the **f
 - **Pricing / cost estimates** (`costCalculator.js`, `pricing.js`) — tariff tables keyed by id; unknown ids fall back heuristically for **cost display**, not for **which model ran**.
 - **Legacy / migration** artefacts (e.g. old SQL defaults in backup files) — not runtime behaviour.
 
+### WP Theme Builder (`my-wp-theme-builder/`)
+
+Mounted at **`/tb`**. Stage 1 model routing is **separate** from chat defaults but uses the same Vault **`vault_models`** / **`default_model`** when no app override is set.
+
+**App overrides (beat Vault defaults):** `THEME_BUILDER_DESIGN_MODEL`, `THEME_BUILDER_DEV_DESIGN_MODEL` (local only), `workspace_settings.theme_builder_design_model` (Settings → AI & Chat → Theme builder design model).
+
+**Local dev:** use Ollama via `THEME_BUILDER_DEV_DESIGN_MODEL` — do not silently switch to cloud APIs in code. **Production:** cloud models from Settings + Railway API keys.
+
+Full priority table and env vars: **`docs/theme-builder.md`**. Resolver: `my-wp-theme-builder/utils/themeBuilderModel.js`.
+
 ---
 
 ## RAG Pipeline
