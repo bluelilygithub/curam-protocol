@@ -116,7 +116,7 @@ function buildPreviewHtml(html, {
     }
   }
 
-  const pickerSrc = `${assetUrl('/preview-picker.js')}?v=40`;
+  const pickerSrc = `${assetUrl('/preview-picker.js')}?v=41`;
   if (!/<script[^>]+preview-picker\.js/i.test(out)) {
     const picker = `<script src="${pickerSrc}" defer></script>`;
     if (/<\/body>/i.test(out)) {

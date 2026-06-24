@@ -59,8 +59,51 @@ function iterateRefFromTarget(target) {
   return `#${target.id}`;
 }
 
+function isTbPickId(id) {
+  return /^tb-pick-/i.test(String(id || '').trim());
+}
+
+function normalizeTargetId(id) {
+  return String(id || '').trim().toLowerCase();
+}
+
+function isIterateTargetSaved(targetId) {
+  if (!targetId) return true;
+  if (!isTbPickId(targetId)) return true;
+  const normalized = normalizeTargetId(targetId);
+  if (selectedIterateTarget?.id && normalizeTargetId(selectedIterateTarget.id) === normalized) {
+    return true;
+  }
+  return findElementBoundsInHtml(currentHtml, targetId);
+}
+
+function syncSelectedTargetFromRef() {
+  const refId = regionIdFromRef(lastIterateRef || els.iterateTargetRef?.value);
+  if (!refId) return;
+  if (selectedIterateTarget?.id && normalizeTargetId(selectedIterateTarget.id) === normalizeTargetId(refId)) {
+    return;
+  }
+  if (!isTbPickId(refId) || findElementBoundsInHtml(currentHtml, refId)) {
+    selectedIterateTarget = {
+      id: refId,
+      label: refId,
+      focusPath: `#${refId}`,
+    };
+    if (els.iterateTargetLabel) {
+      els.iterateTargetLabel.textContent = `#${refId}`;
+    }
+    syncIterateTargetPanel();
+  }
+}
+
 async function stampPickTarget(target) {
-  const isPick = /^tb-pick-/i.test(target?.id || '');
+  if (!target?.id) return target;
+
+  const isPick = isTbPickId(target.id);
+  if (isPick && findElementBoundsInHtml(currentHtml, target.id)) {
+    return { ...target, needsStamp: false };
+  }
+
   const needsStamp = Boolean(target?.needsStamp && target?.anchorId && (target?.locator?.length || target?.childPath?.length));
 
   if (!needsStamp && !isPick) {
@@ -157,6 +200,7 @@ function setIterateTarget(target) {
       els.iterateTargetLabel.textContent = `#${selectedIterateTarget.id} (${selectedIterateTarget.label || selectedIterateTarget.tag || selectedIterateTarget.id})`;
     }
   } else {
+    setIterateRef('');
     syncIterateTargetPanel();
     try {
       els.preview?.contentWindow?.postMessage({ type: 'tb-picker-clear' }, '*');
@@ -970,9 +1014,11 @@ async function runIterate() {
     return;
   }
 
+  syncSelectedTargetFromRef();
+
   const targetIdFromRequest = resolveIterateTargetId(changeRequest);
-  if (/^tb-pick-/i.test(targetIdFromRequest) && selectedIterateTarget?.id !== targetIdFromRequest) {
-    els.iterateError.textContent = 'Use Pick element to select that element first — tb-pick ids must be saved before iterating.';
+  if (!isIterateTargetSaved(targetIdFromRequest)) {
+    els.iterateError.textContent = 'That element is not saved yet — use Pick element and wait for Selected, or describe a general change without a #tb-pick id.';
     els.iterateError.hidden = false;
     return;
   }

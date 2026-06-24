@@ -171,9 +171,9 @@
       info.el.id = id;
       info.id = id;
       info.display = `#${id}`;
+      info.needsStamp = true;
     }
 
-    info.needsStamp = true;
     return info;
   }
 
