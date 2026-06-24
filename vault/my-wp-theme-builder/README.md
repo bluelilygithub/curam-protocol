@@ -22,6 +22,8 @@ Requires:
 
 Standalone (without Vault shell): `npm start` in this directory (port `3100`).
 
+When mounted in Vault (production), dependencies are installed from **`vault/package.json`** — keep theme-builder packages (`archiver`, `uuid`, `playwright`) in sync there.
+
 ## Model policy (summary)
 
 - **Local:** Ollama unless you set `THEME_BUILDER_DESIGN_MODEL` or **Theme builder design model** in Settings.

@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-18
+
+**Fix:** Railway deploy — `Cannot find module 'archiver'` on startup.
+
+Theme Builder is mounted in the Vault server; nested `my-wp-theme-builder/package.json` deps were not installed in production. Added `archiver`, `uuid`, and `playwright` to **`vault/package.json`**.
+
+---
+
 ## 2026-06-24
 
 **Feature:** WP Theme Builder — Vault integration, local dev workflow, and model policy.

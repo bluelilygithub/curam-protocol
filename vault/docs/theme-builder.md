@@ -96,6 +96,8 @@ On wireframe approve, iterate styles (inline picks, `tb-pick-styles`, `style.css
 
 Vault mounts the theme-builder Express app at `/tb` (`server/index.js` → `createThemeBuilderApp`). Vite proxies `/tb` to port `3001` in local dev.
 
+**Production (Railway):** Theme Builder runs inside the Vault process. Its npm dependencies (`archiver`, `uuid`, `playwright`, …) must be listed in **`vault/package.json`** — Railway only runs `npm install` at the vault root, not in `my-wp-theme-builder/`.
+
 ---
 
 ## Related docs
