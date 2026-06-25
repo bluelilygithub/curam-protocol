@@ -45,12 +45,32 @@ function looksLikeCss(text) {
     || (/[\w#.\[\]:-]+\s*\{/.test(trimmed) && trimmed.includes('}'));
 }
 
+// Guaranteed scroll-reveal observer. Used only as a fallback when the design
+// uses data-animate / paused entrance animations but the model omitted its own
+// tb-inview script — ensures animated content can never stay permanently hidden.
+const INVIEW_FALLBACK_SCRIPT = `<script id="tb-inview">
+(function () {
+  var nodes = document.querySelectorAll('[data-animate]');
+  if (!nodes.length) return;
+  function revealAll() { nodes.forEach(function (n) { n.classList.add('in-view'); }); }
+  if (!('IntersectionObserver' in window)) { revealAll(); return; }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('in-view'); io.unobserve(e.target); }
+    });
+  }, { rootMargin: '0px 0px -10% 0px', threshold: 0.1 });
+  nodes.forEach(function (n) { io.observe(n); });
+})();
+</script>`;
+
 function sanitizeDesignHtml(html) {
   let extraCss = '';
   const preservedScripts = [];
+  let hasInview = false;
 
   const cleaned = html.replace(/<script([^>]*)>([\s\S]*?)<\/script>/gi, (match, attrs, body) => {
-    if (/\bid\s*=\s*["']tb-nav-toggle["']/i.test(attrs)) {
+    if (/\bid\s*=\s*["'](tb-nav-toggle|tb-inview)["']/i.test(attrs)) {
+      if (/\bid\s*=\s*["']tb-inview["']/i.test(attrs)) hasInview = true;
       preservedScripts.push(match);
       return '';
     }
@@ -62,6 +82,13 @@ function sanitizeDesignHtml(html) {
   });
 
   let result = cleaned;
+
+  // Safety net: animated content present but no observer survived — inject one
+  // so paused entrance animations can't leave the page blank.
+  if (!hasInview && /\bdata-animate\b/i.test(result)) {
+    preservedScripts.push(INVIEW_FALLBACK_SCRIPT);
+  }
+
   if (preservedScripts.length && /<\/body>/i.test(result)) {
     result = result.replace(/<\/body>/i, `${preservedScripts.join('\n')}\n</body>`);
   }

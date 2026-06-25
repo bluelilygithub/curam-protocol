@@ -122,7 +122,22 @@ async function capturePage(url, options = {}) {
       extracted.evaluateError = evalErr.message;
     }
 
-    const screenshotBuffer = await page.screenshot({ type: 'jpeg', quality: 70, fullPage: false });
+    // Full-page capture, but cap height: the vision API rejects images taller
+    // than 8000px, so very long pages get their top MAX_SHOT_HEIGHT px instead.
+    const MAX_SHOT_HEIGHT = 7000;
+    let fullHeight = VIEWPORT.height;
+    try {
+      fullHeight = await page.evaluate(() => document.documentElement.scrollHeight) || VIEWPORT.height;
+    } catch (_) {
+      // keep viewport height on failure
+    }
+    const screenshotBuffer = fullHeight > MAX_SHOT_HEIGHT
+      ? await page.screenshot({
+          type: 'jpeg',
+          quality: 70,
+          clip: { x: 0, y: 0, width: VIEWPORT.width, height: MAX_SHOT_HEIGHT },
+        })
+      : await page.screenshot({ type: 'jpeg', quality: 70, fullPage: true });
 
     if (screenshotPath) {
       fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });

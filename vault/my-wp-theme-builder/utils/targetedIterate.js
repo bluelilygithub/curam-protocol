@@ -5,19 +5,68 @@ const {
   mergeRegionHtml,
   describeTarget,
   normalizeTargetId,
+  findElementBounds,
 } = require('./regionIds');
+
+/**
+ * Strip trailing model markers (e.g. ---CSS---) and reduce a returned fragment to
+ * the single root element so trailing commentary / CSS blocks can never be spliced
+ * into the page.
+ */
+function trimToSingleElement(rawFragment) {
+  let text = String(rawFragment || '').trim();
+  if (!text) return text;
+
+  // Cut everything from the first known trailing marker.
+  const markerIdx = text.search(/\n?---(?:CSS|HTML|FRAGMENT|END)---/i);
+  if (markerIdx !== -1) text = text.slice(0, markerIdx).trim();
+
+  // Drop leading commentary / whitespace before the first tag.
+  const firstTag = text.indexOf('<');
+  if (firstTag > 0) text = text.slice(firstTag);
+
+  const open = /^<([a-zA-Z][\w-]*)\b/.exec(text);
+  if (!open) return text.trim();
+
+  const tag = open[1].toLowerCase();
+  const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+  const openEnd = text.indexOf('>') + 1;
+  if (openEnd <= 0) return text.trim();
+  if (VOID.has(tag) || /\/\s*>$/.test(text.slice(0, openEnd))) {
+    return text.slice(0, openEnd).trim();
+  }
+
+  const closeTag = `</${tag}>`;
+  const lower = text.toLowerCase();
+  let depth = 1;
+  let i = openEnd;
+  while (depth > 0 && i < text.length) {
+    const nextOpen = lower.indexOf(`<${tag}`, i);
+    const nextClose = lower.indexOf(closeTag, i);
+    if (nextClose === -1) return text.trim();
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      depth += 1;
+      i = nextOpen + tag.length + 1;
+    } else {
+      depth -= 1;
+      i = nextClose + closeTag.length;
+    }
+  }
+  // i is the end of the first complete element; ignore anything after it.
+  return text.slice(0, i).trim();
+}
 
 function extractFragmentHtml(rawText, targetId) {
   const text = String(rawText || '').trim();
   const id = normalizeTargetId(targetId);
 
   const marker = extractDelimited(text, '---FRAGMENT---');
-  if (marker) return ensureIdOnFragment(marker, id);
+  if (marker) return ensureIdOnFragment(trimToSingleElement(marker), id);
 
   const fenced = [...text.matchAll(/```(?:html)?\s*([\s\S]*?)```/gi)]
     .map((m) => m[1].trim())
     .find((block) => block.length > 10);
-  if (fenced) return ensureIdOnFragment(fenced, id);
+  if (fenced) return ensureIdOnFragment(trimToSingleElement(fenced), id);
 
   const doc = extractHtmlDocument(text);
   if (doc) {
@@ -27,10 +76,44 @@ function extractFragmentHtml(rawText, targetId) {
   }
 
   if (text.startsWith('<') && text.length < 12000) {
-    return ensureIdOnFragment(text, id);
+    return ensureIdOnFragment(trimToSingleElement(text), id);
   }
 
   return null;
+}
+
+const LANDMARK_TAGS = /<(section|header|footer|main|nav|article|aside)\b/gi;
+
+function countLandmarks(html) {
+  return (String(html || '').match(LANDMARK_TAGS) || []).length;
+}
+
+/**
+ * Prevent a targeted edit from silently deleting unrelated parts of the page.
+ *
+ * The picked target id sometimes resolves to a large container (e.g. a
+ * <section id="home"> wrapping the whole page). If the model then returns only
+ * the small inner element, the naive splice would wipe every sibling section.
+ *
+ * We use the count of landmark sections (<section>/<header>/<footer>/<main>/…)
+ * as the signal: a legitimate single-element pick (card, button, image, even a
+ * whole section) never drops 2+ landmark sections, whereas collapsing the page
+ * wrapper does. Injected widgets (map/social/forms) are <div>s and don't count,
+ * so re-injectable sub-content never trips this guard.
+ */
+function assertSafeTargetedMerge(oldOuter, newFragment) {
+  const droppedLandmarks = countLandmarks(oldOuter) - countLandmarks(newFragment);
+
+  if (droppedLandmarks >= 2) {
+    const err = new Error(
+      `Targeted edit blocked — applying it would delete ${droppedLandmarks} other sections of the page. `
+      + 'The picked element selected a large container rather than the element you meant. '
+      + 'Use "Pick element" again on the exact element you want to change, then retry.'
+    );
+    err.status = 422;
+    err.safeMergeBlocked = true;
+    throw err;
+  }
 }
 
 function extractDelimited(text, marker) {
@@ -593,6 +676,14 @@ function applyTargetedIteration(html, targetId, rawResponse, { isWireframe = fal
     throw err;
   }
 
+  const bounds = findElementBounds(stamped, id);
+  if (!bounds) {
+    const err = new Error(`Failed to locate #${id} for merge`);
+    err.status = 502;
+    throw err;
+  }
+  assertSafeTargetedMerge(bounds.outer, fragment);
+
   const merged = mergeRegionHtml(stamped, id, fragment);
   if (!merged) {
     const err = new Error(`Failed to merge fragment into #${id}`);
@@ -626,6 +717,8 @@ module.exports = {
   injectPickInlineStyle,
   consolidateWireframeIterateStyles,
   extractFragmentHtml,
+  trimToSingleElement,
+  assertSafeTargetedMerge,
   parseTargetedDesignResponse,
   applyTargetedIteration,
 };

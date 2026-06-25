@@ -6,6 +6,46 @@ const { summarizeWireframeStructure, compactWireframeHtmlForDesign } = require('
 
 const DEFAULT_PAGES = ['Home', 'About', 'Services', 'Blog', 'Portfolio', 'Contact'];
 
+// Precise, opinionated design specifics. These are the rules that separate a
+// bespoke layout from a generic "AI template". Injected into both the full-skin
+// and the wireframe-polish system prompts.
+const DESIGN_SPEC_BLOCK = `DESIGN SPEC — apply these specifics (this is what separates bespoke from generic AI output):
+
+TYPE SCALE (modular — use clamp(), never freehand pixel sizes):
+- Display / hero H1: clamp(3rem, 6vw, 5rem); line-height 1.05; weight 700–800; letter-spacing -0.02em (tight tracking on large headings)
+- Section H2: clamp(1.75rem, 3vw, 2.5rem); line-height 1.15; letter-spacing -0.01em
+- H3 / card titles: clamp(1.15rem, 1.6vw, 1.4rem); line-height 1.25
+- Body: 1rem / 1.75; lead paragraphs 1.125rem / 1.7
+- All-caps labels / eyebrows: 0.75rem; letter-spacing 0.12em; weight 600 (loose tracking on all-caps)
+
+GRID & LAYOUT (avoid safe, symmetric, auto-flow defaults):
+- Home intro / hero must be a SINGLE cohesive composition — a headline/CTA column beside ONE feature image or media frame. NEVER render the intro as a vertical stack of multiple standalone images; multiple images belong only in a deliberate gallery, bento, slideshow, or carousel section.
+- Hero: CSS Grid with an explicit ASYMMETRIC split — 60/40 or 55/45, never 50/50 — using grid-template-areas to place headline/CTA vs. media.
+- Value-prop OR portfolio section: a BENTO grid — grid-template-columns: repeat(12, 1fr) with cells spanning irregular column/row counts (e.g. one 7-col feature tile, two 5-col tiles, one tall 2-row tile) for visual rhythm.
+- Feature/services grid: set gaps EXPLICITLY — column-gap: 24px; row-gap: 40px (do not leave gaps to the default).
+- Use grid-template-areas for the hero and at least one feature section so column behaviour is intentional, not auto-flow.
+
+CARD HOVER SPEC (apply to EVERY card — services, blog, portfolio, reviews):
+- Card: overflow: hidden; transition: transform .2s ease-out, box-shadow .2s ease-out.
+- On hover: transform: translateY(-6px); box-shadow deepens; a 3px brand-colour top accent slides in over 200ms ease-out (animate a ::before/::after or a border-top from scaleX(0) → scaleX(1)).
+- Cards with an image: the <img> sits in an overflow:hidden wrapper; on card hover the img does transform: scale(1.05) with transition: .4s ease (image zoom).
+
+BUTTONS:
+- Primary CTA: fill-sweep hover — a ::before pseudo-element that slides left→right (transform: translateX(-100%) → 0 over .3s ease) in an accent colour, label sitting above it. NOT a plain background-color swap.
+
+MOTION (scroll-triggered, with a safe fallback):
+- Define @keyframes for entrance (opacity 0 + translateY(20px) → opacity 1 + translateY(0)). Apply to hero content, section headings, and grid children — tag those elements with data-animate.
+- Animated elements start hidden via the keyframe with animation-play-state: paused; a .in-view class sets animation-play-state: running.
+- Hero image: Ken Burns — a slow @keyframes (transform: scale(1) → scale(1.08) over ~12s ease-out) running on load inside an overflow:hidden hero media frame.
+- Staggered grid children: each card delays 100ms after the previous — animation-delay: calc(var(--i) * 100ms) with --i set inline per card (or :nth-child delays up to ~6).
+- Include EXACTLY ONE small inline script with id="tb-inview" immediately before </body>: an IntersectionObserver that adds .in-view to [data-animate] elements as they enter the viewport. FALLBACK: if IntersectionObserver is unavailable, immediately add .in-view to every [data-animate] so nothing can stay hidden. This is the ONLY script permitted.
+
+SECTION DIFFERENTIATION (kill the flat white/light alternation):
+- If the brief specifies an alternate section background colour, use it (as a CSS custom property) for alternating sections instead of plain white/grey.
+- Headings and body text must use the brief's specified heading/body colours when provided (set them as CSS custom properties and apply throughout).
+- Make ONE section full-bleed DARK (a deep brand-derived tone) with light text and a thin brand-colour accent stripe — check contrast.
+- Give ONE section a subtle TEXTURE via CSS background-image (a faint diagonal repeating-linear-gradient, or a low-opacity dot/grain pattern) — never a flat fill on every section.`;
+
 const STAGE1_SYSTEM_PROMPT = `You are a senior UI/UX designer and front-end developer producing client-ready website skins for agency sign-off.
 
 QUALITY BAR (non-negotiable):
@@ -22,6 +62,8 @@ DESIGN EXECUTION:
 - Navigation must match the site type and inspiration tone (not always a horizontal pill bar)
 - Imagery: use https://picsum.photos with purposeful crops/sizes; images should support composition, not fill holes
 
+${DESIGN_SPEC_BLOCK}
+
 BRIEF COMPLIANCE (non-negotiable):
 - The header navigation MUST list EXACTLY the pages named in the brief — same labels, same order, no extras, no omissions
 - Each named page MUST exist as its own <section id="..."> in index.html; nav hrefs MUST point to those ids
@@ -37,7 +79,7 @@ TECHNICAL:
 - External stylesheets only: <link rel="stylesheet" href="style.css"> then <link rel="stylesheet" href="responsive.css">
 - responsive.css will be generated separately — focus style.css on desktop layout; do not rely on mobile @media in style.css
 - Load Google Fonts via @import in CSS when specified
-- No <script> tags — static HTML/CSS prototype only; never put CSS inside <script>
+- The ONLY script permitted is a single inline IntersectionObserver with id="tb-inview" (scroll-reveal, see DESIGN SPEC). No other <script> tags; never put CSS inside <script>; no external JS
 - No WordPress, PHP, React, Tailwind, or CSS frameworks
 
 REGION IDs (preserve from wireframe — required for targeted client edits):
@@ -65,21 +107,25 @@ FIDELITY (non-negotiable — violations fail client sign-off):
 - Keep every section id, region id (tb-header, site-navigation, tb-footer, tb-search, tb-map, etc.), and data-tb-region from the wireframe
 - Keep sections in the EXACT same order — do not reorder, merge, split, or remove sections
 - Keep navigation labels, href targets, and header/footer layout slots identical to the wireframe
-- Keep the same grid/column structure per section (same number of columns; you may style them)
-- Apply inspiration and brand via colour, typography, imagery, spacing, and copy — NOT by inventing a new layout
-- If the wireframe has a two-column hero, the design must keep two columns; if stubs exist for About/Services, keep them as stubs
+- Keep the SAME sections, in the same order, with the same ids/regions and the same content/regions inside each
+- You MAY upgrade a section's INTERNAL layout to hit the DESIGN SPEC below — e.g. turn a plain row into an asymmetric 60/40 hero or a bento grid — as long as the same content and regions remain present
+- Apply inspiration and brand via colour, typography, imagery, spacing, layout rhythm, and copy — keep the approved section skeleton, elevate the visual design
+- If stubs exist for About/Services, keep them as stubs
 
 POLISH (what you SHOULD change):
 - Replace wireframe greys with the brand palette and refined CSS custom properties
-- Upgrade typography scale, weights, and pairing per the brief
+- Upgrade typography scale, weights, and pairing per the brief and the TYPE SCALE in the DESIGN SPEC
 - Replace .img-ph / placeholders with purposeful picsum.photos images
 - Improve placeholder copy (realistic, audience-appropriate — not lorem ipsum)
+- Add the card hover, button, motion, and section-differentiation treatments from the DESIGN SPEC
 - Move inline wireframe CSS into a proper external style.css; add <link rel="stylesheet" href="style.css">
+
+${DESIGN_SPEC_BLOCK}
 
 TECHNICAL:
 - Semantic HTML5; preserve the wireframe DOM tree — refine classes and content, do not rebuild from scratch
 - External stylesheets only: <link rel="stylesheet" href="style.css"> (responsive.css is generated later)
-- No <script> tags; no WordPress/PHP/React/Tailwind
+- The ONLY script permitted is a single inline IntersectionObserver with id="tb-inview" (scroll-reveal, see DESIGN SPEC); no other scripts, no WordPress/PHP/React/Tailwind
 - html { scroll-behavior: smooth; } in style.css only
 
 OUTPUT — return ONLY:
@@ -112,6 +158,17 @@ function formatBrandFonts(brand) {
   }
   if (brand.fonts) return brand.fonts;
   return 'Choose distinctive Google Fonts pairing appropriate to inspiration and feel words';
+}
+
+function formatBrandColors(brand = {}) {
+  if (brand.aiChooseColors) {
+    return 'AI to choose heading, body, and section colours from the brand palette + inspiration';
+  }
+  const lines = [];
+  if (brand.headingColor) lines.push(`Headings: ${brand.headingColor}`);
+  if (brand.bodyColor) lines.push(`Body text: ${brand.bodyColor}`);
+  if (brand.altSectionColor) lines.push(`Alternate section background: ${brand.altSectionColor}`);
+  return lines.length ? lines.join('; ') : '';
 }
 
 function formatStyleHints(styles = {}) {
@@ -221,8 +278,8 @@ function buildFunctionalityRequirements(functionality = []) {
   if (items.some((f) => f === 'blog')) {
     reqs.push('- BLOG: Include a Blog page/section with at least 2–3 article preview cards (title, excerpt, date, read link).');
   }
-  if (items.some((f) => f.includes('portfolio') || f.includes('gallery'))) {
-    reqs.push('- PORTFOLIO/GALLERY: Image grid or gallery section with at least 6 placeholder images on the relevant page.');
+  if (items.some((f) => (f.includes('portfolio') || f.includes('gallery')) && !f.includes('masonry'))) {
+    reqs.push('- PORTFOLIO/GALLERY: A responsive image grid of at least 6 images — MULTIPLE images per row (CSS Grid: 3 columns on desktop, 2 on tablet, 1 on mobile). Never one image per row on desktop. Use <div class="tb-portfolio-grid"> so the column rules apply.');
   }
   if (items.some((f) => f === 'booking')) {
     reqs.push('- BOOKING: Include a booking request form (date, name, email, service) or clear booking CTA with form fields.');
@@ -242,6 +299,21 @@ function buildFunctionalityRequirements(functionality = []) {
   if (items.some((f) => f === 'ecommerce')) {
     reqs.push('- ECOMMERCE: Product card grid with image, title, price, and add-to-cart button styling on shop section.');
   }
+  if (items.some((f) => f === 'slideshow')) {
+    reqs.push('- SLIDESHOW: A full-width auto cross-fading slideshow. Use <section class="tb-slideshow"> with a <div class="tb-slides"> containing 3 <figure class="tb-slide"><img src="https://picsum.photos/seed/slideN/1200/600"></figure> items. The cross-fade is handled by provided CSS — just produce this structure and style it to match the design. Do NOT write slideshow JavaScript.');
+  }
+  if (items.some((f) => f === 'carousel')) {
+    reqs.push('- CAROUSEL: A horizontal sliding carousel. Use <section class="tb-carousel"> → <div class="tb-carousel__viewport"> with <button class="tb-carousel__btn tb-carousel__btn--prev"> and <button class="tb-carousel__btn tb-carousel__btn--next">, a <ul class="tb-carousel__track"> of 5 <li class="tb-carousel__slide"><img …></li>, and an empty <div class="tb-carousel__dots"></div>. Auto-advance, prev/next and dots are wired automatically — do NOT write carousel JavaScript. Use these exact class names so the controller binds.');
+  }
+  if (items.some((f) => f === 'parallax')) {
+    reqs.push('- PARALLAX: A fixed-background parallax band. Use <section class="tb-parallax" style="background-image:url(\'https://picsum.photos/seed/parallax/1600/900\')"> with a <div class="tb-parallax__overlay"> containing an eyebrow, heading and short text. The fixed-background effect is handled by provided CSS.');
+  }
+  if (items.some((f) => f === 'video')) {
+    reqs.push('- VIDEO: A responsive 16:9 video section. Use <section class="tb-video"> → <div class="tb-video__frame"> containing an HTML5 <video class="tb-video__el" autoplay muted loop playsinline poster="https://picsum.photos/seed/video/1280/720"> with a <source>. Sizing is handled by provided CSS. (No custom JavaScript.)');
+  }
+  if (items.some((f) => f.includes('masonry'))) {
+    reqs.push('- MASONRY GALLERY: A multi-column masonry gallery with varied image heights. Use <section class="tb-masonry"> → <div class="tb-masonry__grid"> with 8+ <figure class="tb-masonry__item"><img …></figure> items of differing aspect ratios. The CSS-columns masonry layout is handled by provided CSS.');
+  }
 
   const isHandled = (lower) => (
     lower === 'search'
@@ -256,6 +328,11 @@ function buildFunctionalityRequirements(functionality = []) {
     || lower.includes('google review')
     || lower.includes('multilingual')
     || lower === 'ecommerce'
+    || lower === 'slideshow'
+    || lower === 'carousel'
+    || lower === 'parallax'
+    || lower === 'video'
+    || lower.includes('masonry')
   );
 
   functionality.forEach((feature) => {
@@ -308,7 +385,7 @@ ${buildInspirationDirective(inspiration, inspirationResearch)}
 ## Brand
 - Has logo: ${yesNo(brand.hasLogo)}
 - Primary colour: ${brand.primaryColor || 'Derive palette from inspiration + feel words'}
-- Fonts: ${formatBrandFonts(brand)}
+${formatBrandColors(brand) ? `- Colours (use these exact values via CSS custom properties): ${formatBrandColors(brand)}\n` : ''}- Fonts: ${formatBrandFonts(brand)}
 
 ## Pages & structure
 - Pages required: ${listOrNone(pages)} (standard site structure)
@@ -376,6 +453,7 @@ function buildStage1IteratePrompt({ currentHtml, currentCss, changeRequest }) {
     system: STAGE1_SYSTEM_PROMPT,
     user: `Apply this change request to the current site design. Return ---HTML--- and ---CSS--- only.
 Preserve and improve responsive behaviour — every change must still work at 320px, 768px, and 1280px.
+Preserve the existing motion and the single inline IntersectionObserver script (id="tb-inview"), plus all card hover, button, and entrance animations — unless the change request is specifically about them.
 
 Change request:\n${changeRequest}\n\nCurrent HTML:\n${currentHtml}${cssBlock}`,
   };

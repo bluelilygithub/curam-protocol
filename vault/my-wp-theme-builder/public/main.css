@@ -1119,6 +1119,7 @@ body.tb-modal-open {
   padding: 1rem;
   min-height: 4rem;
   background: #020617;
+  color: #ffffff;
   border: 1px solid var(--border);
   border-radius: 8px;
   font-size: 0.8rem;

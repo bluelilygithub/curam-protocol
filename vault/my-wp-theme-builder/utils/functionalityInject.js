@@ -19,6 +19,11 @@ const FEATURE_BY_LABEL = {
   ecommerce: 'ecommerce',
   booking: 'booking',
   multilingual: 'multilingual',
+  slideshow: 'slideshow',
+  carousel: 'carousel',
+  parallax: 'parallax',
+  video: 'video',
+  'masonry gallery': 'masonry',
 };
 
 const MAP_SNIPPET = `
@@ -140,6 +145,75 @@ const SNIPPETS = {
   <span aria-hidden="true">|</span>
   <a href="#">FR</a>
 </div>`.trim(),
+
+  slideshow: `
+<section class="tb-slideshow" id="tb-slideshow" data-tb-region="slideshow" aria-label="Slideshow demo">
+  <div class="container">
+    <div class="tb-slides">
+      <figure class="tb-slide"><img src="https://picsum.photos/seed/tbslide1/1200/600" alt="Slide one"><figcaption>Auto-fading slideshow</figcaption></figure>
+      <figure class="tb-slide"><img src="https://picsum.photos/seed/tbslide2/1200/600" alt="Slide two"><figcaption>Each slide cross-fades</figcaption></figure>
+      <figure class="tb-slide"><img src="https://picsum.photos/seed/tbslide3/1200/600" alt="Slide three"><figcaption>Loops continuously</figcaption></figure>
+    </div>
+  </div>
+</section>`.trim(),
+
+  carousel: `
+<section class="tb-carousel" id="tb-carousel" data-tb-region="carousel" aria-label="Carousel demo">
+  <div class="container">
+    <div class="tb-carousel__viewport">
+      <button class="tb-carousel__btn tb-carousel__btn--prev" type="button" aria-label="Previous slide">&#8249;</button>
+      <ul class="tb-carousel__track">
+        <li class="tb-carousel__slide"><img src="https://picsum.photos/seed/tbcar1/640/420" alt="Item one"></li>
+        <li class="tb-carousel__slide"><img src="https://picsum.photos/seed/tbcar2/640/420" alt="Item two"></li>
+        <li class="tb-carousel__slide"><img src="https://picsum.photos/seed/tbcar3/640/420" alt="Item three"></li>
+        <li class="tb-carousel__slide"><img src="https://picsum.photos/seed/tbcar4/640/420" alt="Item four"></li>
+        <li class="tb-carousel__slide"><img src="https://picsum.photos/seed/tbcar5/640/420" alt="Item five"></li>
+      </ul>
+      <button class="tb-carousel__btn tb-carousel__btn--next" type="button" aria-label="Next slide">&#8250;</button>
+    </div>
+    <div class="tb-carousel__dots" aria-label="Carousel navigation"></div>
+  </div>
+</section>`.trim(),
+
+  parallax: `
+<section class="tb-parallax" id="tb-parallax" data-tb-region="parallax" aria-label="Parallax demo" style="background-image:url('https://picsum.photos/seed/tbparallax/1600/900')">
+  <div class="tb-parallax__overlay">
+    <div class="container">
+      <p class="tb-parallax__eyebrow">Parallax</p>
+      <h2 class="tb-parallax__title">Scroll to see the effect</h2>
+      <p class="tb-parallax__text">The background image stays fixed while the page scrolls over it.</p>
+    </div>
+  </div>
+</section>`.trim(),
+
+  video: `
+<section class="tb-video" id="tb-video" data-tb-region="video" aria-label="Video">
+  <div class="container">
+    <div class="tb-video__frame">
+      <video class="tb-video__el" autoplay muted loop playsinline preload="metadata"
+        poster="https://picsum.photos/seed/tbvideo/1280/720">
+        <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+      </video>
+    </div>
+  </div>
+</section>`.trim(),
+
+  masonry: `
+<section class="tb-masonry" id="tb-masonry" data-tb-region="masonry" aria-label="Masonry gallery">
+  <div class="container">
+    <h2 class="tb-section-title">Gallery</h2>
+    <div class="tb-masonry__grid">
+      <figure class="tb-masonry__item"><img src="https://picsum.photos/seed/tbm1/600/800" alt="Gallery image 1"></figure>
+      <figure class="tb-masonry__item"><img src="https://picsum.photos/seed/tbm2/600/450" alt="Gallery image 2"></figure>
+      <figure class="tb-masonry__item"><img src="https://picsum.photos/seed/tbm3/600/650" alt="Gallery image 3"></figure>
+      <figure class="tb-masonry__item"><img src="https://picsum.photos/seed/tbm4/600/400" alt="Gallery image 4"></figure>
+      <figure class="tb-masonry__item"><img src="https://picsum.photos/seed/tbm5/600/750" alt="Gallery image 5"></figure>
+      <figure class="tb-masonry__item"><img src="https://picsum.photos/seed/tbm6/600/520" alt="Gallery image 6"></figure>
+      <figure class="tb-masonry__item"><img src="https://picsum.photos/seed/tbm7/600/680" alt="Gallery image 7"></figure>
+      <figure class="tb-masonry__item"><img src="https://picsum.photos/seed/tbm8/600/430" alt="Gallery image 8"></figure>
+    </div>
+  </div>
+</section>`.trim(),
 };
 
 const SEARCH_LAYOUT_CSS = `
@@ -172,9 +246,12 @@ const COMPONENT_CSS = `
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
 ${SEARCH_LAYOUT_CSS}
 .tb-contact-form, .tb-newsletter, .tb-booking { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.75rem 0; }
-.tb-contact-form input, .tb-contact-form textarea, .tb-newsletter input, .tb-booking input { flex: 1 1 10rem; min-width: 0; padding: 0.45rem 0.6rem; }
 .tb-contact-form, .tb-booking { flex-direction: column; align-items: stretch; max-width: 32rem; }
 .tb-contact-form label, .tb-booking label { display: flex; flex-direction: column; gap: 0.25rem; width: 100%; }
+.tb-contact-form input, .tb-contact-form select, .tb-contact-form textarea,
+.tb-booking input, .tb-booking select, .tb-booking textarea { flex: 0 0 auto; width: 100%; min-width: 0; height: auto; padding: 0.55rem 0.7rem; font: inherit; }
+.tb-contact-form textarea, .tb-booking textarea { min-height: 6rem; resize: vertical; }
+.tb-newsletter input { flex: 1 1 10rem; min-width: 0; padding: 0.55rem 0.7rem; }
 .tb-social { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.75rem 0; }
 .tb-social a { text-decoration: none; }
 .map-ph, .tb-map { position: relative; overflow: hidden; width: 100%; }
@@ -185,6 +262,61 @@ ${SEARCH_LAYOUT_CSS}
 .tb-portfolio-item { min-height: 120px; display: flex; align-items: center; justify-content: center; background: #eee; }
 .tb-lang-switcher { display: flex; gap: 0.5rem; align-items: center; margin: 0.5rem 0; }
 .tb-form-title { margin: 0 0 0.5rem; width: 100%; }
+
+/* Slideshow — CSS-only auto cross-fade */
+.tb-slideshow { padding: 2rem 0; }
+.tb-slides { position: relative; width: 100%; aspect-ratio: 2 / 1; overflow: hidden; border-radius: 10px; background: #111; }
+.tb-slide { position: absolute; inset: 0; margin: 0; opacity: 0; animation: tb-slideshow-fade 15s infinite; }
+.tb-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tb-slide figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 0.85rem 1.1rem; color: #fff; font-size: 0.95rem; background: linear-gradient(transparent, rgba(0,0,0,0.65)); }
+.tb-slide:nth-child(1) { animation-delay: 0s; }
+.tb-slide:nth-child(2) { animation-delay: 5s; }
+.tb-slide:nth-child(3) { animation-delay: 10s; }
+@keyframes tb-slideshow-fade { 0% { opacity: 0; } 3% { opacity: 1; } 30% { opacity: 1; } 36% { opacity: 0; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .tb-slide { animation: none; } .tb-slide:nth-child(1) { opacity: 1; } }
+
+/* Carousel — scroll-snap track wired by tb-carousel script */
+.tb-carousel { padding: 2rem 0; }
+.tb-carousel__viewport { position: relative; display: flex; align-items: center; gap: 0.5rem; }
+.tb-carousel__track { display: flex; gap: 1rem; list-style: none; margin: 0; padding: 0.25rem; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; flex: 1 1 auto; }
+.tb-carousel__track::-webkit-scrollbar { height: 0; width: 0; }
+.tb-carousel__slide { flex: 0 0 80%; scroll-snap-align: center; border-radius: 10px; overflow: hidden; }
+.tb-carousel__slide img { width: 100%; height: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: block; }
+.tb-carousel__btn { flex: 0 0 auto; width: 2.5rem; height: 2.5rem; border-radius: 50%; border: 0; cursor: pointer; font-size: 1.4rem; line-height: 1; background: var(--primary, #222); color: #fff; }
+.tb-carousel__btn:hover { opacity: 0.85; }
+.tb-carousel__dots { display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.9rem; }
+.tb-carousel__dot { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 0; cursor: pointer; background: #c5c5c5; }
+.tb-carousel__dot[aria-current="true"] { background: var(--primary, #222); }
+@media (min-width: 768px) { .tb-carousel__slide { flex-basis: 42%; } }
+
+/* Parallax — fixed background band */
+.tb-parallax { position: relative; min-height: 60vh; display: flex; align-items: center; background-size: cover; background-position: center; background-attachment: fixed; }
+.tb-parallax__overlay { width: 100%; padding: 4rem 0; background: rgba(0,0,0,0.45); color: #fff; }
+.tb-parallax__eyebrow { text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.75rem; font-weight: 600; margin: 0 0 0.5rem; }
+.tb-parallax__title { margin: 0 0 0.5rem; font-size: clamp(1.75rem, 3vw, 2.5rem); }
+.tb-parallax__text { margin: 0; max-width: 40ch; }
+@media (max-width: 767px) { .tb-parallax { background-attachment: scroll; } }
+
+/* Video — responsive 16:9 frame */
+.tb-video { padding: 2rem 0; }
+.tb-video__frame { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 10px; background: #000; }
+.tb-video__el, .tb-video__frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border: 0; }
+
+/* Masonry gallery — multi-column, varied heights */
+.tb-masonry { padding: 2rem 0; }
+.tb-masonry__grid { columns: 2; column-gap: 1rem; }
+.tb-masonry__item { break-inside: avoid; margin: 0 0 1rem; border-radius: 8px; overflow: hidden; }
+.tb-masonry__item img { width: 100%; height: auto; display: block; }
+@media (min-width: 768px) { .tb-masonry__grid { columns: 3; } }
+@media (min-width: 1100px) { .tb-masonry__grid { columns: 4; } }
+
+/* Standard galleries / card grids — multiple per row on larger screens */
+@media (min-width: 600px) {
+  .tb-blog-grid, .tb-product-grid, .tb-reviews__grid, .tb-portfolio-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 900px) {
+  .tb-blog-grid, .tb-product-grid, .tb-reviews__grid, .tb-portfolio-grid { grid-template-columns: repeat(3, 1fr); }
+}
 `.trim();
 
 function normalizeFeatureIds(functionality = []) {
@@ -222,6 +354,16 @@ function hasFeature(html, id) {
       return /class=["'][^"']*tb-booking/i.test(html);
     case 'multilingual':
       return /class=["'][^"']*tb-lang-switcher/i.test(html);
+    case 'slideshow':
+      return /class=["'][^"']*tb-slideshow/i.test(html);
+    case 'carousel':
+      return /class=["'][^"']*tb-carousel/i.test(html);
+    case 'parallax':
+      return /class=["'][^"']*tb-parallax/i.test(html);
+    case 'video':
+      return /class=["'][^"']*tb-video/i.test(html) || /<video\b/i.test(html);
+    case 'masonry':
+      return /class=["'][^"']*tb-masonry/i.test(html);
     default:
       return false;
   }
@@ -290,6 +432,16 @@ function injectFeature(html, id) {
       return injectIntoSection(html, 'contact', SNIPPETS.booking, 'Contact');
     case 'multilingual':
       return injectIntoHeader(html, SNIPPETS.multilingual);
+    case 'slideshow':
+      return injectBeforeClosingTag(html, 'main', SNIPPETS.slideshow);
+    case 'carousel':
+      return injectBeforeClosingTag(html, 'main', SNIPPETS.carousel);
+    case 'parallax':
+      return injectBeforeClosingTag(html, 'main', SNIPPETS.parallax);
+    case 'video':
+      return injectBeforeClosingTag(html, 'main', SNIPPETS.video);
+    case 'masonry':
+      return injectBeforeClosingTag(html, 'main', SNIPPETS.masonry);
     default:
       return html;
   }
@@ -312,10 +464,58 @@ function injectEnsuredStyles(html) {
   return `${out}\n${block}`;
 }
 
+const CAROUSEL_SCRIPT = `<script id="tb-carousel-js">
+(function () {
+  document.querySelectorAll('.tb-carousel').forEach(function (root) {
+    var track = root.querySelector('.tb-carousel__track');
+    if (!track) return;
+    var slides = Array.prototype.slice.call(track.children);
+    if (!slides.length) return;
+    var idx = 0;
+    function go(i) {
+      idx = (i + slides.length) % slides.length;
+      track.scrollTo({ left: slides[idx].offsetLeft - track.offsetLeft, behavior: 'smooth' });
+      dots.forEach(function (d, di) { d.setAttribute('aria-current', di === idx ? 'true' : 'false'); });
+    }
+    var prev = root.querySelector('.tb-carousel__btn--prev');
+    var next = root.querySelector('.tb-carousel__btn--next');
+    if (prev) prev.addEventListener('click', function () { go(idx - 1); });
+    if (next) next.addEventListener('click', function () { go(idx + 1); });
+    var dotsWrap = root.querySelector('.tb-carousel__dots');
+    var dots = [];
+    if (dotsWrap) {
+      slides.forEach(function (_, i) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'tb-carousel__dot';
+        b.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+        b.addEventListener('click', function () { go(i); });
+        dotsWrap.appendChild(b);
+        dots.push(b);
+      });
+    }
+    go(0);
+    var timer = setInterval(function () { go(idx + 1); }, 3500);
+    root.addEventListener('mouseenter', function () { clearInterval(timer); });
+    root.addEventListener('mouseleave', function () { timer = setInterval(function () { go(idx + 1); }, 3500); });
+  });
+})();
+</script>`;
+
+function ensureCarousel(html) {
+  if (!/class=["'][^"']*tb-carousel/i.test(html)) return html;
+  if (/<script[^>]+id=["']tb-carousel-js["']/i.test(html)) return html;
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${CAROUSEL_SCRIPT}\n</body>`);
+  }
+  return `${html}\n${CAROUSEL_SCRIPT}`;
+}
+
 function postProcessHtml(html) {
   let out = upgradeMapPlaceholders(html);
   out = stampRegionIds(out);
   out = ensureMobileNav(out);
+  out = ensureCarousel(out);
   out = injectEnsuredStyles(out);
   return out;
 }

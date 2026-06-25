@@ -45,12 +45,13 @@ URL: ${url}
 ${formatNavHint(extracted.navLinks)}
 ${styleHints.length ? styleHints.join('\n') : ''}
 
-Study the screenshot and respond with concise bullet points only (max 14 bullets):
-- Overall page structure and section rhythm
+This is a FULL-PAGE screenshot (top to bottom). Study the whole page and respond with concise bullet points only (max 16 bullets):
+- Section-by-section rhythm down the page (hero → … → footer): what each major section does and how they alternate
 - Navigation pattern (placement, style, density)
 - Typography character (families feel, scale, weight contrast)
 - Colour palette with approximate hex values
 - Spacing and layout density
+- Recurring layout patterns (grids, asymmetry, full-bleed bands, alternating backgrounds)
 - Distinctive motifs worth homaging (not copying assets)
 - Mood and brand feel
 

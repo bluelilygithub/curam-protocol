@@ -5,7 +5,7 @@ const {
   buildStage1IteratePrompt,
 } = require('../prompts/stage1-design');
 const { buildWireframePrompt, buildWireframeIteratePrompt } = require('../prompts/stage1-wireframe');
-const { createDesignMessage, resolveIterateModel, resolveCssIterateModel, resolveStage1Model } = require('../utils/modelCall');
+const { createDesignMessage, resolveIterateModel, resolveCssIterateModel, resolveStage1Model, enrichDesignPrompt } = require('../utils/modelCall');
 const { parseDesignResponse, parseWireframeResponse } = require('../utils/parseDesign');
 const { applyWireframeEnhancements, applyDesignEnhancements, listMissingFeatures, guaranteeFunctionality } = require('../utils/functionalityInject');
 const { generateResponsiveCss, ensureStylesheetLinks, fallbackResponsiveCss, appendResponsiveGuarantees } = require('../utils/responsiveCss');
@@ -213,10 +213,17 @@ async function generateWireframeFromAI(sessionId, intakeData, { userId, model, j
     await recordPrompt(sessionId, progress, prompt, resolvedModel, 'wireframe-prompt');
     progress.complete('analyse');
 
+    const enrichedUser = await enrichDesignPrompt({
+      system: prompt.system,
+      user: prompt.user,
+      userId,
+      onProgress: (label) => progress.addItem(label),
+    });
+
     progress.start('generate', 'Building homepage wireframe…');
     const result = await callModelParsed({
       sessionId,
-      prompt,
+      prompt: { system: prompt.system, user: enrichedUser },
       ctx: { userId, model },
       progress,
       parseFn: parseWireframeResponse,
@@ -396,10 +403,17 @@ async function generateHomeDesignFromAI(sessionId, intakeData, { userId, model, 
     await recordPrompt(sessionId, progress, prompt, resolvedModel, 'home-design-prompt');
     progress.complete('analyse');
 
+    const enrichedUser = await enrichDesignPrompt({
+      system: prompt.system,
+      user: prompt.user,
+      userId,
+      onProgress: (label) => progress.addItem(label),
+    });
+
     progress.start('generate', 'Designing homepage…');
     const designResult = await callModelParsed({
       sessionId,
-      prompt,
+      prompt: { system: prompt.system, user: enrichedUser },
       ctx: { userId, model: resolvedModel },
       progress,
       parseFn: (raw) => parseDesignResponse(raw, { fallbackCss: wireframeCss }),

@@ -4,6 +4,20 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-25
+
+**Feature:** WP Theme Builder — production-only DeepSeek prompt builder before Claude.
+
+Adds an optional two-step Stage 1 flow for production: a cheap model (DeepSeek) rewrites the wizard brief into a sharper creative brief, which the design model (Claude) then generates from. Local dev is unchanged — `resolvePromptModel()` returns `null` when `APP_ENV=local`, so the Qwen/Ollama path is untouched.
+
+**Safety:** the brief is split at the first `## MANDATORY` heading — only the creative portion is sent to DeepSeek; mandatory navigation, functionality, region ids, the wireframe skeleton, and checklists are re-attached verbatim. The step fails open (errors, empty/oversized output, or HTML leakage fall back to the full deterministic brief), so generation is never blocked.
+
+**Token clamp:** `createDesignMessage` now clamps DeepSeek output to ~8K (`THEME_BUILDER_DEEPSEEK_MAX_TOKENS`, default 8000), mirroring the Anthropic clamp, preventing `max_tokens` 400s when a DeepSeek id is used.
+
+**Config:** `THEME_BUILDER_PROMPT_MODEL` (defaults to the Vault `deepseek` tier; set `''`/omit to disable), `THEME_BUILDER_PROMPT_MAX_TOKENS` (default 3000). Wired into both Stage 1 generators (`POST /generate/html`, `POST /generate/design-home`). Docs: `docs/theme-builder.md`, `my-wp-theme-builder/.env.example`.
+
+---
+
 ## 2026-06-18
 
 **Fix:** Railway deploy — `Cannot find module 'archiver'` on startup.

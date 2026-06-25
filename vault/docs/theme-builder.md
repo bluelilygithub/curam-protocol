@@ -43,9 +43,20 @@ Implemented in `my-wp-theme-builder/utils/themeBuilderModel.js` → `resolveThem
 |-------|----------------|-------|
 | Wireframe generation | `resolveStage1Model` | Same priority as above |
 | Homepage design (`POST /generate/design-home`) | `resolveStage1Model` | Same priority; wireframe HTML is compacted before prompt |
+| Brief enrichment (Stage 1, **production only**) | `resolvePromptModel` | Optional cheap pass (DeepSeek) before the design model — see below |
 | CSS-only iterate (colour, spacing) | `resolveCssIterateModel` | Prefers `THEME_BUILDER_CSS_ITERATE_MODEL` / local Ollama |
 | Structural iterate | `resolveIterateModel` | Same as Stage 1 unless CSS-only |
 | Stage 2 theme ZIP | `resolveStage2Model` | `THEME_BUILDER_STAGE2_MODEL` or Vault tiers |
+
+### Prompt builder (production only)
+
+In production, an optional cheap model can rewrite the wizard brief into a sharper creative brief **before** the design model (Claude) generates from it. This keeps DeepSeek in the role it's good at (small prompt output) and Claude in the role it's good at (large HTML/CSS generation).
+
+- **Resolver:** `resolvePromptModel()` in `utils/modelCall.js`. Priority: `THEME_BUILDER_PROMPT_MODEL` → Vault **`deepseek`** tier → `null`. Returns `null` when `APP_ENV=local`, so local Qwen dev is unchanged.
+- **Wiring:** `enrichDesignPrompt()` is called inside both Stage 1 generators (wireframe + homepage design) just before the design-model call.
+- **Constraint safety:** the brief is split at the first `## MANDATORY` heading. Only the creative portion is sent to DeepSeek; mandatory navigation, functionality, region ids, the wireframe skeleton HTML, and the self-check list are re-attached **verbatim** so they always reach the design model intact.
+- **Fail-open:** any error, empty/too-short output, or HTML leakage discards the enrichment and uses the full deterministic brief — generation is never blocked.
+- **Tokens:** the enrichment call requests `THEME_BUILDER_PROMPT_MAX_TOKENS` (default 3000); DeepSeek design-side output is clamped to `THEME_BUILDER_DEEPSEEK_MAX_TOKENS` (default 8000) in `createDesignMessage` to avoid `max_tokens` 400s.
 
 ### Settings UI
 
@@ -73,6 +84,11 @@ THEME_BUILDER_DEV_DESIGN_MODEL=ollama:qwen2.5-coder:14b
 
 # Stage 2 WordPress export
 # THEME_BUILDER_STAGE2_MODEL=ollama:qwen2.5-coder:14b
+
+# Prompt builder (production only — ignored when APP_ENV=local)
+# THEME_BUILDER_PROMPT_MODEL=deepseek-chat
+# THEME_BUILDER_PROMPT_MAX_TOKENS=3000
+# THEME_BUILDER_DEEPSEEK_MAX_TOKENS=8000
 
 # Lessons → Vault Memory (shared DB)
 # THEME_BUILDER_VAULT_USER_ID=1

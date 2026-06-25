@@ -27,6 +27,10 @@ const intakeData = {
   brand: {
     hasLogo: false,
     primaryColor: '',
+    headingColor: '',
+    bodyColor: '',
+    altSectionColor: '',
+    aiChooseColors: false,
     headingFont: '',
     bodyFont: '',
     aiChooseFonts: false,
@@ -184,9 +188,14 @@ function syncFormToIntakeData() {
     feelWords: form.feelWords.value.trim(),
   };
 
+  const aiChooseColors = form.aiChooseColors?.checked || false;
   intakeData.brand = {
     hasLogo: toggleState.hasLogo,
     primaryColor: form.primaryColor.value,
+    headingColor: aiChooseColors ? '' : (form.headingColor?.value || ''),
+    bodyColor: aiChooseColors ? '' : (form.bodyColor?.value || ''),
+    altSectionColor: aiChooseColors ? '' : (form.altSectionColor?.value || ''),
+    aiChooseColors,
     headingFont: form.aiChooseFonts.checked ? '' : form.headingFont.value,
     bodyFont: form.aiChooseFonts.checked ? '' : form.bodyFont.value,
     aiChooseFonts: form.aiChooseFonts.checked,
@@ -286,6 +295,13 @@ function renderSummary() {
     ['Feel (3 words)', intakeData.inspiration.feelWords],
     ['Has logo', intakeData.brand.hasLogo],
     ['Primary color', intakeData.brand.primaryColor],
+    ['Colors', intakeData.brand.aiChooseColors
+      ? 'AI to choose'
+      : [
+          intakeData.brand.headingColor && `Heading ${intakeData.brand.headingColor}`,
+          intakeData.brand.bodyColor && `Body ${intakeData.brand.bodyColor}`,
+          intakeData.brand.altSectionColor && `Alt section ${intakeData.brand.altSectionColor}`,
+        ].filter(Boolean).join(', ')],
     ['Fonts', formatBrandFonts(intakeData.brand)],
     ['Pages', `${intakeData.structure.pages.join(', ')} (standard)`],
     ['Content', 'Placeholder copy & images — updated by non-technical client in WordPress'],
