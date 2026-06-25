@@ -122,6 +122,9 @@ function SettingsPage() {
   const [gmailIntelEmailCount, setGmailIntelEmailCount]           = useState('100');
   const [gmailPdfModel, setGmailPdfModel]                         = useState('');
 
+  // Shares alerts
+  const [sharesDropAlertPct, setSharesDropAlertPct] = useState('0');
+
   const [mobileTiles, setMobileTiles] = useState(() => DEFAULT_TILES.map(t => ({ ...t })));
   const [mobileNavItems, setMobileNavItems] = useState(() => DEFAULT_NAV_ITEMS.map(i => ({ ...i })));
   const [mobileSaved, setMobileSaved] = useState(false);
@@ -151,6 +154,7 @@ function SettingsPage() {
         'Goals',
         'Integrations',
         'News Digest',
+        'Shares',
         'Mobile',
         'Members',
         'Feature Access',
@@ -311,6 +315,7 @@ function SettingsPage() {
       if (data.gmail_intel_refresh_interval) setGmailIntelRefreshInterval(data.gmail_intel_refresh_interval);
       if (data.gmail_intel_email_count)      setGmailIntelEmailCount(data.gmail_intel_email_count);
       if (data.gmail_pdf_model)              setGmailPdfModel(data.gmail_pdf_model);
+      if (data.shares_daily_drop_alert_pct != null) setSharesDropAlertPct(String(data.shares_daily_drop_alert_pct));
     }).catch(() => {});
 
     api.get('/api/settings/mobile').then(r => r.json()).then(data => {
@@ -2376,6 +2381,44 @@ function SettingsPage() {
               Reset Goals
             </button>
           </div>
+        </div>
+      </section>
+      )}
+
+      {tab === 'Shares' && (
+      <section>
+        <h2 className="text-sm font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--color-muted)' }}>
+          Daily Drop Alert
+        </h2>
+        <p className="text-xs mb-4" style={{ color: 'var(--color-muted)' }}>
+          Email the admin address when the portfolio's holdings fall by at least this
+          percent versus the previous close, checked on each hourly market poll.
+          Set to <strong>0</strong> to email the daily movement after every poll (test mode).
+        </p>
+        <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)' }}>
+          Daily drop threshold (%)
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min="0"
+            max="100"
+            step="0.5"
+            value={sharesDropAlertPct}
+            onChange={(e) => setSharesDropAlertPct(e.target.value)}
+            onBlur={() => {
+              const n = Math.min(100, Math.max(0, Number(sharesDropAlertPct) || 0));
+              setSharesDropAlertPct(String(n));
+              api.post('/api/settings', { key: 'shares_daily_drop_alert_pct', value: String(n) }).catch(() => {});
+            }}
+            className="w-28 px-3 py-1.5 rounded-lg border text-sm outline-none"
+            style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+          />
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            {Number(sharesDropAlertPct) > 0
+              ? `Alert when holdings drop ${Number(sharesDropAlertPct)}% or more in a day`
+              : 'Test mode — email after every poll'}
+          </span>
         </div>
       </section>
       )}

@@ -132,6 +132,7 @@ async function fetchQuotesForHoldings(holdings, exchangeFilter = null) {
 
   const quotes = {};
   const errors = [];
+  let latestAt = 0;
 
   for (const h of holdings) {
     const key = `${h.symbol}:${h.exchange}`;
@@ -141,7 +142,10 @@ async function fetchQuotesForHoldings(holdings, exchangeFilter = null) {
     if (!inFilter) {
       // Not being polled this run — use whatever is in cache (may be stale)
       const cached = quoteCache.get(key);
-      if (cached) quotes[key] = cached.data;
+      if (cached) {
+        quotes[key] = cached.data;
+        if (cached.at > latestAt) latestAt = cached.at;
+      }
       continue;
     }
 
@@ -151,6 +155,7 @@ async function fetchQuotesForHoldings(holdings, exchangeFilter = null) {
       const cached = quoteCache.get(key);
       if (cached && Date.now() - cached.at < QUOTE_CACHE_USER_MS) {
         quotes[key] = cached.data;
+        if (cached.at > latestAt) latestAt = cached.at;
         continue;
       }
     }
@@ -167,13 +172,18 @@ async function fetchQuotesForHoldings(holdings, exchangeFilter = null) {
         currency: q.currency,
         source: q.source,
       };
+      const fetchedAt = Date.now();
       quotes[key] = qdata;
-      quoteCache.set(key, { data: qdata, at: Date.now() });
+      quoteCache.set(key, { data: qdata, at: fetchedAt });
+      if (fetchedAt > latestAt) latestAt = fetchedAt;
     } catch (err) {
       errors.push(`${h.symbol} (${h.exchange}): ${err.message}`);
       // Fall back to stale cache rather than leaving the position priceless
       const cached = quoteCache.get(key);
-      if (cached) quotes[key] = cached.data;
+      if (cached) {
+        quotes[key] = cached.data;
+        if (cached.at > latestAt) latestAt = cached.at;
+      }
     }
   }
 
@@ -181,6 +191,7 @@ async function fetchQuotesForHoldings(holdings, exchangeFilter = null) {
     quotes,
     usdAud,
     quoteError: errors.length ? errors.join(' · ') : null,
+    quotesAt: latestAt || null,
   };
 }
 
@@ -202,7 +213,7 @@ async function buildDashboard(userId, exchangeFilter = null) {
   const { trades, ledger } = await getTradesAndLedger(userId);
   const { holdings, realized } = computeHoldingsAndRealized(trades);
   const cashAud = computeCashFromActivity(trades, ledger);
-  const { quotes, usdAud, quoteError } = await fetchQuotesForHoldings(holdings, exchangeFilter);
+  const { quotes, usdAud, quoteError, quotesAt } = await fetchQuotesForHoldings(holdings, exchangeFilter);
 
   let holdingsValueAud = 0;
   let costBasisAud = 0;
@@ -255,6 +266,7 @@ async function buildDashboard(userId, exchangeFilter = null) {
     totalRealizedPnlAud: realized.length ? totalRealizedPnlAud : null,
     usdAud,
     quoteError,
+    quotedAt: quotesAt ? new Date(quotesAt).toISOString() : null,
     quotesAvailable: marketData.canFetchQuotes(),
   };
 }

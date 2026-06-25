@@ -5,6 +5,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const marketData = require('../services/marketData');
 const portfolio = require('../services/sharesPortfolio');
+const { checkDailyDropAlerts } = require('../cron/sharesCron');
 
 const VALID_EXCHANGES = ['ASX', 'NYSE', 'NASDAQ'];
 
@@ -76,6 +77,13 @@ router.post('/refresh', async (req, res) => {
   try {
     const dash = await portfolio.recordSnapshots(req.user.id);
     res.json({ ok: true, dashboard: dash });
+    // Let admins verify the drop-alert without waiting for a market-hours poll.
+    // Honours the configured threshold (only emails in test mode or on a real drop).
+    if (req.user?.isAdmin) {
+      checkDailyDropAlerts().catch((err) =>
+        console.error('[shares] manual drop-alert check failed:', err.message)
+      );
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

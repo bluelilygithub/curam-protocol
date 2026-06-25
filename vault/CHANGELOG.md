@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-25 (3)
+
+**Feature:** Shares — daily drop email alert with configurable threshold.
+
+The US market cron (now hourly 10:00–16:00 ET, Mon–Fri) runs `checkDailyDropAlerts()` after each poll. For each admin with an email, it builds the portfolio and computes the day's movement as holdings market value now vs the same holdings at the previous close (the "start of trading day" baseline; cash is excluded). When the drop reaches the configured threshold it emails the admin with the percent, AUD change, start value, and current value.
+
+**Config:** new **Settings → Shares** tab (admin) sets `shares_daily_drop_alert_pct`. `0` = test mode: emails the movement after every poll so you can confirm delivery; raise it to only alert on real drops. To test outside market hours, the manual **Refresh quotes** button (`POST /api/shares/refresh`, admin only) also runs the check, honouring the same threshold. Email uses the existing `sendEmail` util (MailChannels/SMTP).
+
+---
+
 ## 2026-06-25 (2)
 
 **Fix:** WP Theme Builder — preview blocked by production CSP (images + inline scripts).

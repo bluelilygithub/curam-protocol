@@ -65,6 +65,68 @@ function compactAud(n) {
   return `${sign}$${abs.toFixed(0)}`;
 }
 
+// NYSE regular session: 09:30–16:00 ET, Mon–Fri. Evaluated in America/New_York
+// so it tracks DST. Market holidays are not accounted for.
+function getNyseStatus(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+  const get = (type) => parts.find((p) => p.type === type)?.value;
+  const weekday = get('weekday');
+  let hour = Number(get('hour'));
+  if (hour === 24) hour = 0;
+  const minutes = hour * 60 + Number(get('minute'));
+  const isWeekday = !['Sat', 'Sun'].includes(weekday);
+  const open = isWeekday && minutes >= 570 && minutes < 960;
+  return { open };
+}
+
+function formatUpdatedAt(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('en-AU', {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(d);
+}
+
+function PortfolioStatusLine({ quotedAt }) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const nyse = getNyseStatus(now);
+  const updated = formatUpdatedAt(quotedAt);
+  const statusColor = nyse.open ? '#166534' : 'var(--color-muted)';
+
+  return (
+    <p
+      className="text-xs mt-1 flex flex-wrap items-center gap-x-2 gap-y-1"
+      style={{ color: 'var(--color-muted)' }}
+    >
+      <span>Portfolio in AUD</span>
+      <span aria-hidden="true">·</span>
+      <span>{updated ? `Updated ${updated}` : 'Awaiting first quote update'}</span>
+      <span aria-hidden="true">·</span>
+      <span className="inline-flex items-center gap-1" style={{ color: statusColor }}>
+        <span
+          style={{ width: 6, height: 6, borderRadius: 9999, background: statusColor, display: 'inline-block' }}
+        />
+        NYSE {nyse.open ? 'open' : 'closed'}
+      </span>
+    </p>
+  );
+}
+
 function PortfolioPnlBarChart({ positions = [], realized = [] }) {
   const [activeId, setActiveId] = useState(null);
   const realizedBySymbol = realized.reduce((acc, trade) => {
@@ -606,9 +668,7 @@ export default function SharesPage() {
         <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
           <div>
             <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text)' }}>Shares</h1>
-            <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
-              Portfolio in AUD · delayed quotes · not financial advice
-            </p>
+            <PortfolioStatusLine quotedAt={dashboard?.quotedAt} />
           </div>
           <button
             type="button"
