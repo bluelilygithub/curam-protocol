@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const { pool } = require('../db');
 const portfolio = require('../services/sharesPortfolio');
 const marketData = require('../services/marketData');
-const { generateDailyBriefing, generateMonthlySummary } = require('../services/sharesNewsService');
+const { generateDailyBriefing, generateMonthlySummary, generateObservation } = require('../services/sharesNewsService');
 const { reportSharesCron } = require('../services/SuggestionService');
 const sendEmail = require('../utils/sendEmail');
 
@@ -13,6 +13,7 @@ const DROP_ALERT_KEY = 'shares_daily_drop_alert_pct';
 let asxCronTask = null;
 let usCronTask = null;
 let newsCronTask = null;
+let observationCronTask = null;
 let summaryMonthCronTask = null;
 
 async function getWorkspaceTimezone() {
@@ -173,6 +174,7 @@ async function startSharesCron() {
   if (asxCronTask) asxCronTask.stop();
   if (usCronTask) usCronTask.stop();
   if (newsCronTask) newsCronTask.stop();
+  if (observationCronTask) observationCronTask.stop();
   if (summaryMonthCronTask) summaryMonthCronTask.stop();
 
   const tz = await getWorkspaceTimezone();
@@ -214,6 +216,25 @@ async function startSharesCron() {
     { timezone: tz }
   );
 
+  // Portfolio observation agent: 7 AM daily — a holistic narrative briefing
+  // (portfolio + AI/tech sector + market context) emailed to each portfolio owner.
+  // Runs after the 4 AM per-stock briefing and after the overnight US close.
+  observationCronTask = cron.schedule(
+    '0 7 * * *',
+    async () => {
+      const userIds = await getActiveShareUserIds();
+      for (const userId of userIds) {
+        try {
+          await generateObservation(userId);
+        } catch (err) {
+          console.error(`[shares-cron] observation user ${userId}:`, err.message);
+          await reportSharesCron('briefing-failed', { userId, error: err.message, context: 'sharesCron observation' });
+        }
+      }
+    },
+    { timezone: tz }
+  );
+
   // 30-day summary: 1st of each month at 4:30 AM (after daily briefing finishes)
   summaryMonthCronTask = cron.schedule(
     '30 4 1 * *',
@@ -235,7 +256,7 @@ async function startSharesCron() {
     { timezone: tz }
   );
 
-  console.log(`[shares-cron] ASX: 5 AM + 1 PM (${tz}) | US: hourly 10:00–16:00 ET Mon–Fri | News: 4 AM | Monthly summary: 1st 4:30 AM (${tz})`);
+  console.log(`[shares-cron] ASX: 5 AM + 1 PM (${tz}) | US: hourly 10:00–16:00 ET Mon–Fri | News: 4 AM | Observation: 7 AM | Monthly summary: 1st 4:30 AM (${tz})`);
 }
 
 module.exports = { startSharesCron, runSharesPoll, checkDailyDropAlerts };

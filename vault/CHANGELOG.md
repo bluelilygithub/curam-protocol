@@ -4,6 +4,18 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-25 (4)
+
+**Feature:** Shares — daily portfolio observation agent.
+
+A new daily cron (7 AM workspace tz) runs an LLM "observation agent" that blends the portfolio, today's price moves, last‑24h news (Finnhub per holding + web search for the AI/chip sector), and broad market context into one concise Markdown briefing (Portfolio Movement, Sector Pulse, News That Matters, Watch List, One Liner — under 400 words, observations not advice). Each briefing is stored (`share_news_briefings`, `type='observation'`, one per user/day, pruned after 45 days) and emailed to the portfolio owner.
+
+**Market context:** the free Finnhub/Alpha Vantage quote endpoints don't cover raw indices, so liquid ETF proxies are used — Nasdaq→QQQ, SOX→SOXX (Finnhub), ASX 200→STW (Alpha Vantage), overridable via `OBS_INDEX_NASDAQ`/`OBS_INDEX_SOX`/`OBS_INDEX_ASX`. Missing/failed proxies pass `null` and the prompt rules make the model say so rather than guess.
+
+**Endpoints:** `POST /api/shares/news/observe` (generate now + email, for testing) and `GET /api/shares/news/observation` (latest stored). Existing daily/monthly briefing feed is unchanged — observations are excluded from `getBriefingsForUser`.
+
+---
+
 ## 2026-06-25 (3)
 
 **Feature:** Shares — daily drop email alert with configurable threshold.

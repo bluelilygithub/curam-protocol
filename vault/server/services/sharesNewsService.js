@@ -20,6 +20,8 @@ const { callModel } = require('./callModel');
 const { getModelsForUser } = require('./modelResolver');
 const { logUsage } = require('../utils/logUsage');
 const sharesPortfolio = require('./sharesPortfolio');
+const marketData = require('./marketData');
+const sendEmail = require('../utils/sendEmail');
 const { runtimeConfig } = require('../config/runtime');
 
 const FETCH_TIMEOUT_MS = 15000;
@@ -400,20 +402,242 @@ async function generateMonthlySummary(userId) {
   return { date: today, generated: true };
 }
 
+// ─── Portfolio observation agent ──────────────────────────────────────────────
+//
+// A separate, holistic daily narrative (distinct from the per-stock briefings
+// above). It blends the portfolio, today's price moves, 24h news, and broad
+// market context into one concise briefing, then emails the portfolio owner.
+//
+// Index context: the free Finnhub / Alpha Vantage quote endpoints don't cover
+// raw indices, so we use liquid ETF proxies (overridable via env). When a proxy
+// can't be fetched we pass null and the prompt rules tell the model to say so.
+
+const INDEX_PROXIES = {
+  nasdaq: { symbol: String(process.env.OBS_INDEX_NASDAQ || 'QQQ').toUpperCase(), exchange: 'NASDAQ' },
+  sox:    { symbol: String(process.env.OBS_INDEX_SOX || 'SOXX').toUpperCase(),    exchange: 'NASDAQ' },
+  asx:    { symbol: String(process.env.OBS_INDEX_ASX || 'STW').toUpperCase(),     exchange: 'ASX' },
+};
+
+const OBSERVATION_SYSTEM_PROMPT = `You are a portfolio observation agent. Your job is to analyse data collected about a share portfolio and produce a concise daily briefing with observations, not financial advice.
+
+## Your Task
+Produce a daily briefing covering:
+
+1. **Portfolio Movement** — which holdings moved significantly (>2%) and why, if news explains it
+2. **Sector Pulse** — how AI/chip stocks moved as a group vs the broader market today
+3. **News That Matters** — flag any news items that are directly relevant to holdings in this portfolio. Ignore noise.
+4. **Watch List** — anything developing that could affect the portfolio in the next few days (earnings, macro events, product announcements)
+5. **One Liner** — a single sentence summarising the day for this portfolio
+
+## Rules
+- Be direct and specific. No filler.
+- Always reference actual numbers from the data provided.
+- If data is missing or stale, say so rather than guessing.
+- Do not give buy/sell recommendations.
+- Flag if any holding moved significantly with no obvious news explanation — that itself is worth noting.
+- Keep the full briefing under 400 words.
+- Format the briefing in clean Markdown, using the five sections above as headings.`;
+
+function round2(n) {
+  const v = Number(n);
+  return Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
+}
+
+function pctOrNa(v) {
+  return v == null ? 'unavailable (no data)' : `${v}%`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function fetchIndexPct(proxy) {
+  try {
+    if (!marketData.canFetchExchange(proxy.exchange)) return null;
+    const q = await marketData.getQuote(proxy.symbol, proxy.exchange);
+    if (!q || !q.current || !q.previousClose) return null;
+    return round2(((q.current - q.previousClose) / q.previousClose) * 100);
+  } catch (err) {
+    console.warn(`[sharesNews] index proxy ${proxy.symbol} fetch failed:`, err.message);
+    return null;
+  }
+}
+
+function buildObservationPrompt({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct }) {
+  return [
+    '## Portfolio',
+    JSON.stringify(portfolio, null, 2),
+    '',
+    "## Today's Price Data",
+    JSON.stringify(priceData, null, 2),
+    '',
+    '## Recent News (last 24 hours)',
+    JSON.stringify(newsItems, null, 2),
+    '',
+    '## Market Context',
+    `- Nasdaq change today: ${pctOrNa(nasdaqPct)}`,
+    `- SOX (semiconductor index) change today: ${pctOrNa(soxPct)}`,
+    `- ASX 200 change today: ${pctOrNa(asxPct)}`,
+  ].join('\n');
+}
+
+function observationHtml(text, { nasdaqPct, soxPct, asxPct, today }) {
+  const ctx = `Nasdaq ${pctOrNa(nasdaqPct)} · SOX ${pctOrNa(soxPct)} · ASX 200 ${pctOrNa(asxPct)}`;
+  return `
+    <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:640px;">
+      <h2 style="margin:0 0 4px;">Portfolio observation — ${today}</h2>
+      <p style="color:#666;margin:0 0 16px;font-size:13px;">${ctx}</p>
+      <pre style="white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.5;margin:0;">${escapeHtml(text)}</pre>
+      <p style="color:#999;font-size:12px;margin-top:16px;">Observations only — not financial advice.</p>
+    </div>
+  `;
+}
+
+async function generateObservation(userId) {
+  const tz = await getWorkspaceTimezone();
+  const today = getDateInTz(tz);
+
+  const dash = await sharesPortfolio.buildDashboard(userId);
+  if (!dash.positions.length) return { skipped: true, reason: 'No holdings' };
+
+  const holdingsValue = dash.holdingsValueAud || 0;
+
+  const portfolio = {
+    asOf: dash.quotedAt,
+    totalValueAud: round2(dash.totalValueAud),
+    holdingsValueAud: round2(dash.holdingsValueAud),
+    cashAud: round2(dash.cashAud),
+    unrealizedPnlPct: dash.unrealizedPnlPct != null ? round2(dash.unrealizedPnlPct) : null,
+    holdings: dash.positions.map((p) => ({
+      symbol: p.symbol,
+      exchange: p.exchange,
+      quantity: p.quantity,
+      valueAud: p.valueAud != null ? round2(p.valueAud) : null,
+      weightPct: p.valueAud != null && holdingsValue > 0 ? round2((p.valueAud / holdingsValue) * 100) : null,
+      avgCostAud: round2(p.avgCostAud),
+      totalReturnPct: p.pnlPct != null ? round2(p.pnlPct) : null,
+    })),
+  };
+
+  const priceData = dash.positions.map((p) => ({
+    symbol: p.symbol,
+    exchange: p.exchange,
+    priceAud: p.priceAud != null ? round2(p.priceAud) : null,
+    previousCloseAud: p.previousCloseAud != null ? round2(p.previousCloseAud) : null,
+    dayChangePct: p.dayChangePct != null ? round2(p.dayChangePct) : null,
+  }));
+
+  // News per holding (top holdings by value to keep the prompt bounded) + sector news.
+  const ranked = [...dash.positions]
+    .filter((p) => p.valueAud != null)
+    .sort((a, b) => (b.valueAud || 0) - (a.valueAud || 0))
+    .slice(0, 12);
+  const newsItems = [];
+  await Promise.all(
+    ranked.map(async (p) => {
+      const news = await fetchHoldingNews(p.symbol, p.exchange);
+      news.slice(0, 3).forEach((n) =>
+        newsItems.push({ symbol: p.symbol, exchange: p.exchange, title: n.title, snippet: (n.snippet || '').slice(0, 160) })
+      );
+    })
+  );
+  const sectorNews = await webSearch('AI semiconductor chip stocks Nvidia AMD Broadcom news today');
+  sectorNews.slice(0, 4).forEach((n) =>
+    newsItems.push({ symbol: 'SECTOR', title: n.title, snippet: (n.snippet || '').slice(0, 160) })
+  );
+
+  const [nasdaqPct, soxPct, asxPct] = await Promise.all([
+    fetchIndexPct(INDEX_PROXIES.nasdaq),
+    fetchIndexPct(INDEX_PROXIES.sox),
+    fetchIndexPct(INDEX_PROXIES.asx),
+  ]);
+
+  const userPrompt = buildObservationPrompt({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct });
+
+  const tiers = await getModelsForUser(userId);
+  const modelId = tiers.standard || tiers.light || tiers.gemini;
+  if (!modelId) throw new Error('No model configured for user — check vault_models in Settings');
+
+  const result = await callModel(modelId, userPrompt, {
+    maxTokens: 1200,
+    system: OBSERVATION_SYSTEM_PROMPT,
+    returnUsage: true,
+  });
+  logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'shares_observation' });
+
+  const text = (result.text || '').trim();
+  if (!text) throw new Error('Observation agent returned empty output');
+
+  // One observation per user per day — replace any existing for today.
+  await pool.query(
+    `DELETE FROM share_news_briefings WHERE "userId"=$1 AND date=$2 AND type='observation'`,
+    [userId, today]
+  );
+  await pool.query(
+    `INSERT INTO share_news_briefings ("userId", date, symbol, exchange, content, signal, headlines, type)
+     VALUES ($1,$2,NULL,NULL,$3,NULL,$4,'observation')`,
+    [userId, today, text, JSON.stringify({ nasdaqPct, soxPct, asxPct, holdings: priceData.length, newsCount: newsItems.length })]
+  );
+
+  const cutoff = getDateInTz(tz, 45);
+  await pool.query(
+    `DELETE FROM share_news_briefings WHERE "userId"=$1 AND type='observation' AND date < $2`,
+    [userId, cutoff]
+  );
+
+  let emailed = false;
+  try {
+    const { rows: u } = await pool.query('SELECT email FROM users WHERE id=$1', [userId]);
+    const to = u[0]?.email;
+    if (to) {
+      await sendEmail({
+        to,
+        subject: `Portfolio observation — ${today}`,
+        html: observationHtml(text, { nasdaqPct, soxPct, asxPct, today }),
+      });
+      emailed = true;
+    }
+  } catch (err) {
+    console.warn(`[sharesNews] observation email failed for user ${userId}:`, err.message);
+  }
+
+  console.log(`[sharesNews] Generated observation for user ${userId} on ${today} (emailed: ${emailed})`);
+  return { date: today, text, emailed, context: { nasdaqPct, soxPct, asxPct } };
+}
+
+async function getLatestObservation(userId) {
+  const { rows } = await pool.query(
+    `SELECT id, date, content, headlines, "createdAt"
+     FROM share_news_briefings
+     WHERE "userId"=$1 AND type='observation'
+     ORDER BY date DESC, "createdAt" DESC LIMIT 1`,
+    [userId]
+  );
+  return rows[0] || null;
+}
+
 // ─── Query ────────────────────────────────────────────────────────────────────
 
 async function getBriefingsForUser(userId) {
   // Daily: last 45 days. Monthly summaries: all (never deleted).
+  // Observations are excluded here — they have their own endpoint.
   const tz = await getWorkspaceTimezone();
   const cutoff = getDateInTz(tz, 45);
   const { rows } = await pool.query(
     `SELECT id, date, symbol, exchange, content, signal, headlines, "priceChangePct", "createdAt", type
      FROM share_news_briefings
-     WHERE "userId"=$1 AND (type='monthly_summary' OR date >= $2)
+     WHERE "userId"=$1 AND type IN ('daily','monthly_summary')
+       AND (type='monthly_summary' OR date >= $2)
      ORDER BY date DESC, (type='monthly_summary')::int DESC, symbol NULLS FIRST`,
     [userId, cutoff]
   );
   return rows;
 }
 
-module.exports = { generateDailyBriefing, generateMonthlySummary, getBriefingsForUser };
+module.exports = {
+  generateDailyBriefing,
+  generateMonthlySummary,
+  getBriefingsForUser,
+  generateObservation,
+  getLatestObservation,
+};
