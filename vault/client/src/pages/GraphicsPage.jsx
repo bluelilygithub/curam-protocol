@@ -31,6 +31,7 @@ export default function GraphicsPage() {
   const [upscaleInfo, setUpscaleInfo] = useState(null);
   const [upscaleSource, setUpscaleSource] = useState(null);
   const [upscaleScale, setUpscaleScale] = useState('4');
+  const [upscaleModel, setUpscaleModel] = useState('');
   const [upscaleFidelity, setUpscaleFidelity] = useState('-8');
   const [upscaling, setUpscaling] = useState(false);
   const [upscaleResult, setUpscaleResult] = useState(null);
@@ -57,6 +58,7 @@ export default function GraphicsPage() {
         if (Array.isArray(info?.scales) && !info.scales.includes(Number(upscaleScale))) {
           setUpscaleScale(String(info.scales[0]));
         }
+        if (info?.model) setUpscaleModel(info.model);
       })
       .catch(() => {});
     loadGallery();
@@ -97,6 +99,7 @@ export default function GraphicsPage() {
         imageDataUrl: upscaleSource.imageDataUrl,
         scale: Number(upscaleScale),
         creativity: Number(upscaleFidelity),
+        model: upscaleModel || undefined,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upscale failed');
@@ -475,7 +478,7 @@ export default function GraphicsPage() {
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Upscale</h2>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
             {upscaleInfo
-              ? `${upscaleInfo.provider === 'local-comfyui' ? 'Local' : 'Hosted'}: ${upscaleInfo.model || 'not configured'}`
+              ? `${upscaleInfo.provider === 'local-comfyui' ? 'Local' : 'Hosted'}: ${upscaleModel || upscaleInfo.model || 'not configured'}`
               : 'Checking upscaler...'}
           </span>
         </div>
@@ -512,6 +515,23 @@ export default function GraphicsPage() {
               </div>
             )}
 
+            {(upscaleInfo?.models?.length > 1) && (
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Model</label>
+                <select
+                  value={upscaleModel}
+                  onChange={e => setUpscaleModel(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border text-sm"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {upscaleInfo.models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                </select>
+                <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>
+                  Faithful models only sharpen; enhanced models add invented detail.
+                </p>
+              </div>
+            )}
+
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Scale</label>
@@ -524,7 +544,7 @@ export default function GraphicsPage() {
                   {(upscaleInfo?.scales || [2, 4]).map(s => <option key={s} value={s}>{s}x</option>)}
                 </select>
               </div>
-              {upscaleInfo?.creativitySupported && (
+              {/clarity/i.test(upscaleModel) && (
                 <div>
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Fidelity</label>
                   <select

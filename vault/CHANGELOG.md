@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-26 (3)
+
+**Feature:** Graphics — in-app upscale model picker.
+
+The Upscale panel now exposes a Model dropdown so you can switch between faithful and enhanced upscalers per image without touching env vars. In production it offers Real-ESRGAN (pure super-resolution, no hallucination) and Clarity Pro (adds invented detail); locally it lists the installed ComfyUI ESRGAN models. The Fidelity slider only appears for Clarity (the only model that supports it). Server-side, hosted selections are validated against a curated allowlist plus the admin's env model so a client can't trigger arbitrary billable Replicate models, and local selections are validated against the actually installed model list.
+
+---
+
 ## 2026-06-26 (2)
 
 **Feature:** Graphics — per-image cost visibility.

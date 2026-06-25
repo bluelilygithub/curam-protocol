@@ -19,6 +19,13 @@ const UPSCALE_MODEL_KEY = 'graphics_upscale_model';
 const DEFAULT_LOCAL_UPSCALE_MODEL = '4x-UltraSharp.pth';
 const DEFAULT_REPLICATE_UPSCALE_MODEL = 'philz1337x/clarity-pro-upscaler';
 
+// Hosted upscale options offered in the UI. Real-ESRGAN is pure super-resolution
+// (cannot hallucinate); Clarity adds detail. Selectable per upscale.
+const HOSTED_UPSCALE_MODELS = [
+  { id: 'nightmareai/real-esrgan', label: 'Real-ESRGAN — faithful (no hallucination)', kind: 'faithful' },
+  { id: 'philz1337x/clarity-pro-upscaler', label: 'Clarity Pro — enhanced (adds detail)', kind: 'enhanced' },
+];
+
 function comfyBaseUrl() {
   return String(runtimeConfig.localImageApiUrl || DEFAULT_COMFY_URL).replace(/\/$/, '');
 }
@@ -591,10 +598,22 @@ function logImageUsage({ userId, model, feature, costUsd }) {
   ).catch((err) => console.error('[graphics] usage log error:', err.message));
 }
 
-async function upscaleWithReplicate({ imageDataUrl, scale, creativity }) {
+function envReplicateUpscaleModel() {
+  return String(process.env.REPLICATE_UPSCALE_MODEL || DEFAULT_REPLICATE_UPSCALE_MODEL).trim();
+}
+
+// Only allow the curated hosted models plus whatever the admin set via env, so a
+// client can't trigger arbitrary (billable) Replicate models.
+function resolveHostedUpscaleModel(requestedModel) {
+  const allowed = new Set([...HOSTED_UPSCALE_MODELS.map((m) => m.id), envReplicateUpscaleModel()]);
+  const requested = String(requestedModel || '').trim();
+  return allowed.has(requested) ? requested : envReplicateUpscaleModel();
+}
+
+async function upscaleWithReplicate({ imageDataUrl, scale, creativity, model: requestedModel }) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
-  const model = String(process.env.REPLICATE_UPSCALE_MODEL || DEFAULT_REPLICATE_UPSCALE_MODEL).trim();
+  const model = resolveHostedUpscaleModel(requestedModel);
   const input = buildReplicateUpscaleInput(model, { imageDataUrl, scale, creativity });
 
   const res = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
@@ -911,25 +930,31 @@ router.get('/upscale/info', async (req, res) => {
   try {
     if (runtimeConfig.isLocal) {
       const model = await resolveUpscaleModel(req.user.id);
-      const availableModels = await listAvailableUpscaleModels().catch(() => []);
+      const available = await listAvailableUpscaleModels().catch(() => []);
+      const models = available.map((m) => ({ id: m, label: m, kind: 'faithful' }));
+      if (model && !models.some((m) => m.id === model)) {
+        models.unshift({ id: model, label: model, kind: 'faithful' });
+      }
       return res.json({
         provider: 'local-comfyui',
         model,
-        availableModels,
+        models,
         scales: [2, 4],
-        creativitySupported: false,
         configured: true,
         apiUrl: comfyBaseUrl(),
       });
     }
-    const model = String(process.env.REPLICATE_UPSCALE_MODEL || DEFAULT_REPLICATE_UPSCALE_MODEL).trim();
+    const model = envReplicateUpscaleModel();
     const configured = Boolean(process.env.REPLICATE_API_TOKEN);
+    const models = [...HOSTED_UPSCALE_MODELS];
+    if (!models.some((m) => m.id === model)) {
+      models.unshift({ id: model, label: model, kind: 'custom' });
+    }
     res.json({
       provider: 'replicate',
       model,
-      availableModels: [model],
+      models,
       scales: [2, 4, 8],
-      creativitySupported: /clarity/i.test(model),
       configured,
       error: configured ? null : 'REPLICATE_API_TOKEN is not configured',
     });
@@ -947,11 +972,12 @@ router.post('/upscale', async (req, res) => {
     }
     const scale = clampScale(req.body?.scale);
     const creativity = clampCreativity(req.body?.creativity);
+    const requestedModel = String(req.body?.model || '').trim();
 
     const inputBuffer = dataUrlToBuffer(imageDataUrl);
 
     if (!runtimeConfig.isLocal) {
-      const result = await upscaleWithReplicate({ imageDataUrl, scale, creativity });
+      const result = await upscaleWithReplicate({ imageDataUrl, scale, creativity, model: requestedModel });
       const cost = estimateUpscaleCost({ provider: 'replicate', inputBuffer, scale });
       logImageUsage({ userId: req.user.id, model: `replicate:${result.model}`, feature: 'graphics_upscale', costUsd: cost.usd });
       return res.json({
@@ -965,7 +991,11 @@ router.post('/upscale', async (req, res) => {
       });
     }
 
-    const upscaleModelName = await resolveUpscaleModel(req.user.id);
+    let upscaleModelName = await resolveUpscaleModel(req.user.id);
+    if (requestedModel) {
+      const available = await listAvailableUpscaleModels().catch(() => []);
+      if (available.includes(requestedModel)) upscaleModelName = requestedModel;
+    }
     const native = Number(process.env.LOCAL_UPSCALE_NATIVE) || 4;
     const scaleBy = scale / native;
     const imageName = await uploadImageToComfy(imageDataUrl);
