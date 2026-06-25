@@ -4,6 +4,18 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-26
+
+**Feature:** Graphics — fidelity-first image upscaler.
+
+Adds an Upscale tool to the Graphics page that enlarges artwork and small images while preserving detail (no hallucination). Mirrors the existing generate flow's local/production split: locally it runs a ComfyUI Real-ESRGAN/ESRGAN model (Remacri, 4x-UltraSharp, etc.) via `LoadImage → UpscaleModelLoader → ImageUpscaleWithModel → lanczos rescale → SaveImage`; in production it calls a Replicate model, defaulting to Clarity Pro with `creativity` pinned to the faithful end.
+
+**API:** `GET /api/graphics/upscale/info` (provider, model, supported scales) and `POST /api/graphics/upscale` (`imageDataUrl`, `scale`, `creativity`). Upload an image or reuse the current generation result, pick a scale, and download the output.
+
+**Config:** `LOCAL_UPSCALE_MODEL` / `LOCAL_UPSCALE_NATIVE` for ComfyUI; `REPLICATE_API_TOKEN`, optional `REPLICATE_UPSCALE_MODEL` and `REPLICATE_UPSCALE_INPUT` for production. Local upscale models go in `ComfyUI/models/upscale_models`.
+
+---
+
 ## 2026-06-25 (6)
 
 **Robustness:** Shares observation — never silently drop the report email.

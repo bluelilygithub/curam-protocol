@@ -13,6 +13,12 @@ const DEFAULT_FAL_MODEL = 'fal-ai/flux/dev';
 const CONTENT_RESTRICTIONS_KEY = 'graphics_content_restrictions';
 const GRAPHICS_MODEL_KEY = 'graphics_model';
 
+// Upscaling. Local uses a ComfyUI Real-ESRGAN/ESRGAN model (Remacri, UltraSharp,
+// etc.); production uses a fidelity-preserving Replicate model.
+const UPSCALE_MODEL_KEY = 'graphics_upscale_model';
+const DEFAULT_LOCAL_UPSCALE_MODEL = '4x-UltraSharp.pth';
+const DEFAULT_REPLICATE_UPSCALE_MODEL = 'philz1337x/clarity-pro-upscaler';
+
 function comfyBaseUrl() {
   return String(runtimeConfig.localImageApiUrl || DEFAULT_COMFY_URL).replace(/\/$/, '');
 }
@@ -422,6 +428,135 @@ async function listAvailableComfyModels() {
   return Array.isArray(options) ? options.map((item) => String(item || '').trim()).filter(Boolean) : [];
 }
 
+// ─── Upscaling ────────────────────────────────────────────────────────────────
+
+function clampScale(value) {
+  const n = Math.round(Number(value) || 4);
+  if (n <= 2) return 2;
+  if (n <= 4) return 4;
+  if (n <= 8) return 8;
+  return 16;
+}
+
+// Clarity's `creativity` runs -10 (strict to source) .. 10 (adds detail).
+// Default to the faithful end since fidelity preservation is the priority.
+function clampCreativity(value) {
+  if (value === undefined || value === null || value === '') return -5;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return -5;
+  return Math.max(-10, Math.min(10, n));
+}
+
+async function listAvailableUpscaleModels() {
+  const data = await fetchJson(`${comfyBaseUrl()}/object_info/UpscaleModelLoader`);
+  const options = data?.UpscaleModelLoader?.input?.required?.model_name?.[0];
+  return Array.isArray(options) ? options.map((item) => String(item || '').trim()).filter(Boolean) : [];
+}
+
+async function resolveUpscaleModel(userId) {
+  if (userId) {
+    const { rows } = await pool.query(
+      'SELECT value FROM settings WHERE "userId"=$1 AND key=$2 LIMIT 1',
+      [userId, UPSCALE_MODEL_KEY]
+    );
+    const userModel = String(rows[0]?.value || '').trim();
+    if (userModel) return userModel;
+  }
+  const { rows } = await pool.query(
+    `SELECT s.value FROM settings s
+     JOIN users u ON u.id = s."userId"
+     WHERE u."isAdmin" = TRUE AND s.key = $1
+       AND COALESCE(NULLIF(TRIM(s.value), ''), '') <> ''
+     ORDER BY u.id ASC LIMIT 1`,
+    [UPSCALE_MODEL_KEY]
+  );
+  const adminModel = String(rows[0]?.value || '').trim();
+  return adminModel || String(process.env.LOCAL_UPSCALE_MODEL || '').trim() || DEFAULT_LOCAL_UPSCALE_MODEL;
+}
+
+// ComfyUI workflow: LoadImage -> UpscaleModelLoader -> ImageUpscaleWithModel ->
+// (optional lanczos rescale to hit the requested factor) -> SaveImage (node 9,
+// so the existing waitForImage finds it).
+function buildUpscaleWorkflow({ imageName, upscaleModelName, scaleBy }) {
+  const wf = {
+    5:  { class_type: 'LoadImage', inputs: { image: imageName } },
+    11: { class_type: 'UpscaleModelLoader', inputs: { model_name: upscaleModelName } },
+    12: { class_type: 'ImageUpscaleWithModel', inputs: { upscale_model: ['11', 0], image: ['5', 0] } },
+  };
+  let finalNode = '12';
+  if (scaleBy && Math.abs(scaleBy - 1) > 0.001) {
+    wf[13] = {
+      class_type: 'ImageScaleBy',
+      inputs: { image: ['12', 0], upscale_method: 'lanczos', scale_by: scaleBy },
+    };
+    finalNode = '13';
+  }
+  wf[9] = { class_type: 'SaveImage', inputs: { filename_prefix: 'vault_upscale', images: [finalNode, 0] } };
+  return wf;
+}
+
+function buildReplicateUpscaleInput(model, { imageDataUrl, scale, creativity }) {
+  const lower = String(model).toLowerCase();
+  let input;
+  if (lower.includes('clarity')) {
+    input = { image: imageDataUrl, scale_factor: scale, creativity, output_format: 'png' };
+  } else if (lower.includes('real-esrgan') || lower.includes('realesrgan')) {
+    input = { image: imageDataUrl, scale };
+  } else if (lower.includes('topaz')) {
+    input = { image: imageDataUrl, upscale_factor: scale };
+  } else {
+    input = { image: imageDataUrl, scale_factor: scale };
+  }
+  const extraRaw = String(process.env.REPLICATE_UPSCALE_INPUT || '').trim();
+  if (extraRaw) {
+    try { Object.assign(input, JSON.parse(extraRaw)); }
+    catch (err) { console.warn('[graphics] invalid REPLICATE_UPSCALE_INPUT JSON:', err.message); }
+  }
+  return input;
+}
+
+async function waitForReplicate(prediction, token) {
+  let pred = prediction;
+  const started = Date.now();
+  const terminal = ['succeeded', 'failed', 'canceled'];
+  while (pred && !terminal.includes(pred.status) && Date.now() - started < 180000) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const getUrl = pred.urls?.get;
+    if (!getUrl) break;
+    const res = await fetch(getUrl, { headers: { Authorization: `Bearer ${token}` } });
+    pred = await res.json().catch(() => pred);
+  }
+  if (pred?.status !== 'succeeded') {
+    throw new Error(pred?.error || `Replicate upscale ${pred?.status || 'did not complete'}`);
+  }
+  return pred;
+}
+
+async function upscaleWithReplicate({ imageDataUrl, scale, creativity }) {
+  const token = process.env.REPLICATE_API_TOKEN;
+  if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
+  const model = String(process.env.REPLICATE_UPSCALE_MODEL || DEFAULT_REPLICATE_UPSCALE_MODEL).trim();
+  const input = buildReplicateUpscaleInput(model, { imageDataUrl, scale, creativity });
+
+  const res = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Prefer: 'wait',
+    },
+    body: JSON.stringify({ input }),
+  });
+  let pred = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(pred?.detail || pred?.error || `Replicate request failed (${res.status})`);
+
+  pred = await waitForReplicate(pred, token);
+  const out = Array.isArray(pred.output) ? pred.output[0] : pred.output;
+  if (!out) throw new Error('Replicate returned no upscaled image');
+  const upscaledDataUrl = await imageUrlToDataUrl(out, 'image/png');
+  return { provider: 'replicate', model, url: typeof out === 'string' ? out : null, imageDataUrl: upscaledDataUrl };
+}
+
 router.get('/models', async (req, res) => {
   try {
     const selectedModel = await resolveGraphicsModel(req.user.id);
@@ -703,6 +838,88 @@ router.delete('/gallery/:id', async (req, res) => {
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/graphics/upscale/info — provider, model, available models, supported scales
+router.get('/upscale/info', async (req, res) => {
+  try {
+    if (runtimeConfig.isLocal) {
+      const model = await resolveUpscaleModel(req.user.id);
+      const availableModels = await listAvailableUpscaleModels().catch(() => []);
+      return res.json({
+        provider: 'local-comfyui',
+        model,
+        availableModels,
+        scales: [2, 4],
+        creativitySupported: false,
+        configured: true,
+        apiUrl: comfyBaseUrl(),
+      });
+    }
+    const model = String(process.env.REPLICATE_UPSCALE_MODEL || DEFAULT_REPLICATE_UPSCALE_MODEL).trim();
+    const configured = Boolean(process.env.REPLICATE_API_TOKEN);
+    res.json({
+      provider: 'replicate',
+      model,
+      availableModels: [model],
+      scales: [2, 4, 8],
+      creativitySupported: /clarity/i.test(model),
+      configured,
+      error: configured ? null : 'REPLICATE_API_TOKEN is not configured',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/graphics/upscale — fidelity-first upscale (ComfyUI local / Replicate prod)
+router.post('/upscale', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    if (!/^data:image\/(png|jpe?g|webp);base64,/i.test(imageDataUrl)) {
+      return res.status(400).json({ error: 'A PNG, JPEG or WebP image is required' });
+    }
+    const scale = clampScale(req.body?.scale);
+    const creativity = clampCreativity(req.body?.creativity);
+
+    if (!runtimeConfig.isLocal) {
+      const result = await upscaleWithReplicate({ imageDataUrl, scale, creativity });
+      return res.json({
+        ok: true,
+        provider: result.provider,
+        model: result.model,
+        scale,
+        image: { provider: 'replicate', url: result.url },
+        imageDataUrl: result.imageDataUrl,
+      });
+    }
+
+    const upscaleModelName = await resolveUpscaleModel(req.user.id);
+    const native = Number(process.env.LOCAL_UPSCALE_NATIVE) || 4;
+    const scaleBy = scale / native;
+    const imageName = await uploadImageToComfy(imageDataUrl);
+    const clientId = randomUUID();
+    const workflow = buildUpscaleWorkflow({ imageName, upscaleModelName, scaleBy });
+
+    const queued = await fetchJson(`${comfyBaseUrl()}/prompt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: workflow, client_id: clientId }),
+    });
+    const image = await waitForImage(queued.prompt_id);
+    const imageDataUrlOut = await loadImageDataUrl(image);
+
+    res.json({
+      ok: true,
+      provider: 'local-comfyui',
+      model: upscaleModelName,
+      scale,
+      image,
+      imageDataUrl: imageDataUrlOut,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

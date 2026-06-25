@@ -28,6 +28,13 @@ export default function GraphicsPage() {
   const [saving, setSaving] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
   const [restrictionWarning, setRestrictionWarning] = useState(null);
+  const [upscaleInfo, setUpscaleInfo] = useState(null);
+  const [upscaleSource, setUpscaleSource] = useState(null);
+  const [upscaleScale, setUpscaleScale] = useState('4');
+  const [upscaleFidelity, setUpscaleFidelity] = useState('-8');
+  const [upscaling, setUpscaling] = useState(false);
+  const [upscaleResult, setUpscaleResult] = useState(null);
+  const [upscaleError, setUpscaleError] = useState('');
   const isHostedProvider = status?.hosted || (status?.provider && status.provider !== 'local-comfyui');
   const serviceLabel = isHostedProvider
     ? `${status?.provider || 'Hosted'} ready: ${status?.model || 'model not selected'}`
@@ -43,8 +50,71 @@ export default function GraphicsPage() {
       .then(r => r.json())
       .then(setStatus)
       .catch(() => setStatus({ ok: false, hosted: true, provider: 'Graphics provider', error: 'Unable to check graphics service' }));
+    api.get('/api/graphics/upscale/info')
+      .then(r => r.json())
+      .then(info => {
+        setUpscaleInfo(info);
+        if (Array.isArray(info?.scales) && !info.scales.includes(Number(upscaleScale))) {
+          setUpscaleScale(String(info.scales[0]));
+        }
+      })
+      .catch(() => {});
     loadGallery();
   }, []);
+
+  const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const handleUpscaleFile = async (file) => {
+    if (!file) return;
+    setUpscaleError('');
+    setUpscaleResult(null);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setUpscaleSource({ imageDataUrl: dataUrl, name: file.name });
+    } catch {
+      setUpscaleError('Could not read that image file.');
+    }
+  };
+
+  const useResultForUpscale = () => {
+    if (!result?.imageDataUrl) return;
+    setUpscaleError('');
+    setUpscaleResult(null);
+    setUpscaleSource({ imageDataUrl: result.imageDataUrl, name: 'current result' });
+  };
+
+  const runUpscale = async () => {
+    if (!upscaleSource?.imageDataUrl) return;
+    setUpscaling(true);
+    setUpscaleError('');
+    try {
+      const res = await api.post('/api/graphics/upscale', {
+        imageDataUrl: upscaleSource.imageDataUrl,
+        scale: Number(upscaleScale),
+        creativity: Number(upscaleFidelity),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upscale failed');
+      setUpscaleResult(data);
+    } catch (err) {
+      setUpscaleError(err.message || 'Upscale failed');
+    } finally {
+      setUpscaling(false);
+    }
+  };
+
+  const downloadUpscaled = () => {
+    if (!upscaleResult?.imageDataUrl) return;
+    const a = document.createElement('a');
+    a.href = upscaleResult.imageDataUrl;
+    a.download = `upscaled-${upscaleResult.scale || ''}x-${Date.now()}.png`;
+    a.click();
+  };
 
   const loadGallery = () => {
     api.get('/api/graphics/gallery')
@@ -386,6 +456,133 @@ export default function GraphicsPage() {
           </div>
         </div>
       </div>
+
+      <section className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Upscale</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            {upscaleInfo
+              ? `${upscaleInfo.provider === 'local-comfyui' ? 'Local' : 'Hosted'}: ${upscaleInfo.model || 'not configured'}`
+              : 'Checking upscaler...'}
+          </span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Fidelity-first upscaling for artwork and small images. Detail is preserved, not invented.
+            </p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={e => handleUpscaleFile(e.target.files?.[0])}
+                className="block w-full text-xs"
+                style={{ color: 'var(--color-text)' }}
+              />
+              {result?.imageDataUrl && (
+                <button
+                  type="button"
+                  onClick={useResultForUpscale}
+                  className="mt-2 text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+                  style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
+                >
+                  Use current result
+                </button>
+              )}
+            </div>
+
+            {upscaleSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={upscaleSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+                <p className="text-[11px] mt-1 text-center" style={{ color: 'var(--color-muted)' }}>{upscaleSource.name}</p>
+              </div>
+            )}
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Scale</label>
+                <select
+                  value={upscaleScale}
+                  onChange={e => setUpscaleScale(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border text-sm"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {(upscaleInfo?.scales || [2, 4]).map(s => <option key={s} value={s}>{s}x</option>)}
+                </select>
+              </div>
+              {upscaleInfo?.creativitySupported && (
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Fidelity</label>
+                  <select
+                    value={upscaleFidelity}
+                    onChange={e => setUpscaleFidelity(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border text-sm"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="-8">Maximum fidelity</option>
+                    <option value="0">Balanced</option>
+                    <option value="5">Add detail</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {upscaleInfo && !upscaleInfo.configured && (
+              <div className="text-xs px-3 py-2 rounded-xl" style={{ color: '#92400e', background: '#fef3c7' }}>
+                {upscaleInfo.error || 'Upscaler is not configured.'}
+              </div>
+            )}
+            {upscaleError && (
+              <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>
+                {upscaleError}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={runUpscale}
+              disabled={upscaling || !upscaleSource?.imageDataUrl || upscaleInfo?.configured === false}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              {upscaling ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('sparkles', { size: 15 })}
+              {upscaling ? 'Upscaling...' : 'Upscale image'}
+            </button>
+          </div>
+
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Upscaled result</span>
+              {upscaleResult?.imageDataUrl && (
+                <button
+                  onClick={downloadUpscaled}
+                  className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+                  style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
+                >
+                  Download
+                </button>
+              )}
+            </div>
+            <div className="p-4">
+              {upscaleResult?.imageDataUrl ? (
+                <>
+                  <button type="button" onClick={() => setPreviewImage(upscaleResult)} className="block w-full">
+                    <img src={upscaleResult.imageDataUrl} alt="upscaled" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
+                  </button>
+                  <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
+                    {upscaleResult.scale}x · {upscaleResult.model}
+                  </p>
+                </>
+              ) : (
+                <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                  Your upscaled image will appear here.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section className="mt-8">
         <div className="flex items-center justify-between mb-3">
