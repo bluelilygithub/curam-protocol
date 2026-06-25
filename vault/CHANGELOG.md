@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-25 (2)
+
+**Fix:** WP Theme Builder — preview blocked by production CSP (images + inline scripts).
+
+Vault's production helmet CSP (`img-src` without `picsum.photos`, default `script-src 'self'`) blocked the preview's placeholder images and inline controllers (scroll-reveal, nav toggle, slideshow/carousel). Local dev disables CSP, so the issue only appeared in production. The preview route (`my-wp-theme-builder/routes/preview.js`) now sets its own relaxed CSP on the iframe document only (`https:` images, Google Fonts, inline `<style>`/scripts), leaving Vault's global policy strict. Exported themes are unaffected.
+
+---
+
 ## 2026-06-25
 
 **Feature:** WP Theme Builder — production-only DeepSeek prompt builder before Claude.

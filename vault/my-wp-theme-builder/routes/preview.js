@@ -8,6 +8,21 @@ const db = require('../utils/db');
 
 const router = express.Router();
 
+// The preview is sandboxed, AI-generated HTML rendered in an iframe. It needs
+// remote placeholder images (picsum.photos, etc.), Google Fonts, inline <style>,
+// and the inline scroll-reveal / nav-toggle / slideshow controllers. Vault's
+// global helmet CSP (production) blocks these, so override it for this response
+// only — this does not relax the policy for the rest of the app.
+const PREVIEW_CSP = [
+  "default-src 'self'",
+  "img-src 'self' data: blob: https:",
+  "style-src 'self' 'unsafe-inline' https:",
+  "font-src 'self' data: https:",
+  "script-src 'self' 'unsafe-inline'",
+  "connect-src 'self'",
+  "frame-ancestors 'self'",
+].join('; ');
+
 async function loadIntakeFunctionality(sessionId) {
   const raw = await tryReadFile(sessionId, 'intake.json');
   if (!raw) return [];
@@ -116,6 +131,7 @@ router.get(['/:sessionId', '/:sessionId/'], async (req, res, next) => {
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Security-Policy', PREVIEW_CSP);
     res.send(html);
   } catch (err) {
     next(err);
