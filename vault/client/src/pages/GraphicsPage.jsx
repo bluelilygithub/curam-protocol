@@ -123,6 +123,14 @@ export default function GraphicsPage() {
       .catch(() => {});
   };
 
+  const formatCost = (cost) => {
+    if (!cost) return null;
+    if (cost.local) return 'Cost: local (free) · no tokens';
+    if (cost.usd == null) return 'Cost: estimate unavailable';
+    const mp = cost.megapixels ? ` · ${cost.megapixels} MP` : '';
+    return `Cost: ${cost.estimate ? '~' : ''}$${Number(cost.usd).toFixed(4)}${mp} · no tokens (per-image billing)`;
+  };
+
   const buildPrompt = () => {
     const preset = STYLE_PRESETS.find(s => s.id === style);
     return [prompt.trim(), preset?.suffix].filter(Boolean).join(', ');
@@ -410,6 +418,11 @@ export default function GraphicsPage() {
                 <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
                   Seed: {result.seed} · Model: {result.model}
                 </p>
+                {result.cost && (
+                  <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                    {formatCost(result.cost)}
+                  </p>
+                )}
                 <div className="mt-4 border-t pt-4 space-y-3" style={{ borderColor: 'var(--color-border)' }}>
                   <div>
                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
@@ -573,6 +586,11 @@ export default function GraphicsPage() {
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
                     {upscaleResult.scale}x · {upscaleResult.model}
                   </p>
+                  {upscaleResult.cost && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                      {formatCost(upscaleResult.cost)}
+                    </p>
+                  )}
                 </>
               ) : (
                 <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>

@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-26 (2)
+
+**Feature:** Graphics — per-image cost visibility.
+
+Image generation and upscaling now estimate their dollar cost and show it inline on the result (e.g. `~$0.0300 · 1.05 MP`), and log it to the existing Usage dashboard under features `graphics_generate` / `graphics_upscale` so spend aggregates over time. Upscale cost uses output megapixels × rate (Clarity Pro's $0.03/MP model); local ComfyUI is shown as free. Image models bill per image/megapixel, not tokens, so the UI labels tokens as not applicable. Rates are configurable via `REPLICATE_UPSCALE_RATE_PER_MP`, `REPLICATE_UPSCALE_MIN_USD`, and `FAL_IMAGE_COST_USD`.
+
+---
+
 ## 2026-06-26
 
 **Feature:** Graphics — fidelity-first image upscaler.

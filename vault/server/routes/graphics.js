@@ -532,6 +532,65 @@ async function waitForReplicate(prediction, token) {
   return pred;
 }
 
+function dataUrlToBuffer(dataUrl) {
+  const m = String(dataUrl || '').match(/^data:[^;]+;base64,(.+)$/);
+  return m ? Buffer.from(m[1], 'base64') : null;
+}
+
+// Minimal PNG/JPEG dimension reader (avoids a heavy image dependency).
+function getImageSize(buffer) {
+  if (!buffer || buffer.length < 24) return null;
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+  }
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+    let offset = 2;
+    while (offset + 9 < buffer.length) {
+      if (buffer[offset] !== 0xff) { offset++; continue; }
+      const marker = buffer[offset + 1];
+      const isSof = marker >= 0xc0 && marker <= 0xcf
+        && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+      if (isSof) {
+        return { height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) };
+      }
+      if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) { offset += 2; continue; }
+      offset += 2 + buffer.readUInt16BE(offset + 2);
+    }
+  }
+  return null;
+}
+
+// Clarity-style billing is per output megapixel ($0.03/MP, $0.03 min). Local
+// ComfyUI runs on the user's own hardware, so it's free. For other Replicate
+// models that bill by compute time this is a best-effort estimate.
+function estimateUpscaleCost({ provider, inputBuffer, scale }) {
+  if (provider === 'local-comfyui') return { usd: 0, megapixels: null, local: true };
+  const ratePerMp = Number(process.env.REPLICATE_UPSCALE_RATE_PER_MP) || 0.03;
+  const minUsd = Number(process.env.REPLICATE_UPSCALE_MIN_USD) || 0.03;
+  const size = inputBuffer ? getImageSize(inputBuffer) : null;
+  if (!size) return { usd: null, megapixels: null, ratePerMp, estimate: true };
+  const megapixels = Math.min(64, (size.width * scale * size.height * scale) / 1e6);
+  const usd = Math.max(minUsd, megapixels * ratePerMp);
+  return { usd: Number(usd.toFixed(4)), megapixels: Number(megapixels.toFixed(2)), ratePerMp, estimate: true };
+}
+
+function estimateGenerateCost({ provider }) {
+  if (provider === 'local-comfyui') return { usd: 0, local: true };
+  const usd = Number(process.env.FAL_IMAGE_COST_USD) || 0.025;
+  return { usd: Number(usd.toFixed(4)), estimate: true };
+}
+
+// Image operations have no tokens, so logUsage (which ignores zero-token rows)
+// can't be used. Write the usage_logs row directly so cost shows in the dashboard.
+function logImageUsage({ userId, model, feature, costUsd }) {
+  if (!userId || !costUsd || costUsd <= 0) return;
+  pool.query(
+    `INSERT INTO usage_logs (user_id, model_id, input_tokens, output_tokens, estimated_cost_usd, feature)
+     VALUES ($1, $2, 0, 0, $3, $4)`,
+    [userId, model || feature, costUsd, feature]
+  ).catch((err) => console.error('[graphics] usage log error:', err.message));
+}
+
 async function upscaleWithReplicate({ imageDataUrl, scale, creativity }) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) throw new Error('REPLICATE_API_TOKEN is not configured');
@@ -681,6 +740,8 @@ router.post('/generate', async (req, res) => {
         seed,
         modelName,
       });
+      const cost = estimateGenerateCost({ provider: 'fal' });
+      logImageUsage({ userId: req.user.id, model: `fal:${modelName}`, feature: 'graphics_generate', costUsd: cost.usd });
       return res.json({
         ok: true,
         prompt,
@@ -689,6 +750,7 @@ router.post('/generate', async (req, res) => {
         width,
         height,
         model: modelName,
+        cost,
         image: falResult.image,
         imageDataUrl: falResult.imageDataUrl,
         restrictions,
@@ -726,6 +788,7 @@ router.post('/generate', async (req, res) => {
       width,
       height,
       model: modelName,
+      cost: estimateGenerateCost({ provider: 'local-comfyui' }),
       image,
       imageDataUrl,
       restrictions,
@@ -885,13 +948,18 @@ router.post('/upscale', async (req, res) => {
     const scale = clampScale(req.body?.scale);
     const creativity = clampCreativity(req.body?.creativity);
 
+    const inputBuffer = dataUrlToBuffer(imageDataUrl);
+
     if (!runtimeConfig.isLocal) {
       const result = await upscaleWithReplicate({ imageDataUrl, scale, creativity });
+      const cost = estimateUpscaleCost({ provider: 'replicate', inputBuffer, scale });
+      logImageUsage({ userId: req.user.id, model: `replicate:${result.model}`, feature: 'graphics_upscale', costUsd: cost.usd });
       return res.json({
         ok: true,
         provider: result.provider,
         model: result.model,
         scale,
+        cost,
         image: { provider: 'replicate', url: result.url },
         imageDataUrl: result.imageDataUrl,
       });
@@ -917,6 +985,7 @@ router.post('/upscale', async (req, res) => {
       provider: 'local-comfyui',
       model: upscaleModelName,
       scale,
+      cost: estimateUpscaleCost({ provider: 'local-comfyui', inputBuffer, scale }),
       image,
       imageDataUrl: imageDataUrlOut,
     });
