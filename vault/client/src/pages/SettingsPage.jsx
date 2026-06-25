@@ -181,6 +181,7 @@ function SettingsPage() {
           'Goals',
           'Integrations',
           'News Digest',
+          'Shares',
           'Mobile',
           'Members',
           'Feature Access',
