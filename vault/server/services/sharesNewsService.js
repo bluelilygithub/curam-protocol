@@ -526,6 +526,39 @@ async function fetchIndexPct(proxy) {
   }
 }
 
+// Deterministic report used only when the AI pipeline is unavailable, so the
+// owner always receives something rather than silence.
+function buildFallbackReport({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct }) {
+  const movers = priceData
+    .filter((p) => p.dayChangePct != null && Math.abs(p.dayChangePct) >= 2)
+    .sort((a, b) => Math.abs(b.dayChangePct) - Math.abs(a.dayChangePct));
+  const moverLines = movers.length
+    ? movers.map((p) => `- **${p.symbol}** (${p.exchange}): ${p.dayChangePct >= 0 ? '+' : ''}${p.dayChangePct}%`).join('\n')
+    : '- No holding moved more than 2% on the latest data.';
+  const news = newsItems.slice(0, 6);
+  const newsLines = news.length
+    ? news.map((n) => `- ${n.symbol === 'SECTOR' ? '[Sector] ' : `[${n.symbol}] `}${n.title}`).join('\n')
+    : '- No relevant news collected.';
+  return [
+    '_AI narrative was unavailable on this run — automated data-only summary._',
+    '',
+    '## Portfolio Movement',
+    moverLines,
+    '',
+    '## Sector Pulse',
+    `- Nasdaq ${pctOrNa(nasdaqPct)} · SOX ${pctOrNa(soxPct)} · ASX 200 ${pctOrNa(asxPct)}`,
+    '',
+    '## News That Matters',
+    newsLines,
+    '',
+    '## Watch List',
+    '- AI analysis unavailable — review the movers and news above manually.',
+    '',
+    '## One Liner',
+    `- Holdings value ${portfolio.holdingsValueAud} AUD across ${portfolio.holdings.length} positions; ${movers.length} moved >2%.`,
+  ].join('\n');
+}
+
 function buildObservationPrompt({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct }) {
   return [
     '## Portfolio',
@@ -622,44 +655,55 @@ async function generateObservation(userId) {
   if (!primaryModel) throw new Error('No model configured for user — check vault_models in Settings');
   const secondaryModel = pickSecondaryModel(tiers, primaryModel);
 
-  // Stage 1 — primary draft.
-  const draftRes = await callModel(primaryModel, userPrompt, {
-    maxTokens: 1200,
-    system: OBSERVATION_SYSTEM_PROMPT,
-    returnUsage: true,
-  });
-  logUsage({ userId, model: primaryModel, inputTokens: draftRes.inputTokens, outputTokens: draftRes.outputTokens, feature: 'shares_observation' });
-  const draft = (draftRes.text || '').trim();
-  if (!draft) throw new Error('Observation agent returned empty output');
-
-  // Stage 2 — secondary model reflects/augments (fail-open: keep the draft on error).
-  let revised = draft;
+  // Stage 1 — primary draft (fail-open: a data-only fallback is emailed if it fails).
+  let draft = '';
   try {
-    const revRes = await callModel(secondaryModel, buildReflectionPrompt(userPrompt, draft), {
-      maxTokens: 1400,
-      system: OBSERVATION_REVIEW_SYSTEM_PROMPT,
+    const draftRes = await callModel(primaryModel, userPrompt, {
+      maxTokens: 1200,
+      system: OBSERVATION_SYSTEM_PROMPT,
       returnUsage: true,
     });
-    logUsage({ userId, model: secondaryModel, inputTokens: revRes.inputTokens, outputTokens: revRes.outputTokens, feature: 'shares_observation_review' });
-    const t = (revRes.text || '').trim();
-    if (t) revised = t;
+    logUsage({ userId, model: primaryModel, inputTokens: draftRes.inputTokens, outputTokens: draftRes.outputTokens, feature: 'shares_observation' });
+    draft = (draftRes.text || '').trim();
   } catch (err) {
-    console.warn(`[sharesNews] observation secondary pass failed for user ${userId}:`, err.message);
+    console.error(`[sharesNews] observation primary draft failed for user ${userId}:`, err.message);
   }
 
-  // Stage 3 — primary model final review (fail-open: keep the revised text on error).
-  let text = revised;
-  try {
-    const finRes = await callModel(primaryModel, buildFinalPrompt(userPrompt, draft, revised), {
-      maxTokens: 1200,
-      system: OBSERVATION_FINAL_SYSTEM_PROMPT,
-      returnUsage: true,
-    });
-    logUsage({ userId, model: primaryModel, inputTokens: finRes.inputTokens, outputTokens: finRes.outputTokens, feature: 'shares_observation_final' });
-    const t = (finRes.text || '').trim();
-    if (t) text = t;
-  } catch (err) {
-    console.warn(`[sharesNews] observation final pass failed for user ${userId}:`, err.message);
+  let text;
+  let aiUnavailable = false;
+  if (!draft) {
+    aiUnavailable = true;
+    text = buildFallbackReport({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct });
+  } else {
+    // Stage 2 — secondary model reflects/augments (fail-open: keep the draft on error).
+    let revised = draft;
+    try {
+      const revRes = await callModel(secondaryModel, buildReflectionPrompt(userPrompt, draft), {
+        maxTokens: 1400,
+        system: OBSERVATION_REVIEW_SYSTEM_PROMPT,
+        returnUsage: true,
+      });
+      logUsage({ userId, model: secondaryModel, inputTokens: revRes.inputTokens, outputTokens: revRes.outputTokens, feature: 'shares_observation_review' });
+      const t = (revRes.text || '').trim();
+      if (t) revised = t;
+    } catch (err) {
+      console.warn(`[sharesNews] observation secondary pass failed for user ${userId}:`, err.message);
+    }
+
+    // Stage 3 — primary model final review (fail-open: keep the revised text on error).
+    text = revised;
+    try {
+      const finRes = await callModel(primaryModel, buildFinalPrompt(userPrompt, draft, revised), {
+        maxTokens: 1200,
+        system: OBSERVATION_FINAL_SYSTEM_PROMPT,
+        returnUsage: true,
+      });
+      logUsage({ userId, model: primaryModel, inputTokens: finRes.inputTokens, outputTokens: finRes.outputTokens, feature: 'shares_observation_final' });
+      const t = (finRes.text || '').trim();
+      if (t) text = t;
+    } catch (err) {
+      console.warn(`[sharesNews] observation final pass failed for user ${userId}:`, err.message);
+    }
   }
 
   // One observation per user per day — replace any existing for today.
@@ -670,7 +714,7 @@ async function generateObservation(userId) {
   await pool.query(
     `INSERT INTO share_news_briefings ("userId", date, symbol, exchange, content, signal, headlines, type)
      VALUES ($1,$2,NULL,NULL,$3,NULL,$4,'observation')`,
-    [userId, today, text, JSON.stringify({ nasdaqPct, soxPct, asxPct, holdings: priceData.length, newsCount: newsItems.length })]
+    [userId, today, text, JSON.stringify({ nasdaqPct, soxPct, asxPct, holdings: priceData.length, newsCount: newsItems.length, aiUnavailable })]
   );
 
   const cutoff = getDateInTz(tz, 45);
@@ -695,8 +739,8 @@ async function generateObservation(userId) {
     console.warn(`[sharesNews] observation email failed for user ${userId}:`, err.message);
   }
 
-  console.log(`[sharesNews] Generated observation for user ${userId} on ${today} (emailed: ${emailed})`);
-  return { date: today, text, emailed, context: { nasdaqPct, soxPct, asxPct } };
+  console.log(`[sharesNews] Generated observation for user ${userId} on ${today} (emailed: ${emailed}, aiUnavailable: ${aiUnavailable})`);
+  return { date: today, text, emailed, aiUnavailable, context: { nasdaqPct, soxPct, asxPct } };
 }
 
 async function getLatestObservation(userId) {

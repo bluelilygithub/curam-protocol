@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-25 (6)
+
+**Robustness:** Shares observation — never silently drop the report email.
+
+Stage 1 (primary draft) is now fail-open like stages 2–3: if the model call fails or returns empty, a deterministic data-only fallback report (movers >2%, index context, news headlines) is stored and emailed instead of nothing, clearly marked as AI-unavailable. The `aiUnavailable` flag is recorded on the stored row and returned from `POST /api/shares/news/observe`.
+
+---
+
 ## 2026-06-25 (5)
 
 **Enhancement:** Shares observation — multi-LLM reflection pipeline + refresh trigger.
