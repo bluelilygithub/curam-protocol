@@ -6,6 +6,7 @@ const { pool } = require('../db');
 const marketData = require('../services/marketData');
 const portfolio = require('../services/sharesPortfolio');
 const { checkDailyDropAlerts } = require('../cron/sharesCron');
+const { generateObservation } = require('../services/sharesNewsService');
 
 const VALID_EXCHANGES = ['ASX', 'NYSE', 'NASDAQ'];
 
@@ -84,6 +85,11 @@ router.post('/refresh', async (req, res) => {
         console.error('[shares] manual drop-alert check failed:', err.message)
       );
     }
+    // Also regenerate + email the portfolio observation for this user. Fire-and-forget:
+    // it runs a multi-step LLM pipeline (~slow) and must never block or fail the refresh.
+    generateObservation(req.user.id).catch((err) =>
+      console.error('[shares] manual observation generation failed:', err.message)
+    );
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

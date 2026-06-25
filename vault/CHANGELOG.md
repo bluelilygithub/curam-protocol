@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-25 (5)
+
+**Enhancement:** Shares observation — multi-LLM reflection pipeline + refresh trigger.
+
+The observation agent now runs three passes before emailing: the primary model drafts the briefing, a secondary model reflects on/augments/corrects it against the source data, then the primary model does a final review — and that final version is what's stored and emailed. The secondary model is auto-picked as a different tier from the primary (gemini/light/deepseek/standard), falling back to the primary if no distinct tier exists. Stages 2 and 3 are fail-open, so a reflection/review error just keeps the previous good text.
+
+The observation is now generated and emailed both on the daily 7 AM cron **and** when a user hits **Refresh quotes** (`POST /api/shares/refresh`) — fire-and-forget so the slow LLM pipeline never blocks the refresh. New usage features logged: `shares_observation`, `shares_observation_review`, `shares_observation_final`.
+
+---
+
 ## 2026-06-25 (4)
 
 **Feature:** Shares — daily portfolio observation agent.

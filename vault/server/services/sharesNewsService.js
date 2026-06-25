@@ -438,6 +438,69 @@ Produce a daily briefing covering:
 - Keep the full briefing under 400 words.
 - Format the briefing in clean Markdown, using the five sections above as headings.`;
 
+// Stage 2 — a second model reflects on and augments the primary draft.
+const OBSERVATION_REVIEW_SYSTEM_PROMPT = `You are a senior markets analyst reviewing a colleague's draft portfolio observation before it is sent to the portfolio owner.
+
+Reflect on the draft critically against the source data:
+- Correct any number that does not match the data.
+- Fill genuine gaps: significant moves (>2%) the draft missed, sector context, or directly relevant news.
+- Remove filler, vague claims, or anything not supported by the provided data.
+- Sharpen the observations so they are specific and useful.
+
+Return an improved version of the FULL briefing in the same five-section Markdown structure (Portfolio Movement, Sector Pulse, News That Matters, Watch List, One Liner). Follow the same rules: reference real numbers, observations only (no buy/sell advice), flag significant moves with no news explanation, under 400 words. Do NOT invent data that is not present in the inputs. Return only the briefing.`;
+
+// Stage 3 — the primary model does a final review and produces what gets emailed.
+const OBSERVATION_FINAL_SYSTEM_PROMPT = `You are the lead analyst doing the final review of a portfolio observation before it is emailed to the owner. You are given the source data, the original draft, and a reviewer's revised version.
+
+Produce the FINAL briefing:
+- Keep the strongest, best-supported observations from either version.
+- Verify every number against the source data; drop or fix anything unsupported.
+- Keep the five-section Markdown structure and stay under 400 words.
+- Observations only — no buy/sell recommendations.
+
+Return ONLY the final briefing, ready to send.`;
+
+function pickSecondaryModel(tiers, primaryModel) {
+  const candidates = [tiers.gemini, tiers.light, tiers.deepseek, tiers.standard].filter(Boolean);
+  return candidates.find((m) => m && m !== primaryModel) || primaryModel;
+}
+
+function buildReflectionPrompt(dataPrompt, draft) {
+  return [
+    'Source data the briefing must be based on:',
+    '<DATA>',
+    dataPrompt,
+    '</DATA>',
+    '',
+    'Draft briefing to review:',
+    '<DRAFT>',
+    draft,
+    '</DRAFT>',
+    '',
+    'Reflect, correct, and augment per your instructions. Return the improved full briefing only.',
+  ].join('\n');
+}
+
+function buildFinalPrompt(dataPrompt, draft, revised) {
+  return [
+    'Source data:',
+    '<DATA>',
+    dataPrompt,
+    '</DATA>',
+    '',
+    'Original draft:',
+    '<DRAFT>',
+    draft,
+    '</DRAFT>',
+    "Reviewer's revised version:",
+    '<REVISED>',
+    revised,
+    '</REVISED>',
+    '',
+    'Produce the final briefing for emailing. Return only the final briefing.',
+  ].join('\n');
+}
+
 function round2(n) {
   const v = Number(n);
   return Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
@@ -555,18 +618,49 @@ async function generateObservation(userId) {
   const userPrompt = buildObservationPrompt({ portfolio, priceData, newsItems, nasdaqPct, soxPct, asxPct });
 
   const tiers = await getModelsForUser(userId);
-  const modelId = tiers.standard || tiers.light || tiers.gemini;
-  if (!modelId) throw new Error('No model configured for user — check vault_models in Settings');
+  const primaryModel = tiers.standard || tiers.light || tiers.gemini;
+  if (!primaryModel) throw new Error('No model configured for user — check vault_models in Settings');
+  const secondaryModel = pickSecondaryModel(tiers, primaryModel);
 
-  const result = await callModel(modelId, userPrompt, {
+  // Stage 1 — primary draft.
+  const draftRes = await callModel(primaryModel, userPrompt, {
     maxTokens: 1200,
     system: OBSERVATION_SYSTEM_PROMPT,
     returnUsage: true,
   });
-  logUsage({ userId, model: modelId, inputTokens: result.inputTokens, outputTokens: result.outputTokens, feature: 'shares_observation' });
+  logUsage({ userId, model: primaryModel, inputTokens: draftRes.inputTokens, outputTokens: draftRes.outputTokens, feature: 'shares_observation' });
+  const draft = (draftRes.text || '').trim();
+  if (!draft) throw new Error('Observation agent returned empty output');
 
-  const text = (result.text || '').trim();
-  if (!text) throw new Error('Observation agent returned empty output');
+  // Stage 2 — secondary model reflects/augments (fail-open: keep the draft on error).
+  let revised = draft;
+  try {
+    const revRes = await callModel(secondaryModel, buildReflectionPrompt(userPrompt, draft), {
+      maxTokens: 1400,
+      system: OBSERVATION_REVIEW_SYSTEM_PROMPT,
+      returnUsage: true,
+    });
+    logUsage({ userId, model: secondaryModel, inputTokens: revRes.inputTokens, outputTokens: revRes.outputTokens, feature: 'shares_observation_review' });
+    const t = (revRes.text || '').trim();
+    if (t) revised = t;
+  } catch (err) {
+    console.warn(`[sharesNews] observation secondary pass failed for user ${userId}:`, err.message);
+  }
+
+  // Stage 3 — primary model final review (fail-open: keep the revised text on error).
+  let text = revised;
+  try {
+    const finRes = await callModel(primaryModel, buildFinalPrompt(userPrompt, draft, revised), {
+      maxTokens: 1200,
+      system: OBSERVATION_FINAL_SYSTEM_PROMPT,
+      returnUsage: true,
+    });
+    logUsage({ userId, model: primaryModel, inputTokens: finRes.inputTokens, outputTokens: finRes.outputTokens, feature: 'shares_observation_final' });
+    const t = (finRes.text || '').trim();
+    if (t) text = t;
+  } catch (err) {
+    console.warn(`[sharesNews] observation final pass failed for user ${userId}:`, err.message);
+  }
 
   // One observation per user per day — replace any existing for today.
   await pool.query(
