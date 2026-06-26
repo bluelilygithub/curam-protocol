@@ -4,6 +4,7 @@
     "my-wp-theme-builder/createApp.js",
     "my-wp-theme-builder/routes",
     "my-wp-theme-builder/utils",
+    "my-wp-theme-builder/prompts",
     "my-wp-theme-builder/server.js"
   ],
   "ext": "js",
