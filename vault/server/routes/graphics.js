@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { randomUUID } = require('crypto');
+const sharp = require('sharp');
 const { runtimeConfig } = require('../config/runtime');
 const { pool } = require('../db');
 const { getVaultModelsConfigForUser } = require('../services/modelResolver');
@@ -24,6 +25,17 @@ const DEFAULT_REPLICATE_UPSCALE_MODEL = 'philz1337x/clarity-pro-upscaler';
 const HOSTED_UPSCALE_MODELS = [
   { id: 'nightmareai/real-esrgan', label: 'Real-ESRGAN — faithful (no hallucination)', kind: 'faithful' },
   { id: 'philz1337x/clarity-pro-upscaler', label: 'Clarity Pro — enhanced (adds detail)', kind: 'enhanced' },
+];
+
+// Image format conversion (sharp / libvips, runs locally on the server — free).
+// `lossy` formats expose a quality control; `id` is the value passed to sharp.
+const CONVERT_FORMATS = [
+  { id: 'png', label: 'PNG', mime: 'image/png', ext: 'png', lossy: false },
+  { id: 'jpeg', label: 'JPG / JPEG', mime: 'image/jpeg', ext: 'jpg', lossy: true },
+  { id: 'webp', label: 'WebP', mime: 'image/webp', ext: 'webp', lossy: true },
+  { id: 'gif', label: 'GIF', mime: 'image/gif', ext: 'gif', lossy: false },
+  { id: 'avif', label: 'AVIF', mime: 'image/avif', ext: 'avif', lossy: true },
+  { id: 'tiff', label: 'TIFF', mime: 'image/tiff', ext: 'tiff', lossy: false },
 ];
 
 function comfyBaseUrl() {
@@ -1021,6 +1033,52 @@ router.post('/upscale', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+function clampQuality(value) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 90;
+  return Math.min(100, Math.max(1, n));
+}
+
+router.get('/convert/info', (req, res) => {
+  res.json({ formats: CONVERT_FORMATS });
+});
+
+router.post('/convert', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    const buffer = dataUrlToBuffer(imageDataUrl);
+    if (!buffer || !/^data:image\//i.test(imageDataUrl)) {
+      return res.status(400).json({ error: 'A valid image is required' });
+    }
+
+    const requested = String(req.body?.format || '').trim().toLowerCase();
+    const target = CONVERT_FORMATS.find((f) => f.id === requested || f.ext === requested || (requested === 'jpg' && f.id === 'jpeg'));
+    if (!target) {
+      return res.status(400).json({ error: `Unsupported target format. Choose one of: ${CONVERT_FORMATS.map((f) => f.id).join(', ')}` });
+    }
+
+    const quality = clampQuality(req.body?.quality);
+    const pipeline = sharp(buffer, { animated: true });
+    const options = target.lossy ? { quality } : {};
+    const outBuffer = await pipeline.toFormat(target.id, options).toBuffer();
+    const meta = await sharp(outBuffer).metadata().catch(() => null);
+
+    res.json({
+      ok: true,
+      format: target.id,
+      mime: target.mime,
+      ext: target.ext,
+      quality: target.lossy ? quality : null,
+      width: meta?.width || null,
+      height: meta?.height || null,
+      bytes: outBuffer.length,
+      imageDataUrl: `data:${target.mime};base64,${outBuffer.toString('base64')}`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Conversion failed' });
   }
 });
 

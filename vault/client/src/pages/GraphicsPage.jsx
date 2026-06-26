@@ -10,8 +10,24 @@ const STYLE_PRESETS = [
   { id: 'minimal', label: 'Minimal graphic', suffix: 'minimal vector-style graphic, simple shapes, clean background' },
 ];
 
+const CONVERT_FALLBACK_FORMATS = [
+  { id: 'png', label: 'PNG', ext: 'png', lossy: false },
+  { id: 'jpeg', label: 'JPG / JPEG', ext: 'jpg', lossy: true },
+  { id: 'webp', label: 'WebP', ext: 'webp', lossy: true },
+  { id: 'gif', label: 'GIF', ext: 'gif', lossy: false },
+  { id: 'avif', label: 'AVIF', ext: 'avif', lossy: true },
+  { id: 'tiff', label: 'TIFF', ext: 'tiff', lossy: false },
+];
+
+const MODES = [
+  { id: 'generate', label: 'Generate', icon: 'sparkles' },
+  { id: 'upscale', label: 'Upscale', icon: 'image' },
+  { id: 'convert', label: 'Convert', icon: 'refresh-cw' },
+];
+
 export default function GraphicsPage() {
   const getIcon = useIcon();
+  const [mode, setMode] = useState('generate');
   const [status, setStatus] = useState(null);
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('editorial');
@@ -36,6 +52,13 @@ export default function GraphicsPage() {
   const [upscaling, setUpscaling] = useState(false);
   const [upscaleResult, setUpscaleResult] = useState(null);
   const [upscaleError, setUpscaleError] = useState('');
+  const [convertFormats, setConvertFormats] = useState(CONVERT_FALLBACK_FORMATS);
+  const [convertSource, setConvertSource] = useState(null);
+  const [convertFormat, setConvertFormat] = useState('png');
+  const [convertQuality, setConvertQuality] = useState('90');
+  const [converting, setConverting] = useState(false);
+  const [convertResult, setConvertResult] = useState(null);
+  const [convertError, setConvertError] = useState('');
   const isHostedProvider = status?.hosted || (status?.provider && status.provider !== 'local-comfyui');
   const serviceLabel = isHostedProvider
     ? `${status?.provider || 'Hosted'} ready: ${status?.model || 'model not selected'}`
@@ -59,6 +82,12 @@ export default function GraphicsPage() {
           setUpscaleScale(String(info.scales[0]));
         }
         if (info?.model) setUpscaleModel(info.model);
+      })
+      .catch(() => {});
+    api.get('/api/graphics/convert/info')
+      .then(r => r.json())
+      .then(info => {
+        if (Array.isArray(info?.formats) && info.formats.length) setConvertFormats(info.formats);
       })
       .catch(() => {});
     loadGallery();
@@ -116,6 +145,62 @@ export default function GraphicsPage() {
     const a = document.createElement('a');
     a.href = upscaleResult.imageDataUrl;
     a.download = `upscaled-${upscaleResult.scale || ''}x-${Date.now()}.png`;
+    a.click();
+  };
+
+  const activeConvertFormat = convertFormats.find(f => f.id === convertFormat);
+
+  const formatBytes = (bytes) => {
+    if (!bytes && bytes !== 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+  };
+
+  const handleConvertFile = async (file) => {
+    if (!file) return;
+    setConvertError('');
+    setConvertResult(null);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setConvertSource({ imageDataUrl: dataUrl, name: file.name });
+    } catch {
+      setConvertError('Could not read that image file.');
+    }
+  };
+
+  const useResultForConvert = () => {
+    if (!result?.imageDataUrl) return;
+    setConvertError('');
+    setConvertResult(null);
+    setConvertSource({ imageDataUrl: result.imageDataUrl, name: 'current result' });
+  };
+
+  const runConvert = async () => {
+    if (!convertSource?.imageDataUrl) return;
+    setConverting(true);
+    setConvertError('');
+    try {
+      const res = await api.post('/api/graphics/convert', {
+        imageDataUrl: convertSource.imageDataUrl,
+        format: convertFormat,
+        quality: Number(convertQuality),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Conversion failed');
+      setConvertResult(data);
+    } catch (err) {
+      setConvertError(err.message || 'Conversion failed');
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  const downloadConverted = () => {
+    if (!convertResult?.imageDataUrl) return;
+    const a = document.createElement('a');
+    a.href = convertResult.imageDataUrl;
+    a.download = `converted-${Date.now()}.${convertResult.ext || 'img'}`;
     a.click();
   };
 
@@ -284,21 +369,44 @@ export default function GraphicsPage() {
             Graphics
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-            Generate local article and story support images from a prompt.
+            {mode === 'generate' && 'Generate local article and story support images from a prompt.'}
+            {mode === 'upscale' && 'Enlarge artwork and small images while preserving detail.'}
+            {mode === 'convert' && 'Convert an image to PNG, JPG, WebP, GIF, AVIF or TIFF.'}
           </p>
         </div>
-        <div
-          className="text-xs px-3 py-1.5 rounded-full border"
-          style={{
-            color: status?.ok ? '#047857' : '#b45309',
-            borderColor: status?.ok ? '#bbf7d0' : '#fde68a',
-            background: status?.ok ? '#ecfdf5' : '#fffbeb',
-          }}
-        >
-          {statusLabel}
-        </div>
+        {mode !== 'convert' && (
+          <div
+            className="text-xs px-3 py-1.5 rounded-full border"
+            style={{
+              color: status?.ok ? '#047857' : '#b45309',
+              borderColor: status?.ok ? '#bbf7d0' : '#fde68a',
+              background: status?.ok ? '#ecfdf5' : '#fffbeb',
+            }}
+          >
+            {statusLabel}
+          </div>
+        )}
       </div>
 
+      <div className="flex flex-wrap gap-2 mb-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        {MODES.map(m => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => setMode(m.id)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium -mb-px border-b-2 transition-colors"
+            style={{
+              color: mode === m.id ? 'var(--color-primary)' : 'var(--color-muted)',
+              borderColor: mode === m.id ? 'var(--color-primary)' : 'transparent',
+            }}
+          >
+            {getIcon(m.icon, { size: 15 })}
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'generate' && (
       <div className="grid lg:grid-cols-[1fr_420px] gap-6">
         <form onSubmit={generate} className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div>
@@ -472,8 +580,10 @@ export default function GraphicsPage() {
           </div>
         </div>
       </div>
+      )}
 
-      <section className="mt-8">
+      {mode === 'upscale' && (
+      <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Upscale</h2>
           <span className="text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -621,7 +731,133 @@ export default function GraphicsPage() {
           </div>
         </div>
       </section>
+      )}
 
+      {mode === 'convert' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Convert format</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Convert an image to another format — PNG, JPG, WebP, GIF, AVIF or TIFF. Pixels are preserved; only the container changes.
+            </p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={e => handleConvertFile(e.target.files?.[0])}
+                className="block w-full text-xs"
+                style={{ color: 'var(--color-text)' }}
+              />
+              {result?.imageDataUrl && (
+                <button
+                  type="button"
+                  onClick={useResultForConvert}
+                  className="mt-2 text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+                  style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
+                >
+                  Use current result
+                </button>
+              )}
+            </div>
+
+            {convertSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={convertSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+                <p className="text-[11px] mt-1 text-center" style={{ color: 'var(--color-muted)' }}>{convertSource.name}</p>
+              </div>
+            )}
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Convert to</label>
+                <select
+                  value={convertFormat}
+                  onChange={e => setConvertFormat(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border text-sm"
+                  style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                >
+                  {convertFormats.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+                </select>
+              </div>
+              {activeConvertFormat?.lossy && (
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Quality</label>
+                  <select
+                    value={convertQuality}
+                    onChange={e => setConvertQuality(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border text-sm"
+                    style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                  >
+                    <option value="100">Maximum (100)</option>
+                    <option value="90">High (90)</option>
+                    <option value="80">Balanced (80)</option>
+                    <option value="60">Smaller file (60)</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {convertError && (
+              <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>
+                {convertError}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={runConvert}
+              disabled={converting || !convertSource?.imageDataUrl}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              {converting ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('refresh-cw', { size: 15 })}
+              {converting ? 'Converting...' : 'Convert image'}
+            </button>
+          </div>
+
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Converted result</span>
+              {convertResult?.imageDataUrl && (
+                <button
+                  onClick={downloadConverted}
+                  className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+                  style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
+                >
+                  Download
+                </button>
+              )}
+            </div>
+            <div className="p-4">
+              {convertResult?.imageDataUrl ? (
+                <>
+                  <button type="button" onClick={() => setPreviewImage(convertResult)} className="block w-full">
+                    <img src={convertResult.imageDataUrl} alt="converted" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
+                  </button>
+                  <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
+                    {String(convertResult.format || '').toUpperCase()}
+                    {convertResult.width && convertResult.height ? ` · ${convertResult.width}×${convertResult.height}` : ''}
+                    {convertResult.quality != null ? ` · quality ${convertResult.quality}` : ''}
+                    {convertResult.bytes != null ? ` · ${formatBytes(convertResult.bytes)}` : ''}
+                  </p>
+                </>
+              ) : (
+                <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+                  Your converted image will appear here.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'generate' && (
       <section className="mt-8">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Gallery</h2>
@@ -662,6 +898,7 @@ export default function GraphicsPage() {
           </div>
         )}
       </section>
+      )}
 
       {restrictionWarning && !generating && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.55)' }}>

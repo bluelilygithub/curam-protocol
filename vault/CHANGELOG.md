@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-27
+
+**Feature:** Graphics — image format converter + three-function tabbed layout.
+
+The Graphics page is redesigned around three tabs — **Generate**, **Upscale**, and **Convert** — so each tool has its own focused panel instead of stacking vertically. The new Convert tool takes any uploaded image (or the current generated/upscaled result) and re-encodes it to PNG, JPG/JPEG, WebP, GIF, AVIF or TIFF, with a quality control for the lossy formats. Conversion runs locally on the server via `sharp`/libvips (no external API, no cost) and the result panel reports the output format, dimensions and file size. Backend adds `GET /api/graphics/convert/info` and `POST /api/graphics/convert`, validating the target format against an allowlist.
+
+---
+
 ## 2026-06-26 (3)
 
 **Feature:** Graphics — in-app upscale model picker.
