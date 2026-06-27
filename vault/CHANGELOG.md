@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-27 (11)
+
+**Improvement:** Graphics — move Upscale from Create to Optimise.
+
+Upscale needs an existing image and enhances it (rather than creating a new one from a prompt), so it now sits in the **Optimise** group alongside Convert and Compress. **Create** now holds just Generate. Docs updated to match.
+
+---
+
 ## 2026-06-27 (10)
 
 **Improvement:** Graphics — sidebar UX refinements + tools documentation.

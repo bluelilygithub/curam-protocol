@@ -26,8 +26,8 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 
 | Group | Tools |
 |---|---|
-| **Create** | Generate, Upscale |
-| **Optimise** | Convert, Compress |
+| **Create** | Generate |
+| **Optimise** | Upscale, Convert, Compress |
 | **Edit** | Crop/Resize, Canvas Extend, Annotate, Effects, Adjust, Watermark, Collage |
 | **Analyse** | Picker, Palette, Extract Text, Image Diff |
 | **Privacy** | Background, Recolor, Redact, Metadata |
@@ -39,10 +39,10 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 ### Create
 
 - **Generate** — text-to-image with style presets and size options. Local ComfyUI or hosted Replicate; per-image cost/token tracking. `POST /api/graphics/generate` (+ gallery routes).
-- **Upscale** — enlarge artwork/small images. Model picker for faithful (Real-ESRGAN) vs enhanced (Clarity Pro), with fidelity control and cost display. Hosted models are whitelist-validated. `GET /api/graphics/upscale/info`, `POST /api/graphics/upscale`.
 
 ### Optimise
 
+- **Upscale** — enlarge artwork/small images. Model picker for faithful (Real-ESRGAN) vs enhanced (Clarity Pro), with fidelity control and cost display. Hosted models are whitelist-validated. `GET /api/graphics/upscale/info`, `POST /api/graphics/upscale`. (The one hosted/paid tool in this otherwise-local group.)
 - **Convert** — change format between PNG, JPG, WebP, GIF, AVIF, TIFF, with a quality slider for lossy formats. `GET /api/graphics/convert/info`, `POST /api/graphics/convert`.
 - **Compress** — batch re-encode at a chosen quality keeping each file's format; shows per-file and total savings, and never returns a larger file. `POST /api/graphics/compress`.
 

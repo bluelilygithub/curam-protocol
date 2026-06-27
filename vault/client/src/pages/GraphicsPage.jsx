@@ -129,8 +129,8 @@ const MODES = [
 ];
 
 const MODE_GROUPS = [
-  { label: 'Create', ids: ['generate', 'upscale'] },
-  { label: 'Optimise', ids: ['convert', 'compress'] },
+  { label: 'Create', ids: ['generate'] },
+  { label: 'Optimise', ids: ['upscale', 'convert', 'compress'] },
   { label: 'Edit', ids: ['cropresize', 'extend', 'annotate', 'effects', 'adjust', 'watermark', 'collage'] },
   { label: 'Analyse', ids: ['picker', 'palette', 'ocr', 'diff'] },
   { label: 'Privacy', ids: ['background', 'recolor', 'redact', 'metadata'] },
