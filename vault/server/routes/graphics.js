@@ -1256,6 +1256,11 @@ router.post('/background', async (req, res) => {
     if (bgRaw !== 'transparent' && !bgColor) {
       return res.status(400).json({ error: 'Background must be "transparent" or a hex colour like #ffffff' });
     }
+    const bgImageDataUrl = String(req.body?.backgroundImageDataUrl || '');
+    const bgImageBuffer = bgImageDataUrl ? dataUrlToBuffer(bgImageDataUrl) : null;
+    if (bgImageDataUrl && !bgImageBuffer) {
+      return res.status(400).json({ error: 'The background image is not a valid image' });
+    }
 
     let cutoutBuffer;
     let provider;
@@ -1272,16 +1277,27 @@ router.post('/background', async (req, res) => {
       logImageUsage({ userId: req.user.id, model: `replicate:${result.model}`, feature: 'graphics_background', costUsd: cost.usd });
     }
 
-    const pipeline = sharp(cutoutBuffer);
-    const outBuffer = bgColor
-      ? await pipeline.flatten({ background: { r: bgColor.r, g: bgColor.g, b: bgColor.b } }).png().toBuffer()
-      : await pipeline.png().toBuffer();
+    let outBuffer;
+    if (bgImageBuffer) {
+      // Composite the transparent cut-out over a supplied image, scaled to cover.
+      const cm = await sharp(cutoutBuffer).metadata();
+      const resizedBg = await sharp(bgImageBuffer)
+        .rotate()
+        .resize(cm.width, cm.height, { fit: 'cover', position: 'centre' })
+        .toBuffer();
+      const cutoutPng = await sharp(cutoutBuffer).png().toBuffer();
+      outBuffer = await sharp(resizedBg).composite([{ input: cutoutPng }]).png().toBuffer();
+    } else if (bgColor) {
+      outBuffer = await sharp(cutoutBuffer).flatten({ background: { r: bgColor.r, g: bgColor.g, b: bgColor.b } }).png().toBuffer();
+    } else {
+      outBuffer = await sharp(cutoutBuffer).png().toBuffer();
+    }
     const meta = await sharp(outBuffer).metadata().catch(() => null);
 
     res.json({
       ok: true,
       provider,
-      background: bgColor ? bgColor.hex : 'transparent',
+      background: bgImageBuffer ? 'image' : (bgColor ? bgColor.hex : 'transparent'),
       width: meta?.width || null,
       height: meta?.height || null,
       bytes: outBuffer.length,

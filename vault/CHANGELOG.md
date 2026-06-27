@@ -4,6 +4,14 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-27 (15)
+
+**Improvement:** Graphics — Background tool can replace with an image; clearer button.
+
+The Background tool now offers a third mode, **Image**, that composites the AI cut-out over a chosen background photo (scaled to cover the subject) via an optional `backgroundImageDataUrl` on `/api/graphics/background`. The action button is now context-aware: it reads **"Remove background"** only for the transparent option and **"Update background"** for solid colour or image. Also renamed the **Privacy** sidebar group to **Retouch & Privacy**, since Background and Recolour aren't privacy tools.
+
+---
+
 ## 2026-06-27 (14)
 
 **Feature:** Graphics — export panel, size presets, and a favicon generator.

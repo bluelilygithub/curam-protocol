@@ -30,7 +30,7 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 | **Optimise** | Upscale, Convert, Compress, Favicon / Icons |
 | **Edit** | Crop/Resize, Canvas Extend, Annotate, Effects, Adjust, Watermark, Collage |
 | **Analyse** | Picker, Palette, Extract Text, Image Diff |
-| **Privacy** | Background, Recolor, Redact, Metadata |
+| **Retouch & Privacy** | Background, Recolor, Redact, Metadata |
 
 ---
 
@@ -64,9 +64,9 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 - **Extract Text (OCR)** — read text from screenshots/scans/receipts via `tesseract.js` (lazy-loaded; language model downloads once on first use). Progress readout, editable result, copy/.txt download; English, French, Spanish, German, Italian, Portuguese.
 - **Image Diff** — highlight pixel differences between two images in red over a faded base, with an adjustable sensitivity threshold and a "% differ" stat. `POST /api/graphics/diff`.
 
-### Privacy
+### Retouch & Privacy
 
-- **Background** — one-click AI cut-out, leaving the subject transparent or flattened onto a solid colour. Local via the self-contained `@imgly/background-removal-node` ONNX model; production via a Replicate model. `POST /api/graphics/background`.
+- **Background** — one-click AI cut-out, leaving the subject transparent, flattened onto a solid colour, or composited over a **chosen background image** (scaled to cover). The action button reads "Remove background" for transparent and "Update background" for colour/image. Local via the self-contained `@imgly/background-removal-node` ONNX model; production via a Replicate model. `POST /api/graphics/background` (optional `backgroundImageDataUrl`).
 - **Recolor** — change the colour of a specific item via a zoomable eyedropper (loupe, drag-to-pan, averaged sampling), tolerance, and "match colour" vs "preserve shading" modes. `POST /api/graphics/recolor`.
 - **Redact** — drag boxes over faces, plates or sensitive text and pixelate or blur them. Browser-only; live updates, undo/clear, PNG export.
 - **Metadata** — strip EXIF, GPS, camera info, timestamps and colour profiles, reporting what was removed (EXIF orientation is baked in first). `POST /api/graphics/strip-metadata`.

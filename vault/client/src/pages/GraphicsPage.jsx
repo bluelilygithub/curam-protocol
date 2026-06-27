@@ -162,7 +162,7 @@ const MODE_GROUPS = [
   { label: 'Optimise', ids: ['upscale', 'convert', 'compress', 'favicon'] },
   { label: 'Edit', ids: ['cropresize', 'extend', 'annotate', 'effects', 'adjust', 'watermark', 'collage'] },
   { label: 'Analyse', ids: ['picker', 'palette', 'ocr', 'diff'] },
-  { label: 'Privacy', ids: ['background', 'recolor', 'redact', 'metadata'] },
+  { label: 'Retouch & Privacy', ids: ['background', 'recolor', 'redact', 'metadata'] },
 ];
 
 // Re-encode helpers used by the export panel (all client-side via canvas).
@@ -413,6 +413,7 @@ export default function GraphicsPage() {
   const [bgSource, setBgSource] = useState(null);
   const [bgMode, setBgMode] = useState('transparent');
   const [bgColor, setBgColor] = useState('#ffffff');
+  const [bgImage, setBgImage] = useState(null);
   const [bgProcessing, setBgProcessing] = useState(false);
   const [bgResult, setBgResult] = useState(null);
   const [bgError, setBgError] = useState('');
@@ -793,18 +794,21 @@ export default function GraphicsPage() {
 
   const runRemoveBg = async () => {
     if (!bgSource?.imageDataUrl) return;
+    if (bgMode === 'image' && !bgImage?.imageDataUrl) { setBgError('Choose a background image'); return; }
     setBgProcessing(true);
     setBgError('');
     try {
-      const res = await api.post('/api/graphics/background', {
+      const body = {
         imageDataUrl: bgSource.imageDataUrl,
         background: bgMode === 'color' ? bgColor : 'transparent',
-      });
+      };
+      if (bgMode === 'image') body.backgroundImageDataUrl = bgImage.imageDataUrl;
+      const res = await api.post('/api/graphics/background', body);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Background removal failed');
+      if (!res.ok) throw new Error(data.error || 'Background change failed');
       setBgResult(data);
     } catch (err) {
-      setBgError(err.message || 'Background removal failed');
+      setBgError(err.message || 'Background change failed');
     } finally {
       setBgProcessing(false);
     }
@@ -2858,6 +2862,7 @@ export default function GraphicsPage() {
                 >
                   <option value="transparent">Transparent</option>
                   <option value="color">Solid colour</option>
+                  <option value="image">Image</option>
                 </select>
                 {bgMode === 'color' && (
                   <>
@@ -2872,6 +2877,17 @@ export default function GraphicsPage() {
                   </>
                 )}
               </div>
+              {bgMode === 'image' && (
+                <div className="mt-2 space-y-2">
+                  <input type="file" accept="image/*" onChange={e => { setBgError(''); loadImageInto(setBgImage)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+                  {bgImage?.imageDataUrl && (
+                    <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                      <img src={bgImage.imageDataUrl} alt="background" className="max-h-28 mx-auto rounded-lg" />
+                      <p className="text-[11px] mt-1 text-center" style={{ color: 'var(--color-muted)' }}>Background — scaled to cover the subject</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {bgError && (
@@ -2885,8 +2901,10 @@ export default function GraphicsPage() {
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
               style={{ background: 'var(--color-primary)' }}
             >
-              {bgProcessing ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('scissors', { size: 15 })}
-              {bgProcessing ? 'Removing...' : 'Remove background'}
+              {bgProcessing ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon(bgMode === 'transparent' ? 'scissors' : 'refresh-cw', { size: 15 })}
+              {bgProcessing
+                ? (bgMode === 'transparent' ? 'Removing...' : 'Updating...')
+                : (bgMode === 'transparent' ? 'Remove background' : 'Update background')}
             </button>
           </div>
 
