@@ -1,6 +1,6 @@
 # Graphics Tools
 
-The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles twenty tools behind a grouped, searchable left sidebar; the active tool fills the main area.
+The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles twenty-two tools behind a grouped, searchable left sidebar; the active tool fills the main area.
 
 **Frontend:** `vault/client/src/pages/GraphicsPage.jsx`
 **Backend:** `vault/server/routes/graphics.js` (mounted at `/api/graphics`)
@@ -22,12 +22,13 @@ Most tools run **locally and free** via [`sharp`](https://sharp.pixelplumbing.co
 
 ## Sidebar
 
-Tools are grouped into five collapsible, single-open ("accordion") categories. **Create** is open on load; opening another category closes the previous one. A search box filters tools by name across all groups (temporarily revealing matches), headings use the primary accent colour, tools highlight on hover, and the active tool is filled.
+Tools are grouped into six collapsible, single-open ("accordion") categories. **Create** is open on load; opening another category closes the previous one. A search box filters tools by name across all groups (temporarily revealing matches), headings use the primary accent colour, tools highlight on hover, and the active tool is filled.
 
 | Group | Tools |
 |---|---|
 | **Create** | Generate |
-| **Optimise** | Upscale, Convert, Compress, Favicon / Icons |
+| **Optimise** | Upscale, Convert, Compress |
+| **Clipart & Icons** | Favicon / Icons, Vectorize (SVG), AI Icon Library |
 | **Edit** | Crop/Resize, Canvas Extend, Annotate, Effects, Adjust, Watermark, Collage |
 | **Analyse** | Picker, Palette, Extract Text, Image Diff |
 | **Retouch & Privacy** | Background, Recolor, Redact, Metadata |
@@ -45,7 +46,14 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 - **Upscale** — enlarge artwork/small images. Model picker for faithful (Real-ESRGAN) vs enhanced (Clarity Pro), with fidelity control and cost display. Hosted models are whitelist-validated. `GET /api/graphics/upscale/info`, `POST /api/graphics/upscale`. (The one hosted/paid tool in this otherwise-local group.)
 - **Convert** — change format between PNG, JPG, WebP, GIF, AVIF, TIFF, with a quality slider for lossy formats. `GET /api/graphics/convert/info`, `POST /api/graphics/convert`.
 - **Compress** — batch re-encode at a chosen quality keeping each file's format; shows per-file and total savings, and never returns a larger file. `POST /api/graphics/compress`.
+
+### Clipart & Icons
+
 - **Favicon / Icons** — turn one image into a ZIP of square PNG icons (16/32/48/64/180/192/256/512 px) plus an `apple-touch-icon`, a `site.webmanifest`, and a paste-ready `<head>` snippet. `POST /api/graphics/favicon` (sharp + archiver).
+- **Vectorize (SVG)** — trace a raster image into scalable SVG paths with adjustable colour count (2–64) and detail (smooth/medium/detailed). Best for logos, icons and flat clipart; photos become posterised. Images are capped to 700px before tracing for speed. `POST /api/graphics/vectorize` (sharp-decoded pixels → imagetracerjs).
+- **AI Icon Library** — generate a cohesive set of custom SVG icons from a subject. Step 1 fetches a curated grid of real reference icons from Lucide (`lucide-react`) and Font Awesome (CDN), labelled by source and multi-selectable. Step 2 sets count (5–20), colour, stroke weight (super thin/thin/regular/bold), fill style (outlined/filled/duotone), corners and detail. Step 3 shows the generated icons (~80px) with multi-select plus per-icon and bulk `.svg` downloads. You can **remove** unwanted icons (hover → ×) and then **refine & add more**: a feedback box plus an opt-in **Generate additional icons** tickbox (with a count) generates additional icons matching the kept set's style (kept names are passed so duplicates are avoided) and appends them. The generation prompt casts the model as a senior icon designer applying explicit craft principles (non-literal concepts, fewest paths, deliberate negative space, consistent optical weight). `POST /api/graphics/icon-references` and `POST /api/graphics/icon-generate` (accepts `existing` + `feedback`; Anthropic `claude-sonnet-4-6`; generated SVG is sanitised server-side). Model overridable via `GRAPHICS_ICON_MODEL`.
+
+Every Graphics tool shows a **processing modal** (spinner + tool-specific label) while its operation runs, via the shared `ProcessingModal` component.
 
 ### Edit
 
@@ -90,6 +98,7 @@ These work across the image→image tools (Convert, Upscale, Effects, Adjust, Wa
 - **`@imgly/background-removal-node`** powers local background removal; its `onnxruntime-node` native binaries must be present.
 - **`tesseract.js`** (client) powers OCR.
 - **`archiver`** bundles the favicon icon set into a ZIP server-side.
+- **`imagetracerjs`** powers raster→SVG vectorisation (fed sharp-decoded pixels).
 - The Express JSON body limit is raised to `30mb` to accommodate multi-image collage uploads.
 - Optional env: `REPLICATE_BG_MODEL`, `REPLICATE_BG_COST_USD` (hosted background removal).
 

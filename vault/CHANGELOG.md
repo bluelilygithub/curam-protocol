@@ -4,6 +4,41 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-27 (19)
+
+**Improvement:** AI Icon Library — Super thin stroke, opt-in additions, designer-grade prompt.
+
+- New **Super thin** stroke-weight option (1px) alongside Thin / Regular / Bold.
+- The "add more" panel is now gated by a **Generate additional icons** tickbox — additional generation is opt-in rather than always defaulting to a minimum of one; the count selector only appears once ticked.
+- The icon-generation system prompt now casts the model as a **senior icon designer** with explicit craft principles (non-literal concepts, fewest paths, deliberate negative space, consistent optical weight, optical corrections, every path earns its place) for more designed-looking results.
+
+---
+
+## 2026-06-27 (18)
+
+**Feature:** Graphics — processing modal everywhere + icon set refinement.
+
+- **Processing modal across every tool** — a new non-dismissable `ProcessingModal` overlay (spinner + a tool-specific label like "Upscaling…", "Tracing to SVG…", "Generating icons…") now appears while any Graphics operation runs, so it's always clear work is in progress. Wired into all main-page busy states and the AI Icon Library.
+- **AI Icon Library refinement** — after the first batch you can **remove** individual icons (hover → ×), then **refine and add more**: a feedback box ("what's missing / what to change") plus an "add N more" control. New icons are generated to match the existing set's style and theme (the kept icon names are sent so the model avoids duplicates) and are appended to the grid. Backed by extended `/api/graphics/icon-generate` params (`existing`, `feedback`).
+
+---
+
+## 2026-06-27 (17)
+
+**Feature:** Graphics — AI Icon Library generator.
+
+Adds an **AI Icon Library** tool (Clipart & Icons group) that generates a cohesive set of custom SVG icons with Claude (`claude-sonnet-4-6`). Three-step workflow: (1) type a **subject** and get a curated grid of real reference icons from **Lucide** (`lucide-react`) and **Font Awesome** (CDN), each labelled with its source and multi-selectable; (2) tune **count** (5–20), **colour**, **stroke weight**, **fill style** (outlined/filled/duotone), **corners** and **detail level**; (3) browse the generated icons at ~80px, multi-select, and **Download selected** or **Download all** as individual `.svg` files. Backed by two new routes — `/api/graphics/icon-references` (suggests existing icon names for a subject) and `/api/graphics/icon-generate` (returns a JSON array of `{name, svg}` objects). All model-supplied SVG is sanitised server-side (scripts, event handlers and `javascript:` URLs stripped) before it reaches the browser.
+
+---
+
+## 2026-06-27 (16)
+
+**Feature:** Graphics — Vectorize (SVG) tool + "Clipart & Icons" group.
+
+Adds a **Vectorize (SVG)** tool that traces a raster image into scalable SVG paths, with a colour-count slider (2–64) and a smooth/medium/detailed control — ideal for logos, icons and flat clipart. Backed by a new `/api/graphics/vectorize` route that decodes pixels with sharp (capping the image at 700px for speed) and traces them with `imagetracerjs`; the result previews on a transparency checkerboard and downloads as `.svg`. Also adds a new **Clipart & Icons** sidebar group now holding Favicon / Icons and Vectorize (SVG) (Favicon moved out of Optimise).
+
+---
+
 ## 2026-06-27 (15)
 
 **Improvement:** Graphics — Background tool can replace with an image; clearer button.

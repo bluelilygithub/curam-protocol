@@ -108,6 +108,8 @@ const semanticMap = {
   swatch: { lucide: 'SwatchBook' },
   frame: { lucide: 'Frame' },
   'app-window': { lucide: 'AppWindow' },
+  shapes: { lucide: 'Shapes' },
+  'layout-grid': { lucide: 'LayoutGrid' },
 };
 
 const IconContext = createContext(null);

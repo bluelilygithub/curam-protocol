@@ -49,6 +49,9 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-muted); }
 
+/* Inline SVG icons (AI icon generator) fill their box */
+.icon-svg-box svg { width: 100%; height: 100%; display: block; }
+
 /* Textarea auto-resize */
 textarea { overflow-y: hidden; }
 textarea:focus { overflow-y: auto; }

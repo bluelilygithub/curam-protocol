@@ -5,8 +5,55 @@ const router = express.Router();
 const { randomUUID } = require('crypto');
 const sharp = require('sharp');
 const archiver = require('archiver');
+const ImageTracer = require('imagetracerjs');
 const { runtimeConfig } = require('../config/runtime');
+const { callModel } = require('../services/callModel');
 const { pool } = require('../db');
+
+// AI SVG icon generator model (Anthropic). Overridable via env.
+const ICON_MODEL = process.env.GRAPHICS_ICON_MODEL || 'claude-sonnet-4-6';
+
+// Parse model output that should be JSON but may be wrapped in prose / fences.
+function safeJsonParse(text) {
+  if (!text) return null;
+  let s = String(text).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  try { return JSON.parse(s); } catch { /* fall through */ }
+  const firstArr = s.indexOf('[');
+  const firstObj = s.indexOf('{');
+  let start = -1;
+  if (firstArr >= 0 && (firstObj < 0 || firstArr < firstObj)) start = firstArr;
+  else start = firstObj;
+  if (start < 0) return null;
+  const end = Math.max(s.lastIndexOf(']'), s.lastIndexOf('}'));
+  if (end <= start) return null;
+  try { return JSON.parse(s.slice(start, end + 1)); } catch { return null; }
+}
+
+function pickOneOf(value, allowed, fallback) {
+  return allowed.includes(value) ? value : fallback;
+}
+
+function sanitizeIconName(name, index) {
+  const cleaned = String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return cleaned || `icon-${index + 1}`;
+}
+
+// Strip anything unsafe from model-supplied SVG before it reaches the browser.
+function sanitizeSvgMarkup(svg) {
+  let s = String(svg || '');
+  s = s.replace(/<\?xml[\s\S]*?\?>/gi, '');
+  s = s.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
+  s = s.replace(/<script[\s\S]*?<\/script>/gi, '');
+  s = s.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
+  s = s.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
+  s = s.replace(/\son\w+\s*=\s*'[^']*'/gi, '');
+  s = s.replace(/(href|xlink:href)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '');
+  const match = s.match(/<svg[\s\S]*<\/svg>/i);
+  return match ? match[0].trim() : '';
+}
 const { getVaultModelsConfigForUser } = require('../services/modelResolver');
 
 const DEFAULT_COMFY_URL = 'http://127.0.0.1:8188';
@@ -1528,6 +1575,153 @@ router.post('/favicon', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Favicon generation failed' });
+  }
+});
+
+// Raster -> SVG vectorisation (tracing). Best for logos, icons and flat
+// clipart; photos become stylised. Uses imagetracerjs over sharp-decoded
+// pixels; the image is capped in size first so tracing stays fast.
+router.post('/vectorize', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    const buffer = dataUrlToBuffer(imageDataUrl);
+    if (!buffer || !/^data:image\//i.test(imageDataUrl)) {
+      return res.status(400).json({ error: 'A valid image is required' });
+    }
+    const colors = clampInt(req.body?.colors, 2, 64, 16);
+    const detail = String(req.body?.detail || 'medium');
+    const { data, info } = await sharp(buffer)
+      .rotate()
+      .resize(700, 700, { fit: 'inside', withoutEnlargement: true })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const imgd = {
+      width: info.width,
+      height: info.height,
+      data: new Uint8ClampedArray(data.buffer, data.byteOffset, data.length),
+    };
+    const presets = {
+      smooth: { ltres: 1, qtres: 1, pathomit: 8, blurradius: 2, blurdelta: 20 },
+      medium: { ltres: 1, qtres: 1, pathomit: 8 },
+      detailed: { ltres: 0.5, qtres: 0.5, pathomit: 1 },
+    };
+    const opts = { numberofcolors: colors, ...(presets[detail] || presets.medium) };
+    const svg = ImageTracer.imagedataToSVG(imgd, opts);
+    const base64 = Buffer.from(svg, 'utf8').toString('base64');
+    res.json({
+      ok: true,
+      width: info.width,
+      height: info.height,
+      colors,
+      bytes: Buffer.byteLength(svg, 'utf8'),
+      svg,
+      imageDataUrl: `data:image/svg+xml;base64,${base64}`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Vectorize failed' });
+  }
+});
+
+// AI icon generator — step 1: suggest relevant reference icons for a subject.
+router.post('/icon-references', async (req, res) => {
+  try {
+    const subject = String(req.body?.subject || '').trim().slice(0, 80);
+    if (!subject) return res.status(400).json({ error: 'A subject is required' });
+    const system = 'You suggest names of icons that already exist in popular icon libraries. Respond with ONLY minified JSON, no markdown, no commentary.';
+    const prompt = `Suggest icons relevant to the subject "${subject}".
+Return JSON exactly like: {"lucide":["wallet","credit-card"],"fontawesome":["wallet","chart-line"]}
+- "lucide": 12 real lucide-react icon names in kebab-case that genuinely exist.
+- "fontawesome": 8 real Font Awesome 6 Free *solid* icon names (the bare name, no "fa-" prefix) that genuinely exist.
+No duplicates, no made-up names.`;
+    const text = await callModel(ICON_MODEL, prompt, { maxTokens: 600, system });
+    const parsed = safeJsonParse(text) || {};
+    const clean = (arr) => (Array.isArray(arr) ? arr.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim().toLowerCase().replace(/^fa-/, '')) : []);
+    res.json({
+      ok: true,
+      subject,
+      lucide: [...new Set(clean(parsed.lucide))].slice(0, 16),
+      fontawesome: [...new Set(clean(parsed.fontawesome))].slice(0, 16),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Icon suggestion failed' });
+  }
+});
+
+// AI icon generator — step 2: generate a cohesive SVG icon set.
+router.post('/icon-generate', async (req, res) => {
+  try {
+    const subject = String(req.body?.subject || '').trim().slice(0, 80);
+    if (!subject) return res.status(400).json({ error: 'A subject is required' });
+    const count = clampInt(req.body?.count, 5, 20, 10);
+    const parsedColor = parseHexColor(req.body?.color);
+    const color = parsedColor ? parsedColor.hex : '#111111';
+    const references = Array.isArray(req.body?.references)
+      ? req.body.references.filter((s) => typeof s === 'string').slice(0, 12)
+      : [];
+    const strokeWeight = pickOneOf(req.body?.strokeWeight, ['super-thin', 'thin', 'regular', 'bold'], 'regular');
+    const fillStyle = pickOneOf(req.body?.fillStyle, ['outlined', 'filled', 'duotone'], 'outlined');
+    const corners = pickOneOf(req.body?.corners, ['sharp', 'slightly-rounded', 'fully-rounded'], 'slightly-rounded');
+    const detail = pickOneOf(req.body?.detail, ['simple', 'medium', 'detailed'], 'medium');
+    const existing = Array.isArray(req.body?.existing)
+      ? req.body.existing.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()).slice(0, 40)
+      : [];
+    const feedback = String(req.body?.feedback || '').trim().slice(0, 600);
+    const strokeMap = { 'super-thin': 1, thin: 1.5, regular: 2, bold: 3 };
+    const linejoin = corners === 'sharp' ? 'miter' : 'round';
+
+    let styleRule;
+    if (fillStyle === 'outlined') {
+      styleRule = `Outlined: stroke="${color}", fill="none", stroke-width="${strokeMap[strokeWeight]}", stroke-linecap="${corners === 'sharp' ? 'butt' : 'round'}", stroke-linejoin="${linejoin}".`;
+    } else if (fillStyle === 'filled') {
+      styleRule = `Filled: solid fill="${color}", no stroke.`;
+    } else {
+      styleRule = `Duotone: primary shapes fill="${color}"; secondary shapes use the same colour at fill-opacity="0.35".`;
+    }
+
+    const continuation = existing.length
+      ? `\nThis is an addition to an EXISTING set. Already in the set (do NOT repeat or duplicate these): ${existing.join(', ')}.\nGenerate ${count} brand-new icons that match the same visual style, weight and theme as the existing set, and fill obvious gaps.`
+      : '';
+    const refinement = feedback
+      ? `\nUser refinement request — honour this closely: ${feedback}`
+      : '';
+
+    const system = `You are a senior icon designer at a world-class design studio. Every icon you create is a small act of visual craft, not a task to complete.
+Before drawing each icon, ask yourself: what is the most elegant, non-literal way to represent this concept? Avoid the first obvious interpretation. A bank doesn't need columns. A wallet doesn't need stitching.
+Apply these principles to every icon:
+- Use the fewest paths necessary. If a shape can be suggested rather than fully drawn, prefer suggestion.
+- Treat negative space as deliberately as the paths themselves. The space inside and around the icon is part of the design.
+- Ensure consistent optical weight across the set. Every icon must feel like it belongs to the same family — same level of abstraction, same visual tension, same relationship between form and space.
+- Make optical corrections where needed. Circles should appear visually equal to squares, not mathematically equal.
+- Every path must earn its place. If removing it doesn't break the meaning, remove it.
+Before finalising each icon, ask: does this look like it was designed, or does it look like it was generated? If you can't tell the difference, redesign it.
+Output ONLY raw JSON. No markdown, no code fences, no commentary.`;
+    const prompt = `Design a cohesive set of ${count} SVG icons for the subject "${subject}".
+Emulate the visual style of these reference icons: ${references.join(', ') || 'clean, modern line icons'}.${continuation}${refinement}
+Rules for EVERY icon:
+- Root <svg> with xmlns="http://www.w3.org/2000/svg" and viewBox="0 0 24 24" (no width/height).
+- ${styleRule}
+- Corner feel: ${corners.replace('-', ' ')}. Detail level: ${detail}.
+- Consistent visual weight, proportions and padding across the whole set.
+- Self-contained, valid SVG only: no <script>, no <image>, no external references, no <style> blocks.
+Return ONLY a JSON array of exactly ${count} objects:
+[{"name":"short-kebab-name","svg":"<svg ...>...</svg>"}]
+Names must be unique, lowercase, kebab-case, and describe the icon.`;
+
+    const maxTokens = Math.min(8000, 1500 + count * 380);
+    const result = await callModel(ICON_MODEL, prompt, { maxTokens, system, returnUsage: true });
+    const raw = typeof result === 'string' ? result : result.text;
+    const arr = safeJsonParse(raw);
+    if (!Array.isArray(arr)) throw new Error('The model did not return an icon set — try again');
+    const icons = arr
+      .map((o, i) => ({ name: sanitizeIconName(o?.name, i), svg: sanitizeSvgMarkup(o?.svg) }))
+      .filter((o) => o.svg)
+      .slice(0, count);
+    if (!icons.length) throw new Error('No valid icons were produced — try again');
+
+    res.json({ ok: true, subject, count: icons.length, color, icons });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Icon generation failed' });
   }
 });
 
