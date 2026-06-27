@@ -14,6 +14,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
     "@google/generative-ai": "^0.21.0",
+    "@imgly/background-removal-node": "^1.4.5",
     "@react-pdf/renderer": "^3.4.5",
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
@@ -34,8 +35,9 @@
     "react-force-graph-2d": "^1.29.1",
     "remove-markdown": "^0.6.3",
     "rss-parser": "^3.13.0",
-    "sharp": "^0.35.2",
+    "sharp": "^0.32.6",
     "sql.js": "^1.14.1",
+    "tesseract.js": "^7.0.0",
     "uuid": "^11.1.0",
     "xlsx": "^0.18.5"
   },

@@ -33,8 +33,8 @@ app.use(helmet({
   } : false,
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '30mb' }));
+app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
 // WP Theme Builder — mounted before Vault /api auth
 if (!process.env.THEME_BUILDER_MOUNT_PATH) {

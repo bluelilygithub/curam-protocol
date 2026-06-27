@@ -98,6 +98,15 @@ const semanticMap = {
   square: { lucide: 'Square' },
   library: { lucide: 'Library' },
   inbox: { lucide: 'InboxIcon' },
+  scissors: { lucide: 'Scissors' },
+  crop: { lucide: 'Crop' },
+  shield: { lucide: 'Shield' },
+  grid: { lucide: 'LayoutGrid' },
+  droplets: { lucide: 'Droplets' },
+  sliders: { lucide: 'SlidersHorizontal' },
+  type: { lucide: 'Type' },
+  swatch: { lucide: 'SwatchBook' },
+  frame: { lucide: 'Frame' },
 };
 
 const IconContext = createContext(null);

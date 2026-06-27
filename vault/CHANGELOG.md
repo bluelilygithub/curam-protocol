@@ -4,6 +4,86 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-27 (10)
+
+**Improvement:** Graphics — sidebar UX refinements + tools documentation.
+
+Polishes the grouped sidebar: a **search box** filters tools by name across all groups (temporarily revealing matches), the category headings are larger/bolder in the **primary accent colour** and act as **accordion** toggles (only one group open at a time — **Create** is open on load, opening another closes the previous), tools **highlight on hover**, and the tool list is **indented** under each heading with a guide line. Adds `docs/graphics-tools.md` documenting all nineteen tools, the local/hosted/browser split, the sidebar grouping, and the relevant API endpoints and dependencies.
+
+---
+
+## 2026-06-27 (9)
+
+**Feature:** Graphics — Annotate / Draw tool.
+
+Adds an **Annotate** tool to the Edit group for marking up screenshots and images. Four tools — **arrow**, **box**, freehand **pen**, and **text** labels — with a colour picker and a thickness/text-size slider. Drag on the image to draw, or (with the text tool) type a label and click to place it. Undo removes the last item, Clear resets, and Export flattens everything onto the image as a PNG. It's entirely client-side canvas work — nothing is uploaded — and strokes scale with image resolution so they look consistent. This leaves only Auto/Face blur from the earlier wishlist unbuilt.
+
+---
+
+## 2026-06-27 (8)
+
+**Feature:** Graphics — filters in Effects + a Canvas Extend tool.
+
+Adds the two remaining quick-win gaps. **Effects** gains four filters alongside the transforms: **grayscale**, **sepia** (sharp recomb matrix), **invert** (negate, alpha preserved), and **duotone** (luminance mapped between a chosen shadow and highlight colour). **Canvas Extend** is a new tool in the Edit group that adds padding *around* an image (the opposite of cropping) with linked or independent top/right/bottom/left amounts and a white, custom-colour or transparent fill (`POST /api/graphics/extend`, sharp `extend`). This also answers the standing questions: Adjust already covers sharpen and warm/cool temperature; with these additions Effects now covers invert and grayscale; and padding lives in Canvas Extend rather than Crop/Resize.
+
+---
+
+## 2026-06-27 (7)
+
+**Improvement:** Graphics — grouped sidebar navigation.
+
+Replaces the long horizontal tab bar (seventeen tools had outgrown it) with a labelled left sidebar grouped into Create (Generate, Upscale), Optimise (Convert, Compress), Edit (Crop/Resize, Effects, Adjust, Watermark, Collage), Analyse (Picker, Palette, Extract Text, Image Diff) and Privacy (Background, Recolor, Redact, Metadata). The active tool gets the full-width main area. The sidebar sticks while scrolling on desktop and collapses into a horizontal scroller on narrow screens. The page was widened to accommodate the two-column layout.
+
+---
+
+## 2026-06-27 (6)
+
+**Feature:** Graphics — adjust (filters), redact, OCR, and palette extractor (now seventeen tools).
+
+Fills the four most-requested gaps. **Adjust** is a darkroom panel: brightness, contrast, saturation, hue shift, sharpness, colour temperature (warm/cool) and vignette, applied server-side with sharp (`POST /api/graphics/adjust` — modulate for brightness/saturation/hue, linear for contrast, recomb for temperature, an SVG radial-gradient composite for the vignette). **Redact** lets you drag boxes over faces, plates or sensitive text and pixelate or blur them — fully in-browser canvas work (nothing is uploaded), with live updates when you switch mode/strength, undo/clear, and PNG export. **Extract Text (OCR)** reads text from screenshots, scans and receipts via `tesseract.js` (lazy-loaded as its own chunk; the language model downloads once on first use), with a progress readout, an editable result box, and copy/.txt download; English, French, Spanish, German, Italian and Portuguese are offered. **Palette** pulls the dominant colours from an image (client-side canvas quantisation) and lists 5–12 swatches with their HEX, RGB and rough share, each with copy buttons. New dependency: `tesseract.js` (client).
+
+---
+
+## 2026-06-27 (5b)
+
+**Improvement:** Graphics — interactive crop with a large draggable selection.
+
+Reworks the Crop tab from an automatic aspect-ratio crop (which had no visible selection or handles) into a proper interactive cropper. The image now shows in a large pane (up to 70vh) on a dark backdrop with a draggable/resizable selection box: dimmed surroundings, a bright border with rule-of-thirds guides, and clearly visible corner/edge handles. Drag inside to move, drag a handle to resize, optionally lock to an aspect ratio (corner-only handles enforce the ratio), with a live pixel-size readout and reset. The backend `POST /api/graphics/resize` now accepts an exact pixel `rect` and uses sharp's `extract` (EXIF orientation baked in first so the box matches what's displayed). Numeric resize is unchanged.
+
+---
+
+## 2026-06-27 (5)
+
+**Feature:** Graphics — effects, image diff, and colour picker (six new tools, grouped).
+
+Adds three more tabs to the Graphics page (now thirteen tools total). **Effects** groups the simple transforms into one panel — mirror/flip, rotate 90°/180°/270°, add a solid border (width + colour), round corners (PNG with transparent corners), and a configurable drop shadow (blur, X/Y offset, colour, opacity; exported as a transparent PNG). **Image Diff** compares two images and renders a difference map — differing pixels are highlighted in red over a faded copy of the first image (the second is scaled to match), with an adjustable sensitivity threshold and a "% of pixels differ" readout. **Picker** is a click-anywhere eyedropper with a 1–6x zoom + drag-to-pan canvas that reads any pixel and shows its HEX and RGB values with copy buttons. New endpoints: `POST /api/graphics/effect` and `/diff`; the picker runs entirely client-side. All three run locally and free.
+
+---
+
+## 2026-06-27 (4)
+
+**Feature:** Graphics — crop/resize, metadata removal, watermark, and collage tools.
+
+Adds four more local-only tabs to the Graphics page (now ten tools total). **Crop / Resize** does free resizing (with fit modes) or crops to social/print aspect-ratio presets using sharp's attention-based smart focal-point detection (or centre/top/bottom). **Metadata** strips EXIF, GPS, camera, timestamp, XMP/IPTC and ICC data before sharing — it bakes in the EXIF orientation first so the image isn't left mis-rotated, and reports what was removed. **Watermark** overlays text (colour, position, opacity) or an image watermark (scale, opacity), with optional tiling across the whole image. **Collage** arranges 2–9 images into a grid with configurable columns, spacing and background colour. New endpoints: `POST /api/graphics/resize`, `/strip-metadata`, `/watermark`, `/collage`. The JSON body limit was raised to 30mb to accommodate multi-image collage uploads.
+
+---
+
+## 2026-06-27 (3)
+
+**Feature:** Graphics — background removal, background colour, and item recolour.
+
+Adds two more tabs to the Graphics page. **Background** does a one-click AI cut-out of the foreground subject and either leaves the background transparent (PNG) or flattens it onto a chosen solid colour — locally via the self-contained `@imgly/background-removal-node` ONNX model (no ComfyUI needed), and in production via a Replicate background-remover model (`POST /api/graphics/background`). **Recolor** changes the colour of a specific item: sample the colour to change by clicking the image (canvas eyedropper with a hover magnifier loupe, a 1–6x zoom slider, and live hovered/selected colour swatches for precise picking), set a match tolerance, and pick a new colour; the server shifts the hue of matching pixels with a soft tolerance falloff to avoid hard edges (`POST /api/graphics/recolor`, runs locally via sharp). A **Replacement style** option chooses between *Match new colour* (shifts brightness toward the target so a dark item can become a light colour, keeping relative shading) and *Preserve original shading* (hue/saturation only). The picker supports a hover magnifier loupe, 1–6x zoom with drag-to-pan, and 3x3 averaged sampling for reliable colour selection. To avoid a duplicate-libvips conflict between our sharp and the one bundled with `@imgly`, the root `sharp` dependency is pinned to `^0.32.6` so a single libvips is shared. New optional env: `REPLICATE_BG_MODEL`, `REPLICATE_BG_COST_USD`.
+
+---
+
+## 2026-06-27 (2)
+
+**Feature:** Graphics — batch image compressor with savings.
+
+Adds a **Compress** tab that takes one or more images, re-encodes them at a chosen quality (90/75/60/40) while keeping each file's original format, and reports the size reduction per file plus a running total (e.g. `2.4 MB → 880 KB · saved 64%`). Compression runs locally via `sharp` — JPEG uses mozjpeg, PNG uses palette quantization + max zlib, WebP/AVIF use quality+effort. The server never returns a larger file: if re-encoding doesn't help, the original is kept and the row shows "no reduction". Backend adds `POST /api/graphics/compress`.
+
+---
+
 ## 2026-06-27
 
 **Feature:** Graphics — image format converter + three-function tabbed layout.
