@@ -4,6 +4,29 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-27 (13)
+
+**Feature:** Graphics — before/after compare, tool chaining, and result previews.
+
+Several cross-cutting improvements to make the suite feel like a connected editor rather than separate one-shot tools:
+
+- **Original preview in the Result panel** — as soon as a source image is chosen, it appears (badged "Original") in the result area so you can see what you're working on before processing. Shown at full quality with the hint as a caption underneath.
+- **Before / after slider** — every dimension-preserving tool (Convert, Upscale, Effects, Adjust, Watermark, Remove Metadata, Recolour, Background) gets a **Compare** toggle in the result header that swaps the result for a draggable before/after divider.
+- **"Use in…" chaining** — result headers now have a dropdown to send the output straight into another tool (Crop/Resize, Canvas Extend, Annotate, Effects, Adjust, Watermark, Background, Recolour, Convert, Upscale) without re-uploading. Dimension-changing tools (Crop/Resize, Canvas Extend) offer chaining without the compare slider.
+- **Annotate** — text is now typed in place on the canvas, supports multi-line (Enter for a new line), and items can be selected/dragged; placing text auto-selects it for immediate repositioning.
+- **"Same padding on all sides"** — renamed the Canvas Extend "Link all sides" checkbox, which was unclear.
+- **"Choose file" button** styled to match the small Download button (split per-browser rules so the standard and `-webkit` pseudo-elements don't cancel each other out).
+
+---
+
+## 2026-06-27 (12)
+
+**Improvement:** Graphics — Annotate reworked for in-place text and movable items.
+
+Overhauls the Annotate text flow based on feedback that it wasn't obvious. Instead of typing into a separate field and then clicking, you now pick the **Text** tool, click anywhere on the image, and **type directly where the text will appear**; press Enter (or click away) to place it, Escape to cancel. A new **Select / Move** tool (now the default) lets you **click any item to select it and drag to reposition** — arrows, boxes, pen strokes and text alike — with a dashed selection box showing what's active. **Double-click** a text label to re-edit it, **Delete** removes the selected item, and changing the colour recolours the current selection. The save button is relabelled **Save PNG** and works whenever an image is loaded (no longer requires an existing annotation). Still fully client-side — nothing is uploaded.
+
+---
+
 ## 2026-06-27 (11)
 
 **Improvement:** Graphics — move Upscale from Create to Optimise.

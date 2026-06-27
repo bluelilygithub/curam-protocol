@@ -50,7 +50,7 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 
 - **Crop / Resize** — numeric resize (fit modes) **or** an interactive cropper: large pane, draggable/resizable selection with visible handles, rule-of-thirds guides, optional locked aspect ratio, and a live pixel-size readout. `POST /api/graphics/resize` (accepts an exact pixel `rect` for manual crop, using sharp `extract`).
 - **Canvas Extend** — add padding *around* an image (opposite of cropping) with linked or independent top/right/bottom/left amounts and a white, custom-colour, or transparent fill. `POST /api/graphics/extend`.
-- **Annotate** — browser-only mark-up: arrows, boxes, freehand pen, and text labels with colour and thickness/size controls; undo, clear, and flatten-to-PNG export.
+- **Annotate** — browser-only mark-up: arrows, boxes, freehand pen, and text labels with colour and thickness/size controls. Text is typed in place (click on the image, type, Enter to place; double-click to re-edit). A Select / Move tool selects and drags any item to reposition it, Delete removes the selected item, plus undo, clear, and flatten-to-PNG save.
 - **Effects** — flip/mirror, rotate 90/180/270, border, round corners (transparent PNG), drop shadow, and filters: grayscale, sepia, invert, duotone (shadow/highlight colours). `POST /api/graphics/effect`.
 - **Adjust** — brightness, contrast, saturation, hue shift, sharpness, colour temperature (warm/cool) and vignette. `POST /api/graphics/adjust` (sharp `modulate`/`linear`/`recomb`/`sharpen` + an SVG radial-gradient vignette).
 - **Watermark** — text (colour, position, opacity) or image watermark (scale, opacity), with optional tiling. `POST /api/graphics/watermark`.

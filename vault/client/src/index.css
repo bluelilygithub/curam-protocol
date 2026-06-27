@@ -53,6 +53,39 @@ body {
 textarea { overflow-y: hidden; }
 textarea:focus { overflow-y: auto; }
 
+/* "Choose file" button — match the small "Download" button styling.
+   Kept as separate rules: a grouped selector list is dropped entirely by a
+   browser that doesn't recognise one of the pseudo-elements. */
+input[type="file"]::-webkit-file-upload-button {
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--color-primary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  margin-right: 0.75rem;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+input[type="file"]::-webkit-file-upload-button:hover { opacity: 0.7; }
+
+input[type="file"]::file-selector-button {
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--color-primary);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  margin-right: 0.75rem;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+input[type="file"]::file-selector-button:hover { opacity: 0.7; }
+
 /* Prose overrides — inherit theme colours */
 .prose { color: var(--color-text); }
 .prose strong { color: var(--color-text); font-weight: 600; }

@@ -136,9 +136,87 @@ const MODE_GROUPS = [
   { label: 'Privacy', ids: ['background', 'recolor', 'redact', 'metadata'] },
 ];
 
+// Draggable before/after comparison slider. `before` is revealed on the left,
+// `after` on the right of the handle.
+function BeforeAfter({ before, after, transparent }) {
+  const [pos, setPos] = useState(50);
+  const ref = useRef(null);
+  const dragging = useRef(false);
+
+  const moveTo = (clientX) => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos(Math.max(0, Math.min(100, ((clientX - r.left) / r.width) * 100)));
+  };
+
+  useEffect(() => {
+    const onMove = (e) => { if (dragging.current) moveTo(e.touches ? e.touches[0].clientX : e.clientX); };
+    const onUp = () => { dragging.current = false; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+  }, []);
+
+  const checker = transparent ? {
+    backgroundColor: '#fff',
+    backgroundImage: 'linear-gradient(45deg,#ddd 25%,transparent 25%),linear-gradient(-45deg,#ddd 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ddd 75%),linear-gradient(-45deg,transparent 75%,#ddd 75%)',
+    backgroundSize: '16px 16px',
+    backgroundPosition: '0 0,0 8px,8px -8px,-8px 0',
+  } : {};
+
+  return (
+    <div
+      ref={ref}
+      className="relative w-full overflow-hidden rounded-xl border select-none"
+      style={{ borderColor: 'var(--color-border)', cursor: 'ew-resize', ...checker }}
+      onMouseDown={(e) => { dragging.current = true; moveTo(e.clientX); }}
+      onTouchStart={(e) => { dragging.current = true; moveTo(e.touches[0].clientX); }}
+    >
+      <img src={before} alt="before" draggable={false} className="block w-full" />
+      <div className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${pos}%)` }}>
+        <img src={after} alt="after" draggable={false} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+      </div>
+      <div className="absolute top-0 bottom-0" style={{ left: `${pos}%`, width: 2, background: '#fff', boxShadow: '0 0 0 1px rgba(0,0,0,0.35)', transform: 'translateX(-1px)' }} />
+      <div className="absolute flex items-center justify-center rounded-full" style={{ left: `${pos}%`, top: '50%', width: 28, height: 28, transform: 'translate(-50%,-50%)', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.4)', fontSize: 12, color: '#333' }}>⟺</div>
+      <span className="absolute top-2 left-2 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}>Before</span>
+      <span className="absolute top-2 right-2 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}>After</span>
+    </div>
+  );
+}
+
+// Result-panel placeholder: shows the chosen source image (badged "Original")
+// as soon as it's selected, falling back to a hint when nothing is loaded yet.
+function ResultPlaceholder({ src, message }) {
+  if (src) {
+    return (
+      <div>
+        <div className="relative">
+          <img src={src} alt="original" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
+          <span className="absolute top-2 left-2 text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,0,0,0.6)', color: '#fff' }}>Original</span>
+        </div>
+        <p className="text-xs mt-3 text-center" style={{ color: 'var(--color-muted)' }}>{message}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
+      {message}
+    </div>
+  );
+}
+
 export default function GraphicsPage() {
   const getIcon = useIcon();
   const [mode, setMode] = useState('generate');
+  const [compareOn, setCompareOn] = useState(false);
   const [openGroup, setOpenGroup] = useState('Create');
   const [hoveredTool, setHoveredTool] = useState(null);
   const [toolSearch, setToolSearch] = useState('');
@@ -260,15 +338,17 @@ export default function GraphicsPage() {
   const [extResult, setExtResult] = useState(null);
   const [extError, setExtError] = useState('');
   const [annSource, setAnnSource] = useState(null);
-  const [annTool, setAnnTool] = useState('arrow');
+  const [annTool, setAnnTool] = useState('select');
   const [annColor, setAnnColor] = useState('#ff3b30');
   const [annWidth, setAnnWidth] = useState(6);
-  const [annText, setAnnText] = useState('');
   const [annShapes, setAnnShapes] = useState([]);
+  const [annSelected, setAnnSelected] = useState(null);
+  const [annEditing, setAnnEditing] = useState(null);
   const annCanvasRef = useRef(null);
   const annImgRef = useRef(null);
   const annDrawRef = useRef(null);
   const annDrawFnRef = useRef(null);
+  const annInputRef = useRef(null);
   const [diffA, setDiffA] = useState(null);
   const [diffB, setDiffB] = useState(null);
   const [diffThreshold, setDiffThreshold] = useState('25');
@@ -735,6 +815,92 @@ export default function GraphicsPage() {
     }
   };
 
+  useEffect(() => { setCompareOn(false); }, [mode]);
+
+  // Tools an edited image can be handed straight to, without re-uploading.
+  const SEND_TARGETS = [
+    { mode: 'cropresize', label: 'Crop / Resize' },
+    { mode: 'extend', label: 'Canvas Extend' },
+    { mode: 'annotate', label: 'Annotate' },
+    { mode: 'effects', label: 'Effects' },
+    { mode: 'adjust', label: 'Adjust' },
+    { mode: 'watermark', label: 'Watermark' },
+    { mode: 'background', label: 'Background' },
+    { mode: 'recolor', label: 'Recolour' },
+    { mode: 'convert', label: 'Convert' },
+    { mode: 'upscale', label: 'Upscale' },
+  ];
+
+  const sendImageTo = (targetMode, dataUrl, name = 'image.png') => {
+    if (!dataUrl) return;
+    const src = { imageDataUrl: dataUrl, name };
+    switch (targetMode) {
+      case 'cropresize': setCrResult(null); setCrNat(null); setCrSource(src); break;
+      case 'extend': setExtResult(null); setExtError(''); setExtSource(src); break;
+      case 'annotate': setAnnShapes([]); setAnnSelected(null); setAnnEditing(null); annImgRef.current = null; setAnnSource(src); break;
+      case 'effects': setEfResult(null); setEfError(''); setEfSource(src); break;
+      case 'adjust': setAdjResult(null); setAdjError(''); setAdjSource(src); break;
+      case 'watermark': setWmResult(null); setWmError(''); setWmSource(src); break;
+      case 'background': setBgResult(null); setBgError(''); setBgSource(src); break;
+      case 'recolor': setRecolorResult(null); setRecolorError(''); setRecolorSource(src); break;
+      case 'convert': setConvertResult(null); setConvertError(''); setConvertSource(src); break;
+      case 'upscale': setUpscaleResult(null); setUpscaleError(''); setUpscaleSource(src); break;
+      default: return;
+    }
+    setCompareOn(false);
+    setMode(targetMode);
+  };
+
+  // Compact "Use result in…" dropdown shown in a result header.
+  const renderSendTo = (dataUrl, name, excludeMode) => (
+    <select
+      value=""
+      onChange={(e) => { if (e.target.value) sendImageTo(e.target.value, dataUrl, name); e.target.value = ''; }}
+      className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 cursor-pointer"
+      style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)', background: 'transparent' }}
+      title="Continue editing this result in another tool"
+    >
+      <option value="">Use in…</option>
+      {SEND_TARGETS.filter(t => t.mode !== excludeMode).map(t => (
+        <option key={t.mode} value={t.mode}>{t.label}</option>
+      ))}
+    </select>
+  );
+
+  // Compare toggle for a result header (only meaningful with both images).
+  const renderCompareToggle = (hasSource, hasResult) => {
+    if (!hasSource || !hasResult) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => setCompareOn(v => !v)}
+        className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+        style={{ color: compareOn ? '#fff' : 'var(--color-primary)', background: compareOn ? 'var(--color-primary)' : 'transparent', borderColor: 'var(--color-border)' }}
+      >
+        {compareOn ? 'Result' : 'Compare'}
+      </button>
+    );
+  };
+
+  // Result media: a before/after slider when Compare is on, otherwise the
+  // clickable result image (with optional transparency checkerboard).
+  const renderResultMedia = (source, result, { transparent = false, alt = 'result' } = {}) => {
+    if (compareOn && source && result?.imageDataUrl) {
+      return <BeforeAfter before={source} after={result.imageDataUrl} transparent={transparent} />;
+    }
+    const checker = transparent ? {
+      backgroundColor: '#fff',
+      backgroundImage: 'linear-gradient(45deg,#ddd 25%,transparent 25%),linear-gradient(-45deg,#ddd 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ddd 75%),linear-gradient(-45deg,transparent 75%,#ddd 75%)',
+      backgroundSize: '16px 16px',
+      backgroundPosition: '0 0,0 8px,8px -8px,-8px 0',
+    } : {};
+    return (
+      <button type="button" onClick={() => setPreviewImage(result)} className="block w-full rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', ...checker }}>
+        <img src={result.imageDataUrl} alt={alt} className="w-full" />
+      </button>
+    );
+  };
+
   const runCropResize = async () => {
     if (!crSource?.imageDataUrl) return;
     setCrBusy(true);
@@ -980,8 +1146,33 @@ export default function GraphicsPage() {
     } else if (s.type === 'text') {
       ctx.font = `bold ${s.fontPx}px system-ui, sans-serif`;
       ctx.textBaseline = 'top';
-      ctx.fillText(s.text, s.x * W, s.y * H);
+      const lines = String(s.text).split('\n');
+      const lh = s.fontPx * 1.25;
+      lines.forEach((line, i) => ctx.fillText(line, s.x * W, s.y * H + i * lh));
     }
+  };
+
+  const annShapeBBox = (s, ctx, W, H) => {
+    if (s.type === 'text') {
+      ctx.font = `bold ${s.fontPx}px system-ui, sans-serif`;
+      const lines = String(s.text || '').split('\n');
+      const w = Math.max(0, ...lines.map(l => ctx.measureText(l).width));
+      const lh = s.fontPx * 1.25;
+      return { x: s.x * W, y: s.y * H, w, h: lh * lines.length };
+    }
+    if (s.type === 'rect') {
+      return { x: Math.min(s.x, s.x + s.w) * W, y: Math.min(s.y, s.y + s.h) * H, w: Math.abs(s.w) * W, h: Math.abs(s.h) * H };
+    }
+    if (s.type === 'arrow') {
+      const x1 = s.x1 * W; const y1 = s.y1 * H; const x2 = s.x2 * W; const y2 = s.y2 * H;
+      return { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
+    }
+    if (s.type === 'pen') {
+      const xs = s.points.map(p => p.x * W); const ys = s.points.map(p => p.y * H);
+      const minx = Math.min(...xs); const miny = Math.min(...ys);
+      return { x: minx, y: miny, w: Math.max(...xs) - minx, h: Math.max(...ys) - miny };
+    }
+    return { x: 0, y: 0, w: 0, h: 0 };
   };
 
   const drawAnnotate = (preview) => {
@@ -993,8 +1184,21 @@ export default function GraphicsPage() {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, W, H);
     ctx.drawImage(img, 0, 0, W, H);
-    for (const s of annShapes) renderAnnShape(ctx, s, W, H);
+    annShapes.forEach((s, i) => {
+      if (annEditing && annEditing.editIndex === i) return; // hidden while editing
+      renderAnnShape(ctx, s, W, H);
+    });
     if (preview) renderAnnShape(ctx, preview, W, H);
+    if (annTool === 'select' && annSelected != null && !annEditing && annShapes[annSelected]) {
+      const b = annShapeBBox(annShapes[annSelected], ctx, W, H);
+      const pad = Math.max(6, W / 250);
+      ctx.save();
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = Math.max(1.5, W / 600);
+      ctx.setLineDash([8, 5]);
+      ctx.strokeRect(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
+      ctx.restore();
+    }
   };
   annDrawFnRef.current = drawAnnotate;
 
@@ -1015,22 +1219,76 @@ export default function GraphicsPage() {
 
   useEffect(() => {
     annDrawFnRef.current?.(null);
-  }, [annShapes]);
+  }, [annShapes, annSelected, annTool, annEditing]);
 
-  const annPoint = (e) => {
-    const canvas = annCanvasRef.current;
-    if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: clampNum((e.clientX - rect.left) / rect.width, 0, 1),
-      y: clampNum((e.clientY - rect.top) / rect.height, 0, 1),
-    };
-  };
+  useEffect(() => {
+    if (annEditing?.editId && annInputRef.current) {
+      const el = annInputRef.current;
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+    }
+  }, [annEditing?.editId]);
 
   const annSizes = () => {
     const canvas = annCanvasRef.current;
     const scale = canvas ? canvas.width / 1000 : 1;
     return { widthPx: Number(annWidth) * scale, fontPx: Number(annWidth) * 6 * scale };
+  };
+
+  const annDisplayScale = () => {
+    const canvas = annCanvasRef.current;
+    if (!canvas) return 1;
+    const rect = canvas.getBoundingClientRect();
+    return rect.width / canvas.width;
+  };
+
+  const translateAnnShape = (s, dx, dy) => {
+    if (s.type === 'text' || s.type === 'rect') return { ...s, x: s.x + dx, y: s.y + dy };
+    if (s.type === 'arrow') return { ...s, x1: s.x1 + dx, y1: s.y1 + dy, x2: s.x2 + dx, y2: s.y2 + dy };
+    if (s.type === 'pen') return { ...s, points: s.points.map(p => ({ x: p.x + dx, y: p.y + dy })) };
+    return s;
+  };
+
+  const annHitTest = (cx, cy) => {
+    const canvas = annCanvasRef.current;
+    if (!canvas) return null;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width; const H = canvas.height;
+    const pxX = cx * W; const pxY = cy * H;
+    for (let i = annShapes.length - 1; i >= 0; i -= 1) {
+      const b = annShapeBBox(annShapes[i], ctx, W, H);
+      const pad = Math.max(10, annShapes[i].widthPx || 0);
+      if (pxX >= b.x - pad && pxX <= b.x + b.w + pad && pxY >= b.y - pad && pxY <= b.y + b.h + pad) return i;
+    }
+    return null;
+  };
+
+  const commitAnnEditing = () => {
+    const cur = annEditing;
+    if (!cur) return;
+    const val = (cur.value || '').replace(/^\n+|\n+$/g, '').trim();
+    setAnnShapes(prev => {
+      if (cur.editIndex != null) {
+        if (!val) return prev.filter((_, i) => i !== cur.editIndex);
+        return prev.map((s, i) => (i === cur.editIndex ? { ...s, text: val, color: cur.color } : s));
+      }
+      if (!val) return prev;
+      return [...prev, { type: 'text', x: cur.x, y: cur.y, text: val, color: cur.color, fontPx: cur.fontPx, widthPx: Math.max(2, cur.fontPx * 0.08) }];
+    });
+    setAnnEditing(null);
+    if (val) {
+      // After placing/editing text, switch to Select / Move so it can be dragged straight away.
+      const idx = cur.editIndex != null ? cur.editIndex : annShapes.length;
+      setAnnTool('select');
+      setAnnSelected(idx);
+    }
+  };
+
+  const openAnnTextEditor = (x, y, { editIndex = null, value = '', fontPx, color } = {}) => {
+    const sizes = annSizes();
+    setAnnSelected(null);
+    setAnnEditing({ editId: Date.now(), x, y, value, editIndex, fontPx: fontPx || sizes.fontPx, color: color || annColor, scale: annDisplayScale() });
   };
 
   const onAnnMove = useCallback((e) => {
@@ -1040,6 +1298,13 @@ export default function GraphicsPage() {
     const rect = canvas.getBoundingClientRect();
     const cx = clampNum((e.clientX - rect.left) / rect.width, 0, 1);
     const cy = clampNum((e.clientY - rect.top) / rect.height, 0, 1);
+    if (d.tool === 'select') {
+      d.moved = true;
+      const dx = cx - d.startX;
+      const dy = cy - d.startY;
+      setAnnShapes(prev => prev.map((s, i) => (i === d.idx ? translateAnnShape(d.orig, dx, dy) : s)));
+      return;
+    }
     let preview;
     if (d.tool === 'pen') {
       d.points.push({ x: cx, y: cy });
@@ -1059,6 +1324,7 @@ export default function GraphicsPage() {
     window.removeEventListener('mouseup', onAnnUp);
     const canvas = annCanvasRef.current;
     if (!d || !canvas) return;
+    if (d.tool === 'select') return;
     const rect = canvas.getBoundingClientRect();
     const cx = clampNum((e.clientX - rect.left) / rect.width, 0, 1);
     const cy = clampNum((e.clientY - rect.top) / rect.height, 0, 1);
@@ -1077,13 +1343,24 @@ export default function GraphicsPage() {
   }, [onAnnMove]);
 
   const onAnnDown = (e) => {
-    const p = annPoint(e);
-    if (!p) return;
+    const canvas = annCanvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const p = { x: clampNum((e.clientX - rect.left) / rect.width, 0, 1), y: clampNum((e.clientY - rect.top) / rect.height, 0, 1) };
     e.preventDefault();
-    const { widthPx, fontPx } = annSizes();
+    if (annEditing) commitAnnEditing();
+    const { widthPx } = annSizes();
     if (annTool === 'text') {
-      if (!annText.trim()) return;
-      setAnnShapes(prev => [...prev, { type: 'text', x: p.x, y: p.y, text: annText.trim(), color: annColor, fontPx, widthPx }]);
+      openAnnTextEditor(p.x, p.y, {});
+      return;
+    }
+    if (annTool === 'select') {
+      const idx = annHitTest(p.x, p.y);
+      setAnnSelected(idx);
+      if (idx == null) return;
+      annDrawRef.current = { tool: 'select', idx, startX: p.x, startY: p.y, orig: annShapes[idx], moved: false };
+      window.addEventListener('mousemove', onAnnMove);
+      window.addEventListener('mouseup', onAnnUp);
       return;
     }
     annDrawRef.current = { tool: annTool, startX: p.x, startY: p.y, points: [p], color: annColor, widthPx };
@@ -1091,12 +1368,36 @@ export default function GraphicsPage() {
     window.addEventListener('mouseup', onAnnUp);
   };
 
-  const exportAnnotate = () => {
+  const onAnnDoubleClick = (e) => {
     const canvas = annCanvasRef.current;
     if (!canvas) return;
-    drawAnnotate(null);
-    const url = canvas.toDataURL('image/png');
-    downloadDataUrl(url, `annotated-${Date.now()}.png`);
+    const rect = canvas.getBoundingClientRect();
+    const p = { x: clampNum((e.clientX - rect.left) / rect.width, 0, 1), y: clampNum((e.clientY - rect.top) / rect.height, 0, 1) };
+    const idx = annHitTest(p.x, p.y);
+    if (idx != null && annShapes[idx].type === 'text') {
+      const s = annShapes[idx];
+      openAnnTextEditor(s.x, s.y, { editIndex: idx, value: s.text, fontPx: s.fontPx, color: s.color });
+    }
+  };
+
+  const deleteAnnSelected = () => {
+    if (annSelected == null) return;
+    setAnnShapes(prev => prev.filter((_, i) => i !== annSelected));
+    setAnnSelected(null);
+  };
+
+  const exportAnnotate = () => {
+    if (annEditing) commitAnnEditing();
+    const canvas = annCanvasRef.current;
+    if (!canvas) return;
+    const prevSel = annSelected;
+    setAnnSelected(null);
+    requestAnimationFrame(() => {
+      drawAnnotate(null);
+      const url = canvas.toDataURL('image/png');
+      downloadDataUrl(url, `annotated-${Date.now()}.png`);
+      setAnnSelected(prevSel);
+    });
   };
 
   const runDiff = async () => {
@@ -1606,7 +1907,7 @@ export default function GraphicsPage() {
             {mode === 'watermark' && 'Add a text or image watermark.'}
             {mode === 'collage' && 'Arrange several images into a grid.'}
             {mode === 'extend' && 'Add padding around the image (white, a colour, or transparent).'}
-            {mode === 'annotate' && 'Draw arrows, boxes, freehand and text labels, then export a PNG.'}
+            {mode === 'annotate' && 'Click to type text right on the image, draw arrows/boxes/freehand, move anything, then save a PNG.'}
             {mode === 'effects' && 'Flip, rotate, border, round corners, shadow, or a filter (grayscale, sepia, invert, duotone).'}
             {mode === 'adjust' && 'Tune brightness, contrast, colour, sharpness and vignette.'}
             {mode === 'redact' && 'Draw boxes to blur or pixelate faces, plates or sensitive text.'}
@@ -2002,21 +2303,23 @@ export default function GraphicsPage() {
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Upscaled result</span>
               {upscaleResult?.imageDataUrl && (
-                <button
-                  onClick={downloadUpscaled}
-                  className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
-                  style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                >
-                  Download
-                </button>
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(upscaleSource?.imageDataUrl, upscaleResult?.imageDataUrl)}
+                  {renderSendTo(upscaleResult.imageDataUrl, 'upscaled.png', 'upscale')}
+                  <button
+                    onClick={downloadUpscaled}
+                    className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+                    style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
+                  >
+                    Download
+                  </button>
+                </div>
               )}
             </div>
             <div className="p-4">
               {upscaleResult?.imageDataUrl ? (
                 <>
-                  <button type="button" onClick={() => setPreviewImage(upscaleResult)} className="block w-full">
-                    <img src={upscaleResult.imageDataUrl} alt="upscaled" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
-                  </button>
+                  {renderResultMedia(upscaleSource?.imageDataUrl, upscaleResult, { alt: 'upscaled' })}
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
                     {upscaleResult.scale}x · {upscaleResult.model}
                   </p>
@@ -2027,9 +2330,7 @@ export default function GraphicsPage() {
                   )}
                 </>
               ) : (
-                <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
-                  Your upscaled image will appear here.
-                </div>
+                <ResultPlaceholder src={upscaleSource?.imageDataUrl} message="Your upscaled image will appear here." />
               )}
             </div>
           </div>
@@ -2128,21 +2429,23 @@ export default function GraphicsPage() {
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Converted result</span>
               {convertResult?.imageDataUrl && (
-                <button
-                  onClick={downloadConverted}
-                  className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
-                  style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
-                >
-                  Download
-                </button>
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(convertSource?.imageDataUrl, convertResult?.imageDataUrl)}
+                  {renderSendTo(convertResult.imageDataUrl, `converted.${convertResult.format || 'png'}`, 'convert')}
+                  <button
+                    onClick={downloadConverted}
+                    className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+                    style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
+                  >
+                    Download
+                  </button>
+                </div>
               )}
             </div>
             <div className="p-4">
               {convertResult?.imageDataUrl ? (
                 <>
-                  <button type="button" onClick={() => setPreviewImage(convertResult)} className="block w-full">
-                    <img src={convertResult.imageDataUrl} alt="converted" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
-                  </button>
+                  {renderResultMedia(convertSource?.imageDataUrl, convertResult, { alt: 'converted' })}
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
                     {String(convertResult.format || '').toUpperCase()}
                     {convertResult.width && convertResult.height ? ` · ${convertResult.width}×${convertResult.height}` : ''}
@@ -2151,9 +2454,7 @@ export default function GraphicsPage() {
                   </p>
                 </>
               ) : (
-                <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
-                  Your converted image will appear here.
-                </div>
+                <ResultPlaceholder src={convertSource?.imageDataUrl} message="Your converted image will appear here." />
               )}
             </div>
           </div>
@@ -2361,15 +2662,17 @@ export default function GraphicsPage() {
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
               {bgResult?.imageDataUrl && (
-                <button onClick={downloadBg} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(bgSource?.imageDataUrl, bgResult?.imageDataUrl)}
+                  {renderSendTo(bgResult.imageDataUrl, 'cutout.png', 'background')}
+                  <button onClick={downloadBg} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
               )}
             </div>
             <div className="p-4">
               {bgResult?.imageDataUrl ? (
                 <>
-                  <button type="button" onClick={() => setPreviewImage(bgResult)} className="block w-full rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', backgroundColor: '#fff', backgroundImage: 'linear-gradient(45deg,#ddd 25%,transparent 25%),linear-gradient(-45deg,#ddd 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ddd 75%),linear-gradient(-45deg,transparent 75%,#ddd 75%)', backgroundSize: '16px 16px', backgroundPosition: '0 0,0 8px,8px -8px,-8px 0' }}>
-                    <img src={bgResult.imageDataUrl} alt="result" className="w-full" />
-                  </button>
+                  {renderResultMedia(bgSource?.imageDataUrl, bgResult, { transparent: true, alt: 'result' })}
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
                     {bgResult.background === 'transparent' ? 'Transparent PNG' : `Background ${bgResult.background}`}
                     {bgResult.width && bgResult.height ? ` · ${bgResult.width}×${bgResult.height}` : ''}
@@ -2379,9 +2682,7 @@ export default function GraphicsPage() {
                   )}
                 </>
               ) : (
-                <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
-                  Your cut-out image will appear here.
-                </div>
+                <ResultPlaceholder src={bgSource?.imageDataUrl} message="Your cut-out image will appear here." />
               )}
             </div>
           </div>
@@ -2514,23 +2815,23 @@ export default function GraphicsPage() {
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
               {recolorResult?.imageDataUrl && (
-                <button onClick={downloadRecolor} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(recolorSource?.imageDataUrl, recolorResult?.imageDataUrl)}
+                  {renderSendTo(recolorResult.imageDataUrl, 'recoloured.png', 'recolor')}
+                  <button onClick={downloadRecolor} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
               )}
             </div>
             <div className="p-4">
               {recolorResult?.imageDataUrl ? (
                 <>
-                  <button type="button" onClick={() => setPreviewImage(recolorResult)} className="block w-full">
-                    <img src={recolorResult.imageDataUrl} alt="recoloured" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
-                  </button>
+                  {renderResultMedia(recolorSource?.imageDataUrl, recolorResult, { alt: 'recoloured' })}
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>
                     Recoloured {recolorResult.matchedPct}% of pixels ({recolorResult.matchedPixels?.toLocaleString?.() || recolorResult.matchedPixels} px)
                   </p>
                 </>
               ) : (
-                <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
-                  Your recoloured image will appear here.
-                </div>
+                <ResultPlaceholder src={recolorSource?.imageDataUrl} message="Your recoloured image will appear here." />
               )}
             </div>
           </div>
@@ -2594,7 +2895,12 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
-              {crResult?.imageDataUrl && <button onClick={() => downloadDataUrl(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>}
+              {crResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderSendTo(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}.${crResult.format}`, 'cropresize')}
+                  <button onClick={() => downloadDataUrl(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
             </div>
             <div className="p-4">
               {crResult?.imageDataUrl ? (
@@ -2602,7 +2908,7 @@ export default function GraphicsPage() {
                   <button type="button" onClick={() => setPreviewImage(crResult)} className="block w-full"><img src={crResult.imageDataUrl} alt="result" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} /></button>
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{crResult.width}×{crResult.height} · {String(crResult.format).toUpperCase()} · {formatBytes(crResult.bytes)}</p>
                 </>
-              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Your result will appear here.</div>}
+              ) : <ResultPlaceholder src={crSource?.imageDataUrl} message="Your result will appear here." />}
             </div>
           </div>
         </div>
@@ -2697,7 +3003,10 @@ export default function GraphicsPage() {
                 <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
                   <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
                     <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result · {crResult.width}×{crResult.height} · {formatBytes(crResult.bytes)}</span>
-                    <button onClick={() => downloadDataUrl(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                    <div className="flex items-center gap-2">
+                      {renderSendTo(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}.${crResult.format}`, 'cropresize')}
+                      <button onClick={() => downloadDataUrl(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                    </div>
                   </div>
                   <div className="p-4">
                     <button type="button" onClick={() => setPreviewImage(crResult)} className="block max-w-full"><img src={crResult.imageDataUrl} alt="result" className="max-h-80 rounded-xl border" style={{ borderColor: 'var(--color-border)' }} /></button>
@@ -2738,12 +3047,18 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Cleaned image</span>
-              {metaResult?.imageDataUrl && <button onClick={() => downloadDataUrl(metaResult.imageDataUrl, `clean-${Date.now()}.${metaResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>}
+              {metaResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(metaSource?.imageDataUrl, metaResult?.imageDataUrl)}
+                  {renderSendTo(metaResult.imageDataUrl, `clean.${metaResult.format}`, 'metadata')}
+                  <button onClick={() => downloadDataUrl(metaResult.imageDataUrl, `clean-${Date.now()}.${metaResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
             </div>
             <div className="p-4">
               {metaResult ? (
                 <>
-                  <img src={metaResult.imageDataUrl} alt="cleaned" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
+                  {renderResultMedia(metaSource?.imageDataUrl, metaResult, { alt: 'cleaned' })}
                   <div className="mt-3 text-xs" style={{ color: 'var(--color-muted)' }}>
                     {metaResult.hadMetadata ? (
                       <>
@@ -2754,7 +3069,7 @@ export default function GraphicsPage() {
                     <p className="mt-2">{formatBytes(metaResult.originalBytes)} → {formatBytes(metaResult.cleanedBytes)}</p>
                   </div>
                 </>
-              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>The cleaned image and a report of what was removed will appear here.</div>}
+              ) : <ResultPlaceholder src={metaSource?.imageDataUrl} message="The cleaned image and a report of what was removed will appear here." />}
             </div>
           </div>
         </div>
@@ -2838,12 +3153,18 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
-              {wmResult?.imageDataUrl && <button onClick={() => downloadDataUrl(wmResult.imageDataUrl, `watermarked-${Date.now()}.${wmResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>}
+              {wmResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(wmSource?.imageDataUrl, wmResult?.imageDataUrl)}
+                  {renderSendTo(wmResult.imageDataUrl, `watermarked.${wmResult.format}`, 'watermark')}
+                  <button onClick={() => downloadDataUrl(wmResult.imageDataUrl, `watermarked-${Date.now()}.${wmResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
             </div>
             <div className="p-4">
               {wmResult?.imageDataUrl ? (
-                <button type="button" onClick={() => setPreviewImage(wmResult)} className="block w-full"><img src={wmResult.imageDataUrl} alt="result" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} /></button>
-              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Your watermarked image will appear here.</div>}
+                renderResultMedia(wmSource?.imageDataUrl, wmResult, { alt: 'result' })
+              ) : <ResultPlaceholder src={wmSource?.imageDataUrl} message="Your watermarked image will appear here." />}
             </div>
           </div>
         </div>
@@ -2921,47 +3242,84 @@ export default function GraphicsPage() {
         <div className="rounded-2xl border p-4 mb-4 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div className="grow min-w-[200px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-            <input type="file" accept="image/*" onChange={e => { setAnnShapes([]); annImgRef.current = null; loadImageInto(setAnnSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+            <input type="file" accept="image/*" onChange={e => { setAnnShapes([]); setAnnSelected(null); setAnnEditing(null); annImgRef.current = null; loadImageInto(setAnnSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
           </div>
           <div className="flex gap-2 self-end">
-            {[['arrow', 'Arrow'], ['rect', 'Box'], ['pen', 'Pen'], ['text', 'Text']].map(([t, label]) => (
-              <button key={t} type="button" onClick={() => setAnnTool(t)} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: annTool === t ? 'var(--color-primary)' : 'transparent', color: annTool === t ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>{label}</button>
+            {[['select', 'Select / Move'], ['text', 'Text'], ['arrow', 'Arrow'], ['rect', 'Box'], ['pen', 'Pen']].map(([t, label]) => (
+              <button key={t} type="button" onClick={() => { setAnnTool(t); if (t !== 'select') setAnnSelected(null); }} className="px-3 py-1.5 rounded-lg text-xs font-medium border" style={{ background: annTool === t ? 'var(--color-primary)' : 'transparent', color: annTool === t ? '#fff' : 'var(--color-text)', borderColor: 'var(--color-border)' }}>{label}</button>
             ))}
           </div>
           <div className="flex items-center gap-2 self-end">
             <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Colour</label>
-            <input type="color" value={annColor} onChange={e => setAnnColor(e.target.value)} className="h-8 w-10 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+            <input type="color" value={annColor} onChange={e => { setAnnColor(e.target.value); setAnnEditing(cur => (cur ? { ...cur, color: e.target.value } : cur)); if (annSelected != null) setAnnShapes(prev => prev.map((s, i) => (i === annSelected ? { ...s, color: e.target.value } : s))); }} className="h-8 w-10 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
           </div>
           <div className="self-end min-w-[140px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>{annTool === 'text' ? 'Text size' : 'Thickness'}: {annWidth}</label>
             <input type="range" min="1" max="24" value={annWidth} onChange={e => setAnnWidth(Number(e.target.value))} className="w-full" />
           </div>
           <div className="flex gap-2 self-end">
-            <button type="button" onClick={() => setAnnShapes(prev => prev.slice(0, -1))} disabled={!annShapes.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button>
-            <button type="button" onClick={() => setAnnShapes([])} disabled={!annShapes.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Clear</button>
-            <button type="button" onClick={exportAnnotate} disabled={!annSource?.imageDataUrl || !annShapes.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
-              {getIcon('download', { size: 15 })} Export PNG
+            <button type="button" onClick={deleteAnnSelected} disabled={annSelected == null} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Delete</button>
+            <button type="button" onClick={() => { setAnnShapes(prev => prev.slice(0, -1)); setAnnSelected(null); }} disabled={!annShapes.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button>
+            <button type="button" onClick={() => { setAnnShapes([]); setAnnSelected(null); }} disabled={!annShapes.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Clear</button>
+            <button type="button" onClick={exportAnnotate} disabled={!annSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {getIcon('download', { size: 15 })} Save PNG
             </button>
           </div>
         </div>
-        {annTool === 'text' && (
-          <div className="rounded-2xl border p-3 mb-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Label text (type here, then click on the image to place it)</label>
-            <input type="text" value={annText} onChange={e => setAnnText(e.target.value)} placeholder="Your label..." className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
-          </div>
-        )}
         {!annSource?.imageDataUrl ? (
-          <div className="rounded-2xl border flex items-center justify-center text-sm text-center px-6 py-20" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Choose an image, then draw on it with the tools above.</div>
+          <div className="rounded-2xl border flex items-center justify-center text-sm text-center px-6 py-20" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Choose an image to start annotating.</div>
         ) : (
           <div className="rounded-2xl border p-4 flex justify-center" style={{ borderColor: 'var(--color-border)', background: '#1e1e1e' }}>
-            <canvas
-              ref={annCanvasRef}
-              onMouseDown={onAnnDown}
-              style={{ display: 'block', maxHeight: '70vh', maxWidth: '100%', borderRadius: 6, cursor: annTool === 'text' ? 'text' : 'crosshair', touchAction: 'none' }}
-            />
+            <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', lineHeight: 0 }}>
+              <canvas
+                ref={annCanvasRef}
+                onMouseDown={onAnnDown}
+                onDoubleClick={onAnnDoubleClick}
+                style={{ display: 'block', maxHeight: '70vh', maxWidth: '100%', borderRadius: 6, cursor: annTool === 'text' ? 'text' : annTool === 'select' ? 'move' : 'crosshair', touchAction: 'none' }}
+              />
+              {annEditing && (
+                <textarea
+                  ref={annInputRef}
+                  rows={Math.max(1, (annEditing.value || '').split('\n').length)}
+                  value={annEditing.value}
+                  onChange={e => setAnnEditing(cur => (cur ? { ...cur, value: e.target.value } : cur))}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { e.preventDefault(); setAnnEditing(null); }
+                    else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); commitAnnEditing(); }
+                  }}
+                  onBlur={commitAnnEditing}
+                  placeholder="Type… (Enter = new line)"
+                  spellCheck={false}
+                  style={{
+                    position: 'absolute',
+                    left: `${annEditing.x * 100}%`,
+                    top: `${annEditing.y * 100}%`,
+                    transform: 'translateY(-2px)',
+                    font: `bold ${Math.max(12, annEditing.fontPx * annEditing.scale)}px system-ui, sans-serif`,
+                    lineHeight: 1.25,
+                    color: annEditing.color,
+                    background: 'rgba(255,255,255,0.85)',
+                    border: '1px dashed #3b82f6',
+                    borderRadius: 4,
+                    padding: '0 4px',
+                    outline: 'none',
+                    minWidth: 80,
+                    width: 'auto',
+                    resize: 'none',
+                    overflow: 'hidden',
+                    whiteSpace: 'pre',
+                  }}
+                />
+              )}
+            </div>
           </div>
         )}
-        <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>Pick a tool, drag on the image to draw (or click to place text). Undo removes the last item. Export flattens everything into a PNG. Nothing leaves your browser.</p>
+        <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+          {annTool === 'text' && 'Text: click on the image and type. Enter adds a new line; click away (or ⌘/Ctrl+Enter) to place it — it stays selected so you can drag it straight away.'}
+          {annTool === 'select' && 'Select / Move: click an item to select it, then drag to move. Double-click text to re-edit. Delete removes the selected item.'}
+          {(annTool === 'arrow' || annTool === 'rect' || annTool === 'pen') && 'Drag on the image to draw. Switch to Select / Move to reposition anything.'}
+          {' '}Save PNG flattens everything into an image — nothing leaves your browser.
+        </p>
       </section>
       )}
 
@@ -2984,7 +3342,7 @@ export default function GraphicsPage() {
             )}
             <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-text)' }}>
               <input type="checkbox" checked={extLink} onChange={e => setExtLink(e.target.checked)} />
-              Link all sides
+              Same padding on all sides
             </label>
             {extLink ? (
               <div>
@@ -3032,7 +3390,12 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
-              {extResult?.imageDataUrl && <button onClick={() => downloadDataUrl(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}.${extResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>}
+              {extResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderSendTo(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}.${extResult.format}`, 'extend')}
+                  <button onClick={() => downloadDataUrl(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}.${extResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
             </div>
             <div className="p-4">
               {extResult?.imageDataUrl ? (
@@ -3042,7 +3405,7 @@ export default function GraphicsPage() {
                   </button>
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{extResult.width}×{extResult.height} · {String(extResult.format).toUpperCase()} · {formatBytes(extResult.bytes)}</p>
                 </>
-              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Your result will appear here.</div>}
+              ) : <ResultPlaceholder src={extSource?.imageDataUrl} message="Your result will appear here." />}
             </div>
           </div>
         </div>
@@ -3149,17 +3512,21 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
-              {efResult?.imageDataUrl && <button onClick={() => downloadDataUrl(efResult.imageDataUrl, `effect-${Date.now()}.${efResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>}
+              {efResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(efSource?.imageDataUrl, efResult?.imageDataUrl)}
+                  {renderSendTo(efResult.imageDataUrl, `effect.${efResult.format}`, 'effects')}
+                  <button onClick={() => downloadDataUrl(efResult.imageDataUrl, `effect-${Date.now()}.${efResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
             </div>
             <div className="p-4">
               {efResult?.imageDataUrl ? (
                 <>
-                  <button type="button" onClick={() => setPreviewImage(efResult)} className="block w-full rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', backgroundColor: '#fff', backgroundImage: 'linear-gradient(45deg,#eee 25%,transparent 25%),linear-gradient(-45deg,#eee 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#eee 75%),linear-gradient(-45deg,transparent 75%,#eee 75%)', backgroundSize: '16px 16px', backgroundPosition: '0 0,0 8px,8px -8px,-8px 0' }}>
-                    <img src={efResult.imageDataUrl} alt="result" className="w-full" />
-                  </button>
+                  {renderResultMedia(efSource?.imageDataUrl, efResult, { transparent: true, alt: 'result' })}
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{efResult.width}×{efResult.height} · {String(efResult.format).toUpperCase()} · {formatBytes(efResult.bytes)}</p>
                 </>
-              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Your result will appear here.</div>}
+              ) : <ResultPlaceholder src={efSource?.imageDataUrl} message="Your result will appear here." />}
             </div>
           </div>
         </div>
@@ -3225,15 +3592,21 @@ export default function GraphicsPage() {
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
               <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
-              {adjResult?.imageDataUrl && <button onClick={() => downloadDataUrl(adjResult.imageDataUrl, `adjusted-${Date.now()}.${adjResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>}
+              {adjResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(adjSource?.imageDataUrl, adjResult?.imageDataUrl)}
+                  {renderSendTo(adjResult.imageDataUrl, `adjusted.${adjResult.format}`, 'adjust')}
+                  <button onClick={() => downloadDataUrl(adjResult.imageDataUrl, `adjusted-${Date.now()}.${adjResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
             </div>
             <div className="p-4">
               {adjResult?.imageDataUrl ? (
                 <>
-                  <button type="button" onClick={() => setPreviewImage(adjResult)} className="block w-full"><img src={adjResult.imageDataUrl} alt="result" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} /></button>
+                  {renderResultMedia(adjSource?.imageDataUrl, adjResult, { alt: 'result' })}
                   <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{adjResult.width}×{adjResult.height} · {String(adjResult.format).toUpperCase()} · {formatBytes(adjResult.bytes)}</p>
                 </>
-              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Your result will appear here.</div>}
+              ) : <ResultPlaceholder src={adjSource?.imageDataUrl} message="Your result will appear here." />}
             </div>
           </div>
         </div>
