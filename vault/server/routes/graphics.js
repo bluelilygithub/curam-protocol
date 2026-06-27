@@ -4,6 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { randomUUID } = require('crypto');
 const sharp = require('sharp');
+const archiver = require('archiver');
 const { runtimeConfig } = require('../config/runtime');
 const { pool } = require('../db');
 const { getVaultModelsConfigForUser } = require('../services/modelResolver');
@@ -1446,6 +1447,71 @@ router.post('/resize', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Resize failed' });
+  }
+});
+
+// Favicon / app-icon generator: one source image -> a ZIP of square PNG icons
+// in every common size, plus a web manifest and a ready-to-paste <head> snippet.
+router.post('/favicon', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    const buffer = dataUrlToBuffer(imageDataUrl);
+    if (!buffer || !/^data:image\//i.test(imageDataUrl)) {
+      return res.status(400).json({ error: 'A valid image is required' });
+    }
+    const sizes = [16, 32, 48, 64, 180, 192, 256, 512];
+    const oriented = await sharp(buffer).rotate().toBuffer();
+    const files = [];
+    for (const s of sizes) {
+      // eslint-disable-next-line no-await-in-loop
+      const png = await sharp(oriented).resize(s, s, { fit: 'cover', position: 'centre' }).png().toBuffer();
+      files.push({ name: `favicon-${s}x${s}.png`, buf: png });
+    }
+
+    const manifest = JSON.stringify({
+      name: '',
+      short_name: '',
+      icons: [
+        { src: 'favicon-192x192.png', sizes: '192x192', type: 'image/png' },
+        { src: 'favicon-512x512.png', sizes: '512x512', type: 'image/png' },
+      ],
+      theme_color: '#ffffff',
+      background_color: '#ffffff',
+      display: 'standalone',
+    }, null, 2);
+
+    const html = [
+      '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">',
+      '<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">',
+      '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">',
+      '<link rel="manifest" href="/site.webmanifest">',
+    ].join('\n');
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    const chunks = [];
+    archive.on('data', (c) => chunks.push(c));
+    const done = new Promise((resolve, reject) => {
+      archive.on('end', resolve);
+      archive.on('error', reject);
+    });
+    files.forEach((f) => archive.append(f.buf, { name: f.name }));
+    const apple = files.find((f) => f.name === 'favicon-180x180.png');
+    if (apple) archive.append(apple.buf, { name: 'apple-touch-icon.png' });
+    archive.append(manifest, { name: 'site.webmanifest' });
+    archive.append(html, { name: 'head-snippet.html' });
+    await archive.finalize();
+    await done;
+
+    const zip = Buffer.concat(chunks);
+    res.json({
+      ok: true,
+      count: sizes.length,
+      sizes,
+      bytes: zip.length,
+      zipDataUrl: `data:application/zip;base64,${zip.toString('base64')}`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Favicon generation failed' });
   }
 });
 

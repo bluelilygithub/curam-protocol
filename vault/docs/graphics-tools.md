@@ -1,6 +1,6 @@
 # Graphics Tools
 
-The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles nineteen tools behind a grouped, searchable left sidebar; the active tool fills the main area.
+The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles twenty tools behind a grouped, searchable left sidebar; the active tool fills the main area.
 
 **Frontend:** `vault/client/src/pages/GraphicsPage.jsx`
 **Backend:** `vault/server/routes/graphics.js` (mounted at `/api/graphics`)
@@ -27,7 +27,7 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 | Group | Tools |
 |---|---|
 | **Create** | Generate |
-| **Optimise** | Upscale, Convert, Compress |
+| **Optimise** | Upscale, Convert, Compress, Favicon / Icons |
 | **Edit** | Crop/Resize, Canvas Extend, Annotate, Effects, Adjust, Watermark, Collage |
 | **Analyse** | Picker, Palette, Extract Text, Image Diff |
 | **Privacy** | Background, Recolor, Redact, Metadata |
@@ -45,6 +45,7 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 - **Upscale** — enlarge artwork/small images. Model picker for faithful (Real-ESRGAN) vs enhanced (Clarity Pro), with fidelity control and cost display. Hosted models are whitelist-validated. `GET /api/graphics/upscale/info`, `POST /api/graphics/upscale`. (The one hosted/paid tool in this otherwise-local group.)
 - **Convert** — change format between PNG, JPG, WebP, GIF, AVIF, TIFF, with a quality slider for lossy formats. `GET /api/graphics/convert/info`, `POST /api/graphics/convert`.
 - **Compress** — batch re-encode at a chosen quality keeping each file's format; shows per-file and total savings, and never returns a larger file. `POST /api/graphics/compress`.
+- **Favicon / Icons** — turn one image into a ZIP of square PNG icons (16/32/48/64/180/192/256/512 px) plus an `apple-touch-icon`, a `site.webmanifest`, and a paste-ready `<head>` snippet. `POST /api/graphics/favicon` (sharp + archiver).
 
 ### Edit
 
@@ -72,11 +73,23 @@ Tools are grouped into five collapsible, single-open ("accordion") categories. *
 
 ---
 
+## Cross-cutting features
+
+These work across the image→image tools (Convert, Upscale, Effects, Adjust, Watermark, Metadata, Recolour, Background, Crop/Resize, Canvas Extend):
+
+- **Original preview** — the chosen source appears in the Result panel (badged "Original") before processing.
+- **Compare** — a draggable before/after slider in the result header (dimension-preserving tools only).
+- **Use in…** — send a result straight into another tool without re-uploading.
+- **Export…** — client-side re-encode to PNG/JPG/WebP/AVIF with quality, max-side, target-KB, and JPG background controls.
+
+---
+
 ## Dependencies & env
 
 - **`sharp`** is pinned to `^0.32.6` so a single libvips is shared with the copy bundled inside `@imgly/background-removal-node` (avoids a duplicate-libvips crash).
 - **`@imgly/background-removal-node`** powers local background removal; its `onnxruntime-node` native binaries must be present.
 - **`tesseract.js`** (client) powers OCR.
+- **`archiver`** bundles the favicon icon set into a ZIP server-side.
 - The Express JSON body limit is raised to `30mb` to accommodate multi-image collage uploads.
 - Optional env: `REPLICATE_BG_MODEL`, `REPLICATE_BG_COST_USD` (hosted background removal).
 

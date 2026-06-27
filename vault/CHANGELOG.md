@@ -4,6 +4,16 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-27 (14)
+
+**Feature:** Graphics — export panel, size presets, and a favicon generator.
+
+- **Export… panel** on every result header — re-encode the result client-side to **PNG / JPG / WebP / AVIF**, set **quality**, cap the **longest side**, hit a **target file size in KB** (binary-searches quality for lossy formats), and flatten transparency onto a chosen **background** for JPG. No server round-trip.
+- **Social / web size presets** in Crop / Resize — a dropdown of ready dimensions (Instagram, Facebook, X/Twitter, LinkedIn, YouTube, Open Graph, HD) that fills width/height and switches to cover-fit.
+- **Favicon / app-icon generator** (new tool, Optimise group) — one image becomes a ZIP of square PNG icons at 16/32/48/64/180/192/256/512 px plus an `apple-touch-icon`, a `site.webmanifest`, and a paste-ready `<head>` snippet. Backed by a new `/api/graphics/favicon` route (sharp + archiver).
+
+---
+
 ## 2026-06-27 (13)
 
 **Feature:** Graphics — before/after compare, tool chaining, and result previews.

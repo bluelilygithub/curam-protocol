@@ -111,6 +111,7 @@ const MODES = [
   { id: 'upscale', label: 'Upscale', icon: 'image' },
   { id: 'convert', label: 'Convert', icon: 'refresh-cw' },
   { id: 'compress', label: 'Compress', icon: 'archive' },
+  { id: 'favicon', label: 'Favicon / Icons', icon: 'app-window' },
   { id: 'background', label: 'Background', icon: 'scissors' },
   { id: 'recolor', label: 'Recolor', icon: 'palette' },
   { id: 'cropresize', label: 'Crop / Resize', icon: 'crop' },
@@ -128,13 +129,164 @@ const MODES = [
   { id: 'picker', label: 'Picker', icon: 'eye' },
 ];
 
+const SIZE_PRESETS = [
+  { group: 'Instagram', items: [
+    { label: 'Square post 1080×1080', w: 1080, h: 1080 },
+    { label: 'Portrait 1080×1350', w: 1080, h: 1350 },
+    { label: 'Story / Reel 1080×1920', w: 1080, h: 1920 },
+  ] },
+  { group: 'Facebook', items: [
+    { label: 'Post 1200×630', w: 1200, h: 630 },
+    { label: 'Cover 820×312', w: 820, h: 312 },
+  ] },
+  { group: 'X / Twitter', items: [
+    { label: 'Post 1600×900', w: 1600, h: 900 },
+    { label: 'Header 1500×500', w: 1500, h: 500 },
+  ] },
+  { group: 'LinkedIn', items: [
+    { label: 'Post 1200×627', w: 1200, h: 627 },
+    { label: 'Cover 1584×396', w: 1584, h: 396 },
+  ] },
+  { group: 'YouTube', items: [
+    { label: 'Thumbnail 1280×720', w: 1280, h: 720 },
+    { label: 'Channel art 2560×1440', w: 2560, h: 1440 },
+  ] },
+  { group: 'Web', items: [
+    { label: 'Open Graph 1200×630', w: 1200, h: 630 },
+    { label: 'HD 1920×1080', w: 1920, h: 1080 },
+  ] },
+];
+
 const MODE_GROUPS = [
   { label: 'Create', ids: ['generate'] },
-  { label: 'Optimise', ids: ['upscale', 'convert', 'compress'] },
+  { label: 'Optimise', ids: ['upscale', 'convert', 'compress', 'favicon'] },
   { label: 'Edit', ids: ['cropresize', 'extend', 'annotate', 'effects', 'adjust', 'watermark', 'collage'] },
   { label: 'Analyse', ids: ['picker', 'palette', 'ocr', 'diff'] },
   { label: 'Privacy', ids: ['background', 'recolor', 'redact', 'metadata'] },
 ];
+
+// Re-encode helpers used by the export panel (all client-side via canvas).
+const loadImageEl = (src) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => resolve(img);
+  img.onerror = reject;
+  img.src = src;
+});
+
+const canvasToBlob = (canvas, type, quality) => new Promise((resolve) => {
+  canvas.toBlob((b) => resolve(b), type, quality);
+});
+
+async function renderToCanvas(dataUrl, { maxDim, bg, type }) {
+  const img = await loadImageEl(dataUrl);
+  let w = img.naturalWidth;
+  let h = img.naturalHeight;
+  if (maxDim && Math.max(w, h) > maxDim) {
+    const s = maxDim / Math.max(w, h);
+    w = Math.round(w * s);
+    h = Math.round(h * s);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, w);
+  canvas.height = Math.max(1, h);
+  const ctx = canvas.getContext('2d');
+  if (type === 'image/jpeg') { ctx.fillStyle = bg || '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+// Compact "Export…" popover: format, quality, max size, target file size.
+function ExportMenu({ dataUrl, baseName = 'image' }) {
+  const [open, setOpen] = useState(false);
+  const [format, setFormat] = useState('image/png');
+  const [quality, setQuality] = useState(90);
+  const [maxDim, setMaxDim] = useState('');
+  const [targetKb, setTargetKb] = useState('');
+  const [bg, setBg] = useState('#ffffff');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  const lossy = format === 'image/jpeg' || format === 'image/webp' || format === 'image/avif';
+  const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/avif': 'avif' }[format] || 'png';
+
+  const doExport = async () => {
+    setBusy(true);
+    setErr('');
+    try {
+      const canvas = await renderToCanvas(dataUrl, { maxDim: maxDim ? Number(maxDim) : 0, bg, type: format });
+      let blob;
+      const target = lossy && targetKb ? Number(targetKb) * 1024 : 0;
+      if (target) {
+        let lo = 0.3; let hi = 0.95; let best = null;
+        for (let i = 0; i < 7; i += 1) {
+          const q = (lo + hi) / 2;
+          const b = await canvasToBlob(canvas, format, q); // eslint-disable-line no-await-in-loop
+          if (!b) break;
+          if (b.size <= target) { best = b; lo = q; } else { hi = q; }
+        }
+        blob = best || await canvasToBlob(canvas, format, 0.3);
+      } else {
+        blob = await canvasToBlob(canvas, format, lossy ? quality / 100 : undefined);
+      }
+      if (!blob) throw new Error('This browser can’t export that format');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${baseName}.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setOpen(false);
+    } catch (e) {
+      setErr(e.message || 'Export failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(o => !o)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Export…</button>
+      {open && (
+        <div className="absolute right-0 mt-1 z-20 w-60 rounded-xl border p-3 space-y-2 shadow-lg" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+          <div>
+            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Format</label>
+            <select value={format} onChange={e => setFormat(e.target.value)} className="w-full text-xs px-2 py-1 rounded-lg border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+              <option value="image/png">PNG (lossless)</option>
+              <option value="image/jpeg">JPG</option>
+              <option value="image/webp">WebP</option>
+              <option value="image/avif">AVIF</option>
+            </select>
+          </div>
+          {lossy && !targetKb && (
+            <div>
+              <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Quality: {quality}</label>
+              <input type="range" min="10" max="100" value={quality} onChange={e => setQuality(Number(e.target.value))} className="w-full" />
+            </div>
+          )}
+          <div className="flex gap-2">
+            <div className="grow">
+              <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Max side (px)</label>
+              <input type="number" min="1" placeholder="orig" value={maxDim} onChange={e => setMaxDim(e.target.value)} className="w-full text-xs px-2 py-1 rounded-lg border" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+            <div className="grow">
+              <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Target (KB)</label>
+              <input type="number" min="1" placeholder={lossy ? 'auto' : 'n/a'} disabled={!lossy} value={targetKb} onChange={e => setTargetKb(e.target.value)} className="w-full text-xs px-2 py-1 rounded-lg border disabled:opacity-40" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+          </div>
+          {format === 'image/jpeg' && (
+            <div className="flex items-center gap-2">
+              <label className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Background</label>
+              <input type="color" value={bg} onChange={e => setBg(e.target.value)} className="h-7 w-9 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+              <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>(fills transparency)</span>
+            </div>
+          )}
+          {err && <p className="text-[11px]" style={{ color: '#b91c1c' }}>{err}</p>}
+          <button type="button" onClick={doExport} disabled={busy} className="w-full text-xs px-2 py-1.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: 'var(--color-primary)' }}>{busy ? 'Exporting…' : 'Download'}</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Draggable before/after comparison slider. `before` is revealed on the left,
 // `after` on the right of the handle.
@@ -251,6 +403,10 @@ export default function GraphicsPage() {
   const [converting, setConverting] = useState(false);
   const [convertResult, setConvertResult] = useState(null);
   const [convertError, setConvertError] = useState('');
+  const [favSource, setFavSource] = useState(null);
+  const [favBusy, setFavBusy] = useState(false);
+  const [favResult, setFavResult] = useState(null);
+  const [favError, setFavError] = useState('');
   const [compressFiles, setCompressFiles] = useState([]);
   const [compressQuality, setCompressQuality] = useState('75');
   const [compressing, setCompressing] = useState(false);
@@ -538,6 +694,22 @@ export default function GraphicsPage() {
     a.href = convertResult.imageDataUrl;
     a.download = `converted-${Date.now()}.${convertResult.ext || 'img'}`;
     a.click();
+  };
+
+  const runFavicon = async () => {
+    if (!favSource?.imageDataUrl) return;
+    setFavBusy(true);
+    setFavError('');
+    try {
+      const res = await api.post('/api/graphics/favicon', { imageDataUrl: favSource.imageDataUrl });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Favicon generation failed');
+      setFavResult(data);
+    } catch (err) {
+      setFavError(err.message || 'Favicon generation failed');
+    } finally {
+      setFavBusy(false);
+    }
   };
 
   const handleCompressFiles = async (fileList) => {
@@ -866,6 +1038,8 @@ export default function GraphicsPage() {
       ))}
     </select>
   );
+
+  const renderExport = (dataUrl, baseName) => (dataUrl ? <ExportMenu dataUrl={dataUrl} baseName={baseName} /> : null);
 
   // Compare toggle for a result header (only meaningful with both images).
   const renderCompareToggle = (hasSource, hasResult) => {
@@ -1899,6 +2073,7 @@ export default function GraphicsPage() {
             {mode === 'generate' && 'Generate local article and story support images from a prompt.'}
             {mode === 'upscale' && 'Enlarge artwork and small images while preserving detail.'}
             {mode === 'convert' && 'Convert an image to PNG, JPG, WebP, GIF, AVIF or TIFF.'}
+            {mode === 'favicon' && 'Generate a full favicon / app-icon set with manifest from one image.'}
             {mode === 'compress' && 'Reduce image file sizes and see the savings.'}
             {mode === 'background' && 'Remove or replace an image background with one click.'}
             {mode === 'recolor' && 'Change the colour of a specific item in an image.'}
@@ -2306,6 +2481,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderCompareToggle(upscaleSource?.imageDataUrl, upscaleResult?.imageDataUrl)}
                   {renderSendTo(upscaleResult.imageDataUrl, 'upscaled.png', 'upscale')}
+                  {renderExport(upscaleResult.imageDataUrl, 'upscaled')}
                   <button
                     onClick={downloadUpscaled}
                     className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
@@ -2432,6 +2608,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderCompareToggle(convertSource?.imageDataUrl, convertResult?.imageDataUrl)}
                   {renderSendTo(convertResult.imageDataUrl, `converted.${convertResult.format || 'png'}`, 'convert')}
+                  {renderExport(convertResult.imageDataUrl, 'converted')}
                   <button
                     onClick={downloadConverted}
                     className="text-xs px-2 py-1 rounded-lg border hover:opacity-70"
@@ -2455,6 +2632,61 @@ export default function GraphicsPage() {
                 </>
               ) : (
                 <ResultPlaceholder src={convertSource?.imageDataUrl} message="Your converted image will appear here." />
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'favicon' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Favicon / app icons</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image (square works best)</label>
+              <input type="file" accept="image/*" onChange={e => { setFavResult(null); setFavError(''); loadImageInto(setFavSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+            </div>
+            {favSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={favSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+              </div>
+            )}
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+              Generates PNG icons at 16, 32, 48, 64, 180, 192, 256 and 512 px, an <strong>apple-touch-icon</strong>, a <strong>site.webmanifest</strong> and a ready-to-paste <strong>&lt;head&gt;</strong> snippet — bundled as a ZIP.
+            </p>
+            {favError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{favError}</div>}
+            <button type="button" onClick={runFavicon} disabled={favBusy || !favSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {favBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('app-window', { size: 15 })}
+              {favBusy ? 'Generating…' : 'Generate icon set'}
+            </button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Icon set</span>
+              {favResult?.zipDataUrl && (
+                <button onClick={() => downloadDataUrl(favResult.zipDataUrl, 'favicons.zip')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download ZIP</button>
+              )}
+            </div>
+            <div className="p-4">
+              {favResult?.zipDataUrl ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-end gap-3">
+                    {favResult.sizes.map(s => (
+                      <div key={s} className="flex flex-col items-center gap-1">
+                        <img src={favSource?.imageDataUrl} alt={`${s}px`} style={{ width: Math.min(64, s), height: Math.min(64, s), objectFit: 'cover', borderRadius: 4, border: '1px solid var(--color-border)' }} />
+                        <span className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{s}px</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{favResult.count} icons · {formatBytes(favResult.bytes)} ZIP</p>
+                </div>
+              ) : (
+                <ResultPlaceholder src={favSource?.imageDataUrl} message="Your icon set will appear here." />
               )}
             </div>
           </div>
@@ -2665,6 +2897,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderCompareToggle(bgSource?.imageDataUrl, bgResult?.imageDataUrl)}
                   {renderSendTo(bgResult.imageDataUrl, 'cutout.png', 'background')}
+                  {renderExport(bgResult.imageDataUrl, 'cutout')}
                   <button onClick={downloadBg} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
                 </div>
               )}
@@ -2818,6 +3051,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderCompareToggle(recolorSource?.imageDataUrl, recolorResult?.imageDataUrl)}
                   {renderSendTo(recolorResult.imageDataUrl, 'recoloured.png', 'recolor')}
+                  {renderExport(recolorResult.imageDataUrl, 'recoloured')}
                   <button onClick={downloadRecolor} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
                 </div>
               )}
@@ -2867,6 +3101,28 @@ export default function GraphicsPage() {
                 <img src={crSource.imageDataUrl} alt="source" className="max-h-56 mx-auto rounded-lg" />
               </div>
             )}
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Preset size</label>
+              <select
+                value=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const [w, h] = e.target.value.split('x');
+                  setCrWidth(w);
+                  setCrHeight(h);
+                  setCrFit('cover');
+                  e.target.value = '';
+                }}
+                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                <option value="">Choose a social / web size…</option>
+                {SIZE_PRESETS.map(g => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.items.map(it => <option key={it.label} value={`${it.w}x${it.h}`}>{it.label}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
             <div className="grid sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Width (px)</label>
@@ -2898,6 +3154,7 @@ export default function GraphicsPage() {
               {crResult?.imageDataUrl && (
                 <div className="flex items-center gap-2">
                   {renderSendTo(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}.${crResult.format}`, 'cropresize')}
+                  {renderExport(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}`)}
                   <button onClick={() => downloadDataUrl(crResult.imageDataUrl, `image-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
                 </div>
               )}
@@ -3005,6 +3262,7 @@ export default function GraphicsPage() {
                     <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result · {crResult.width}×{crResult.height} · {formatBytes(crResult.bytes)}</span>
                     <div className="flex items-center gap-2">
                       {renderSendTo(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}.${crResult.format}`, 'cropresize')}
+                      {renderExport(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}`)}
                       <button onClick={() => downloadDataUrl(crResult.imageDataUrl, `crop-${crResult.width}x${crResult.height}.${crResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
                     </div>
                   </div>
@@ -3051,6 +3309,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderCompareToggle(metaSource?.imageDataUrl, metaResult?.imageDataUrl)}
                   {renderSendTo(metaResult.imageDataUrl, `clean.${metaResult.format}`, 'metadata')}
+                  {renderExport(metaResult.imageDataUrl, 'clean')}
                   <button onClick={() => downloadDataUrl(metaResult.imageDataUrl, `clean-${Date.now()}.${metaResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
                 </div>
               )}
@@ -3157,6 +3416,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderCompareToggle(wmSource?.imageDataUrl, wmResult?.imageDataUrl)}
                   {renderSendTo(wmResult.imageDataUrl, `watermarked.${wmResult.format}`, 'watermark')}
+                  {renderExport(wmResult.imageDataUrl, 'watermarked')}
                   <button onClick={() => downloadDataUrl(wmResult.imageDataUrl, `watermarked-${Date.now()}.${wmResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
                 </div>
               )}
@@ -3393,6 +3653,7 @@ export default function GraphicsPage() {
               {extResult?.imageDataUrl && (
                 <div className="flex items-center gap-2">
                   {renderSendTo(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}.${extResult.format}`, 'extend')}
+                  {renderExport(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}`)}
                   <button onClick={() => downloadDataUrl(extResult.imageDataUrl, `extended-${extResult.width}x${extResult.height}.${extResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
                 </div>
               )}
@@ -3516,6 +3777,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderCompareToggle(efSource?.imageDataUrl, efResult?.imageDataUrl)}
                   {renderSendTo(efResult.imageDataUrl, `effect.${efResult.format}`, 'effects')}
+                  {renderExport(efResult.imageDataUrl, 'effect')}
                   <button onClick={() => downloadDataUrl(efResult.imageDataUrl, `effect-${Date.now()}.${efResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
                 </div>
               )}
@@ -3596,6 +3858,7 @@ export default function GraphicsPage() {
                 <div className="flex items-center gap-2">
                   {renderCompareToggle(adjSource?.imageDataUrl, adjResult?.imageDataUrl)}
                   {renderSendTo(adjResult.imageDataUrl, `adjusted.${adjResult.format}`, 'adjust')}
+                  {renderExport(adjResult.imageDataUrl, 'adjusted')}
                   <button onClick={() => downloadDataUrl(adjResult.imageDataUrl, `adjusted-${Date.now()}.${adjResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
                 </div>
               )}
