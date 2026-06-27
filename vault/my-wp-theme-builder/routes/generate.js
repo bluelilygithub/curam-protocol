@@ -27,6 +27,10 @@ const {
   consolidateWireframeIterateStyles,
   extractIteratePreviewCss,
 } = require('../utils/targetedIterate');
+const { detectSlop, buildDesloppifyPrompt } = require('../utils/slopDetect');
+const { getTemplateType, isValidTemplateType, listTemplateTypes } = require('../utils/templateTypes');
+const { buildTemplateDesignPrompt, buildTemplateIteratePrompt } = require('../prompts/template-design');
+const { pageToSectionId } = require('../prompts/stage1-design');
 const { writeFile, readFile, fileExists, tryReadFile } = require('../utils/filewriter');
 const { createJobReporter, isJobCancelled } = require('../utils/jobProgress');
 const { researchInspirationSites } = require('../utils/inspirationContext');
@@ -377,6 +381,109 @@ async function snapshotApprovedWireframe(sessionId) {
   return { html: cleanHtml, css: cleanCss, consolidated };
 }
 
+// Region/section ids that must survive any desloppify repair (a fix that drops
+// one of these would break targeted editing and WordPress conversion).
+const REQUIRED_ID_RE = /\sid=["'](tb-[a-z0-9-]+|site-navigation|home|about|services|blog|portfolio|contact)["']/gi;
+
+function extractRequiredIds(html) {
+  const ids = new Set();
+  let match = REQUIRED_ID_RE.exec(String(html || ''));
+  while (match) {
+    ids.add(match[1].toLowerCase());
+    match = REQUIRED_ID_RE.exec(String(html || ''));
+  }
+  return ids;
+}
+
+function preservesRequiredIds(originalHtml, fixedHtml) {
+  const before = extractRequiredIds(originalHtml);
+  const after = extractRequiredIds(fixedHtml);
+  for (const id of before) {
+    if (!after.has(id)) return false;
+  }
+  return true;
+}
+
+function slopGateEnabled(ctx) {
+  if (ctx?.skipSlopGate) return false;
+  return process.env.THEME_BUILDER_SLOP_GATE !== 'off';
+}
+
+/**
+ * QA gate: detect AI-slop tells in the generated skin and, when warranted,
+ * run a single targeted repair pass through the model. Never throws — on any
+ * failure it keeps the original design.
+ */
+async function runSlopGate({ sessionId, html, css, ctx, progress, force = false }) {
+  const before = detectSlop(html, css);
+  const report = { before, ranAt: new Date().toISOString(), fixed: false };
+
+  const actionable = force || before.errorCount > 0 || before.warnCount >= 3;
+  if (!slopGateEnabled(ctx) || !actionable) {
+    progress?.addItem?.(
+      before.findings.length
+        ? `Quality check: ${before.grade} (${before.errorCount} issues, ${before.warnCount} warnings) — no repair needed`
+        : 'Quality check: clean (no slop detected)'
+    );
+    await writeFile(sessionId, 'stage1/slop-report.json', JSON.stringify(report, null, 2)).catch(() => {});
+    return { html, css, report };
+  }
+
+  try {
+    progress?.start?.('desloppify', `Quality check ${before.grade} — removing AI-slop tells…`);
+    before.findings.forEach((f) => progress?.addItem?.(`• ${f.severity === 'error' ? 'Fix' : 'Review'}: ${f.label}`));
+
+    const prompt = buildDesloppifyPrompt({ html, css, findings: before.findings });
+    await recordPrompt(sessionId, progress, prompt, ctx?.model || null, 'desloppify-prompt');
+
+    const result = await createDesignMessage({
+      ...prompt,
+      userId: ctx?.userId,
+      model: ctx?.model,
+      stage: 'stage1',
+      maxTokens: 16000,
+      onProgress: (label) => progress?.addItem?.(label),
+    });
+    await writeFile(sessionId, 'stage1/last-desloppify-raw.txt', String(result.text || '').slice(0, 100000)).catch(() => {});
+
+    const parsed = parseDesignResponse(result.text, { fallbackCss: css });
+    const fixedHtml = stampRegionIds(parsed.html);
+    const fixedCss = parsed.css || css;
+
+    if (!preservesRequiredIds(html, fixedHtml)) {
+      progress?.addItem?.('Repair discarded — it would have dropped required regions; keeping original');
+      report.rejected = 'missing-required-ids';
+      await writeFile(sessionId, 'stage1/slop-report.json', JSON.stringify(report, null, 2)).catch(() => {});
+      progress?.complete?.('desloppify');
+      return { html, css, report };
+    }
+
+    const after = detectSlop(fixedHtml, fixedCss);
+    const improved = after.errorCount < before.errorCount
+      || (after.errorCount === before.errorCount && after.findings.length < before.findings.length);
+
+    report.after = after;
+    if (improved) {
+      report.fixed = true;
+      progress?.addItem?.(`Quality improved: ${before.grade} → ${after.grade}`);
+      progress?.complete?.('desloppify');
+      await writeFile(sessionId, 'stage1/slop-report.json', JSON.stringify(report, null, 2)).catch(() => {});
+      return { html: fixedHtml, css: fixedCss, report };
+    }
+
+    progress?.addItem?.('Repair did not improve the score — keeping original');
+    report.rejected = 'no-improvement';
+    progress?.complete?.('desloppify');
+    await writeFile(sessionId, 'stage1/slop-report.json', JSON.stringify(report, null, 2)).catch(() => {});
+    return { html, css, report };
+  } catch (err) {
+    progress?.addItem?.(`Quality repair skipped (${err.message})`);
+    report.error = err.message;
+    await writeFile(sessionId, 'stage1/slop-report.json', JSON.stringify(report, null, 2)).catch(() => {});
+    return { html, css, report };
+  }
+}
+
 async function generateHomeDesignFromAI(sessionId, intakeData, { userId, model, jobId } = {}) {
   const progress = createJobReporter(jobId, 'stage1-home');
 
@@ -426,8 +533,18 @@ async function generateHomeDesignFromAI(sessionId, intakeData, { userId, model, 
       intakeData.functionality
     );
     let html = stampRegionIds(enhancedDesign.html);
-    const css = enhancedDesign.css;
+    let css = enhancedDesign.css;
     const modelUsed = designResult.model;
+
+    const gated = await runSlopGate({
+      sessionId,
+      html,
+      css,
+      ctx: { userId, model: resolvedModel, skipSlopGate: intakeData?.skipSlopGate },
+      progress,
+    });
+    html = stampRegionIds(gated.html);
+    css = gated.css;
 
     progress.start('responsive', 'Applying standard mobile CSS…');
     const responsiveCss = appendResponsiveGuarantees(fallbackResponsiveCss());
@@ -454,7 +571,273 @@ async function generateHomeDesignFromAI(sessionId, intakeData, { userId, model, 
       model: modelUsed,
       responsiveModel: 'deterministic',
       phase: 'design',
+      slopReport: gated.report,
     };
+  } catch (err) {
+    progress.fail(err);
+    throw err;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Multi-template theme building (page / single / cpt) — Phase 1
+// ----------------------------------------------------------------------------
+
+function templateDir(key) {
+  return `stage1/templates/${key}`;
+}
+
+function extractTag(html, tag) {
+  const match = String(html || '').match(new RegExp(`<${tag}\\b[\\s\\S]*?</${tag}>`, 'i'));
+  return match ? match[0] : '';
+}
+
+function replaceTag(html, tag, replacement) {
+  if (!replacement) return html;
+  const re = new RegExp(`<${tag}\\b[\\s\\S]*?</${tag}>`, 'i');
+  if (re.test(html)) return html.replace(re, replacement);
+  return html;
+}
+
+function extractRootTokens(css) {
+  const blocks = String(css || '').match(/:root\s*\{[\s\S]*?\}/gi);
+  return blocks ? blocks.join('\n') : '';
+}
+
+function composeTemplateCss(homeCss, additions) {
+  const base = String(homeCss || '').trim();
+  const add = String(additions || '').trim();
+  if (!add) return base;
+  return `${base}\n\n/* === template additions === */\n${add}`;
+}
+
+async function loadApprovedHomepage(sessionId) {
+  if (db.isEnabled()) {
+    const approved = await db.getApprovedHtml?.(sessionId);
+    if (approved?.html) return { html: approved.html, css: approved.css || '' };
+    const stored = await db.getHtml(sessionId);
+    if (stored?.html) return { html: stored.html, css: stored.css || '' };
+  }
+  const approvedHtml = await tryReadFile(sessionId, 'stage1/approved/index.html');
+  if (approvedHtml) {
+    return { html: approvedHtml, css: (await tryReadFile(sessionId, 'stage1/approved/style.css')) || '' };
+  }
+  const indexHtml = await tryReadFile(sessionId, 'index.html');
+  return { html: indexHtml || '', css: (await tryReadFile(sessionId, 'style.css')) || '' };
+}
+
+function upsertTemplateItem(meta, item) {
+  meta.pages = meta.pages || { homepage: 'pending', items: [] };
+  meta.pages.items = meta.pages.items || [];
+  const idx = meta.pages.items.findIndex((i) => i.slug === item.slug);
+  if (idx >= 0) {
+    meta.pages.items[idx] = { ...meta.pages.items[idx], ...item };
+  } else {
+    meta.pages.items.push(item);
+  }
+}
+
+async function patchTemplateItem(sessionId, key, patch) {
+  const meta = JSON.parse(await readFile(sessionId, 'meta.json'));
+  upsertTemplateItem(meta, { slug: key, ...patch });
+  meta.updatedAt = new Date().toISOString();
+  await writeFile(sessionId, 'meta.json', JSON.stringify(meta, null, 2));
+  return meta;
+}
+
+async function saveTemplatePreview(sessionId, key, { html, additionsCss, fullCss, responsiveCss }) {
+  const dir = templateDir(key);
+  const versionsPath = `${dir}/versions.json`;
+  const versionsRaw = await tryReadFile(sessionId, versionsPath);
+  const versions = versionsRaw ? JSON.parse(versionsRaw) : [];
+  const version = versions.length + 1;
+  versions.push({ version, createdAt: new Date().toISOString() });
+  await writeFile(sessionId, versionsPath, JSON.stringify(versions, null, 2));
+
+  await writeFile(sessionId, `${dir}/index.html`, html);
+  await writeFile(sessionId, `${dir}/style.css`, fullCss);
+  await writeFile(sessionId, `${dir}/additions.css`, additionsCss || '');
+  if (responsiveCss != null) await writeFile(sessionId, `${dir}/responsive.css`, responsiveCss);
+  await writeFile(sessionId, `${dir}/v${version}/index.html`, html);
+  await writeFile(sessionId, `${dir}/v${version}/style.css`, fullCss);
+  await writeFile(sessionId, `${dir}/current.json`, JSON.stringify({ version, updatedAt: new Date().toISOString() }, null, 2));
+  return version;
+}
+
+async function loadTemplate(sessionId, key) {
+  const dir = templateDir(key);
+  const html = await tryReadFile(sessionId, `${dir}/index.html`);
+  if (!html) return null;
+  return {
+    html,
+    fullCss: (await tryReadFile(sessionId, `${dir}/style.css`)) || '',
+    additionsCss: (await tryReadFile(sessionId, `${dir}/additions.css`)) || '',
+    responsiveCss: (await tryReadFile(sessionId, `${dir}/responsive.css`)) || null,
+  };
+}
+
+async function gatherTemplateReferences(sessionId, descriptor, home) {
+  const refs = [];
+  for (const refId of descriptor.inheritsFrom || []) {
+    if (refId === 'home') {
+      if (home?.html) refs.push({ label: 'homepage', html: home.html });
+    } else {
+      const meta = JSON.parse(await readFile(sessionId, 'meta.json'));
+      const item = (meta.pages?.items || []).find((i) => i.template === refId && i.status === 'approved');
+      if (item) {
+        const tpl = await loadTemplate(sessionId, item.slug);
+        if (tpl?.html) refs.push({ label: item.label, html: tpl.html });
+      }
+    }
+  }
+  return refs;
+}
+
+function intakeSummaryText(intakeData) {
+  const purpose = intakeData?.purpose || {};
+  const parts = [];
+  if (purpose.siteFor) parts.push(`Site type: ${purpose.siteFor}`);
+  if (purpose.targetAudience) parts.push(`Audience: ${purpose.targetAudience}`);
+  if (purpose.primaryAction) parts.push(`Primary action: ${purpose.primaryAction}`);
+  return parts.join('; ');
+}
+
+async function finalizeTemplateOutput(sessionId, key, label, parsedHtml, additionsCss, home, miniBrief) {
+  // Enforce inherited chrome regardless of what the model returned.
+  let html = parsedHtml;
+  const header = extractTag(home.html, 'header');
+  const footer = extractTag(home.html, 'footer');
+  if (header) html = replaceTag(html, 'header', header);
+  if (footer) html = replaceTag(html, 'footer', footer);
+
+  const components = Array.isArray(miniBrief?.components) ? miniBrief.components : [];
+  const enhanced = applyDesignEnhancements(html, additionsCss, components);
+  html = stampRegionIds(enhanced.html);
+  const additions = enhanced.css;
+  const fullCss = composeTemplateCss(home.css, additions);
+
+  html = ensureStylesheetLinks(html);
+  const responsiveCss = appendResponsiveGuarantees(fallbackResponsiveCss());
+
+  const slopReport = detectSlop(html, fullCss);
+  await writeFile(sessionId, `${templateDir(key)}/slop-report.json`, JSON.stringify({ before: slopReport, ranAt: new Date().toISOString() }, null, 2)).catch(() => {});
+
+  const version = await saveTemplatePreview(sessionId, key, { html, additionsCss: additions, fullCss, responsiveCss });
+  return { html, fullCss, additionsCss: additions, responsiveCss, slopReport, version };
+}
+
+async function generateTemplateDesign(sessionId, { key, label, type, cptSlug, miniBrief, intakeData, ctx }) {
+  const descriptor = getTemplateType(type);
+  if (!descriptor) {
+    const err = new Error(`Unknown template type: ${type}`);
+    err.status = 400;
+    throw err;
+  }
+
+  const home = await loadApprovedHomepage(sessionId);
+  if (!home.html) {
+    const err = new Error('Design and approve the homepage before adding templates');
+    err.status = 400;
+    throw err;
+  }
+
+  const progress = createJobReporter(ctx.jobId, 'stage1-home');
+  try {
+    progress.start('analyse', `Reading the theme for "${label}"`);
+    const references = await gatherTemplateReferences(sessionId, descriptor, home);
+    const resolvedModel = await resolveStage1Model({ userId: ctx.userId, model: ctx.model });
+    const prompt = buildTemplateDesignPrompt({
+      descriptor,
+      label,
+      miniBrief,
+      homepageHeader: extractTag(home.html, 'header'),
+      homepageFooter: extractTag(home.html, 'footer'),
+      tokensCss: extractRootTokens(home.css),
+      homepageCssExcerpt: home.css,
+      references,
+      intakeSummary: intakeSummaryText(intakeData),
+    });
+    await recordPrompt(sessionId, progress, prompt, resolvedModel, `template-${key}-prompt`);
+    progress.complete('analyse');
+
+    progress.start('generate', `Designing the ${descriptor.label.toLowerCase()} template…`);
+    const result = await createDesignMessage({
+      ...prompt,
+      userId: ctx.userId,
+      model: resolvedModel,
+      stage: 'stage1',
+      maxTokens: 16000,
+      onProgress: (lbl) => progress.addItem(lbl),
+    });
+    await writeFile(sessionId, `${templateDir(key)}/last-raw-response.txt`, String(result.text || '').slice(0, 80000)).catch(() => {});
+    const parsed = parseDesignResponse(result.text, { fallbackCss: '' });
+    progress.complete('generate');
+
+    progress.start('save', 'Saving template preview');
+    const out = await finalizeTemplateOutput(sessionId, key, label, parsed.html, parsed.css, home, miniBrief);
+    await patchTemplateItem(sessionId, key, {
+      label,
+      template: type,
+      cptSlug: cptSlug || null,
+      miniBrief: miniBrief || {},
+      status: 'designed',
+      version: out.version,
+    });
+    progress.complete('save');
+    progress.finish();
+
+    return { sessionId, key, label, type, phase: 'design', model: result.model, ...out };
+  } catch (err) {
+    progress.fail(err);
+    throw err;
+  }
+}
+
+async function iterateTemplateDesign(sessionId, { key, changeRequest, ctx }) {
+  const meta = JSON.parse(await readFile(sessionId, 'meta.json'));
+  const item = (meta.pages?.items || []).find((i) => i.slug === key);
+  if (!item) {
+    const err = new Error('Template not found');
+    err.status = 404;
+    throw err;
+  }
+  const current = await loadTemplate(sessionId, key);
+  if (!current) {
+    const err = new Error('No template design to iterate on');
+    err.status = 400;
+    throw err;
+  }
+  const home = await loadApprovedHomepage(sessionId);
+
+  const progress = createJobReporter(ctx.jobId, 'stage1-iterate');
+  try {
+    progress.start('generate', `Updating the "${item.label}" template…`);
+    const resolvedModel = await resolveIterateModel({ userId: ctx.userId, model: ctx.model, phase: 'design' });
+    const prompt = buildTemplateIteratePrompt({
+      currentHtml: current.html,
+      currentCss: current.additionsCss,
+      changeRequest: changeRequest.trim(),
+      label: item.label,
+    });
+    await recordPrompt(sessionId, progress, prompt, resolvedModel, `template-${key}-iterate-prompt`);
+    const result = await createDesignMessage({
+      ...prompt,
+      userId: ctx.userId,
+      model: resolvedModel,
+      stage: 'stage1',
+      maxTokens: 16000,
+      onProgress: (lbl) => progress.addItem(lbl),
+    });
+    const parsed = parseDesignResponse(result.text, { fallbackCss: current.additionsCss });
+    progress.complete('generate');
+
+    progress.start('save', 'Saving template preview');
+    const out = await finalizeTemplateOutput(sessionId, key, item.label, parsed.html, parsed.css, home, item.miniBrief);
+    await patchTemplateItem(sessionId, key, { status: 'designed', version: out.version });
+    progress.complete('save');
+    progress.finish();
+
+    return { sessionId, key, label: item.label, phase: 'design', model: result.model, ...out };
   } catch (err) {
     progress.fail(err);
     throw err;
@@ -499,6 +882,69 @@ router.get('/session/:sessionId/lessons', async (req, res, next) => {
     const { sessionId } = req.params;
     const lessons = await loadLessons(sessionId);
     res.json({ sessionId, lessons });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// On-demand slop report: cached gate result, or a live detection on current files.
+router.get('/session/:sessionId/slop', async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    if (!(await fileExists(sessionId, 'meta.json'))) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const cached = await tryReadFile(sessionId, 'stage1/slop-report.json');
+    if (cached) {
+      return res.json({ sessionId, source: 'cached', report: JSON.parse(cached) });
+    }
+    const html = (await tryReadFile(sessionId, 'index.html')) || '';
+    const css = (await tryReadFile(sessionId, 'style.css')) || '';
+    if (!html) return res.status(400).json({ error: 'No design to analyse yet' });
+    return res.json({ sessionId, source: 'live', report: { before: detectSlop(html, css) } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Manually run the desloppify repair pass on the current design and save a new version.
+router.post('/session/:sessionId/desloppify', async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    if (!(await fileExists(sessionId, 'meta.json'))) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    await assertSessionEditable(sessionId);
+
+    const html = await loadSessionHtmlForPick(sessionId);
+    if (!html) return res.status(400).json({ error: 'No design to clean up' });
+    const css = (await tryReadFile(sessionId, 'style.css')) || '';
+
+    const ctx = generationContext(req);
+    const progress = createJobReporter(ctx.jobId, 'stage1-desloppify');
+    progress.start('desloppify', 'Running quality check…');
+
+    const gated = await runSlopGate({
+      sessionId,
+      html,
+      css,
+      ctx: { ...ctx, model: resolveModelOverride(ctx) },
+      progress,
+      force: true,
+    });
+
+    if (!gated.report.fixed) {
+      progress.finish();
+      return res.json({ sessionId, changed: false, report: gated.report });
+    }
+
+    const currentRaw = await tryReadFile(sessionId, 'stage1/current.json');
+    const phase = currentRaw ? JSON.parse(currentRaw).phase || 'design' : 'design';
+    const responsiveCss = (await tryReadFile(sessionId, 'responsive.css')) || null;
+    const version = await savePreview(sessionId, gated.html, gated.css, phase, responsiveCss);
+    progress.finish();
+
+    res.json({ sessionId, changed: true, version, html: gated.html, css: gated.css, report: gated.report });
   } catch (err) {
     next(err);
   }
@@ -1147,6 +1593,135 @@ router.post('/session/:sessionId/approve', async (req, res, next) => {
     await writeFile(sessionId, 'meta.json', JSON.stringify(meta, null, 2));
 
     res.json({ ok: true, sessionId, version });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// List available template types (for the mini-brief type picker).
+router.get('/template-types', (req, res) => {
+  res.json({ types: listTemplateTypes() });
+});
+
+// List the theme's templates (homepage + added templates).
+router.get('/session/:sessionId/templates', async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    if (!(await fileExists(sessionId, 'meta.json'))) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const meta = JSON.parse(await readFile(sessionId, 'meta.json'));
+    res.json({ sessionId, pages: meta.pages || { homepage: 'pending', items: [] } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Create + design a new template from a mini-brief.
+router.post('/session/:sessionId/templates', async (req, res, next) => {
+  try {
+    const { sessionId } = req.params;
+    const { label, type, cptSlug, miniBrief } = req.body || {};
+    if (!(await fileExists(sessionId, 'meta.json'))) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    if (!label?.trim()) return res.status(400).json({ error: 'A template label is required' });
+    if (!isValidTemplateType(type)) return res.status(400).json({ error: 'A valid template type is required (page, single, cpt)' });
+    if (type === 'cpt' && !cptSlug?.trim()) return res.status(400).json({ error: 'cptSlug is required for a custom post type template' });
+
+    const key = type === 'cpt' ? pageToSectionId(cptSlug) : pageToSectionId(label);
+    const intakeRaw = await tryReadFile(sessionId, 'intake.json');
+    const intakeData = intakeRaw ? normalizeIntakeData(JSON.parse(intakeRaw)) : {};
+
+    await patchTemplateItem(sessionId, key, {
+      label: label.trim(),
+      template: type,
+      cptSlug: cptSlug?.trim() || null,
+      miniBrief: miniBrief || {},
+      status: 'designing',
+    });
+
+    const ctx = generationContext(req);
+    const data = await generateTemplateDesign(sessionId, {
+      key,
+      label: label.trim(),
+      type,
+      cptSlug: cptSlug?.trim() || null,
+      miniBrief: miniBrief || {},
+      intakeData,
+      ctx: { ...ctx, model: resolveModelOverride(ctx) },
+    });
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get one template's current design.
+router.get('/session/:sessionId/templates/:key', async (req, res, next) => {
+  try {
+    const { sessionId, key } = req.params;
+    if (!(await fileExists(sessionId, 'meta.json'))) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const meta = JSON.parse(await readFile(sessionId, 'meta.json'));
+    const item = (meta.pages?.items || []).find((i) => i.slug === key);
+    if (!item) return res.status(404).json({ error: 'Template not found' });
+    const tpl = await loadTemplate(sessionId, key);
+    const reportRaw = await tryReadFile(sessionId, `${templateDir(key)}/slop-report.json`);
+    res.json({
+      sessionId,
+      item,
+      html: tpl?.html || null,
+      css: tpl?.fullCss || null,
+      responsiveCss: tpl?.responsiveCss || null,
+      slopReport: reportRaw ? JSON.parse(reportRaw) : null,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Iterate a template design.
+router.post('/session/:sessionId/templates/:key/iterate', async (req, res, next) => {
+  try {
+    const { sessionId, key } = req.params;
+    const { changeRequest } = req.body || {};
+    if (!changeRequest?.trim()) return res.status(400).json({ error: 'changeRequest is required' });
+    if (!(await fileExists(sessionId, 'meta.json'))) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const ctx = generationContext(req);
+    const data = await iterateTemplateDesign(sessionId, {
+      key,
+      changeRequest,
+      ctx: { ...ctx, model: resolveModelOverride(ctx) },
+    });
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Approve a template.
+router.post('/session/:sessionId/templates/:key/approve', async (req, res, next) => {
+  try {
+    const { sessionId, key } = req.params;
+    if (!(await fileExists(sessionId, 'meta.json'))) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    const tpl = await loadTemplate(sessionId, key);
+    if (!tpl) return res.status(400).json({ error: 'No template design to approve' });
+
+    const dir = templateDir(key);
+    await writeFile(sessionId, `${dir}/approved/index.html`, tpl.html);
+    await writeFile(sessionId, `${dir}/approved/style.css`, tpl.fullCss);
+    await writeFile(sessionId, `${dir}/approved/additions.css`, tpl.additionsCss);
+    if (tpl.responsiveCss) await writeFile(sessionId, `${dir}/approved/responsive.css`, tpl.responsiveCss);
+    await writeFile(sessionId, `${dir}/approved.json`, JSON.stringify({ approvedAt: new Date().toISOString() }, null, 2));
+
+    await patchTemplateItem(sessionId, key, { status: 'approved' });
+    res.json({ ok: true, sessionId, key, status: 'approved' });
   } catch (err) {
     next(err);
   }

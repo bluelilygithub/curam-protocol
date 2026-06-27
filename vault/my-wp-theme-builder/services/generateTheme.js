@@ -1,6 +1,7 @@
 const { createDesignMessage } = require('../utils/modelCall');
 const { parseJsonResponse, extractPhp, extractCss } = require('../utils/parseThemeOutput');
-const { writeFile, listFiles } = require('../utils/filewriter');
+const { writeFile, tryReadFile, listFiles } = require('../utils/filewriter');
+const { emitTemplateFiles } = require('../utils/templateEmit');
 const {
   buildCall1AnalysisPrompt,
   buildCall2StylePrompt,
@@ -275,7 +276,8 @@ async function generateWordPressTheme({
   } catch {
     styleResult = { 'style.css': fallbackStyleCss(themeSlug, wpData, approvedCss) };
   }
-  await saveThemeFile(sessionId, themeSlug, 'style.css', styleResult['style.css'] || fallbackStyleCss(themeSlug, wpData, approvedCss));
+  const baseStyleCss = styleResult['style.css'] || fallbackStyleCss(themeSlug, wpData, approvedCss);
+  await saveThemeFile(sessionId, themeSlug, 'style.css', baseStyleCss);
 
   if (approvedResponsiveCss) {
     await saveThemeFile(sessionId, themeSlug, 'responsive.css', approvedResponsiveCss);
@@ -326,6 +328,42 @@ async function generateWordPressTheme({
   const parts = templatesResult['template-parts'] || {};
   for (const [name, content] of Object.entries(parts)) {
     await saveThemeFile(sessionId, themeSlug, `template-parts/${name}`, extractPhp(content));
+  }
+
+  // Emit deterministic PHP for each approved non-homepage template (page/single/cpt).
+  // These swap data-tb-bind / data-tb-loop markers for WP/ACF calls and, by the WP
+  // template hierarchy, take precedence over the generic page.php above.
+  progress(5, 'Emitting page templates');
+  const templateAdditions = [];
+  try {
+    const metaRaw = await tryReadFile(sessionId, 'meta.json');
+    const meta = metaRaw ? JSON.parse(metaRaw) : {};
+    const items = (meta.pages?.items || []).filter((i) => i.status === 'approved');
+    for (const item of items) {
+      const dir = `stage1/templates/${item.slug}`;
+      const html = (await tryReadFile(sessionId, `${dir}/approved/index.html`)) || (await tryReadFile(sessionId, `${dir}/index.html`));
+      if (!html) continue;
+      const { files } = emitTemplateFiles({
+        html,
+        type: item.template,
+        slug: item.slug,
+        cptSlug: item.cptSlug || null,
+        label: item.label || item.slug,
+      });
+      for (const [filename, content] of Object.entries(files)) {
+        await saveThemeFile(sessionId, themeSlug, filename, content);
+      }
+      const additions = (await tryReadFile(sessionId, `${dir}/approved/additions.css`)) || (await tryReadFile(sessionId, `${dir}/additions.css`));
+      if (additions && additions.trim()) {
+        templateAdditions.push(`/* === ${item.label || item.slug} (${item.template}) === */\n${additions.trim()}`);
+      }
+    }
+  } catch {
+    // Templates are optional; a malformed meta shouldn't abort theme generation.
+  }
+  if (templateAdditions.length) {
+    const mergedStyle = `${baseStyleCss}\n\n/* === template styles === */\n${templateAdditions.join('\n\n')}\n`;
+    await saveThemeFile(sessionId, themeSlug, 'style.css', mergedStyle);
   }
 
   progress(6, 'Generating ACF JSON');

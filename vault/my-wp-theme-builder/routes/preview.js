@@ -4,6 +4,7 @@ const { ensureScrollBehavior } = require('../utils/parseDesign');
 const { appendResponsiveGuarantees } = require('../utils/responsiveCss');
 const { buildPreviewHtml } = require('../utils/previewEnhance');
 const { extractAllIteratePreviewCss } = require('../utils/targetedIterate');
+const { assetUrl } = require('../utils/mountPath');
 const db = require('../utils/db');
 
 const router = express.Router();
@@ -84,6 +85,66 @@ async function loadPreviewHtml(sessionId) {
     cssVersion,
   });
 }
+
+async function loadTemplatePreviewHtml(sessionId, key) {
+  const dir = `stage1/templates/${key}`;
+  const html = await tryReadFile(sessionId, `${dir}/index.html`);
+  if (!html) return null;
+
+  const css = (await tryReadFile(sessionId, `${dir}/style.css`)) || '';
+  const functionality = await loadIntakeFunctionality(sessionId);
+  const hasResponsive = await fileExists(sessionId, `${dir}/responsive.css`);
+  const iterateCss = extractAllIteratePreviewCss({ css, html });
+
+  return buildPreviewHtml(html, {
+    sessionId,
+    baseHref: assetUrl(`/preview/${sessionId}/template/${key}/`),
+    functionality,
+    hasResponsive,
+    wireframe: false,
+    iterateCss,
+    cssVersion: Date.now(),
+  });
+}
+
+router.get('/:sessionId/template/:key/style.css', async (req, res, next) => {
+  try {
+    const { sessionId, key } = req.params;
+    const css = await tryReadFile(sessionId, `stage1/templates/${key}/style.css`);
+    if (!css) return res.status(404).send('/* template style.css not found */');
+    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(ensureScrollBehavior(css));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/:sessionId/template/:key/responsive.css', async (req, res, next) => {
+  try {
+    const { sessionId, key } = req.params;
+    const css = await tryReadFile(sessionId, `stage1/templates/${key}/responsive.css`);
+    if (!css) return res.status(404).send('/* template responsive.css not found */');
+    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    res.send(appendResponsiveGuarantees(css));
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get(['/:sessionId/template/:key', '/:sessionId/template/:key/'], async (req, res, next) => {
+  try {
+    const { sessionId, key } = req.params;
+    const html = await loadTemplatePreviewHtml(sessionId, key);
+    if (!html) return res.status(404).send('Template preview not found');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Security-Policy', PREVIEW_CSP);
+    res.send(html);
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get('/:sessionId/style.css', async (req, res, next) => {
   try {

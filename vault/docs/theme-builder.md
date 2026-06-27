@@ -108,6 +108,18 @@ On wireframe approve, iterate styles (inline picks, `tb-pick-styles`, `style.css
 
 ---
 
+## Quality gate (slop detection)
+
+After the homepage design pass generates HTML/CSS (`generateHomeDesignFromAI`), a deterministic **slop detector** (`utils/slopDetect.js`) scans the output for AI-generated tells — gradient-filled text, lorem ipsum, missing CSS custom properties, the default indigo/purple-on-white palette, no fluid `clamp()` type scale, glassmorphism, lazy `transition: all`, emoji-as-icons, and generic filler copy. It returns a score (0–100) and graded findings; no LLM is used.
+
+When high-confidence issues are found (any **error**, or 3+ **warnings**), the gate runs **one** targeted desloppify repair pass through the Stage 1 model (`buildDesloppifyPrompt`) that fixes only the listed issues while preserving structure, region ids, nav, and the inline `tb-inview` script. The repair is **only accepted if** it keeps all required region ids and lowers the issue count — otherwise the original design is kept. The whole gate is wrapped so it can never fail generation. The report is written to `stage1/slop-report.json` (before/after) and returned as `slopReport` on the design response.
+
+- **Disable:** set `THEME_BUILDER_SLOP_GATE=off`.
+- `GET /tb/api/generate/session/:sessionId/slop` — cached report, or a live detection on the current files.
+- `POST /tb/api/generate/session/:sessionId/desloppify` — force a repair pass on the current design and save a new version.
+
+---
+
 ## API mount
 
 Vault mounts the theme-builder Express app at `/tb` (`server/index.js` → `createThemeBuilderApp`). Vite proxies `/tb` to port `3001` in local dev.

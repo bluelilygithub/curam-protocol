@@ -56,7 +56,35 @@
     }
     return parts.length
       ? `<div class="history-downloads">${parts.join('')}</div>`
-      : '<span class="history-row__hint">Approve design to export</span>';
+      : '<span class="history-row__hint">Lock homepage to export</span>';
+  }
+
+  function statusBadge(website) {
+    const stage = website.stage || '';
+    let label = website.stageLabel || 'New';
+    let tone = 'neutral';
+    if (stage === 'conversion-complete') {
+      label = 'Theme ready';
+      tone = 'success';
+    } else if (stage === 'design-approved' || website.locked) {
+      label = 'Homepage approved';
+      tone = 'success';
+    } else if (stage === 'design') {
+      label = 'Homepage designed';
+      tone = 'info';
+    } else if (stage === 'wireframe') {
+      label = 'Wireframe';
+      tone = 'info';
+    }
+    return `<span class="history-status-badge history-status-badge--${tone}">${escapeHtml(label)}</span>`;
+  }
+
+  function pagesSummary(website) {
+    const items = website.pages?.items || [];
+    if (!items.length) return '';
+    const approved = items.filter((i) => i.status === 'approved').length;
+    const designed = items.filter((i) => ['designed', 'approved'].includes(i.status)).length;
+    return `<span class="history-row__pages">${designed}/${items.length} pages designed${approved ? ` · ${approved} approved` : ''}</span>`;
   }
 
   function renderWebsiteRow(website, project, rowIndex) {
@@ -79,13 +107,13 @@
       </div>
       <div class="history-row__col history-row__col--main">
         <div class="history-row__title">${escapeHtml(website.websiteLabel || website.sessionId.slice(0, 8))}</div>
-        <div class="history-row__subtitle">${escapeHtml(website.stageLabel || 'New')}${website.locked ? ' · locked' : ''}</div>
+        <div class="history-row__subtitle">${statusBadge(website)}${pagesSummary(website)}</div>
       </div>
       <div class="history-row__col history-row__col--actions" data-no-open>
         ${renderDownloadMenu(website)}
+        <button type="button" class="history-action history-action--primary" data-review-website="${website.sessionId}">Review</button>
         <button type="button" class="history-action" data-rename-website="${website.sessionId}" data-current-name="${escapeHtml(website.websiteLabel)}">Rename</button>
         <button type="button" class="history-action history-action--danger" data-confirm-website="${website.sessionId}">Delete</button>
-        <span class="history-row__chevron" aria-hidden="true">›</span>
       </div>
     </div>`;
   }
@@ -286,6 +314,12 @@
 
     if (target.closest('[data-no-open]')) {
       if (!target.closest('[data-open-website]')) event.stopPropagation();
+    }
+
+    const reviewBtn = target.closest('[data-review-website]');
+    if (reviewBtn?.dataset.reviewWebsite) {
+      await window.openWebsite?.(reviewBtn.dataset.reviewWebsite);
+      return;
     }
 
     const openRow = target.closest('[data-open-website]');

@@ -34,8 +34,9 @@ function injectExtraCss(html, extraCss) {
   return `${styleTag}${html}`;
 }
 
-function applyPreviewBaseTag(html, sessionId) {
-  const baseTag = `<base href="${assetUrl(`/preview/${sessionId}/`)}">`;
+function applyPreviewBaseTag(html, sessionId, baseHref) {
+  const href = baseHref || assetUrl(`/preview/${sessionId}/`);
+  const baseTag = `<base href="${href}">`;
   if (/<base\s/i.test(html)) return html;
   if (/<head[^>]*>/i.test(html)) {
     return html.replace(/<head([^>]*)>/i, `<head$1>${baseTag}`);
@@ -89,6 +90,7 @@ function buildPreviewHtml(html, {
   wireframe = false,
   iterateCss = '',
   cssVersion = null,
+  baseHref = null,
 } = {}) {
   const { html: cleaned, extraCss } = sanitizeDesignHtml(html);
   let out = injectExtraCss(cleaned, extraCss);
@@ -126,8 +128,8 @@ function buildPreviewHtml(html, {
     }
   }
 
-  if (sessionId) {
-    out = applyPreviewBaseTag(out, sessionId);
+  if (sessionId || baseHref) {
+    out = applyPreviewBaseTag(out, sessionId, baseHref);
   }
 
   out = injectIterateOverrides(out, iterateCss);

@@ -227,13 +227,25 @@
         </div>
         <button type="button" class="btn-secondary btn-toolbar" id="btn-open-tab" hidden>Preview in new tab</button>
         <button type="button" class="btn-secondary btn-toolbar" id="btn-iterate">Iterate</button>
-          <button type="button" class="btn-primary btn-toolbar" id="btn-design-home" hidden title="Polishes your approved wireframe structure with brand styling — same layout, not a new design">Approve wireframe &amp; build homepage</button>
-        <button type="button" class="btn-primary btn-toolbar" id="btn-approve" hidden>Approve design</button>
+          <button type="button" class="btn-primary btn-toolbar" id="btn-design-home" hidden title="Locks the wireframe layout and designs the homepage with brand styling — same layout, not a new design">Looks good — design it</button>
+        <button type="button" class="btn-primary btn-toolbar" id="btn-approve" hidden title="Locks the homepage as the source of truth, then lets you design inner pages or build the theme">Lock homepage &amp; continue</button>
+        <button type="button" class="btn-primary btn-toolbar" id="btn-to-stage2" hidden>Build WordPress theme →</button>
         <button type="button" class="btn-secondary btn-toolbar" id="btn-all-projects">Back To Projects</button>
       </div>
 
+      <div class="template-mode-bar" id="template-mode-bar" hidden>
+        <span class="template-mode-bar__label">Editing template: <strong id="template-mode-name"></strong></span>
+        <div class="template-mode-bar__actions">
+          <button type="button" class="btn-primary btn-small" id="btn-approve-template">Approve page</button>
+          <button type="button" class="btn-secondary btn-small" id="btn-exit-template">Back to homepage</button>
+        </div>
+      </div>
+
       <div class="site-pages-panel" id="site-pages-panel" hidden>
-        <h3 class="site-pages-panel__title">Site pages</h3>
+        <div class="site-pages-panel__head">
+          <h3 class="site-pages-panel__title">Site pages</h3>
+          <button type="button" class="btn-secondary btn-small" id="btn-add-page" hidden>+ Add design</button>
+        </div>
         <p class="field-hint">Homepage and shared CSS must be established before designing inner pages.</p>
         <ul class="site-pages-list" id="site-pages-list"></ul>
       </div>

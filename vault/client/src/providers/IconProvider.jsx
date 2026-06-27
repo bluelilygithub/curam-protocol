@@ -110,6 +110,7 @@ const semanticMap = {
   'app-window': { lucide: 'AppWindow' },
   shapes: { lucide: 'Shapes' },
   'layout-grid': { lucide: 'LayoutGrid' },
+  info: { lucide: 'Info' },
 };
 
 const IconContext = createContext(null);
