@@ -111,6 +111,14 @@ const semanticMap = {
   shapes: { lucide: 'Shapes' },
   'layout-grid': { lucide: 'LayoutGrid' },
   info: { lucide: 'Info' },
+  'file-stack': { lucide: 'FileStack' },
+  'bar-chart': { lucide: 'BarChart3' },
+  contrast: { lucide: 'Contrast' },
+  film: { lucide: 'Film' },
+  link: { lucide: 'Link' },
+  'file-text': { lucide: 'FileText' },
+  workflow: { lucide: 'Workflow' },
+  eraser: { lucide: 'Eraser' },
 };
 
 const IconContext = createContext(null);

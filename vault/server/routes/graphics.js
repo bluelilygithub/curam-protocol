@@ -6,6 +6,7 @@ const { randomUUID } = require('crypto');
 const sharp = require('sharp');
 const archiver = require('archiver');
 const ImageTracer = require('imagetracerjs');
+const exifReader = require('exif-reader');
 const { runtimeConfig } = require('../config/runtime');
 const { callModel } = require('../services/callModel');
 const { pool } = require('../db');
@@ -123,7 +124,46 @@ const CONVERT_FORMATS = [
   { id: 'gif', label: 'GIF', mime: 'image/gif', ext: 'gif', lossy: false },
   { id: 'avif', label: 'AVIF', mime: 'image/avif', ext: 'avif', lossy: true },
   { id: 'tiff', label: 'TIFF', mime: 'image/tiff', ext: 'tiff', lossy: false },
+  { id: 'ico', label: 'ICO (favicon)', mime: 'image/x-icon', ext: 'ico', lossy: false },
 ];
+
+// True if the buffer looks like an HEIF/HEIC container (ISO-BMFF `ftyp` box with
+// an HEIC-family brand). Used so the Convert tool can accept .heic uploads whose
+// browser MIME type came through as octet-stream.
+function isHeicBuffer(buffer) {
+  if (!buffer || buffer.length < 12) return false;
+  if (buffer.toString('ascii', 4, 8) !== 'ftyp') return false;
+  const brand = buffer.toString('ascii', 8, 12).toLowerCase();
+  return ['heic', 'heix', 'heif', 'mif1', 'msf1', 'hevc', 'heim', 'heis', 'hevm', 'hevs'].includes(brand);
+}
+
+// Pack a set of PNG buffers (one per square size) into a single .ico container.
+// Modern .ico supports embedded PNG data, so each entry is just the PNG bytes.
+function packIco(images) {
+  const count = images.length;
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0); // reserved
+  header.writeUInt16LE(1, 2); // type: 1 = icon
+  header.writeUInt16LE(count, 4);
+  const dir = Buffer.alloc(16 * count);
+  let offset = 6 + 16 * count;
+  const bodies = [];
+  images.forEach((img, i) => {
+    const b = i * 16;
+    const dim = img.size >= 256 ? 0 : img.size; // 0 means 256px
+    dir.writeUInt8(dim, b + 0);
+    dir.writeUInt8(dim, b + 1);
+    dir.writeUInt8(0, b + 2); // palette colour count
+    dir.writeUInt8(0, b + 3); // reserved
+    dir.writeUInt16LE(1, b + 4); // colour planes
+    dir.writeUInt16LE(32, b + 6); // bits per pixel
+    dir.writeUInt32LE(img.buf.length, b + 8);
+    dir.writeUInt32LE(offset, b + 12);
+    offset += img.buf.length;
+    bodies.push(img.buf);
+  });
+  return Buffer.concat([header, dir, ...bodies]);
+}
 
 function comfyBaseUrl() {
   return String(runtimeConfig.localImageApiUrl || DEFAULT_COMFY_URL).replace(/\/$/, '');
@@ -440,6 +480,93 @@ async function generateWithFal({ prompt, width, height, seed, modelName }) {
       contentType: image.content_type || 'image/jpeg',
     },
     imageDataUrl,
+  };
+}
+
+async function augmentWithFal({ prompt, imageDataUrl, denoise, seed, modelName }) {
+  const apiKey = process.env.FAL_API_KEY;
+  if (!apiKey) throw new Error('FAL_API_KEY is not configured');
+  if (!/^data:image\//i.test(String(imageDataUrl || ''))) {
+    throw new Error('A source image is required for augmentation');
+  }
+
+  // resolveFalEndpoint appends the /image-to-image suffix for augment mode.
+  const endpoint = resolveFalEndpoint(modelName, 'augment');
+  const data = await fetchJson(`https://fal.run/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      prompt,
+      image_url: imageDataUrl,
+      strength: denoise,
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+      sync_mode: true,
+      num_images: 1,
+      enable_safety_checker: true,
+      output_format: 'jpeg',
+      acceleration: 'none',
+      seed,
+    }),
+  });
+
+  const image = Array.isArray(data.images) ? data.images[0] : null;
+  if (!image?.url) throw new Error('FAL did not return an augmented image');
+  const outDataUrl = await imageUrlToDataUrl(image.url, image.content_type);
+
+  return {
+    seed: Number.isFinite(Number(data.seed)) ? Number(data.seed) : seed,
+    image: {
+      provider: 'fal',
+      endpoint,
+      url: image.url,
+      contentType: image.content_type || 'image/jpeg',
+    },
+    imageDataUrl: outDataUrl,
+  };
+}
+
+// Mask-based inpainting via FAL. The mask must be the same size as the image,
+// white where the model should repaint, black to keep. Endpoint is overridable.
+async function inpaintWithFal({ prompt, imageDataUrl, maskDataUrl, strength, seed }) {
+  const apiKey = process.env.FAL_API_KEY;
+  if (!apiKey) throw new Error('FAL_API_KEY is not configured');
+  if (!/^data:image\//i.test(String(imageDataUrl || ''))) throw new Error('A source image is required for inpainting');
+  if (!/^data:image\//i.test(String(maskDataUrl || ''))) throw new Error('A mask is required for inpainting');
+
+  const endpoint = String(process.env.GRAPHICS_INPAINT_MODEL || 'fal-ai/flux-lora/inpainting').trim();
+  const data = await fetchJson(`https://fal.run/${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Key ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      prompt,
+      image_url: imageDataUrl,
+      mask_url: maskDataUrl,
+      strength,
+      num_inference_steps: 28,
+      guidance_scale: 3.5,
+      sync_mode: true,
+      num_images: 1,
+      enable_safety_checker: true,
+      output_format: 'jpeg',
+      acceleration: 'none',
+      seed,
+    }),
+  });
+
+  const image = Array.isArray(data.images) ? data.images[0] : null;
+  if (!image?.url) throw new Error('FAL did not return an inpainted image');
+  const outDataUrl = await imageUrlToDataUrl(image.url, image.content_type);
+  return {
+    seed: Number.isFinite(Number(data.seed)) ? Number(data.seed) : seed,
+    image: { provider: 'fal', endpoint, url: image.url, contentType: image.content_type || 'image/jpeg' },
+    imageDataUrl: outDataUrl,
   };
 }
 
@@ -925,13 +1052,38 @@ router.post('/augment', async (req, res) => {
     const negativePrompt = buildNegativePrompt(String(req.body?.negativePrompt || '').trim(), restrictions);
     const modelName = await resolveGraphicsModel(req.user.id);
     const provider = await resolveGraphicsProvider(req.user.id, modelName);
-    if (provider !== 'local-comfyui') {
-      return res.status(400).json({ error: `Image provider ${provider} is not supported yet` });
-    }
     const seed = Number.isFinite(Number(req.body?.seed))
       ? Math.floor(Number(req.body.seed))
       : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
     const denoise = Math.max(0.15, Math.min(0.85, Number(req.body?.denoise) || 0.45));
+
+    if (provider === 'fal') {
+      const falResult = await augmentWithFal({
+        prompt,
+        imageDataUrl: sourceImageDataUrl,
+        denoise,
+        seed,
+        modelName,
+      });
+      const cost = estimateGenerateCost({ provider: 'fal' });
+      logImageUsage({ userId: req.user.id, model: `fal:${modelName}`, feature: 'graphics_augment', costUsd: cost.usd });
+      return res.json({
+        ok: true,
+        prompt,
+        seed: falResult.seed,
+        denoise,
+        model: modelName,
+        cost,
+        image: falResult.image,
+        imageDataUrl: falResult.imageDataUrl,
+        restrictions,
+      });
+    }
+
+    if (provider !== 'local-comfyui') {
+      return res.status(400).json({ error: `Image provider ${provider} is not supported yet` });
+    }
+
     const imageName = await uploadImageToComfy(sourceImageDataUrl);
     const clientId = randomUUID();
     const workflow = buildAugmentWorkflow({
@@ -964,6 +1116,117 @@ router.post('/augment', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Mask-based inpainting / object removal. Currently FAL-only (mask + prompt).
+router.post('/inpaint', async (req, res) => {
+  try {
+    const prompt = String(req.body?.prompt || '').trim();
+    if (!prompt) return res.status(400).json({ error: 'Describe what should fill the masked area' });
+    const sourceImageDataUrl = String(req.body?.imageDataUrl || '');
+    const maskDataUrl = String(req.body?.maskDataUrl || '');
+    if (!/^data:image\//i.test(sourceImageDataUrl)) return res.status(400).json({ error: 'A valid image is required' });
+    if (!/^data:image\//i.test(maskDataUrl)) return res.status(400).json({ error: 'Paint a mask over the area to change' });
+
+    const restrictions = await loadContentRestrictions();
+    const modelName = await resolveGraphicsModel(req.user.id);
+    const provider = await resolveGraphicsProvider(req.user.id, modelName);
+    if (provider !== 'fal') {
+      return res.status(400).json({ error: 'Inpainting currently requires the FAL provider. Switch your image provider in Settings.' });
+    }
+    const seed = Number.isFinite(Number(req.body?.seed)) ? Math.floor(Number(req.body.seed)) : Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+    const strength = Math.max(0.3, Math.min(1, Number(req.body?.strength) || 0.85));
+
+    const result = await inpaintWithFal({ prompt, imageDataUrl: sourceImageDataUrl, maskDataUrl, strength, seed });
+    const cost = estimateGenerateCost({ provider: 'fal' });
+    logImageUsage({ userId: req.user.id, model: `fal:${result.image.endpoint}`, feature: 'graphics_inpaint', costUsd: cost.usd });
+    res.json({
+      ok: true,
+      prompt,
+      seed: result.seed,
+      strength,
+      model: result.image.endpoint,
+      cost,
+      image: result.image,
+      imageDataUrl: result.imageDataUrl,
+      restrictions,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Inpainting failed' });
+  }
+});
+
+// Deterministic multi-step pipeline: apply a whitelisted sequence of sharp ops.
+const PIPELINE_OPS = ['grayscale', 'sepia', 'invert', 'blur', 'sharpen', 'brightness', 'contrast', 'saturation', 'gamma', 'rotate', 'flip', 'flop', 'resize', 'border', 'temperature'];
+
+async function applyPipelineStep(buffer, step) {
+  const op = String(step?.op || '');
+  const num = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  let pipe = sharp(buffer).rotate();
+  switch (op) {
+    case 'grayscale': pipe = pipe.grayscale(); break;
+    case 'invert': pipe = pipe.negate({ alpha: false }); break;
+    case 'sepia': pipe = pipe.recomb([[0.393, 0.769, 0.189], [0.349, 0.686, 0.168], [0.272, 0.534, 0.131]]); break;
+    case 'blur': pipe = pipe.blur(clamp(num(step.value, 5), 0.3, 60)); break;
+    case 'sharpen': pipe = pipe.sharpen({ sigma: clamp(num(step.value, 2), 0.3, 10) }); break;
+    case 'brightness': pipe = pipe.modulate({ brightness: clamp(num(step.value, 1), 0.3, 2) }); break;
+    case 'saturation': pipe = pipe.modulate({ saturation: clamp(num(step.value, 1), 0, 2) }); break;
+    case 'contrast': { const c = clamp(num(step.value, 1), 0.3, 2); pipe = pipe.linear(c, Math.round(128 * (1 - c))); break; }
+    case 'gamma': pipe = pipe.gamma(clamp(num(step.value, 1), 1, 3)); break;
+    case 'rotate': { const a = clamp(num(step.value, 90), -180, 180); pipe = pipe.rotate(a, { background: { r: 255, g: 255, b: 255, alpha: 1 } }); break; }
+    case 'flip': pipe = pipe.flip(); break;
+    case 'flop': pipe = pipe.flop(); break;
+    case 'temperature': { const t = clamp(num(step.value, 0), -100, 100) / 100; pipe = pipe.recomb([[1 + 0.3 * t, 0, 0], [0, 1, 0], [0, 0, 1 - 0.3 * t]]); break; }
+    case 'resize': {
+      const w = clampInt(step.width, 1, 12000, undefined);
+      const h = clampInt(step.height, 1, 12000, undefined);
+      const fit = ['cover', 'contain', 'fill', 'inside', 'outside'].includes(step.fit) ? step.fit : 'inside';
+      if (w || h) pipe = pipe.resize({ width: w, height: h, fit });
+      break;
+    }
+    case 'border': {
+      const bw = clampInt(step.value, 0, 1000, 24);
+      const bc = parseHexColor(step.color) || { r: 255, g: 255, b: 255 };
+      pipe = pipe.extend({ top: bw, bottom: bw, left: bw, right: bw, background: { r: bc.r, g: bc.g, b: bc.b, alpha: 1 } });
+      break;
+    }
+    default: return buffer;
+  }
+  return pipe.toBuffer();
+}
+
+router.post('/pipeline', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    let buffer = dataUrlToBuffer(imageDataUrl);
+    if (!buffer || !/^data:image\//i.test(imageDataUrl)) return res.status(400).json({ error: 'A valid image is required' });
+    const steps = Array.isArray(req.body?.steps) ? req.body.steps : [];
+    if (!steps.length) return res.status(400).json({ error: 'Add at least one step' });
+    const valid = steps.filter((s) => PIPELINE_OPS.includes(String(s?.op)));
+    if (!valid.length) return res.status(400).json({ error: 'No recognised steps' });
+    if (valid.length > 12) return res.status(400).json({ error: 'Too many steps (max 12)' });
+
+    const meta = await sharp(buffer).metadata();
+    const fmt = outputFormatFor(meta);
+    for (const step of valid) {
+      // eslint-disable-next-line no-await-in-loop
+      buffer = await applyPipelineStep(buffer, step);
+    }
+    const out = await sharp(buffer).toFormat(fmt).toBuffer();
+    const m2 = await sharp(out).metadata().catch(() => null);
+    res.json({
+      ok: true,
+      steps: valid.length,
+      width: m2?.width || null,
+      height: m2?.height || null,
+      format: fmt,
+      bytes: out.length,
+      imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Pipeline failed' });
   }
 });
 
@@ -1137,7 +1400,8 @@ router.post('/convert', async (req, res) => {
   try {
     const imageDataUrl = String(req.body?.imageDataUrl || '');
     const buffer = dataUrlToBuffer(imageDataUrl);
-    if (!buffer || !/^data:image\//i.test(imageDataUrl)) {
+    const heic = isHeicBuffer(buffer);
+    if (!buffer || (!/^data:image\//i.test(imageDataUrl) && !heic)) {
       return res.status(400).json({ error: 'A valid image is required' });
     }
 
@@ -1145,6 +1409,41 @@ router.post('/convert', async (req, res) => {
     const target = CONVERT_FORMATS.find((f) => f.id === requested || f.ext === requested || (requested === 'jpg' && f.id === 'jpeg'));
     if (!target) {
       return res.status(400).json({ error: `Unsupported target format. Choose one of: ${CONVERT_FORMATS.map((f) => f.id).join(', ')}` });
+    }
+
+    // HEIC decoding depends on the installed libvips having an HEIF decoder.
+    // Probe early so we can return a friendly message instead of a raw error.
+    if (heic) {
+      try {
+        await sharp(buffer).metadata();
+      } catch {
+        return res.status(415).json({ error: 'This server build can’t read HEIC/HEIF images. Convert to JPG/PNG on your device first.' });
+      }
+    }
+
+    // ICO is packed by hand (sharp can't write it): render square PNGs at the
+    // standard icon sizes and stitch them into one multi-resolution .ico.
+    if (target.id === 'ico') {
+      const oriented = await sharp(buffer).rotate().toBuffer();
+      const icoSizes = [16, 32, 48, 64, 128, 256];
+      const pngs = [];
+      for (const s of icoSizes) {
+        // eslint-disable-next-line no-await-in-loop
+        const png = await sharp(oriented).resize(s, s, { fit: 'cover', position: 'centre' }).png().toBuffer();
+        pngs.push({ size: s, buf: png });
+      }
+      const ico = packIco(pngs);
+      return res.json({
+        ok: true,
+        format: 'ico',
+        mime: target.mime,
+        ext: target.ext,
+        quality: null,
+        width: 256,
+        height: 256,
+        bytes: ico.length,
+        imageDataUrl: `data:${target.mime};base64,${ico.toString('base64')}`,
+      });
     }
 
     const quality = clampQuality(req.body?.quality);
@@ -1790,6 +2089,76 @@ Names must be unique, lowercase, kebab-case, and describe the icon.`;
   }
 });
 
+function gpsToDecimal(parts, ref) {
+  if (!Array.isArray(parts) || parts.length < 3) return null;
+  const [d, m, s] = parts.map(Number);
+  let dec = d + m / 60 + s / 3600;
+  if (ref === 'S' || ref === 'W') dec = -dec;
+  return Number.isFinite(dec) ? dec : null;
+}
+
+function formatExif(buffer) {
+  let parsed;
+  try { parsed = exifReader(buffer); } catch { return []; }
+  if (!parsed) return [];
+  const image = parsed.Image || {};
+  const photo = parsed.Photo || {};
+  const gps = parsed.GPSInfo || parsed.GPS || {};
+  const fields = [];
+  const push = (label, value) => {
+    if (value === undefined || value === null || value === '') return;
+    fields.push({ label, value: value instanceof Date ? value.toISOString().replace('T', ' ').replace(/\..+/, '') : String(value) });
+  };
+  push('Camera make', image.Make);
+  push('Camera model', image.Model);
+  push('Lens', photo.LensModel);
+  push('Software', image.Software);
+  if (photo.FNumber) push('Aperture', `f/${photo.FNumber}`);
+  if (photo.ExposureTime) push('Shutter', photo.ExposureTime < 1 ? `1/${Math.round(1 / photo.ExposureTime)} s` : `${photo.ExposureTime} s`);
+  const iso = Array.isArray(photo.ISOSpeedRatings) ? photo.ISOSpeedRatings[0] : photo.ISOSpeedRatings;
+  if (iso) push('ISO', iso);
+  if (photo.FocalLength) push('Focal length', `${photo.FocalLength} mm`);
+  push('Taken', photo.DateTimeOriginal || image.DateTime);
+  const lat = gpsToDecimal(gps.GPSLatitude, gps.GPSLatitudeRef);
+  const lon = gpsToDecimal(gps.GPSLongitude, gps.GPSLongitudeRef);
+  if (lat != null && lon != null) push('GPS', `${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+  return fields;
+}
+
+router.post('/metadata', async (req, res) => {
+  try {
+    const imageDataUrl = String(req.body?.imageDataUrl || '');
+    const buffer = dataUrlToBuffer(imageDataUrl);
+    if (!buffer || !/^data:image\//i.test(imageDataUrl)) {
+      return res.status(400).json({ error: 'A valid image is required' });
+    }
+    const meta = await sharp(buffer).metadata();
+    const basics = [];
+    basics.push({ label: 'Format', value: String(meta.format || '').toUpperCase() });
+    if (meta.width && meta.height) basics.push({ label: 'Dimensions', value: `${meta.width} × ${meta.height} px` });
+    if (meta.space) basics.push({ label: 'Colour space', value: meta.space });
+    if (meta.channels) basics.push({ label: 'Channels', value: `${meta.channels}${meta.hasAlpha ? ' (with alpha)' : ''}` });
+    if (meta.density) basics.push({ label: 'Density', value: `${meta.density} DPI` });
+    if (meta.orientation) basics.push({ label: 'Orientation', value: meta.orientation });
+    const exif = meta.exif ? formatExif(meta.exif) : [];
+    res.json({
+      ok: true,
+      basics,
+      exif,
+      hasExif: exif.length > 0,
+      flags: {
+        exif: Boolean(meta.exif),
+        gps: Boolean(meta.exif && Buffer.isBuffer(meta.exif) && meta.exif.includes('GPS')),
+        xmp: Boolean(meta.xmp),
+        iptc: Boolean(meta.iptc),
+        icc: Boolean(meta.icc),
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Could not read metadata' });
+  }
+});
+
 router.post('/strip-metadata', async (req, res) => {
   try {
     const imageDataUrl = String(req.body?.imageDataUrl || '');
@@ -1996,6 +2365,13 @@ router.post('/effect', async (req, res) => {
       pipeline = sharp({ create: { width: cw, height: ch, channels: 4, background: baseBg } })
         .composite([{ input: shadowLayer, left: 0, top: 0 }, { input: oriented, left: pad, top: pad }]);
       fmt = 'png';
+    } else if (effect === 'rotate-free') {
+      const angle = Math.max(-180, Math.min(180, Number(req.body?.angle) || 0));
+      const transparent = Boolean(req.body?.transparent);
+      const bg = parseHexColor(req.body?.background) || { r: 255, g: 255, b: 255 };
+      const background = transparent ? { r: 0, g: 0, b: 0, alpha: 0 } : { r: bg.r, g: bg.g, b: bg.b, alpha: 1 };
+      pipeline = sharp(oriented).rotate(angle, { background });
+      if (transparent) fmt = 'png';
     } else {
       return res.status(400).json({ error: 'Unknown effect' });
     }
@@ -2073,6 +2449,12 @@ router.post('/adjust', async (req, res) => {
     const sharpness = clampNumber(num(req.body?.sharpness, 0), 0, 10);
     const temperature = clampNumber(num(req.body?.temperature, 0), -100, 100);
     const vignette = clampNumber(num(req.body?.vignette, 0), 0, 100);
+    // Levels (black/white point + gamma), blur and denoise.
+    const blackPoint = clampNumber(num(req.body?.blackPoint, 0), 0, 254);
+    const whitePoint = clampNumber(num(req.body?.whitePoint, 255), Math.max(1, blackPoint + 1), 255);
+    const gamma = clampNumber(num(req.body?.gamma, 1), 1, 3);
+    const blur = clampNumber(num(req.body?.blur, 0), 0, 30);
+    const denoise = Math.round(clampNumber(num(req.body?.denoise, 0), 0, 13));
 
     const om = await sharp(buffer).rotate().metadata();
     const W = om.width;
@@ -2084,13 +2466,25 @@ router.post('/adjust', async (req, res) => {
     if (saturation !== 1) modOpts.saturation = saturation;
     if (hue) modOpts.hue = Math.round(hue);
     if (Object.keys(modOpts).length) pipeline = pipeline.modulate(modOpts);
-    if (contrast !== 1) pipeline = pipeline.linear(contrast, Math.round(128 * (1 - contrast)));
+    // Fold levels (black/white point) and contrast into a single linear map so
+    // sharp doesn't drop one when .linear is configured more than once.
+    const hasLevels = blackPoint > 0 || whitePoint < 255;
+    if (contrast !== 1 || hasLevels) {
+      const aL = 255 / (whitePoint - blackPoint);
+      const bL = -aL * blackPoint;
+      const a = contrast * aL;
+      const b = contrast * bL + 128 * (1 - contrast);
+      pipeline = pipeline.linear(a, Math.round(b));
+    }
+    if (gamma !== 1) pipeline = pipeline.gamma(gamma);
     if (temperature !== 0) {
       const t = temperature / 100;
       const rMul = 1 + 0.3 * t;
       const bMul = 1 - 0.3 * t;
       pipeline = pipeline.recomb([[rMul, 0, 0], [0, 1, 0], [0, 0, bMul]]);
     }
+    if (denoise >= 1) pipeline = pipeline.median(denoise % 2 === 0 ? denoise + 1 : denoise);
+    if (blur > 0) pipeline = pipeline.blur(0.3 + blur);
     if (sharpness > 0) pipeline = pipeline.sharpen({ sigma: 0.5 + sharpness * 0.35 });
     if (vignette > 0) {
       const strength = (vignette / 100) * 0.85;
@@ -2152,6 +2546,117 @@ router.post('/diff', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Diff failed' });
+  }
+});
+
+// Reject obviously-internal hosts to limit SSRF when importing an image by URL.
+function isPrivateHost(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  if (!h || h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.internal') || h.endsWith('.local')) return true;
+  if (h === '0.0.0.0' || h === '::1' || h === '[::1]') return true;
+  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (m) {
+    const a = Number(m[1]); const b = Number(m[2]);
+    if (a === 10 || a === 127) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+  }
+  return false;
+}
+
+// Import an image by URL (server-side fetch avoids browser CORS). Returns a data URL.
+router.post('/fetch-url', async (req, res) => {
+  try {
+    const raw = String(req.body?.url || '').trim();
+    let parsed;
+    try { parsed = new URL(raw); } catch { return res.status(400).json({ error: 'Enter a valid URL' }); }
+    if (!/^https?:$/.test(parsed.protocol)) return res.status(400).json({ error: 'Only http(s) URLs are allowed' });
+    if (isPrivateHost(parsed.hostname)) return res.status(400).json({ error: 'That host is not allowed' });
+    if (typeof fetch !== 'function') return res.status(501).json({ error: 'URL import needs Node 18+' });
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    let resp;
+    try {
+      resp = await fetch(raw, { redirect: 'follow', signal: controller.signal, headers: { 'user-agent': 'CuramVault/1.0', accept: 'image/*' } });
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!resp.ok) return res.status(400).json({ error: `Could not fetch image (HTTP ${resp.status})` });
+    const ct = String(resp.headers.get('content-type') || '').toLowerCase().split(';')[0].trim();
+    if (!ct.startsWith('image/')) return res.status(400).json({ error: `That URL is not an image (${ct || 'unknown type'})` });
+    const buf = Buffer.from(await resp.arrayBuffer());
+    const MAX = 25 * 1024 * 1024;
+    if (buf.length > MAX) return res.status(400).json({ error: 'Image is too large (max 25MB)' });
+    if (!buf.length) return res.status(400).json({ error: 'The URL returned an empty image' });
+    const name = decodeURIComponent((parsed.pathname.split('/').pop() || '').trim()) || 'image';
+    res.json({ ok: true, name, bytes: buf.length, imageDataUrl: `data:${ct};base64,${buf.toString('base64')}` });
+  } catch (err) {
+    const msg = err?.name === 'AbortError' ? 'Fetching the image timed out' : (err.message || 'Fetch failed');
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Build an animated GIF from a series of frames. Uses the pure-JS `gifenc`
+// encoder, lazily required so the app still boots if it isn't installed.
+router.post('/animate', async (req, res) => {
+  try {
+    const frames = Array.isArray(req.body?.frames) ? req.body.frames : [];
+    if (frames.length < 2) return res.status(400).json({ error: 'Add at least 2 frames' });
+
+    let gifenc;
+    try {
+      // eslint-disable-next-line global-require
+      gifenc = require('gifenc');
+    } catch {
+      return res.status(501).json({ error: 'The Animate tool needs the gifenc package — run npm install in the vault folder.' });
+    }
+    const { GIFEncoder, quantize, applyPalette } = gifenc;
+
+    const delay = clampInt(req.body?.delay, 20, 5000, 200);
+    const loopForever = req.body?.loop !== false;
+
+    const firstBuf = dataUrlToBuffer(frames[0]);
+    if (!firstBuf) return res.status(400).json({ error: 'The first frame is not a valid image' });
+    const fm = await sharp(firstBuf).rotate().metadata();
+    let W = fm.width || 480;
+    let H = fm.height || 480;
+    const cap = 800;
+    if (Math.max(W, H) > cap) {
+      const s = cap / Math.max(W, H);
+      W = Math.max(1, Math.round(W * s));
+      H = Math.max(1, Math.round(H * s));
+    }
+
+    const enc = GIFEncoder();
+    let written = 0;
+    for (const frame of frames) {
+      const b = dataUrlToBuffer(frame);
+      if (!b) continue;
+      // eslint-disable-next-line no-await-in-loop
+      const { data } = await sharp(b).rotate().resize(W, H, { fit: 'cover', position: 'centre' }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const rgba = new Uint8Array(data.buffer, data.byteOffset, data.length);
+      const palette = quantize(rgba, 256);
+      const index = applyPalette(rgba, palette);
+      const opts = { palette, delay };
+      if (written === 0) opts.repeat = loopForever ? 0 : -1;
+      enc.writeFrame(index, W, H, opts);
+      written += 1;
+    }
+    if (written < 2) return res.status(400).json({ error: 'Could not read enough valid frames' });
+    enc.finish();
+    const bytes = Buffer.from(enc.bytes());
+    res.json({
+      ok: true,
+      width: W,
+      height: H,
+      frames: written,
+      bytes: bytes.length,
+      imageDataUrl: `data:image/gif;base64,${bytes.toString('base64')}`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Animation failed' });
   }
 });
 

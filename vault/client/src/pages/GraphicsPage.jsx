@@ -106,13 +106,17 @@ const CONVERT_FALLBACK_FORMATS = [
   { id: 'gif', label: 'GIF', ext: 'gif', lossy: false },
   { id: 'avif', label: 'AVIF', ext: 'avif', lossy: true },
   { id: 'tiff', label: 'TIFF', ext: 'tiff', lossy: false },
+  { id: 'ico', label: 'ICO (favicon)', ext: 'ico', lossy: false },
 ];
 
 const MODES = [
   { id: 'generate', label: 'Generate', icon: 'sparkles' },
+  { id: 'animate', label: 'Animate (GIF)', icon: 'film' },
   { id: 'upscale', label: 'Upscale', icon: 'image' },
   { id: 'convert', label: 'Convert', icon: 'refresh-cw' },
   { id: 'compress', label: 'Compress', icon: 'archive' },
+  { id: 'batch', label: 'Batch', icon: 'file-stack' },
+  { id: 'pdf2img', label: 'PDF → Images', icon: 'file-text' },
   { id: 'favicon', label: 'Favicon / Icons', icon: 'app-window' },
   { id: 'svg', label: 'Vectorize (SVG)', icon: 'shapes' },
   { id: 'iconlib', label: 'AI Icon Library', icon: 'layout-grid' },
@@ -127,10 +131,14 @@ const MODES = [
   { id: 'effects', label: 'Effects', icon: 'wand' },
   { id: 'adjust', label: 'Adjust', icon: 'sliders' },
   { id: 'redact', label: 'Redact', icon: 'eye-off' },
+  { id: 'inpaint', label: 'Inpaint / Remove', icon: 'eraser' },
+  { id: 'pipeline', label: 'Pipeline', icon: 'workflow' },
   { id: 'ocr', label: 'Extract Text', icon: 'type' },
   { id: 'palette', label: 'Palette', icon: 'swatch' },
   { id: 'diff', label: 'Image Diff', icon: 'layers' },
   { id: 'picker', label: 'Picker', icon: 'eye' },
+  { id: 'histogram', label: 'Histogram', icon: 'bar-chart' },
+  { id: 'contrast', label: 'Contrast (WCAG)', icon: 'contrast' },
   { id: 'fileinfo', label: 'File Info', icon: 'info' },
 ];
 
@@ -163,11 +171,11 @@ const SIZE_PRESETS = [
 ];
 
 const MODE_GROUPS = [
-  { label: 'Create', ids: ['generate'] },
-  { label: 'Optimise', ids: ['upscale', 'convert', 'compress'] },
+  { label: 'Create', ids: ['generate', 'animate'] },
+  { label: 'Optimise', ids: ['upscale', 'convert', 'compress', 'batch', 'pdf2img'] },
   { label: 'Clipart & Icons', ids: ['favicon', 'svg', 'iconlib'] },
-  { label: 'Edit', ids: ['cropresize', 'extend', 'annotate', 'effects', 'adjust', 'watermark', 'collage', 'background', 'recolor', 'redact'] },
-  { label: 'Analyse', ids: ['picker', 'palette', 'ocr', 'diff', 'metadata', 'fileinfo'] },
+  { label: 'Edit', ids: ['cropresize', 'extend', 'annotate', 'effects', 'adjust', 'watermark', 'collage', 'background', 'recolor', 'redact', 'inpaint', 'pipeline'] },
+  { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'diff', 'metadata', 'fileinfo'] },
 ];
 
 // Re-encode helpers used by the export panel (all client-side via canvas).
@@ -198,6 +206,59 @@ async function renderToCanvas(dataUrl, { maxDim, bg, type }) {
   if (type === 'image/jpeg') { ctx.fillStyle = bg || '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
   return canvas;
+}
+
+// WCAG relative-luminance + contrast-ratio helpers (sRGB, per WCAG 2.x).
+function hexToRgbTriple(hex) {
+  const h = String(hex || '').replace('#', '').trim();
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return { r: 0, g: 0, b: 0 };
+  const int = parseInt(full, 16);
+  return { r: (int >> 16) & 255, g: (int >> 8) & 255, b: int & 255 };
+}
+
+function relativeLuminance({ r, g, b }) {
+  const lin = (c) => {
+    const s = c / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+function contrastRatio(fgHex, bgHex) {
+  const l1 = relativeLuminance(hexToRgbTriple(fgHex));
+  const l2 = relativeLuminance(hexToRgbTriple(bgHex));
+  const hi = Math.max(l1, l2);
+  const lo = Math.min(l1, l2);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+// Inline "…or paste an image URL" row, wired to POST /api/graphics/fetch-url.
+function UrlImportRow({ onImport, importing }) {
+  const [url, setUrl] = useState('');
+  const go = () => { const u = url.trim(); if (u) onImport(u); };
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="url"
+        value={url}
+        onChange={(e) => setUrl(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } }}
+        placeholder="…or paste an image URL"
+        className="flex-1 min-w-0 px-3 py-2 rounded-xl border text-sm"
+        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+      />
+      <button
+        type="button"
+        onClick={go}
+        disabled={importing || !url.trim()}
+        className="px-3 py-2 rounded-xl text-sm border disabled:opacity-50 hover:opacity-80 whitespace-nowrap"
+        style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'transparent' }}
+      >
+        {importing ? 'Importing…' : 'Import'}
+      </button>
+    </div>
+  );
 }
 
 // Compact "Export…" popover: format, quality, max size, target file size.
@@ -379,10 +440,11 @@ export default function GraphicsPage() {
   const [openGroup, setOpenGroup] = useState('Create');
   const [hoveredTool, setHoveredTool] = useState(null);
   const [toolSearch, setToolSearch] = useState('');
+  const toolSearchRef = useRef(null);
   const [status, setStatus] = useState(null);
   const [prompt, setPrompt] = useState('');
   const [style, setStyle] = useState('editorial');
-  const [size, setSize] = useState('512');
+  const [size, setSize] = useState('512x512');
   const [generating, setGenerating] = useState(false);
   const [refining, setRefining] = useState(false);
   const [augmenting, setAugmenting] = useState(false);
@@ -423,6 +485,14 @@ export default function GraphicsPage() {
   const [compressFiles, setCompressFiles] = useState([]);
   const [compressQuality, setCompressQuality] = useState('75');
   const [compressing, setCompressing] = useState(false);
+  const [batchFiles, setBatchFiles] = useState([]);
+  const [batchOp, setBatchOp] = useState('convert');
+  const [batchFormat, setBatchFormat] = useState('webp');
+  const [batchQuality, setBatchQuality] = useState('82');
+  const [batchWidth, setBatchWidth] = useState('1600');
+  const [batchHeight, setBatchHeight] = useState('');
+  const [batchFit, setBatchFit] = useState('inside');
+  const [batchRunning, setBatchRunning] = useState(false);
   const [bgSource, setBgSource] = useState(null);
   const [bgMode, setBgMode] = useState('transparent');
   const [bgColor, setBgColor] = useState('#ffffff');
@@ -467,6 +537,47 @@ export default function GraphicsPage() {
 
   const [fileInfo, setFileInfo] = useState(null);
   const [fileInfoError, setFileInfoError] = useState('');
+  const [metaInfo, setMetaInfo] = useState(null);
+  const [histSource, setHistSource] = useState(null);
+  const [histData, setHistData] = useState(null);
+  const [histChannel, setHistChannel] = useState('rgb');
+  const [histError, setHistError] = useState('');
+  const histCanvasRef = useRef(null);
+  const [contrastFg, setContrastFg] = useState('#1f2937');
+  const [contrastBg, setContrastBg] = useState('#ffffff');
+  const [animFrames, setAnimFrames] = useState([]);
+  const [animDelay, setAnimDelay] = useState('200');
+  const [animLoop, setAnimLoop] = useState(true);
+  const [animBusy, setAnimBusy] = useState(false);
+  const [animResult, setAnimResult] = useState(null);
+  const [animError, setAnimError] = useState('');
+  const [urlImporting, setUrlImporting] = useState(false);
+  const [pdfPages, setPdfPages] = useState([]);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+  const [pdfScale, setPdfScale] = useState('2');
+  const [pdfName, setPdfName] = useState('');
+  const [pipeSource, setPipeSource] = useState(null);
+  const [pipeSteps, setPipeSteps] = useState([]);
+  const [pipeStepOp, setPipeStepOp] = useState('grayscale');
+  const [pipeBusy, setPipeBusy] = useState(false);
+  const [pipeResult, setPipeResult] = useState(null);
+  const [pipeError, setPipeError] = useState('');
+  const [inpaintSource, setInpaintSource] = useState(null);
+  const [inpaintPrompt, setInpaintPrompt] = useState('');
+  const [inpaintBrush, setInpaintBrush] = useState('40');
+  const [inpaintBusy, setInpaintBusy] = useState(false);
+  const [inpaintResult, setInpaintResult] = useState(null);
+  const [inpaintError, setInpaintError] = useState('');
+  const inpaintCanvasRef = useRef(null);
+  const inpaintMaskRef = useRef(null);
+  const inpaintImgRef = useRef(null);
+  const inpaintDrawing = useRef(false);
+  const [inpaintHasMask, setInpaintHasMask] = useState(false);
+  const [adjPresets, setAdjPresets] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('graphics.adjustPresets') || '[]'); } catch { return []; }
+  });
+  const [adjPresetName, setAdjPresetName] = useState('');
   const [wmSource, setWmSource] = useState(null);
   const [wmType, setWmType] = useState('text');
   const [wmText, setWmText] = useState('© My Brand');
@@ -498,6 +609,9 @@ export default function GraphicsPage() {
   const [efShadowOpacity, setEfShadowOpacity] = useState('0.45');
   const [efDuoShadow, setEfDuoShadow] = useState('#1e1440');
   const [efDuoHighlight, setEfDuoHighlight] = useState('#ffd278');
+  const [efAngle, setEfAngle] = useState('0');
+  const [efRotateTransparent, setEfRotateTransparent] = useState(false);
+  const [efRotateBg, setEfRotateBg] = useState('#ffffff');
   const [efBusy, setEfBusy] = useState(false);
   const [efResult, setEfResult] = useState(null);
   const [efError, setEfError] = useState('');
@@ -524,6 +638,10 @@ export default function GraphicsPage() {
   const annDrawRef = useRef(null);
   const annDrawFnRef = useRef(null);
   const annInputRef = useRef(null);
+  const [annPast, setAnnPast] = useState([]);
+  const [annFuture, setAnnFuture] = useState([]);
+  const annShapesRef = useRef([]);
+  useEffect(() => { annShapesRef.current = annShapes; }, [annShapes]);
   const [diffA, setDiffA] = useState(null);
   const [diffB, setDiffB] = useState(null);
   const [diffThreshold, setDiffThreshold] = useState('25');
@@ -543,6 +661,11 @@ export default function GraphicsPage() {
   const [adjSaturation, setAdjSaturation] = useState(1);
   const [adjHue, setAdjHue] = useState(0);
   const [adjSharpness, setAdjSharpness] = useState(0);
+  const [adjBlackPoint, setAdjBlackPoint] = useState(0);
+  const [adjWhitePoint, setAdjWhitePoint] = useState(255);
+  const [adjGamma, setAdjGamma] = useState(1);
+  const [adjBlur, setAdjBlur] = useState(0);
+  const [adjDenoise, setAdjDenoise] = useState(0);
   const [adjTemperature, setAdjTemperature] = useState(0);
   const [adjVignette, setAdjVignette] = useState(0);
   const [adjBusy, setAdjBusy] = useState(false);
@@ -557,6 +680,10 @@ export default function GraphicsPage() {
   const redactImgRef = useRef(null);
   const redactDrawRef = useRef(null);
   const redactDrawFnRef = useRef(null);
+  const [redactPast, setRedactPast] = useState([]);
+  const [redactFuture, setRedactFuture] = useState([]);
+  const redactRectsRef = useRef([]);
+  useEffect(() => { redactRectsRef.current = redactRects; }, [redactRects]);
   const [ocrSource, setOcrSource] = useState(null);
   const [ocrLang, setOcrLang] = useState('eng');
   const [ocrBusy, setOcrBusy] = useState(false);
@@ -571,6 +698,9 @@ export default function GraphicsPage() {
   const [palError, setPalError] = useState('');
   const [palCopied, setPalCopied] = useState('');
   const isHostedProvider = status?.hosted || (status?.provider && status.provider !== 'local-comfyui');
+  // Image-to-image augmentation is supported on local ComfyUI and on FAL (via its
+  // /image-to-image endpoint). Other hosted providers don't support it yet.
+  const augmentSupported = !isHostedProvider || status?.provider === 'fal';
   const serviceLabel = isHostedProvider
     ? `${status?.provider || 'Hosted'} ready: ${status?.model || 'model not selected'}`
     : `ComfyUI ready: ${status?.model}`;
@@ -804,6 +934,78 @@ export default function GraphicsPage() {
     a.href = item.result.imageDataUrl;
     a.download = `${base}-compressed.${item.result.ext || 'img'}`;
     a.click();
+  };
+
+  const handleBatchFiles = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const items = await Promise.all(files.map(async (file) => {
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        return { id: `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, imageDataUrl: dataUrl, originalBytes: file.size, status: 'ready', result: null, error: '' };
+      } catch {
+        return { id: `${file.name}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, imageDataUrl: null, originalBytes: file.size, status: 'error', result: null, error: 'Could not read file' };
+      }
+    }));
+    setBatchFiles(prev => [...prev, ...items]);
+  };
+
+  const removeBatchFile = (id) => setBatchFiles(prev => prev.filter(f => f.id !== id));
+  const clearBatchFiles = () => setBatchFiles([]);
+
+  const batchOne = async (item) => {
+    let endpoint = '/api/graphics/convert';
+    let body = { imageDataUrl: item.imageDataUrl };
+    if (batchOp === 'convert') {
+      body.format = batchFormat;
+      body.quality = Number(batchQuality);
+    } else if (batchOp === 'resize') {
+      endpoint = '/api/graphics/resize';
+      body.op = 'resize';
+      if (batchWidth) body.width = Number(batchWidth);
+      if (batchHeight) body.height = Number(batchHeight);
+      body.fit = batchFit;
+    } else if (batchOp === 'strip') {
+      endpoint = '/api/graphics/strip-metadata';
+    }
+    const res = await api.post(endpoint, body);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Operation failed');
+    return data;
+  };
+
+  const runBatchAll = async () => {
+    const pending = batchFiles.filter(f => f.imageDataUrl && f.status !== 'done');
+    if (!pending.length) return;
+    if (batchOp === 'resize' && !batchWidth && !batchHeight) return;
+    setBatchRunning(true);
+    for (const item of pending) {
+      setBatchFiles(prev => prev.map(f => f.id === item.id ? { ...f, status: 'working', error: '' } : f));
+      try {
+        const data = await batchOne(item);
+        setBatchFiles(prev => prev.map(f => f.id === item.id ? { ...f, status: 'done', result: data } : f));
+      } catch (err) {
+        setBatchFiles(prev => prev.map(f => f.id === item.id ? { ...f, status: 'error', error: err.message || 'Operation failed' } : f));
+      }
+    }
+    setBatchRunning(false);
+  };
+
+  const downloadBatchItem = (item) => {
+    if (!item?.result?.imageDataUrl) return;
+    const base = item.name.replace(/\.[^.]+$/, '');
+    const ext = item.result.ext || item.result.format || 'img';
+    const suffix = batchOp === 'convert' ? '' : (batchOp === 'resize' ? '-resized' : '-clean');
+    const a = document.createElement('a');
+    a.href = item.result.imageDataUrl;
+    a.download = `${base}${suffix}.${ext}`;
+    a.click();
+  };
+
+  const downloadBatchAll = () => {
+    batchFiles.filter(f => f.result?.imageDataUrl).forEach((item, i) => {
+      setTimeout(() => downloadBatchItem(item), i * 150);
+    });
   };
 
   const compressTotals = compressFiles.reduce((acc, f) => {
@@ -1066,7 +1268,391 @@ export default function GraphicsPage() {
     return `${w / d}:${h / d}`;
   };
 
+  // Import an image by URL via the server (avoids browser CORS). onLoad receives
+  // ({ imageDataUrl, name }) on success or (null, errorMessage) on failure.
+  const importFromUrl = async (url, onLoad) => {
+    const u = String(url || '').trim();
+    if (!u) return;
+    setUrlImporting(true);
+    try {
+      const res = await api.post('/api/graphics/fetch-url', { url: u });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Import failed');
+      onLoad({ imageDataUrl: data.imageDataUrl, name: data.name || 'image' });
+    } catch (err) {
+      onLoad(null, err.message || 'Could not import that URL');
+    } finally {
+      setUrlImporting(false);
+    }
+  };
+
+  // Histogram: draw the image to an offscreen canvas (capped) and tally per-channel
+  // and luminance counts entirely in the browser — nothing is uploaded.
+  const computeHistogram = async (dataUrl) => {
+    const img = await loadImageEl(dataUrl);
+    const maxDim = 1000;
+    let w = img.naturalWidth || img.width;
+    let h = img.naturalHeight || img.height;
+    if (Math.max(w, h) > maxDim) { const s = maxDim / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, w);
+    canvas.height = Math.max(1, h);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const r = new Array(256).fill(0);
+    const g = new Array(256).fill(0);
+    const b = new Array(256).fill(0);
+    const lum = new Array(256).fill(0);
+    for (let i = 0; i < data.length; i += 4) {
+      r[data[i]] += 1;
+      g[data[i + 1]] += 1;
+      b[data[i + 2]] += 1;
+      lum[Math.round(0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2])] += 1;
+    }
+    return { r, g, b, lum, total: data.length / 4, width: img.naturalWidth, height: img.naturalHeight };
+  };
+
+  const loadHistogram = async (src) => {
+    if (!src?.imageDataUrl) return;
+    setHistError('');
+    setHistData(null);
+    setHistSource(src);
+    try {
+      setHistData(await computeHistogram(src.imageDataUrl));
+    } catch {
+      setHistError('Could not read that image.');
+    }
+  };
+
+  // Animate: assemble multiple frames into one animated GIF on the server.
+  const handleAnimFrames = async (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const items = await Promise.all(files.map(async (file) => {
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        return { id: `${file.name}-${file.size}-${Math.random().toString(36).slice(2, 7)}`, name: file.name, imageDataUrl: dataUrl };
+      } catch {
+        return null;
+      }
+    }));
+    setAnimFrames(prev => [...prev, ...items.filter(Boolean)]);
+  };
+
+  const removeAnimFrame = (id) => setAnimFrames(prev => prev.filter(f => f.id !== id));
+  const moveAnimFrame = (id, dir) => setAnimFrames(prev => {
+    const i = prev.findIndex(f => f.id === id);
+    if (i < 0) return prev;
+    const j = i + dir;
+    if (j < 0 || j >= prev.length) return prev;
+    const copy = [...prev];
+    const [x] = copy.splice(i, 1);
+    copy.splice(j, 0, x);
+    return copy;
+  });
+  const clearAnimFrames = () => { setAnimFrames([]); setAnimResult(null); setAnimError(''); };
+
+  const runAnimate = async () => {
+    if (animFrames.length < 2) { setAnimError('Add at least 2 frames'); return; }
+    setAnimBusy(true);
+    setAnimError('');
+    setAnimResult(null);
+    try {
+      const res = await api.post('/api/graphics/animate', {
+        frames: animFrames.map(f => f.imageDataUrl),
+        delay: Number(animDelay),
+        loop: animLoop,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Animation failed');
+      setAnimResult(data);
+    } catch (err) {
+      setAnimError(err.message || 'Animation failed');
+    } finally {
+      setAnimBusy(false);
+    }
+  };
+
+  // PDF → images: render each page to a PNG in the browser via pdfjs-dist.
+  const handlePdfFile = async (file) => {
+    if (!file) return;
+    setPdfError('');
+    setPdfPages([]);
+    setPdfName(file.name?.replace(/\.pdf$/i, '') || 'page');
+    setPdfBusy(true);
+    try {
+      const pdfjsLib = await import('pdfjs-dist');
+      if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+      }
+      const buffer = await file.arrayBuffer();
+      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+      const scale = Math.max(1, Math.min(4, Number(pdfScale) || 2));
+      const pages = [];
+      for (let n = 1; n <= doc.numPages; n += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const page = await doc.getPage(n);
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // eslint-disable-next-line no-await-in-loop
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        pages.push({ id: `p${n}`, page: n, dataUrl: canvas.toDataURL('image/png'), width: canvas.width, height: canvas.height });
+        setPdfPages([...pages]);
+      }
+    } catch (err) {
+      setPdfError(err.message || 'Could not read that PDF.');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
+
+  const downloadPdfPage = (item) => downloadDataUrl(item.dataUrl, `${pdfName || 'page'}-${item.page}.png`);
+  const downloadPdfAll = () => pdfPages.forEach((item, i) => setTimeout(() => downloadPdfPage(item), i * 150));
+
+  // Pipeline builder: ordered list of whitelisted ops applied server-side.
+  const PIPE_OP_DEFS = {
+    grayscale: { label: 'Grayscale', param: null },
+    sepia: { label: 'Sepia', param: null },
+    invert: { label: 'Invert', param: null },
+    flip: { label: 'Flip vertical', param: null },
+    flop: { label: 'Mirror horizontal', param: null },
+    blur: { label: 'Blur', param: { min: 0.3, max: 60, step: 0.5, def: 5 } },
+    sharpen: { label: 'Sharpen', param: { min: 0.3, max: 10, step: 0.1, def: 2 } },
+    brightness: { label: 'Brightness', param: { min: 0.3, max: 2, step: 0.01, def: 1 } },
+    contrast: { label: 'Contrast', param: { min: 0.3, max: 2, step: 0.01, def: 1 } },
+    saturation: { label: 'Saturation', param: { min: 0, max: 2, step: 0.01, def: 1 } },
+    gamma: { label: 'Gamma', param: { min: 1, max: 3, step: 0.01, def: 1 } },
+    temperature: { label: 'Temperature', param: { min: -100, max: 100, step: 1, def: 0 } },
+    rotate: { label: 'Rotate (angle)', param: { min: -180, max: 180, step: 1, def: 90 } },
+    border: { label: 'Border', param: { min: 0, max: 200, step: 1, def: 24 }, color: true },
+    resize: { label: 'Resize (width px)', param: { min: 16, max: 8000, step: 1, def: 1200 }, resize: true },
+  };
+
+  const addPipeStep = () => {
+    const def = PIPE_OP_DEFS[pipeStepOp];
+    const step = { id: `s${Date.now()}${Math.random().toString(36).slice(2, 5)}`, op: pipeStepOp };
+    if (def?.param) step.value = def.param.def;
+    if (def?.color) step.color = '#ffffff';
+    if (def?.resize) { step.width = def.param.def; step.fit = 'inside'; }
+    setPipeSteps(prev => [...prev, step]);
+  };
+  const updatePipeStep = (id, patch) => setPipeSteps(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+  const removePipeStep = (id) => setPipeSteps(prev => prev.filter(s => s.id !== id));
+  const movePipeStep = (id, dir) => setPipeSteps(prev => {
+    const i = prev.findIndex(s => s.id === id);
+    if (i < 0) return prev;
+    const j = i + dir;
+    if (j < 0 || j >= prev.length) return prev;
+    const copy = [...prev];
+    const [x] = copy.splice(i, 1);
+    copy.splice(j, 0, x);
+    return copy;
+  });
+
+  const runPipeline = async () => {
+    if (!pipeSource?.imageDataUrl || !pipeSteps.length) return;
+    setPipeBusy(true);
+    setPipeError('');
+    setPipeResult(null);
+    try {
+      const steps = pipeSteps.map(s => {
+        const out = { op: s.op };
+        if (s.value !== undefined) out.value = Number(s.value);
+        if (s.color) out.color = s.color;
+        if (s.op === 'resize') { out.width = Number(s.width) || undefined; out.fit = s.fit || 'inside'; }
+        return out;
+      });
+      const res = await api.post('/api/graphics/pipeline', { imageDataUrl: pipeSource.imageDataUrl, steps });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Pipeline failed');
+      setPipeResult(data);
+    } catch (err) {
+      setPipeError(err.message || 'Pipeline failed');
+    } finally {
+      setPipeBusy(false);
+    }
+  };
+
+  // Adjust presets (localStorage).
+  const persistAdjPresets = (next) => {
+    setAdjPresets(next);
+    try { localStorage.setItem('graphics.adjustPresets', JSON.stringify(next)); } catch { /* ignore quota */ }
+  };
+  const saveAdjPreset = () => {
+    const name = adjPresetName.trim();
+    if (!name) return;
+    const preset = {
+      name,
+      values: {
+        brightness: adjBrightness, contrast: adjContrast, saturation: adjSaturation, hue: adjHue,
+        sharpness: adjSharpness, temperature: adjTemperature, vignette: adjVignette,
+        blackPoint: adjBlackPoint, whitePoint: adjWhitePoint, gamma: adjGamma, blur: adjBlur, denoise: adjDenoise,
+      },
+    };
+    const next = [...adjPresets.filter(p => p.name !== name), preset];
+    persistAdjPresets(next);
+    setAdjPresetName('');
+  };
+  const applyAdjPreset = (name) => {
+    const p = adjPresets.find(x => x.name === name);
+    if (!p) return;
+    const v = p.values;
+    setAdjBrightness(v.brightness); setAdjContrast(v.contrast); setAdjSaturation(v.saturation); setAdjHue(v.hue);
+    setAdjSharpness(v.sharpness); setAdjTemperature(v.temperature); setAdjVignette(v.vignette);
+    setAdjBlackPoint(v.blackPoint ?? 0); setAdjWhitePoint(v.whitePoint ?? 255); setAdjGamma(v.gamma ?? 1); setAdjBlur(v.blur ?? 0); setAdjDenoise(v.denoise ?? 0);
+  };
+  const deleteAdjPreset = (name) => persistAdjPresets(adjPresets.filter(p => p.name !== name));
+
+  // Inpaint: paint a white mask (red overlay on screen) over the area to change.
+  const drawInpaintBase = () => {
+    const disp = inpaintCanvasRef.current;
+    const mask = inpaintMaskRef.current;
+    const img = inpaintImgRef.current;
+    if (!disp || !mask || !img) return;
+    const cap = 1024;
+    let w = img.naturalWidth || img.width;
+    let h = img.naturalHeight || img.height;
+    if (Math.max(w, h) > cap) { const s = cap / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+    disp.width = w; disp.height = h; mask.width = w; mask.height = h;
+    disp.getContext('2d').drawImage(img, 0, 0, w, h);
+    const mctx = mask.getContext('2d');
+    mctx.fillStyle = '#000';
+    mctx.fillRect(0, 0, w, h);
+    setInpaintHasMask(false);
+  };
+
+  const loadInpaint = (src) => { setInpaintError(''); setInpaintResult(null); setInpaintSource(src); };
+
+  const inpaintPos = (e) => {
+    const c = inpaintCanvasRef.current;
+    const r = c.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) };
+  };
+  const inpaintPaint = (x, y) => {
+    const disp = inpaintCanvasRef.current;
+    const mask = inpaintMaskRef.current;
+    if (!disp || !mask) return;
+    const rect = disp.getBoundingClientRect();
+    const scale = disp.width / (rect.width || disp.width);
+    const r = Math.max(2, Number(inpaintBrush) * scale);
+    const dctx = disp.getContext('2d');
+    dctx.fillStyle = 'rgba(239,68,68,0.5)';
+    dctx.beginPath(); dctx.arc(x, y, r, 0, Math.PI * 2); dctx.fill();
+    const mctx = mask.getContext('2d');
+    mctx.fillStyle = '#fff';
+    mctx.beginPath(); mctx.arc(x, y, r, 0, Math.PI * 2); mctx.fill();
+  };
+  const onInpaintDown = (e) => { inpaintDrawing.current = true; const { x, y } = inpaintPos(e); inpaintPaint(x, y); setInpaintHasMask(true); };
+  const onInpaintMove = (e) => { if (!inpaintDrawing.current) return; const { x, y } = inpaintPos(e); inpaintPaint(x, y); };
+  const onInpaintUp = () => { inpaintDrawing.current = false; };
+  const clearInpaintMask = () => drawInpaintBase();
+
+  const runInpaint = async () => {
+    const mask = inpaintMaskRef.current;
+    const img = inpaintImgRef.current;
+    if (!mask || !img) { setInpaintError('Load an image first'); return; }
+    if (!inpaintHasMask) { setInpaintError('Paint over the area you want to change'); return; }
+    if (!inpaintPrompt.trim()) { setInpaintError('Describe what should fill the masked area'); return; }
+    setInpaintBusy(true);
+    setInpaintError('');
+    setInpaintResult(null);
+    try {
+      const tmp = document.createElement('canvas');
+      tmp.width = mask.width;
+      tmp.height = mask.height;
+      tmp.getContext('2d').drawImage(img, 0, 0, tmp.width, tmp.height);
+      const res = await api.post('/api/graphics/inpaint', {
+        imageDataUrl: tmp.toDataURL('image/png'),
+        maskDataUrl: mask.toDataURL('image/png'),
+        prompt: inpaintPrompt.trim(),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Inpainting failed');
+      setInpaintResult(data);
+    } catch (err) {
+      setInpaintError(err.message || 'Inpainting failed');
+    } finally {
+      setInpaintBusy(false);
+    }
+  };
+
   useEffect(() => { setCompareOn(false); }, [mode]);
+
+  // Render the histogram onto its canvas whenever the data or channel changes.
+  useEffect(() => {
+    if (mode !== 'histogram') return;
+    const canvas = histCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0b0b0c';
+    ctx.fillRect(0, 0, W, H);
+    if (!histData) return;
+    const channels = histChannel === 'rgb'
+      ? [['r', 'rgba(239,68,68,0.7)'], ['g', 'rgba(34,197,94,0.7)'], ['b', 'rgba(59,130,246,0.7)']]
+      : histChannel === 'lum'
+        ? [['lum', 'rgba(229,231,235,0.9)']]
+        : [[histChannel, histChannel === 'r' ? 'rgba(239,68,68,0.9)' : histChannel === 'g' ? 'rgba(34,197,94,0.9)' : 'rgba(59,130,246,0.9)']];
+    let max = 1;
+    channels.forEach(([ch]) => { const arr = histData[ch]; for (let i = 0; i < 256; i += 1) if (arr[i] > max) max = arr[i]; });
+    ctx.globalCompositeOperation = histChannel === 'rgb' ? 'lighter' : 'source-over';
+    const bw = W / 256;
+    channels.forEach(([ch, color]) => {
+      const arr = histData[ch];
+      ctx.fillStyle = color;
+      for (let i = 0; i < 256; i += 1) {
+        const bh = (arr[i] / max) * (H - 2);
+        ctx.fillRect(i * bw, H - bh, Math.ceil(bw), bh);
+      }
+    });
+    ctx.globalCompositeOperation = 'source-over';
+  }, [histData, histChannel, mode]);
+
+  // Load the inpaint source onto the canvas (and reset the mask) when it changes.
+  useEffect(() => {
+    if (mode !== 'inpaint' || !inpaintSource?.imageDataUrl) return undefined;
+    let cancelled = false;
+    loadImageEl(inpaintSource.imageDataUrl)
+      .then((img) => { if (!cancelled) { inpaintImgRef.current = img; drawInpaintBase(); } })
+      .catch(() => { if (!cancelled) setInpaintError('Could not load that image.'); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inpaintSource, mode]);
+
+  // Global keyboard shortcuts: "/" focuses tool search, Esc closes the preview /
+  // clears search, and Cmd/Ctrl+Z / Shift+Z drive undo-redo in Annotate & Redact.
+  useEffect(() => {
+    const onKey = (e) => {
+      const el = e.target;
+      const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
+      if (e.key === '/' && !typing) {
+        e.preventDefault();
+        toolSearchRef.current?.focus();
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (previewImage) setPreviewImage(null);
+        else if (typing && el === toolSearchRef.current) setToolSearch('');
+        return;
+      }
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && (e.key === 'z' || e.key === 'Z') && !typing) {
+        if (mode === 'annotate') { e.preventDefault(); if (e.shiftKey) redoAnn(); else undoAnn(); }
+        else if (mode === 'redact') { e.preventDefault(); if (e.shiftKey) redoRedact(); else undoRedact(); }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, previewImage]);
 
   // Tools an edited image can be handed straight to, without re-uploading.
   const SEND_TARGETS = [
@@ -1080,6 +1666,8 @@ export default function GraphicsPage() {
     { mode: 'recolor', label: 'Recolour' },
     { mode: 'convert', label: 'Convert' },
     { mode: 'upscale', label: 'Upscale' },
+    { mode: 'pipeline', label: 'Pipeline' },
+    { mode: 'inpaint', label: 'Inpaint' },
   ];
 
   const sendImageTo = (targetMode, dataUrl, name = 'image.png') => {
@@ -1088,7 +1676,7 @@ export default function GraphicsPage() {
     switch (targetMode) {
       case 'cropresize': setCrResult(null); setCrNat(null); setCrSource(src); break;
       case 'extend': setExtResult(null); setExtError(''); setExtSource(src); break;
-      case 'annotate': setAnnShapes([]); setAnnSelected(null); setAnnEditing(null); annImgRef.current = null; setAnnSource(src); break;
+      case 'annotate': setAnnShapes([]); setAnnSelected(null); setAnnEditing(null); setAnnPast([]); setAnnFuture([]); annImgRef.current = null; setAnnSource(src); break;
       case 'effects': setEfResult(null); setEfError(''); setEfSource(src); break;
       case 'adjust': setAdjResult(null); setAdjError(''); setAdjSource(src); break;
       case 'watermark': setWmResult(null); setWmError(''); setWmSource(src); break;
@@ -1096,6 +1684,8 @@ export default function GraphicsPage() {
       case 'recolor': setRecolorResult(null); setRecolorError(''); setRecolorSource(src); break;
       case 'convert': setConvertResult(null); setConvertError(''); setConvertSource(src); break;
       case 'upscale': setUpscaleResult(null); setUpscaleError(''); setUpscaleSource(src); break;
+      case 'pipeline': setPipeResult(null); setPipeError(''); setPipeSource(src); break;
+      case 'inpaint': loadInpaint(src); break;
       default: return;
     }
     setCompareOn(false);
@@ -1233,6 +1823,18 @@ export default function GraphicsPage() {
     window.addEventListener('mouseup', endCrDrag);
   };
 
+  const loadMetaInfo = async (dataUrl) => {
+    setMetaInfo(null);
+    if (!dataUrl) return;
+    try {
+      const res = await api.post('/api/graphics/metadata', { imageDataUrl: dataUrl });
+      const data = await res.json();
+      if (res.ok) setMetaInfo(data);
+    } catch {
+      /* metadata read is best-effort; ignore failures */
+    }
+  };
+
   const runStripMetadata = async () => {
     if (!metaSource?.imageDataUrl) return;
     setMetaBusy(true);
@@ -1327,6 +1929,7 @@ export default function GraphicsPage() {
         body.shadowOpacity = Number(efShadowOpacity);
       }
       if (efEffect === 'duotone') { body.duoShadow = efDuoShadow; body.duoHighlight = efDuoHighlight; }
+      if (efEffect === 'rotate-free') { body.angle = Number(efAngle); body.transparent = efRotateTransparent; body.background = efRotateBg; }
       const res = await api.post('/api/graphics/effect', body);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Effect failed');
@@ -1517,10 +2120,53 @@ export default function GraphicsPage() {
     return null;
   };
 
+  const recordAnn = (snapshot) => {
+    setAnnPast(p => [...p, snapshot].slice(-20));
+    setAnnFuture([]);
+  };
+  const undoAnn = () => {
+    if (!annPast.length) return;
+    const prev = annPast[annPast.length - 1];
+    setAnnFuture(f => [annShapesRef.current, ...f].slice(0, 20));
+    setAnnPast(p => p.slice(0, -1));
+    setAnnShapes(prev);
+    setAnnSelected(null);
+    setAnnEditing(null);
+  };
+  const redoAnn = () => {
+    if (!annFuture.length) return;
+    const next = annFuture[0];
+    setAnnPast(p => [...p, annShapesRef.current].slice(-20));
+    setAnnFuture(f => f.slice(1));
+    setAnnShapes(next);
+    setAnnSelected(null);
+    setAnnEditing(null);
+  };
+
+  const recordRedact = (snapshot) => {
+    setRedactPast(p => [...p, snapshot].slice(-20));
+    setRedactFuture([]);
+  };
+  const undoRedact = () => {
+    if (!redactPast.length) return;
+    const prev = redactPast[redactPast.length - 1];
+    setRedactFuture(f => [redactRectsRef.current, ...f].slice(0, 20));
+    setRedactPast(p => p.slice(0, -1));
+    setRedactRects(prev);
+  };
+  const redoRedact = () => {
+    if (!redactFuture.length) return;
+    const next = redactFuture[0];
+    setRedactPast(p => [...p, redactRectsRef.current].slice(-20));
+    setRedactFuture(f => f.slice(1));
+    setRedactRects(next);
+  };
+
   const commitAnnEditing = () => {
     const cur = annEditing;
     if (!cur) return;
     const val = (cur.value || '').replace(/^\n+|\n+$/g, '').trim();
+    if (cur.editIndex != null || val) recordAnn(annShapesRef.current);
     setAnnShapes(prev => {
       if (cur.editIndex != null) {
         if (!val) return prev.filter((_, i) => i !== cur.editIndex);
@@ -1552,6 +2198,12 @@ export default function GraphicsPage() {
     const cx = clampNum((e.clientX - rect.left) / rect.width, 0, 1);
     const cy = clampNum((e.clientY - rect.top) / rect.height, 0, 1);
     if (d.tool === 'select') {
+      if (!d.snapped) {
+        const before = d.before;
+        setAnnPast(p => [...p, before].slice(-20));
+        setAnnFuture([]);
+        d.snapped = true;
+      }
       d.moved = true;
       const dx = cx - d.startX;
       const dy = cy - d.startY;
@@ -1591,8 +2243,12 @@ export default function GraphicsPage() {
       const h = Math.abs(cy - d.startY);
       if (w > 0.005 && h > 0.005) shape = { type: 'rect', x: Math.min(d.startX, cx), y: Math.min(d.startY, cy), w, h, color: d.color, widthPx: d.widthPx };
     }
-    if (shape) setAnnShapes(prev => [...prev, shape]);
-    else annDrawFnRef.current?.(null);
+    if (shape) {
+      const before = d.before;
+      setAnnPast(p => [...p, before].slice(-20));
+      setAnnFuture([]);
+      setAnnShapes(prev => [...prev, shape]);
+    } else annDrawFnRef.current?.(null);
   }, [onAnnMove]);
 
   const onAnnDown = (e) => {
@@ -1611,12 +2267,12 @@ export default function GraphicsPage() {
       const idx = annHitTest(p.x, p.y);
       setAnnSelected(idx);
       if (idx == null) return;
-      annDrawRef.current = { tool: 'select', idx, startX: p.x, startY: p.y, orig: annShapes[idx], moved: false };
+      annDrawRef.current = { tool: 'select', idx, startX: p.x, startY: p.y, orig: annShapes[idx], moved: false, snapped: false, before: annShapesRef.current };
       window.addEventListener('mousemove', onAnnMove);
       window.addEventListener('mouseup', onAnnUp);
       return;
     }
-    annDrawRef.current = { tool: annTool, startX: p.x, startY: p.y, points: [p], color: annColor, widthPx };
+    annDrawRef.current = { tool: annTool, startX: p.x, startY: p.y, points: [p], color: annColor, widthPx, before: annShapesRef.current };
     window.addEventListener('mousemove', onAnnMove);
     window.addEventListener('mouseup', onAnnUp);
   };
@@ -1635,6 +2291,7 @@ export default function GraphicsPage() {
 
   const deleteAnnSelected = () => {
     if (annSelected == null) return;
+    recordAnn(annShapesRef.current);
     setAnnShapes(prev => prev.filter((_, i) => i !== annSelected));
     setAnnSelected(null);
   };
@@ -1746,6 +2403,11 @@ export default function GraphicsPage() {
         sharpness: Number(adjSharpness),
         temperature: Number(adjTemperature),
         vignette: Number(adjVignette),
+        blackPoint: Number(adjBlackPoint),
+        whitePoint: Number(adjWhitePoint),
+        gamma: Number(adjGamma),
+        blur: Number(adjBlur),
+        denoise: Number(adjDenoise),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Adjust failed');
@@ -1760,6 +2422,7 @@ export default function GraphicsPage() {
   const resetAdjust = () => {
     setAdjBrightness(1); setAdjContrast(1); setAdjSaturation(1); setAdjHue(0);
     setAdjSharpness(0); setAdjTemperature(0); setAdjVignette(0); setAdjResult(null);
+    setAdjBlackPoint(0); setAdjWhitePoint(255); setAdjGamma(1); setAdjBlur(0); setAdjDenoise(0);
   };
 
   // Redact: render the image with each rectangle blurred or pixelated. `preview`
@@ -1867,8 +2530,12 @@ export default function GraphicsPage() {
     const cx = clampNum((e.clientX - rect.left) / rect.width, 0, 1);
     const cy = clampNum((e.clientY - rect.top) / rect.height, 0, 1);
     const pr = { x: Math.min(d.startX, cx), y: Math.min(d.startY, cy), w: Math.abs(cx - d.startX), h: Math.abs(cy - d.startY) };
-    if (pr.w > 0.01 && pr.h > 0.01) setRedactRects(prev => [...prev, pr]);
-    else redactDrawFnRef.current?.(null);
+    if (pr.w > 0.01 && pr.h > 0.01) {
+      const before = redactRectsRef.current;
+      setRedactPast(p => [...p, before].slice(-20));
+      setRedactFuture([]);
+      setRedactRects(prev => [...prev, pr]);
+    } else redactDrawFnRef.current?.(null);
   }, [onRedactDrawMove]);
 
   const onRedactDown = (e) => {
@@ -2037,10 +2704,11 @@ export default function GraphicsPage() {
     try {
       setRefinedPrompt('');
       setPreviewImage(null);
+      const [genW, genH] = String(size).split('x').map(Number);
       const res = await api.post('/api/graphics/generate', {
         prompt: buildPrompt(),
-        width: Number(size),
-        height: Number(size),
+        width: genW || 512,
+        height: genH || 512,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Image generation failed');
@@ -2150,6 +2818,11 @@ export default function GraphicsPage() {
     [favBusy, 'Building icon set…'],
     [svgBusy, 'Tracing to SVG…'],
     [compressing, 'Compressing…'],
+    [batchRunning, 'Processing batch…'],
+    [animBusy, 'Building animation…'],
+    [pdfBusy, 'Rendering PDF…'],
+    [pipeBusy, 'Running pipeline…'],
+    [inpaintBusy, 'Inpainting…'],
     [bgProcessing, 'Updating background…'],
     [recoloring, 'Recolouring…'],
     [crBusy, 'Processing image…'],
@@ -2183,11 +2856,12 @@ export default function GraphicsPage() {
           <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
             {mode === 'generate' && 'Generate local article and story support images from a prompt.'}
             {mode === 'upscale' && 'Enlarge artwork and small images while preserving detail.'}
-            {mode === 'convert' && 'Convert an image to PNG, JPG, WebP, GIF, AVIF or TIFF.'}
+            {mode === 'convert' && 'Convert an image to PNG, JPG, WebP, GIF, AVIF, TIFF or ICO (HEIC input supported where available).'}
             {mode === 'favicon' && 'Generate a full favicon / app-icon set with manifest from one image.'}
             {mode === 'svg' && 'Trace a raster image into a scalable SVG — best for logos, icons and clipart.'}
             {mode === 'iconlib' && 'Generate a cohesive set of custom SVG icons from a subject and reference styles.'}
             {mode === 'compress' && 'Reduce image file sizes and see the savings.'}
+            {mode === 'batch' && 'Convert, resize or strip metadata across many images at once.'}
             {mode === 'background' && 'Remove or replace an image background with one click.'}
             {mode === 'recolor' && 'Change the colour of a specific item in an image.'}
             {mode === 'cropresize' && 'Resize by dimensions, or drag the box to crop exactly what you want.'}
@@ -2196,13 +2870,19 @@ export default function GraphicsPage() {
             {mode === 'collage' && 'Arrange several images into a grid.'}
             {mode === 'extend' && 'Add padding around the image (white, a colour, or transparent).'}
             {mode === 'annotate' && 'Click to type text right on the image, draw arrows/boxes/freehand, move anything, then save a PNG.'}
-            {mode === 'effects' && 'Flip, rotate, border, round corners, shadow, or a filter (grayscale, sepia, invert, duotone).'}
-            {mode === 'adjust' && 'Tune brightness, contrast, colour, sharpness and vignette.'}
+            {mode === 'effects' && 'Flip, rotate (90° or any angle), border, round corners, shadow, or a filter (grayscale, sepia, invert, duotone).'}
+            {mode === 'adjust' && 'Tune brightness, contrast, colour, levels, gamma, sharpness, blur, noise reduction and vignette.'}
             {mode === 'redact' && 'Draw boxes to blur or pixelate faces, plates or sensitive text.'}
             {mode === 'ocr' && 'Extract text from screenshots, scans and receipts.'}
             {mode === 'palette' && 'Pull the dominant colours out of an image.'}
             {mode === 'diff' && 'Highlight the pixel differences between two images.'}
             {mode === 'picker' && 'Click anywhere on an image to read its colour.'}
+            {mode === 'histogram' && 'See the tonal distribution (RGB and luminance) of an image.'}
+            {mode === 'contrast' && 'Check colour contrast against WCAG AA / AAA thresholds.'}
+            {mode === 'animate' && 'Combine several images into an animated GIF.'}
+            {mode === 'pdf2img' && 'Render each page of a PDF to a PNG image.'}
+            {mode === 'pipeline' && 'Chain several edits into one repeatable sequence.'}
+            {mode === 'inpaint' && 'Paint over an area and let AI fill or replace it.'}
           </p>
         </div>
         {(mode === 'generate' || mode === 'upscale') && (
@@ -2226,10 +2906,11 @@ export default function GraphicsPage() {
               {getIcon('search', { size: 14 })}
             </span>
             <input
+              ref={toolSearchRef}
               type="text"
               value={toolSearch}
               onChange={e => setToolSearch(e.target.value)}
-              placeholder="Search tools..."
+              placeholder="Search tools...  ( / )"
               className="w-full pl-8 pr-7 py-2 rounded-lg border text-sm outline-none"
               style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
             />
@@ -2336,8 +3017,12 @@ export default function GraphicsPage() {
                 className="w-full px-3 py-2 rounded-xl border text-sm"
                 style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
               >
-                <option value="512">512 x 512 (fastest)</option>
-                <option value="768">768 x 768</option>
+                <option value="512x512">Square · 512 × 512 (fastest)</option>
+                <option value="768x768">Square · 768 × 768</option>
+                <option value="1024x768">Landscape 4:3 · 1024 × 768</option>
+                <option value="768x1024">Portrait 4:3 · 768 × 1024</option>
+                <option value="1024x576">Landscape 16:9 · 1024 × 576</option>
+                <option value="576x1024">Portrait 9:16 · 576 × 1024</option>
               </select>
             </div>
           </div>
@@ -2427,10 +3112,10 @@ export default function GraphicsPage() {
                     {formatCost(result.cost)}
                   </p>
                 )}
-                {isHostedProvider ? (
+                {!augmentSupported ? (
                   <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
                     <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                      Variations (image-to-image) are only available with the local ComfyUI provider, so this step is unavailable on the hosted provider.
+                      Variations (image-to-image) require the local ComfyUI provider or a FAL model, so this step is unavailable on the current provider.
                     </p>
                   </div>
                 ) : (
@@ -2644,22 +3329,23 @@ export default function GraphicsPage() {
         <div className="grid lg:grid-cols-[1fr_420px] gap-6">
           <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Convert an image to another format — PNG, JPG, WebP, GIF, AVIF or TIFF. Pixels are preserved; only the container changes.
+              Convert an image to another format — PNG, JPG, WebP, GIF, AVIF, TIFF or a multi-size ICO. HEIC/HEIF uploads work where the server supports them. Pixels are preserved; only the container changes.
             </p>
-            <div>
+            <div className="space-y-2">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 onChange={e => handleConvertFile(e.target.files?.[0])}
                 className="block w-full text-xs"
                 style={{ color: 'var(--color-text)' }}
               />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setConvertError(err); } else { setConvertResult(null); setConvertError(''); setConvertSource(src); } })} />
               {result?.imageDataUrl && (
                 <button
                   type="button"
                   onClick={useResultForConvert}
-                  className="mt-2 text-xs px-2 py-1 rounded-lg border hover:opacity-70"
+                  className="mt-1 text-xs px-2 py-1 rounded-lg border hover:opacity-70"
                   style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
                 >
                   Use current result
@@ -3005,6 +3691,177 @@ export default function GraphicsPage() {
       </section>
       )}
 
+      {mode === 'batch' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Batch process</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            Apply the same operation to many images at once — convert formats, resize, or strip metadata. Each file is processed and downloadable individually.
+          </p>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Add images</label>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={e => { handleBatchFiles(e.target.files); e.target.value = ''; }}
+                className="block w-full text-xs"
+                style={{ color: 'var(--color-text)' }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Operation</label>
+              <select
+                value={batchOp}
+                onChange={e => setBatchOp(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border text-sm"
+                style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              >
+                <option value="convert">Convert format</option>
+                <option value="resize">Resize</option>
+                <option value="strip">Strip metadata</option>
+              </select>
+            </div>
+          </div>
+
+          {batchOp === 'convert' && (
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Target format</label>
+                <select value={batchFormat} onChange={e => setBatchFormat(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="png">PNG</option>
+                  <option value="jpeg">JPG / JPEG</option>
+                  <option value="webp">WebP</option>
+                  <option value="gif">GIF</option>
+                  <option value="avif">AVIF</option>
+                  <option value="tiff">TIFF</option>
+                  <option value="ico">ICO (favicon)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Quality (lossy formats): {batchQuality}</label>
+                <input type="range" min="1" max="100" value={batchQuality} onChange={e => setBatchQuality(e.target.value)} className="w-full" />
+              </div>
+            </div>
+          )}
+
+          {batchOp === 'resize' && (
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Width (px)</label>
+                <input type="number" min="1" value={batchWidth} onChange={e => setBatchWidth(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Height (px)</label>
+                <input type="number" min="1" value={batchHeight} onChange={e => setBatchHeight(e.target.value)} placeholder="auto" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Fit</label>
+                <select value={batchFit} onChange={e => setBatchFit(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="inside">Inside (fit within)</option>
+                  <option value="cover">Cover (fill + crop)</option>
+                  <option value="contain">Contain (letterbox)</option>
+                  <option value="fill">Fill (stretch)</option>
+                  <option value="outside">Outside (cover area)</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {batchOp === 'strip' && (
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Removes EXIF, GPS, XMP, IPTC and ICC data from every image. Format and dimensions are preserved.</p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={runBatchAll}
+              disabled={batchRunning || !batchFiles.some(f => f.imageDataUrl && f.status !== 'done') || (batchOp === 'resize' && !batchWidth && !batchHeight)}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              {batchRunning ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('file-stack', { size: 15 })}
+              {batchRunning ? 'Processing...' : 'Process all'}
+            </button>
+            {batchFiles.some(f => f.result?.imageDataUrl) && (
+              <button
+                type="button"
+                onClick={downloadBatchAll}
+                disabled={batchRunning}
+                className="px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50 hover:opacity-80"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)', background: 'transparent' }}
+              >
+                Download all
+              </button>
+            )}
+            {batchFiles.length > 0 && (
+              <button
+                type="button"
+                onClick={clearBatchFiles}
+                disabled={batchRunning}
+                className="px-3 py-2 rounded-xl text-sm font-medium border disabled:opacity-50 hover:opacity-80"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)', background: 'transparent' }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {batchFiles.length === 0 ? (
+            <div className="rounded-xl border px-4 py-6 text-sm text-center" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+              Add one or more images to process.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {batchFiles.map(item => (
+                <div key={item.id} className="flex items-center gap-3 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  {item.imageDataUrl && (
+                    <img src={item.result?.imageDataUrl || item.imageDataUrl} alt="" className="h-10 w-10 rounded object-cover flex-shrink-0" style={{ border: '1px solid var(--color-border)' }} />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{item.name}</p>
+                    <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                      {item.status === 'done' && item.result ? (
+                        <span style={{ color: '#047857' }}>
+                          Done · {item.result.width && item.result.height ? `${item.result.width}×${item.result.height} · ` : ''}{(item.result.format || item.result.ext || '').toUpperCase()} · {formatBytes(item.result.bytes || item.result.cleanedBytes || 0)}
+                        </span>
+                      ) : item.status === 'working' ? 'Processing...'
+                        : item.status === 'error' ? <span style={{ color: '#ef4444' }}>{item.error}</span>
+                        : formatBytes(item.originalBytes)}
+                    </p>
+                  </div>
+                  {item.status === 'done' && item.result?.imageDataUrl && (
+                    <button
+                      type="button"
+                      onClick={() => downloadBatchItem(item)}
+                      className="text-xs px-2 py-1 rounded-lg border hover:opacity-70 flex-shrink-0"
+                      style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}
+                    >
+                      Download
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeBatchFile(item.id)}
+                    disabled={batchRunning}
+                    className="text-xs hover:opacity-70 flex-shrink-0 disabled:opacity-40"
+                    style={{ color: '#ef4444' }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+      )}
+
       {mode === 'background' && (
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -3016,7 +3873,7 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
               AI cut-out of the foreground subject. Leave the background transparent (PNG) or flatten it onto a solid colour.
             </p>
-            <div>
+            <div className="space-y-2">
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
               <input
                 type="file"
@@ -3025,6 +3882,7 @@ export default function GraphicsPage() {
                 className="block w-full text-xs"
                 style={{ color: 'var(--color-text)' }}
               />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setBgError(err); } else { setBgResult(null); setBgError(''); setBgSource(src); } })} />
             </div>
 
             {bgSource?.imageDataUrl && (
@@ -3322,6 +4180,7 @@ export default function GraphicsPage() {
           <div className="grow min-w-[220px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
             <input type="file" accept="image/*" onChange={e => { setCrResult(null); setCrError(''); setCrNat(null); loadImageInto(setCrSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+            <div className="mt-2"><UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setCrError(err); } else { setCrResult(null); setCrError(''); setCrNat(null); setCrSource(src); } })} /></div>
           </div>
           <div className="flex gap-2 self-end">
             {['resize', 'crop'].map(o => (
@@ -3528,11 +4387,46 @@ export default function GraphicsPage() {
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Strips EXIF, GPS location, camera info, timestamps and colour profiles. Orientation is baked in so the image still displays correctly.</p>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-              <input type="file" accept="image/*" onChange={e => { setMetaResult(null); setMetaError(''); loadImageInto(setMetaSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <input type="file" accept="image/*" onChange={async e => {
+                const file = e.target.files?.[0];
+                setMetaResult(null); setMetaError(''); setMetaInfo(null);
+                if (!file) return;
+                const dataUrl = await readFileAsDataUrl(file).catch(() => null);
+                if (!dataUrl) { setMetaError('Could not read that image file.'); return; }
+                setMetaSource({ imageDataUrl: dataUrl, name: file.name });
+                loadMetaInfo(dataUrl);
+              }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
             </div>
             {metaSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
                 <img src={metaSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+              </div>
+            )}
+            {metaSource?.imageDataUrl && metaInfo && (
+              <div className="rounded-xl border p-3 space-y-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <p className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>Current metadata</p>
+                {metaInfo.basics?.length > 0 && (
+                  <dl className="text-xs">
+                    {metaInfo.basics.map((f) => (
+                      <div key={f.label} className="flex items-start justify-between gap-3 py-1">
+                        <dt style={{ color: 'var(--color-muted)' }}>{f.label}</dt>
+                        <dd className="text-right break-all" style={{ color: 'var(--color-text)' }}>{f.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                {metaInfo.hasExif ? (
+                  <dl className="text-xs border-t pt-2" style={{ borderColor: 'var(--color-border)' }}>
+                    {metaInfo.exif.map((f) => (
+                      <div key={f.label} className="flex items-start justify-between gap-3 py-1">
+                        <dt style={{ color: f.label === 'GPS' ? '#b45309' : 'var(--color-muted)' }}>{f.label}</dt>
+                        <dd className="text-right break-all" style={{ color: f.label === 'GPS' ? '#b45309' : 'var(--color-text)' }}>{f.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p className="text-xs border-t pt-2" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>No EXIF camera/GPS data found — this image is already clean.</p>
+                )}
               </div>
             )}
             {metaError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{metaError}</div>}
@@ -3741,7 +4635,7 @@ export default function GraphicsPage() {
         <div className="rounded-2xl border p-4 mb-4 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div className="grow min-w-[200px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-            <input type="file" accept="image/*" onChange={e => { setAnnShapes([]); setAnnSelected(null); setAnnEditing(null); annImgRef.current = null; loadImageInto(setAnnSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+            <input type="file" accept="image/*" onChange={e => { setAnnShapes([]); setAnnSelected(null); setAnnEditing(null); setAnnPast([]); setAnnFuture([]); annImgRef.current = null; loadImageInto(setAnnSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
           </div>
           <div className="flex gap-2 self-end">
             {[['select', 'Select / Move'], ['text', 'Text'], ['arrow', 'Arrow'], ['rect', 'Box'], ['pen', 'Pen']].map(([t, label]) => (
@@ -3758,8 +4652,9 @@ export default function GraphicsPage() {
           </div>
           <div className="flex gap-2 self-end">
             <button type="button" onClick={deleteAnnSelected} disabled={annSelected == null} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Delete</button>
-            <button type="button" onClick={() => { setAnnShapes(prev => prev.slice(0, -1)); setAnnSelected(null); }} disabled={!annShapes.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button>
-            <button type="button" onClick={() => { setAnnShapes([]); setAnnSelected(null); }} disabled={!annShapes.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Clear</button>
+            <button type="button" onClick={undoAnn} disabled={!annPast.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button>
+            <button type="button" onClick={redoAnn} disabled={!annFuture.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Redo</button>
+            <button type="button" onClick={() => { if (!annShapes.length) return; recordAnn(annShapesRef.current); setAnnShapes([]); setAnnSelected(null); }} disabled={!annShapes.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Clear</button>
             <button type="button" onClick={exportAnnotate} disabled={!annSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {getIcon('download', { size: 15 })} Save PNG
             </button>
@@ -3923,6 +4818,7 @@ export default function GraphicsPage() {
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
               <input type="file" accept="image/*" onChange={e => { setEfResult(null); setEfError(''); loadImageInto(setEfSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <div className="mt-2"><UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setEfError(err); } else { setEfResult(null); setEfError(''); setEfSource(src); } })} /></div>
             </div>
             {efSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -3937,6 +4833,7 @@ export default function GraphicsPage() {
                 <option value="rotate-90">Rotate 90° right</option>
                 <option value="rotate-270">Rotate 90° left</option>
                 <option value="rotate-180">Rotate 180°</option>
+                <option value="rotate-free">Rotate by angle…</option>
                 <option value="border">Add border</option>
                 <option value="round">Round corners</option>
                 <option value="shadow">Drop shadow</option>
@@ -3946,6 +4843,24 @@ export default function GraphicsPage() {
                 <option value="duotone">Duotone</option>
               </select>
             </div>
+            {efEffect === 'rotate-free' && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Angle: {efAngle}°</label>
+                  <input type="range" min="-180" max="180" step="1" value={efAngle} onChange={e => setEfAngle(e.target.value)} className="w-full" />
+                </div>
+                <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                  <input type="checkbox" checked={efRotateTransparent} onChange={e => setEfRotateTransparent(e.target.checked)} />
+                  Transparent corners (PNG)
+                </label>
+                {!efRotateTransparent && (
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Corner fill</label>
+                    <input type="color" value={efRotateBg} onChange={e => setEfRotateBg(e.target.value)} className="h-8 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                  </div>
+                )}
+              </div>
+            )}
             {efEffect === 'border' && (
               <div className="grid sm:grid-cols-2 gap-3 items-end">
                 <div>
@@ -4045,6 +4960,7 @@ export default function GraphicsPage() {
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
               <input type="file" accept="image/*" onChange={e => { setAdjResult(null); setAdjError(''); loadImageInto(setAdjSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <div className="mt-2"><UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setAdjError(err); } else { setAdjResult(null); setAdjError(''); setAdjSource(src); } })} /></div>
             </div>
             {adjSource?.imageDataUrl && (
               <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
@@ -4080,6 +4996,27 @@ export default function GraphicsPage() {
                 <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Vignette: {adjVignette}%</label>
                 <input type="range" min="0" max="100" step="1" value={adjVignette} onChange={e => setAdjVignette(e.target.value)} className="w-full" />
               </div>
+              <div className="pt-2 mt-1 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                <p className="text-[11px] font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--color-muted)' }}>Levels</p>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Black point: {adjBlackPoint}</label>
+                <input type="range" min="0" max="254" step="1" value={adjBlackPoint} onChange={e => setAdjBlackPoint(e.target.value)} className="w-full" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>White point: {adjWhitePoint}</label>
+                <input type="range" min="1" max="255" step="1" value={adjWhitePoint} onChange={e => setAdjWhitePoint(e.target.value)} className="w-full" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Gamma (midtones): {Number(adjGamma).toFixed(2)}</label>
+                <input type="range" min="1" max="3" step="0.01" value={adjGamma} onChange={e => setAdjGamma(e.target.value)} className="w-full" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Blur: {Number(adjBlur).toFixed(1)}</label>
+                <input type="range" min="0" max="30" step="0.5" value={adjBlur} onChange={e => setAdjBlur(e.target.value)} className="w-full" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Noise reduction: {adjDenoise > 0 ? `${adjDenoise % 2 === 0 ? Number(adjDenoise) + 1 : adjDenoise}px` : 'off'}</label>
+                <input type="range" min="0" max="13" step="1" value={adjDenoise} onChange={e => setAdjDenoise(e.target.value)} className="w-full" />
+              </div>
             </div>
             {adjError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{adjError}</div>}
             <div className="flex items-center gap-2">
@@ -4088,6 +5025,23 @@ export default function GraphicsPage() {
                 {adjBusy ? 'Applying...' : 'Apply adjustments'}
               </button>
               <button type="button" onClick={resetAdjust} className="px-3 py-2 rounded-xl text-sm border hover:opacity-70" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Reset</button>
+            </div>
+            <div className="pt-3 mt-1 border-t space-y-2" style={{ borderColor: 'var(--color-border)' }}>
+              <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-muted)' }}>Presets</p>
+              <div className="flex items-center gap-2">
+                <input type="text" value={adjPresetName} onChange={e => setAdjPresetName(e.target.value)} placeholder="Preset name" className="flex-1 min-w-0 px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                <button type="button" onClick={saveAdjPreset} disabled={!adjPresetName.trim()} className="px-3 py-2 rounded-xl text-sm border disabled:opacity-50 hover:opacity-80 whitespace-nowrap" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>Save current</button>
+              </div>
+              {adjPresets.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {adjPresets.map(p => (
+                    <span key={p.name} className="inline-flex items-center gap-1 rounded-lg border text-xs" style={{ borderColor: 'var(--color-border)' }}>
+                      <button type="button" onClick={() => applyAdjPreset(p.name)} className="pl-2 py-1 hover:opacity-70" style={{ color: 'var(--color-text)' }}>{p.name}</button>
+                      <button type="button" onClick={() => deleteAdjPreset(p.name)} className="px-1.5 py-1 hover:opacity-70" style={{ color: '#ef4444' }}>×</button>
+                    </span>
+                  ))}
+                </div>
+              ) : <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Save the current sliders as a named preset to reuse later.</p>}
             </div>
           </div>
           <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
@@ -4124,7 +5078,7 @@ export default function GraphicsPage() {
         <div className="rounded-2xl border p-4 mb-4 flex flex-wrap items-center gap-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
           <div className="grow min-w-[200px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
-            <input type="file" accept="image/*" onChange={e => { setRedactRects([]); setRedactExport(null); redactImgRef.current = null; loadImageInto(setRedactSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+            <input type="file" accept="image/*" onChange={e => { setRedactRects([]); setRedactExport(null); setRedactPast([]); setRedactFuture([]); redactImgRef.current = null; loadImageInto(setRedactSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
           </div>
           <div className="flex gap-2 self-end">
             {['pixelate', 'blur'].map(m => (
@@ -4136,8 +5090,9 @@ export default function GraphicsPage() {
             <input type="range" min="4" max="60" value={redactStrength} onChange={e => setRedactStrength(Number(e.target.value))} className="w-full" />
           </div>
           <div className="flex gap-2 self-end">
-            <button type="button" onClick={() => setRedactRects(prev => prev.slice(0, -1))} disabled={!redactRects.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button>
-            <button type="button" onClick={() => setRedactRects([])} disabled={!redactRects.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Clear</button>
+            <button type="button" onClick={undoRedact} disabled={!redactPast.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Undo</button>
+            <button type="button" onClick={redoRedact} disabled={!redactFuture.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Redo</button>
+            <button type="button" onClick={() => { if (!redactRects.length) return; recordRedact(redactRectsRef.current); setRedactRects([]); }} disabled={!redactRects.length} className="text-xs px-3 py-2 rounded-xl border hover:opacity-70 disabled:opacity-40" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Clear</button>
             <button type="button" onClick={exportRedact} disabled={!redactSource?.imageDataUrl || !redactRects.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
               {getIcon('download', { size: 15 })} Export PNG
             </button>
@@ -4426,6 +5381,389 @@ export default function GraphicsPage() {
                   ))}
                 </dl>
               ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Choose a file to see its details.</div>}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'histogram' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Histogram</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_520px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>See the tonal distribution of an image. Nothing is uploaded — pixels are read in your browser.</p>
+            <div className="space-y-2">
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={async e => { const f = e.target.files?.[0]; if (!f) return; try { const d = await readFileAsDataUrl(f); loadHistogram({ imageDataUrl: d, name: f.name }); } catch { setHistError('Could not read that image.'); } }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setHistError(err); } else { loadHistogram(src); } })} />
+            </div>
+            {histSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={histSource.imageDataUrl} alt="source" className="max-h-48 mx-auto rounded-lg" />
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Channel</label>
+              <select value={histChannel} onChange={e => setHistChannel(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                <option value="rgb">RGB (combined)</option>
+                <option value="lum">Luminance</option>
+                <option value="r">Red</option>
+                <option value="g">Green</option>
+                <option value="b">Blue</option>
+              </select>
+            </div>
+            {histError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{histError}</div>}
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Distribution</span>
+            </div>
+            <div className="p-4">
+              {histData ? (
+                <>
+                  <canvas ref={histCanvasRef} width={512} height={240} className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
+                  <div className="flex items-center justify-between mt-2 text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                    <span>0 (shadows)</span>
+                    <span>{histData.total.toLocaleString()} px · {histData.width}×{histData.height}</span>
+                    <span>255 (highlights)</span>
+                  </div>
+                </>
+              ) : <div className="aspect-video rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Choose an image to see its histogram.</div>}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'contrast' && (() => {
+        const ratio = contrastRatio(contrastFg, contrastBg);
+        const Badge = ({ label, threshold }) => {
+          const pass = ratio >= threshold;
+          return (
+            <div className="flex items-center justify-between gap-3 py-2 border-b last:border-b-0" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm" style={{ color: 'var(--color-text)' }}>{label}</span>
+              <span className="text-xs font-semibold px-2 py-1 rounded-lg" style={{ color: pass ? '#065f46' : '#991b1b', background: pass ? '#d1fae5' : '#fee2e2' }}>{pass ? 'Pass' : 'Fail'} · ≥{threshold}</span>
+            </div>
+          );
+        };
+        return (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Contrast checker</h2>
+            <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+          </div>
+          <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+            <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Check a text/background colour pair against the WCAG 2.1 contrast thresholds.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Text / foreground</label>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={contrastFg} onChange={e => setContrastFg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                    <input type="text" value={contrastFg} onChange={e => setContrastFg(e.target.value)} className="flex-1 min-w-0 px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Background</label>
+                  <div className="flex items-center gap-2">
+                    <input type="color" value={contrastBg} onChange={e => setContrastBg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                    <input type="text" value={contrastBg} onChange={e => setContrastBg(e.target.value)} className="flex-1 min-w-0 px-2 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                  </div>
+                </div>
+              </div>
+              <button type="button" onClick={() => { setContrastFg(contrastBg); setContrastBg(contrastFg); }} className="text-xs px-3 py-2 rounded-xl border hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Swap colours</button>
+              <div className="rounded-xl border p-5 space-y-2" style={{ background: contrastBg, borderColor: 'var(--color-border)' }}>
+                <p style={{ color: contrastFg, fontSize: 24, fontWeight: 700, margin: 0 }}>Large text sample</p>
+                <p style={{ color: contrastFg, fontSize: 15, margin: 0 }}>Normal body text sample — the quick brown fox jumps over the lazy dog.</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              </div>
+              <div className="p-4">
+                <div className="text-center py-3">
+                  <div className="text-4xl font-bold" style={{ color: 'var(--color-text)' }}>{ratio.toFixed(2)}:1</div>
+                  <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>contrast ratio</div>
+                </div>
+                <Badge label="AA · normal text" threshold={4.5} />
+                <Badge label="AA · large text (18pt+/14pt bold)" threshold={3} />
+                <Badge label="AAA · normal text" threshold={7} />
+                <Badge label="AAA · large text" threshold={4.5} />
+              </div>
+            </div>
+          </div>
+        </section>
+        );
+      })()}
+
+      {mode === 'animate' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Animate (GIF)</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Combine several images into an animated GIF. Frames play in the order shown (the first frame sets the size — others are cropped to fit).</p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Add frames</label>
+              <input type="file" accept="image/*" multiple onChange={e => { handleAnimFrames(e.target.files); e.target.value = ''; }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3 items-end">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Frame delay: {animDelay}ms</label>
+                <input type="range" min="20" max="2000" step="10" value={animDelay} onChange={e => setAnimDelay(e.target.value)} className="w-full" />
+              </div>
+              <label className="flex items-center gap-2 text-xs" style={{ color: 'var(--color-muted)' }}>
+                <input type="checkbox" checked={animLoop} onChange={e => setAnimLoop(e.target.checked)} /> Loop forever
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={runAnimate} disabled={animBusy || animFrames.length < 2} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+                {animBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('film', { size: 15 })}
+                {animBusy ? 'Building...' : 'Build GIF'}
+              </button>
+              {animFrames.length > 0 && (
+                <button type="button" onClick={clearAnimFrames} disabled={animBusy} className="px-3 py-2 rounded-xl text-sm border disabled:opacity-50 hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear</button>
+              )}
+            </div>
+            {animError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{animError}</div>}
+            {animFrames.length === 0 ? (
+              <div className="rounded-xl border px-4 py-6 text-sm text-center" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>Add 2 or more frames to animate.</div>
+            ) : (
+              <div className="space-y-2">
+                {animFrames.map((item, i) => (
+                  <div key={item.id} className="flex items-center gap-3 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                    <span className="text-[11px] w-5 text-center" style={{ color: 'var(--color-muted)' }}>{i + 1}</span>
+                    <img src={item.imageDataUrl} alt="" className="h-10 w-10 rounded object-cover flex-shrink-0" style={{ border: '1px solid var(--color-border)' }} />
+                    <p className="text-xs font-medium truncate flex-1 min-w-0" style={{ color: 'var(--color-text)' }}>{item.name}</p>
+                    <button type="button" onClick={() => moveAnimFrame(item.id, -1)} disabled={i === 0} className="text-xs px-1.5 py-1 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>↑</button>
+                    <button type="button" onClick={() => moveAnimFrame(item.id, 1)} disabled={i === animFrames.length - 1} className="text-xs px-1.5 py-1 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>↓</button>
+                    <button type="button" onClick={() => removeAnimFrame(item.id)} disabled={animBusy} className="text-xs hover:opacity-70 disabled:opacity-40" style={{ color: '#ef4444' }}>Remove</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              {animResult?.imageDataUrl && <button onClick={() => downloadDataUrl(animResult.imageDataUrl, `animation-${Date.now()}.gif`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>}
+            </div>
+            <div className="p-4">
+              {animResult?.imageDataUrl ? (
+                <>
+                  <img src={animResult.imageDataUrl} alt="animation" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
+                  <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{animResult.frames} frames · {animResult.width}×{animResult.height} · {formatBytes(animResult.bytes)}</p>
+                </>
+              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Your animated GIF will appear here.</div>}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'pdf2img' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>PDF → Images</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Render each page of a PDF to a PNG in your browser — nothing is uploaded. Higher resolution = larger, sharper images.</p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>PDF file</label>
+              <input type="file" accept="application/pdf,.pdf" onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfFile(f); e.target.value = ''; }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Resolution</label>
+              <select value={pdfScale} onChange={e => setPdfScale(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                <option value="1">Screen (1×)</option>
+                <option value="2">High (2×)</option>
+                <option value="3">Very high (3×)</option>
+                <option value="4">Print (4×)</option>
+              </select>
+            </div>
+          </div>
+          {pdfError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{pdfError}</div>}
+          {pdfPages.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={downloadPdfAll} className="px-3 py-2 rounded-xl text-sm border hover:opacity-80" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>Download all ({pdfPages.length})</button>
+              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{pdfBusy ? 'Rendering…' : `${pdfPages.length} page${pdfPages.length === 1 ? '' : 's'}`}</span>
+            </div>
+          )}
+          {pdfPages.length === 0 ? (
+            <div className="rounded-xl border px-4 py-6 text-sm text-center" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>{pdfBusy ? 'Rendering pages…' : 'Choose a PDF to render its pages.'}</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {pdfPages.map(item => (
+                <div key={item.id} className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  <button type="button" onClick={() => setPreviewImage({ imageDataUrl: item.dataUrl })} className="block w-full"><img src={item.dataUrl} alt={`page ${item.page}`} className="w-full" /></button>
+                  <div className="flex items-center justify-between px-2 py-1.5">
+                    <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Page {item.page}</span>
+                    <button type="button" onClick={() => downloadPdfPage(item)} className="text-[11px] px-2 py-0.5 rounded border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Save</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+      )}
+
+      {mode === 'pipeline' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Pipeline</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Build a sequence of edits and apply them in order, in one pass. Up to 12 steps.</p>
+            <div className="space-y-2">
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={e => { setPipeResult(null); setPipeError(''); loadImageInto(setPipeSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setPipeError(err); } else { setPipeResult(null); setPipeError(''); setPipeSource(src); } })} />
+            </div>
+            {pipeSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={pipeSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <select value={pipeStepOp} onChange={e => setPipeStepOp(e.target.value)} className="flex-1 px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                {Object.entries(PIPE_OP_DEFS).map(([id, d]) => <option key={id} value={id}>{d.label}</option>)}
+              </select>
+              <button type="button" onClick={addPipeStep} className="px-3 py-2 rounded-xl text-sm border hover:opacity-80 whitespace-nowrap" style={{ borderColor: 'var(--color-border)', color: 'var(--color-primary)' }}>+ Add step</button>
+            </div>
+            {pipeSteps.length === 0 ? (
+              <div className="rounded-xl border px-4 py-5 text-sm text-center" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>No steps yet — add one above.</div>
+            ) : (
+              <div className="space-y-2">
+                {pipeSteps.map((s, i) => {
+                  const def = PIPE_OP_DEFS[s.op] || {};
+                  return (
+                    <div key={s.id} className="rounded-xl border px-3 py-2 space-y-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] w-5 text-center" style={{ color: 'var(--color-muted)' }}>{i + 1}</span>
+                        <span className="text-sm font-medium flex-1" style={{ color: 'var(--color-text)' }}>{def.label || s.op}</span>
+                        <button type="button" onClick={() => movePipeStep(s.id, -1)} disabled={i === 0} className="text-xs px-1.5 py-0.5 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>↑</button>
+                        <button type="button" onClick={() => movePipeStep(s.id, 1)} disabled={i === pipeSteps.length - 1} className="text-xs px-1.5 py-0.5 rounded border disabled:opacity-30 hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>↓</button>
+                        <button type="button" onClick={() => removePipeStep(s.id)} className="text-xs hover:opacity-70" style={{ color: '#ef4444' }}>Remove</button>
+                      </div>
+                      {def.param && (
+                        <div className="flex items-center gap-2">
+                          <input type="range" min={def.param.min} max={def.param.max} step={def.param.step} value={s.op === 'resize' ? s.width : s.value} onChange={e => updatePipeStep(s.id, s.op === 'resize' ? { width: e.target.value } : { value: e.target.value })} className="flex-1" />
+                          <span className="text-[11px] w-12 text-right" style={{ color: 'var(--color-muted)' }}>{s.op === 'resize' ? `${s.width}px` : Number(s.value).toFixed(def.param.step < 1 ? 2 : 0)}</span>
+                        </div>
+                      )}
+                      {def.color && (
+                        <input type="color" value={s.color} onChange={e => updatePipeStep(s.id, { color: e.target.value })} className="h-7 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {pipeError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{pipeError}</div>}
+            <button type="button" onClick={runPipeline} disabled={pipeBusy || !pipeSource?.imageDataUrl || !pipeSteps.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {pipeBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('workflow', { size: 15 })}
+              {pipeBusy ? 'Running...' : 'Run pipeline'}
+            </button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              {pipeResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderSendTo(pipeResult.imageDataUrl, `pipeline.${pipeResult.format}`, 'pipeline')}
+                  {renderExport(pipeResult.imageDataUrl, 'pipeline')}
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              {pipeResult?.imageDataUrl ? (
+                <>
+                  <button type="button" onClick={() => setPreviewImage(pipeResult)} className="block w-full"><img src={pipeResult.imageDataUrl} alt="pipeline result" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} /></button>
+                  <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{pipeResult.steps} step{pipeResult.steps === 1 ? '' : 's'} · {pipeResult.width}×{pipeResult.height} · {formatBytes(pipeResult.bytes)}</p>
+                </>
+              ) : <ResultPlaceholder src={pipeSource?.imageDataUrl} message="Your processed image will appear here." />}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'inpaint' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Inpaint / Remove</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Hosted (FAL) · paid</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Paint over an area, then describe what should be there. The model repaints just the masked region. Requires the FAL image provider.</p>
+            <div className="space-y-2">
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={e => loadImageInto(loadInpaint)(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setInpaintError(err); } else { loadInpaint(src); } })} />
+            </div>
+            {inpaintSource?.imageDataUrl && (
+              <div className="space-y-2">
+                <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                  <canvas
+                    ref={inpaintCanvasRef}
+                    onMouseDown={onInpaintDown}
+                    onMouseMove={onInpaintMove}
+                    onMouseUp={onInpaintUp}
+                    onMouseLeave={onInpaintUp}
+                    className="w-full rounded-lg"
+                    style={{ display: 'block', cursor: 'crosshair', touchAction: 'none' }}
+                  />
+                  <canvas ref={inpaintMaskRef} style={{ display: 'none' }} />
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>Brush</span>
+                  <input type="range" min="6" max="120" step="2" value={inpaintBrush} onChange={e => setInpaintBrush(e.target.value)} className="flex-1" />
+                  <span className="text-[11px] w-8 text-right" style={{ color: 'var(--color-muted)' }}>{inpaintBrush}</span>
+                  <button type="button" onClick={clearInpaintMask} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>Clear mask</button>
+                </div>
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>What should fill the area?</label>
+              <textarea value={inpaintPrompt} onChange={e => setInpaintPrompt(e.target.value)} rows={2} placeholder="e.g. empty grass, clear blue sky, a wooden table" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              <p className="text-[11px] mt-1" style={{ color: 'var(--color-muted)' }}>To remove an object, describe the background that should replace it.</p>
+            </div>
+            {inpaintError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{inpaintError}</div>}
+            <button type="button" onClick={runInpaint} disabled={inpaintBusy || !inpaintSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {inpaintBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('eraser', { size: 15 })}
+              {inpaintBusy ? 'Inpainting...' : 'Inpaint'}
+            </button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              {inpaintResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderSendTo(inpaintResult.imageDataUrl, 'inpainted.jpg', 'inpaint')}
+                  {renderExport(inpaintResult.imageDataUrl, 'inpainted')}
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              {inpaintResult?.imageDataUrl ? (
+                <>
+                  <button type="button" onClick={() => setPreviewImage(inpaintResult)} className="block w-full"><img src={inpaintResult.imageDataUrl} alt="inpainted" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} /></button>
+                  {inpaintResult.cost && <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{formatCost(inpaintResult.cost)}</p>}
+                </>
+              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Your inpainted image will appear here.</div>}
             </div>
           </div>
         </div>

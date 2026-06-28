@@ -4,6 +4,53 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-28 (25)
+
+**Feature:** Graphics — workflow batch 4 (PDF→images, Pipeline, Inpaint, Adjust presets, keyboard shortcuts).
+
+- **PDF → Images** (Optimise) — render every page of a PDF to a PNG entirely in the browser via `pdfjs-dist` (already a dependency), with a resolution selector (1×–4×), per-page and "download all", and a click-to-zoom preview. Nothing is uploaded.
+- **Pipeline** (Edit) — chain up to 12 whitelisted edits (grayscale/sepia/invert, flip/mirror, blur, sharpen, brightness/contrast/saturation, gamma, temperature, rotate, border, resize) with per-step sliders and ↑/↓ reordering, applied in one server pass. New `POST /api/graphics/pipeline`.
+- **Inpaint / Remove** (Edit) — paint a mask over an area and describe what should fill it; the model repaints just that region (object removal = describe the background). Brush size + clear, mask sent as white-on-black. New `POST /api/graphics/inpaint` — **FAL-only**, model overridable via `GRAPHICS_INPAINT_MODEL` (default `fal-ai/flux-lora/inpainting`); cost is logged like Generate/Augment.
+- **Adjust presets** — save the current Adjust sliders as a named preset (stored in `localStorage`) and re-apply or delete them later.
+- **Keyboard shortcuts** — `/` focuses the tool search, `Esc` closes the full-screen preview (or clears the search), and `Cmd/Ctrl+Z` / `Cmd/Ctrl+Shift+Z` drive undo/redo in Annotate and Redact.
+
+---
+
+## 2026-06-28 (24)
+
+**Feature:** Graphics — analysis & format batch 3 (histogram, WCAG contrast, URL import, ICO, HEIC, Animate).
+
+- **Histogram** (Analyse) — browser-only RGB/luminance tonal distribution with a per-channel toggle (combined RGB, luminance, or a single channel). Nothing is uploaded.
+- **Contrast checker** (Analyse) — enter a text/background colour pair and see the WCAG 2.1 contrast ratio with AA/AAA pass/fail for normal and large text, plus a live preview and a swap button.
+- **Import by URL** — a "…or paste an image URL" row on Convert, Crop/Resize, Adjust, Effects and Background, backed by a new `POST /api/graphics/fetch-url` (server-side fetch avoids CORS; basic SSRF guard blocks localhost/private hosts, image-only, 25MB cap, 15s timeout).
+- **ICO output** — Convert (and Batch) can emit a multi-resolution `.ico` (16–256px) packed by hand from sharp-rendered PNGs.
+- **HEIC/HEIF input** — Convert accepts `.heic/.heif` uploads and decodes them where the server's libvips supports HEIF, with a clear message when it doesn't.
+- **Animate (GIF)** (Create) — combine several frames into an animated GIF with a frame-delay slider, loop toggle and drag-free reorder (↑/↓). New `POST /api/graphics/animate` using the pure-JS **gifenc** encoder (lazy-required, so the app still boots if it isn't installed — run `npm install`).
+
+---
+
+## 2026-06-28 (23)
+
+**Feature:** Graphics — editing batch 2 (Batch tool, levels/gamma, blur, denoise, free rotate).
+
+- **Batch tool** (Optimise) — drop many images and run one operation across all of them: **Convert format** (PNG/JPG/WebP/GIF/AVIF/TIFF + quality), **Resize** (width/height + fit mode), or **Strip metadata**. Each file shows its result and downloads individually, plus a **Download all**. Reuses the existing per-file endpoints, so no new server routes.
+- **Levels & gamma in Adjust** — new **black point**, **white point** and **gamma (midtones)** controls. Levels are folded together with contrast into a single `linear()` map so sharp doesn't drop one; gamma uses sharp's `gamma()`.
+- **Blur & noise reduction in Adjust** — a **Blur** slider (sharp `blur`) and a **Noise reduction** slider (sharp `median` filter, snapped to an odd window).
+- **Rotate by any angle** — Effects gains **Rotate by angle…** (-180°…180°) with a choice of transparent corners (PNG) or a solid corner-fill colour, via sharp `rotate(angle, { background })`.
+
+---
+
+## 2026-06-28 (22)
+
+**Feature:** Graphics — editing batch 1 (non-square generate, FAL augment, undo/redo, EXIF viewer).
+
+- **Non-square generation sizes** — the Generate size control now offers landscape/portrait/square aspect presets; width and height are parsed and sent through to the provider instead of a single square dimension.
+- **FAL image-to-image augment** — "Augment this image" now works on the **FAL** provider via a real image-to-image call, not just local ComfyUI; the UI enables Augment for FAL too.
+- **Undo / redo in Annotate & Redact** — both tools keep a 20-step history covering draws, moves, text edits, deletes and clears, with the stacks reset whenever a new image is loaded.
+- **EXIF viewer before stripping** — the Remove Meta tool shows the current metadata first (format, dimensions, colour space, camera/lens, GPS) using `exif-reader`, via a new `POST /api/graphics/metadata` route, so you can see what will be removed.
+
+---
+
 ## 2026-06-28 (21)
 
 **Fixes:** Graphics/app — unified processing overlay, hardened SVG sanitiser, hosted Augment guard.
