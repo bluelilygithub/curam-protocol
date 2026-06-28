@@ -119,6 +119,12 @@ const semanticMap = {
   'file-text': { lucide: 'FileText' },
   workflow: { lucide: 'Workflow' },
   eraser: { lucide: 'Eraser' },
+  zap: { lucide: 'Zap' },
+  focus: { lucide: 'Focus' },
+  trapezoid: { lucide: 'Scaling' },
+  aim: { lucide: 'Crosshair' },
+  'palette-2': { lucide: 'PaintBucket' },
+  text: { lucide: 'Type' },
 };
 
 const IconContext = createContext(null);

@@ -2660,4 +2660,372 @@ router.post('/animate', async (req, res) => {
   }
 });
 
+// Blur detection using Laplacian variance. Lower variance = blurrier image.
+router.post('/blur-detect', async (req, res) => {
+  try {
+    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    if (!buf) return res.status(400).json({ error: 'No valid image provided' });
+
+    const img = sharp(buf).rotate();
+    const meta = await img.metadata();
+    let w = meta.width || 1;
+    let h = meta.height || 1;
+    
+    // Cap analysis at 800px for speed.
+    const cap = 800;
+    if (Math.max(w, h) > cap) {
+      const s = cap / Math.max(w, h);
+      w = Math.round(w * s);
+      h = Math.round(h * s);
+    }
+
+    // Convert to grayscale for edge detection.
+    const gray = await img
+      .resize(w, h, { fit: 'inside', withoutEnlargement: true })
+      .grayscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    // Apply 3x3 Laplacian kernel for edge detection.
+    const data = gray.data;
+    const stride = gray.info.width;
+    let lapSum = 0;
+    let count = 0;
+
+    for (let y = 1; y < h - 1; y += 1) {
+      for (let x = 1; x < w - 1; x += 1) {
+        const i = y * stride + x;
+        const lap = 
+          -1 * data[i - stride - 1] + -1 * data[i - stride] + -1 * data[i - stride + 1]
+          + -1 * data[i - 1] + 8 * data[i] + -1 * data[i + 1]
+          + -1 * data[i + stride - 1] + -1 * data[i + stride] + -1 * data[i + stride + 1];
+        lapSum += lap * lap;
+        count += 1;
+      }
+    }
+
+    const variance = count > 0 ? lapSum / count : 0;
+    let status = 'sharp';
+    if (variance < 100) status = 'blurry';
+    else if (variance < 500) status = 'soft';
+
+    res.json({
+      ok: true,
+      variance: Number(variance.toFixed(2)),
+      status,
+      width: meta.width,
+      height: meta.height,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Blur detection failed' });
+  }
+});
+
+// Auto-enhance: intelligently adjust brightness, contrast, saturation based on histogram.
+router.post('/auto-enhance', async (req, res) => {
+  try {
+    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    if (!buf) return res.status(400).json({ error: 'No valid image provided' });
+
+    // Analyze histogram to determine optimal adjustments.
+    const img = sharp(buf).rotate();
+    const meta = await img.metadata();
+    let w = meta.width || 1;
+    let h = meta.height || 1;
+
+    // Cap analysis at 800px.
+    const cap = 800;
+    if (Math.max(w, h) > cap) {
+      const s = cap / Math.max(w, h);
+      w = Math.round(w * s);
+      h = Math.round(h * s);
+    }
+
+    // Get pixel data for histogram analysis.
+    const raw = await img
+      .resize(w, h, { fit: 'inside', withoutEnlargement: true })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const data = raw.data;
+    const r = new Array(256).fill(0);
+    const g = new Array(256).fill(0);
+    const b = new Array(256).fill(0);
+
+    // Tally per-channel histograms.
+    for (let i = 0; i < data.length; i += 4) {
+      r[data[i]] += 1;
+      g[data[i + 1]] += 1;
+      b[data[i + 2]] += 1;
+    }
+
+    // Find 5th and 95th percentiles for each channel to detect shadows/highlights.
+    const percentile = (hist, p) => {
+      const total = hist.reduce((a, v) => a + v, 0);
+      const target = total * p;
+      let sum = 0;
+      for (let i = 0; i < 256; i += 1) {
+        sum += hist[i];
+        if (sum >= target) return i;
+      }
+      return 255;
+    };
+
+    const r5 = percentile(r, 0.05);
+    const r95 = percentile(r, 0.95);
+    const g5 = percentile(g, 0.05);
+    const g95 = percentile(g, 0.95);
+    const b5 = percentile(b, 0.05);
+    const b95 = percentile(b, 0.95);
+
+    // Compute adjustments: contrast stretches dark/light points, brightness shifts midtones.
+    const rMid = (r5 + r95) / 2;
+    const gMid = (g5 + g95) / 2;
+    const bMid = (b5 + b95) / 2;
+    const overall = (rMid + gMid + bMid) / 3;
+
+    let brightness = 1;
+    let contrast = 1;
+    let saturation = 1;
+
+    if (overall < 80) brightness = 1.2; // Image is dark
+    else if (overall > 180) brightness = 0.9; // Image is bright
+
+    const range = (r95 - r5 + g95 - g5 + b95 - b5) / 3;
+    if (range < 100) contrast = 1.3; // Low contrast
+    if (range > 200) saturation = 1.15; // Boost already-vibrant images
+
+    // Apply adjustments via sharp: linear contrast, then manipulate saturation.
+    const enhanced = await img
+      .linear(contrast, Math.round(128 * (1 - contrast)))
+      .modulate({ brightness, saturation })
+      .png()
+      .toBuffer();
+
+    res.json({
+      ok: true,
+      imageDataUrl: `data:image/png;base64,${enhanced.toString('base64')}`,
+      applied: { brightness: Number(brightness.toFixed(2)), contrast: Number(contrast.toFixed(2)), saturation: Number(saturation.toFixed(2)) },
+      width: meta.width,
+      height: meta.height,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Auto-enhance failed' });
+  }
+});
+
+// Perspective correction via affine shear (handles keystone / trapezoid distortion).
+// hSkew and vSkew are in the range -50…50 (percentage), normalised to -0.5…0.5 for the matrix.
+router.post('/perspective', async (req, res) => {
+  try {
+    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    if (!buf) return res.status(400).json({ error: 'No valid image provided' });
+
+    const hSkew = Math.max(-0.5, Math.min(0.5, Number(req.body?.hSkew || 0) / 100));
+    const vSkew = Math.max(-0.5, Math.min(0.5, Number(req.body?.vSkew || 0) / 100));
+    const bgColor = String(req.body?.background || 'transparent');
+
+    const bg = bgColor === 'transparent'
+      ? { r: 0, g: 0, b: 0, alpha: 0 }
+      : (() => {
+          const c = parseHexColor(bgColor);
+          return c ? { r: c.r, g: c.g, b: c.b, alpha: 1 } : { r: 255, g: 255, b: 255, alpha: 1 };
+        })();
+
+    const out = await sharp(buf)
+      .rotate()
+      .affine([[1, hSkew], [vSkew, 1]], { background: bg, interpolator: sharp.interpolators.nohalo })
+      .png()
+      .toBuffer();
+
+    const m = await sharp(out).metadata().catch(() => null);
+    res.json({
+      ok: true,
+      imageDataUrl: `data:image/png;base64,${out.toString('base64')}`,
+      width: m?.width,
+      height: m?.height,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Perspective correction failed' });
+  }
+});
+
+// Smart crop — resize to a target size or aspect ratio using a chosen focus strategy.
+// focus: 'attention' (content-aware), 'entropy' (high-detail region), or a cardinal direction.
+const SC_FOCUS_POSITIONS = ['attention', 'entropy', 'centre', 'north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest'];
+
+router.post('/smart-crop', async (req, res) => {
+  try {
+    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    if (!buf) return res.status(400).json({ error: 'No valid image provided' });
+
+    const focus = SC_FOCUS_POSITIONS.includes(req.body?.focus) ? req.body.focus : 'attention';
+    let width = clampInt(req.body?.width, 1, 8000, null);
+    let height = clampInt(req.body?.height, 1, 8000, null);
+
+    const meta = await sharp(buf).rotate().metadata();
+    const origW = meta.width;
+    const origH = meta.height;
+    const fmt = outputFormatFor(meta);
+
+    // Resolve dimensions from aspect ratio when explicit w/h are not both given.
+    const aspect = req.body?.aspect ? parseAspect(req.body.aspect) : null;
+    if (aspect) {
+      if (width && !height) {
+        height = Math.max(1, Math.round(width * aspect.h / aspect.w));
+      } else if (!width && height) {
+        width = Math.max(1, Math.round(height * aspect.w / aspect.h));
+      } else if (!width && !height) {
+        const fromH = Math.round(origW * aspect.h / aspect.w);
+        if (fromH <= origH) { width = origW; height = fromH; }
+        else { height = origH; width = Math.max(1, Math.round(origH * aspect.w / aspect.h)); }
+      }
+    }
+
+    if (!width && !height) {
+      return res.status(400).json({ error: 'Provide a target width, height, or aspect ratio' });
+    }
+
+    const out = await sharp(buf)
+      .rotate()
+      .resize(width || null, height || null, { fit: 'cover', position: focus })
+      .toFormat(fmt)
+      .toBuffer();
+
+    const m2 = await sharp(out).metadata().catch(() => null);
+    res.json({
+      ok: true,
+      focus,
+      imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
+      width: m2?.width,
+      height: m2?.height,
+      format: fmt,
+      bytes: out.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Smart crop failed' });
+  }
+});
+
+// Color grading — apply a named look via channel recombination, modulate and linear tone mapping.
+const COLORGRADE_PRESETS = {
+  warm:        { label: 'Warm',          recomb: [[1.15, 0.05, 0], [0, 1.0, 0], [0, 0, 0.85]], saturation: 1.1 },
+  cool:        { label: 'Cool',          recomb: [[0.85, 0, 0], [0, 1.0, 0], [0, 0, 1.15]] },
+  cinematic:   { label: 'Cinematic',     recomb: [[0.90, 0.05, 0.05], [0, 0.95, 0.05], [0.15, 0.05, 0.80]], saturation: 0.85, brightness: 0.95 },
+  vintage:     { label: 'Vintage',       recomb: [[1.05, 0.05, 0], [0.05, 0.9, 0.05], [0, 0.05, 0.80]], saturation: 0.72, lift: 15 },
+  fade:        { label: 'Fade',          saturation: 0.65, brightness: 1.05, contrast: 0.82, lift: 35 },
+  matte:       { label: 'Matte',         saturation: 0.82, contrast: 0.88, lift: 20 },
+  vivid:       { label: 'Vivid',         saturation: 1.45, contrast: 1.1 },
+  noir:        { label: 'Noir (B&W)',    saturation: 0, contrast: 1.2, brightness: 0.95 },
+  golden:      { label: 'Golden hour',   recomb: [[1.25, 0.05, 0], [0, 1.0, 0], [0, 0, 0.70]], saturation: 1.2, brightness: 1.05 },
+  teal_orange: { label: 'Teal & orange', recomb: [[1.1, 0, 0], [0, 0.95, 0.05], [0.1, 0.1, 0.80]], saturation: 1.05 },
+};
+
+router.post('/colorgrade', async (req, res) => {
+  try {
+    const buf = dataUrlToBuffer(req.body?.imageDataUrl || '');
+    if (!buf) return res.status(400).json({ error: 'No valid image provided' });
+
+    const presetKey = Object.prototype.hasOwnProperty.call(COLORGRADE_PRESETS, req.body?.preset)
+      ? req.body.preset
+      : 'warm';
+    const preset = COLORGRADE_PRESETS[presetKey];
+
+    const meta = await sharp(buf).rotate().metadata();
+    const fmt = outputFormatFor(meta);
+    let pipeline = sharp(buf).rotate();
+
+    if (preset.recomb) pipeline = pipeline.recomb(preset.recomb);
+
+    const modOpts = {};
+    if (preset.brightness && preset.brightness !== 1) modOpts.brightness = preset.brightness;
+    if (preset.saturation !== undefined && preset.saturation !== 1) modOpts.saturation = Number(preset.saturation);
+    if (Object.keys(modOpts).length) pipeline = pipeline.modulate(modOpts);
+
+    const contrast = preset.contrast || 1;
+    const lift = preset.lift || 0;
+    if (contrast !== 1 || lift !== 0) {
+      pipeline = pipeline.linear(contrast, Math.round(lift + 128 * (1 - contrast)));
+    }
+
+    const out = await pipeline.toFormat(fmt).toBuffer();
+    const m2 = await sharp(out).metadata().catch(() => null);
+    res.json({
+      ok: true,
+      preset: presetKey,
+      presetLabel: preset.label,
+      imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
+      width: m2?.width,
+      height: m2?.height,
+      format: fmt,
+      bytes: out.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Color grading failed' });
+  }
+});
+
+// Batch text — composite the same (templated) text label onto multiple images.
+// Template variables: {filename}, {index}, {n}, {date}.
+router.post('/batch-text', async (req, res) => {
+  try {
+    const images = Array.isArray(req.body?.images) ? req.body.images : [];
+    if (!images.length) return res.status(400).json({ error: 'No images provided' });
+    const items = images.slice(0, 20);
+
+    const textTemplate = String(req.body?.text || '{filename}').slice(0, 200);
+    const color = parseHexColor(req.body?.color)?.hex || '#ffffff';
+    const bgHex = req.body?.background ? (parseHexColor(req.body.background)?.hex || null) : null;
+    const fontSize = clampInt(req.body?.fontSize, 8, 200, 36);
+    const opacity = Math.max(0, Math.min(1, Number(req.body?.opacity) || 0.85));
+    const gravity = GRAVITY_MAP[req.body?.position] || 'southeast';
+    const today = new Date().toISOString().slice(0, 10);
+
+    const results = [];
+    for (let idx = 0; idx < items.length; idx += 1) {
+      const item = items[idx];
+      const dataUrl = typeof item === 'string' ? item : (item.imageDataUrl || '');
+      const rawName = typeof item === 'object' ? (item.name || `image-${idx + 1}`) : `image-${idx + 1}`;
+      const buf = dataUrlToBuffer(dataUrl);
+      if (!buf) { results.push({ name: rawName, error: 'Could not decode image' }); continue; }
+
+      try {
+        const meta = await sharp(buf).rotate().metadata();
+        const fmt = outputFormatFor(meta);
+        const baseName = rawName.replace(/\.[^/.]+$/, '');
+
+        const label = textTemplate
+          .replace(/\{filename\}/gi, baseName)
+          .replace(/\{index\}/gi, String(idx + 1))
+          .replace(/\{n\}/gi, String(items.length))
+          .replace(/\{date\}/gi, today);
+
+        const w = Math.ceil(label.length * fontSize * 0.62) + 28;
+        const h = Math.ceil(fontSize * 1.6);
+
+        let svgInner = `<text x="50%" y="50%" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="bold" fill="${color}" fill-opacity="${opacity}" text-anchor="middle" dominant-baseline="middle">${escapeXml(label)}</text>`;
+        if (bgHex) {
+          svgInner = `<rect width="${w}" height="${h}" fill="${bgHex}" fill-opacity="${Math.min(1, opacity * 1.2)}" rx="4"/>` + svgInner;
+        }
+        const svgBuf = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${svgInner}</svg>`);
+
+        const out = await sharp(buf).rotate().composite([{ input: svgBuf, gravity }]).toFormat(fmt).toBuffer();
+        results.push({
+          name: `${baseName}.${fmt}`,
+          imageDataUrl: `data:image/${fmt};base64,${out.toString('base64')}`,
+          bytes: out.length,
+          label,
+        });
+      } catch (e) {
+        results.push({ name: rawName, error: e.message || 'Failed' });
+      }
+    }
+
+    res.json({ ok: true, count: results.length, results });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Batch text failed' });
+  }
+});
+
 module.exports = router;

@@ -156,28 +156,34 @@ const MODES = [
   { id: 'compress', label: 'Compress', icon: 'archive' },
   { id: 'batch', label: 'Batch', icon: 'file-stack' },
   { id: 'pdf2img', label: 'PDF → Images', icon: 'file-text' },
+  { id: 'autoenhance', label: 'Auto-enhance', icon: 'zap' },
+  { id: 'cropresize', label: 'Crop / Resize', icon: 'crop' },
+  { id: 'extend', label: 'Canvas Extend', icon: 'frame' },
+  { id: 'perspective', label: 'Perspective Correct', icon: 'trapezoid' },
+  { id: 'smartcrop', label: 'Smart Crop', icon: 'aim' },
+  { id: 'effects', label: 'Effects', icon: 'wand' },
+  { id: 'adjust', label: 'Adjust', icon: 'sliders' },
+  { id: 'colorgrade', label: 'Color Grading', icon: 'palette-2' },
+  { id: 'pipeline', label: 'Pipeline', icon: 'workflow' },
+  { id: 'annotate', label: 'Annotate', icon: 'pen-line' },
+  { id: 'watermark', label: 'Watermark', icon: 'droplets' },
+  { id: 'batchtext', label: 'Batch Text', icon: 'text' },
+  { id: 'collage', label: 'Collage', icon: 'grid' },
   { id: 'favicon', label: 'Favicon / Icons', icon: 'app-window' },
   { id: 'svg', label: 'Vectorize (SVG)', icon: 'shapes' },
   { id: 'iconlib', label: 'AI Icon Library', icon: 'layout-grid' },
   { id: 'background', label: 'Background', icon: 'scissors' },
   { id: 'recolor', label: 'Recolor', icon: 'palette' },
-  { id: 'cropresize', label: 'Crop / Resize', icon: 'crop' },
-  { id: 'metadata', label: 'Remove Meta', icon: 'shield' },
-  { id: 'watermark', label: 'Watermark', icon: 'droplets' },
-  { id: 'collage', label: 'Collage', icon: 'grid' },
-  { id: 'extend', label: 'Canvas Extend', icon: 'frame' },
-  { id: 'annotate', label: 'Annotate', icon: 'pen-line' },
-  { id: 'effects', label: 'Effects', icon: 'wand' },
-  { id: 'adjust', label: 'Adjust', icon: 'sliders' },
   { id: 'redact', label: 'Redact', icon: 'eye-off' },
   { id: 'inpaint', label: 'Inpaint / Remove', icon: 'eraser' },
-  { id: 'pipeline', label: 'Pipeline', icon: 'workflow' },
-  { id: 'ocr', label: 'Extract Text', icon: 'type' },
-  { id: 'palette', label: 'Palette', icon: 'swatch' },
-  { id: 'diff', label: 'Image Diff', icon: 'layers' },
   { id: 'picker', label: 'Picker', icon: 'eye' },
   { id: 'histogram', label: 'Histogram', icon: 'bar-chart' },
   { id: 'contrast', label: 'Contrast (WCAG)', icon: 'contrast' },
+  { id: 'palette', label: 'Palette', icon: 'swatch' },
+  { id: 'ocr', label: 'Extract Text', icon: 'type' },
+  { id: 'blurdetect', label: 'Blur Detection', icon: 'focus' },
+  { id: 'diff', label: 'Image Diff', icon: 'layers' },
+  { id: 'metadata', label: 'Remove Meta', icon: 'shield' },
   { id: 'fileinfo', label: 'File Info', icon: 'info' },
 ];
 
@@ -211,10 +217,12 @@ const SIZE_PRESETS = [
 
 const MODE_GROUPS = [
   { label: 'Create', ids: ['generate', 'animate'] },
-  { label: 'Optimise', ids: ['upscale', 'convert', 'compress', 'batch', 'pdf2img'] },
-  { label: 'Clipart & Icons', ids: ['favicon', 'svg', 'iconlib'] },
-  { label: 'Edit', ids: ['cropresize', 'extend', 'annotate', 'effects', 'adjust', 'watermark', 'collage', 'background', 'recolor', 'redact', 'inpaint', 'pipeline'] },
-  { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'diff', 'metadata', 'fileinfo'] },
+  { label: 'Optimise', ids: ['upscale', 'convert', 'compress', 'batch', 'pdf2img', 'autoenhance'] },
+  { label: 'Transform', ids: ['cropresize', 'extend', 'perspective', 'smartcrop'] },
+  { label: 'Enhance', ids: ['effects', 'adjust', 'colorgrade', 'pipeline'] },
+  { label: 'Compose', ids: ['annotate', 'watermark', 'batchtext', 'collage', 'favicon', 'svg', 'iconlib'] },
+  { label: 'Privacy', ids: ['background', 'recolor', 'redact', 'inpaint'] },
+  { label: 'Analyse', ids: ['picker', 'histogram', 'contrast', 'palette', 'ocr', 'blurdetect', 'diff', 'metadata', 'fileinfo'] },
 ];
 
 // Re-encode helpers used by the export panel (all client-side via canvas).
@@ -737,6 +745,50 @@ export default function GraphicsPage() {
   const [palColors, setPalColors] = useState([]);
   const [palError, setPalError] = useState('');
   const [palCopied, setPalCopied] = useState('');
+  // Blur detection
+  const [blurSource, setBlurSource] = useState(null);
+  const [blurBusy, setBlurBusy] = useState(false);
+  const [blurResult, setBlurResult] = useState(null);
+  const [blurError, setBlurError] = useState('');
+  // Auto-enhance
+  const [aeSource, setAeSource] = useState(null);
+  const [aeBusy, setAeBusy] = useState(false);
+  const [aeResult, setAeResult] = useState(null);
+  const [aeError, setAeError] = useState('');
+  // Perspective correct
+  const [persSource, setPersSource] = useState(null);
+  const [persHSkew, setPersHSkew] = useState(0);
+  const [persVSkew, setPersVSkew] = useState(0);
+  const [persBg, setPersBg] = useState('transparent');
+  const [persBusy, setPersBusy] = useState(false);
+  const [persResult, setPersResult] = useState(null);
+  const [persError, setPersError] = useState('');
+  // Smart crop
+  const [scSource, setScSource] = useState(null);
+  const [scWidth, setScWidth] = useState('');
+  const [scHeight, setScHeight] = useState('');
+  const [scAspect, setScAspect] = useState('');
+  const [scFocus, setScFocus] = useState('attention');
+  const [scBusy, setScBusy] = useState(false);
+  const [scResult, setScResult] = useState(null);
+  const [scError, setScError] = useState('');
+  // Color grading
+  const [cgSource, setCgSource] = useState(null);
+  const [cgPreset, setCgPreset] = useState('warm');
+  const [cgBusy, setCgBusy] = useState(false);
+  const [cgResult, setCgResult] = useState(null);
+  const [cgError, setCgError] = useState('');
+  // Batch text
+  const [btImages, setBtImages] = useState([]);
+  const [btText, setBtText] = useState('{filename}');
+  const [btPosition, setBtPosition] = useState('bottom-right');
+  const [btColor, setBtColor] = useState('#ffffff');
+  const [btFontSize, setBtFontSize] = useState(36);
+  const [btOpacity, setBtOpacity] = useState(0.85);
+  const [btBg, setBtBg] = useState('');
+  const [btBusy, setBtBusy] = useState(false);
+  const [btResults, setBtResults] = useState([]);
+  const [btError, setBtError] = useState('');
   const isHostedProvider = status?.hosted || (status?.provider && status.provider !== 'local-comfyui');
   // Image-to-image augmentation is supported on local ComfyUI and on FAL (via its
   // /image-to-image endpoint). Other hosted providers don't support it yet.
@@ -1362,6 +1414,176 @@ export default function GraphicsPage() {
       setHistData(await computeHistogram(src.imageDataUrl));
     } catch {
       setHistError('Could not read that image.');
+    }
+  };
+
+  const handleBlurFile = async (file) => {
+    if (!file) return;
+    setBlurError('');
+    setBlurResult(null);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setBlurSource({ imageDataUrl: dataUrl, name: file.name });
+    } catch {
+      setBlurError('Could not read that image file.');
+    }
+  };
+
+  const runBlurDetect = async () => {
+    if (!blurSource?.imageDataUrl) return;
+    setBlurBusy(true);
+    setBlurError('');
+    try {
+      const res = await api.post('/api/graphics/blur-detect', {
+        imageDataUrl: blurSource.imageDataUrl,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Blur detection failed');
+      setBlurResult(data);
+    } catch (err) {
+      setBlurError(err.message || 'Blur detection failed');
+    } finally {
+      setBlurBusy(false);
+    }
+  };
+
+  const handleAeFile = async (file) => {
+    if (!file) return;
+    setAeError('');
+    setAeResult(null);
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setAeSource({ imageDataUrl: dataUrl, name: file.name });
+    } catch {
+      setAeError('Could not read that image file.');
+    }
+  };
+
+  const runAutoEnhance = async () => {
+    if (!aeSource?.imageDataUrl) return;
+    setAeBusy(true);
+    setAeError('');
+    try {
+      const res = await api.post('/api/graphics/auto-enhance', {
+        imageDataUrl: aeSource.imageDataUrl,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Auto-enhance failed');
+      setAeResult(data);
+    } catch (err) {
+      setAeError(err.message || 'Auto-enhance failed');
+    } finally {
+      setAeBusy(false);
+    }
+  };
+
+  const downloadAeEnhanced = () => {
+    if (!aeResult?.imageDataUrl) return;
+    const a = document.createElement('a');
+    a.href = aeResult.imageDataUrl;
+    a.download = `enhanced-${Date.now()}.png`;
+    a.click();
+  };
+
+  // Perspective correct handlers.
+  const runPerspective = async () => {
+    if (!persSource?.imageDataUrl) return;
+    setPersBusy(true);
+    setPersError('');
+    try {
+      const res = await api.post('/api/graphics/perspective', {
+        imageDataUrl: persSource.imageDataUrl,
+        hSkew: persHSkew,
+        vSkew: persVSkew,
+        background: persBg,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Perspective correction failed');
+      setPersResult(data);
+    } catch (err) {
+      setPersError(err.message || 'Perspective correction failed');
+    } finally {
+      setPersBusy(false);
+    }
+  };
+
+  // Smart crop handlers.
+  const runSmartCrop = async () => {
+    if (!scSource?.imageDataUrl) return;
+    setScBusy(true);
+    setScError('');
+    try {
+      const res = await api.post('/api/graphics/smart-crop', {
+        imageDataUrl: scSource.imageDataUrl,
+        width: scWidth ? Number(scWidth) : undefined,
+        height: scHeight ? Number(scHeight) : undefined,
+        aspect: scAspect || undefined,
+        focus: scFocus,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Smart crop failed');
+      setScResult(data);
+    } catch (err) {
+      setScError(err.message || 'Smart crop failed');
+    } finally {
+      setScBusy(false);
+    }
+  };
+
+  // Color grading handlers.
+  const runColorGrade = async () => {
+    if (!cgSource?.imageDataUrl) return;
+    setCgBusy(true);
+    setCgError('');
+    try {
+      const res = await api.post('/api/graphics/colorgrade', {
+        imageDataUrl: cgSource.imageDataUrl,
+        preset: cgPreset,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Color grading failed');
+      setCgResult(data);
+    } catch (err) {
+      setCgError(err.message || 'Color grading failed');
+    } finally {
+      setCgBusy(false);
+    }
+  };
+
+  // Batch text handlers.
+  const addBtImages = async (fileList) => {
+    const files = Array.from(fileList || []);
+    const loaded = await Promise.all(files.map(async (f) => {
+      try {
+        const dataUrl = await readFileAsDataUrl(f);
+        return { name: f.name, imageDataUrl: dataUrl };
+      } catch { return null; }
+    }));
+    setBtImages(prev => [...prev, ...loaded.filter(Boolean)].slice(0, 20));
+  };
+
+  const runBatchText = async () => {
+    if (!btImages.length) return;
+    setBtBusy(true);
+    setBtError('');
+    setBtResults([]);
+    try {
+      const res = await api.post('/api/graphics/batch-text', {
+        images: btImages,
+        text: btText,
+        position: btPosition,
+        color: btColor,
+        fontSize: btFontSize,
+        opacity: btOpacity,
+        background: btBg || undefined,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Batch text failed');
+      setBtResults(data.results || []);
+    } catch (err) {
+      setBtError(err.message || 'Batch text failed');
+    } finally {
+      setBtBusy(false);
     }
   };
 
@@ -2928,6 +3150,10 @@ export default function GraphicsPage() {
             {mode === 'pdf2img' && 'Render each page of a PDF to a PNG image.'}
             {mode === 'pipeline' && 'Chain several edits into one repeatable sequence.'}
             {mode === 'inpaint' && 'Paint over an area and let AI fill or replace it.'}
+            {mode === 'perspective' && 'Correct keystone / trapezoid distortion with horizontal and vertical shear sliders.'}
+            {mode === 'smartcrop' && 'Crop to a target size or aspect ratio, with content-aware focus (attention, entropy, or a fixed direction).'}
+            {mode === 'colorgrade' && 'Apply a cinematic colour grade — warm, cool, vintage, fade, noir, and more — in one click.'}
+            {mode === 'batchtext' && 'Stamp a text label (with {filename}, {index}, {date} variables) onto many images at once.'}
           </p>
         </div>
         {(mode === 'generate' || mode === 'upscale') && (
@@ -5446,6 +5672,444 @@ export default function GraphicsPage() {
                   ))}
                 </dl>
               ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Choose a file to see its details.</div>}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'blurdetect' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Blur detection</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Analyse image sharpness using Laplacian edge detection. Nothing is uploaded — analysis happens in your browser.</p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={async e => handleBlurFile(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setBlurError(err); } else { setBlurSource(src); } })} />
+            </div>
+            {blurSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={blurSource.imageDataUrl} alt="source" className="max-h-48 mx-auto rounded-lg" />
+              </div>
+            )}
+            {blurError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{blurError}</div>}
+            <button type="button" onClick={runBlurDetect} disabled={blurBusy || !blurSource?.imageDataUrl} className="w-full px-4 py-2 rounded-xl font-medium text-white disabled:opacity-50" style={{ background: 'var(--color-primary)' }}>{blurBusy ? 'Analysing…' : 'Analyse'}</button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+            </div>
+            <div className="p-4">
+              {blurResult ? (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold" style={{ color: 'var(--color-text)' }}>{blurResult.variance}</div>
+                    <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>Laplacian variance</div>
+                  </div>
+                  <div className="rounded-xl border p-3 text-center" style={{ borderColor: 'var(--color-border)', background: blurResult.status === 'sharp' ? '#dcfce7' : blurResult.status === 'soft' ? '#fef3c7' : '#fee2e2' }}>
+                    <div className="text-sm font-semibold" style={{ color: blurResult.status === 'sharp' ? '#166534' : blurResult.status === 'soft' ? '#92400e' : '#991b1b' }}>{blurResult.status === 'sharp' ? '📸 Sharp' : blurResult.status === 'soft' ? '⚠️ Soft' : '🌫️ Blurry'}</div>
+                    <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{blurResult.width}×{blurResult.height} px</div>
+                  </div>
+                </div>
+              ) : <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>Upload and analyse an image to see its blur score.</div>}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'autoenhance' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Auto-enhance</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_1fr] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>One-click intelligent brightness, contrast and saturation adjustments based on image analysis.</p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={async e => handleAeFile(e.target.files?.[0])} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setAeError(err); } else { setAeSource(src); } })} />
+            </div>
+            {aeSource?.imageDataUrl && (
+              <ResultPlaceholder src={aeSource.imageDataUrl} message={aeBusy ? 'Enhancing…' : 'Ready to enhance'} />
+            )}
+            {aeError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{aeError}</div>}
+            <button type="button" onClick={runAutoEnhance} disabled={aeBusy || !aeSource?.imageDataUrl} className="w-full px-4 py-2 rounded-xl font-medium text-white disabled:opacity-50" style={{ background: 'var(--color-primary)' }}>{aeBusy ? 'Enhancing…' : 'Enhance'}</button>
+          </div>
+          {aeResult && (
+            <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+              <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+                  {renderCompareToggle(aeSource?.imageDataUrl, aeResult?.imageDataUrl)}
+                </div>
+              </div>
+              <div className="p-4 space-y-4">
+                {renderResultMedia(aeSource?.imageDataUrl, aeResult, { alt: 'enhanced' })}
+                <div className="grid grid-cols-3 gap-2 text-[11px]" style={{ color: 'var(--color-text)' }}>
+                  <div className="px-2 py-1.5 rounded-lg text-center" style={{ background: 'var(--color-bg)' }}>
+                    <div className="font-semibold">Brightness</div>
+                    <div style={{ color: 'var(--color-muted)' }}>{aeResult.applied?.brightness}×</div>
+                  </div>
+                  <div className="px-2 py-1.5 rounded-lg text-center" style={{ background: 'var(--color-bg)' }}>
+                    <div className="font-semibold">Contrast</div>
+                    <div style={{ color: 'var(--color-muted)' }}>{aeResult.applied?.contrast}×</div>
+                  </div>
+                  <div className="px-2 py-1.5 rounded-lg text-center" style={{ background: 'var(--color-bg)' }}>
+                    <div className="font-semibold">Saturation</div>
+                    <div style={{ color: 'var(--color-muted)' }}>{aeResult.applied?.saturation}×</div>
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {renderExport(aeResult?.imageDataUrl, 'enhanced')}
+                  {renderSendTo(aeResult?.imageDataUrl, 'enhanced', 'autoenhance')}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+      )}
+
+      {mode === 'perspective' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Perspective correct</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Fix keystone / trapezoid distortion by adjusting horizontal and vertical shear. Best for whiteboards, documents and architecture shots taken at an angle.</p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={async e => { setPersError(''); setPersResult(null); loadImageInto(setPersSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setPersError(err); } else { setPersResult(null); setPersError(''); setPersSource(src); } })} />
+            </div>
+            {persSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={persSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+              </div>
+            )}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Horizontal skew: {persHSkew > 0 ? `+${persHSkew}` : persHSkew}</label>
+                <input type="range" min="-50" max="50" step="1" value={persHSkew} onChange={e => setPersHSkew(Number(e.target.value))} className="w-full" />
+                <div className="flex justify-between text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}><span>Left lean</span><span>0</span><span>Right lean</span></div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Vertical skew: {persVSkew > 0 ? `+${persVSkew}` : persVSkew}</label>
+                <input type="range" min="-50" max="50" step="1" value={persVSkew} onChange={e => setPersVSkew(Number(e.target.value))} className="w-full" />
+                <div className="flex justify-between text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}><span>Top lean</span><span>0</span><span>Bottom lean</span></div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Corner fill</label>
+                  <select value={persBg} onChange={e => setPersBg(e.target.value)} className="px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                    <option value="transparent">Transparent (PNG)</option>
+                    <option value="#ffffff">White</option>
+                    <option value="#000000">Black</option>
+                  </select>
+                </div>
+                {persBg !== 'transparent' && (
+                  <div>
+                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Custom colour</label>
+                    <input type="color" value={persBg.startsWith('#') ? persBg : '#ffffff'} onChange={e => setPersBg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)' }} />
+                  </div>
+                )}
+              </div>
+            </div>
+            {persError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{persError}</div>}
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={runPerspective} disabled={persBusy || !persSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+                {persBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('trapezoid', { size: 15 })}
+                {persBusy ? 'Correcting…' : 'Apply correction'}
+              </button>
+              <button type="button" onClick={() => { setPersHSkew(0); setPersVSkew(0); }} className="px-3 py-2 rounded-xl text-sm border hover:opacity-70" style={{ color: 'var(--color-text)', borderColor: 'var(--color-border)' }}>Reset</button>
+            </div>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              {persResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(persSource?.imageDataUrl, persResult?.imageDataUrl)}
+                  {renderSendTo(persResult.imageDataUrl, 'corrected.png', 'perspective')}
+                  {renderExport(persResult.imageDataUrl, 'corrected')}
+                  <button onClick={() => downloadDataUrl(persResult.imageDataUrl, `perspective-${Date.now()}.png`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              {persResult?.imageDataUrl ? (
+                <>
+                  {renderResultMedia(persSource?.imageDataUrl, persResult, { alt: 'corrected' })}
+                  <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{persResult.width}×{persResult.height} px</p>
+                </>
+              ) : <ResultPlaceholder src={persSource?.imageDataUrl} message="Apply correction to see the result." />}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'smartcrop' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Smart crop</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Crop to a target size or aspect ratio. The focus strategy determines which part of the image is kept — <strong>Attention</strong> uses saliency detection, <strong>Entropy</strong> keeps the region with the most visual detail.</p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={async e => { setScError(''); setScResult(null); loadImageInto(setScSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setScError(err); } else { setScResult(null); setScError(''); setScSource(src); } })} />
+            </div>
+            {scSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={scSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+              </div>
+            )}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Focus strategy</label>
+                <select value={scFocus} onChange={e => setScFocus(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="attention">Attention (saliency — recommended)</option>
+                  <option value="entropy">Entropy (highest detail region)</option>
+                  <option value="centre">Centre</option>
+                  <option value="north">Top</option>
+                  <option value="south">Bottom</option>
+                  <option value="west">Left</option>
+                  <option value="east">Right</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Aspect ratio (e.g. 16:9, 1:1, 4:5)</label>
+                <input type="text" value={scAspect} onChange={e => setScAspect(e.target.value)} placeholder="Leave blank to use width × height" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Width (px)</label>
+                  <input type="number" min="1" max="8000" value={scWidth} onChange={e => setScWidth(e.target.value)} placeholder="e.g. 1080" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Height (px)</label>
+                  <input type="number" min="1" max="8000" value={scHeight} onChange={e => setScHeight(e.target.value)} placeholder="e.g. 1080" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+                </div>
+              </div>
+            </div>
+            {scError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{scError}</div>}
+            <button type="button" onClick={runSmartCrop} disabled={scBusy || !scSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {scBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('aim', { size: 15 })}
+              {scBusy ? 'Cropping…' : 'Smart crop'}
+            </button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              {scResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderSendTo(scResult.imageDataUrl, `cropped.${scResult.format}`, 'smartcrop')}
+                  {renderExport(scResult.imageDataUrl, 'cropped')}
+                  <button onClick={() => downloadDataUrl(scResult.imageDataUrl, `smartcrop-${Date.now()}.${scResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              {scResult?.imageDataUrl ? (
+                <>
+                  <img src={scResult.imageDataUrl} alt="cropped" className="w-full rounded-xl border" style={{ borderColor: 'var(--color-border)' }} />
+                  <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{scResult.width}×{scResult.height} · {String(scResult.format).toUpperCase()} · {formatBytes(scResult.bytes)} · focus: {scResult.focus}</p>
+                </>
+              ) : <ResultPlaceholder src={scSource?.imageDataUrl} message="Choose a target size or aspect ratio, then crop." />}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'colorgrade' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Color grading</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_420px] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Apply a cinematic colour look via channel recombination and tone mapping. Non-destructive — re-run with a different preset any time.</p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Source image</label>
+              <input type="file" accept="image/*" onChange={async e => { setCgError(''); setCgResult(null); loadImageInto(setCgSource)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              <UrlImportRow importing={urlImporting} onImport={(u) => importFromUrl(u, (src, err) => { if (err) { setCgError(err); } else { setCgResult(null); setCgError(''); setCgSource(src); } })} />
+            </div>
+            {cgSource?.imageDataUrl && (
+              <div className="rounded-xl border p-2" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                <img src={cgSource.imageDataUrl} alt="source" className="max-h-40 mx-auto rounded-lg" />
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>Preset</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { id: 'warm', label: 'Warm' },
+                  { id: 'cool', label: 'Cool' },
+                  { id: 'cinematic', label: 'Cinematic' },
+                  { id: 'vintage', label: 'Vintage' },
+                  { id: 'fade', label: 'Fade' },
+                  { id: 'matte', label: 'Matte' },
+                  { id: 'vivid', label: 'Vivid' },
+                  { id: 'noir', label: 'Noir (B&W)' },
+                  { id: 'golden', label: 'Golden hour' },
+                  { id: 'teal_orange', label: 'Teal & orange' },
+                ].map(p => (
+                  <button key={p.id} type="button" onClick={() => setCgPreset(p.id)} className="px-3 py-2 rounded-xl text-xs font-medium border text-left" style={{ background: cgPreset === p.id ? 'var(--color-primary)' : 'var(--color-bg)', color: cgPreset === p.id ? '#fff' : 'var(--color-text)', borderColor: cgPreset === p.id ? 'var(--color-primary)' : 'var(--color-border)' }}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {cgError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{cgError}</div>}
+            <button type="button" onClick={runColorGrade} disabled={cgBusy || !cgSource?.imageDataUrl} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {cgBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('palette-2', { size: 15 })}
+              {cgBusy ? 'Grading…' : 'Apply grade'}
+            </button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Result</span>
+              {cgResult?.imageDataUrl && (
+                <div className="flex items-center gap-2">
+                  {renderCompareToggle(cgSource?.imageDataUrl, cgResult?.imageDataUrl)}
+                  {renderSendTo(cgResult.imageDataUrl, `graded.${cgResult.format}`, 'colorgrade')}
+                  {renderExport(cgResult.imageDataUrl, 'graded')}
+                  <button onClick={() => downloadDataUrl(cgResult.imageDataUrl, `graded-${Date.now()}.${cgResult.format}`)} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>Download</button>
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              {cgResult?.imageDataUrl ? (
+                <>
+                  {renderResultMedia(cgSource?.imageDataUrl, cgResult, { alt: 'graded' })}
+                  <p className="text-xs mt-3" style={{ color: 'var(--color-muted)' }}>{cgResult.presetLabel} · {cgResult.width}×{cgResult.height} · {String(cgResult.format).toUpperCase()} · {formatBytes(cgResult.bytes)}</p>
+                </>
+              ) : <ResultPlaceholder src={cgSource?.imageDataUrl} message="Pick a preset and apply to see the result." />}
+            </div>
+          </div>
+        </div>
+      </section>
+      )}
+
+      {mode === 'batchtext' && (
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Batch text</h2>
+          <span className="text-xs" style={{ color: 'var(--color-muted)' }}>Runs locally · free</span>
+        </div>
+        <div className="grid lg:grid-cols-[1fr_1fr] gap-6">
+          <div className="rounded-2xl border p-4 space-y-4" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Stamp a text label onto many images at once. Use <code className="px-1 rounded" style={{ background: 'var(--color-bg)' }}>{'{filename}'}</code>, <code className="px-1 rounded" style={{ background: 'var(--color-bg)' }}>{'{index}'}</code>, <code className="px-1 rounded" style={{ background: 'var(--color-bg)' }}>{'{n}'}</code> or <code className="px-1 rounded" style={{ background: 'var(--color-bg)' }}>{'{date}'}</code> as template variables.</p>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Images (up to 20)</label>
+              <input type="file" accept="image/*" multiple onChange={e => addBtImages(e.target.files)} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
+              {btImages.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {btImages.map((img, i) => (
+                    <div key={i} className="relative group">
+                      <img src={img.imageDataUrl} alt={img.name} className="h-12 w-12 rounded-lg border object-cover" style={{ borderColor: 'var(--color-border)' }} title={img.name} />
+                      <button type="button" onClick={() => setBtImages(prev => prev.filter((_, j) => j !== i))} className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: '#ef4444', color: '#fff' }}>×</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setBtImages([])} className="text-xs px-2 py-1 rounded-lg border self-center hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: '#ef4444' }}>Clear all</button>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Text template</label>
+              <input type="text" value={btText} onChange={e => setBtText(e.target.value)} placeholder="{filename}" className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }} />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Position</label>
+                <select value={btPosition} onChange={e => setBtPosition(e.target.value)} className="w-full px-3 py-2 rounded-xl border text-sm" style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="bottom-right">Bottom right</option>
+                  <option value="bottom-left">Bottom left</option>
+                  <option value="top-right">Top right</option>
+                  <option value="top-left">Top left</option>
+                  <option value="center">Centre</option>
+                  <option value="bottom">Bottom centre</option>
+                  <option value="top">Top centre</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font size: {btFontSize}px</label>
+                <input type="range" min="8" max="120" step="2" value={btFontSize} onChange={e => setBtFontSize(Number(e.target.value))} className="w-full" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Text colour</label>
+                <input type="color" value={btColor} onChange={e => setBtColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)' }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Opacity: {Math.round(btOpacity * 100)}%</label>
+                <input type="range" min="0.1" max="1" step="0.05" value={btOpacity} onChange={e => setBtOpacity(Number(e.target.value))} className="w-full" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Background colour (optional — adds a backing rectangle)</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={btBg || '#000000'} onChange={e => setBtBg(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)' }} />
+                  {btBg ? <button type="button" onClick={() => setBtBg('')} className="text-xs px-2 py-1 rounded-lg border hover:opacity-70" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>Remove</button> : <span className="text-xs" style={{ color: 'var(--color-muted)' }}>None (text only)</span>}
+                </div>
+              </div>
+            </div>
+            {btError && <div className="text-sm px-3 py-2 rounded-xl" style={{ color: '#991b1b', background: '#fee2e2' }}>{btError}</div>}
+            <button type="button" onClick={runBatchText} disabled={btBusy || !btImages.length} className="px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50 hover:opacity-90 inline-flex items-center gap-2" style={{ background: 'var(--color-primary)' }}>
+              {btBusy ? getIcon('loader', { size: 15, className: 'animate-spin' }) : getIcon('text', { size: 15 })}
+              {btBusy ? `Processing ${btImages.length} image${btImages.length !== 1 ? 's' : ''}…` : `Apply to ${btImages.length || '0'} image${btImages.length !== 1 ? 's' : ''}`}
+            </button>
+          </div>
+          <div className="rounded-2xl border overflow-hidden" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
+            <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--color-border)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Results</span>
+              {btResults.length > 0 && <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>{btResults.filter(r => !r.error).length} of {btResults.length} succeeded</span>}
+            </div>
+            <div className="p-4">
+              {btResults.length > 0 ? (
+                <div className="space-y-3">
+                  {btResults.map((r, i) => (
+                    <div key={i} className="rounded-xl border p-3 flex items-center gap-3" style={{ borderColor: 'var(--color-border)', background: 'var(--color-bg)' }}>
+                      {r.imageDataUrl ? (
+                        <img src={r.imageDataUrl} alt={r.name} className="h-14 w-14 rounded-lg border object-cover flex-shrink-0" style={{ borderColor: 'var(--color-border)' }} />
+                      ) : (
+                        <div className="h-14 w-14 rounded-lg border flex items-center justify-center flex-shrink-0" style={{ borderColor: 'var(--color-border)', background: '#fee2e2' }}>
+                          <span className="text-[10px] text-center" style={{ color: '#991b1b' }}>error</span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>{r.name}</p>
+                        {r.error ? (
+                          <p className="text-xs mt-0.5" style={{ color: '#991b1b' }}>{r.error}</p>
+                        ) : (
+                          <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>Label: {r.label} · {formatBytes(r.bytes)}</p>
+                        )}
+                      </div>
+                      {r.imageDataUrl && (
+                        <button onClick={() => downloadDataUrl(r.imageDataUrl, r.name)} className="text-xs px-2 py-1 rounded-lg border flex-shrink-0 hover:opacity-70" style={{ color: 'var(--color-primary)', borderColor: 'var(--color-border)' }}>↓</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-32 text-sm text-center px-6" style={{ color: 'var(--color-muted)' }}>
+                  Add images, configure the label, then apply to see results here.
+                </div>
+              )}
             </div>
           </div>
         </div>

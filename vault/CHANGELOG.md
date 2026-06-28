@@ -4,6 +4,21 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-29 (27)
+
+**Feature:** Graphics — batch 5 (Perspective Correct, Smart Crop, Color Grading, Batch Text, Blur Detection, Auto-enhance) + sidebar reorganisation.
+
+- **Perspective Correct** (Transform) — fix keystone / trapezoid distortion with horizontal and vertical shear sliders (−50…+50). Applied server-side via sharp `affine()` with `nohalo` interpolation. Corner fill: transparent PNG, white, black, or a custom hex colour. Before/after compare, Send To, Export, Download. `POST /api/graphics/perspective`.
+- **Smart Crop** (Transform) — crop to a target size or aspect ratio (`16:9`, `1:1`, `4:5`, etc.) with a configurable focus strategy: **Attention** (saliency detection, default), **Entropy** (highest-detail region), or any cardinal direction. Width/height are optional when an aspect ratio is given — the server resolves the largest possible fit within the original. `POST /api/graphics/smart-crop`.
+- **Color Grading** (Enhance) — ten cinematic looks applied in one click via channel recombination (`recomb()`), modulate and linear tone mapping: **Warm**, **Cool**, **Cinematic**, **Vintage**, **Fade**, **Matte**, **Vivid**, **Noir (B&W)**, **Golden hour**, **Teal & orange**. Before/after compare, result labels the preset applied. `POST /api/graphics/colorgrade`.
+- **Batch Text** (Compose) — stamp a templated text label onto up to 20 images at once. Template variables: `{filename}`, `{index}`, `{n}`, `{date}`. Controls: position (7 options), font size, text colour, opacity, optional backing-rectangle colour. Per-image result list with thumbnail + download. `POST /api/graphics/batch-text`.
+- **Blur Detection** (Analyse) — Laplacian variance sharpness analysis: classifies images as **Sharp**, **Soft** or **Blurry** with a numeric score. `POST /api/graphics/blur-detect`.
+- **Auto-enhance** (Optimise) — one-click brightness/contrast/saturation correction driven by histogram analysis (5th/95th percentile stretch). Shows the applied multipliers and supports before/after compare. `POST /api/graphics/auto-enhance`.
+- **Sidebar reorganisation** — groups restructured to: **Create** · **Optimise** (+ Auto-enhance) · **Transform** (Crop/Resize, Canvas Extend, Perspective Correct, Smart Crop) · **Enhance** (Effects, Adjust, Color Grading, Pipeline) · **Compose** (Annotate, Watermark, Batch Text, Collage, Favicon, Vectorize, AI Icon Library) · **Privacy** (Background, Recolor, Redact, Inpaint) · **Analyse** (+ Blur Detection, remove metadata).
+- **Icons** — six new entries in `IconProvider`: `zap`, `focus`, `trapezoid` (Scaling), `aim` (Crosshair), `palette-2` (PaintBucket), `text` (Type).
+
+---
+
 ## 2026-06-28 (25)
 
 **Feature:** Graphics — workflow batch 4 (PDF→images, Pipeline, Inpaint, Adjust presets, keyboard shortcuts).
