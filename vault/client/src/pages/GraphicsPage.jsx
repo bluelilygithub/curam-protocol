@@ -20,6 +20,45 @@ const CR_CURSOR = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw:
 
 const clampNum = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+const ANN_GOOGLE_FONTS = [
+  { label: 'System default', family: '' },
+  { label: 'Inter', family: 'Inter' },
+  { label: 'Roboto', family: 'Roboto' },
+  { label: 'Open Sans', family: 'Open Sans' },
+  { label: 'Lato', family: 'Lato' },
+  { label: 'Montserrat', family: 'Montserrat' },
+  { label: 'Poppins', family: 'Poppins' },
+  { label: 'Nunito', family: 'Nunito' },
+  { label: 'Raleway', family: 'Raleway' },
+  { label: 'Oswald', family: 'Oswald' },
+  { label: 'Bebas Neue', family: 'Bebas Neue' },
+  { label: 'Anton', family: 'Anton' },
+  { label: 'Playfair Display', family: 'Playfair Display' },
+  { label: 'Merriweather', family: 'Merriweather' },
+  { label: 'Lora', family: 'Lora' },
+  { label: 'PT Serif', family: 'PT Serif' },
+  { label: 'Pacifico', family: 'Pacifico' },
+  { label: 'Dancing Script', family: 'Dancing Script' },
+  { label: 'Caveat', family: 'Caveat' },
+  { label: 'Roboto Mono', family: 'Roboto Mono' },
+  { label: 'Space Mono', family: 'Space Mono' },
+];
+
+const loadGoogleFont = (family) => {
+  if (!family) return Promise.resolve();
+  const id = `gf-${family.replace(/\s+/g, '-')}`;
+  if (!document.getElementById(id)) {
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@400;700&display=swap`;
+    document.head.appendChild(link);
+  }
+  return document.fonts.ready;
+};
+
+const fontFamilyFor = (family) => (family ? `"${family}", sans-serif` : 'system-ui, sans-serif');
+
 // Build a centred crop box (fractions of the image) for the given aspect ratio.
 function makeCenteredCrop(ratio, nat) {
   if (!ratio || !nat?.w || !nat?.h) return { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
@@ -630,6 +669,7 @@ export default function GraphicsPage() {
   const [annTool, setAnnTool] = useState('select');
   const [annColor, setAnnColor] = useState('#ff3b30');
   const [annWidth, setAnnWidth] = useState(6);
+  const [annFont, setAnnFont] = useState('');
   const [annShapes, setAnnShapes] = useState([]);
   const [annSelected, setAnnSelected] = useState(null);
   const [annEditing, setAnnEditing] = useState(null);
@@ -2000,7 +2040,7 @@ export default function GraphicsPage() {
       ctx.closePath();
       ctx.fill();
     } else if (s.type === 'text') {
-      ctx.font = `bold ${s.fontPx}px system-ui, sans-serif`;
+      ctx.font = `bold ${s.fontPx}px ${fontFamilyFor(s.fontFamily)}`;
       ctx.textBaseline = 'top';
       const lines = String(s.text).split('\n');
       const lh = s.fontPx * 1.25;
@@ -2010,7 +2050,7 @@ export default function GraphicsPage() {
 
   const annShapeBBox = (s, ctx, W, H) => {
     if (s.type === 'text') {
-      ctx.font = `bold ${s.fontPx}px system-ui, sans-serif`;
+      ctx.font = `bold ${s.fontPx}px ${fontFamilyFor(s.fontFamily)}`;
       const lines = String(s.text || '').split('\n');
       const w = Math.max(0, ...lines.map(l => ctx.measureText(l).width));
       const lh = s.fontPx * 1.25;
@@ -2057,6 +2097,11 @@ export default function GraphicsPage() {
     }
   };
   annDrawFnRef.current = drawAnnotate;
+
+  useEffect(() => {
+    if (!annFont) return;
+    loadGoogleFont(annFont).then(() => annDrawFnRef.current?.(null));
+  }, [annFont]);
 
   useEffect(() => {
     if (mode !== 'annotate' || !annSource?.imageDataUrl) return;
@@ -2170,10 +2215,10 @@ export default function GraphicsPage() {
     setAnnShapes(prev => {
       if (cur.editIndex != null) {
         if (!val) return prev.filter((_, i) => i !== cur.editIndex);
-        return prev.map((s, i) => (i === cur.editIndex ? { ...s, text: val, color: cur.color } : s));
+        return prev.map((s, i) => (i === cur.editIndex ? { ...s, text: val, color: cur.color, fontFamily: cur.fontFamily !== undefined ? cur.fontFamily : s.fontFamily } : s));
       }
       if (!val) return prev;
-      return [...prev, { type: 'text', x: cur.x, y: cur.y, text: val, color: cur.color, fontPx: cur.fontPx, widthPx: Math.max(2, cur.fontPx * 0.08) }];
+      return [...prev, { type: 'text', x: cur.x, y: cur.y, text: val, color: cur.color, fontPx: cur.fontPx, fontFamily: cur.fontFamily || '', widthPx: Math.max(2, cur.fontPx * 0.08) }];
     });
     setAnnEditing(null);
     if (val) {
@@ -2184,10 +2229,10 @@ export default function GraphicsPage() {
     }
   };
 
-  const openAnnTextEditor = (x, y, { editIndex = null, value = '', fontPx, color } = {}) => {
+  const openAnnTextEditor = (x, y, { editIndex = null, value = '', fontPx, color, fontFamily } = {}) => {
     const sizes = annSizes();
     setAnnSelected(null);
-    setAnnEditing({ editId: Date.now(), x, y, value, editIndex, fontPx: fontPx || sizes.fontPx, color: color || annColor, scale: annDisplayScale() });
+    setAnnEditing({ editId: Date.now(), x, y, value, editIndex, fontPx: fontPx || sizes.fontPx, color: color || annColor, fontFamily: fontFamily !== undefined ? fontFamily : annFont, scale: annDisplayScale() });
   };
 
   const onAnnMove = useCallback((e) => {
@@ -2285,7 +2330,7 @@ export default function GraphicsPage() {
     const idx = annHitTest(p.x, p.y);
     if (idx != null && annShapes[idx].type === 'text') {
       const s = annShapes[idx];
-      openAnnTextEditor(s.x, s.y, { editIndex: idx, value: s.text, fontPx: s.fontPx, color: s.color });
+      openAnnTextEditor(s.x, s.y, { editIndex: idx, value: s.text, fontPx: s.fontPx, color: s.color, fontFamily: s.fontFamily });
     }
   };
 
@@ -4646,6 +4691,26 @@ export default function GraphicsPage() {
             <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Colour</label>
             <input type="color" value={annColor} onChange={e => { setAnnColor(e.target.value); setAnnEditing(cur => (cur ? { ...cur, color: e.target.value } : cur)); if (annSelected != null) setAnnShapes(prev => prev.map((s, i) => (i === annSelected ? { ...s, color: e.target.value } : s))); }} className="h-8 w-10 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
           </div>
+          <div className="self-end min-w-[160px]">
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>Font</label>
+            <select
+              value={annFont}
+              onChange={e => {
+                const fam = e.target.value;
+                setAnnFont(fam);
+                loadGoogleFont(fam).then(() => annDrawFnRef.current?.(null));
+                if (annSelected != null && annShapes[annSelected]?.type === 'text') {
+                  setAnnShapes(prev => prev.map((s, i) => (i === annSelected ? { ...s, fontFamily: fam } : s)));
+                }
+              }}
+              className="w-full px-3 py-2 rounded-xl border text-sm"
+              style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)', fontFamily: annFont ? `"${annFont}", sans-serif` : undefined }}
+            >
+              {ANN_GOOGLE_FONTS.map(f => (
+                <option key={f.family} value={f.family}>{f.label}</option>
+              ))}
+            </select>
+          </div>
           <div className="self-end min-w-[140px]">
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>{annTool === 'text' ? 'Text size' : 'Thickness'}: {annWidth}</label>
             <input type="range" min="1" max="24" value={annWidth} onChange={e => setAnnWidth(Number(e.target.value))} className="w-full" />
@@ -4689,7 +4754,7 @@ export default function GraphicsPage() {
                     left: `${annEditing.x * 100}%`,
                     top: `${annEditing.y * 100}%`,
                     transform: 'translateY(-2px)',
-                    font: `bold ${Math.max(12, annEditing.fontPx * annEditing.scale)}px system-ui, sans-serif`,
+                    font: `bold ${Math.max(12, annEditing.fontPx * annEditing.scale)}px ${fontFamilyFor(annEditing.fontFamily)}`,
                     lineHeight: 1.25,
                     color: annEditing.color,
                     background: 'rgba(255,255,255,0.85)',
