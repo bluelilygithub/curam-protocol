@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as LucideIcons from 'lucide-react';
 import api from '../utils/apiClient';
-import ProcessingModal from './ProcessingModal';
+import useProcessingStore from '../store/processingStore';
 
 const pascalCase = (name) => String(name || '')
   .split(/[-_\s]+/)
@@ -35,6 +35,8 @@ function downloadSvgFile(name, svg) {
 }
 
 export default function IconLibraryGenerator({ getIcon }) {
+  const startProcessing = useProcessingStore((s) => s.startProcessing);
+  const stopProcessing = useProcessingStore((s) => s.stopProcessing);
   const [subject, setSubject] = useState('');
   const [refsLoading, setRefsLoading] = useState(false);
   const [refs, setRefs] = useState(null); // { lucide:[], fontawesome:[] }
@@ -60,6 +62,13 @@ export default function IconLibraryGenerator({ getIcon }) {
 
   const uidRef = useRef(0);
   const withUid = (icon) => ({ ...icon, uid: `i${uidRef.current++}` });
+
+  const busyLabel = refsLoading ? 'Finding reference icons…' : moreBusy ? 'Generating more icons…' : generating ? 'Generating icons…' : null;
+  useEffect(() => {
+    if (busyLabel) startProcessing(busyLabel, 'Claude is designing your SVGs — this can take a few moments.');
+    else stopProcessing();
+    return () => stopProcessing();
+  }, [busyLabel, startProcessing, stopProcessing]);
 
   const spin = (icon) => (getIcon ? getIcon(icon, { size: 15, className: 'animate-spin' }) : null);
   const ic = (icon) => (getIcon ? getIcon(icon, { size: 15 }) : null);
@@ -385,11 +394,6 @@ export default function IconLibraryGenerator({ getIcon }) {
         </div>
       )}
 
-      <ProcessingModal
-        open={refsLoading || generating || moreBusy}
-        title={refsLoading ? 'Finding reference icons…' : moreBusy ? 'Generating more icons…' : 'Generating icons…'}
-        message="Claude is designing your SVGs — this can take a few moments."
-      />
     </section>
   );
 }

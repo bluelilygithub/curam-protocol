@@ -41,18 +41,47 @@ function sanitizeIconName(name, index) {
   return cleaned || `icon-${index + 1}`;
 }
 
+// DOM-based SVG sanitiser. Lazy-loaded (jsdom is heavy) so it's only paid for
+// when the AI icon generator actually runs.
+let _svgPurify = null;
+function getSvgPurify() {
+  if (_svgPurify) return _svgPurify;
+  const { JSDOM } = require('jsdom');
+  const createDOMPurify = require('dompurify');
+  _svgPurify = createDOMPurify(new JSDOM('').window);
+  return _svgPurify;
+}
+
+// Last-resort regex strip, used only if jsdom/DOMPurify fails to load.
+function regexStripSvg(s) {
+  let out = String(s || '');
+  out = out.replace(/<\?xml[\s\S]*?\?>/gi, '');
+  out = out.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
+  out = out.replace(/<script[\s\S]*?<\/script>/gi, '');
+  out = out.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
+  out = out.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
+  out = out.replace(/\son\w+\s*=\s*'[^']*'/gi, '');
+  out = out.replace(/(href|xlink:href)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '');
+  return out;
+}
+
 // Strip anything unsafe from model-supplied SVG before it reaches the browser.
 function sanitizeSvgMarkup(svg) {
-  let s = String(svg || '');
-  s = s.replace(/<\?xml[\s\S]*?\?>/gi, '');
-  s = s.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
-  s = s.replace(/<script[\s\S]*?<\/script>/gi, '');
-  s = s.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
-  s = s.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
-  s = s.replace(/\son\w+\s*=\s*'[^']*'/gi, '');
-  s = s.replace(/(href|xlink:href)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '');
-  const match = s.match(/<svg[\s\S]*<\/svg>/i);
-  return match ? match[0].trim() : '';
+  // Isolate the <svg> element first — drops markdown, XML prologs and DOCTYPEs.
+  const match = String(svg || '').match(/<svg[\s\S]*<\/svg>/i);
+  if (!match) return '';
+  const raw = match[0].trim();
+  try {
+    const DOMPurify = getSvgPurify();
+    const clean = DOMPurify.sanitize(raw, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+      FORBID_TAGS: ['script', 'foreignObject'],
+      FORBID_ATTR: ['onload', 'onclick', 'onmouseover', 'onerror'],
+    });
+    return String(clean || '').trim();
+  } catch {
+    return regexStripSvg(raw).trim();
+  }
 }
 const { getVaultModelsConfigForUser } = require('../services/modelResolver');
 
@@ -1309,6 +1338,18 @@ router.post('/background', async (req, res) => {
       return res.status(400).json({ error: 'The background image is not a valid image' });
     }
 
+    let gradient = null;
+    if (req.body?.gradient && typeof req.body.gradient === 'object') {
+      const from = parseHexColor(req.body.gradient.from);
+      const to = parseHexColor(req.body.gradient.to);
+      if (!from || !to) {
+        return res.status(400).json({ error: 'Gradient colours must be valid hex values' });
+      }
+      const allowedDirs = ['to-bottom', 'to-top', 'to-right', 'to-left', 'to-bottom-right', 'to-bottom-left', 'radial'];
+      const direction = allowedDirs.includes(req.body.gradient.direction) ? req.body.gradient.direction : 'to-bottom';
+      gradient = { from: from.hex, to: to.hex, direction };
+    }
+
     let cutoutBuffer;
     let provider;
     let cost = { usd: 0, local: true };
@@ -1334,6 +1375,30 @@ router.post('/background', async (req, res) => {
         .toBuffer();
       const cutoutPng = await sharp(cutoutBuffer).png().toBuffer();
       outBuffer = await sharp(resizedBg).composite([{ input: cutoutPng }]).png().toBuffer();
+    } else if (gradient) {
+      // Composite the cut-out over a generated two-colour gradient sized to the subject.
+      const cm = await sharp(cutoutBuffer).metadata();
+      const W = cm.width || 1024;
+      const H = cm.height || 1024;
+      const dirCoords = {
+        'to-bottom': { x1: 0, y1: 0, x2: 0, y2: 1 },
+        'to-top': { x1: 0, y1: 1, x2: 0, y2: 0 },
+        'to-right': { x1: 0, y1: 0, x2: 1, y2: 0 },
+        'to-left': { x1: 1, y1: 0, x2: 0, y2: 0 },
+        'to-bottom-right': { x1: 0, y1: 0, x2: 1, y2: 1 },
+        'to-bottom-left': { x1: 1, y1: 0, x2: 0, y2: 1 },
+      };
+      let defs;
+      if (gradient.direction === 'radial') {
+        defs = `<radialGradient id="g" cx="50%" cy="50%" r="75%"><stop offset="0%" stop-color="${gradient.from}"/><stop offset="100%" stop-color="${gradient.to}"/></radialGradient>`;
+      } else {
+        const c = dirCoords[gradient.direction] || dirCoords['to-bottom'];
+        defs = `<linearGradient id="g" x1="${c.x1}" y1="${c.y1}" x2="${c.x2}" y2="${c.y2}"><stop offset="0%" stop-color="${gradient.from}"/><stop offset="100%" stop-color="${gradient.to}"/></linearGradient>`;
+      }
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><defs>${defs}</defs><rect width="${W}" height="${H}" fill="url(#g)"/></svg>`;
+      const gradientBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+      const cutoutPng = await sharp(cutoutBuffer).png().toBuffer();
+      outBuffer = await sharp(gradientBuffer).composite([{ input: cutoutPng }]).png().toBuffer();
     } else if (bgColor) {
       outBuffer = await sharp(cutoutBuffer).flatten({ background: { r: bgColor.r, g: bgColor.g, b: bgColor.b } }).png().toBuffer();
     } else {
@@ -1344,7 +1409,7 @@ router.post('/background', async (req, res) => {
     res.json({
       ok: true,
       provider,
-      background: bgImageBuffer ? 'image' : (bgColor ? bgColor.hex : 'transparent'),
+      background: bgImageBuffer ? 'image' : (gradient ? `gradient ${gradient.from} → ${gradient.to}` : (bgColor ? bgColor.hex : 'transparent')),
       width: meta?.width || null,
       height: meta?.height || null,
       bytes: outBuffer.length,

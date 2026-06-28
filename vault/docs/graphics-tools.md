@@ -1,6 +1,6 @@
 # Graphics Tools
 
-The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles twenty-two tools behind a grouped, searchable left sidebar; the active tool fills the main area.
+The Graphics page is an image toolkit mounted in Vault at **`/graphics`**. It bundles twenty-three tools behind a grouped, searchable left sidebar; the active tool fills the main area.
 
 **Frontend:** `vault/client/src/pages/GraphicsPage.jsx`
 **Backend:** `vault/server/routes/graphics.js` (mounted at `/api/graphics`)
@@ -15,23 +15,22 @@ Most tools run **locally and free** via [`sharp`](https://sharp.pixelplumbing.co
 | Tier | Tools | Notes |
 |---|---|---|
 | Hosted / paid | Generate, Upscale, Background (production) | ComfyUI locally, Replicate in production; cost + token usage is logged and shown |
-| Local (sharp) | Convert, Compress, Recolor, Crop/Resize, Canvas Extend, Effects, Adjust, Watermark, Collage, Metadata, Image Diff, Background (local) | CPU-bound, no network |
-| Browser-only | Redact, Annotate, Palette, Picker, Extract Text (OCR) | Nothing is uploaded; OCR fetches its language model from a CDN on first use |
+| Local (sharp) | Convert, Compress, Recolor, Crop/Resize, Canvas Extend, Effects, Adjust, Watermark, Collage, Remove Meta, Image Diff, Background (local) | CPU-bound, no network |
+| Browser-only | Redact, Annotate, Palette, Picker, Extract Text (OCR), File Info | Nothing is uploaded; OCR fetches its language model from a CDN on first use |
 
 ---
 
 ## Sidebar
 
-Tools are grouped into six collapsible, single-open ("accordion") categories. **Create** is open on load; opening another category closes the previous one. A search box filters tools by name across all groups (temporarily revealing matches), headings use the primary accent colour, tools highlight on hover, and the active tool is filled.
+Tools are grouped into five collapsible, single-open ("accordion") categories. **Create** is open on load; opening another category closes the previous one. A search box filters tools by name across all groups (temporarily revealing matches), headings use the primary accent colour, tools highlight on hover, and the active tool is filled.
 
 | Group | Tools |
 |---|---|
 | **Create** | Generate |
 | **Optimise** | Upscale, Convert, Compress |
 | **Clipart & Icons** | Favicon / Icons, Vectorize (SVG), AI Icon Library |
-| **Edit** | Crop/Resize, Canvas Extend, Annotate, Effects, Adjust, Watermark, Collage |
-| **Analyse** | Picker, Palette, Extract Text, Image Diff |
-| **Retouch & Privacy** | Background, Recolor, Redact, Metadata |
+| **Edit** | Crop/Resize, Canvas Extend, Annotate, Effects, Adjust, Watermark, Collage, Background, Recolor, Redact |
+| **Analyse** | Picker, Palette, Extract Text, Image Diff, Remove Meta, File Info |
 
 ---
 
@@ -39,7 +38,7 @@ Tools are grouped into six collapsible, single-open ("accordion") categories. **
 
 ### Create
 
-- **Generate** — text-to-image with style presets and size options. Local ComfyUI or hosted Replicate; per-image cost/token tracking. `POST /api/graphics/generate` (+ gallery routes).
+- **Generate** — text-to-image with style presets and size options. Local ComfyUI or hosted Replicate; per-image cost/token tracking. `POST /api/graphics/generate` (+ gallery routes). The follow-up **Augment** (image-to-image variation) step requires the local ComfyUI provider; on a hosted provider it's hidden with a short note, since `POST /api/graphics/augment` only supports `local-comfyui`.
 
 ### Optimise
 
@@ -53,7 +52,7 @@ Tools are grouped into six collapsible, single-open ("accordion") categories. **
 - **Vectorize (SVG)** — trace a raster image into scalable SVG paths with adjustable colour count (2–64) and detail (smooth/medium/detailed). Best for logos, icons and flat clipart; photos become posterised. Images are capped to 700px before tracing for speed. `POST /api/graphics/vectorize` (sharp-decoded pixels → imagetracerjs).
 - **AI Icon Library** — generate a cohesive set of custom SVG icons from a subject. Step 1 fetches a curated grid of real reference icons from Lucide (`lucide-react`) and Font Awesome (CDN), labelled by source and multi-selectable. Step 2 sets count (5–20), colour, stroke weight (super thin/thin/regular/bold), fill style (outlined/filled/duotone), corners and detail. Step 3 shows the generated icons (~80px) with multi-select plus per-icon and bulk `.svg` downloads. You can **remove** unwanted icons (hover → ×) and then **refine & add more**: a feedback box plus an opt-in **Generate additional icons** tickbox (with a count) generates additional icons matching the kept set's style (kept names are passed so duplicates are avoided) and appends them. The generation prompt casts the model as a senior icon designer applying explicit craft principles (non-literal concepts, fewest paths, deliberate negative space, consistent optical weight). `POST /api/graphics/icon-references` and `POST /api/graphics/icon-generate` (accepts `existing` + `feedback`; Anthropic `claude-sonnet-4-6`; generated SVG is sanitised server-side). Model overridable via `GRAPHICS_ICON_MODEL`.
 
-Every Graphics tool shows a **processing modal** (spinner + tool-specific label) while its operation runs, via the shared `ProcessingModal` component.
+Every Graphics tool shows a **processing modal** (spinner + tool-specific label) while its operation runs. There is a single `ProcessingModal` instance rendered in `App.jsx` driven by `useProcessingStore`; Graphics (and the AI Icon Library) call `startProcessing`/`stopProcessing` rather than rendering their own overlay, so the same mechanism also covers the rest of the app (e.g. wellbeing, shares).
 
 ### Edit
 
@@ -64,6 +63,9 @@ Every Graphics tool shows a **processing modal** (spinner + tool-specific label)
 - **Adjust** — brightness, contrast, saturation, hue shift, sharpness, colour temperature (warm/cool) and vignette. `POST /api/graphics/adjust` (sharp `modulate`/`linear`/`recomb`/`sharpen` + an SVG radial-gradient vignette).
 - **Watermark** — text (colour, position, opacity) or image watermark (scale, opacity), with optional tiling. `POST /api/graphics/watermark`.
 - **Collage** — arrange 2–9 images into a grid with columns, spacing and background colour. `POST /api/graphics/collage`.
+- **Background** — one-click AI cut-out, leaving the subject transparent, flattened onto a solid colour, blended behind a **two-colour gradient**, or composited over a **chosen background image** (scaled to cover). Blended mode offers from/to colour pickers, a direction (top→bottom, left→right, both diagonals, or radial) and a live preview; the gradient is generated as an SVG sized to the subject and composited under the cut-out. The action button reads "Remove background" for transparent and "Update background" otherwise. Local via the self-contained `@imgly/background-removal-node` ONNX model; production via a Replicate model. `POST /api/graphics/background` (optional `backgroundImageDataUrl` or `gradient` `{from,to,direction}`).
+- **Recolor** — change the colour of a specific item via a zoomable eyedropper (loupe, drag-to-pan, averaged sampling), tolerance, and "match colour" vs "preserve shading" modes. `POST /api/graphics/recolor`.
+- **Redact** — drag boxes over faces, plates or sensitive text and pixelate or blur them. Browser-only; live updates, undo/clear, PNG export.
 
 ### Analyse
 
@@ -71,13 +73,8 @@ Every Graphics tool shows a **processing modal** (spinner + tool-specific label)
 - **Palette** — extract 5–12 dominant colours (client-side quantisation) with HEX, RGB and rough share, plus copy buttons. Browser-only.
 - **Extract Text (OCR)** — read text from screenshots/scans/receipts via `tesseract.js` (lazy-loaded; language model downloads once on first use). Progress readout, editable result, copy/.txt download; English, French, Spanish, German, Italian, Portuguese.
 - **Image Diff** — highlight pixel differences between two images in red over a faded base, with an adjustable sensitivity threshold and a "% differ" stat. `POST /api/graphics/diff`.
-
-### Retouch & Privacy
-
-- **Background** — one-click AI cut-out, leaving the subject transparent, flattened onto a solid colour, or composited over a **chosen background image** (scaled to cover). The action button reads "Remove background" for transparent and "Update background" for colour/image. Local via the self-contained `@imgly/background-removal-node` ONNX model; production via a Replicate model. `POST /api/graphics/background` (optional `backgroundImageDataUrl`).
-- **Recolor** — change the colour of a specific item via a zoomable eyedropper (loupe, drag-to-pan, averaged sampling), tolerance, and "match colour" vs "preserve shading" modes. `POST /api/graphics/recolor`.
-- **Redact** — drag boxes over faces, plates or sensitive text and pixelate or blur them. Browser-only; live updates, undo/clear, PNG export.
-- **Metadata** — strip EXIF, GPS, camera info, timestamps and colour profiles, reporting what was removed (EXIF orientation is baked in first). `POST /api/graphics/strip-metadata`.
+- **Remove Meta** — strip EXIF, GPS, camera info, timestamps and colour profiles, reporting what was removed (EXIF orientation is baked in first). `POST /api/graphics/strip-metadata`.
+- **File Info** — choose a file to read its name, MIME type, format, size (human-readable + exact bytes), pixel dimensions, aspect ratio, megapixels and last-modified date, alongside a preview. Browser-only — nothing is uploaded.
 
 ---
 
@@ -99,7 +96,8 @@ These work across the image→image tools (Convert, Upscale, Effects, Adjust, Wa
 - **`tesseract.js`** (client) powers OCR.
 - **`archiver`** bundles the favicon icon set into a ZIP server-side.
 - **`imagetracerjs`** powers raster→SVG vectorisation (fed sharp-decoded pixels).
+- **`dompurify` + `jsdom`** sanitise model-supplied SVG (AI Icon Library) with a real DOM rather than regex; loaded lazily so jsdom's cost is only paid when icons are generated. A regex strip remains as a fallback if the DOM sanitiser can't load.
 - The Express JSON body limit is raised to `30mb` to accommodate multi-image collage uploads.
 - Optional env: `REPLICATE_BG_MODEL`, `REPLICATE_BG_COST_USD` (hosted background removal).
 
-See `CHANGELOG.md` (entries dated 2026-06-26 to 2026-06-27) for the full build history.
+See `CHANGELOG.md` (entries dated 2026-06-26 to 2026-06-28) for the full build history.

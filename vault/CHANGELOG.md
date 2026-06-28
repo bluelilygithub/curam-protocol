@@ -4,6 +4,26 @@ A log of bugs found and fixed in the Curam Vault application.
 
 ---
 
+## 2026-06-28 (21)
+
+**Fixes:** Graphics/app — unified processing overlay, hardened SVG sanitiser, hosted Augment guard.
+
+- **Single processing overlay** — `ProcessingModal` now reads `useProcessingStore`, so the one instance rendered in `App.jsx` is the only overlay. Graphics and the AI Icon Library were migrated off their own local modals to `startProcessing`/`stopProcessing`, removing a double-overlay during Generate. This also fixes the **wellbeing and shares** pages, which already called the store but had no modal rendering it — their progress overlays now actually appear.
+- **DOM-based SVG sanitisation** — model-supplied icon SVG is now sanitised with **DOMPurify + jsdom** (real DOM parsing) instead of regex, which is far more robust against obfuscated `<script>`, `<foreignObject>`, event handlers and `javascript:` URLs. Lazy-loaded (jsdom is heavy) with the old regex strip kept as a fallback. Adds `dompurify` and `jsdom`.
+- **Augment hidden on hosted providers** — the image-to-image "Augment" step is only offered with the local ComfyUI provider; on a hosted provider it now shows a short explanatory note instead of letting the user trigger a 400.
+
+---
+
+## 2026-06-28 (20)
+
+**Feature:** Graphics — blended-colour backgrounds, File Info tool & sidebar tidy-up.
+
+- **Blended (gradient) backgrounds** — the Background tool gains a **Blended colours** option alongside Transparent / Solid / Image: from/to colour pickers, a direction (top→bottom, left→right, both diagonals, radial) and a live preview. The cut-out is composited over an SVG gradient sized to the subject. `POST /api/graphics/background` accepts a `gradient` `{from,to,direction}`.
+- **File Info tool** (Analyse) — pick a file to read its name, type, format, size (human-readable + exact bytes), dimensions, aspect ratio, megapixels and last-modified date, with a preview. Browser-only.
+- **Sidebar reorg** — Background, Recolor and Redact moved into **Edit**; the **Image Info / Retouch & Privacy** heading was removed, with **Remove Meta** (formerly "Metadata") and **File Info** now living under **Analyse**.
+
+---
+
 ## 2026-06-27 (19)
 
 **Improvement:** AI Icon Library — Super thin stroke, opt-in additions, designer-grade prompt.

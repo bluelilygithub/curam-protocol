@@ -1,16 +1,25 @@
 import React, { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
+import useProcessingStore from '../store/processingStore';
 
-// Non-dismissable busy overlay shown while a Graphics operation runs.
-export default function ProcessingModal({ open, title = 'Working…', message = 'This can take a few moments.' }) {
+// Non-dismissable busy overlay. Normally rendered once in App.jsx and driven by
+// useProcessingStore; explicit props still override the store for back-compat.
+export default function ProcessingModal({ open, title, message }) {
+  const storeMessage = useProcessingStore((s) => s.message);
+  const storeDetail = useProcessingStore((s) => s.detail);
+
+  const isOpen = open !== undefined ? open : !!storeMessage;
+  const heading = title !== undefined ? title : (storeMessage || 'Working…');
+  const body = message !== undefined ? message : (storeDetail ?? 'This can take a few moments.');
+
   useEffect(() => {
-    if (!open) return undefined;
+    if (!isOpen) return undefined;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
-  }, [open]);
+  }, [isOpen]);
 
-  if (!open) return null;
+  if (!isOpen) return null;
 
   return (
     <div
@@ -27,8 +36,8 @@ export default function ProcessingModal({ open, title = 'Working…', message = 
         <div className="px-6 py-7 flex flex-col items-center text-center gap-3">
           <Loader2 size={28} className="animate-spin" style={{ color: 'var(--color-primary)' }} />
           <div>
-            <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{title}</div>
-            {message && <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{message}</div>}
+            <div className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{heading}</div>
+            {body && <div className="text-xs mt-1" style={{ color: 'var(--color-muted)' }}>{body}</div>}
           </div>
         </div>
       </div>

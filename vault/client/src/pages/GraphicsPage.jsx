@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../utils/apiClient';
 import { useIcon } from '../providers/IconProvider';
 import IconLibraryGenerator from '../components/IconLibraryGenerator';
-import ProcessingModal from '../components/ProcessingModal';
+import useProcessingStore from '../store/processingStore';
 
 const CR_ASPECTS = [
   { id: 'free', label: 'Free', v: null },
@@ -119,7 +119,7 @@ const MODES = [
   { id: 'background', label: 'Background', icon: 'scissors' },
   { id: 'recolor', label: 'Recolor', icon: 'palette' },
   { id: 'cropresize', label: 'Crop / Resize', icon: 'crop' },
-  { id: 'metadata', label: 'Metadata', icon: 'shield' },
+  { id: 'metadata', label: 'Remove Meta', icon: 'shield' },
   { id: 'watermark', label: 'Watermark', icon: 'droplets' },
   { id: 'collage', label: 'Collage', icon: 'grid' },
   { id: 'extend', label: 'Canvas Extend', icon: 'frame' },
@@ -167,8 +167,7 @@ const MODE_GROUPS = [
   { label: 'Optimise', ids: ['upscale', 'convert', 'compress'] },
   { label: 'Clipart & Icons', ids: ['favicon', 'svg', 'iconlib'] },
   { label: 'Edit', ids: ['cropresize', 'extend', 'annotate', 'effects', 'adjust', 'watermark', 'collage', 'background', 'recolor', 'redact'] },
-  { label: 'Analyse', ids: ['picker', 'palette', 'ocr', 'diff'] },
-  { label: 'Image Info', ids: ['metadata', 'fileinfo'] },
+  { label: 'Analyse', ids: ['picker', 'palette', 'ocr', 'diff', 'metadata', 'fileinfo'] },
 ];
 
 // Re-encode helpers used by the export panel (all client-side via canvas).
@@ -373,6 +372,8 @@ function ResultPlaceholder({ src, message }) {
 
 export default function GraphicsPage() {
   const getIcon = useIcon();
+  const startProcessing = useProcessingStore((s) => s.startProcessing);
+  const stopProcessing = useProcessingStore((s) => s.stopProcessing);
   const [mode, setMode] = useState('generate');
   const [compareOn, setCompareOn] = useState(false);
   const [openGroup, setOpenGroup] = useState('Create');
@@ -425,6 +426,8 @@ export default function GraphicsPage() {
   const [bgSource, setBgSource] = useState(null);
   const [bgMode, setBgMode] = useState('transparent');
   const [bgColor, setBgColor] = useState('#ffffff');
+  const [bgColor2, setBgColor2] = useState('#2563eb');
+  const [bgGradientDir, setBgGradientDir] = useState('to-bottom');
   const [bgImage, setBgImage] = useState(null);
   const [bgProcessing, setBgProcessing] = useState(false);
   const [bgResult, setBgResult] = useState(null);
@@ -838,6 +841,7 @@ export default function GraphicsPage() {
         background: bgMode === 'color' ? bgColor : 'transparent',
       };
       if (bgMode === 'image') body.backgroundImageDataUrl = bgImage.imageDataUrl;
+      if (bgMode === 'gradient') body.gradient = { from: bgColor, to: bgColor2, direction: bgGradientDir };
       const res = await api.post('/api/graphics/background', body);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Background change failed');
@@ -2160,10 +2164,16 @@ export default function GraphicsPage() {
     [palBusy, 'Extracting palette…'],
   ];
   const activeBusy = busyStates.find(([flag]) => flag);
+  const activeBusyLabel = activeBusy?.[1] || null;
+
+  useEffect(() => {
+    if (activeBusyLabel) startProcessing(activeBusyLabel);
+    else stopProcessing();
+    return () => stopProcessing();
+  }, [activeBusyLabel, startProcessing, stopProcessing]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <ProcessingModal open={!!activeBusy} title={activeBusy?.[1] || 'Working…'} />
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
           <h1 className="text-xl font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
@@ -2417,43 +2427,51 @@ export default function GraphicsPage() {
                     {formatCost(result.cost)}
                   </p>
                 )}
-                <div className="mt-4 border-t pt-4 space-y-3" style={{ borderColor: 'var(--color-border)' }}>
-                  <div>
-                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
-                      Augment this image
-                    </label>
-                    <textarea
-                      value={augmentPrompt}
-                      onChange={e => setAugmentPrompt(e.target.value)}
-                      rows={3}
-                      placeholder="e.g. make it more photographic, add sunset lighting, change background..."
-                      className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
-                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                    />
+                {isHostedProvider ? (
+                  <div className="mt-4 border-t pt-4" style={{ borderColor: 'var(--color-border)' }}>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                      Variations (image-to-image) are only available with the local ComfyUI provider, so this step is unavailable on the hosted provider.
+                    </p>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Change strength</label>
-                    <select
-                      value={denoise}
-                      onChange={e => setDenoise(e.target.value)}
-                      className="px-2 py-1 rounded-lg border text-xs"
-                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
-                    >
-                      <option value="0.3">Subtle</option>
-                      <option value="0.45">Medium</option>
-                      <option value="0.65">Strong</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={augmentImage}
-                      disabled={augmenting || !augmentPrompt.trim()}
-                      className="ml-auto text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
-                      style={{ background: 'var(--color-primary)' }}
-                    >
-                      {augmenting ? 'Augmenting...' : 'Augment'}
-                    </button>
+                ) : (
+                  <div className="mt-4 border-t pt-4 space-y-3" style={{ borderColor: 'var(--color-border)' }}>
+                    <div>
+                      <label className="block text-xs font-medium mb-1" style={{ color: 'var(--color-muted)' }}>
+                        Augment this image
+                      </label>
+                      <textarea
+                        value={augmentPrompt}
+                        onChange={e => setAugmentPrompt(e.target.value)}
+                        rows={3}
+                        placeholder="e.g. make it more photographic, add sunset lighting, change background..."
+                        className="w-full px-3 py-2 rounded-xl border text-sm outline-none"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Change strength</label>
+                      <select
+                        value={denoise}
+                        onChange={e => setDenoise(e.target.value)}
+                        className="px-2 py-1 rounded-lg border text-xs"
+                        style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                      >
+                        <option value="0.3">Subtle</option>
+                        <option value="0.45">Medium</option>
+                        <option value="0.65">Strong</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={augmentImage}
+                        disabled={augmenting || !augmentPrompt.trim()}
+                        className="ml-auto text-xs px-3 py-1.5 rounded-lg font-semibold text-white disabled:opacity-50"
+                        style={{ background: 'var(--color-primary)' }}
+                      >
+                        {augmenting ? 'Augmenting...' : 'Augment'}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </>
             ) : (
               <div className="aspect-square rounded-xl border flex items-center justify-center text-sm text-center px-6" style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)', background: 'var(--color-bg)' }}>
@@ -3027,6 +3045,7 @@ export default function GraphicsPage() {
                 >
                   <option value="transparent">Transparent</option>
                   <option value="color">Solid colour</option>
+                  <option value="gradient">Blended colours</option>
                   <option value="image">Image</option>
                 </select>
                 {bgMode === 'color' && (
@@ -3042,6 +3061,43 @@ export default function GraphicsPage() {
                   </>
                 )}
               </div>
+              {bgMode === 'gradient' && (
+                <div className="mt-3 space-y-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>From</span>
+                      <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>To</span>
+                      <input type="color" value={bgColor2} onChange={e => setBgColor2(e.target.value)} className="h-9 w-12 rounded border" style={{ borderColor: 'var(--color-border)', background: 'transparent' }} />
+                    </div>
+                    <select
+                      value={bgGradientDir}
+                      onChange={e => setBgGradientDir(e.target.value)}
+                      className="px-3 py-2 rounded-xl border text-sm"
+                      style={{ background: 'var(--color-bg)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+                    >
+                      <option value="to-bottom">Top → bottom</option>
+                      <option value="to-top">Bottom → top</option>
+                      <option value="to-right">Left → right</option>
+                      <option value="to-left">Right → left</option>
+                      <option value="to-bottom-right">Diagonal ↘</option>
+                      <option value="to-bottom-left">Diagonal ↙</option>
+                      <option value="radial">Radial</option>
+                    </select>
+                  </div>
+                  <div
+                    className="h-12 rounded-xl border"
+                    style={{
+                      borderColor: 'var(--color-border)',
+                      background: bgGradientDir === 'radial'
+                        ? `radial-gradient(circle, ${bgColor}, ${bgColor2})`
+                        : `linear-gradient(${{ 'to-bottom': 'to bottom', 'to-top': 'to top', 'to-right': 'to right', 'to-left': 'to left', 'to-bottom-right': 'to bottom right', 'to-bottom-left': 'to bottom left' }[bgGradientDir]}, ${bgColor}, ${bgColor2})`,
+                    }}
+                  />
+                </div>
+              )}
               {bgMode === 'image' && (
                 <div className="mt-2 space-y-2">
                   <input type="file" accept="image/*" onChange={e => { setBgError(''); loadImageInto(setBgImage)(e.target.files?.[0]); }} className="block w-full text-xs" style={{ color: 'var(--color-text)' }} />
@@ -4457,22 +4513,6 @@ export default function GraphicsPage() {
                 Continue
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {(generating || augmenting) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" style={{ background: 'rgba(0,0,0,0.55)' }}>
-          <div className="w-full max-w-sm rounded-2xl border p-5 text-center shadow-xl" style={{ borderColor: 'var(--color-border)', background: 'var(--color-surface)' }}>
-            <div className="mx-auto mb-3 h-10 w-10 rounded-full flex items-center justify-center" style={{ background: 'var(--color-bg)', color: 'var(--color-primary)' }}>
-              {getIcon('loader', { size: 22, className: 'animate-spin' })}
-            </div>
-            <h2 className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>
-              {augmenting ? 'Augmenting image' : 'Creating image'}
-            </h2>
-            <p className="text-sm mt-2" style={{ color: 'var(--color-muted)' }}>
-              Refining the prompt and generating locally with ComfyUI. This can take a little while.
-            </p>
           </div>
         </div>
       )}
